@@ -1,0 +1,3896 @@
+/**
+ * marcaciones_ui.js
+ * Módulo para visualizar Asistencia: Vista Matriz (Equipo) y Calendario (Personal).
+ */
+
+// Evitar conflicto con versiones antiguas en caché (script fantasma)
+// Usamos un nombre de variable ÚNICO para esta versión
+window.stateMarcacionesApp = window.stateMarcacionesApp || {
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+    isModoRRHH: true,
+    fechaInicioRRHH: "",
+    fechaFinRRHH: "",
+    area: "",
+    turnoId: "",
+    empleadoId: "",
+    viewMode: 'conceptos', // 'conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos'
+    panelMode: 'analitica', // La vista única será siempre Analítica
+    data: null,
+    autoRefreshEnabled: false,
+    autoRefreshIntervalId: null,
+    controllers: {
+        filters: null
+    }
+};
+
+// Estado de la Vista Analítica (si no está ya inicializado)
+window.vistaAnaliticaState = window.vistaAnaliticaState || {
+    soloNegativo: false,
+    soloConHE: false,
+    showBonos: false,
+    showHE: false,
+    showDeudas: false,
+    showIncidencias: false,
+    showSaldoMeta: true  // Visible por defecto cuando hay bolsa flexible
+};
+
+// Referencia local
+// Referencia local (segura para re-declaración)
+// Referencia local (segura para re-declaración)
+// var stateMarcacionesApp = window.stateMarcacionesApp;
+
+// ==========================================
+// INICIALIZACIÓN
+// ==========================================
+async function initMarcacionesUI() {
+    console.log("Inicializando UI de Marcaciones (BioAlba Integration)...");
+
+    const container = document.getElementById('page-marcaciones');
+    if (!container) return; // No estamos en la página correcta o no existe el contenedor
+
+    // Inicializar fechas RRHH por defecto si no están configuradas
+    if (!stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
+        try {
+            const resp = await fetch('/api/asistencia/periodo-rrhh/ultimo-cierre/');
+            const ultimo = await resp.json();
+            
+            if (ultimo && ultimo.fecha_fin) {
+                const lastFin = new Date(ultimo.fecha_fin);
+                lastFin.setDate(lastFin.getDate() + 1);
+                stateMarcacionesApp.fechaInicioRRHH = lastFin.toISOString().split('T')[0];
+                
+                const nextFin = new Date(lastFin);
+                nextFin.setMonth(nextFin.getMonth() + 1);
+                nextFin.setDate(nextFin.getDate() - 1);
+                stateMarcacionesApp.fechaFinRRHH = nextFin.toISOString().split('T')[0];
+            } else {
+                const now = new Date();
+                const inicio = new Date(now.getFullYear(), now.getMonth() - 1, 26);
+                const fin = new Date(now.getFullYear(), now.getMonth(), 25);
+                stateMarcacionesApp.fechaInicioRRHH = inicio.toISOString().split('T')[0];
+                stateMarcacionesApp.fechaFinRRHH = fin.toISOString().split('T')[0];
+            }
+        } catch (e) {
+            console.error("Error sugiriendo periodo por defecto:", e);
+        }
+    }
+
+    // 1. Renderizar Estructura Base (Toolbar + Contenedor de Grilla)
+    renderMarcacionesToolbar(container);
+
+    // 2. Cargar Filtros Iniciales
+    loadMarcacionesFilters();
+}
+
+function renderMarcacionesToolbar(container) {
+    container.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0 d-flex align-items-center gap-2">
+                <i class="bi bi-calendar-check" style="color:#6366f1"></i>
+                <span style="font-weight:700;color:#1e293b">Control de Asistencia</span>
+            </h2>
+            <div class="d-flex gap-2 align-items-center">
+                <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
+                    <button class="btn btn-sm btn-outline-secondary bg-white" onclick="downloadExcelReport()" title="Exportar a Excel">
+                        <i class="bi bi-file-earmark-excel text-success"></i> Excel
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary bg-white" onclick="window.print()" title="Imprimir Reporte">
+                        <i class="bi bi-printer"></i>
+                    </button>
+                </div>
+
+                <div class="btn-group shadow-sm">
+                    <button class="btn btn-sm btn-outline-primary" onclick="syncMarcacionesBioAlba()">
+                        <i class="bi bi-cloud-download"></i> Sincronizar BioAlba
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle dropdown-toggle-split" 
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="visually-hidden">Opciones</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0">
+                        <li>
+                            <a class="dropdown-item py-2" href="#" onclick="syncMarcacionesBioAlba(); return false;">
+                                <i class="bi bi-lightning-fill text-warning"></i> Sincronización Rápida
+                                <small class="d-block text-muted">Todas las áreas del mes actual</small>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item py-2" href="#" onclick="openSyncMarcacionesModal(); return false;">
+                                <i class="bi bi-funnel text-primary"></i> Filtrar por Áreas...
+                                <small class="d-block text-muted">Seleccionar áreas específicas</small>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="d-flex align-items-center bg-white border rounded-3 px-3 py-1 shadow-sm" style="height:38px;border-color:#e2e8f0 !important">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh-switch" 
+                               ${stateMarcacionesApp.autoRefreshEnabled ? 'checked' : ''} onchange="toggleAutoRefresh(this.checked)">
+                        <label class="form-check-label small fw-bold text-muted ms-1" for="auto-refresh-switch">Auto</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolbar de Filtros -->
+        <div class="marcaciones-filter-bar">
+            <div class="row g-2 align-items-end">
+                <!-- Filtro Tiempo (Dinámico) -->
+                <div class="col-md-4">
+                    <div id="filter-time-rrhh">
+                        <div class="d-flex gap-2">
+                            <div class="flex-grow-1">
+                                <label for="rrhh-fecha-inicio" class="form-label small fw-semibold text-muted mb-1">Desde</label>
+                                <input type="date" class="form-control form-control-sm" id="rrhh-fecha-inicio" 
+                                       value="${stateMarcacionesApp.fechaInicioRRHH}" onchange="updateMarcacionesState('fechaInicioRRHH', this.value)" style="border-color:#c7d2fe">
+                            </div>
+                            <div class="flex-grow-1">
+                                <label for="rrhh-fecha-fin" class="form-label small fw-semibold text-muted mb-1">Hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="rrhh-fecha-fin" 
+                                       value="${stateMarcacionesApp.fechaFinRRHH}" onchange="updateMarcacionesState('fechaFinRRHH', this.value)" style="border-color:#c7d2fe">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Área -->
+                <div class="col-md-2">
+                    <label for="marcacion-area" class="form-label small fw-semibold text-muted mb-1">Área</label>
+                    <select class="form-select form-select-sm" id="marcacion-area" onchange="updateMarcacionesState('area', this.value)">
+                        <option value="">Todas las Áreas</option>
+                    </select>
+                </div>
+
+                <!-- Horario -->
+                <div class="col-md-2">
+                    <label for="marcacion-turno" class="form-label small fw-semibold text-muted mb-1">Horario</label>
+                    <select class="form-select form-select-sm" id="marcacion-turno" onchange="updateMarcacionesState('turnoId', this.value)">
+                        <option value="">Todos los Horarios</option>
+                    </select>
+                </div>
+
+                <!-- Empleado -->
+                <div class="col-md-2">
+                    <label for="marcacion-empleado" class="form-label small fw-semibold text-muted mb-1">Empleado</label>
+                    <select class="form-select form-select-sm" id="marcacion-empleado" onchange="updateMarcacionesState('empleadoId', this.value)">
+                        <option value="">-- Ver Todo el Equipo --</option>
+                    </select>
+                </div>
+
+                <!-- Botón Ver -->
+                <div class="col-md-2">
+                    <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;">
+                        <i class="bi bi-search"></i> Ver
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenedor Principal de Vistas -->
+        <div id="marcaciones-view-container" class="position-relative">
+            <div class="text-center py-5 text-muted opacity-50">
+                <i class="bi bi-hand-index-thumb mb-2" style="font-size: 2rem;"></i>
+                <p>Selecciona filtros para visualizar la asistencia.</p>
+            </div>
+        </div>
+    `;
+}
+
+// ==========================================
+// LOGICA DE ESTADO Y CARGA
+// ==========================================
+async function loadMarcacionesFilters() {
+    try {
+        // Cargar Metadatos (Areas, Cargos, etc.)
+        const respMeta = await fetch('/api/empleados/metadata/');
+        const metadata = await respMeta.json();
+
+        const areaSelect = document.getElementById('marcacion-area');
+        if (areaSelect && metadata.areas) {
+            // Preservar valor si existe
+            const currentVal = areaSelect.value;
+            areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
+                metadata.areas.map(a => `<option value="${a}">${a}</option>`).join('');
+            if (currentVal) areaSelect.value = currentVal;
+        }
+
+        // Cargar Dependientes (Empleados y Turnos) en una sola llamada
+        await loadMarcacionesDependentFilters();
+
+    } catch (e) {
+        console.error("Error cargando filtros:", e);
+        showToast("Error cargando filtros", "error");
+    }
+}
+
+async function loadMarcacionesDependentFilters(onlyEmployees = false) {
+    console.time("⏱️ CargaFiltrosDependientes");
+    try {
+        // Cancelar peticiones anteriores
+        if (stateMarcacionesApp.controllers.filters) {
+            stateMarcacionesApp.controllers.filters.abort();
+        }
+        stateMarcacionesApp.controllers.filters = new AbortController();
+
+        const empSelect = document.getElementById('marcacion-empleado');
+        const turnoSelect = document.getElementById('marcacion-turno');
+
+        if (!onlyEmployees && turnoSelect) turnoSelect.innerHTML = '<option value="">Cargando horarios...</option>';
+        if (empSelect) empSelect.innerHTML = '<option value="">Cargando empleados...</option>';
+
+        // Endpoint consolidado con soporte de cascada
+        let url = `/api/asistencia/filters-data/?area=${encodeURIComponent(stateMarcacionesApp.area || '')}`;
+        if (onlyEmployees && stateMarcacionesApp.turnoId) {
+            url += `&turno_id=${encodeURIComponent(stateMarcacionesApp.turnoId)}`;
+        }
+
+        const resp = await fetch(url, { signal: stateMarcacionesApp.controllers.filters.signal });
+        const data = await resp.json();
+        const empleados = data.empleados || [];
+        const turnos = data.turnos || [];
+
+        // Renderizar Turnos (solo si no es carga parcial de empleados)
+        if (!onlyEmployees && turnoSelect) {
+            const currentTurnoVal = turnoSelect.value;
+            turnoSelect.innerHTML = '<option value="">Todos los Horarios</option>' +
+                turnos.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+
+            if (currentTurnoVal && turnos.find(t => t.id == currentTurnoVal)) {
+                turnoSelect.value = currentTurnoVal;
+            } else {
+                stateMarcacionesApp.turnoId = "";
+            }
+        }
+
+        // Renderizar Empleados
+        if (empSelect) {
+            if (empleados.length === 0) {
+                empSelect.innerHTML = '<option value="">-- Sin empleados en esta área/horario --</option>';
+            } else {
+                empSelect.innerHTML = '<option value="">-- Ver Todo el Equipo (Matriz) --</option>' +
+                    empleados.map(e => `<option value="${e.id}">${e.nombre_completo.toUpperCase()}</option>`).join('');
+            }
+
+            if (stateMarcacionesApp.empleadoId) empSelect.value = stateMarcacionesApp.empleadoId;
+        }
+
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            console.error("Error cargando datos de filtros:", e);
+        }
+    } finally {
+        console.timeEnd("⏱️ CargaFiltrosDependientes");
+    }
+}
+
+let _dependentFiltersDebounceTimer = null;
+
+function updateMarcacionesState(key, value) {
+    if (key === 'month' || key === 'year') {
+        stateMarcacionesApp[key] = parseInt(value, 10);
+    } else {
+        stateMarcacionesApp[key] = value;
+    }
+
+    let shouldLoadFilters = false;
+    let onlyEmployees = false;
+
+    if (key === 'month' || key === 'year') {
+        // Nivel 1 cambió: resetear niveles 2-4 y recargar turnos+empleados
+        stateMarcacionesApp.area = "";
+        stateMarcacionesApp.turnoId = "";
+        stateMarcacionesApp.empleadoId = "";
+        const areaSelect = document.getElementById('marcacion-area');
+        if (areaSelect) areaSelect.value = "";
+        shouldLoadFilters = true;
+    } else if (key === 'area') {
+        // Nivel 2 cambió: resetear niveles 3-4 y recargar turnos+empleados
+        stateMarcacionesApp.turnoId = "";
+        stateMarcacionesApp.empleadoId = "";
+        const turnoSelect = document.getElementById('marcacion-turno');
+        const empSelect = document.getElementById('marcacion-empleado');
+        if (turnoSelect) turnoSelect.value = "";
+        if (empSelect) empSelect.value = "";
+        shouldLoadFilters = true;
+    } else if (key === 'turnoId') {
+        // Nivel 3 cambió: resetear nivel 4 y recargar solo empleados (cascade)
+        stateMarcacionesApp.empleadoId = "";
+        const empSelect = document.getElementById('marcacion-empleado');
+        if (empSelect) empSelect.value = "";
+        shouldLoadFilters = true;
+        onlyEmployees = true;
+    }
+
+    if (shouldLoadFilters) {
+        if (_dependentFiltersDebounceTimer) {
+            clearTimeout(_dependentFiltersDebounceTimer);
+        }
+        _dependentFiltersDebounceTimer = setTimeout(() => {
+            loadMarcacionesDependentFilters(onlyEmployees);
+        }, 500);
+    }
+}
+
+
+// ── DEBOUNCE GUARD: evitar múltiples cargas simultáneas ──────────────────
+let _loadMarcacionesInProgress = false;
+let _loadMarcacionesDebounceTimer = null;
+
+// Exponer globalmente para ser visible desde bypassSecurityWall y otros modales
+window.loadMarcacionesData = async function() {
+    // Invalidar caché de auditoría al recargar datos (estado puede haber cambiado)
+    if (typeof _invalidarAuditoriaCache === 'function') _invalidarAuditoriaCache();
+
+    // Guard: si ya está cargando, ignorar la solicitud duplicada
+    if (_loadMarcacionesInProgress) {
+        console.log('⏳ loadMarcacionesData: ya en progreso, ignorando llamada duplicada');
+        return;
+    }
+
+    // Debounce: cancelar llamadas rápidas consecutivas (300ms)
+    if (_loadMarcacionesDebounceTimer) {
+        clearTimeout(_loadMarcacionesDebounceTimer);
+    }
+
+    await new Promise(resolve => {
+        _loadMarcacionesDebounceTimer = setTimeout(resolve, 300);
+    });
+
+    _loadMarcacionesInProgress = true;
+    try {
+        return await _loadMarcacionesDataImpl();
+    } finally {
+        _loadMarcacionesInProgress = false;
+    }
+};
+
+let _currentMarcacionesAbortController = null;
+
+async function _loadMarcacionesDataImpl() {
+    // 🛑 ABORTAR FETCH ANTERIOR SI AÚN ESTÁ EN PROCESO
+    if (_currentMarcacionesAbortController) {
+        _currentMarcacionesAbortController.abort();
+    }
+    _currentMarcacionesAbortController = new AbortController();
+    const signal = _currentMarcacionesAbortController.signal;
+
+    const container = document.getElementById('marcaciones-view-container');
+    container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando datos...</p></div>';
+
+    // 🛑 BLOQUEO DE SEGURIDAD (PLAN V29+)
+    // El sistema valida SIEMPRE si hay empleados con marcas pero sin turno (Fantasmas)
+    // El bloqueo es mandatorio para el área de responsabilidad del usuario.
+    const isBlocked = await checkAuditoriaBloqueo();
+    if (isBlocked) {
+        console.warn("⚠️ ACCESO BLOQUEADO: Se detectaron empleados con marcas pero sin turno asignado.");
+        return; 
+    }
+
+    // 🐛 DEBUG: Estado completo
+    console.group('🔍 DEBUG: loadMarcacionesData');
+    console.log('Estado actual:', {
+        year: stateMarcacionesApp.year,
+        month: stateMarcacionesApp.month,
+        area: stateMarcacionesApp.area,
+        turnoId: stateMarcacionesApp.turnoId,
+        empleadoId: stateMarcacionesApp.empleadoId
+    });
+    console.log('Fecha actual real:', new Date());
+    console.log('Mes actual real (0-indexed):', new Date().getMonth());
+    console.log('Mes en estado (+1):', stateMarcacionesApp.month);
+
+    try {
+        let url, isCalendar = false;
+
+        if (stateMarcacionesApp.empleadoId) {
+            // MODO CALENDARIO (Individual)
+            url = `/api/asistencia/calendar/?fecha_inicio=${stateMarcacionesApp.fechaInicioRRHH}&fecha_fin=${stateMarcacionesApp.fechaFinRRHH}&empleado_id=${stateMarcacionesApp.empleadoId}`;
+            isCalendar = true;
+        } else {
+            // MODO MATRIZ (Equipo)
+            // Guard: no llamar si las fechas RRHH aún no están configuradas
+            if (!stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
+                container.innerHTML = `
+                    <div class="d-flex flex-column align-items-center justify-content-center py-5 text-center">
+                        <i class="bi bi-calendar-range fs-1 text-primary mb-3"></i>
+                        <h5 class="text-muted">Selecciona el período de fechas</h5>
+                        <p class="text-muted small">Ingresa las fechas de inicio y fin en el selector de período para cargar la matriz.</p>
+                    </div>`;
+                console.groupEnd();
+                return;
+            }
+            url = `/api/asistencia/matriz/?fecha_inicio=${stateMarcacionesApp.fechaInicioRRHH}&fecha_fin=${stateMarcacionesApp.fechaFinRRHH}`;
+            if (stateMarcacionesApp.area) url += `&area=${encodeURIComponent(stateMarcacionesApp.area)}`;
+            if (stateMarcacionesApp.turnoId) url += `&turno_id=${stateMarcacionesApp.turnoId}`;
+        }
+
+        console.log('URL generada:', url);
+
+        const resp = await fetch(url, { signal });
+        if (!resp.ok) throw new Error("Error fetching data");
+        const data = await resp.json();
+
+        // 🛑 PREVENCIÓN DE RACE CONDITIONS: si este no es el fetch más reciente, abortamos silenciosamente el render
+        if (signal.aborted) {
+            console.log('Fetch de matriz completado pero obsoleto. Render abortado.');
+            console.groupEnd();
+            return;
+        }
+
+        console.log('Datos recibidos:', {
+            periodo: data.periodo,
+            feriadosCount: data.feriados?.length || 0,
+            feriados: data.feriados,
+            empleadosCount: Object.keys(data.matrix || {}).length
+        });
+        console.groupEnd();
+
+        // LIMPIAR CONTAINER EXPLÍCITAMENTE ANTES DE RENDERIZAR
+        container.innerHTML = '';
+        
+        stateMarcacionesApp.data = data;
+
+        if (isCalendar) {
+            renderReporteEmpleado(data, container);
+        } else {
+            renderVistaAnalitica(data, container);
+        }
+
+    } catch (e) {
+        if (e.name === 'AbortError') {
+            console.log('Fetch de matriz abortado por el usuario o nueva solicitud.');
+            console.groupEnd();
+        } else {
+            console.error("Error cargando datos:", e);
+            console.groupEnd();
+            container.innerHTML = `<div class="alert alert-danger">Error cargando datos: ${e.message}</div>`;
+        }
+    }
+}
+
+async function syncMarcacionesBioAlba(areas = null) {
+    const btn = document.querySelector('button[onclick="syncMarcacionesBioAlba()"]');
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conectando...';
+
+    // Se asume que sync sincroniza el mes seleccionado en los dropdowns
+    const mes = stateMarcacionesApp.month;
+    const anio = stateMarcacionesApp.year;
+
+    // Calcular fechas inicio/fin para el endpoint de sync (que espera rango fechas, o adaptarlo)
+    // El endpoint de sync actual recibe fecha_inicio y fecha_fin.
+    // Vamos a enviar el primer dia del mes
+    const fechaInicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
+
+    try {
+        // Construir payload
+        const payload = areas ? { areas } : {};
+
+        // Crear AbortController para timeout de 5 minutos (sincronizaciones grandes)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutos
+
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando... (esto puede tardar varios minutos)';
+
+        const resp = await fetch(`/api/sync/asistencia/now/?fecha_inicio=${fechaInicio}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        const result = await resp.json();
+
+        if (resp.ok) {
+            const areasMsg = areas ? ` (${areas.length} área${areas.length > 1 ? 's' : ''})` : ' (todas las áreas)';
+            showToast(`Sincronización Exitosa${areasMsg}: ${result.marcaciones_nuevas} nuevas, ${result.dias_recalculados} recalculos.`, 'success');
+            if (typeof window.loadMarcacionesData === 'function') {
+            window.loadMarcacionesData(); // Recargar vista
+        }
+        } else {
+            showToast("Error en sincronización: " + (result.detail || 'Error desconocido'), "error");
+        }
+    } catch (e) {
+        console.error('Error en sincronización:', e);
+
+        if (e.name === 'AbortError') {
+            showToast("⏱️ Timeout: La sincronización tardó más de 5 minutos. Por favor, verifica los logs del servidor.", "error");
+        } else if (e.message.includes('fetch')) {
+            showToast("❌ Error de conexión: El servidor no respondió. Por favor, verifica que esté ejecutándose.", "error");
+        } else {
+            showToast("❌ Error de conexión: " + e.message, "error");
+        }
+
+        // Intentar recargar la vista de todos modos (puede que se haya sincronizado parcialmente)
+        try {
+            await window.loadMarcacionesData();
+        } catch (reloadError) {
+            console.error('Error recargando datos:', reloadError);
+        }
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+    }
+}
+
+// ============================================
+// MODAL DE SINCRONIZACIÓN POR ÁREAS
+// ============================================
+
+function openSyncMarcacionesModal() {
+    // Crear modal dinámicamente si no existe
+    if (!document.getElementById('modal-sync-marcaciones')) {
+        const modalHTML = `
+            <div class="modal fade" id="modal-sync-marcaciones" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-funnel"></i> Sincronizar por Áreas
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted">
+                                <i class="bi bi-info-circle"></i> 
+                                Selecciona las áreas que deseas sincronizar para el mes actual:
+                            </p>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="select-all-areas-sync"
+                                           onchange="toggleAllAreasSync(this.checked)">
+                                    <label class="form-check-label fw-bold" for="select-all-areas-sync">
+                                        Seleccionar Todas
+                                    </label>
+                                </div>
+                                <hr>
+                            </div>
+                            <div id="areas-sync-list" class="mb-3">
+                                <div class="text-center">
+                                    <div class="spinner-border spinner-border-sm text-primary"></div>
+                                    <span class="ms-2">Cargando áreas...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="confirmSyncMarcaciones()">
+                                <i class="bi bi-cloud-download"></i> Sincronizar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    // Cargar áreas
+    loadAreasForSync();
+
+    // Mostrar modal
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-sync-marcaciones'));
+    modal.show();
+}
+
+async function loadAreasForSync() {
+    try {
+        const resp = await fetch('/api/empleados/metadata/');
+        const data = await resp.json();
+        const areas = data.areas || [];
+
+        const container = document.getElementById('areas-sync-list');
+        if (areas.length === 0) {
+            container.innerHTML = '<div class="alert alert-warning">No se encontraron áreas</div>';
+            return;
+        }
+
+        container.innerHTML = areas.map(area => `
+            <div class="form-check">
+                <input class="form-check-input area-sync-checkbox" type="checkbox" 
+                       value="${area}" id="area-sync-${area.replace(/\s+/g, '-')}">
+                <label class="form-check-label" for="area-sync-${area.replace(/\s+/g, '-')}">
+                    ${area}
+                </label>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Error cargando áreas:', e);
+        document.getElementById('areas-sync-list').innerHTML =
+            '<div class="alert alert-danger">Error cargando áreas</div>';
+    }
+}
+
+function toggleAllAreasSync(checked) {
+    const checkboxes = document.querySelectorAll('.area-sync-checkbox');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
+async function confirmSyncMarcaciones() {
+    const btnConfirm = document.querySelector('#modal-sync-marcaciones .btn-primary');
+    if (btnConfirm) btnConfirm.blur(); // Liberar foco para evitar advertencia ARIA 🧬
+
+    const checkboxes = document.querySelectorAll('.area-sync-checkbox:checked');
+    const selectedAreas = Array.from(checkboxes).map(cb => cb.value);
+
+    if (selectedAreas.length === 0) {
+        alert('⚠️ Selecciona al menos un área para sincronizar');
+        return;
+    }
+
+    // Cerrar modal
+    const modalEl = document.getElementById('modal-sync-marcaciones');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    
+    // Liberar foco de cualquier elemento dentro del modal antes de ocultar 
+    // para evitar advertencias de ARIA sobre elementos enfocados ocultos.
+    if (document.activeElement) document.activeElement.blur();
+    
+    if (modal) modal.hide();
+
+    // Sincronizar con filtro de áreas
+    await syncMarcacionesBioAlba(selectedAreas);
+}
+
+
+// ==========================================
+// RENDERIZADORES
+// ==========================================
+
+// ==========================================
+// RENDERIZADORES
+// ==========================================
+
+// ==========================================
+// REPORTE CONSOLIDADO ENTERPRISE (V12)
+// ==========================================
+
+function calcularMetricasEmpleado(data) {
+    // Clonación profunda para inmutabilidad y no afectar la grilla
+    const dataList = Array.isArray(data.data) ? JSON.parse(JSON.stringify(data.data)) : (Array.isArray(data) ? JSON.parse(JSON.stringify(data)) : []);
+    const infoMeta = data.info || {};
+    const feriadosArray = data.feriados || [];
+    
+    let esBolsa = false;
+    let metaMensualMinutos = 0;
+    let minutosTrabajadosAcumulados = 0;
+    let minutosDeuda = 0;
+    let minutosHE_Aprobado = 0;
+    let diasTrabajados = 0;
+    let atrasosCount = 0;
+    let faltasCount = 0;
+    let justificacionesCount = 0;
+    let salidasAdelantadasCount = 0;
+    let jornadasEspecialesCount = 0;
+    let permisosCount = 0;
+
+    dataList.forEach(a => {
+        if (a.horas_trabajadas) {
+            minutosTrabajadosAcumulados += Math.round(a.horas_trabajadas * 60);
+        }
+        if (a.minutos_deuda) minutosDeuda += a.minutos_deuda;
+        
+        const isEsp = a.estado === 'JORNADA_ESPECIAL' || a.estado === 'EXTRA' || a.estado === 'FERIADO Y JORNADA EXTRA' || a.estado === 'DÍA LIBRE Y JORNADA EXTRA';
+        
+        if (!isEsp && a.estado_he === 'APROBADO' && a.minutos_extra_autorizados) {
+            minutosHE_Aprobado += a.minutos_extra_autorizados;
+        }
+        
+        if (a.estado === 'ATRASO') atrasosCount++;
+        if (a.estado === 'INASISTENCIA' || (a.estado && a.estado.includes('FALTA'))) faltasCount++;
+        if (a.estado && (a.estado.includes('SALIDA_ADELANTADA') || a.estado.includes('SAD'))) salidasAdelantadasCount++;
+        if (a.estado === 'JORNADA_ESPECIAL' || a.estado === 'EXTRA' || a.estado === 'FERIADO Y JORNADA EXTRA' || a.estado === 'DÍA LIBRE Y JORNADA EXTRA') jornadasEspecialesCount++;
+        if (a.justificacion || a.nomenclatura) justificacionesCount++;
+        if (a.tiene_permiso_hora || a.permiso_activo) permisosCount++;
+        
+        if (['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'].includes(a.estado)) {
+            diasTrabajados++;
+        }
+
+        if (a.tipo_programacion === 'FLEXIBLE_BOLSA') {
+            esBolsa = true;
+            if (a.meta_mensual_minutos) metaMensualMinutos = a.meta_mensual_minutos;
+            else if (a.meta_horas_semanales) metaMensualMinutos = Math.round(a.meta_horas_semanales * 60);
+        }
+    });
+
+    if (esBolsa && infoMeta && infoMeta.meta_ajustada_minutos_descuento) {
+        metaMensualMinutos = Math.max(0, metaMensualMinutos - infoMeta.meta_ajustada_minutos_descuento);
+    }
+
+    return {
+        esBolsa,
+        metaMensualMinutos,
+        minutosTrabajadosAcumulados,
+        minutosDeuda,
+        saldoBolsa: minutosTrabajadosAcumulados - metaMensualMinutos,
+        minutosHE_Aprobado,
+        diasTrabajados,
+        atrasosCount,
+        faltasCount,
+        justificacionesCount,
+        salidasAdelantadasCount,
+        jornadasEspecialesCount,
+        permisosCount,
+        dataList,
+        feriadosArray
+    };
+}
+
+let pdfDataCache = null;
+
+function renderReporteEmpleado(data, container) {
+    // 1. Limpieza de memoria (Sanitización)
+    const oldPopovers = container.querySelectorAll('[data-bs-toggle="popover"]');
+    oldPopovers.forEach(el => {
+        const popover = bootstrap.Popover.getInstance(el);
+        if (popover) popover.dispose();
+    });
+    
+    // Guardar data en cache para PDF
+    pdfDataCache = data;
+
+    // Calcular Resumen (Saldo, Deuda, etc) para mostrarlo arriba del visor
+    const metrics = calcularMetricasEmpleado(data);
+    let summaryHtml = '';
+    if (metrics.esBolsa) {
+        const saldoColor = metrics.saldoBolsa >= 0 ? 'text-success' : 'text-danger';
+        const saldoSigno = metrics.saldoBolsa > 0 ? '+' : (metrics.saldoBolsa < 0 ? '-' : '');
+        summaryHtml = `
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <div class="card border-0 bg-info-subtle shadow-sm h-100">
+                        <div class="card-body py-2 text-center">
+                            <small class="text-muted d-block">Meta Periodo</small>
+                            <span class="fs-5 fw-bold text-dark tabular-nums">${formatMinutesToHHMM(metrics.metaMensualMinutos)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 bg-warning-subtle shadow-sm h-100">
+                        <div class="card-body py-2 text-center">
+                            <small class="text-muted d-block">Avance Real</small>
+                            <span class="fs-5 fw-bold text-dark tabular-nums">${formatMinutesToHHMM(metrics.minutosTrabajadosAcumulados)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 bg-light shadow-sm h-100">
+                        <div class="card-body py-2 text-center">
+                            <small class="text-muted d-block">Deuda (No Justif.)</small>
+                            <span class="fs-5 fw-bold text-danger tabular-nums">-${formatMinutesToHHMM(metrics.minutosDeuda)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 bg-light shadow-sm h-100">
+                        <div class="card-body py-2 text-center">
+                            <small class="text-muted d-block">Saldo Bolsa</small>
+                            <span class="fs-5 fw-bold ${saldoColor} tabular-nums">${saldoSigno}${formatMinutesToHHMM(Math.abs(metrics.saldoBolsa))}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    const html = `
+        <div class="card shadow-sm border-0 bg-white mb-3">
+            <div class="card-header bg-light border-bottom-0 d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-file-earmark-pdf fs-4 text-danger me-2"></i>
+                    <h6 class="mb-0 fw-bold">Visor de Reporte Consolidado (Oficial)</h6>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="small text-muted mb-0 fw-bold text-nowrap">Papel:</label>
+                    <select id="pdf-format-select" class="form-select form-select-sm shadow-sm" style="width: 130px;" onchange="updateVisorPDF(false)">
+                        <option value="a4" selected>A4</option>
+                        <option value="letter">Carta (Letter)</option>
+                        <option value="legal">Oficio (Legal)</option>
+                    </select>
+                    <button class="btn btn-sm btn-danger shadow-sm ms-2 text-nowrap" onclick="updateVisorPDF(true)">
+                        <i class="bi bi-download me-1"></i> Descargar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        ${summaryHtml}
+
+        <div class="card shadow-sm border-0 bg-light" style="min-height: 600px;">
+            <div class="card-body p-0 d-flex justify-content-center align-items-center" id="pdf-iframe-container">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Generando PDF...</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Generar PDF inicial asíncronamente
+    setTimeout(() => {
+        updateVisorPDF(false);
+    }, 50);
+}
+
+window.updateVisorPDF = function(isDownload = false) {
+    if (!pdfDataCache) return;
+
+    // 1. Seguro de vida: Validar rango de fechas para prevenir crasheos de memoria gráfica
+    const startDateRaw = new Date(stateMarcacionesApp.fechaInicioRRHH);
+    const endDateRaw = new Date(stateMarcacionesApp.fechaFinRRHH);
+    const diffTime = Math.abs(endDateRaw - startDateRaw);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    
+    if (diffDays > 93) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Periodo demasiado largo', 'Para prevenir colapsos de memoria, el reporte PDF está limitado a un máximo de 3 meses. Por favor, ajuste el filtro de fechas.', 'warning');
+        } else {
+            alert('El periodo es demasiado largo para este formato. Seleccione máximo 3 meses.');
+        }
+        return;
+    }
+
+    const formatSelect = document.getElementById('pdf-format-select');
+    const format = formatSelect ? formatSelect.value : 'a4';
+
+    const { jsPDF } = window.jspdf;
+    // Forzamos orientación Horizontal (landscape) para que quepan las nuevas columnas
+    const doc = new jsPDF('l', 'pt', format);
+    
+    const data = pdfDataCache;
+    const empleadoInfo = data.empleado_info || {};
+    
+    let nombreEmpleado = 'Empleado no identificado';
+    if (empleadoInfo.nombre) {
+        nombreEmpleado = `${empleadoInfo.apellido_paterno || ''} ${empleadoInfo.apellido_materno || ''} ${empleadoInfo.nombre || ''}`.trim().replace(/  +/g, ' ');
+    } else if (stateMarcacionesApp.data?.empleado_nombre) {
+        nombreEmpleado = stateMarcacionesApp.data.empleado_nombre;
+    }
+
+    const rut = empleadoInfo.rut || 'No Registrado';
+    const cargo = empleadoInfo.cargo || 'No Registrado';
+    const area = empleadoInfo.area || stateMarcacionesApp.data?.empleado_area || stateMarcacionesApp.data?.area || 'No Registrada';
+
+    let fechaInicio = '', fechaFin = '';
+    if (data.periodo) {
+        fechaInicio = new Date(data.periodo.inicio + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        fechaFin = new Date(data.periodo.fin + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    
+    // Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("AGUACOL SPA", 40, 40);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text("Reporte Consolidado de Asistencia", 40, 55);
+    
+    // Adjust header right alignment based on format width
+    const pageWidth = doc.internal.pageSize.getWidth();
+    doc.text(`Periodo: ${fechaInicio} al ${fechaFin}`, pageWidth - 195, 40);
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')}`, pageWidth - 195, 55);
+    
+    doc.line(40, 65, pageWidth - 40, 65); // separator
+
+    // Recalcular métricas para el array del AutoTable y otras lógicas
+    const metrics = calcularMetricasEmpleado(data);
+
+    // Info Empleado
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.text("RUT:", 40, 85);
+    doc.setFont("helvetica", "normal");
+    doc.text(rut, 80, 85);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Nombre:", 40, 100);
+    doc.setFont("helvetica", "normal");
+    doc.text(nombreEmpleado, 90, 100);
+
+    const midPoint = pageWidth / 2 + 20;
+    doc.setFont("helvetica", "bold");
+    doc.text("Cargo:", midPoint, 85);
+    doc.setFont("helvetica", "normal");
+    doc.text(cargo, midPoint + 40, 85);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Área:", midPoint, 100);
+    doc.setFont("helvetica", "normal");
+    doc.text(area, midPoint + 35, 100);
+
+    const turnoNombre = data.info?.turno || 'No asignado';
+    doc.setFont("helvetica", "bold");
+    doc.text("Turno Asignado:", 40, 115);
+    doc.setFont("helvetica", "normal");
+    doc.text(turnoNombre, 125, 115);
+
+    // Lado derecho: Horas del turno o meta de la bolsa
+    doc.setFont("helvetica", "bold");
+    if (metrics.esBolsa) {
+        doc.text("Meta Bolsa (Hrs):", midPoint, 115);
+        doc.setFont("helvetica", "normal");
+        const metaHrs = (metrics.metaMensualMinutos / 60).toFixed(1);
+        doc.text(`${metaHrs} Hrs`, midPoint + 95, 115);
+    } else {
+        doc.text("Hrs Semanales:", midPoint, 115);
+        doc.setFont("helvetica", "normal");
+        const hrsSemanales = data.info?.meta_horas_semanales || 45;
+        doc.text(`${hrsSemanales} Hrs`, midPoint + 90, 115);
+    }
+
+    let startY = 135;
+    const turnoDias = data.info?.turno_dias || {};
+    if (Object.keys(turnoDias).length > 0) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text("Horario Teórico Día a Día", 40, startY);
+        
+        const theader = [["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]];
+        const tbody = [];
+        let row = [];
+        for (let i = 0; i < 7; i++) {
+            let config = turnoDias[i];
+            if (!config || config.es_libre) {
+                row.push("Libre");
+            } else {
+                let e = config.hora_entrada ? config.hora_entrada.substring(0, 5) : "--:--";
+                let s = config.hora_salida ? config.hora_salida.substring(0, 5) : "--:--";
+                row.push(`${e} a ${s}`);
+            }
+        }
+        tbody.push(row);
+
+        doc.autoTable({
+            startY: startY + 10,
+            head: theader,
+            body: tbody,
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, halign: 'center', fontSize: 8 },
+            bodyStyles: { halign: 'center', fontSize: 8 },
+            margin: { left: 40, right: 40 }
+        });
+        
+        startY = doc.lastAutoTable.finalY + 20;
+    } else {
+        startY = 140;
+    }
+
+    const tableBody = metrics.dataList.map(a => {
+        let estadoStr = a.estado || '';
+        let estadoBadge = estadoStr;
+
+        // Mejorar nomenclaturas a nivel Enterprise
+        if (estadoStr === 'OK') estadoBadge = 'Jornada Completa';
+        else if (estadoStr === 'ATRASO' || estadoStr === 'ATR') estadoBadge = 'Atraso';
+        else if (estadoStr === 'SALIDA_ADELANTADA' || estadoStr === 'SAD') estadoBadge = 'Salida Adelantada';
+        else if (estadoStr === 'ATR_SAD') estadoBadge = 'Atraso / Sal. Adelantada';
+        else if (estadoStr === 'INASISTENCIA' || estadoStr === 'FALTA') estadoBadge = 'Inasistencia';
+        else if (estadoStr === 'LIBRE') estadoBadge = 'Día Libre';
+        else if (estadoStr === 'NO_ACTIVO') estadoBadge = 'No Activo';
+
+        // Determinar Feriado y buscar su descripción
+        let feriadoDesc = null;
+        if (Array.isArray(data.feriados)) {
+            const ferObj = data.feriados.find(f => f === a.fecha || f.fecha === a.fecha);
+            if (ferObj) feriadoDesc = ferObj.descripcion || 'Feriado';
+        } else if (data.feriados && typeof data.feriados === 'object') {
+            if (data.feriados[a.fecha]) feriadoDesc = data.feriados[a.fecha];
+        }
+
+        if (!feriadoDesc && metrics.feriadosArray && metrics.feriadosArray.includes(a.fecha)) {
+            feriadoDesc = 'Feriado';
+        }
+
+        // Aplicar jerarquía de estados (Feriado -> Permisos -> Estado normal)
+        let esJornadaEspecial = estadoStr === 'JORNADA_ESPECIAL' || estadoStr === 'EXTRA';
+        let badgeEspecial = estadoStr === 'EXTRA' ? ' - Jornada Extra' : ' - Jornada Especial';
+
+        // Determinar si el día era teóricamente libre
+        let diaDate = new Date(a.fecha);
+        let diaNum = (diaDate.getUTCDay() + 6) % 7;
+        let esLibreTeorico = turnoDias && turnoDias[diaNum] && turnoDias[diaNum].es_libre;
+
+        // Formatear fecha a texto amigable
+        const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        let fechaFormateada = `${diasSemana[diaDate.getUTCDay()]} ${diaDate.getUTCDate()} ${meses[diaDate.getUTCMonth()]} ${diaDate.getUTCFullYear()}`.toUpperCase();
+
+        if (feriadoDesc) {
+            estadoBadge = feriadoDesc.toUpperCase().includes('FERIADO') ? feriadoDesc : `Feriado: ${feriadoDesc}`;
+            if (esJornadaEspecial) estadoBadge += badgeEspecial;
+        } else if (a.tiene_permiso_hora) {
+            estadoBadge = 'Permiso (Horas)';
+            if (esJornadaEspecial) estadoBadge += badgeEspecial;
+        } else if (a.permiso_activo) {
+            estadoBadge = 'Permiso (Día)';
+        } else if (esLibreTeorico && esJornadaEspecial) {
+            estadoBadge = 'Día Libre' + badgeEspecial;
+        } else if (estadoStr === 'EXTRA') {
+            estadoBadge = 'Jornada Extra';
+        } else if (estadoStr === 'JORNADA_ESPECIAL') {
+            estadoBadge = 'Jornada Especial';
+        }
+        
+        const tiempoColacion = a.minutos_colacion_real || a.minutos_colacion || 0;
+        
+        return [
+            fechaFormateada,
+            estadoBadge,
+            a.hora_entrada_real || '--:--',
+            a.hora_salida_colacion || '--:--',
+            a.hora_entrada_colacion || '--:--',
+            a.hora_salida_real || '--:--',
+            a.horas_trabajadas > 0 ? formatDecimalToTime(a.horas_trabajadas) : '--:--',
+            (a.minutos_extra_autorizados > 0) ? formatMinutesToHHMM(a.minutos_extra_autorizados) : '--:--',
+            tiempoColacion > 0 ? formatMinutesToHHMM(tiempoColacion) : '--:--',
+            a.minutos_atraso > 0 ? formatMinutesToHHMM(a.minutos_atraso) : '--:--',
+            a.minutos_salida_adelantada > 0 ? formatMinutesToHHMM(a.minutos_salida_adelantada) : '--:--',
+            a.minutos_exceso_colacion > 0 ? formatMinutesToHHMM(a.minutos_exceso_colacion) : '--:--',
+            a.minutos_permiso_descontar > 0 ? formatMinutesToHHMM(a.minutos_permiso_descontar) : (a.permiso_activo ? 'Día Completo' : '--:--'),
+            a.minutos_deuda > 0 ? formatMinutesToHHMM(a.minutos_deuda) : '--:--'
+        ];
+    });
+
+    // AutoTable usando los datos directamente
+    doc.autoTable({
+        head: [
+            [
+                { content: 'DATOS GENERALES', colSpan: 2, styles: { halign: 'center', fillColor: [230, 230, 230] } },
+                { content: 'MARCACIONES', colSpan: 4, styles: { halign: 'center', fillColor: [226, 240, 217] } },
+                { content: 'TIEMPOS ACUMULADOS', colSpan: 3, styles: { halign: 'center', fillColor: [255, 242, 204] } },
+                { content: 'DEUDAS E INCIDENCIAS', colSpan: 5, styles: { halign: 'center', fillColor: [252, 228, 214] } }
+            ],
+            ['Fecha', 'Estado', 'Entrada\nTurno', 'Inicio\nColación', 'Fin\nColación', 'Salida\nTurno', 'Horas\nTrabajadas', 'Horas\nExtras', 'Total\nColación', 'ATRASOS', 'Salida\nAdelantada', 'Exceso\nColación', 'Permisos', 'Deuda']
+        ],
+        body: tableBody,
+        startY: startY,
+        theme: 'grid',
+        styles: { font: 'helvetica', fontSize: 8, cellPadding: 4, halign: 'center' },
+        headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+        columnStyles: {
+            0: { halign: 'left', fontStyle: 'bold' }, // Fecha
+            1: { halign: 'left' } // Estado
+        },
+        didParseCell: function(data) {
+            // Condicional de color para Anomalías
+            if (data.section === 'body' && data.column.index === 1) {
+                const text = data.cell.text[0] || '';
+                if (text === 'Inasistencia' || text.includes('FALTA')) {
+                    data.cell.styles.textColor = [220, 53, 69]; // danger
+                    data.cell.styles.fontStyle = 'bold';
+                } else if (text.includes('Atraso') || text.includes('Salida Adelantada')) {
+                    data.cell.styles.textColor = [253, 126, 20]; // warning
+                } else if (text === 'Jornada Completa') {
+                    data.cell.styles.textColor = [25, 135, 84]; // success
+                } else if (text.toLowerCase().includes('feriado') || text.toLowerCase().includes('libre')) {
+                    data.cell.styles.textColor = [13, 110, 253]; // blue for free/holiday
+                }
+            }
+        },
+        didDrawPage: function(data) {
+            // Footer con paginación
+            let str = 'Página ' + doc.internal.getNumberOfPages();
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(150);
+            doc.text(str, data.settings.margin.left, doc.internal.pageSize.height - 20);
+        }
+    });
+
+    // Cuadro Consolidado de métricas
+    let finalY = doc.lastAutoTable.finalY + 20;
+
+    if (finalY + 120 > doc.internal.pageSize.height) {
+        doc.addPage();
+        finalY = 40;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.text("Resumen Consolidado del Período", 40, finalY);
+
+    const formatDeuda = (mins) => {
+        return formatExactMinutesToTime(mins);
+    };
+
+    const formatNeto = (mins) => {
+        if (!mins || mins === 0) return '00:00:00';
+        let sign = mins < 0 ? '-' : '+';
+        let absMins = Math.abs(mins);
+        return `${sign}${formatExactMinutesToTime(absMins)}`;
+    };
+
+    let saldoNetoMins = metrics.minutosHE_Aprobado - metrics.minutosDeuda;
+
+    const summaryBody = [
+        ['Días Trabajados', metrics.diasTrabajados],
+        ['Atrasos', metrics.atrasosCount],
+        ['Salidas Adelantadas', metrics.salidasAdelantadasCount],
+        ['Deuda Total Bruta (HH:mm:ss)', formatDeuda(metrics.minutosDeuda)],
+        ['Inasistencias', metrics.faltasCount],
+        ['Justificaciones', metrics.justificacionesCount],
+        ['Permisos', metrics.permisosCount],
+        ['Jornadas Especiales', metrics.jornadasEspecialesCount],
+        ['Horas Extras Brutas (HH:mm:ss)', formatDeuda(metrics.minutosHE_Aprobado)],
+        ['Saldo Neto (HH:mm:ss)', formatNeto(saldoNetoMins)]
+    ];
+
+    doc.autoTable({
+        startY: finalY + 10,
+        body: summaryBody,
+        theme: 'grid',
+        tableWidth: 300,
+        margin: { left: 40 },
+        styles: { fontSize: 8, cellPadding: 3 },
+        columnStyles: {
+            0: { fontStyle: 'bold', fillColor: [245, 245, 245] },
+            1: { halign: 'center' }
+        }
+    });
+
+    finalY = doc.lastAutoTable.finalY + 50;
+
+    // Validar espacio para firmas
+    if (finalY + 50 > doc.internal.pageSize.height) {
+        doc.addPage();
+        finalY = 60;
+    }
+
+    doc.setTextColor(0);
+    doc.setDrawColor(0);
+    doc.setLineWidth(1);
+
+    // Firmas calculadas dinámicamente según ancho de página
+    const centerPoint = pageWidth / 2;
+    
+    // Firma Empleado (Izquierda)
+    const leftMargin = centerPoint - 180;
+    doc.line(leftMargin, finalY, leftMargin + 140, finalY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Firma Empleado", leftMargin + 35, finalY + 15);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`RUT: ${rut}`, leftMargin + 45, finalY + 25);
+
+    // Firma Jefatura (Derecha)
+    const rightMargin = centerPoint + 40;
+    doc.line(rightMargin, finalY, rightMargin + 140, finalY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Firma Jefatura / RRHH", rightMargin + 15, finalY + 15);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text("Aguacol SpA", rightMargin + 45, finalY + 25);
+
+    if (isDownload) {
+        const safeArea = (area || 'SIN_AREA').replace(/[^a-zA-Z0-9_\-]/g, '_').toUpperCase();
+        const safeNombre = nombreEmpleado.trim().replace(/\s+/g, '_').toUpperCase();
+        let fInicio = stateMarcacionesApp.fechaInicioRRHH ? stateMarcacionesApp.fechaInicioRRHH.replace(/-/g, '') : 'INICIO';
+        let fFin = stateMarcacionesApp.fechaFinRRHH ? stateMarcacionesApp.fechaFinRRHH.replace(/-/g, '') : 'FIN';
+        const nombreArchivo = `${safeArea}_${safeNombre}_${fInicio}-${fFin}.pdf`;
+        
+        doc.save(nombreArchivo);
+    } else {
+        const blob = doc.output('blob');
+        const url = URL.createObjectURL(blob);
+        const container = document.getElementById('pdf-iframe-container');
+        if (container) {
+            container.innerHTML = `<iframe src="${url}" width="100%" height="800px" style="border: none; border-radius: 4px;"></iframe>`;
+        }
+    }
+}
+
+// Deprecated alias for compatibility with external calls if any
+window.downloadReportPDF = function() {
+    updateVisorPDF(true);
+};
+
+
+// Helpers
+function generateMonthOptions(selected) {
+    const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    return months.map((m, i) => `<option value="${i + 1}" ${i + 1 === selected ? 'selected' : ''}>${m}</option>`).join('');
+}
+function generateYearOptions(selected) {
+    const start = 2024;
+    const end = 2030;
+    let html = '';
+    for (let y = start; y <= end; y++) {
+        html += `<option value="${y}" ${y === selected ? 'selected' : ''}>${y}</option>`;
+    }
+    return html;
+}
+
+// ==========================================
+// UTILIDADES DE VISTA
+// ==========================================
+
+
+
+// ── Helpers de vista única (mutuamente excluyentes) ──────────────────────────
+
+
+// ── Función Maestra Universal (V15.0) ──────────────────────────
+/**
+ * Transforma minutos puros (decimales exactos sin truncar) en formato HH:MM:SS
+ * protegiendo los cálculos matemáticos de errores visuales en PDF y UI.
+ * @param {number} minsFloat 
+ */
+function formatExactMinutesToTime(minsFloat) {
+    if (!minsFloat || minsFloat <= 0) return "00:00:00";
+    const totalSecs = Math.round(minsFloat * 60);
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// Deprecated: Aliases redirigidos a la nueva función maestra
+function formatDecimalToTime(decimalHours) {
+    if (!decimalHours || decimalHours <= 0) return "00:00:00";
+    return formatExactMinutesToTime(decimalHours * 60);
+}
+
+function formatMinutesToHHMM(totalMinutes) {
+    return formatExactMinutesToTime(totalMinutes);
+}
+/**
+ * Abre el modal de gestión de horas extra.
+ */
+function openHoraExtraModal(empleadoId, fecha, nombreEmpleado) {
+    // Buscar los datos de este día en el estado global
+    const empData = stateMarcacionesApp.data.matrix[empleadoId];
+    const asist = empData ? empData[fecha] : null;
+
+    if (!asist || !asist.minutos_extra_bruto) {
+        showToast("No existen horas extra para gestionar en este día.", "info");
+        return;
+    }
+
+    const mExtra = asist.minutos_extra_bruto;
+    const mAuth = asist.minutos_extra_autorizados || 0;
+
+    // Crear/Reutilizar modal
+    let modalEl = document.getElementById('modal-aprobacion-he');
+    if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'modal-aprobacion-he';
+        // Guardar el valor exacto para usarlo al aprobar completo
+        modalEl.dataset.brutoExacto = mExtra;
+
+        const html = `
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content shadow-lg border-0">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title"><i class="bi bi-clock-history"></i> Aprobar Horas Extra</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted small mb-1" id="he-modal-emp"></h6>
+                            <div class="fw-bold" id="he-modal-fecha"></div>
+                        </div>
+                        
+                        <div class="alert alert-info py-2 px-3 small">
+                            <i class="bi bi-info-circle"></i> Total detectado: <strong id="he-modal-bruto-str"></strong>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="input-he-minutos" class="form-label small">Modificar a (Minutos):</label>
+                            <input type="number" id="input-he-minutos" class="form-control" step="any" placeholder="Ej: 120 para 2 horas">
+                            <div class="form-text small text-muted">Deja el valor sugerido para aprobar completo.</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" id="btn-he-aprobar">
+                                <i class="bi bi-check-circle"></i> Aprobar Total Completo
+                            </button>
+                            <button class="btn btn-outline-danger" id="btn-he-rechazar">
+                                <i class="bi bi-x-circle"></i> Rechazar
+                            </button>
+                            <button class="btn btn-link btn-sm text-secondary" id="btn-he-pendiente">
+                                Volver a Pendiente
+                            </button>
+                            <hr class="my-1">
+                            <button type="button" class="btn btn-outline-danger btn-sm" id="btn-he-delete-manual" title="Elimina las marcaciones manuales creadas en este día">
+                                <i class="bi bi-trash"></i> Eliminar Ingreso Manual
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        modalEl.classList.add('modal', 'fade');
+        modalEl.setAttribute('tabindex', '-1');
+        modalEl.innerHTML = html;
+        document.body.appendChild(modalEl);
+    } else {
+        modalEl.dataset.brutoExacto = mExtra;
+    }
+
+    // Actualizar valores
+    document.getElementById('he-modal-emp').innerText = nombreEmpleado;
+    document.getElementById('he-modal-fecha').innerText = fecha;
+    document.getElementById('he-modal-bruto-str').innerText = formatExactMinutesToTime(mExtra);
+    
+    // Si ya tiene autorizados, mostramos esos, sino mostramos el bruto exacto
+    document.getElementById('input-he-minutos').value = mAuth || mExtra;
+    document.getElementById('input-he-minutos').max = mExtra;
+
+    // Asignar eventos dinámicos
+    document.getElementById('btn-he-aprobar').onclick = () => confirmAprobacionHE(empleadoId, fecha, 'APROBADO', asist?.updated_at);
+    document.getElementById('btn-he-rechazar').onclick = () => confirmAprobacionHE(empleadoId, fecha, 'RECHAZADO', asist?.updated_at);
+    document.getElementById('btn-he-pendiente').onclick = () => confirmAprobacionHE(empleadoId, fecha, 'PENDIENTE', asist?.updated_at);
+
+    const deleteManualBtn = document.getElementById('btn-he-delete-manual');
+    if (deleteManualBtn) {
+        deleteManualBtn.onclick = () => {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            if (typeof deleteManualJornada === 'function') {
+                deleteManualJornada(empleadoId, fecha);
+            } else {
+                console.error("deleteManualJornada no está definida");
+            }
+        };
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+async function confirmAprobacionHE(empleadoId, fecha, estado, lastUpdatedAt) {
+    const inputVal = parseFloat(document.getElementById('input-he-minutos').value);
+    const brutoExacto = parseFloat(document.getElementById('modal-aprobacion-he').dataset.brutoExacto);
+    
+    // Si aprueba, por defecto enviamos el input, pero asegurándonos de que si el usuario no tocó nada (y tiene todo el bruto), mandamos el exacto.
+    let minutos = inputVal;
+    if (estado === 'APROBADO' && Math.abs(inputVal - brutoExacto) < 1) { 
+        // Si la diferencia es menor a 1 minuto (ej. usuario tipea 125 para 125.55), y quería aprobar completo
+        // Se envía el bruto exacto para no perder los segundos
+        minutos = brutoExacto; 
+    }
+
+    try {
+        const resp = await fetch('/api/asistencia/aprobar-he-batch/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([{
+                empleado_id: empleadoId,
+                fecha: fecha,
+                estado: estado,
+                minutos_autorizados: estado === 'APROBADO' ? minutos : 0,
+                last_updated_at: lastUpdatedAt || null
+            }])
+        });
+
+        const result = await resp.json();
+        if (resp.ok) {
+            showToast(result.mensaje, "success");
+
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-aprobacion-he'));
+            modal.hide();
+
+            // Recargar datos
+            if (typeof window.loadMarcacionesData === 'function') {
+                window.loadMarcacionesData();
+            }
+        } else {
+            const result = await resp.json();
+            if (resp.status === 409) {
+                // Conflicto de concurrencia
+                showToast("Conflicto: " + result.detail, "error");
+                // Forzar recarga inmediata para ver cambios externos
+                if (typeof window.loadMarcacionesData === 'function') {
+                    window.loadMarcacionesData();
+                }
+            } else {
+                showToast("Error: " + result.detail, "error");
+            }
+        }
+    } catch (e) {
+        console.error("Error sincronizando BioAlba:", e);
+        showToast("Error de conexión", "error");
+    }
+}
+
+/**
+ * Gestiona el refresco automático de la matriz
+ * @param {boolean} enabled 
+ */
+function toggleAutoRefresh(enabled) {
+    stateMarcacionesApp.autoRefreshEnabled = enabled;
+
+    // Limpiar anterior si existe
+    if (stateMarcacionesApp.autoRefreshIntervalId) {
+        clearInterval(stateMarcacionesApp.autoRefreshIntervalId);
+        stateMarcacionesApp.autoRefreshIntervalId = null;
+    }
+
+    if (enabled) {
+        console.log("🔄 Auto-refresco activado (60s)");
+        showToast("Auto-refresco activado (60s)", "info");
+        stateMarcacionesApp.autoRefreshIntervalId = setInterval(() => {
+            // Solo si la página está activa y el contenedor existe
+            const container = document.getElementById('page-marcaciones');
+            if (container && container.classList.contains('active')) {
+                console.log("⏱️ Ejecutando auto-refresco de Marcaciones...");
+                if (typeof window.loadMarcacionesData === 'function') {
+                    window.loadMarcacionesData();
+                }
+            }
+        }, 60000);
+    } else {
+        console.log("🛑 Auto-refresco desactivado");
+        showToast("Auto-refresco desactivado", "info");
+    }
+}
+
+/**
+ * Módulo de Aprobación Masiva de Horas Extra
+ * Se abre al hacer doble clic en el nombre de un empleado en la grilla analítica
+ */
+window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
+    if (!stateMarcacionesApp.data || !stateMarcacionesApp.data.matrix || !stateMarcacionesApp.data.matrix[empleadoId]) {
+        showToast("No se encontraron datos del empleado.", "error");
+        return;
+    }
+    const empData = stateMarcacionesApp.data.matrix[empleadoId];
+    
+    // Buscar nombre del empleado
+    let empNombre = empNombreArg || "Desconocido";
+    if (empNombre === "Desconocido") {
+        // Fallback: buscar en info o en cualquier día
+        if (empData.info && empData.info.nombre_completo) {
+            empNombre = empData.info.nombre_completo;
+        } else {
+            for (const key in empData) {
+                if (empData[key]?.empleado) { empNombre = empData[key].empleado; break; }
+            }
+        }
+    }
+
+    // 1. Determinar el rango de fechas dinámico
+    let dates = [];
+    if (stateMarcacionesApp.data && stateMarcacionesApp.data.periodo) {
+        let curr = new Date(stateMarcacionesApp.data.periodo.inicio + 'T00:00:00');
+        let end = new Date(stateMarcacionesApp.data.periodo.fin + 'T00:00:00');
+        while (curr <= end) {
+            dates.push(curr.toISOString().split('T')[0]);
+            curr.setDate(curr.getDate() + 1);
+        }
+    }
+
+    // 2. Encontrar días con HE Detectada usando los campos correctos
+    const diasHE = [];
+    const dayNames = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    dates.forEach(dateStr => {
+        const di = empData[dateStr];
+        if (!di) return;
+
+        // Excluir días especiales para que no se sumen a la bolsa de HE normales
+        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA';
+        // Campo correcto: minutos_extra_bruto (usado en renderVistaAnalitica línea 2331)
+        const brutoPotencial = isEsp ? 0 : (di.minutos_extra_bruto || 0);
+        
+        if (brutoPotencial > 0) {
+            const dt = new Date(dateStr + 'T00:00:00');
+            diasHE.push({
+                fecha: dateStr,
+                fechaLabel: `${dayNames[dt.getDay()]} ${dt.getDate()}-${String(dt.getMonth()+1).padStart(2,'0')}`,
+                bruto: brutoPotencial,
+                autorizados: di.minutos_extra_autorizados || 0,
+                estado: (di.estado_he === 'N/A' || !di.estado_he) ? 'PENDIENTE' : di.estado_he,
+                hora_entrada: di.hora_entrada_real || '--',
+                hora_salida: di.hora_salida_real || '--'
+            });
+        }
+    });
+
+    // Calcular totales
+    const totalBruto = diasHE.reduce((s, d) => s + d.bruto, 0);
+    const totalAprobado = diasHE.reduce((s, d) => s + d.autorizados, 0);
+
+    if (diasHE.length === 0) {
+        showToast(`${empNombre} no tiene horas extra detectadas en el periodo.`, 'info');
+        return;
+    }
+
+    // 3. Construir filas de la tabla
+    const heRows = diasHE.map(d => {
+        const estadoBadge = d.estado === 'APROBADO' ? '<span class="badge bg-success">✅ Aprobado</span>' :
+                           d.estado === 'RECHAZADO' ? '<span class="badge bg-danger">❌ Rechazado</span>' :
+                           '<span class="badge bg-warning text-dark">⏳ Pendiente</span>';
+        const checked = d.estado === 'PENDIENTE' ? 'checked' : '';
+        return `<tr class="he-approval-row ${d.estado === 'PENDIENTE' ? 'table-warning-subtle' : ''}">
+            <td class="text-center"><input class="form-check-input check-item-he" type="checkbox" 
+                data-fecha="${d.fecha}" data-minutos="${d.bruto}" ${checked}></td>
+            <td class="fw-semibold">${d.fechaLabel}</td>
+            <td class="font-monospace text-center">${d.hora_entrada}</td>
+            <td class="font-monospace text-center">${d.hora_salida}</td>
+            <td class="fw-bold text-center" style="color:#1e40af">${formatMinutesToHHMM(d.bruto)}</td>
+            <td class="text-center">${estadoBadge}</td>
+            <td class="text-center">
+                ${d.estado !== 'APROBADO' ? `<button class="btn btn-sm btn-outline-success py-0 px-2" onclick="submitSingleHE(${empleadoId},'${d.fecha}','APROBADO',${d.bruto})" title="Aprobar"><i class="bi bi-check-lg"></i></button>` : ''}
+                ${d.estado !== 'RECHAZADO' ? `<button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" onclick="submitSingleHE(${empleadoId},'${d.fecha}','RECHAZADO',0)" title="Rechazar"><i class="bi bi-x-lg"></i></button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+
+    // 4. Crear Modal
+    const modalId = 'modalBatchHE';
+    let existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content border-0 shadow-lg" style="border-radius:16px;overflow:hidden">
+                    <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);padding:20px 24px 16px">
+                        <div>
+                            <h5 class="modal-title fw-bold mb-1" style="color:#1e293b">
+                                <i class="bi bi-clock-history text-primary me-2"></i>Gestión de Horas Extra
+                            </h5>
+                            <p class="mb-0 text-muted" style="font-size:0.82rem">
+                                <i class="bi bi-person-fill me-1"></i>${empNombre}
+                                <span class="mx-2">·</span>
+                                <span class="fw-semibold">${diasHE.length}</span> días con HE
+                                <span class="mx-2">·</span>
+                                Total: <span class="fw-bold text-primary">${formatMinutesToHHMM(totalBruto)}</span>
+                            </p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="font-size:0.8rem">
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input" id="check-all-he" checked onchange="toggleAllHECells(this)">
+                                <label for="check-all-he" class="form-check-label fw-semibold">Seleccionar todos</label>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-approve-all" onclick="submitBatchHE(event, ${empleadoId}, 'APROBADO')">
+                                    <i class="bi bi-check-all me-1"></i>Aprobar Seleccionados
+                                </button>
+                                <button class="btn btn-sm btn-reject-all" onclick="submitBatchHE(event, ${empleadoId}, 'RECHAZADO')">
+                                    <i class="bi bi-x-circle me-1"></i>Rechazar Seleccionados
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive" style="max-height:420px;overflow-y:auto">
+                            <table class="table table-sm table-hover align-middle mb-0 he-approval-table">
+                                <thead class="table-light sticky-top" style="z-index:10">
+                                    <tr>
+                                        <th style="width:40px" class="text-center"><i class="bi bi-check2-square"></i></th>
+                                        <th>Fecha</th>
+                                        <th class="text-center">Entrada</th>
+                                        <th class="text-center">Salida</th>
+                                        <th class="text-center">HE Bruto</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${heRows}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 bg-light" style="padding:12px 24px">
+                        <div class="d-flex align-items-center gap-3 w-100">
+                            <div class="d-flex gap-3" style="font-size:0.78rem">
+                                <span><i class="bi bi-clock text-primary me-1"></i>Bruto: <strong>${formatMinutesToHHMM(totalBruto)}</strong></span>
+                                <span><i class="bi bi-check-circle text-success me-1"></i>Aprobado: <strong class="text-success">${formatMinutesToHHMM(totalAprobado)}</strong></span>
+                            </div>
+                            <button type="button" class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+
+    document.getElementById(modalId).addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+};
+
+// Acción individual: Aprobar/Rechazar una sola jornada de HE
+window.submitSingleHE = async function(empId, fecha, estado, minutos) {
+    try {
+        const res = await fetch('/api/asistencia/aprobar-he-batch/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([{
+                empleado_id: empId,
+                fecha: fecha,
+                estado: estado,
+                minutos_autorizados: estado === 'APROBADO' ? minutos : 0
+            }])
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(estado === 'APROBADO' ? '✅ HE Aprobada' : '❌ HE Rechazada', 'success');
+            await loadMarcacionesData();
+            const mEl = document.getElementById('modalBatchHE');
+            if (mEl) bootstrap.Modal.getInstance(mEl)?.hide();
+        } else {
+            showToast('Error: ' + (data.detail || 'Error procesando'), 'danger');
+        }
+    } catch (e) {
+        showToast('Error de conexión: ' + e.message, 'danger');
+    }
+};
+
+// ==========================================
+// ADMIN BYPASS: Salto de Seguridad para Superusuarios
+// ==========================================
+window.bypassSecurityWall = function() {
+    console.log("🚀 INICIANDO BYPASS DE SEGURIDAD...");
+    
+    // Eliminamos confirm para evitar problemas de foco/bloqueo en el navegador
+    console.log("🔓 ADMIN BYPASS ACTIVADO");
+    
+    // Almacenar bypass en la sesión actual para evitar que checkAuditoriaBloqueo lo vuelva a abrir
+    sessionStorage.setItem('security_wall_bypass', 'true');
+    // Invalidar caché de auditoría para que la próxima llamada use el bypass
+    _auditoriaBloqueoCache = { result: null, timestamp: 0 };
+    
+    // Cerrar el modal
+    const modalEl = document.getElementById('modal-regularizacion-asistencia');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }
+    
+    showToast("Acceso desbloqueado mediante Bypass de Administrador", "warning");
+    
+    // REANUDAR CARGA: Con un pequeño delay para asegurar limpieza visual del modal
+    console.log("🔄 Reanudando carga de datos tras bypass (con delay)...");
+    setTimeout(() => {
+        if (typeof window.loadMarcacionesData === 'function') {
+            window.loadMarcacionesData();
+        } else {
+            console.error("❌ Error: window.loadMarcacionesData no está definida.");
+        }
+    }, 500);
+}
+
+// Modificar checkAuditoriaBloqueo para respetar el bypass de sesión
+// ── CACHE TTL: evitar llamadas redundantes al backend ────────────────────
+let _auditoriaBloqueoCache = { result: null, timestamp: 0 };
+const _AUDITORIA_CACHE_TTL_MS = 60000; // 60 segundos — el estado de bloqueo no cambia entre clicks
+let _auditoriaBloqueoInFlight = null;  // Promise para deduplicar llamadas concurrentes
+
+// Invalidar caché cuando se recarga la data de marcaciones
+function _invalidarAuditoriaCache() {
+    _auditoriaBloqueoCache = { result: null, timestamp: 0 };
+}
+
+window.checkAuditoriaBloqueo = async function(fecha) {
+    if (sessionStorage.getItem('security_wall_bypass') === 'true') {
+        console.log("🔓 Bypass activo en sesión. Ignorando auditoría.");
+        return false;
+    }
+
+    // Caché TTL: si la última consulta fue hace menos de 5s, reusar resultado
+    const now = Date.now();
+    if (_auditoriaBloqueoCache.result !== null && (now - _auditoriaBloqueoCache.timestamp) < _AUDITORIA_CACHE_TTL_MS) {
+        console.log('🛡️ Auditoría (caché): reutilizando resultado previo');
+        return _auditoriaBloqueoCache.result;
+    }
+
+    // Deduplicación: si ya hay una llamada en vuelo, esperar su resultado
+    if (_auditoriaBloqueoInFlight) {
+        console.log('🛡️ Auditoría (dedup): esperando llamada en vuelo');
+        return _auditoriaBloqueoInFlight;
+    }
+
+    _auditoriaBloqueoInFlight = _checkAuditoriaBloqueoImpl(fecha);
+    try {
+        const result = await _auditoriaBloqueoInFlight;
+        _auditoriaBloqueoCache = { result, timestamp: Date.now() };
+        return result;
+    } finally {
+        _auditoriaBloqueoInFlight = null;
+    }
+};
+
+async function _checkAuditoriaBloqueoImpl(fecha) {
+    try {
+        const t = Date.now();
+        const resp = await fetch(`/api/asistencia/auditoria-bloqueo/?fecha=${fecha || ''}&_t=${t}`);
+        if (!resp.ok) {
+            console.error("❌ Error en auditoría:", resp.status);
+            return false;
+        }
+        
+        const data = await resp.json();
+        console.log("🛡️ Resultado Auditoría (Raw):", data);
+        
+        if (data.bloqueo) {
+            // Abrir el modal con la tabla de anomalías
+            openRegularizacionModal(data.anomalias, data.fecha_auditada); 
+            
+            // Gestionar visibilidad de botones Admin (Bypass)
+            const btnBypass = document.getElementById('btn-bypass-seguridad');
+            if (btnBypass) {
+                const canBypass = (data.can_bypass === true || data.can_bypass === 1);
+                console.log("🔑 Aplicando Visibilidad Bypass:", canBypass);
+                btnBypass.style.setProperty('display', canBypass ? 'block' : 'none', 'important');
+                
+                // ASIGNACIÓN EXPLICITA DE EVENTO
+                btnBypass.onclick = function() {
+                    console.log("🖱️ Click detectado en Botón Bypass");
+                    window.bypassSecurityWall();
+                };
+            }
+            
+            // Habilitar cierre si es Admin
+            const closeBtns = document.querySelectorAll('#modal-regularizacion-asistencia .btn-close, #modal-regularizacion-asistencia [data-bs-dismiss="modal"]');
+            closeBtns.forEach(btn => {
+                const canBypass = (data.can_bypass === true || data.can_bypass === 1);
+                btn.style.setProperty('display', canBypass ? 'block' : 'none', 'important');
+                
+                // Si puede saltarse el muro, el cierre del modal también debe activar la carga
+                if (canBypass) {
+                    btn.onclick = function() {
+                        console.log("✖️ Cierre de modal detectado (Bypass implícito)");
+                        window.bypassSecurityWall();
+                    };
+                }
+            });
+
+            const modalEl = document.getElementById('modal-regularizacion-asistencia');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl, {
+                backdrop: (data.can_bypass) ? true : 'static',
+                keyboard: (data.can_bypass) ? true : false
+            });
+            modal.show();
+            return true; 
+        }
+        return false; 
+    } catch (e) {
+        console.error("🚨 Error crítico en auditoría:", e);
+        return false; 
+    }
+}
+
+window.toggleAllHECells = function (master) {
+    document.querySelectorAll('.check-item-he').forEach(c => c.checked = master.checked);
+};
+
+window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
+    const selected = Array.from(document.querySelectorAll('.check-item-he:checked')).map(c => ({
+        empleado_id: empleadoId,
+        fecha: c.dataset.fecha,
+        estado: nuevoEstado,
+        minutos_autorizados: nuevoEstado === 'APROBADO' ? parseFloat(c.dataset.minutos) : 0
+    }));
+
+    if (selected.length === 0) {
+        alert("Por favor seleccione al menos un día.");
+        return;
+    }
+
+    if (!confirm(`¿Está seguro de marcar ${selected.length} registros como ${nuevoEstado}?`)) return;
+
+    try {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+        btn.disabled = true;
+
+        const response = await fetch('/api/asistencia/aprobar-he-batch/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(selected)
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.mensaje, 'success');
+            const mEl = document.getElementById('modalBatchHE');
+            const mInst = bootstrap.Modal.getInstance(mEl);
+            if (mInst) mInst.hide();
+
+            // Refrescar la matriz (usar la función correcta según el contexto)
+            if (typeof window.loadMarcacionesData === 'function') {
+                window.loadMarcacionesData();
+            } else if (typeof loadTeamMatrix === 'function') {
+                loadTeamMatrix();
+            }
+        } else {
+            throw new Error(data.detail || 'Error en el servidor');
+        }
+    } catch (error) {
+        console.error("Error en submitBatchHE:", error);
+        alert("Error al procesar la aprobación masiva: " + error.message);
+    } finally {
+        // En caso de error, restaurar botón
+        const btn = event.target;
+        if (btn && btn.disabled) {
+            btn.innerHTML = nuevoEstado === 'APROBADO' ? '✅ Aprobar Seleccionados' : '❌ Rechazar Seleccionados';
+            btn.disabled = false;
+        }
+    }
+};
+
+function getStatusHEBadgeClass(estado) {
+    switch (estado) {
+        case 'APROBADO': return 'bg-success';
+        case 'RECHAZADO': return 'bg-danger';
+        default: return 'bg-warning text-dark';
+    }
+}
+
+// ==========================================
+// UTILIDADES DE BONOS
+// ==========================================
+function renderBonoStatus(empId, bonoName, evaluations) {
+    if (!evaluations || !evaluations[empId] || !evaluations[empId][bonoName]) {
+        return '<span class="text-muted" style="font-size:0.75rem;">—</span>';
+    }
+
+    const b = evaluations[empId][bonoName];
+
+    // No aplica por cargo o contrato
+    if (b.aplica === false) {
+        return '<span class="text-muted" style="font-size:0.75rem;" title="No aplica por cargo/contrato">—</span>';
+    }
+
+    // Pendiente: sin días laborables aún (inicio de mes)
+    if (b.califica && b.monto === 0 && b.motivo && b.motivo.startsWith('Pendiente')) {
+        return `<span class="badge" style="background:#94a3b8;padding:0.4em 0.7em;min-width:55px;font-size:0.85em;" title="${b.motivo}">⏳ …</span>`;
+    }
+
+    const montoFmt   = (b.monto || 0).toLocaleString('es-CL');
+    const completoFmt = (b.monto_completo || b.monto || 0).toLocaleString('es-CL');
+
+    if (!b.califica) {
+        // Perdió el bono
+        return `<span class="badge bg-danger" style="opacity:0.8;padding:0.4em 0.8em;min-width:55px;font-size:0.88em;" title="Motivo: ${b.motivo || ''}">✗ NO</span>`;
+    }
+
+    if (b.proporcional) {
+        // Bono proporcional — ámbar
+        const pct = b.factor != null ? Math.round(b.factor * 100) : '';
+        const tooltip = `$${montoFmt} de $${completoFmt} completo&#10;${b.motivo || ''}`;
+        return `<span class="badge" style="background:#f59e0b;color:#1a1a1a;padding:0.4em 0.7em;min-width:55px;font-size:0.88em;font-weight:700;" title="${tooltip}">≈ $${montoFmt}</span>`;
+    }
+
+    // Bono completo — verde
+    return `<span class="badge bg-success" style="padding:0.4em 1em;min-width:55px;font-size:0.95em;" title="Monto: $${montoFmt}&#10;${b.motivo || ''}">✓ SÍ</span>`;
+}
+
+
+
+
+/**
+ * Mantiene el estado local de la regularización para callbacks
+ */
+const regularizacionState = {
+    callbackFinal: null
+};
+
+// Apertura del modal de regularización
+function openRegularizacionModal(anomalias, fecha) {
+    const modalEl = document.getElementById('modal-regularizacion-asistencia');
+    if (!modalEl) {
+        console.error("No se encontró modal-regularizacion-asistencia en index.html");
+        return;
+    }
+
+    const tbody = document.getElementById('lista-regularizacion-cuerpo');
+    // a.fecha es la fecha MÍNIMA encontrada por el backend (agrupada por empleado)
+    tbody.innerHTML = anomalias.map(a => {
+        const fullNombre = `${a.apellido_paterno} ${a.apellido_materno || ''} ${a.nombre}`.trim().replace(/  +/g, ' ');
+        return `
+        <tr>
+            <td>
+                <div class="fw-bold text-dark">${fullNombre}</div>
+                <div class="text-muted" style="font-size: 0.75rem;">RUT: ${a.rut || 'No Registrado'}</div>
+            </td>
+            <td><span class="badge bg-light text-dark border">${a.area}</span></td>
+            <td>
+                <div class="text-info small fw-bold"><i class="bi bi-calendar-check-fill me-1"></i>Desde: ${a.fecha}</div>
+                <div class="text-muted x-small">Pendiente de regularización</div>
+            </td>
+            <td class="text-end">
+                <button class="btn btn-sm btn-primary fw-bold shadow-sm" 
+                        onclick="openAsignarTurnoForzado(${a.id}, '${a.fecha}', '${a.area}', '${fullNombre.replace(/'/g, "\\'")}', '${a.cargo || ''}')">
+                    <i class="bi bi-pencil-square me-1"></i> Asignar
+                </button>
+            </td>
+        </tr>
+    `}).join('');
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+/**
+ * Abre el modal de asignación individual filtrando por área.
+ */
+async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = '') {
+    const modalEl = document.getElementById('modal-asignar-turno-individual');
+    if (!modalEl) return;
+
+    // Poblar datos básicos
+    document.getElementById('asig-indiv-empleado-id').value = empleadoId;
+    document.getElementById('asig-indiv-fecha').value = fecha;
+    document.getElementById('asig-indiv-nombre').innerText = nombre;
+    
+    const areaBadge = document.getElementById('asig-indiv-area-badge');
+    areaBadge.innerHTML = `<span class="badge bg-info text-dark border"><i class="bi bi-geo-alt me-1"></i> ${area}</span>`;
+    
+    const cargoBadge = document.getElementById('asig-indiv-cargo');
+    if (cargoBadge) {
+        if (cargo) {
+            cargoBadge.innerHTML = `<i class="bi bi-person-badge me-1"></i>${cargo}`;
+            cargoBadge.classList.remove('d-none');
+        } else {
+            cargoBadge.classList.add('d-none');
+            cargoBadge.innerHTML = '';
+        }
+    }
+
+
+    // Ocultar la fila BioAlba hasta que RRHH decida buscar (no automático)
+    const rowBioAlba = document.getElementById('asig-bioalba-row');
+    if (rowBioAlba) rowBioAlba.classList.add('d-none');
+    // Guardar el empleadoId para que el botón de búsqueda lo use
+    const btnBuscarBioAlba = document.getElementById('asig-btn-buscar-bioalba');
+    if (btnBuscarBioAlba) {
+        btnBuscarBioAlba.dataset.empleadoId = empleadoId;
+        btnBuscarBioAlba.disabled = false;
+        btnBuscarBioAlba.innerHTML = '<i class="bi bi-search me-1"></i>Buscar 1ª marca en BioAlba';
+    }
+
+    // Cargar Turnos del área
+    const selectTurno = document.getElementById('asig-indiv-turno-id');
+    selectTurno.innerHTML = '<option value="">Cargando turnos de ' + area + '...</option>';
+    
+    try {
+        const t = Date.now();
+        const resp = await fetch(`/api/turnos/?area=${encodeURIComponent(area)}&_t=${t}`);
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(`Status: ${resp.status} - ${errText}`);
+        }
+        const turnos = await resp.json();
+        
+        if (turnos.length === 0) {
+            console.warn("\u26a0\ufe0f No se encontraron turnos para el \u00e1rea:", area);
+            selectTurno.innerHTML = '<option value="">❌ No hay turnos creados</option>';
+            document.getElementById('asig-indiv-alerta-area').innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> No existen turnos configurados para <u>${area}</u>.`;
+        } else {
+            selectTurno.innerHTML = '<option value="">-- Seleccione el Turno Oficial --</option>' +
+                turnos.map(t => {
+                    let horario = '';
+                    if (t.dias && t.dias.length > 0) {
+                        const diaLaboral = t.dias.find(d => !d.es_libre) || t.dias[0];
+                        const he = diaLaboral.hora_entrada || '--:--';
+                        const hs = diaLaboral.hora_salida || '--:--';
+                        horario = `(${he} - ${hs})`;
+                    }
+                    return `<option value="${t.id}">${t.nombre} ${horario}</option>`;
+                }).join('');
+            document.getElementById('asig-indiv-alerta-area').innerHTML = `<i class="bi bi-info-circle me-1"></i> Mostrando ${turnos.length} turnos válidos para <strong>${area}</strong>.`;
+        }
+    } catch (e) {
+        console.error("\u274c Error cargando turnos para:", area, e);
+        selectTurno.innerHTML = `<option value="">Error al cargar turnos (${e.message})</option>`;
+    }
+
+    // Resetear checkbox BioAlba (siempre marcado al abrir)
+    const chkSync = document.getElementById('asig-chk-bioalba-sync');
+    if (chkSync) chkSync.checked = true;
+
+    // Restaurar botón confirmar (en caso de que quedara en spinner de uso previo)
+    const btnConfirmar = document.getElementById('btn-confirmar-asignacion-individual');
+    if (btnConfirmar) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.innerHTML = '<i class="bi bi-check-lg me-2"></i>Confirmar Asignación';
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+// Exponer globalmente para que pueda ser llamada desde onclick en main.js
+window.openAsignarTurnoForzado = openAsignarTurnoForzado;
+
+// Búsqueda bajo demanda: RRHH decide cuándo buscar la primera marcación en BioAlba
+window.buscarPrimeraMarcaBioAlba = async function(btn) {
+    const empleadoId = btn?.dataset?.empleadoId;
+    if (!empleadoId) return;
+
+    const rowBioAlba = document.getElementById('asig-bioalba-row');
+    const valBioAlba = document.getElementById('asig-bioalba-valor');
+    const btnUsarFecha = document.getElementById('asig-btn-primera-marca');
+
+    // Estado: buscando
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Consultando BioAlba...';
+    if (rowBioAlba) {
+        rowBioAlba.classList.remove('d-none');
+        if (valBioAlba) valBioAlba.textContent = 'Buscando desde enero 2026...';
+        if (btnUsarFecha) btnUsarFecha.classList.add('d-none');
+    }
+
+    try {
+        const resp = await fetch(`/api/asistencia/empleados/${empleadoId}/primera-marcacion/`);
+        const data = resp.ok ? await resp.json() : null;
+        const primeraMarca = data?.primera_marcacion || null;
+
+        if (primeraMarca) {
+            if (valBioAlba) valBioAlba.textContent = primeraMarca;
+            if (btnUsarFecha) {
+                btnUsarFecha.dataset.fecha = primeraMarca;
+                btnUsarFecha.classList.remove('d-none');
+            }
+            btn.innerHTML = '<i class="bi bi-check-circle me-1 text-success"></i>BioAlba consultado';
+        } else {
+            if (valBioAlba) valBioAlba.textContent = data?.motivo || 'Sin marcaciones históricas en BioAlba';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-search me-1"></i>Buscar 1ª marca en BioAlba';
+        }
+    } catch (e) {
+        if (valBioAlba) valBioAlba.textContent = 'Error conectando a BioAlba';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Reintentar';
+    }
+};
+
+async function saveAsignacionIndividual() {
+    const empleadoId = document.getElementById('asig-indiv-empleado-id').value;
+    const fecha = document.getElementById('asig-indiv-fecha').value;
+    const turnoId = document.getElementById('asig-indiv-turno-id').value;
+    const nombre = document.getElementById('asig-indiv-nombre').innerText;
+
+    // ── Detectar modo batch ───────────────────────────────────────────────────
+    const isBatchTurnos = typeof _batch !== 'undefined' && _batch.active && _batch.phase === 'turnos';
+
+    // En batch: nunca sincronizar individualmente; se hace todo junto en Fase Sync
+    const syncBioAlba = isBatchTurnos
+        ? false
+        : (document.getElementById('asig-chk-bioalba-sync')?.checked ?? true);
+
+    if (!fecha) return showToast("Debe seleccionar una fecha de inicio", "warning");
+    if (!turnoId) return showToast("Debe seleccionar un turno", "warning");
+
+    // ── Spinner en botón ────────────────────────────────────────────────────
+    const btn = document.getElementById('btn-confirmar-asignacion-individual');
+    const btnOrigHtml = btn?.innerHTML;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+    }
+
+    try {
+        const resp = await fetch('/api/asistencia/asignaciones/individual/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                empleado_id: parseInt(empleadoId),
+                fecha: fecha,
+                turno_id: parseInt(turnoId),
+                sync_bioalba: syncBioAlba,
+                skip_reproceso: isBatchTurnos,  // batch: solo guarda turno, sin reproceso individual
+            })
+        });
+
+        if (resp.ok) {
+            const data = await resp.json();
+            const jobId = data.job_id || null;
+
+            showToast("✅ Turno asignado. Iniciando proceso...", "success");
+
+            // Cerrar modal de asignación
+            const modalAsig = bootstrap.Modal.getInstance(document.getElementById('modal-asignar-turno-individual'));
+            if (modalAsig) modalAsig.hide();
+
+            // ── MODO BATCH: recolectar payload y avanzar cola ────────────────
+            if (isBatchTurnos) {
+                // Guardar datos para el batch-sync final
+                if (typeof _batch !== 'undefined') {
+                    _batch.syncPayload.push({
+                        empleado_id: parseInt(empleadoId),
+                        fecha_inicio: fecha,
+                    });
+                    console.log(
+                        `[Batch/Turnos] Turno registrado para emp ${empleadoId} desde ${fecha}. ` +
+                        `Payload: ${_batch.syncPayload.length} / ${_batch.editedEmployees.length}`
+                    );
+                }
+                // Avanzar al siguiente empleado en la cola de turnos
+                // (procesarColaOnboarding detectará si quedan más o lanzará batch-sync)
+                if (typeof procesarColaOnboarding === 'function') {
+                    setTimeout(procesarColaOnboarding, 400);
+                }
+                return;  // ← No abrir modal de progreso ni calibración en batch
+            }
+
+            // ── MODO INDIVIDUAL: flujo original con progreso y calibración ───
+            if (jobId) {
+                setTimeout(() => abrirModalProgresoJob(jobId, nombre, fecha, {
+                    syncBioAlba,
+                    onComplete: () => {
+                        if (!(typeof _isOnboardingFlow !== 'undefined' && _isOnboardingFlow === false)) {
+                            const turnoNombre = document.getElementById('asig-indiv-turno-id').options[
+                                document.getElementById('asig-indiv-turno-id').selectedIndex
+                            ]?.text || 'Turno Asignado';
+                            openCalibracionHistorica({ empleadoId: parseInt(empleadoId), nombre, fecha, turnoNombre });
+                        }
+                    }
+                }), 350);
+            }
+
+            // ── Flujo post-asignación sin job_id (fallback) ──────────────────
+            if (!jobId) {
+                if (typeof _isOnboardingFlow !== 'undefined' && _isOnboardingFlow === false) {
+                    const isBlocked = await checkAuditoriaBloqueo();
+                    if (!isBlocked) {
+                        const modalReg = bootstrap.Modal.getInstance(document.getElementById('modal-regularizacion-asistencia'));
+                        if (modalReg) modalReg.hide();
+                        showToast("✅ Regularización completada.", "success");
+                        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+                    }
+                } else {
+                    const turnoNombre = document.getElementById('asig-indiv-turno-id').options[
+                        document.getElementById('asig-indiv-turno-id').selectedIndex
+                    ]?.text || 'Turno Asignado';
+                    setTimeout(() => openCalibracionHistorica({ empleadoId: parseInt(empleadoId), nombre, fecha, turnoNombre }), 350);
+                }
+            }
+
+        } else {
+            const err = await resp.json();
+            showToast("❌ " + (err.detail || "No se pudo asignar el turno"), "danger");
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("❌ Error de conexión al asignar turno", "danger");
+    } finally {
+        // Restaurar botón siempre
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = btnOrigHtml || '<i class="bi bi-check-lg me-2"></i>Confirmar Asignación';
+        }
+    }
+}
+
+
+
+// =====================================================================
+// [RFC PASO 7] MODAL DE CALIBRACIÓN HISTÓRICA
+// =====================================================================
+
+// Estado del contexto de calibración
+let _calibContext = {};
+
+function openCalibracionHistorica({ empleadoId, nombre, fecha, turnoNombre }) {
+    _calibContext = { empleadoId, nombre, fecha, turnoNombre };
+
+    // Poblar resumen del turno asignado
+    document.getElementById('calib-emp-nombre').textContent = nombre;
+    document.getElementById('calib-turno-nombre').textContent = turnoNombre;
+    document.getElementById('calib-fecha-asignacion').textContent = fecha;
+
+    // La fecha ya fue decidida por RRHH en el modal anterior → pasarla al campo oculto
+    document.getElementById('calib-fecha-inicio').value = fecha;
+
+    // Guardar el empleadoId para el sync individual
+    const calibEmpId = document.getElementById('calib-empleado-id');
+    if (calibEmpId) calibEmpId.value = empleadoId || '';
+
+    // Mostrar la fecha en el botón de confirmación
+    const displayFecha = document.getElementById('calib-fecha-display');
+    if (displayFecha) displayFecha.textContent = fecha;
+
+    // Resetear checkbox a su valor por defecto (marcado)
+    const chkBioAlba = document.getElementById('calib-chk-bioalba');
+    if (chkBioAlba) chkBioAlba.checked = true;
+
+    const modalEl = document.getElementById('modal-calibracion-historica');
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+
+// Omitir: solo confirmar que el turno quedó asignado; no reprocesar histórico
+window.omitirCalibracion = function() {
+    const modalEl = document.getElementById('modal-calibracion-historica');
+    if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
+    showToast("Turno asignado. Sin reproceso retroactivo.", "info");
+    // Continuar con el siguiente en la cola de onboarding (si existe)
+    if (typeof procesarColaOnboarding === 'function' && typeof onboardingQueue !== 'undefined' && onboardingQueue.length > 0) {
+        setTimeout(procesarColaOnboarding, 500);
+    }
+};
+
+// Confirmar: cierra la modal Y lanza polling de progreso en background
+window.confirmarCalibracion = async function() {
+    const fechaInicio = document.getElementById('calib-fecha-inicio').value;
+    if (!fechaInicio) return showToast("Seleccione una fecha de inicio", "warning");
+
+    const empleadoId = document.getElementById('calib-empleado-id')?.value;
+    const syncBioAlba = document.getElementById('calib-chk-bioalba')?.checked ?? true;
+
+    // 1. Cerrar modal de inmediato — NO bloquear al usuario
+    const modalEl = document.getElementById('modal-calibracion-historica');
+    if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
+
+    // 2. Si el checkbox está marcado, disparar sync individual de BioAlba (fire-and-forget)
+    if (syncBioAlba && empleadoId) {
+        showToast("☁️ Descargando marcaciones desde BioAlba...", "info");
+        // Fire-and-forget — el reproceso en background leerá las marcas cuando terminen de llegar
+        fetch(`/api/sync/asistencia/empleado/${empleadoId}/?fecha_inicio=${fechaInicio}`, {
+            method: 'POST'
+        }).then(r => r.ok
+            ? showToast("✅ Marcaciones BioAlba descargadas. El reproceso se actualizará.", "success")
+            : showToast("⚠️ No se pudieron descargar marcaciones de BioAlba.", "warning")
+        ).catch(() => showToast("⚠️ Error conectando a BioAlba.", "warning"));
+    }
+
+    // 3. Iniciar polling de progreso (el reproceso ya está corriendo en background)
+    iniciarPollingReproceso(_calibContext.empleadoId, _calibContext.nombre, fechaInicio);
+
+    // 4. Continuar con el siguiente en la cola de onboarding
+    if (typeof procesarColaOnboarding === 'function' && typeof onboardingQueue !== 'undefined' && onboardingQueue.length > 0) {
+        setTimeout(procesarColaOnboarding, 500);
+    }
+};
+
+
+// ==========================================================================
+// F2: MODAL DE PROGRESO CON JOB_ID (Polling) — Dos fases: syncing + running
+// ==========================================================================
+
+let _reprocesoJobId = null;
+let _reprocesoPollingTimer = null;
+
+/**
+ * Abre el modal de progreso y comienza el polling al endpoint /api/asistencia/jobs/{job_id}/.
+ * Soporta dos fases secuenciales:
+ *   Fase 1 (status='syncing'): descarga BioAlba
+ *   Fase 2 (status='running'): reproceso día a día
+ * @param {string} jobId   - ID del job
+ * @param {string} nombre  - Nombre del empleado
+ * @param {string} fechaDesde - Fecha de inicio
+ * @param {object} opts    - { syncBioAlba: bool, onComplete: fn }
+ */
+function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
+    _reprocesoJobId = jobId;
+    if (_reprocesoPollingTimer) clearInterval(_reprocesoPollingTimer);
+
+    const { syncBioAlba = false, onComplete = null, allJobIds = null } = opts;
+    let _onCompleteCallback = onComplete;
+    const _allJobs = allJobIds || [jobId];  // Todos los jobs del batch
+
+    // ── Resetear estado del modal ───────────────────────────────
+    const el = id => document.getElementById(id);
+    const syncLabel = syncBioAlba ? ' · Incluye sync BioAlba' : '';
+    el('repr-emp-nombre').textContent = `${nombre} · desde ${fechaDesde}${syncLabel}`;
+    el('repr-header-title').textContent = syncBioAlba ? 'Sincronizando y Calculando...' : 'Reprocesando Asistencia';
+    el('repr-progress-bar').style.width = '2%';
+    el('repr-progress-bar').style.background = 'linear-gradient(90deg,#0ea5e9,#2563eb)';
+    el('repr-progress-bar').classList.add('progress-bar-animated', 'progress-bar-striped');
+    el('repr-pct').textContent = '0%';
+    el('repr-pct').className = 'badge rounded-pill bg-info';
+    el('repr-day-label').textContent = syncBioAlba ? '☁️ Descargando marcaciones BioAlba...' : 'Iniciando cálculo...';
+    el('repr-counter').textContent = syncBioAlba ? 'Fase 1 de 2: Sincronización' : 'Iniciando...';
+    el('repr-log').innerHTML = `<span style="color:#38bdf8;">⟳</span> ${syncBioAlba ? 'Conectando a BioAlba...' : 'Esperando inicio del proceso...'}`;
+    el('repr-footer-completado').classList.add('d-none');
+    el('repr-header-spinner').classList.remove('d-none');
+    el('repr-header-ok').classList.add('d-none');
+
+    // ── Abrir modal ─────────────────────────────────────────────
+    const modalEl = document.getElementById('modal-reproceso-progreso');
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+    let prevDayIndex = -1;
+    let prevPhase = null;
+
+    // ── Polling adaptativo ───────────────────────────────────────────────────
+    // Durante 'syncing' (descarga BioAlba, lenta): intervalo crece hasta 4s.
+    // Durante 'running' (cálculo día a día, rápido): vuelve a 1.5s.
+    // Esto reduce requests innecesarios durante la fase de red sin sacrificar
+    // la respuesta visual en la fase de cálculo.
+    const POLL_FAST = 1500;   // ms — fase running / completado
+    const POLL_SLOW = 4000;   // ms — fase syncing (BioAlba network bound)
+    let _currentPollInterval = POLL_FAST;
+
+    function _restartPolling(newInterval) {
+        if (newInterval === _currentPollInterval) return; // ya en el intervalo correcto
+        clearInterval(_reprocesoPollingTimer);
+        _currentPollInterval = newInterval;
+        _reprocesoPollingTimer = setInterval(_pollTick, _currentPollInterval);
+    }
+
+    async function _pollTick() {
+        try {
+            const r = await fetch(`/api/asistencia/jobs/${jobId}/`);
+            if (!r.ok) return;
+            const s = await r.json();
+
+            if (s.status === 'not_found') return;
+
+            const phase = s.status;      // 'syncing' | 'running' | 'done' | 'completed' | 'error'
+            const pct = s.pct ?? 0;
+            const isCompleted = phase === 'done' || phase === 'completed';  // backend usa 'done'
+            const isError = phase === 'error';
+            const isSyncing = phase === 'syncing';
+            const isRunning = phase === 'running';
+
+            // ── FASE: syncing (BioAlba) ───────────────────────────
+            if (isSyncing) {
+                _restartPolling(POLL_SLOW); // BioAlba es lento — reducir requests
+                const phaseLabel = s.phase_label || 'Descargando marcaciones BioAlba...';
+                el('repr-progress-bar').style.background = 'linear-gradient(90deg,#0ea5e9,#2563eb)';
+                // Actualizar barra proporcional al pct reportado por el backend
+                el('repr-progress-bar').style.width = `${Math.max(pct, 2)}%`;
+                el('repr-pct').className = 'badge rounded-pill bg-info';
+                el('repr-pct').textContent = `${pct}%`;
+                el('repr-day-label').textContent = `☁️ ${phaseLabel}`;
+                el('repr-counter').textContent = 'Fase 1 de 2: Sincronización BioAlba';
+
+                // Agregar entrada al log al cambiar de fase
+                if (prevPhase !== 'syncing') {
+                    prevPhase = 'syncing';
+                    const logEl = el('repr-log');
+                    const line = document.createElement('div');
+                    line.style.color = '#38bdf8';
+                    line.textContent = `☁️ Conectado a BioAlba — descargando marcaciones...`;
+                    logEl.appendChild(line);
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+                return;  // aún en fase 1, no actualizar barra animada de días
+            }
+
+            // ── TRANSICION syncing → running ───────────────────────
+            if (isRunning && prevPhase !== 'running') {
+                prevPhase = 'running';
+                el('repr-progress-bar').style.background = 'linear-gradient(90deg,#2563eb,#7c3aed)';
+                el('repr-pct').className = 'badge rounded-pill bg-primary';
+                el('repr-header-title').textContent = 'Calculando Asistencia...';
+                // Log de transición
+                const logEl = el('repr-log');
+                const sep = document.createElement('div');
+                sep.style.cssText = 'color:#64748b;border-top:1px solid #1e293b;margin:4px 0;padding-top:4px;';
+                sep.textContent = '✔ BioAlba OK — Iniciando cálculo día a día...';
+                logEl.appendChild(sep);
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+
+            // ── FASE: running (reproceso día a día) ──────────────────
+            if (isRunning) {
+                _restartPolling(POLL_FAST); // Cálculo es rápido — volver a 1.5s
+                el('repr-progress-bar').style.width = `${pct}%`;
+                el('repr-pct').textContent = `${pct}%`;
+                el('repr-day-label').textContent = `Procesando ${s.current_day || '...'}...`;
+                el('repr-counter').textContent = `${syncBioAlba ? 'Fase 2 de 2 — ' : ''}Día ${s.day_index ?? 0} de ${s.total_days ?? '?'}`;
+
+                // Log por cada día nuevo
+                if (s.day_index !== prevDayIndex && s.current_day) {
+                    prevDayIndex = s.day_index;
+                    const logEl = el('repr-log');
+                    const line = document.createElement('div');
+                    line.style.color = '#94a3b8';
+                    line.textContent = `→ [${String(s.day_index).padStart(2, '0')}/${s.total_days}] ${s.current_day}`;
+                    logEl.appendChild(line);
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+                return;
+            }
+
+            // ── COMPLETADO ────────────────────────────────────────────
+            if (isCompleted || isError) {
+                // Si es un batch con múltiples jobs, verificar que TODOS terminaron
+                if (_allJobs.length > 1 && isCompleted) {
+                    try {
+                        const allResponses = await Promise.all(
+                            _allJobs.map(jid => fetch(`/api/asistencia/jobs/${jid}/`).then(r => r.json()))
+                        );
+                        const allDone = allResponses.every(j =>
+                            j.status === 'done' || j.status === 'completed' || j.status === 'error'
+                        );
+                        if (!allDone) {
+                            // Actualizar label para mostrar progreso del batch
+                            const doneCount = allResponses.filter(j => j.status === 'done' || j.status === 'completed' || j.status === 'error').length;
+                            el('repr-day-label').textContent = `⏳ ${doneCount}/${_allJobs.length} empleados completados...`;
+                            el('repr-progress-bar').style.width = `${Math.round(50 + 50 * doneCount / _allJobs.length)}%`;
+                            return; // Seguir polling hasta que TODOS terminen
+                        }
+                    } catch (_) { /* error de red, reintentar en siguiente poll */ return; }
+                }
+
+                clearInterval(_reprocesoPollingTimer);
+
+                const elapsed = ((s.elapsed_ms || 0) / 1000).toFixed(1);
+                const bar = el('repr-progress-bar');
+                bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+
+                if (isError) {
+                    bar.style.background = 'linear-gradient(90deg,#dc2626,#ef4444)';
+                    el('repr-pct').className = 'badge rounded-pill bg-danger';
+                    el('repr-day-label').textContent = '❌ Error en el proceso';
+                    el('repr-resumen-texto').textContent = `Error: ${s.error || 'Desconocido'}. Revise la terminal.`;
+                    const logEl = el('repr-log');
+                    const errLine = document.createElement('div');
+                    errLine.style.color = '#fca5a5';
+                    errLine.textContent = `❌ ${s.error || 'Error desconocido'}`;
+                    logEl.appendChild(errLine);
+                } else {
+                    bar.style.width = '100%';
+                    bar.style.background = 'linear-gradient(90deg,#059669,#10b981)';
+                    el('repr-pct').textContent = '100%';
+                    el('repr-pct').className = 'badge rounded-pill bg-success';
+                    el('repr-header-title').textContent = 'Proceso Completado ✅';
+                    el('repr-day-label').textContent = '✅ Todo listo — puede revisar la grilla';
+                    const bioAlbaNote = syncBioAlba ? ' (☁️ BioAlba + 🗃️ cálculo)' : '';
+                    el('repr-resumen-texto').textContent =
+                        `✅ ${s.procesados} días procesados en ${elapsed}s${bioAlbaNote} ⋅ ✕ ${s.errores} errores`;
+
+                    const logEl = el('repr-log');
+                    const okLine = document.createElement('div');
+                    okLine.style.cssText = 'color:#86efac;font-weight:bold;margin-top:4px;';
+                    okLine.textContent = `✔ Completado: ${s.procesados} días (${elapsed}s)`;
+                    logEl.appendChild(okLine);
+                    logEl.scrollTop = logEl.scrollHeight;
+
+                    // Recargar grilla en background (sin esperar)
+                    setTimeout(() => {
+                        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+                    }, 600);
+
+                    // Ejecutar callback onComplete si fue pasado
+                    if (_onCompleteCallback) {
+                        setTimeout(_onCompleteCallback, 800);
+                        _onCompleteCallback = null;
+                    }
+                }
+
+                el('repr-header-spinner').classList.add('d-none');
+                el('repr-header-ok').classList.remove('d-none');
+                el('repr-footer-completado').classList.remove('d-none');
+            }
+
+        } catch (err) { /* error de red transitorio: ignorar */ }
+    }
+
+    // Arrancar polling con intervalo inicial (fast: 1.5s)
+    _reprocesoPollingTimer = setInterval(_pollTick, _currentPollInterval);
+}
+
+
+
+/** Cierra el modal de progreso y detiene el polling. */
+window.cerrarModalReproceso = function() {
+    if (_reprocesoPollingTimer) {
+        clearInterval(_reprocesoPollingTimer);
+        _reprocesoPollingTimer = null;
+    }
+    const modalEl = document.getElementById('modal-reproceso-progreso');
+    if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
+};
+
+
+/**
+ * Legacy wrapper — usado por confirmarCalibracion (que aún no tiene job_id).
+ * Dejamos compatibilidad del nombre original.
+ */
+function iniciarPollingReproceso(empleadoId, nombre, fechaDesde) {
+    // En el flujo de Calibración, el reproceso ya corrió desde saveAsignacionIndividual.
+    // Solo mostramos un banner informativo liviano sin polling.
+    showToast(`🔄 Reprocesando asistencia de ${nombre} desde ${fechaDesde}. La grilla se actualizará al finalizar.`, 'info');
+}
+
+
+
+
+/**
+ * [NUEVO] Abre el modal de confirmación de cierre de periodo RRHH.
+ */
+async function openCierrePeriodoModal() {
+    const fIni = stateMarcacionesApp.fechaInicioRRHH;
+    const fFin = stateMarcacionesApp.fechaFinRRHH;
+
+    if (!fIni || !fFin) return showToast("Debe seleccionar un rango de fechas", "warning");
+
+    const area = stateMarcacionesApp.area;
+    const turnoId = stateMarcacionesApp.turnoId;
+
+    try {
+        let url = `/api/asistencia/periodo-rrhh/resumen-global/?fecha_inicio=${fIni}&fecha_fin=${fFin}`;
+        if (area) url += `&area=${encodeURIComponent(area)}`;
+        if (turnoId) url += `&turno_id=${turnoId}`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("Fallo al obtener resumen");
+        const resumen = await resp.json();
+
+        const html = `
+            <div class="modal fade" id="modal-cierre-rrhh" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header bg-warning text-dark border-0">
+                            <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill me-2"></i> Cerrar Periodo RRHH</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-3 text-center">Formalizar cierre del periodo:<br><span class="badge bg-dark fs-6">${fIni} al ${fFin}</span></p>
+                            
+                            <div class="bg-light p-3 rounded mb-3 border">
+                                <h6 class="fw-bold small text-muted text-uppercase mb-3 border-bottom pb-1">Resumen Consolidado</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Horas Extra Aprobadas:</span>
+                                    <span class="fw-bold text-primary">${formatMinutesToHHMM(resumen.total_he_aprobado)}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Deuda Acumulada:</span>
+                                    <span class="fw-bold text-danger">-${formatMinutesToHHMM(resumen.total_deuda)}</span>
+                                </div>
+                                <hr class="my-2">
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-bold">Balance Neto:</span>
+                                    <span class="fw-bold fs-5 ${resumen.total_balance >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${resumen.total_balance > 0 ? '+' : ''}${formatMinutesToHHMM(resumen.total_balance)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <label for="cierre-comentario" class="small fw-bold mb-1 text-muted">Comentarios de Cierre</label>
+                                <textarea id="cierre-comentario" class="form-control" rows="2" placeholder="Ej: Cierre de mes validado por RRHH..."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light border-0">
+                            <button type="button" class="btn btn-link text-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-warning fw-bold px-4" onclick="confirmarCierreRRHH()">
+                                <i class="bi bi-check-lg"></i> Confirmar Cierre Definitivo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const old = document.getElementById('modal-cierre-rrhh');
+        if (old) old.remove();
+
+        document.body.insertAdjacentHTML('beforeend', html);
+        const modal = new bootstrap.Modal(document.getElementById('modal-cierre-rrhh'));
+        modal.show();
+
+    } catch (e) {
+        console.error("Error obteniendo resumen de cierre:", e);
+        showToast("Error al obtener datos del periodo: " + e.message, "error");
+    }
+}
+
+async function confirmarCierreRRHH() {
+    const fIni = stateMarcacionesApp.fechaInicioRRHH;
+    const fFin = stateMarcacionesApp.fechaFinRRHH;
+    const comentario = document.getElementById('cierre-comentario').value;
+
+    const area = stateMarcacionesApp.area;
+    const turnoId = stateMarcacionesApp.turnoId;
+
+    try {
+        const resp = await fetch('/api/asistencia/periodo-rrhh/cerrar/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fecha_inicio: fIni,
+                fecha_fin: fFin,
+                area: area || null,
+                turno_id: turnoId ? parseInt(turnoId) : null,
+                comentario: comentario
+            })
+        });
+
+        const res = await resp.json();
+        if (resp.ok) {
+            showToast("✅ Periodo cerrado exitosamente", "success");
+            const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-rrhh'));
+            if (m) m.hide();
+            loadMarcacionesData();
+        } else {
+            alert("Error: " + (res.detail || "No se pudo cerrar el periodo"));
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Error de conexión", "error");
+    }
+}
+
+async function openHistorialCierresModal() {
+    try {
+        const resp = await fetch('/api/asistencia/periodo-rrhh/historial/');
+        const historial = await resp.json();
+
+        const html = `
+            <div class="modal fade" id="modal-historial-cierres" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header border-0 pb-0">
+                            <h5 class="modal-title fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i> Historial de Cierres RRHH</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="table-responsive rounded border">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr class="small text-uppercase">
+                                            <th>Periodo</th>
+                                            <th>Fecha Registro</th>
+                                            <th>Usuario</th>
+                                            <th>Comentarios</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="align-middle">
+                                        ${historial.length === 0 ? '<tr><td colspan="4" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>' : 
+                                            historial.map(c => `
+                                            <tr>
+                                                <td><span class="badge bg-info-subtle text-info border border-info-subtle">${c.fecha_inicio} al ${c.fecha_fin}</span></td>
+                                                <td class="small">${new Date(c.fecha_cierre).toLocaleString('es-ES')}</td>
+                                                <td><i class="bi bi-person-circle me-1"></i> ${c.usuario_cierre}</td>
+                                                <td class="small text-muted italic">${c.comentario || '--'}</td>
+                                            </tr>
+                                            `).join('')
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const old = document.getElementById('modal-historial-cierres');
+        if (old) old.remove();
+
+        document.body.insertAdjacentHTML('beforeend', html);
+        const modal = new bootstrap.Modal(document.getElementById('modal-historial-cierres'));
+        modal.show();
+
+    } catch (e) {
+        console.error(e);
+        showToast("Error al cargar historial", "error");
+    }
+}
+
+
+/* ==========================================
+   MERGED FROM vista_analitica.js
+   ========================================== */
+/**
+ * vista_analitica.js
+ * Vista Analítica de Marcaciones — Balance de Masas HH/Deudas
+ * ISOLADO: No toca ni modifica ninguna lógica existente.
+ */
+
+window.vistaAnaliticaState = window.vistaAnaliticaState || {
+    soloNegativo: false,
+    soloConHE: false,
+    showBonos: false,
+    showHE: false,
+    showDeudas: false,
+    showIncidencias: false,
+    showSaldoMeta: true  // Visible por defecto cuando hay bolsa flexible
+};
+
+
+// ─── PUNTO DE ENTRADA (llamado desde marcaciones_ui.js) ──────────────────────
+function renderVistaAnalitica(respData, container) {
+    if (!respData) return;
+    const { matrix, feriados } = respData;
+    const dayNames = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+    const hasMatrix = matrix && typeof matrix === 'object';
+    if (!hasMatrix) {
+        container.innerHTML = '<div class="alert alert-info">No hay datos para mostrar.</div>';
+        return;
+    }
+
+    // ── 1. Organizar empleados (igual que renderTeamMatrix) ──────────────────
+    const employees = [];
+    if (respData.empleados) {
+        respData.empleados.forEach(e_raw => {
+            const eid = e_raw.id;
+            const mEmp = matrix[eid];
+            if (!mEmp) return;
+            const info = mEmp.info || {};
+            employees.push({
+                id: eid, info,
+                nombre_completo: info.nombre_completo || e_raw.nombre_completo || e_raw.nombre,
+                area: info.area || e_raw.area || '',
+                turno: info.turno || info.nombre_turno || '',          // backend envía info.turno
+                turno_dias: info.turno_dias || {},                     // necesario para proyección LIBRE y tooltip
+                tipo_programacion: info.tipo_programacion || '',
+                activo: info.activo !== false,
+                dias: mEmp
+            });
+        });
+    }
+
+    // ── 2. Rango de fechas ───────────────────────────────────────────────────
+    const dates = [];
+    if (respData.periodo) {
+        let curr = new Date(respData.periodo.inicio + 'T00:00:00');
+        const end  = new Date(respData.periodo.fin   + 'T00:00:00');
+        while (curr <= end) { dates.push(curr.toISOString().split('T')[0]); curr.setDate(curr.getDate()+1); }
+    } else {
+        const y = stateMarcacionesApp.year, m = stateMarcacionesApp.month;
+        const daysInMonth = new Date(y, m, 0).getDate();
+        for (let i = 1; i <= daysInMonth; i++)
+            dates.push(`${y}-${String(m).padStart(2,'0')}-${String(i).padStart(2,'0')}`);
+    }
+
+    const feriadosArray = feriados ? feriados.map(f => f.fecha || f) : [];
+    const getFeriadoDesc = (d) => {
+        if (!feriados) return null;
+        const f = feriados.find(x => (x.fecha || x) === d);
+        return f ? (f.descripcion || 'Feriado') : null;
+    };
+
+    // ── 3. Calcular resumen por empleado ─────────────────────────────────────
+    const rows = employees.map(emp => {
+        let he_bruto=0, he_apr=0, he_rec=0, he_pend=0, d_tot=0, min_atr=0, min_sad=0, min_col=0, min_per=0;
+        let cnt_atr=0, cnt_sad=0, cnt_inas=0, cnt_esp=0, cnt_per=0, cnt_efectivos=0;
+        // tipo_programacion viene del turno (emp.info), NO de cada fila de asistencia
+        const esBolsa = emp.tipo_programacion === 'FLEXIBLE_BOLSA'
+                     || (emp.info && emp.info.tipo_programacion === 'FLEXIBLE_BOLSA');
+        emp._esBolsaFlag = esBolsa;
+        let acumBolsa=0, excedido=false, metaMin=0;
+
+        if (esBolsa && emp.info) {
+            // meta_horas_semanales en bolsa flexible es la meta mensual total (ej: 176 hrs)
+            let metaOriginal = emp.info.meta_mensual_minutos
+                   || Math.round((emp.info.meta_horas_semanales || 176) * 60);
+
+            // --- Lógica Art 25 bis: Reducción proporcional por ausencias justificadas ---
+            let diasProgramados = 0;
+            let diasJustificados = 0;
+            
+            dates.forEach(d => {
+                const dt = new Date(d+'T00:00:00');
+                const isFer = feriadosArray.includes(d);
+                const diCheck = emp.dias[d] || {};
+                
+                // Convertir JS day (0=Dom) a DB day (0=Lun, 6=Dom)
+                const dayDB = (dt.getDay() + 6) % 7; 
+                const isStructurallyLibre = (emp.info.turno_dias && emp.info.turno_dias[dayDB] && emp.info.turno_dias[dayDB].es_libre === 1);
+                
+                // No es programado si es Feriado, Libre estructural o Libre marcado manual
+                const isDescanso = isFer || isStructurallyLibre || (diCheck.estado === 'LIBRE');
+                
+                if (!isDescanso) {
+                    diasProgramados++;
+                    // Identificar si el estado es una justificación que rebaja la meta (Art 25 bis / DT: Vacaciones, Licencias Médicas, Permisos pagados)
+                    const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO'];
+                    const isJustificado = diCheck.estado && (
+                        diCheck.estado === 'JORNADA_ESPECIAL' ||
+                        estadosJustificados.some(ej => diCheck.estado.toUpperCase().includes(ej))
+                    );
+                    
+                    if (isJustificado) {
+                        diasJustificados++;
+                        diCheck._esDiaJustificadoBolsa = true;
+                    }
+                }
+            });
+
+            if (diasProgramados > 0 && diasJustificados > 0) {
+                const valorTurnoMin = metaOriginal / diasProgramados;
+                metaMin = Math.round(metaOriginal - (valorTurnoMin * diasJustificados));
+                emp._metaOriginalBolsa = metaOriginal;
+                emp._diasJustificadosBolsa = diasJustificados;
+                emp._valorTurnoMinBolsa = valorTurnoMin;
+            } else {
+                metaMin = metaOriginal;
+            }
+            
+            if (emp.info.meta_ajustada_minutos_descuento && diasJustificados === 0) {
+                // Fallback por si backend manda descuento duro
+                metaMin = Math.max(0, metaMin - emp.info.meta_ajustada_minutos_descuento);
+            }
+        }
+
+        let acumSemanal = 0;
+        let startDayJS = 1; // Default Lunes
+        if (emp.info && emp.info.primer_dia_semana_turno !== undefined) {
+            // Convertir DB (0=Lunes, 6=Domingo) a JS (0=Domingo, 1=Lunes)
+            startDayJS = (emp.info.primer_dia_semana_turno + 1) % 7;
+        }
+
+        dates.forEach(d => {
+            const dt = new Date(d+'T00:00:00');
+            if (dt.getDay() === startDayJS) acumSemanal = 0; // Reset semanal dinámico
+
+            const di = emp.dias[d];
+            if (!di) return;
+
+            // Tag para que _analiticaCellContent sepa el tipo sin depender de di.tipo_programacion
+            if (esBolsa) { di._esBolsa = true; di._metaMinBolsa = metaMin; }
+
+            const trab = Math.round((di.horas_trabajadas||0)*60);
+            const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA';
+            
+            if (!esBolsa && !isEsp) {
+                acumSemanal += trab;
+            }
+            if (!esBolsa) di._acumuladoSemanalSnap = acumSemanal;
+            if (!isEsp && !esBolsa) {
+                // En Bolsa Flexible no existen atrasos, salidas adelantadas ni deuda diaria.
+                // Es un modelo de acumulación pura donde solo importa el balance contra la meta mensual.
+                d_tot   += (di.minutos_deuda || 0);
+                min_atr += (di.minutos_atraso || 0);
+                min_sad += (di.minutos_salida_adelantada || 0);
+                min_col += (di.minutos_exceso_colacion || 0);
+                min_per += (di.minutos_permiso_personal_deuda || 0);
+                if ((di.minutos_atraso||0) > 0)                cnt_atr++;
+                if ((di.minutos_salida_adelantada||0) > 0)     cnt_sad++;
+                if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
+            }
+            if (di.estado === 'INASISTENCIA') cnt_inas++;
+            if (isEsp)                         cnt_esp++;
+            if (di.hora_entrada_real && !isEsp && !['LIBRE','FERIADO','INASISTENCIA'].includes(di.estado)) cnt_efectivos++;
+
+            // HE bruto (misma lógica que vista actual)
+            if (!isEsp) {
+                if (esBolsa) {
+                    const snapAntes = acumBolsa; // guardar antes de sumar
+                    acumBolsa += trab;
+                    di._acumuladoBolsaSnapPrev = snapAntes; // acumulado ANTES de este día
+                    di._acumuladoBolsaSnap = acumBolsa;    // acumulado DESPUÉS de este día
+                    di._metaMinBolsa = metaMin;             // meta del ciclo (para la vista)
+                    if (excedido)                                    he_bruto += trab;
+                    else if (acumBolsa > metaMin && trab > 0) { he_bruto += acumBolsa - metaMin; excedido = true; }
+                } else {
+                    he_bruto += (di.minutos_extra_bruto || 0);
+                }
+            } else if (esBolsa) {
+                // Día especial (EXTRA, JORNADA_ESPECIAL, etc.): mantener snap sin sumar
+                di._acumuladoBolsaSnapPrev = acumBolsa;
+                di._acumuladoBolsaSnap = acumBolsa;
+                di._metaMinBolsa = metaMin;
+            }
+
+
+            if (!isEsp && !esBolsa) {
+                // Turnos normales: HE se toman directamente del backend
+                if (di.estado_he === 'APROBADO') {
+                    const apr = di.minutos_extra_autorizados || 0;
+                    he_apr += apr;
+                } else if (di.estado_he === 'RECHAZADO') {
+                    he_rec += (di.minutos_extra_bruto || 0);
+                } else if ((di.minutos_extra_bruto || 0) > 0) {
+                    he_pend += (di.minutos_extra_bruto || 0);
+                }
+            }
+            // FLEXIBLE_BOLSA: he_apr/he_rec/he_pend NO usan minutos_extra_bruto del backend
+            // porque ese campo no respeta la lógica del ciclo acumulado.
+            // he_bruto para bolsa se calcula abajo con la lógica del acumulado.
+        });
+
+
+        // Limpiar errores de coma flotante redondeando a 5 decimales (suficiente precisión)
+        he_bruto = Math.round(he_bruto * 10000) / 10000;
+        he_apr = Math.round(he_apr * 10000) / 10000;
+        he_rec = Math.round(he_rec * 10000) / 10000;
+        he_pend = Math.round(he_pend * 10000) / 10000;
+
+        const saldo = he_apr - d_tot;
+        const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null; // null = no bolsa
+        return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
+                 cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
+                 esBolsa, metaMin, acumBolsa, saldoMeta };
+    });
+
+    // ── 4. Aplicar filtros UI ────────────────────────────────────────────────
+    const s = window.vistaAnaliticaState;
+    let visibleRows = rows;
+    if (s.soloNegativo) visibleRows = visibleRows.filter(r => r.saldo < 0);
+    if (s.soloConHE)    visibleRows = visibleRows.filter(r => r.he_bruto > 0);
+
+    // ── 5. Totales ───────────────────────────────────────────────────────────
+    const showHE = s.showHE !== false;
+    const showDeudas = s.showDeudas !== false;
+    const showIncidencias = s.showIncidencias !== false;
+    const tot = visibleRows.reduce((acc,r) => {
+        acc.he_bruto+=r.he_bruto; acc.he_apr+=r.he_apr; acc.he_rec+=r.he_rec; acc.he_pend+=r.he_pend;
+        acc.d_tot+=r.d_tot; acc.saldo+=r.saldo;
+        acc.cnt_atr+=r.cnt_atr; acc.cnt_sad+=r.cnt_sad; acc.cnt_inas+=r.cnt_inas;
+        acc.cnt_esp+=r.cnt_esp; acc.cnt_per+=r.cnt_per;
+        acc.min_col+=(r.min_col||0); acc.min_per+=(r.min_per||0); 
+        acc.min_atr+=(r.min_atr||0); acc.min_sad+=(r.min_sad||0);
+        return acc;
+    }, {he_bruto:0,he_apr:0,he_rec:0,he_pend:0,d_tot:0,saldo:0,cnt_atr:0,cnt_sad:0,cnt_inas:0,cnt_esp:0,cnt_per:0,min_col:0,min_per:0,min_atr:0,min_sad:0});
+
+    // ── 5.5 Bonos ───────────────────────────────────────────────────────────
+    const bonosNombres = respData.bonos_nombres || [];
+    const bonosEval = respData.bonos_evaluacion || {};
+    const hasBonos = bonosNombres.length > 0;
+    const showBonos = window.vistaAnaliticaState.showBonos;
+    
+    let bonosHeadersTop = '';
+    let bonosHeadersSub = '';
+    if (hasBonos) {
+        if (showBonos) {
+            bonosHeadersTop = `<th colspan="${bonosNombres.length}" class="text-start px-2 th-bento th-bento-success"><i class="bi bi-trophy-fill me-1" style="font-size:0.75rem;color:#10b981"></i><span class="fw-bold">Bonos</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleBonos()" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>`;
+            bonosHeadersSub = bonosNombres.map(b => {
+                const bShort = b.length > 5 ? b.substring(0,4) + '.' : b;
+                return `<th class="text-center px-1 align-middle th-bento-sub" style="min-width:65px" title="${b}">${bShort}</th>`;
+            }).join('');
+        } else {
+            bonosHeadersTop = `<th rowspan="2" class="align-middle text-center px-1 th-bento th-bento-success" style="min-width:50px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleBonos()" title="Expandir Bonos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-trophy-fill d-block mb-1" style="font-size:0.85rem;color:#10b981"></i><span style="font-size:0.65rem;letter-spacing:0.5px">BONOS</span></th>`;
+        }
+    }
+
+    // ── 6. Cabeceras de días ─────────────────────────────────────────────────
+    const monthNamesShort = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const dayHeaders = dates.map(d => {
+        const dt = new Date(d+'T00:00:00');
+        const isFer = feriadosArray.includes(d);
+        const isWE  = (dt.getDay()===0||dt.getDay()===6);
+        const bg = isFer ? 'background:#fff9c4' : isWE ? 'background:#f8f9fa' : '';
+        const dateStrObj = dt.getDate().toString().padStart(2, '0') + '-' + monthNamesShort[dt.getMonth()];
+        const dayShortName = dayNames[dt.getDay()].toUpperCase();
+        return `<th class="col-day text-center p-1" style="min-width:48px;font-size:0.65rem;white-space:nowrap;${bg}">
+                    <div style="font-weight:700;font-size:0.7rem;line-height:1.1">${dateStrObj}</div>
+                    <div style="opacity:0.8;font-size:0.6rem;line-height:1.1">${dayShortName}</div>
+                </th>`;
+    }).join('');
+
+    // ── 7. Filas de empleados ────────────────────────────────────────────────
+    // Detectar si algún empleado del área tiene turno Bolsa Flexible (DEBE estar antes de bodyRows)
+    const hayBolsa = rows.some(r => r.esBolsa);
+    const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
+
+    const bodyRows = visibleRows.map(r => {
+        const { emp } = r;
+        const sClass = r.saldo > 0 ? 'text-success' : r.saldo < 0 ? 'text-danger' : 'text-muted';
+        const sPrefix = r.saldo > 0 ? '+' : r.saldo < 0 ? '-' : '';
+        const nameClass = emp.activo ? '' : 'text-danger opacity-75';
+
+        const empEval = bonosEval[emp.id] || {};
+        let bonoCells = '';
+        if (hasBonos) {
+            if (showBonos) {
+                bonoCells = bonosNombres.map((bName, idx) => {
+                    const bRes = empEval[bName];
+                    const borderStyle = idx === 0 ? 'border-left:3px solid #10b981' : 'border-left:1px solid #e2e8f0';
+                    if (!bRes || !bRes.aplica) return `<td class="text-center align-middle" style="background:#f8fafc;font-size:0.75rem;${borderStyle}"></td>`;
+                    if (bRes.califica) {
+                        return `<td class="text-center align-middle text-success fw-bold" style="background:#f8fafc;font-size:1.1rem;${borderStyle}" title="${bRes.motivo||''}"><i class="bi bi-check-circle-fill"></i></td>`;
+                    } else {
+                        return `<td class="text-center align-middle text-danger opacity-75" style="background:#f8fafc;font-size:1.1rem;${borderStyle}" title="${bRes.motivo||''}"><i class="bi bi-dash-circle-fill"></i></td>`;
+                    }
+                }).join('');
+            } else {
+                let cntAplica = 0;
+                let cntCalifica = 0;
+                bonosNombres.forEach(bName => {
+                    const bRes = empEval[bName];
+                    if (bRes && bRes.aplica) {
+                        cntAplica++;
+                        if (bRes.califica) cntCalifica++;
+                    }
+                });
+                if (cntAplica > 0) {
+                    const color = cntCalifica === cntAplica ? 'text-success' : (cntCalifica > 0 ? 'text-warning' : 'text-danger');
+                    bonoCells = `<td class="text-center align-middle fw-bold ${color}" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981" title="${cntCalifica} cumplidos de ${cntAplica} aplicables">${cntCalifica}/${cntAplica}</td>`;
+                } else {
+                    bonoCells = `<td class="text-center align-middle text-muted" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981"></td>`;
+                }
+            }
+        }
+
+        const dayCells = dates.map(d => {
+            const di = emp.dias[d];
+            const dt = new Date(d+'T00:00:00');
+            const feriadoDesc = getFeriadoDesc(d);
+            const isFer = !!feriadoDesc;
+            const isWE  = (dt.getDay()===0||dt.getDay()===6);
+            const bg = isFer ? 'background:#fff9c4;' : isWE ? 'background:#f8f9fa;' : '';
+            const empNameEsc = (emp.nombre_completo||'').replace(/'/g,"\\'");
+            const hEnt = di && di.hora_entrada_real ? `'${di.hora_entrada_real}'` : 'null';
+            const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
+            const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode);
+            const tooltipData = _buildRichTooltipData(di, d, dt, feriadoDesc, isWE, emp);
+            return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
+                        onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
+                        ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
+                        data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-html="true"
+                        data-bs-content="${tooltipData}">
+                        ${cellContent}
+                    </td>`;
+        }).join('');
+
+        const hasHE = r.he_bruto > 0;
+        const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
+        return `<tr>
+            <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="white-space:nowrap;cursor:pointer;font-size:0.75rem;"
+                ondblclick="openBatchApprovalModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
+                title="${hasHE ? '⚡ Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
+                <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
+                <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
+            </td>
+            ${bonoCells}
+            ${showIncidencias ? `
+            <td class="text-center align-middle" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b">${r.cnt_per||''}</td>
+            <td class="text-center align-middle" style="background:#f8fafc;font-size:0.78rem">${r.cnt_atr||''}</td>
+            <td class="text-center align-middle" style="background:#f8fafc;font-size:0.78rem">${r.cnt_sad||''}</td>
+            <td class="text-center align-middle ${r.cnt_inas>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.78rem">${r.cnt_inas||''}</td>
+            <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''}" style="background:#f8fafc;font-size:0.78rem">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
+            <td class="text-center align-middle fw-bold" style="background:#f8fafc;font-size:0.78rem">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
+            ${showHE ? `
+            <td class="text-center align-middle tabular-nums text-warning fw-bold" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6">${r.he_pend>0?_fmtMin(r.he_pend):''}</td>
+            <td class="text-center align-middle tabular-nums text-success fw-bold" style="background:#f8fafc;font-size:0.8rem">${r.he_apr>0?_fmtMin(r.he_apr):''}</td>
+            <td class="text-center align-middle tabular-nums text-danger" style="background:#f8fafc;font-size:0.8rem">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
+            <td class="text-center align-middle tabular-nums fw-bold" style="background:#f8fafc;font-size:0.8rem">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
+            ${showDeudas ? `
+            <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #ef4444">${r.min_col>0?_fmtMin(r.min_col):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_per>0?_fmtMin(r.min_per):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
+            <td class="text-center align-middle tabular-nums fw-bold text-danger" style="background:#f8fafc;font-size:0.8rem">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-danger" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #ef4444">${r.d_tot>0 ? '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
+            <td class="text-center align-middle tabular-nums fw-bold ${sClass}" style="background:#f9fafb;font-size:0.8rem">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
+            ${(hayBolsa && showSaldoMeta) ? (
+                r.esBolsa
+                    ? (() => {
+                        const sm = r.saldoMeta; // acumBolsa - metaMin: negativo = falta, positivo = excedió
+                        const smColor = sm >= 0 ? '#10b981' : '#ef4444';
+                        const smBg    = sm >= 0 ? '#f0fdf4' : '#fff5f5';
+                        const smSign  = sm > 0 ? '+' : sm < 0 ? '-' : '';
+                        const metaTooltip = r.emp._diasJustificadosBolsa > 0 
+                            ? `Meta original: ${_fmtMin(r.emp._metaOriginalBolsa)} | Descuento por ${r.emp._diasJustificadosBolsa} día(s) justificado(s)`
+                            : `Meta mensual del ciclo`;
+
+                        return `<td class="text-center align-middle tabular-nums" style="background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
+                                <td class="text-center align-middle tabular-nums" style="background:#faf5ff;font-size:0.78rem" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
+                                <td class="text-center align-middle tabular-nums fw-bold" style="background:${smBg};color:${smColor};font-size:0.8rem" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>`;
+                    })()
+                    : `<td colspan="3" style="background:#faf5ff;border-left:3px solid #8b5cf6"></td>`
+            ) : ''}
+            ${dayCells}
+        </tr>`;
+    }).join('');
+
+    // Fila totales
+    const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'text-muted';
+    const totSPrefix = tot.saldo > 0 ? '+' : tot.saldo < 0 ? '-' : '';
+    
+    let bonosTotalsCell = '';
+    if (hasBonos) {
+        if (showBonos) {
+            bonosTotalsCell = `<td colspan="${bonosNombres.length}" style="border-left:3px solid #10b981"></td>`;
+        } else {
+            bonosTotalsCell = `<td style="border-left:3px solid #10b981"></td>`;
+        }
+    }
+
+    const totalsRow = `<tr class="fw-bold text-center" style="font-size:0.78rem; border-top: 2px solid #e2e8f0; background: #f8fafc;">
+        <td class="sticky-col-analitica text-start ps-2" style="background: #f8fafc; color: #475569; font-weight: 800;">TOTALES</td>
+        ${bonosTotalsCell}
+        ${showIncidencias ? `
+        <td style="border-left:3px solid #f59e0b">${tot.cnt_per||''}</td>
+        <td>${tot.cnt_atr||''}</td>
+        <td>${tot.cnt_sad||''}</td>
+        <td class="${tot.cnt_inas>0?'text-danger':''}">${tot.cnt_inas||''}</td>
+        <td class="${tot.cnt_esp>0?'text-info':''}">${tot.cnt_esp||''}</td>
+        <td class="fw-bold">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))||''}</td>` : `<td style="border-left:3px solid #f59e0b; color:#f59e0b" class="fw-bold">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0)) : ''}</td>`}
+        ${showHE ? `
+        <td style="border-left:3px solid #3b82f6" class="tabular-nums text-warning">${tot.he_pend>0?_fmtMin(tot.he_pend):''}</td>
+        <td class="tabular-nums text-success">${tot.he_apr>0?_fmtMin(tot.he_apr):''}</td>
+        <td class="tabular-nums text-danger">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
+        <td class="tabular-nums fw-bold">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="border-left:3px solid #3b82f6; color:#3b82f6" class="tabular-nums fw-bold">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
+        ${showDeudas ? `
+        <td style="border-left:3px solid #ef4444" class="tabular-nums ${tot.min_col>0?'text-danger fw-bold':''}">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
+        <td class="tabular-nums ${tot.min_per>0?'text-danger fw-bold':''}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
+        <td class="tabular-nums ${tot.min_atr>0?'text-danger fw-bold':''}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
+        <td class="tabular-nums ${tot.min_sad>0?'text-danger fw-bold':''}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
+        <td class="tabular-nums text-danger fw-bold">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="border-left:3px solid #ef4444" class="tabular-nums text-danger fw-bold">${tot.d_tot>0 ? '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
+        <td class="tabular-nums ${totSClass}">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
+        ${(hayBolsa && showSaldoMeta) ? `<td colspan="3" style="background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.7rem;color:#8b5cf6;text-align:center" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>` : ''}
+        <td colspan="${dates.length}"></td>
+    </tr>`;
+
+    // ── 8. Switches ──────────────────────────────────────────────────────────
+    const isClosed = respData.periodo && respData.periodo.cerrado;
+    const closedBadge = isClosed ? `<span class="badge bg-danger ms-2" title="El periodo está cerrado y protegido contra modificaciones"><i class="bi bi-lock-fill"></i> CERRADO</span>` : '';
+
+    const activeVM = stateMarcacionesApp.viewMode || 'conceptos';
+    const vmButtons = [
+        {key:'conceptos', icon:'bi-grid-3x3-gap',     label:'Conceptos'},
+        {key:'horas',     icon:'bi-clock',            label:'Horas'},
+        {key:'colacion',  icon:'bi-cup-hot',          label:'Colación'},
+        {key:'permisos',  icon:'bi-person-dash',      label:'Permisos'},
+        {key:'he',        icon:'bi-arrow-up-circle',  label:'Horas Extras'},
+        {key:'acumulado', icon:'bi-graph-up',         label:'Acumulado'}
+    ].map(v => `<button class="btn segmented-btn ${activeVM===v.key ? 'active' : ''}" onclick="vaSetViewMode('${v.key}')" title="${v.label}"><i class="bi ${v.icon} me-1 d-none d-sm-inline"></i>${v.label}</button>`).join('');
+
+    const sw = `<div class="va-toolbar-premium">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#6366f1"></i>
+            <span class="fw-bold" style="font-size:0.88rem;color:#1e293b">Vista Analítica</span>
+            ${closedBadge}
+        </div>
+        <div style="width:1px;height:24px;background:#cbd5e1"></div>
+        <div class="segmented-control" role="group" aria-label="Modo de vista">${vmButtons}</div>
+        <div class="ms-auto d-flex align-items-center gap-3">
+            <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
+                <button class="btn btn-sm ${isClosed ? 'btn-secondary disabled' : 'btn-warning'} fw-bold" ${isClosed ? 'disabled' : ''} onclick="openCierrePeriodoModal()" title="${isClosed ? 'El periodo ya está cerrado' : 'Cerrar este periodo definitivamente'}">
+                    <i class="bi bi-shield-lock-fill me-1"></i> Cerrar Periodo
+                </button>
+                <button class="btn btn-sm btn-outline-secondary bg-white" onclick="openHistorialCierresModal()" title="Ver historial de cierres">
+                    <i class="bi bi-clock-history"></i>
+                </button>
+            </div>
+            <div class="va-stats-chip">
+                <i class="bi bi-people-fill"></i>
+                <strong>${visibleRows.length}</strong> emp · <strong>${dates.length}</strong> días
+            </div>
+        </div>
+    </div>`;
+
+    // ── 9. HTML final ────────────────────────────────────────────────────────
+    // (hayBolsa y showSaldoMeta ya están definidos arriba, antes de bodyRows)
+
+    const incHeadersTop = showIncidencias ? `<th colspan="6" class="text-start px-2 th-bento th-bento-warning"><i class="bi bi-flag-fill me-1" style="font-size:0.75rem;color:#f59e0b"></i><span class="fw-bold">Incidencias</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showIncidencias')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">INCID</span></th>`;
+    const heHeadersTop = showHE ? `<th colspan="4" class="text-start px-2 th-bento th-bento-primary"><i class="bi bi-lightning-charge-fill me-1" style="font-size:0.75rem;color:#3b82f6"></i><span class="fw-bold">Horas Extra</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showHE')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-primary"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showHE')" title="Expandir HE"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-lightning-charge-fill d-block mb-1" style="font-size:0.85rem;color:#3b82f6"></i><span style="font-size:0.65rem;letter-spacing:0.5px">HR EX</span></th>`;
+    const deudasHeadersTop = showDeudas ? `<th colspan="5" class="text-start px-2 th-bento th-bento-danger"><i class="bi bi-exclamation-triangle-fill me-1" style="font-size:0.75rem;color:#ef4444"></i><span class="fw-bold">Deudas</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-danger"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Deudas"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-exclamation-triangle-fill d-block mb-1" style="font-size:0.85rem;color:#ef4444"></i><span style="font-size:0.65rem;letter-spacing:0.5px">DEUDA</span></th>`;
+
+    // Columna SALDO META — solo visible si hay bolsa flexible en el área
+    const saldoMetaHeaderTop = hayBolsa
+        ? (showSaldoMeta
+            ? `<th colspan="3" class="text-start px-2" style="background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.68rem"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa Flexible</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
+            : `<th rowspan="2" class="align-middle px-1 text-center" style="min-width:50px;background:#faf5ff;border-left:3px solid #8b5cf6"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#7c3aed">BOLSA</span></th>`)
+        : '';
+    const saldoMetaHeadersSub = (hayBolsa && showSaldoMeta) ? `
+            <th class="text-center px-1" style="min-width:72px;background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.65rem;color:#7c3aed" title="Meta mensual del ciclo">META</th>
+            <th class="text-center px-1" style="min-width:72px;background:#faf5ff;font-size:0.65rem;color:#7c3aed" title="Horas acumuladas en el ciclo">ACUM.</th>
+            <th class="text-center px-1" style="min-width:72px;background:#faf5ff;font-size:0.65rem;color:#7c3aed" title="Balance: negativo = falta, positivo = excedió">BALANCE</th>` : '';
+
+    const incHeadersSub = showIncidencias ? `
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Días con permiso">PERM</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Días con atraso">ATR</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Días con salida adelantada">S.ADL</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Inasistencias">INA</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Jornadas especiales">J.ESP</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Total incidencias">TOT</th>` : '';
+    const heHeadersSub = showHE ? `
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="HE pendientes por revisar">PEND</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="HE aprobadas por jefe">APR ✅</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="HE rechazadas">RECH ❌</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Total HE brutas calculadas">TOT</th>` : '';
+    const deudasHeadersSub = showDeudas ? `
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Exceso colación (disponible tras nuevo motor)">COL</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Permisos biométricos sin validar">PER</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Minutos de atraso">ATR</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Minutos salida adelantada">S.ADL</th>
+            <th class="text-center px-1 th-bento-sub" style="min-width:65px" title="Total deuda acumulada">TOT</th>` : '';
+
+    container.innerHTML = `
+    ${sw}
+    <div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
+    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
+    <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
+        <tr class="text-center" style="background:#f8f9fa;font-size:0.68rem">
+            <th rowspan="2" class="sticky-col-analitica align-middle text-start ps-2" style="white-space:nowrap;z-index:110;background:#f8f9fa">Empleado</th>
+            ${bonosHeadersTop}
+            ${incHeadersTop}
+            ${heHeadersTop}
+            ${deudasHeadersTop}
+            <th rowspan="2" class="align-middle text-start px-2" style="min-width:70px;background:#f0fdf4">Saldo<br>Neto</th>
+            ${saldoMetaHeaderTop}
+            <th colspan="${dates.length}" class="text-start px-2" style="background:#f0f7ff">Días del período</th>
+        </tr>
+        <tr class="text-center" style="background:#f8f9fa;font-size:0.7rem">
+            ${bonosHeadersSub}
+            ${incHeadersSub}
+            ${heHeadersSub}
+            ${deudasHeadersSub}
+            ${saldoMetaHeadersSub}
+            ${dayHeaders}
+        </tr>
+    </thead>
+    <tbody>${bodyRows}</tbody>
+    <tfoot>${totalsRow}</tfoot>
+    </table>
+    </div>
+    <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size:0.72rem;color:#6b7280">
+        <span class="badge-status badge-state-success"><i class="bi bi-check-circle-fill me-1"></i>OK</span> Normal
+        <span class="badge-status badge-state-warning"><i class="bi bi-clock-fill me-1"></i>ATR</span> Atraso
+        <span class="badge-status badge-state-info"><i class="bi bi-box-arrow-left me-1"></i>SAD</span> Sal.Adelantada
+        <span class="badge-status badge-state-danger"><i class="bi bi-x-circle-fill me-1"></i>INA</span> Inasistencia
+        <span class="badge-status badge-state-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>PER</span> Permiso
+        <span class="ms-auto text-muted" style="font-size:0.68rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
+    </div>`;
+
+    // Activar popovers si los hay (Sanitizer off + Glassmorphism class + Smart boundary + Offset)
+    setTimeout(() => {
+        document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+            new bootstrap.Popover(el, { 
+                trigger: 'hover focus', 
+                html: true,
+                sanitize: false,
+                placement: 'auto',
+                container: 'body',
+                boundary: 'window',
+                offset: [0, 8],
+                customClass: 'glass-popover-light shadow-sm'
+            });
+        });
+    }, 100);
+}
+
+// ─── HELPERS INTERNOS ────────────────────────────────────────────────────────
+function _fmtMin(min) {
+    if (!min || min === 0) return '—';
+    if (Math.round(Math.abs(min) * 60) <= 0) return '';
+    return formatExactMinutesToTime(Math.abs(min));
+}
+
+// ─── CACHÉ DE ESTADOS (cargada desde API) ────────────────────────────────────
+// Se carga una vez al iniciar la app. El frontend la usa para badges y tooltips.
+window._estadosAsistencia = {}; // { codigo: { nombre_display, color_clase, icono_bi, descripcion } }
+
+window._loadEstadosAsistencia = async function() {
+    try {
+        const resp = await fetch('/api/configuracion/estados/?solo_activos=true');
+        if (!resp.ok) return;
+        const lista = await resp.json();
+        window._estadosAsistencia = {};
+        lista.forEach(e => { window._estadosAsistencia[e.codigo] = e; });
+        console.log(`[Estados] ${lista.length} estados cargados desde BD.`);
+    } catch(err) {
+        console.warn('[Estados] Error cargando estados, usando defaults:', err);
+    }
+};
+
+// Helpers para obtener datos de estado (con fallback hardcodeado)
+function _getEstadoColor(codigo) {
+    return (window._estadosAsistencia[codigo] || {}).color_clase || _fallbackEstadoColor(codigo);
+}
+function _getEstadoIcon(codigo) {
+    const ic = (window._estadosAsistencia[codigo] || {}).icono_bi;
+    return ic ? `<i class="bi ${ic} me-1"></i>` : '';
+}
+function _getEstadoNombre(codigo) {
+    return (window._estadosAsistencia[codigo] || {}).nombre_display || codigo;
+}
+function _fallbackEstadoColor(codigo) {
+    const m = { OK:'badge-state-success', INASISTENCIA:'badge-state-danger', ATRASO:'badge-state-warning',
+                SALIDA_ADELANTADA:'badge-state-info', LIBRE:'badge-state-neutral', FERIADO:'badge-state-warning',
+                EXTRA:'badge-state-info', JORNADA_ESPECIAL:'badge-state-info', EN_CURSO:'badge-state-success',
+                ANOMALIA:'bg-dark text-white', PERMISO:'badge-state-info' };
+    return m[codigo] || 'badge-state-neutral';
+}
+
+function _analiticaCellBadge(di) {
+    if (!di || !di.estado) return '';
+    let est = di.estado;
+
+    // --- Lógica Bolsa Flexible: Suprimir estados de penalización de tiempo ---
+    if (di._esBolsa) {
+        if (['ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'].includes(est)) {
+            est = 'OK'; // Visualmente es un día trabajado normal
+        }
+        // Suprimir flags secundarios para que no rendericen badges apilados
+        di.tiene_atraso = false;
+        di.tiene_salida_adelantada = false;
+    }
+
+    // Construir badgeMap desde caché de BD (si está disponible) + fallback hardcodeado
+    const estadosCache = window._estadosAsistencia || {};
+    const badgeMap = {};
+    // Primero cargamos los estados desde la caché de BD
+    Object.values(estadosCache).forEach(e => {
+        const icon = e.icono_bi ? `<i class="bi ${e.icono_bi} me-1"></i>` : '';
+        // Para badges cortos usamos short_label o fallback
+        const shortLabel = e.short_label || (e.codigo === 'JORNADA_ESPECIAL' ? 'ESP' : (e.codigo.length <= 3 ? e.codigo : e.codigo.substring(0,3)));
+        badgeMap[e.codigo] = [e.color_clase, icon + (e._badgeLabel || shortLabel)];
+    });
+    // Fallback hardcodeado (si la caché aún no cargó)
+    if (Object.keys(badgeMap).length === 0) {
+        Object.assign(badgeMap, {
+            'OK':               ['badge-state-success', '<i class="bi bi-check-circle-fill me-1"></i>OK'],
+            'ATRASO':           ['badge-state-warning',  '<i class="bi bi-clock-fill me-1"></i>ATR'],
+            'SALIDA_ADELANTADA':['badge-state-info',     '<i class="bi bi-box-arrow-left me-1"></i>SAD'],
+            'INASISTENCIA':     ['badge-state-danger',   '<i class="bi bi-x-circle-fill me-1"></i>INA'],
+            'LIBRE':            ['badge-state-neutral',  '<i class="bi bi-cup-hot-fill me-1"></i>LIB'],
+            'FERIADO':          ['badge-state-warning',  '<i class="bi bi-calendar-heart-fill me-1"></i>FER'],
+            'PERMISO':          ['badge-state-info',     '<i class="bi bi-person-check-fill me-1"></i>PER'],
+            'EXTRA':            ['badge-state-info',     '<i class="bi bi-plus-circle-fill me-1"></i>EXT'],
+            'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
+            'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
+            'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR']
+        });
+    }
+
+    const stdBadgeStyle = "width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; flex-direction:column; line-height:1.1;";
+
+    // ── Badge del estado PRIMARIO ─────────────────────────────────────────────
+    let pillClass = 'badge-state-neutral';
+    let label = (estadosCache[est] && estadosCache[est].short_label) || (est === 'JORNADA_ESPECIAL' ? 'ESP' : (est.length <= 3 ? est : est.substring(0,3)));
+
+    if (badgeMap[est]) {
+        [pillClass, label] = badgeMap[est];
+    } else if (di.nomenclatura) {
+        pillClass = 'badge-state-info';
+        label = di.nomenclatura;
+    }
+
+    const primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}"><span>${label}</span></div>`;
+
+    // ── Badges secundarios según flags independientes ─────────────────────────
+    // Solo se muestran si el flag es verdadero Y el estado primario no lo representa ya
+    const extraBadges = [];
+
+    if (di.tiene_atraso && est !== 'ATRASO') {
+        const [ac, al] = badgeMap['ATRASO'] || ['badge-state-warning', '<i class="bi bi-clock-fill me-1"></i>ATR'];
+        extraBadges.push(`<div class="badge-status ${ac}" style="${stdBadgeStyle}"><span>${al}</span></div>`);
+    }
+    if (di.tiene_salida_adelantada && est !== 'SALIDA_ADELANTADA') {
+        const [sc, sl] = badgeMap['SALIDA_ADELANTADA'] || ['badge-state-info', '<i class="bi bi-box-arrow-left me-1"></i>SAD'];
+        extraBadges.push(`<div class="badge-status ${sc}" style="${stdBadgeStyle}"><span>${sl}</span></div>`);
+    }
+    if (di.tiene_permiso && est !== 'PERMISO') {
+        const [pc, pl] = badgeMap['PERMISO'] || ['badge-state-info', '<i class="bi bi-calendar-check-fill me-1"></i>PER'];
+        extraBadges.push(`<div class="badge-status ${pc}" style="${stdBadgeStyle}"><span>${pl}</span></div>`);
+    }
+
+    // Si hay badges adicionales → contenedor columna; si no → badge simple
+    let resultHtml = '';
+    if (extraBadges.length > 0) {
+        resultHtml = `<div class="d-flex flex-column align-items-center justify-content-center gap-1" style="line-height:1.2; padding:2px 0;">
+            ${primaryBadge}
+            ${extraBadges.join('\n')}
+        </div>`;
+    } else {
+        resultHtml = primaryBadge;
+    }
+
+    if (di.observaciones && di.observaciones.includes('[ALERTA SISTEMA')) {
+        return `<div style="position:relative; display:inline-block; width:100%;">
+            ${resultHtml}
+            <div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>
+        </div>`;
+    }
+    return resultHtml;
+}
+
+// ─── TOGGLE DE FILTROS UI (sin llamada al backend) ───────────────────────────
+function vaToggleFilter(key, value) {
+    window.vistaAnaliticaState[key] = value;
+    if (stateMarcacionesApp.data) {
+        const container = document.getElementById('marcaciones-view-container');
+        renderVistaAnalitica(stateMarcacionesApp.data, container);
+    }
+}
+
+window.vaToggleBonos = function() {
+    window.vistaAnaliticaState.showBonos = !window.vistaAnaliticaState.showBonos;
+    if (stateMarcacionesApp.data) {
+        const container = document.getElementById('marcaciones-view-container');
+        renderVistaAnalitica(stateMarcacionesApp.data, container);
+    }
+}
+
+window.vaToggleCol = function(key) {
+    window.vistaAnaliticaState[key] = !window.vistaAnaliticaState[key];
+    if (stateMarcacionesApp.data) {
+        const container = document.getElementById('marcaciones-view-container');
+        renderVistaAnalitica(stateMarcacionesApp.data, container);
+    }
+}
+
+// ─── SETTER DE VIEWMODE (6 switches de la grilla) ────────────────────────────────
+window.vaSetViewMode = function(mode) {
+    stateMarcacionesApp.viewMode = mode;
+    if (stateMarcacionesApp.data) {
+        const container = document.getElementById('marcaciones-view-container');
+        renderVistaAnalitica(stateMarcacionesApp.data, container);
+    }
+}
+
+// ─── CONTENIDO DE CELDA SEGÚN VIEWMODE ──────────────────────────────────────
+function _analiticaCellContent(di, dateStr, emp, viewMode) {
+    // Proyección visual de LIBRE para fechas sin datos (futuras o sin marcas)
+    // Si no hay registro pero el empleado tiene turno con ese día marcado como libre → mostrar LIB
+    if (!di || !di.estado) {
+        if (emp && emp.turno_dias && dateStr) {
+            const dt2 = new Date(dateStr + 'T00:00:00');
+            // js getDay(): 0=Dom,1=Lun...6=Sab → Python: Mon=0..Sun=6
+            const pyDay = dt2.getDay() === 0 ? 6 : dt2.getDay() - 1;
+            const dayInfo = emp.turno_dias[pyDay];
+            if (dayInfo && dayInfo.es_libre) {
+                // Badge LIB proyectado (visual únicamente, no guardado en BD)
+                return `<div class="badge-status badge-state-neutral" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.55;"><span><i class="bi bi-cup-hot-fill me-1"></i>LIB</span></div>`;
+            }
+        }
+        return '';
+    }
+    const est = di.estado;
+    const hasEff = ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO'].includes(est);
+
+    let resultHtml = '';
+
+    if (viewMode === 'horas' && hasEff) {
+        const hrs = est === 'EN_CURSO' ? '>>' : formatDecimalToTime(di.horas_trabajadas);
+        const mDeuda = di.minutos_deuda || 0;
+        
+        let html = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;">`;
+        html += `<span class="fw-bold tabular-nums" style="font-size:0.72rem">${hrs}</span>`;
+        if (di.tipo_programacion !== 'FLEXIBLE_BOLSA' && mDeuda > 0) {
+            html += `<span style="font-size:0.55rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(mDeuda)}</span>`;
+        }
+        html += `</div>`;
+        resultHtml = html;
+    }
+    else if (viewMode === 'he') {
+        // En modo HE: nunca caer al badge de conceptos → return explícito
+        if (di._esBolsa) {
+            const snapHoy      = di._acumuladoBolsaSnap || 0;
+            const snapAyer     = di._acumuladoBolsaSnapPrev || 0;
+            const metaMinBolsa = di._metaMinBolsa || 0;
+            const trabHoy      = Math.round((di.horas_trabajadas || 0) * 60);
+            if (snapHoy > metaMinBolsa && trabHoy > 0) {
+                const heEste = snapAyer >= metaMinBolsa ? trabHoy : (snapHoy - metaMinBolsa);
+                if (heEste > 0) {
+                    const col = di.estado_he === 'APROBADO' ? 'color:#16a34a' : 'color:#f97316';
+                    return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;${col}">${_fmtMin(heEste)}</span>`;
+                }
+            }
+            return ''; // Sin HE: celda vacía (no badge)
+        } else {
+            const heBruto = di.minutos_extra_bruto || 0;
+            if (heBruto > 0) {
+                const col = di.estado_he === 'APROBADO' ? 'color:#16a34a' : 'color:#dc2626';
+                return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;${col}">${_fmtMin(heBruto)}</span>`;
+            }
+            return ''; // Sin HE: celda vacía (no badge)
+        }
+    }
+    else if (viewMode === 'acumulado') {
+        if (di._esBolsa) {
+            // FLEXIBLE_BOLSA: SOLO mostrar en días efectivos (no LIBRE/FERIADO)
+            if (!hasEff) return ''; // LIBRE / FERIADO → celda vacía
+            const snap         = di._acumuladoBolsaSnap || 0;
+            const snapAyer     = di._acumuladoBolsaSnapPrev || 0;
+            const metaMinBolsa = di._metaMinBolsa || 1;
+            if (snap > 0) {
+                let color, bg = '';
+                if (snapAyer >= metaMinBolsa) {
+                    color = '#f97316'; bg = 'background:rgba(249,115,22,0.08)';
+                } else if (snap > metaMinBolsa) {
+                    color = '#10b981'; bg = 'background:rgba(16,185,129,0.12)';
+                } else if (snap / metaMinBolsa >= 0.8) {
+                    color = '#d97706';
+                } else {
+                    color = '#3b82f6';
+                }
+                const cruzaHoy = snap > metaMinBolsa && snapAyer < metaMinBolsa;
+                return `<div style="display:flex;flex-direction:column;align-items:center;line-height:1.2;${bg}">
+                    <span class="fw-bold tabular-nums" style="font-size:0.72rem;color:${color}">${_fmtMin(snap)}</span>
+                    ${cruzaHoy ? `<span style="font-size:0.5rem;color:#10b981;font-weight:800">&#9733;META</span>` : ''}
+                </div>`;
+            }
+            return '';
+        } else if (hasEff && di.horas_trabajadas > 0) {
+            // Turnos normales: acumulado semanal
+            const snap = di._acumuladoSemanalSnap || 0;
+            return snap > 0
+                ? `<span class="fw-bold tabular-nums" style="font-size:0.72rem">${_fmtMin(snap)}</span>`
+                : `<span style="font-size:0.68rem;color:#9ca3af">—</span>`;
+        }
+        return ''; // cualquier otro caso → vacío
+    }
+    else if (viewMode === 'colacion' && hasEff) {
+        const mColReal = di.minutos_colacion_real || 0;
+        const mColAplicado = di.minutos_colacion || 0;
+        const exceso = di.minutos_exceso_colacion || 0;
+        
+        if (di.hora_entrada_real && di.hora_salida_real) {
+            let color = mColAplicado > 0 ? '#1e293b' : '#9ca3af';
+            let html = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;">`;
+            html += `<span class="fw-bold tabular-nums" style="font-size:0.72rem;color:${color}">${_fmtMin(mColAplicado)}</span>`;
+            
+            if (exceso > 0) {
+                html += `<span style="font-size:0.55rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(exceso)}</span>`;
+            } else if (mColReal === 0 && mColAplicado > 0) {
+                html += `<span style="font-size:0.55rem;color:#64748b;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">AUTO</span>`;
+            }
+            html += `</div>`;
+            resultHtml = html;
+        } else {
+            resultHtml = `<span style="font-size:0.68rem;color:#9ca3af">—</span>`;
+        }
+    }
+    else if (viewMode === 'permisos') {
+        const mPerm = di.minutos_permisos_detectados || 0;
+        const mDeuda = di.minutos_permiso_personal_deuda || 0;
+        if (mPerm > 0) return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;color:#2563eb">${_fmtMin(mPerm)}</span>`;
+        if (di.tiene_permiso_hora || di.permiso_activo) {
+            const mins = mDeuda > 0 ? mDeuda : Math.round((di.horas_teoricas||0)*60);
+            if (mins > 0) return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;color:#d97706">${_fmtMin(mins)}</span>`;
+            return `<span style="font-size:0.68rem;color:#d97706">PER</span>`;
+        }
+        return hasEff ? `<span style="font-size:0.68rem;color:#9ca3af">—</span>` : '';
+    }
+
+    if (resultHtml !== '') {
+        if (est === 'EXTRA') {
+            const label = 'EXTRA';
+            const color = '#8b5cf6';
+            return `<div style="display:flex;flex-direction:column;align-items:center;line-height:1.2;">
+                ${resultHtml}
+                <span style="font-size:0.55rem;color:${color};font-weight:700;letter-spacing:-0.2px;margin-top:2px;">${label}</span>
+            </div>`;
+        }
+        return resultHtml;
+    }
+
+    // default: conceptos
+    return _analiticaCellBadge(di);
+}
+
+// ─── TOOLTIP DASHBOARD PREMIUM (LIGHT THEME) ────────────────────
+function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const dayName = dt ? days[dt.getDay()] : '';
+    const dateFormatted = dayName ? `${dayName} ${dateStr}` : dateStr;
+    const empName = empInfo ? (empInfo.nombre_completo || empInfo.nombre || 'Empleado') : 'Empleado';
+    const empAreaText = empInfo && empInfo.area ? empInfo.area : 'SIN ÁREA';
+    const isFer = !!feriadoDesc;
+
+    if (!di || !di.estado) {
+        const fallbackShift = (empInfo && empInfo.turno) ? empInfo.turno : 'SIN PROGRAMACIÓN';
+        let scheduleHtml = '';
+        if (dt && empInfo && empInfo.turno_dias) {
+            const pyDay = dt.getDay() === 0 ? 6 : dt.getDay() - 1;
+            const dayInfo = empInfo.turno_dias[pyDay];
+            if (dayInfo) {
+                if (dayInfo.es_libre) {
+                    scheduleHtml = `<div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-top:2px;"><i class="bi bi-cup-hot-fill me-1"></i> HORARIO: <span style="color:var(--text-primary, #1e293b);">DÍA LIBRE</span></div>`;
+                } else if (dayInfo.hora_entrada && dayInfo.hora_salida) {
+                    const hEnt = dayInfo.hora_entrada.substring(0, 5);
+                    const hSal = dayInfo.hora_salida.substring(0, 5);
+                    scheduleHtml = `<div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-top:2px;"><i class="bi bi-clock-history me-1"></i> HORARIO: <span style="color:var(--text-primary, #1e293b);">${hEnt} - ${hSal}</span></div>`;
+                }
+            }
+        }
+        let emptyStateHtml = isFer ? `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-star-fill me-1"></i>FERIADO</div>` : `<div class="badge-status badge-state-secondary" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">SIN DATOS</div>`;
+        
+        return _escAttr(`<div style="width: 340px; font-family:'Inter',sans-serif; cursor: default; background:var(--card-bg, #ffffff); color:var(--text-primary, #1e293b); padding:12px; border-radius:6px; margin:0; border:1px solid var(--border-color, #e2e8f0); box-shadow:var(--shadow-premium);">
+            <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
+                <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+                    <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
+                </div>
+                <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem; margin-bottom: 8px;">
+                    ${dateFormatted}
+                </div>
+                <div style="display:flex; align-items:flex-start; justify-content:flex-start; gap:8px; margin-bottom: 10px;">
+                    <span style="color:var(--text-secondary, #64748b); font-weight:700; font-size:0.65rem; text-transform:uppercase; margin-top: 4px;">ESTADO:</span>
+                    <div style="flex:1; display:flex; justify-content:flex-start; text-align:left;">${emptyStateHtml}</div>
+                </div>
+                <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
+                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
+                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-bottom:2px;">TURNO: <span style="color:var(--text-primary, #1e293b);">${fallbackShift}</span></div>
+                ${scheduleHtml}
+                ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
+            </div>
+        </div>`);
+    }
+
+    const e = di;
+    const est = e.estado;
+    
+    // Icon mappings
+    const iconMap = {
+        'OK': '<i class="bi bi-check-circle-fill me-1"></i>',
+        'INASISTENCIA': '<i class="bi bi-x-circle-fill me-1"></i>',
+        'PERMISO': '<i class="bi bi-calendar-check-fill me-1"></i>',
+        'ATRASO': '<i class="bi bi-clock-fill me-1"></i>',
+        'SALIDA_ADELANTADA': '<i class="bi bi-box-arrow-left me-1"></i>',
+        'LIBRE': '<i class="bi bi-cup-hot-fill me-1"></i>',
+        'EN_CURSO': '<i class="bi bi-play-circle-fill me-1"></i>',
+        'FERIADO': '<i class="bi bi-star-fill me-1"></i>',
+        'JORNADA_ESPECIAL': '<i class="bi bi-star-fill me-1"></i>',
+        'EXTRA': '<i class="bi bi-plus-circle-fill me-1"></i>',
+        'ANOMALIA': '<i class="bi bi-exclamation-triangle-fill me-1"></i>',
+        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>'  // fallback defensivo
+    };
+    
+    // Nombres para mostrar en tooltip — desde caché de BD con fallback al código
+    const stateNameMap = {};
+    Object.values(window._estadosAsistencia || {}).forEach(e => {
+        stateNameMap[e.codigo] = e.nombre_display || e.codigo;
+    });
+    // Fallbacks mínimos si la caché no cargó
+    if (!stateNameMap['OK']) {
+        Object.assign(stateNameMap, {
+            'OK': 'OK', 'INASISTENCIA': 'INASISTENCIA',
+            'SALIDA_ADELANTADA': 'SALIDA ADELANTADA', 'EN_CURSO': 'EN TURNO',
+            'JORNADA_ESPECIAL': 'JORNADA ESPECIAL', 'EXTRA': 'JORNADA EXTRA',
+            'ANOMALIA': 'ANOMALÍA (INCOMPLETA)'
+        });
+    }
+    // PENDIENTE nunca debe mostrarse — siempre mappear a ANOMALÍA visualmente
+    stateNameMap['PENDIENTE'] = 'ANOMALÍA (JE INCOMPLETA)';
+    
+    // Class mappings for badges
+    const pillClassMap = {
+        'OK': 'badge-state-success',
+        'INASISTENCIA': 'badge-state-danger',
+        'PERMISO': 'badge-state-info',
+        'ATRASO': 'badge-state-warning',
+        'SALIDA_ADELANTADA': 'badge-state-info',
+        'LIBRE': 'badge-state-secondary',
+        'EN_CURSO': 'badge-state-success',
+        'FERIADO': 'badge-state-warning',
+        'JORNADA_ESPECIAL': 'badge-state-info',
+        'EXTRA': 'badge-state-info',
+        'ANOMALIA': 'bg-dark text-white border-0',
+        'PENDIENTE': 'bg-dark text-white border-0'   // fallback defensivo → igual que ANOMALIA
+    };
+
+    let badgeHtml = '';
+    const perSuffix = (e.tiene_permiso_hora || e.permiso_activo) ? ' <span style="opacity:0.8;font-size:0.9em;margin-left:4px;">(+PERM)</span>' : '';
+    
+    if (est === 'ATR_SAD') {
+        const b1 = `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-clock-fill me-1"></i>ATRASO</div>`;
+        const b2 = `<div class="badge-status badge-state-info" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-box-arrow-left me-1"></i>SAL. ADEL. ${perSuffix}</div>`;
+        badgeHtml = `<div style="display:flex; flex-direction:column; align-items:flex-start; gap: 4px;">${b1}${b2}</div>`;
+    } else {
+        const fullName = stateNameMap[est] || (e.nomenclatura || est);
+        const pillClass = pillClassMap[est] || 'badge-state-info';
+        const icon = iconMap[est] || '';
+        badgeHtml = `<div class="badge-status ${pillClass}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon}${fullName}${perSuffix}</div>`;
+    }
+    
+    badgeHtml = `
+    <div style="display:flex; align-items:flex-start; justify-content:flex-start; gap:8px;">
+        <span style="color:var(--text-secondary, #64748b); font-weight:700; font-size:0.65rem; text-transform:uppercase; margin-top: 4px;">ESTADO:</span>
+        <div style="flex:1; display:flex; justify-content:flex-start; text-align:left;">${badgeHtml}</div>
+    </div>`;
+    
+    // Formatters
+    const _fM = (m) => {
+        if (!m || m <= 0) return '';
+        return formatExactMinutesToTime(m);
+    };
+
+    // Calculate Extra Hours distribution
+    let heBruta = e.minutos_extra_bruto || 0;
+    let heAprobada = e.minutos_extra_autorizados || 0;
+    let heRechazada = e.estado_he === 'RECHAZADO' ? heBruta : 0;
+    let hePendiente = e.estado_he === 'PENDIENTE' ? heBruta : 0;
+    let heTotal = heAprobada; 
+
+    // Incidencias Array
+    let incidencias = [];
+    if (e.minutos_atraso > 0) incidencias.push(`Atraso de ${formatExactMinutesToTime(e.minutos_atraso)} en entrada`);
+    if (e.minutos_salida_adelantada > 0) incidencias.push(`Salida anticipada por ${formatExactMinutesToTime(e.minutos_salida_adelantada)}`);
+    if (e.minutos_deuda > 0 && e.minutos_atraso === 0 && e.minutos_salida_adelantada === 0) incidencias.push(`Deuda total de ${formatExactMinutesToTime(e.minutos_deuda)}`);
+    if (e.tiene_permiso || e.tiene_permiso_hora || e.permiso_activo || e.minutos_permisos_detectados > 0) {
+        // Formato BD: "HH:MM:SS" → recortar a "HH:MM"
+        const hIni  = e.hora_inicio_permiso  ? String(e.hora_inicio_permiso).substring(0,5)  : null;
+        const hFin  = e.hora_termino_permiso ? String(e.hora_termino_permiso).substring(0,5) : null;
+        const durMin = e.minutos_permisos_detectados || e.minutos_permiso_personal_deuda || 0;
+        let permisoTxt = 'Permiso detectado';
+        if (hIni && hFin) {
+            permisoTxt = `Permiso ${hIni} – ${hFin}`;
+            if (durMin > 0) permisoTxt += ` (${formatExactMinutesToTime(durMin)})`;
+        } else if (hIni) {
+            permisoTxt = `Permiso desde ${hIni}`;
+            if (durMin > 0) permisoTxt += ` (${formatExactMinutesToTime(durMin)})`;
+        } else if (durMin > 0) {
+            permisoTxt = `Permiso de ${formatExactMinutesToTime(durMin)}`;
+        } else if (e.observaciones) {
+            permisoTxt = `Ausencia Justificada: ${e.observaciones}`;
+        }
+        incidencias.push(permisoTxt);
+    }
+    
+    if (e._esDiaJustificadoBolsa && empInfo && empInfo._esBolsaFlag && empInfo._valorTurnoMinBolsa) {
+        incidencias.push(`Día justificado (Art 25 bis): descuenta ${formatExactMinutesToTime(empInfo._valorTurnoMinBolsa)} a la meta mensual.`);
+    }
+
+    let incidenciasHtml = '';
+    if (incidencias.length > 0) {
+        incidenciasHtml = `
+        <div style="background-color: rgba(245,158,11,0.1); border: 1px solid var(--warning-color, #f59e0b); border-radius: 6px; padding: 8px; margin-bottom: 12px;">
+            <div style="color: var(--warning-color, #f59e0b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 4px;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> INCIDENCIAS
+            </div>
+            <ul style="margin: 0; padding-left: 16px; color: var(--text-primary, #1e293b); font-size: 0.7rem; line-height: 1.4;">
+                ${incidencias.map(i => `<li>${i}</li>`).join('')}
+            </ul>
+        </div>`;
+    }
+
+    // Colors
+    const isUnderHours = e.horas_trabajadas && e.horas_teoricas && e.horas_trabajadas < e.horas_teoricas;
+    const hoursColor = isUnderHours ? 'var(--danger-color, #f43f5e)' : 'var(--text-primary, #1e293b)';
+    
+    const rowStyles = "display:flex; justify-content:space-between; margin-bottom:4px; align-items:center;";
+    const labelStyles = "color:var(--text-secondary, #64748b); font-weight:500; font-size:0.7rem;";
+    
+    const valMins = (mins, activeColor) => {
+        if (!mins || mins <= 0) return `<span style="color:var(--text-secondary, #64748b); font-family:'monospace'; font-size:0.75rem;"></span>`;
+        return `<span style="color:${activeColor}; font-family:'monospace'; font-size:0.75rem; font-weight:700;">${formatExactMinutesToTime(mins)}</span>`;
+    };
+
+    // Colación Logic
+    const colAuto = e.minutos_colacion_auto || 0;
+    const colReal = e.minutos_colacion_real || 0;
+    const colApli = e.minutos_colacion || 0;
+
+    let colRealText = '';
+    if (colReal > 0) {
+        colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Marcas)</span>`;
+    } else if (colApli > 0) {
+        colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Auto)</span>`;
+    }
+
+    // Observaciones
+    let obsHtml = '';
+    if (e.observaciones) {
+        const isAlert = e.observaciones.includes('[ALERTA SISTEMA');
+        const bg = isAlert ? 'var(--danger-light, #fef2f2)' : 'var(--light-bg, #f1f5f9)';
+        const border = isAlert ? 'var(--danger-color, #ef4444)' : 'var(--border-color, #e2e8f0)';
+        const textColor = isAlert ? 'var(--danger-color, #ef4444)' : 'var(--text-secondary, #64748b)';
+        const textMainColor = isAlert ? 'var(--danger-color, #dc2626)' : 'var(--text-primary, #1e293b)';
+        const titleText = isAlert ? '⚠️ ALERTA DE SISTEMA' : 'OBSERVACIONES';
+
+        obsHtml = `
+        <div style="background-color: ${bg}; border: 1px solid ${border}; border-radius: 6px; padding: 8px; margin-top: 12px;">
+            <div style="color: ${textColor}; font-weight: 800; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 4px; text-transform: uppercase;">
+                ${titleText}
+            </div>
+            <div style="color: ${textMainColor}; font-size: 0.7rem; line-height: 1.4; font-weight: ${isAlert ? '600' : 'normal'};">
+                ${e.observaciones}
+            </div>
+        </div>`;
+    }
+
+    const shiftName = e.turno_nombre || (empInfo && empInfo.turno) || 'SIN PROGRAMACIÓN';
+
+    const html = `
+    <div style="width: 340px; font-family: 'Inter', sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 12px; border-radius: 6px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium);">
+        
+        <!-- Header Principal (Apilado verticalmente) -->
+        <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
+            
+            <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+                <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
+            </div>
+            
+            <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem; margin-bottom: 8px;">
+                ${dateFormatted}
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                ${badgeHtml}
+            </div>
+
+            <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase;">TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
+            ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
+            
+        </div>
+
+        <!-- Tabla Principal -->
+        <div style="margin-bottom: 12px;">
+            <div style="display: flex; margin-bottom: 6px;">
+                <div style="width: 30%;"></div>
+                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6rem; letter-spacing: 0.5px;">PROGRAMADO</div>
+                <div style="width: 35%; text-align: center; color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.6rem; letter-spacing: 0.5px;">REAL</div>
+            </div>
+            
+            <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
+                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Entrada</div>
+                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_entrada_teorica ? (e.hora_entrada_teorica.length === 5 ? e.hora_entrada_teorica + ':00' : e.hora_entrada_teorica) : '--:--:--'}</div>
+                <div style="width: 35%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_entrada_real || '--:--:--'}</div>
+            </div>
+            <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
+                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Salida</div>
+                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_salida_teorica ? (e.hora_salida_teorica.length === 5 ? e.hora_salida_teorica + ':00' : e.hora_salida_teorica) : '--:--:--'}</div>
+                <div style="width: 35%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_salida_real || '--:--:--'}</div>
+            </div>
+            <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
+                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">
+                    Colación ${colRealText ? `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-weight:normal; margin-left:2px;">${colRealText}</span>` : ''}
+                </div>
+                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${colAuto > 0 ? _fM(colAuto) : '--:--:--'}</div>
+                <div style="width: 35%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${_fM(colApli)}</div>
+            </div>
+            <div style="display: flex; align-items: center; padding: 4px 0;">
+                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Horas</div>
+                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.horas_teoricas ? formatDecimalToTime(e.horas_teoricas) : '--:--:--'}</div>
+                <div style="width: 35%; text-align: center; color: ${hoursColor}; font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.horas_trabajadas ? formatDecimalToTime(e.horas_trabajadas) : '--:--:--'}</div>
+            </div>
+        </div>
+
+        ${incidenciasHtml}
+
+        <!-- Bloques HE y Deuda -->
+        <div style="display: flex; gap: 10px;">
+            <!-- Horas Extras -->
+            <div style="flex: 1; border: 1px solid rgba(16, 185, 129, 0.2); background-color: rgba(16, 185, 129, 0.05); border-radius: 6px; padding: 8px;">
+                <div style="color: var(--success-color, #10b981); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
+                    <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> ${(est === 'EXTRA' || est === 'JORNADA_ESPECIAL') ? (stateNameMap[est] || 'HORAS EXTRAS') : 'HORAS EXTRAS'}
+                </div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Bruta</span> ${valMins(heBruta, 'var(--success-color, #10b981)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Aprobada</span> ${valMins(heAprobada, 'var(--success-color, #10b981)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Pendiente</span> ${valMins(hePendiente, 'var(--success-color, #10b981)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Rechazada</span> ${valMins(heRechazada, 'var(--success-color, #10b981)')}</div>
+                <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(heTotal, 'var(--success-color, #10b981)')}</div>
+            </div>
+
+            <!-- Deuda -->
+            <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
+                <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
+                    <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
+                </div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_deuda > 0 ? e.minutos_atraso : 0, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_deuda > 0 ? e.minutos_salida_adelantada : 0, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins(e.minutos_deuda > 0 ? (e.minutos_exceso_colacion || 0) : 0, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins(e.minutos_deuda > 0 ? (e.minutos_permisos_detectados || 0) : 0, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>
+            </div>
+        </div>
+
+        ${obsHtml}
+    </div>
+    `;
+
+    return _escAttr(html);
+}
+
+function _escAttr(html) {
+    return html.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+

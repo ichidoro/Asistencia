@@ -1,0 +1,383 @@
+import json
+import hashlib
+import secrets
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta, timezone
+from loguru import logger
+import jwt
+
+from backend.core.database import Database
+from backend.schemas.auth import (
+    UsuarioCreate, UsuarioUpdate, UsuarioResponse,
+    RolCreate, RolResponse, PermisoResponse
+)
+
+from backend.core.config import settings
+
+# ELIMINADO: SECRET_KEY y ALGORITHM hardcoded. Ahora se usan desde settings.
+
+class SeguridadRepository:
+    def __init__(self, db: Database):
+        self.db = db
+
+    def get_password_hash(self, password: str) -> str:
+        """Hashing ultra-estable usando hashlib (Sin dependencias nativas volátiles)"""
+        salt = secrets.token_hex(16)
+        hash_obj = hashlib.sha256(f"{salt}{password}".encode('utf-8'))
+        return f"{salt}${hash_obj.hexdigest()}"
+
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        try:
+            if not hashed_password or "$" not in hashed_password:
+                return False
+            salt, stored_hash = hashed_password.split("$")
+            hash_obj = hashlib.sha256(f"{salt}{plain_password}".encode('utf-8'))
+            return secrets.compare_digest(hash_obj.hexdigest(), stored_hash)
+        except Exception as e:
+            logger.error(f"Error verificando password (Hashlib): {e}")
+            return False
+
+    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None):
+        to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.now(timezone.utc) + expires_delta
+        else:
+            expire = datetime.now(timezone.utc) + timedelta(minutes=1440)  # 24 horas por defecto
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        return encoded_jwt
+
+    async def init_tables(self):
+        """Inicializar tablas de seguridad e Inyectar la Semilla (God Mode)"""
+        
+        # 1. Tabla Permisos
+        if not await self.db.table_exists("permisos"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS permisos (
+                    id TEXT PRIMARY KEY, -- ej: empleados.ver
+                    modulo TEXT NOT NULL, -- ej: Empleados
+                    descripcion TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+        # 2. Tabla Roles
+        if not await self.db.table_exists("roles"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS roles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL UNIQUE,
+                    descripcion TEXT,
+                    alcance_global INTEGER DEFAULT 0, -- 1=Ve todo, 0=Filtro por área
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+        # 3. Tabla Relacional Rol_Permisos
+        if not await self.db.table_exists("rol_permisos"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS rol_permisos (
+                    rol_id INTEGER NOT NULL,
+                    permiso_id TEXT NOT NULL,
+                    PRIMARY KEY (rol_id, permiso_id),
+                    FOREIGN KEY (rol_id) REFERENCES roles (id) ON DELETE CASCADE,
+                    FOREIGN KEY (permiso_id) REFERENCES permisos (id) ON DELETE CASCADE
+                )
+            """)
+
+        # 4. Tabla Usuarios
+        if not await self.db.table_exists("usuarios"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    nombre_completo TEXT NOT NULL,
+                    email TEXT,
+                    activo INTEGER DEFAULT 1,
+                    rol_id INTEGER NOT NULL,
+                    areas_json TEXT, -- Lista JSON de áreas permitidas si no es alcance global
+                    ultimo_acceso TIMESTAMP,
+                    is_superuser INTEGER DEFAULT 0, -- BANDERA GOD MODE
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (rol_id) REFERENCES roles (id)
+                )
+            """)
+
+        # 5. Tabla Logs Auditoría
+        if not await self.db.table_exists("logs_auditoria"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS logs_auditoria (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    usuario_id INTEGER,
+                    username TEXT,
+                    accion TEXT NOT NULL, -- CREATE, UPDATE, DELETE, LOGIN, EXPORT
+                    modulo TEXT NOT NULL,
+                    detalle TEXT, -- JSON del cambio
+                    ip_address TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+        # 6. Tabla Sync Logs (Auditoría de Sincronización BioAlba)
+        if not await self.db.table_exists("sync_logs"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS sync_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fecha_inicio TEXT NOT NULL,
+                    fecha_fin TEXT,
+                    tipo_sync TEXT DEFAULT 'COMPLETA',
+                    marcaciones_nuevas INTEGER DEFAULT 0,
+                    dias_recalculados INTEGER DEFAULT 0,
+                    errores INTEGER DEFAULT 0,
+                    duracion_segundos REAL DEFAULT 0,
+                    detalle_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+        await self._inyectar_semilla_seguridad()
+
+    async def _inyectar_semilla_seguridad(self):
+        """Si la tabla de usuarios está vacía, crea el SuperAdmin y los permisos base."""
+        try:
+            # 1. Sembrar Permisos Base si están vacíos
+            count_p = await self.db.fetch_one("SELECT COUNT(*) as c FROM permisos")
+            if count_p and count_p['c'] == 0:
+                permisos_base = [
+                    # Configuración (permisos granulares por pestaña)
+                    ('configuracion.ver',            'Configuración', 'Acceso de solo lectura al módulo de configuración (Robot BioAlba y vista general)'),
+                    ('configuracion.seguridad',      'Configuración', 'Gestionar roles, permisos y usuarios del sistema (pestaña Seguridad)'),
+                    ('configuracion.horarios',       'Configuración', 'Ver, crear, editar y eliminar turnos y horarios de trabajo'),
+                    ('configuracion.bonos',          'Configuración', 'Ver, crear, editar y eliminar bonos, reglas de bonos y pagadores'),
+                    ('configuracion.justificaciones','Configuración', 'Ver, crear, editar y eliminar tipos de justificación e inasistencia'),
+                    ('configuracion.calendario',     'Configuración', 'Ver feriados, agregar feriados manuales y sincronizar calendario oficial'),
+                    ('configuracion.correo',         'Configuración', 'Ver ajustes de correo, guardar configuración y gestionar notificaciones por área'),
+                    ('configuracion.estados',        'Configuración', 'Ver, activar/desactivar y editar los estados de asistencia del sistema'),
+
+                    # Empleados
+                    ('empleados.ver',                'Empleados', 'Ver la lista y ficha personal de los empleados'),
+                    ('empleados.crear',              'Empleados', 'Botón Nuevo Empleado (encima de la lista de empleados)'),
+                    ('empleados.editar',             'Empleados', 'Botón editar en la fila del empleado → abre y guarda la ficha personal'),
+                    ('empleados.eliminar',           'Empleados', 'Botón rojo para eliminar a un empleado definitivamente del sistema'),
+                    ('empleados.reincorporar',       'Empleados', 'Reactivar un empleado que estaba en estado inactivo'),
+                    ('empleados.horarios',           'Empleados', 'Cambiar turno individual + pestaña Asignación Masiva'),
+                    ('empleados.bonos',              'Empleados', 'Ver y gestionar bonos asignados a empleados'),
+                    ('empleados.sincronizar_biometrico', 'Empleados', 'Botón sincronizar empleados desde el Reloj Biométrico BioAlba (header)'),
+
+                    # Marcaciones
+                    ('marcaciones.ver',              'Marcaciones', 'Ver la grilla de asistencia, filtros y reporte individual'),
+                    ('marcaciones.editar',           'Marcaciones', 'Click en celda → agregar o modificar hora de entrada/salida manualmente'),
+                    ('marcaciones.justificar',       'Marcaciones', 'Asignar tipo de justificación a una celda (licencia, permiso, etc.)'),
+                    ('marcaciones.horas_extras',     'Marcaciones', 'Sugerir y aprobar horas extras desde la grilla'),
+                    ('marcaciones.procesar',         'Marcaciones', 'Botón procesar/reprocesar periodo desde el toolbar de Marcaciones'),
+                    ('marcaciones.cierre_periodo',   'Marcaciones', 'Crear y revertir cierres mensuales de asistencia'),
+                    ('marcaciones.sincronizar_biometrico', 'Marcaciones', 'Botón sincronizar marcaciones BioAlba desde el toolbar de Marcaciones'),
+                    ('marcaciones.bypass_cierre',    'Marcaciones', 'Modal de desbloqueo para editar datos en un periodo ya cerrado'),
+
+                    # Reportes
+                    ('reportes.ver',                 'Reportes', 'Acceder al módulo de reportes, filtros y tabla de resultados'),
+                    ('reportes.exportar',            'Reportes', 'Descargar el reporte consolidado en Excel'),
+                    ('reportes.reprocesar',          'Reportes', 'Botón reprocesar desde la pantalla de Reportes (independiente de Marcaciones)'),
+                    ('reportes.sincronizar',         'Reportes', 'Botón sincronizar BioAlba desde la pantalla de Reportes (independiente de Marcaciones)'),
+                ]
+                await self.db.executemany(
+                    "INSERT INTO permisos (id, modulo, descripcion) VALUES (?, ?, ?)",
+                    permisos_base
+                )
+                logger.info("✨ Permisos base inyectados (28 permisos)")
+
+            # 2. Sembrar los 4 Roles base si la tabla está vacía
+            count_r = await self.db.fetch_one("SELECT COUNT(*) as c FROM roles")
+            if count_r and count_r['c'] == 0:
+                roles_base = [
+                    (1, 'Super Administrador', 'Control total del sistema. Ve y hace todo sin restricciones. Único acceso a la consola de seguridad para crear usuarios y modificar roles.', 1),
+                    (2, 'Jefe de Area',        'Responsable operativo de su área. Gestiona empleados (sin crear ni eliminar), controla marcaciones completas, procesa periodos y genera reportes. Ve configuración solo lectura (Robot BioAlba).', 0),
+                    (3, 'Operador RRHH',       'Personal de RRHH con gestión de empleados y registro de asistencia diaria. Sin acceso a procesar periodos, cerrar meses ni configuración del sistema.', 0),
+                    (4, 'Supervisor',          'Rol de solo lectura. Ve dashboard, empleados, marcaciones y reportes sin modificar nada. Ideal para gerentes o directivos que monitorizan sin intervenir.', 0),
+                ]
+                await self.db.executemany(
+                    "INSERT INTO roles (id, nombre, descripcion, alcance_global) VALUES (?, ?, ?, ?)",
+                    roles_base
+                )
+
+                # Rol 1 — Super Admin: todos los permisos
+                await self.db.execute("INSERT INTO rol_permisos (rol_id, permiso_id) SELECT 1, id FROM permisos")
+
+                # Rol 2 — Jefe de Área: operativo completo (sin eliminar empleados, sin bypass, sin seguridad)
+                permisos_jefe = [
+                    'empleados.ver','empleados.crear','empleados.editar','empleados.reincorporar',
+                    'empleados.horarios','empleados.bonos','empleados.sincronizar_biometrico',
+                    'marcaciones.ver','marcaciones.editar','marcaciones.justificar',
+                    'marcaciones.horas_extras','marcaciones.procesar','marcaciones.cierre_periodo',
+                    'marcaciones.sincronizar_biometrico',
+                    'reportes.ver','reportes.exportar','reportes.reprocesar','reportes.sincronizar',
+                    'configuracion.ver',
+                ]
+                await self.db.executemany(
+                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (2, ?)",
+                    [(p,) for p in permisos_jefe]
+                )
+
+                # Rol 3 — Operador RRHH: gestión diaria sin acciones críticas
+                permisos_operador = [
+                    'empleados.ver','empleados.editar','empleados.reincorporar','empleados.horarios',
+                    'marcaciones.ver','marcaciones.editar','marcaciones.justificar','marcaciones.horas_extras',
+                    'reportes.ver','reportes.exportar',
+                ]
+                await self.db.executemany(
+                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (3, ?)",
+                    [(p,) for p in permisos_operador]
+                )
+
+                # Rol 4 — Supervisor: solo lectura
+                permisos_supervisor = ['empleados.ver','marcaciones.ver','reportes.ver']
+                await self.db.executemany(
+                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (4, ?)",
+                    [(p,) for p in permisos_supervisor]
+                )
+
+                logger.info("✨ 4 Roles base inyectados con sus permisos")
+
+            # 3. Sembrar Usuario GOD MODE si está vacío
+            count_u = await self.db.fetch_one("SELECT COUNT(*) as c FROM usuarios")
+            if count_u and count_u['c'] == 0:
+                hashed_pw = self.get_password_hash("aguacol2026")
+                await self.db.execute("""
+                    INSERT INTO usuarios (username, password_hash, nombre_completo, email, activo, rol_id, is_superuser, areas_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, ("admin", hashed_pw, "Súper Admin Creador", "admin@aguacol.cl", 1, 1, 1, "[]"))
+                logger.warning("🚨 GOD MODE Activado: Usuario 'admin' creado exitosamente con privilegios máximos.")
+        
+        except Exception as e:
+            logger.error(f"Error inyectando semilla de seguridad: {e}")
+
+    # --- Operaciones CRUD Básicas (Base para Routers) ---
+    async def get_user_by_username(self, username: str) -> Optional[Dict]:
+        query = """
+            SELECT u.*, r.nombre as rol_nombre, r.alcance_global 
+            FROM usuarios u 
+            JOIN roles r ON u.rol_id = r.id 
+            WHERE u.username = ?
+        """
+        return await self.db.fetch_one(query, (username,))
+
+    async def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Obtiene un usuario por su ID primario"""
+        return await self.db.fetch_one("SELECT * FROM usuarios WHERE id = ?", (user_id,))
+
+    async def get_rol_by_id(self, rol_id: int) -> Optional[Dict]:
+        """Obtiene detalles de un Rol por su ID"""
+        return await self.db.fetch_one("SELECT * FROM roles WHERE id = ?", (rol_id,))
+
+    async def log_auditoria(self, usuario_id: int, username: str, accion: str, modulo: str, detalle: str = None, ip: str = None):
+        """Guarda un registro inmutable en auditoría"""
+        query = """
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle, ip_address)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """
+        await self.db.execute(query, (usuario_id, username, accion, modulo, detalle, ip))
+
+    async def get_permissions_for_role(self, rol_id: int) -> List[str]:
+        query = "SELECT permiso_id FROM rol_permisos WHERE rol_id = ?"
+        rows = await self.db.fetch_all(query, (rol_id,))
+        return [r['permiso_id'] for r in rows]
+
+    # --- Gestión Avanzada (Dashboard y Consola) ---
+    async def get_all_roles(self) -> List[Dict]:
+        query = "SELECT * FROM roles ORDER BY id ASC"
+        return await self.db.fetch_all(query)
+
+    async def get_all_permisos(self) -> List[Dict]:
+        query = "SELECT * FROM permisos ORDER BY modulo, id"
+        return await self.db.fetch_all(query)
+
+    async def create_rol(self, nombre: str, descripcion: str, alcance_global: int, permisos: List[str]) -> int:
+        query_rol = "INSERT INTO roles (nombre, descripcion, alcance_global) VALUES (?, ?, ?)"
+        cursor = await self.db.execute(query_rol, (nombre, descripcion, alcance_global))
+        rol_id = cursor.lastrowid
+        
+        if permisos:
+            permisos_data = [(rol_id, p) for p in permisos]
+            await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
+            
+        return rol_id
+
+    async def update_rol(self, rol_id: int, nombre: str, descripcion: str, alcance_global: int, permisos: List[str]):
+        query_rol = "UPDATE roles SET nombre = ?, descripcion = ?, alcance_global = ? WHERE id = ?"
+        await self.db.execute(query_rol, (nombre, descripcion, alcance_global, rol_id))
+        
+        # Recrear permisos
+        await self.db.execute("DELETE FROM rol_permisos WHERE rol_id = ?", (rol_id,))
+        if permisos:
+            permisos_data = [(rol_id, p) for p in permisos]
+            await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
+
+    async def get_all_usuarios(self) -> List[Dict]:
+        query = """
+            SELECT u.id, u.username, u.nombre_completo, u.email, u.activo,
+                   u.rol_id, r.nombre as rol_nombre, r.alcance_global, 
+                   u.areas_json, u.ultimo_acceso, u.is_superuser
+            FROM usuarios u
+            JOIN roles r ON u.rol_id = r.id
+            ORDER BY u.id DESC
+        """
+        return await self.db.fetch_all(query)
+
+    async def create_user(self, user: UsuarioCreate) -> int:
+        hashed_pw = self.get_password_hash(user.password)
+        areas_str = json.dumps(user.areas) if user.areas else "[]"
+        
+        query = """
+            INSERT INTO usuarios (username, password_hash, nombre_completo, email, activo, rol_id, areas_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        cursor = await self.db.execute(
+            query, 
+            (user.username, hashed_pw, user.nombre_completo, user.email, 
+             int(user.activo), user.rol_id, areas_str)
+        )
+        return cursor.lastrowid
+
+    async def update_user(self, user_id: int, user: UsuarioUpdate):
+        updates = []
+        params = []
+        
+        if user.nombre_completo is not None:
+            updates.append("nombre_completo = ?")
+            params.append(user.nombre_completo)
+        if user.email is not None:
+            updates.append("email = ?")
+            params.append(user.email)
+        if user.activo is not None:
+            updates.append("activo = ?")
+            params.append(int(user.activo))
+        if user.rol_id is not None:
+            updates.append("rol_id = ?")
+            params.append(user.rol_id)
+        if user.password:
+            updates.append("password_hash = ?")
+            params.append(self.get_password_hash(user.password))
+        if user.areas is not None:
+            updates.append("areas_json = ?")
+            params.append(json.dumps(user.areas))
+            
+        if not updates:
+            return
+            
+        query = f"UPDATE usuarios SET {', '.join(updates)} WHERE id = ?"
+        params.append(user_id)
+        
+        await self.db.execute(query, tuple(params))
+
+    async def get_auditoria(self, limit: int = 100, skip: int = 0) -> List[Dict]:
+        query = """
+            SELECT * FROM logs_auditoria 
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        return await self.db.fetch_all(query, (limit, skip))
+
+    async def count_auditoria(self) -> int:
+        row = await self.db.fetch_one("SELECT COUNT(*) as c FROM logs_auditoria")
+        return row['c'] if row else 0
