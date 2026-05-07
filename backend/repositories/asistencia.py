@@ -351,10 +351,14 @@ class AsistenciaRepository:
         cursor = await self.db.execute(query, params)
         return cursor.lastrowid
 
-    async def get_ultimo_cierre_periodo(self, tipo: str = 'RRHH') -> Optional[Dict[str, Any]]:
+    async def get_ultimo_cierre_periodo(self, tipo: str = 'RRHH', area: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Obtiene el último periodo cerrado para sugerir el siguiente"""
-        query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? ORDER BY fecha_fin DESC LIMIT 1"
-        return await self.db.fetch_one(query, (tipo,))
+        if area:
+            query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? AND area = ? ORDER BY fecha_fin DESC LIMIT 1"
+            return await self.db.fetch_one(query, (tipo, area))
+        else:
+            query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? ORDER BY fecha_fin DESC LIMIT 1"
+            return await self.db.fetch_one(query, (tipo,))
 
     async def get_cierres_historial(self, limit: int = 12) -> List[Dict[str, Any]]:
         """Obtiene al historial de cierres para la tabla de administración"""

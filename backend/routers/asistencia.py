@@ -1372,13 +1372,14 @@ async def get_periodo_rrhh_resumen_global(
 @router.get("/periodo-rrhh/ultimo-cierre/")
 async def get_ultimo_cierre_rrhh(
     tipo: str = Query("RRHH"),
+    area: Optional[str] = Query(None),
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
 ):
     """
     Obtiene la información del último cierre registrado para sugerir el siguiente periodo.
     """
-    return await service.repository.get_ultimo_cierre_periodo(tipo)
+    return await service.repository.get_ultimo_cierre_periodo(tipo, area)
 
 @router.get("/periodo-rrhh/historial/")
 async def get_historial_cierres_rrhh(

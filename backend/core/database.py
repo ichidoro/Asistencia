@@ -148,25 +148,11 @@ class HybridDatabase:
             except Exception as pragma_err:
                 logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 
-            # Sync post-conexión en BACKGROUND: no bloqueamos el arranque.
-            # La réplica local ya tiene datos válidos (libsql los mantiene).
-            # El sync trae cambios de Turso Cloud desde la última vez, pero
-            # no es urgente — el scheduler lo repetirá cada 90s de todas formas.
-            if hasattr(self.conn, 'sync') and not self._force_turso_only:
-                async def _bg_initial_sync():
-                    try:
-                        await asyncio.wait_for(
-                            asyncio.to_thread(self.conn.sync),
-                            timeout=30.0
-                        )
-                        self._last_sync = datetime.now()
-                        logger.info("☁️ Sync inicial completado en background (réplica actualizada)")
-                    except asyncio.TimeoutError:
-                        logger.warning("⚠️ Sync inicial timeout (>30s) — continuando con datos locales")
-                    except Exception as sync_err:
-                        logger.warning(f"⚠️ Sync inicial falló (no crítico): {sync_err}")
-                # Guardar referencia: evita que el GC destruya la tarea antes de completarse
-                self._bg_sync_task = asyncio.create_task(_bg_initial_sync())
+            # Se ha removido _bg_initial_sync() porque `conn.sync()` retenía el lock interno
+            # de SQLite (bloqueando todas las operaciones, como init_db_schemas) por 30-60 segundos
+            # si Turso Cloud presentaba alta latencia o era un sync pesado de inicio.
+            # El scheduler en events.py (`start_sync_scheduler`) ya se encarga de esto de 
+            # forma segura cada 90s respetando el `_sync_lock`.
 
             logger.success(f"✅ Motor LibSQL conectado (Modo: {'Cloud' if self._force_turso_only else 'Hybrid'})")
 

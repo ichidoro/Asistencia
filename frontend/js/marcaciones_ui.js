@@ -288,7 +288,7 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
 
 let _dependentFiltersDebounceTimer = null;
 
-function updateMarcacionesState(key, value) {
+async function updateMarcacionesState(key, value) {
     if (key === 'month' || key === 'year') {
         stateMarcacionesApp[key] = parseInt(value, 10);
     } else {
@@ -315,6 +315,39 @@ function updateMarcacionesState(key, value) {
         if (turnoSelect) turnoSelect.value = "";
         if (empSelect) empSelect.value = "";
         shouldLoadFilters = true;
+
+        // [NUEVO] "Smart Dates" para cierres
+        if (stateMarcacionesApp.isModoRRHH && value && value !== "Todas") {
+            try {
+                const resp = await fetch(`/api/asistencia/periodo-rrhh/ultimo-cierre/?area=${encodeURIComponent(value)}`);
+                const ultimo = await resp.json();
+                
+                if (ultimo && ultimo.fecha_fin) {
+                    const lastFin = new Date(ultimo.fecha_fin + "T00:00:00");
+                    lastFin.setDate(lastFin.getDate() + 1);
+                    stateMarcacionesApp.fechaInicioRRHH = lastFin.toISOString().split('T')[0];
+                    
+                    const nextFin = new Date(lastFin);
+                    nextFin.setDate(nextFin.getDate() + 29); // 30 días de rango
+                    stateMarcacionesApp.fechaFinRRHH = nextFin.toISOString().split('T')[0];
+                } else {
+                    const now = new Date();
+                    const inicio = new Date(now.getFullYear(), now.getMonth() - 1, 26);
+                    const fin = new Date(now.getFullYear(), now.getMonth(), 25);
+                    stateMarcacionesApp.fechaInicioRRHH = inicio.toISOString().split('T')[0];
+                    stateMarcacionesApp.fechaFinRRHH = fin.toISOString().split('T')[0];
+                }
+                const inpIni = document.getElementById('rrhh-fecha-inicio');
+                const inpFin = document.getElementById('rrhh-fecha-fin');
+                if (inpIni) inpIni.value = stateMarcacionesApp.fechaInicioRRHH;
+                if (inpFin) inpFin.value = stateMarcacionesApp.fechaFinRRHH;
+
+                showToast(`Fechas sugeridas para ${value} cargadas automáticamente`, "info");
+            } catch (e) {
+                console.error("Error al sugerir fechas Smart Dates:", e);
+            }
+        }
+
     } else if (key === 'turnoId') {
         // Nivel 3 cambió: resetear nivel 4 y recargar solo empleados (cascade)
         stateMarcacionesApp.empleadoId = "";
@@ -2523,7 +2556,7 @@ function iniciarPollingReproceso(empleadoId, nombre, fechaDesde) {
 
 
 /**
- * [NUEVO] Abre el modal de confirmación de cierre de periodo RRHH.
+ * [NUEVO] Abre el Asistente Zero-Trust de Cierre de Periodo RRHH.
  */
 async function openCierrePeriodoModal() {
     const fIni = stateMarcacionesApp.fechaInicioRRHH;
@@ -2532,109 +2565,283 @@ async function openCierrePeriodoModal() {
     if (!fIni || !fFin) return showToast("Debe seleccionar un rango de fechas", "warning");
 
     const area = stateMarcacionesApp.area;
-    const turnoId = stateMarcacionesApp.turnoId;
+    if (!area || area === 'Todas' || area === '') {
+        return showToast("Debe seleccionar un Área específica para realizar el cierre.", "error");
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    if (fFin >= today || fIni >= today) {
+        return showToast("Bloqueo de Seguridad: No se pueden cerrar periodos que incluyan el día de hoy o fechas futuras.", "error");
+    }
+
+    const dIni = new Date(fIni);
+    const dFin = new Date(fFin);
+    const diffTime = Math.abs(dFin - dIni);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    if (diffDays > 31) {
+        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (31 días).`, "error");
+    }
+
+    const html = `
+        <div class="modal fade" id="modal-cierre-wizard" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header bg-dark text-white border-0">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill text-warning me-2"></i> Asistente de Cierre de Periodo (Zero-Trust)</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body bg-light p-4">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="list-group list-group-flush mb-4 rounded shadow-sm">
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-1" disabled><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> 1. Anomalías</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-2" disabled><i class="bi bi-clock-fill text-warning me-2"></i> 2. En Curso</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-3" disabled><i class="bi bi-calendar-plus text-primary me-2"></i> 3. Horas Extras</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-4" disabled><i class="bi bi-person-dash text-info me-2"></i> 4. Inasistencias</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-5" disabled><i class="bi bi-file-earmark-pdf text-success me-2"></i> 5. Reporte Final</button>
+                                </div>
+                                <div class="alert alert-secondary small">
+                                    <i class="bi bi-calendar-check"></i> Rango:<br><strong>${fIni} al ${fFin}</strong><br>
+                                    <i class="bi bi-geo-alt-fill"></i> Área: <strong>${area}</strong>
+                                </div>
+                            </div>
+                            <div class="col-md-9 bg-white border rounded shadow-sm p-4 position-relative" id="wizard-content" style="min-height: 350px;">
+                                <div class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <p class="mt-3 text-muted fw-bold">Pre-evaluando integridad de datos...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-white border-top">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        <button type="button" class="btn btn-dark fw-bold px-4" id="btn-wizard-next" style="display:none;" onclick="nextWizardStep()">
+                            Siguiente Paso <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const old = document.getElementById('modal-cierre-wizard');
+    if (old) old.remove();
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    const modal = new bootstrap.Modal(document.getElementById('modal-cierre-wizard'));
+    modal.show();
+
+    window.cierreWizardState = { currentStep: 1, evaluacion: null, fIni, fFin, area, aceptarInasistencias: false };
 
     try {
-        let url = `/api/asistencia/periodo-rrhh/resumen-global/?fecha_inicio=${fIni}&fecha_fin=${fFin}`;
-        if (area) url += `&area=${encodeURIComponent(area)}`;
-        if (turnoId) url += `&turno_id=${turnoId}`;
+        const url = `/api/cierre/pre-evaluacion?fecha_inicio=${fIni}&fecha_fin=${fFin}&area=${encodeURIComponent(area)}`;
+        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.token}` } });
+        const data = await resp.json();
+        
+        if (!resp.ok) throw new Error(data.detail || "Fallo en pre-evaluación");
+        
+        window.cierreWizardState.evaluacion = data;
+        renderWizardStep(1);
+    } catch (e) {
+        document.getElementById('wizard-content').innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="bi bi-x-circle-fill"></i> Error de Validación</h5>
+                <p>${e.message}</p>
+            </div>
+        `;
+    }
+}
 
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error("Fallo al obtener resumen");
-        const resumen = await resp.json();
+function updateWizardTabs(step) {
+    for (let i = 1; i <= 5; i++) {
+        const tab = document.getElementById(`wiz-tab-${i}`);
+        if (i === step) {
+            tab.classList.add('active');
+            tab.classList.remove('bg-light');
+        } else if (i < step) {
+            tab.classList.remove('active');
+            tab.classList.add('bg-light', 'text-muted');
+        } else {
+            tab.classList.remove('active', 'bg-light', 'text-muted');
+        }
+    }
+}
 
-        const html = `
-            <div class="modal fade" id="modal-cierre-rrhh" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-warning text-dark border-0">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill me-2"></i> Cerrar Periodo RRHH</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+function renderWizardStep(step) {
+    window.cierreWizardState.currentStep = step;
+    updateWizardTabs(step);
+    const content = document.getElementById('wizard-content');
+    const btnNext = document.getElementById('btn-wizard-next');
+    const ev = window.cierreWizardState.evaluacion;
+
+    if (step === 1) { // Anomalías
+        if (ev.anomalias > 0) {
+            const list = ev.detalle_anomalias.map(a => `<li>${a.fecha} - ${a.nombre_completo}</li>`).join('');
+            content.innerHTML = `
+                <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: Anomalías Detectadas</h4>
+                <p>Se encontraron <strong>${ev.anomalias} anomalías</strong> que bloquean el cierre. Debes solucionarlas en la grilla de marcaciones antes de continuar.</p>
+                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+            `;
+            btnNext.style.display = 'none';
+        } else {
+            content.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Sin Anomalías</h4>
+                    <p class="text-muted">Las marcaciones están íntegras. Puede continuar al siguiente paso.</p>
+                </div>
+            `;
+            btnNext.style.display = 'inline-block';
+            btnNext.innerHTML = 'Siguiente Paso <i class="bi bi-arrow-right"></i>';
+            btnNext.className = 'btn btn-dark fw-bold px-4';
+            btnNext.onclick = () => renderWizardStep(2);
+        }
+    } else if (step === 2) { // En Curso
+        if (ev.en_curso > 0) {
+            const list = ev.detalle_en_curso.map(a => `<li>${a.fecha} - ${a.nombre_completo} (Salida teórica: ${a.hora_salida_teorica || 'N/A'})</li>`).join('');
+            content.innerHTML = `
+                <h4 class="text-warning fw-bold"><i class="bi bi-clock-history"></i> HARD STOP: Turnos en Curso</h4>
+                <p>Hay <strong>${ev.en_curso} empleados</strong> con turno activo. No puedes cerrar hasta que terminen su jornada.</p>
+                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+            `;
+            btnNext.style.display = 'none';
+        } else {
+            content.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Sin Turnos en Curso</h4>
+                    <p class="text-muted">Todos los turnos del periodo han finalizado.</p>
+                </div>
+            `;
+            btnNext.style.display = 'inline-block';
+            btnNext.onclick = () => renderWizardStep(3);
+        }
+    } else if (step === 3) { // HE Pendientes
+        if (ev.he_pendientes > 0) {
+            const list = ev.detalle_he.map(a => `<li>${a.fecha} - ${a.nombre_completo} (${a.minutos_autorizados} min)</li>`).join('');
+            content.innerHTML = `
+                <h4 class="text-primary fw-bold"><i class="bi bi-exclamation-circle"></i> HARD STOP: Horas Extras Pendientes</h4>
+                <p>Existen <strong>${ev.he_pendientes} registros</strong> de Horas Extras pendientes de aprobación/rechazo.</p>
+                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+            `;
+            btnNext.style.display = 'none';
+        } else {
+            content.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Sin HE Pendientes</h4>
+                    <p class="text-muted">Todas las Horas Extras han sido resueltas.</p>
+                </div>
+            `;
+            btnNext.style.display = 'inline-block';
+            btnNext.onclick = () => renderWizardStep(4);
+        }
+    } else if (step === 4) { // Inasistencias (Soft Stop)
+        if (ev.inasistencias_injustificadas > 0) {
+            const list = ev.detalle_ina.map(a => `<li>${a.fecha} - ${a.nombre_completo}</li>`).join('');
+            content.innerHTML = `
+                <h4 class="text-info fw-bold"><i class="bi bi-info-circle"></i> SOFT STOP: Inasistencias no justificadas</h4>
+                <p>Hay <strong>${ev.inasistencias_injustificadas} inasistencias</strong>. Si cierra ahora, se consolidarán como inasistencias definitivas sin goce de sueldo.</p>
+                <div class="border rounded p-3 bg-light mb-3" style="max-height:150px; overflow-y:auto;"><ul>${list}</ul></div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-aceptar-inasistencias" onchange="window.cierreWizardState.aceptarInasistencias = this.checked; document.getElementById('btn-wizard-next').disabled = !this.checked;">
+                    <label class="form-check-label fw-bold" for="chk-aceptar-inasistencias">
+                        Acepto consolidar estas inasistencias.
+                    </label>
+                </div>
+            `;
+            btnNext.style.display = 'inline-block';
+            btnNext.disabled = true;
+            btnNext.onclick = () => renderWizardStep(5);
+        } else {
+            content.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Sin Inasistencias Pendientes</h4>
+                    <p class="text-muted">No hay inasistencias injustificadas en el periodo.</p>
+                </div>
+            `;
+            window.cierreWizardState.aceptarInasistencias = true;
+            btnNext.style.display = 'inline-block';
+            btnNext.disabled = false;
+            btnNext.onclick = () => renderWizardStep(5);
+        }
+    } else if (step === 5) { // Reporte Final
+        content.innerHTML = `
+            <h4 class="fw-bold mb-4"><i class="bi bi-file-text"></i> Previsualización de Cierre</h4>
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <div class="card bg-light border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted text-uppercase small fw-bold">Horas Extras Aprobadas</h6>
+                            <h3 class="text-primary mb-0">${ev.resumen.he_aprobadas_horas || 0} hrs <small class="fs-6 text-muted">(${ev.resumen.he_aprobadas_count || 0} reg.)</small></h3>
                         </div>
-                        <div class="modal-body">
-                            <p class="mb-3 text-center">Formalizar cierre del periodo:<br><span class="badge bg-dark fs-6">${fIni} al ${fFin}</span></p>
-                            
-                            <div class="bg-light p-3 rounded mb-3 border">
-                                <h6 class="fw-bold small text-muted text-uppercase mb-3 border-bottom pb-1">Resumen Consolidado</h6>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Horas Extra Aprobadas:</span>
-                                    <span class="fw-bold text-primary">${formatMinutesToHHMM(resumen.total_he_aprobado)}</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Deuda Acumulada:</span>
-                                    <span class="fw-bold text-danger">-${formatMinutesToHHMM(resumen.total_deuda)}</span>
-                                </div>
-                                <hr class="my-2">
-                                <div class="d-flex justify-content-between">
-                                    <span class="fw-bold">Balance Neto:</span>
-                                    <span class="fw-bold fs-5 ${resumen.total_balance >= 0 ? 'text-success' : 'text-danger'}">
-                                        ${resumen.total_balance > 0 ? '+' : ''}${formatMinutesToHHMM(resumen.total_balance)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="form-group mb-0">
-                                <label for="cierre-comentario" class="small fw-bold mb-1 text-muted">Comentarios de Cierre</label>
-                                <textarea id="cierre-comentario" class="form-control" rows="2" placeholder="Ej: Cierre de mes validado por RRHH..."></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light border-0">
-                            <button type="button" class="btn btn-link text-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-warning fw-bold px-4" onclick="confirmarCierreRRHH()">
-                                <i class="bi bi-check-lg"></i> Confirmar Cierre Definitivo
-                            </button>
+                    </div>
+                </div>
+                <div class="col-6 mb-3">
+                    <div class="card bg-light border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted text-uppercase small fw-bold">Inasistencias Selladas</h6>
+                            <h3 class="text-danger mb-0">${ev.inasistencias_injustificadas}</h3>
                         </div>
                     </div>
                 </div>
             </div>
+            <div class="alert alert-warning mt-3 border-warning">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Atención:</strong> Esta acción sellará el periodo. Los empleados en el biométrico NO podrán alterar la asistencia de estas fechas retrospectivamente.
+            </div>
         `;
-
-        const old = document.getElementById('modal-cierre-rrhh');
-        if (old) old.remove();
-
-        document.body.insertAdjacentHTML('beforeend', html);
-        const modal = new bootstrap.Modal(document.getElementById('modal-cierre-rrhh'));
-        modal.show();
-
-    } catch (e) {
-        console.error("Error obteniendo resumen de cierre:", e);
-        showToast("Error al obtener datos del periodo: " + e.message, "error");
+        btnNext.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
+        btnNext.className = 'btn btn-warning fw-bold px-4';
+        btnNext.disabled = false;
+        btnNext.style.display = 'inline-block';
+        btnNext.onclick = confirmarCierreRRHH;
     }
 }
 
-async function confirmarCierreRRHH() {
-    const fIni = stateMarcacionesApp.fechaInicioRRHH;
-    const fFin = stateMarcacionesApp.fechaFinRRHH;
-    const comentario = document.getElementById('cierre-comentario').value;
+function nextWizardStep() {
+    const s = window.cierreWizardState.currentStep;
+    if (s < 5) renderWizardStep(s + 1);
+}
 
-    const area = stateMarcacionesApp.area;
-    const turnoId = stateMarcacionesApp.turnoId;
+async function confirmarCierreRRHH() {
+    const s = window.cierreWizardState;
+    const btn = document.getElementById('btn-wizard-next');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sellando...';
 
     try {
-        const resp = await fetch('/api/asistencia/periodo-rrhh/cerrar/', {
+        const resp = await fetch('/api/cierre/ejecutar', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AuthService.token}`
+            },
             body: JSON.stringify({
-                fecha_inicio: fIni,
-                fecha_fin: fFin,
-                area: area || null,
-                turno_id: turnoId ? parseInt(turnoId) : null,
-                comentario: comentario
+                fecha_inicio: s.fIni,
+                fecha_fin: s.fFin,
+                area: s.area,
+                aceptar_inasistencias: s.aceptarInasistencias
             })
         });
 
         const res = await resp.json();
         if (resp.ok) {
             showToast("✅ Periodo cerrado exitosamente", "success");
-            const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-rrhh'));
+            const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-wizard'));
             if (m) m.hide();
             loadMarcacionesData();
         } else {
-            alert("Error: " + (res.detail || "No se pudo cerrar el periodo"));
+            showToast("Error: " + (res.detail || "No se pudo cerrar el periodo"), "error");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
         }
     } catch (e) {
         console.error(e);
-        showToast("Error de conexión", "error");
+        showToast("Error de conexión al cerrar periodo", "error");
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
     }
 }
 
@@ -2660,16 +2867,27 @@ async function openHistorialCierresModal() {
                                             <th>Fecha Registro</th>
                                             <th>Usuario</th>
                                             <th>Comentarios</th>
+                                            <th>Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody class="align-middle">
-                                        ${historial.length === 0 ? '<tr><td colspan="4" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>' : 
+                                        ${historial.length === 0 ? '<tr><td colspan="5" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>' : 
                                             historial.map(c => `
                                             <tr>
-                                                <td><span class="badge bg-info-subtle text-info border border-info-subtle">${c.fecha_inicio} al ${c.fecha_fin}</span></td>
-                                                <td class="small">${new Date(c.fecha_cierre).toLocaleString('es-ES')}</td>
-                                                <td><i class="bi bi-person-circle me-1"></i> ${c.usuario_cierre}</td>
-                                                <td class="small text-muted italic">${c.comentario || '--'}</td>
+                                                <td>
+                                                    <span class="badge bg-info-subtle text-info border border-info-subtle">${c.fecha_inicio} al ${c.fecha_fin}</span>
+                                                    ${c.area ? `<br><small class="text-muted"><i class="bi bi-geo-alt"></i> ${c.area}</small>` : ''}
+                                                </td>
+                                                <td class="small">${new Date(c.created_at).toLocaleString('es-ES')}</td>
+                                                <td><i class="bi bi-person-circle me-1"></i> ${c.username || 'Sistema'}</td>
+                                                <td class="small text-muted italic">${c.comentarios || '--'}</td>
+                                                <td>
+                                                    ${localStorage.getItem('is_superuser') === 'true' ? `
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="revertirCierre('${c.fecha_inicio}', '${c.fecha_fin}', '${c.area || ''}')" title="Revertir este cierre">
+                                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                                    </button>
+                                                    ` : ''}
+                                                </td>
                                             </tr>
                                             `).join('')
                                         }
@@ -2698,6 +2916,37 @@ async function openHistorialCierresModal() {
     }
 }
 
+async function revertirCierre(fecha_inicio, fecha_fin, area) {
+    if (!confirm(`¿Está seguro que desea REVERTIR el cierre del periodo ${fecha_inicio} al ${fecha_fin} para el área ${area || 'Todas'}? Esta acción reabrirá las marcaciones y horas extras.`)) {
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/cierre/revertir', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AuthService.token}`
+            },
+            body: JSON.stringify({ fecha_inicio, fecha_fin, area })
+        });
+        const data = await resp.json();
+        
+        if (resp.ok) {
+            showToast(data.message || "Cierre revertido con éxito", "success");
+            // Close modal
+            const m = bootstrap.Modal.getInstance(document.getElementById('modal-historial-cierres'));
+            if (m) m.hide();
+            // Refresh
+            if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        } else {
+            showToast(data.detail || "Error al revertir", "error");
+        }
+    } catch (err) {
+        console.error(err);
+        showToast("Error de conexión al revertir el cierre", "error");
+    }
+}
 
 /* ==========================================
    MERGED FROM vista_analitica.js

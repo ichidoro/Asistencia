@@ -211,10 +211,10 @@ class CierreService:
             raise ValueError("El periodo seleccionado ya se encuentra cerrado para esta área.")
 
         # Determinar tipo de cierre según rol
-        tipo_cierre = "SUPER_ADMIN" if user.get("rol_global") == 1 else "JEFE_AREA"
+        tipo_cierre = "SUPER_ADMIN" if user.is_superuser else "JEFE_AREA"
 
         comentarios = (
-            f"Cierre ejecutado por {user.get('username', 'sistema')} "
+            f"Cierre ejecutado por {user.username or 'sistema'} "
             f"[{tipo_cierre}] — "
             f"Inasistencias aceptadas: {'SI' if aceptar_inasistencias else 'N/A'}"
         )
@@ -226,11 +226,23 @@ class CierreService:
         await self.db.execute(insert_query, (
             fecha_inicio,
             fecha_fin,
-            user.get("id"),
-            user.get("username"),
+            user.user_id,
+            user.username,
             tipo_cierre,
             area,
             comentarios
         ))
 
         return {"success": True, "message": "Periodo cerrado exitosamente.", "tipo_cierre": tipo_cierre}
+
+    async def revertir_cierre(self, fecha_inicio: str, fecha_fin: str, area: str, user: dict):
+        # Primero buscar si existe
+        check_query = "SELECT id FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area = ?"
+        existe = await self.db.fetch_one(check_query, (fecha_inicio, fecha_fin, area))
+        if not existe:
+            raise ValueError("No se encontró un cierre para revertir en este periodo y área.")
+            
+        delete_query = "DELETE FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area = ?"
+        await self.db.execute(delete_query, (fecha_inicio, fecha_fin, area))
+        
+        return {"success": True, "message": "Cierre revertido exitosamente."}
