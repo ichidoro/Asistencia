@@ -91,16 +91,11 @@ class HybridDatabase:
                             database=str(self.db_path),
                             sync_url=self.turso_url,
                             auth_token=self.turso_token,
-                            sync_interval=30,  # Auto-sync a Turso cada 30s en background.
+                            # Se eliminó sync_interval=30 para evitar colisiones con el APScheduler.
+                            # El scheduler (events.py) manejará los syncs respetando el _sync_lock.
                             offline=True,      # OFFLINE WRITES: commit() escribe 100% en disco local (~1ms).
-                            # Sin offline=True: cada commit() verifica frames WAL con Turso Cloud
-                            # → 640ms/registro → 72s para 112 registros (throttling de red).
-                            # Con offline=True: commit() = fsync local puro. La nube se actualiza
-                            # solo cuando el scheduler llama conn.sync() (cada 30s) o cuando
-                            # _batch_bg llama sync_to_cloud_explicit() al final del batch.
-                            # Benchmark: 112 inserts = 72,000ms → 1ms (72,000x más rápido).
                         ),
-                        timeout=3.0
+                        timeout=5.0
                     )
                     logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync_interval=30s)")
                 except asyncio.TimeoutError:
@@ -125,28 +120,31 @@ class HybridDatabase:
             self._connected = True
             
             # PRAGMAs de resiliencia y performance post-conexión
-            try:
-                def _apply_pragmas():
-                    cursor = self.conn.cursor()
-                    # Resiliencia
-                    cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
-                    cursor.execute("PRAGMA journal_mode = WAL")    # WAL: lecturas concurrentes
-                    # PRAGMAs de performance (guía SQLite Forum + docs Turso Embedded Replica):
-                    cursor.execute("PRAGMA synchronous = NORMAL")  # WAL-safe: ahorra fsync
-                    # FULL (defecto): fsync en cada commit → lento en WAL mode
-                    # NORMAL: solo fsync en checkpoints → seguro porque WAL garantiza integridad
-                    cursor.execute("PRAGMA cache_size = -32000")   # 32MB page cache en RAM
-                    # Reduce I/O al leer las mismas páginas repetidamente (reproceso histórico)
-                    cursor.execute("PRAGMA temp_store = MEMORY")   # tablas temporales en RAM
-                    # Beneficia ORDER BY, GROUP BY y subconsultas de asistencias_service
-                    cursor.execute("PRAGMA mmap_size = 134217728") # 128MB memory-mapped I/O
-                    # Mapea el archivo DB al espacio virtual: elimina syscalls read() por página
-                    # Impacto principal: lecturas del reproceso histórico (110 días × consultas)
-                self._pragma_applied = True
-                await asyncio.to_thread(_apply_pragmas)
-                logger.debug("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, sync=NORMAL, cache=32MB, mmap=128MB)")
-            except Exception as pragma_err:
-                logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
+            if not (self._force_turso_only and self.use_turso):
+                try:
+                    def _apply_pragmas():
+                        cursor = self.conn.cursor()
+                        # Resiliencia
+                        cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
+                        cursor.execute("PRAGMA journal_mode = WAL")    # WAL: lecturas concurrentes
+                        # PRAGMAs de performance (guía SQLite Forum + docs Turso Embedded Replica):
+                        cursor.execute("PRAGMA synchronous = NORMAL")  # WAL-safe: ahorra fsync
+                        # FULL (defecto): fsync en cada commit → lento en WAL mode
+                        # NORMAL: solo fsync en checkpoints → seguro porque WAL garantiza integridad
+                        cursor.execute("PRAGMA cache_size = -32000")   # 32MB page cache en RAM
+                        # Reduce I/O al leer las mismas páginas repetidamente (reproceso histórico)
+                        cursor.execute("PRAGMA temp_store = MEMORY")   # tablas temporales en RAM
+                        # Beneficia ORDER BY, GROUP BY y subconsultas de asistencias_service
+                        cursor.execute("PRAGMA mmap_size = 134217728") # 128MB memory-mapped I/O
+                        # Mapea el archivo DB al espacio virtual: elimina syscalls read() por página
+                        # Impacto principal: lecturas del reproceso histórico (110 días × consultas)
+                    self._pragma_applied = True
+                    await asyncio.to_thread(_apply_pragmas)
+                    logger.debug("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, sync=NORMAL, cache=32MB, mmap=128MB)")
+                except Exception as pragma_err:
+                    logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
+            else:
+                logger.debug("🛡️ PRAGMAs omitidos (Modo Cloud-Only no soporta directivas SQLite locales)")
 
             # Se ha removido _bg_initial_sync() porque `conn.sync()` retenía el lock interno
             # de SQLite (bloqueando todas las operaciones, como init_db_schemas) por 30-60 segundos
@@ -275,21 +273,17 @@ class HybridDatabase:
         if not self._connected or not self.conn:
             return
 
-        # Sync final: empujar cualquier escritura pendiente a Turso Cloud
-        # ANTES de cerrar la conexión. Esto asegura que los datos locales
-        # (en WAL) se repliquen al Cloud y no se pierdan si algo externo
-        # limpia los archivos WAL antes del próximo startup.
-        if self.sync_supported:
-            try:
-                await asyncio.to_thread(self.conn.sync)
-                logger.info("🔄 Sync final completado (datos locales empujados a Cloud)")
-            except Exception as sync_err:
-                logger.warning(f"⚠️ Sync final falló: {sync_err} (datos podrían estar solo en WAL local)")
+        # El Sync final ha sido deshabilitado temporalmente porque bloqueaba
+        # el hilo principal durante el Ctrl+C. LibSQL garantiza que los datos 
+        # en el WAL local no se perderán y se enviarán en el próximo inicio.
+        pass
 
         try:
-            await asyncio.to_thread(self.conn.close)
-        except Exception:
-            pass  # Ignorar errores al cerrar
+            # Envolvemos el cierre en un wait_for porque si hay un sync o petición
+            # HTTP en curso en el backend de Rust, close() puede bloquearse indefinidamente
+            await asyncio.wait_for(asyncio.to_thread(self.conn.close), timeout=2.0)
+        except Exception as e:
+            logger.debug(f"⚠️ Cierre de conexión forzado (timeout o error): {e}")
         self.conn = None
         self._connected = False
         # Forzar liberación de handles del Rust backend en Windows

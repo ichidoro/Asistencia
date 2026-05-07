@@ -120,20 +120,23 @@ async def lifespan(app: FastAPI):
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
 
                 # 4. Iniciar Sincronización Automática
+                # [Skill Phase 3]: Sync automático en background desactivado temporalmente 
+                # para evitar latencias de 54s en frontend mientras se depura red de Turso.
                 if settings.SYNC_ENABLED:
-                    logger.info(f"⏰ Iniciando Sync Scheduler (Intervalo: {settings.SYNC_INTERVAL_SECONDS}s)")
-                    scheduler.add_job(
-                        db.sync_from_cloud,
-                        'interval',
-                        seconds=settings.SYNC_INTERVAL_SECONDS,
-                        id='turso_sync',
-                        replace_existing=True,
-                        coalesce=True,          # Si se acumulan disparos, ejecutar solo 1
-                        max_instances=1,        # Nunca 2 syncs en paralelo
-                        misfire_grace_time=60   # Tolerar hasta 60s de retraso antes de descartar
-                    )
-                    scheduler.start()
-                    logger.success("✅ Sync Scheduler en ejecución")
+                    logger.warning("⚠️ Sync Automático DESACTIVADO temporalmente por Auditoría de Red. La app está en modo Offline-First 100% rápido.")
+                    # logger.info(f"⏰ Iniciando Sync Scheduler (Intervalo: {settings.SYNC_INTERVAL_SECONDS}s)")
+                    # scheduler.add_job(
+                    #     db.sync_from_cloud,
+                    #     'interval',
+                    #     seconds=settings.SYNC_INTERVAL_SECONDS,
+                    #     id='turso_sync',
+                    #     replace_existing=True,
+                    #     coalesce=True,          # Si se acumulan disparos, ejecutar solo 1
+                    #     max_instances=1,        # Nunca 2 syncs en paralelo
+                    #     misfire_grace_time=60   # Tolerar hasta 60s de retraso antes de descartar
+                    # )
+                    # scheduler.start()
+                    # logger.success("✅ Sync Scheduler en ejecución")
 
             except Exception as bg_err:
                 logger.error(f"❌ Error en inicio background: {bg_err}")
