@@ -7,6 +7,7 @@ import libsql
 import asyncio
 import os
 import sys
+import threading  # Para _conn_native_lock: serializar conn.sync() vs conn.cursor() a nivel OS-thread
 from typing import Any, Dict, List, Optional, Tuple, Union
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -65,6 +66,13 @@ class HybridDatabase:
         # lo reintentará en 30s, los datos están seguros en WAL local).
         self._sync_lock = asyncio.Lock()
         self._sync_pending: bool = False
+        # threading.Lock() OS-level para serializar conn.sync() vs conn.cursor().
+        # NO usar asyncio.Lock (solo funciona en event loop, no en threads del pool).
+        # NO usar threading.Event (tiene ventana TOCTOU — no es atómica).
+        # NO usar bool (invisible entre threads cuando la GIL se libera en C/Rust).
+        # PATRÓN: acquire(timeout=5.0) en _do_X(); si timeout → retornar "RECONNECT"
+        # para que el retry loop existente (fetch_all/execute) reintente con 200ms backoff.
+        self._conn_native_lock = threading.Lock()
         
     async def connect(self, retry: bool = True) -> None:
         """Establece la conexión nativa con Turso (Embedded Replica o Remote)"""
@@ -86,25 +94,59 @@ class HybridDatabase:
                 try:
                     # Timeout 30s (Hilo Rojo): Permite descargar la réplica inicial sin fallar por red lenta.
                     db_exists = self.db_path.exists()
+                    # [Fix v5-R3 + Hotfix] libsql v0.1.11 escribe '.db-info' (NO '.meta').
+                    # offline=True SOLO si la replica esta completa (.db + .db-info).
+                    # Sin .db-info, libsql no puede calcular el delta de frames y lanza
+                    # 'invalid local state: db file exists but metadata file does not'.
+                    # VERIFICADO empiricamente: connect()+sync() crea exactamente:
+                    # [test.db, test.db-info, test.db-shm, test.db-wal]
+                    meta_exists = Path(str(self.db_path) + "-info").exists()
                     self.conn = await asyncio.wait_for(
                         asyncio.to_thread(
                             libsql.connect,
                             database=str(self.db_path),
                             sync_url=self.turso_url,
                             auth_token=self.turso_token,
-                            # Mantener offline=True solo si la BD ya existe, para evitar crear un archivo vacío sin .meta
-                            # Si es la primera vez, necesitamos que inicialice el protocolo Hrana completo.
-                            offline=True if db_exists else False,
+                            # offline=True si y solo si la réplica está completa (.db Y .meta).
+                            # Si falta .meta (fresh-start o hard reset), usar offline=False
+                            # para que el SDK inicialice el protocolo Hrana completo.
+                            offline=db_exists and meta_exists,
                         ),
                         timeout=30.0
                     )
                     
-                    if not db_exists:
-                        # Forzar el primer sync inmediatamente si la BD acaba de ser creada
-                        logger.info("🔄 Base de datos nueva detectada. Sincronizando por primera vez...")
-                        await asyncio.to_thread(self.conn.sync)
-                        
-                    logger.info("🔄 Conexión establecida con Turso Cloud (Embedded Replica)")
+                    # Sync inicial:
+                    # - warm-start (offline=True: .db + .meta existen): sync delta ligero.
+                    #   Usar wait_for(5s): si la red falla, continuar con datos locales.
+                    # - fresh-start (offline=False: sin .meta): descarga replica completa.
+                    #   NO usar asyncio.wait_for: wait_for no cancela hilos OS, solo abandona
+                    #   la coroutine dejando el hilo de sync corriendo con .db-shm bloqueado,
+                    #   lo que provoca WinError 32 en el siguiente cleanup.
+                    #   Solucion: to_thread directo (sin timeout). Puede tardar 60s+ desde
+                    #   Chile->Turso-US. Es bloqueante solo en el fresh-start; los inicios
+                    #   siguientes seran warm-start.
+                    is_fresh_start = not (db_exists and meta_exists)
+                    if is_fresh_start:
+                        logger.info("Sync inicial fresh-start (sin timeout, descargando replica completa)...")
+                        try:
+                            await asyncio.to_thread(self.conn.sync)
+                            logger.info("Sync inicial fresh-start completado")
+                        except Exception as initial_sync_err:
+                            logger.warning(f"Sync inicial fresh-start fallo: {initial_sync_err}")
+                    else:
+                        logger.info("Sync inicial warm-start (max 5s)...")
+                        try:
+                            await asyncio.wait_for(
+                                asyncio.to_thread(self.conn.sync),
+                                timeout=5.0
+                            )
+                            logger.info("Sync inicial warm-start completado")
+                        except asyncio.TimeoutError:
+                            logger.warning("Sync inicial warm-start timeout 5s. Continuando (datos locales validos).")
+                        except Exception as initial_sync_err:
+                            logger.warning(f"Sync inicial warm-start fallo (no critico): {initial_sync_err}")
+                    
+                    logger.info("Conexion establecida con Turso Cloud (Embedded Replica)")
                 except asyncio.TimeoutError:
                     logger.warning("⏱️ Timeout de 30s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
                     # Fallback puro a SQLite local (Réplica)
@@ -116,10 +158,23 @@ class HybridDatabase:
                 except Exception as e:
                     err_msg = str(e).lower()
                     if (("invalid local state" in err_msg or "malformed" in err_msg or "local state is incorrect" in err_msg) and retry):
-                        logger.warning(f"🩹 Estado local inconsistente detectado. Eliminando DB local para re-sincronizar desde cloud...")
-                        # soft_only=False: borrar .db + aux. El servidor re-sincronizará
-                        # desde cloud (ya purgado). Esto soluciona el loop infinito cuando
-                        # .db existe pero .meta no (e.g. tras un hard_reset con sqlite3 directo).
+                        logger.warning(f"Estado local inconsistente detectado. Cerrando conn y eliminando DB local...")
+                        # CRITICO: Cerrar self.conn ANTES de cleanup para liberar los file handles.
+                        # Sin esto: WinError 32 al intentar renombrar .db-shm mientras LibSQL lo tiene abierto.
+                        if self.conn:
+                            try:
+                                await asyncio.to_thread(self.conn.close)
+                            except Exception:
+                                pass
+                            self.conn = None
+                        # Forzar recoleccion del objeto Rust y esperar que el OS libere el handle.
+                        # Windows no libera .db-shm inmediatamente tras conn.close().
+                        import gc
+                        gc.collect()
+                        await asyncio.sleep(1.5)
+                        # soft_only=False: borrar .db + aux. El servidor re-sincronizara
+                        # desde cloud. Esto soluciona el loop infinito cuando
+                        # .db existe pero .meta no.
                         await self._cleanup_local_db_files(soft_only=False)
                         return await self.connect(retry=False)
                     raise e
@@ -171,6 +226,20 @@ class HybridDatabase:
         """Desconecta, limpia archivos locales y reconecta con control de concurrencia"""
         async with self._reset_lock:
             logger.warning("🔄 Iniciando proceso de RESET de base de datos local...")
+            
+            # [Fix v5-Fix5] Esperar que el sync en vuelo termine antes de cerrar conn.
+            # Sin esto: conn.close() mientras _push_to_cloud() activo → WinError 32.
+            # Timeout 3s: si el sync no termina en 3s, proceder igualmente.
+            # El _push_to_cloud() pendiente fallará con AttributeError (conn=None),
+            # pero ese error ya está capturado en su except Exception as sync_err.
+            if self._sync_lock.locked():
+                logger.debug("⏳ Reset: esperando sync en vuelo (máx 3s)...")
+                try:
+                    await asyncio.wait_for(self._sync_lock.acquire(), timeout=3.0)
+                    self._sync_lock.release()  # Solo queríamos esperar, no mantener el lock
+                    logger.debug("✅ Reset: sync completado, procediendo")
+                except asyncio.TimeoutError:
+                    logger.warning("⚠️ Reset: sync no terminó en 3s, procediendo igualmente")
             
             if self._connected and self.conn:
                 try:
@@ -380,23 +449,33 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_execute():
+                    # [Fix v5-4b] Adquirir _conn_native_lock antes de conn.cursor().
+                    # Serializa con _do_sync() en _push_to_cloud() (threading.Lock OS-level).
+                    # timeout=5.0: libera la GIL mientras espera (no bloquea el event loop).
+                    # Si timeout → RECONNECT → el retry loop existente reintenta en 200ms.
                     try:
-                        cursor = self.conn.cursor()
+                        acquired = self._conn_native_lock.acquire(timeout=5.0)
+                        if not acquired:
+                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
                         try:
-                            cursor.execute(query, params or ())
-                        except Exception as exec_err:
-                            if self._is_wal_conflict(exec_err):
-                                return cursor, "WAL_OK"
-                            raise
-                        if not self._in_transaction and not is_read:
+                            cursor = self.conn.cursor()
                             try:
-                                self.conn.commit()
-                            except Exception as commit_err:
-                                commit_msg = str(commit_err).lower()
-                                if "walconflict" in commit_msg or "wal frame" in commit_msg:
+                                cursor.execute(query, params or ())
+                            except Exception as exec_err:
+                                if self._is_wal_conflict(exec_err):
                                     return cursor, "WAL_OK"
                                 raise
-                        return cursor, None
+                            if not self._in_transaction and not is_read:
+                                try:
+                                    self.conn.commit()
+                                except Exception as commit_err:
+                                    commit_msg = str(commit_err).lower()
+                                    if "walconflict" in commit_msg or "wal frame" in commit_msg:
+                                        return cursor, "WAL_OK"
+                                    raise
+                            return cursor, None
+                        finally:
+                            self._conn_native_lock.release()
                     except Exception as inner_e:
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
@@ -500,11 +579,22 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_fetch():
+                    # [Fix v5-4a] Adquirir _conn_native_lock antes de conn.cursor().
+                    # Serializa con _do_sync() en _push_to_cloud() (threading.Lock OS-level).
+                    # timeout=5.0: libera la GIL mientras espera (no bloquea el event loop).
+                    # Si timeout → RECONNECT → el retry loop existente reintenta en 200ms.
                     try:
-                        cursor = self.conn.cursor()
-                        rows = cursor.execute(query, params or ()).fetchall()
-                        cols = [col[0] for col in cursor.description]
-                        return [dict(zip(cols, row)) for row in rows], None
+                        acquired = self._conn_native_lock.acquire(timeout=5.0)
+                        if not acquired:
+                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
+                        try:
+                            cursor = self.conn.cursor()
+                            rows = cursor.execute(query, params or ()).fetchall()
+                            cols = [col[0] for col in cursor.description]
+                            result = [dict(zip(cols, row)) for row in rows]
+                        finally:
+                            self._conn_native_lock.release()
+                        return result, None
                     except Exception as inner_e:
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
@@ -600,15 +690,30 @@ class HybridDatabase:
             try:
                 def _do_batch_local():
                     """Solo commit LOCAL al WAL. No llama conn.sync(). Rápido: escritura en disco local, sin red."""
+                    # [Fix v5-4d] Adquirir _conn_native_lock antes de conn.cursor().
+                    # RIESGO: Un _push_to_cloud() de un execute_batch() ANTERIOR puede estar
+                    # corriendo conn.sync() mientras este nuevo batch llama conn.cursor().
+                    # El lock serializa ambos. timeout=5.0 → RECONNECT si sync demora.
                     try:
-                        cursor = self.conn.cursor()
-                        for query, params in operations:
-                            cursor.execute(query, params or ())
-                        self.conn.commit()   # WAL local — instantáneo
+                        acquired = self._conn_native_lock.acquire(timeout=5.0)
+                        if not acquired:
+                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
+                        try:
+                            cursor = self.conn.cursor()
+                            for query, params in operations:
+                                cursor.execute(query, params or ())
+                            self.conn.commit()   # WAL local — instantáneo
+                        finally:
+                            self._conn_native_lock.release()
                         return "OK", None
                     except Exception as inner_e:
                         try:
-                            self.conn.cursor().execute("ROLLBACK")
+                            # ROLLBACK fuera del lock: self.conn sigue válida
+                            self._conn_native_lock.acquire(timeout=1.0)
+                            try:
+                                self.conn.cursor().execute("ROLLBACK")
+                            finally:
+                                self._conn_native_lock.release()
                         except Exception:
                             pass
                         if self._is_reconnect_error(inner_e):
@@ -659,7 +764,14 @@ class HybridDatabase:
                             async with self._sync_lock:
                                 self._sync_pending = False
                                 try:
-                                    await asyncio.to_thread(self.conn.sync)
+                                    # [Fix v5-Fix3] Envolver conn.sync() con _conn_native_lock.
+                                    # Esto serializa el sync con todos los _do_X() que usan
+                                    # acquire(timeout=5.0): si sync está activo, los reads
+                                    # esperan máx 5s y luego retornan RECONNECT para retry.
+                                    def _do_sync():
+                                        with self._conn_native_lock:
+                                            self.conn.sync()
+                                    await asyncio.to_thread(_do_sync)
                                     self._last_sync = __import__('datetime').datetime.now()
                                 except Exception as sync_err:
                                     logger.warning(f"⚠️ Sync background a Turso falló (datos en WAL local): {sync_err}")
@@ -717,10 +829,18 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_script():
+                    # [Fix v5-4c] Adquirir _conn_native_lock antes de conn.cursor().
+                    # execute_script corre DDL/DML masivo y puede solaparse con conn.sync().
                     try:
-                        cursor = self.conn.cursor()
-                        cursor.executescript(script_sql)
-                        # executescript hace auto-COMMIT al final del script
+                        acquired = self._conn_native_lock.acquire(timeout=5.0)
+                        if not acquired:
+                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
+                        try:
+                            cursor = self.conn.cursor()
+                            cursor.executescript(script_sql)
+                            # executescript hace auto-COMMIT al final del script
+                        finally:
+                            self._conn_native_lock.release()
                         return "OK", None
                     except Exception as inner_e:
                         if self._is_reconnect_error(inner_e):
