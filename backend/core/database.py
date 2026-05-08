@@ -84,22 +84,29 @@ class HybridDatabase:
             else:
                 logger.info(f"🔌 Conectando a Embedded Replica: {self.db_path}")
                 try:
-                    # Timeout 3s (Hilo Rojo): evita colgar el inicio si Turso Cloud no responde rápido.
+                    # Timeout 30s (Hilo Rojo): Permite descargar la réplica inicial sin fallar por red lenta.
+                    db_exists = self.db_path.exists()
                     self.conn = await asyncio.wait_for(
                         asyncio.to_thread(
                             libsql.connect,
                             database=str(self.db_path),
                             sync_url=self.turso_url,
                             auth_token=self.turso_token,
-                            # Se eliminó sync_interval=30 para evitar colisiones con el APScheduler.
-                            # El scheduler (events.py) manejará los syncs respetando el _sync_lock.
-                            offline=True,      # OFFLINE WRITES: commit() escribe 100% en disco local (~1ms).
+                            # Mantener offline=True solo si la BD ya existe, para evitar crear un archivo vacío sin .meta
+                            # Si es la primera vez, necesitamos que inicialice el protocolo Hrana completo.
+                            offline=True if db_exists else False,
                         ),
-                        timeout=5.0
+                        timeout=30.0
                     )
-                    logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync_interval=30s)")
+                    
+                    if not db_exists:
+                        # Forzar el primer sync inmediatamente si la BD acaba de ser creada
+                        logger.info("🔄 Base de datos nueva detectada. Sincronizando por primera vez...")
+                        await asyncio.to_thread(self.conn.sync)
+                        
+                    logger.info("🔄 Conexión establecida con Turso Cloud (Embedded Replica)")
                 except asyncio.TimeoutError:
-                    logger.warning("⏱️ Timeout de 3s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
+                    logger.warning("⏱️ Timeout de 30s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
                     # Fallback puro a SQLite local (Réplica)
                     self.conn = await asyncio.to_thread(
                         libsql.connect,
