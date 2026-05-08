@@ -29,7 +29,7 @@ async def evaluar_cierre(
 ):
     try:
         service = CierreService(db)
-        if not current_user.is_superuser and not current_user.check_area_access(area):
+        if current_user.rol_global != 1 and area not in current_user.areas:
             raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
         resultado = await service.evaluar_cierre(fecha_inicio, fecha_fin, area)
         return resultado
@@ -49,46 +49,14 @@ async def ejecutar_cierre(
 ):
     try:
         service = CierreService(db)
-        if not current_user.is_superuser and not current_user.check_area_access(req.area):
+        if current_user.rol_global != 1 and req.area not in current_user.areas:
             raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
         res = await service.ejecutar_cierre(
             fecha_inicio=req.fecha_inicio,
             fecha_fin=req.fecha_fin,
             area=req.area,
             aceptar_inasistencias=req.aceptar_inasistencias,
-            user=current_user
-        )
-        return res
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-class RevertirCierreRequest(BaseModel):
-    fecha_inicio: str
-    fecha_fin: str
-    area: str
-
-@router.post(
-    "/revertir",
-    summary="Revertir el periodo cerrado"
-)
-async def revertir_cierre(
-    req: RevertirCierreRequest = Body(...),
-    db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
-):
-    try:
-        service = CierreService(db)
-        if not current_user.is_superuser:
-            raise HTTPException(status_code=403, detail="Solo un super administrador puede revertir un cierre.")
-        res = await service.revertir_cierre(
-            fecha_inicio=req.fecha_inicio,
-            fecha_fin=req.fecha_fin,
-            area=req.area,
-            user=current_user
+            user=current_user.usuario
         )
         return res
     except ValueError as e:

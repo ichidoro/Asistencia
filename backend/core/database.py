@@ -7,7 +7,6 @@ import libsql
 import asyncio
 import os
 import sys
-import threading  # Para _conn_native_lock: serializar conn.sync() vs conn.cursor() a nivel OS-thread
 from typing import Any, Dict, List, Optional, Tuple, Union
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -66,13 +65,6 @@ class HybridDatabase:
         # lo reintentará en 30s, los datos están seguros en WAL local).
         self._sync_lock = asyncio.Lock()
         self._sync_pending: bool = False
-        # threading.Lock() OS-level para serializar conn.sync() vs conn.cursor().
-        # NO usar asyncio.Lock (solo funciona en event loop, no en threads del pool).
-        # NO usar threading.Event (tiene ventana TOCTOU — no es atómica).
-        # NO usar bool (invisible entre threads cuando la GIL se libera en C/Rust).
-        # PATRÓN: acquire(timeout=5.0) en _do_X(); si timeout → retornar "RECONNECT"
-        # para que el retry loop existente (fetch_all/execute) reintente con 200ms backoff.
-        self._conn_native_lock = threading.Lock()
         
     async def connect(self, retry: bool = True) -> None:
         """Establece la conexión nativa con Turso (Embedded Replica o Remote)"""
@@ -92,63 +84,27 @@ class HybridDatabase:
             else:
                 logger.info(f"🔌 Conectando a Embedded Replica: {self.db_path}")
                 try:
-                    # Timeout 30s (Hilo Rojo): Permite descargar la réplica inicial sin fallar por red lenta.
-                    db_exists = self.db_path.exists()
-                    # [Fix v5-R3 + Hotfix] libsql v0.1.11 escribe '.db-info' (NO '.meta').
-                    # offline=True SOLO si la replica esta completa (.db + .db-info).
-                    # Sin .db-info, libsql no puede calcular el delta de frames y lanza
-                    # 'invalid local state: db file exists but metadata file does not'.
-                    # VERIFICADO empiricamente: connect()+sync() crea exactamente:
-                    # [test.db, test.db-info, test.db-shm, test.db-wal]
-                    meta_exists = Path(str(self.db_path) + "-info").exists()
+                    # Timeout 3s (Hilo Rojo): evita colgar el inicio si Turso Cloud no responde rápido.
                     self.conn = await asyncio.wait_for(
                         asyncio.to_thread(
                             libsql.connect,
                             database=str(self.db_path),
                             sync_url=self.turso_url,
                             auth_token=self.turso_token,
-                            # offline=True si y solo si la réplica está completa (.db Y .meta).
-                            # Si falta .meta (fresh-start o hard reset), usar offline=False
-                            # para que el SDK inicialice el protocolo Hrana completo.
-                            offline=db_exists and meta_exists,
+                            sync_interval=30,  # Auto-sync a Turso cada 30s en background.
+                            offline=True,      # OFFLINE WRITES: commit() escribe 100% en disco local (~1ms).
+                            # Sin offline=True: cada commit() verifica frames WAL con Turso Cloud
+                            # → 640ms/registro → 72s para 112 registros (throttling de red).
+                            # Con offline=True: commit() = fsync local puro. La nube se actualiza
+                            # solo cuando el scheduler llama conn.sync() (cada 30s) o cuando
+                            # _batch_bg llama sync_to_cloud_explicit() al final del batch.
+                            # Benchmark: 112 inserts = 72,000ms → 1ms (72,000x más rápido).
                         ),
-                        timeout=30.0
+                        timeout=3.0
                     )
-                    
-                    # Sync inicial:
-                    # - warm-start (offline=True: .db + .meta existen): sync delta ligero.
-                    #   Usar wait_for(5s): si la red falla, continuar con datos locales.
-                    # - fresh-start (offline=False: sin .meta): descarga replica completa.
-                    #   NO usar asyncio.wait_for: wait_for no cancela hilos OS, solo abandona
-                    #   la coroutine dejando el hilo de sync corriendo con .db-shm bloqueado,
-                    #   lo que provoca WinError 32 en el siguiente cleanup.
-                    #   Solucion: to_thread directo (sin timeout). Puede tardar 60s+ desde
-                    #   Chile->Turso-US. Es bloqueante solo en el fresh-start; los inicios
-                    #   siguientes seran warm-start.
-                    is_fresh_start = not (db_exists and meta_exists)
-                    if is_fresh_start:
-                        logger.info("Sync inicial fresh-start (sin timeout, descargando replica completa)...")
-                        try:
-                            await asyncio.to_thread(self.conn.sync)
-                            logger.info("Sync inicial fresh-start completado")
-                        except Exception as initial_sync_err:
-                            logger.warning(f"Sync inicial fresh-start fallo: {initial_sync_err}")
-                    else:
-                        logger.info("Sync inicial warm-start (max 5s)...")
-                        try:
-                            await asyncio.wait_for(
-                                asyncio.to_thread(self.conn.sync),
-                                timeout=5.0
-                            )
-                            logger.info("Sync inicial warm-start completado")
-                        except asyncio.TimeoutError:
-                            logger.warning("Sync inicial warm-start timeout 5s. Continuando (datos locales validos).")
-                        except Exception as initial_sync_err:
-                            logger.warning(f"Sync inicial warm-start fallo (no critico): {initial_sync_err}")
-                    
-                    logger.info("Conexion establecida con Turso Cloud (Embedded Replica)")
+                    logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync_interval=30s)")
                 except asyncio.TimeoutError:
-                    logger.warning("⏱️ Timeout de 30s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
+                    logger.warning("⏱️ Timeout de 3s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
                     # Fallback puro a SQLite local (Réplica)
                     self.conn = await asyncio.to_thread(
                         libsql.connect,
@@ -158,23 +114,10 @@ class HybridDatabase:
                 except Exception as e:
                     err_msg = str(e).lower()
                     if (("invalid local state" in err_msg or "malformed" in err_msg or "local state is incorrect" in err_msg) and retry):
-                        logger.warning(f"Estado local inconsistente detectado. Cerrando conn y eliminando DB local...")
-                        # CRITICO: Cerrar self.conn ANTES de cleanup para liberar los file handles.
-                        # Sin esto: WinError 32 al intentar renombrar .db-shm mientras LibSQL lo tiene abierto.
-                        if self.conn:
-                            try:
-                                await asyncio.to_thread(self.conn.close)
-                            except Exception:
-                                pass
-                            self.conn = None
-                        # Forzar recoleccion del objeto Rust y esperar que el OS libere el handle.
-                        # Windows no libera .db-shm inmediatamente tras conn.close().
-                        import gc
-                        gc.collect()
-                        await asyncio.sleep(1.5)
-                        # soft_only=False: borrar .db + aux. El servidor re-sincronizara
-                        # desde cloud. Esto soluciona el loop infinito cuando
-                        # .db existe pero .meta no.
+                        logger.warning(f"🩹 Estado local inconsistente detectado. Eliminando DB local para re-sincronizar desde cloud...")
+                        # soft_only=False: borrar .db + aux. El servidor re-sincronizará
+                        # desde cloud (ya purgado). Esto soluciona el loop infinito cuando
+                        # .db existe pero .meta no (e.g. tras un hard_reset con sqlite3 directo).
                         await self._cleanup_local_db_files(soft_only=False)
                         return await self.connect(retry=False)
                     raise e
@@ -182,34 +125,48 @@ class HybridDatabase:
             self._connected = True
             
             # PRAGMAs de resiliencia y performance post-conexión
-            if not (self._force_turso_only and self.use_turso):
-                try:
-                    def _apply_pragmas():
-                        cursor = self.conn.cursor()
-                        # Resiliencia
-                        cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
-                        # 🚨 ¡ATENCIÓN! NO ejecutar 'PRAGMA journal_mode = WAL' ni 'synchronous'
-                        # en Embedded Replica de Turso. LibSQL usa su propio formato 'libsql_wal' 
-                        # y cambiar a WAL estándar de SQLite corrompe la réplica permanentemente,
-                        # causando "database disk image is malformed" o Panic en Rust.
-                        
-                        # PRAGMAs de performance (solo RAM)
-                        cursor.execute("PRAGMA cache_size = -32000")   # 32MB page cache en RAM
-                        cursor.execute("PRAGMA temp_store = MEMORY")   # tablas temporales en RAM
-                        cursor.execute("PRAGMA mmap_size = 134217728") # 128MB memory-mapped I/O
-                    self._pragma_applied = True
-                    await asyncio.to_thread(_apply_pragmas)
-                    logger.debug("🛡️ PRAGMAs de memoria aplicados (busy_timeout=5000, cache=32MB, mmap=128MB)")
-                except Exception as pragma_err:
-                    logger.warning(f"⚠️ PRAGMAs no aplicados: {pragma_err}")
-            else:
-                logger.debug("🛡️ PRAGMAs omitidos (Modo Cloud-Only no soporta directivas SQLite locales)")
+            try:
+                def _apply_pragmas():
+                    cursor = self.conn.cursor()
+                    # Resiliencia
+                    cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
+                    cursor.execute("PRAGMA journal_mode = WAL")    # WAL: lecturas concurrentes
+                    # PRAGMAs de performance (guía SQLite Forum + docs Turso Embedded Replica):
+                    cursor.execute("PRAGMA synchronous = NORMAL")  # WAL-safe: ahorra fsync
+                    # FULL (defecto): fsync en cada commit → lento en WAL mode
+                    # NORMAL: solo fsync en checkpoints → seguro porque WAL garantiza integridad
+                    cursor.execute("PRAGMA cache_size = -32000")   # 32MB page cache en RAM
+                    # Reduce I/O al leer las mismas páginas repetidamente (reproceso histórico)
+                    cursor.execute("PRAGMA temp_store = MEMORY")   # tablas temporales en RAM
+                    # Beneficia ORDER BY, GROUP BY y subconsultas de asistencias_service
+                    cursor.execute("PRAGMA mmap_size = 134217728") # 128MB memory-mapped I/O
+                    # Mapea el archivo DB al espacio virtual: elimina syscalls read() por página
+                    # Impacto principal: lecturas del reproceso histórico (110 días × consultas)
+                self._pragma_applied = True
+                await asyncio.to_thread(_apply_pragmas)
+                logger.debug("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, sync=NORMAL, cache=32MB, mmap=128MB)")
+            except Exception as pragma_err:
+                logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 
-            # Se ha removido _bg_initial_sync() porque `conn.sync()` retenía el lock interno
-            # de SQLite (bloqueando todas las operaciones, como init_db_schemas) por 30-60 segundos
-            # si Turso Cloud presentaba alta latencia o era un sync pesado de inicio.
-            # El scheduler en events.py (`start_sync_scheduler`) ya se encarga de esto de 
-            # forma segura cada 90s respetando el `_sync_lock`.
+            # Sync post-conexión en BACKGROUND: no bloqueamos el arranque.
+            # La réplica local ya tiene datos válidos (libsql los mantiene).
+            # El sync trae cambios de Turso Cloud desde la última vez, pero
+            # no es urgente — el scheduler lo repetirá cada 90s de todas formas.
+            if hasattr(self.conn, 'sync') and not self._force_turso_only:
+                async def _bg_initial_sync():
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.to_thread(self.conn.sync),
+                            timeout=30.0
+                        )
+                        self._last_sync = datetime.now()
+                        logger.info("☁️ Sync inicial completado en background (réplica actualizada)")
+                    except asyncio.TimeoutError:
+                        logger.warning("⚠️ Sync inicial timeout (>30s) — continuando con datos locales")
+                    except Exception as sync_err:
+                        logger.warning(f"⚠️ Sync inicial falló (no crítico): {sync_err}")
+                # Guardar referencia: evita que el GC destruya la tarea antes de completarse
+                self._bg_sync_task = asyncio.create_task(_bg_initial_sync())
 
             logger.success(f"✅ Motor LibSQL conectado (Modo: {'Cloud' if self._force_turso_only else 'Hybrid'})")
 
@@ -226,20 +183,6 @@ class HybridDatabase:
         """Desconecta, limpia archivos locales y reconecta con control de concurrencia"""
         async with self._reset_lock:
             logger.warning("🔄 Iniciando proceso de RESET de base de datos local...")
-            
-            # [Fix v5-Fix5] Esperar que el sync en vuelo termine antes de cerrar conn.
-            # Sin esto: conn.close() mientras _push_to_cloud() activo → WinError 32.
-            # Timeout 3s: si el sync no termina en 3s, proceder igualmente.
-            # El _push_to_cloud() pendiente fallará con AttributeError (conn=None),
-            # pero ese error ya está capturado en su except Exception as sync_err.
-            if self._sync_lock.locked():
-                logger.debug("⏳ Reset: esperando sync en vuelo (máx 3s)...")
-                try:
-                    await asyncio.wait_for(self._sync_lock.acquire(), timeout=3.0)
-                    self._sync_lock.release()  # Solo queríamos esperar, no mantener el lock
-                    logger.debug("✅ Reset: sync completado, procediendo")
-                except asyncio.TimeoutError:
-                    logger.warning("⚠️ Reset: sync no terminó en 3s, procediendo igualmente")
             
             if self._connected and self.conn:
                 try:
@@ -346,17 +289,21 @@ class HybridDatabase:
         if not self._connected or not self.conn:
             return
 
-        # El Sync final ha sido deshabilitado temporalmente porque bloqueaba
-        # el hilo principal durante el Ctrl+C. LibSQL garantiza que los datos 
-        # en el WAL local no se perderán y se enviarán en el próximo inicio.
-        pass
+        # Sync final: empujar cualquier escritura pendiente a Turso Cloud
+        # ANTES de cerrar la conexión. Esto asegura que los datos locales
+        # (en WAL) se repliquen al Cloud y no se pierdan si algo externo
+        # limpia los archivos WAL antes del próximo startup.
+        if self.sync_supported:
+            try:
+                await asyncio.to_thread(self.conn.sync)
+                logger.info("🔄 Sync final completado (datos locales empujados a Cloud)")
+            except Exception as sync_err:
+                logger.warning(f"⚠️ Sync final falló: {sync_err} (datos podrían estar solo en WAL local)")
 
         try:
-            # Envolvemos el cierre en un wait_for porque si hay un sync o petición
-            # HTTP en curso en el backend de Rust, close() puede bloquearse indefinidamente
-            await asyncio.wait_for(asyncio.to_thread(self.conn.close), timeout=2.0)
-        except Exception as e:
-            logger.debug(f"⚠️ Cierre de conexión forzado (timeout o error): {e}")
+            await asyncio.to_thread(self.conn.close)
+        except Exception:
+            pass  # Ignorar errores al cerrar
         self.conn = None
         self._connected = False
         # Forzar liberación de handles del Rust backend en Windows
@@ -449,33 +396,23 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_execute():
-                    # [Fix v5-4b] Adquirir _conn_native_lock antes de conn.cursor().
-                    # Serializa con _do_sync() en _push_to_cloud() (threading.Lock OS-level).
-                    # timeout=5.0: libera la GIL mientras espera (no bloquea el event loop).
-                    # Si timeout → RECONNECT → el retry loop existente reintenta en 200ms.
                     try:
-                        acquired = self._conn_native_lock.acquire(timeout=5.0)
-                        if not acquired:
-                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
+                        cursor = self.conn.cursor()
                         try:
-                            cursor = self.conn.cursor()
+                            cursor.execute(query, params or ())
+                        except Exception as exec_err:
+                            if self._is_wal_conflict(exec_err):
+                                return cursor, "WAL_OK"
+                            raise
+                        if not self._in_transaction and not is_read:
                             try:
-                                cursor.execute(query, params or ())
-                            except Exception as exec_err:
-                                if self._is_wal_conflict(exec_err):
+                                self.conn.commit()
+                            except Exception as commit_err:
+                                commit_msg = str(commit_err).lower()
+                                if "walconflict" in commit_msg or "wal frame" in commit_msg:
                                     return cursor, "WAL_OK"
                                 raise
-                            if not self._in_transaction and not is_read:
-                                try:
-                                    self.conn.commit()
-                                except Exception as commit_err:
-                                    commit_msg = str(commit_err).lower()
-                                    if "walconflict" in commit_msg or "wal frame" in commit_msg:
-                                        return cursor, "WAL_OK"
-                                    raise
-                            return cursor, None
-                        finally:
-                            self._conn_native_lock.release()
+                        return cursor, None
                     except Exception as inner_e:
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
@@ -579,22 +516,11 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_fetch():
-                    # [Fix v5-4a] Adquirir _conn_native_lock antes de conn.cursor().
-                    # Serializa con _do_sync() en _push_to_cloud() (threading.Lock OS-level).
-                    # timeout=5.0: libera la GIL mientras espera (no bloquea el event loop).
-                    # Si timeout → RECONNECT → el retry loop existente reintenta en 200ms.
                     try:
-                        acquired = self._conn_native_lock.acquire(timeout=5.0)
-                        if not acquired:
-                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
-                        try:
-                            cursor = self.conn.cursor()
-                            rows = cursor.execute(query, params or ()).fetchall()
-                            cols = [col[0] for col in cursor.description]
-                            result = [dict(zip(cols, row)) for row in rows]
-                        finally:
-                            self._conn_native_lock.release()
-                        return result, None
+                        cursor = self.conn.cursor()
+                        rows = cursor.execute(query, params or ()).fetchall()
+                        cols = [col[0] for col in cursor.description]
+                        return [dict(zip(cols, row)) for row in rows], None
                     except Exception as inner_e:
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
@@ -690,30 +616,15 @@ class HybridDatabase:
             try:
                 def _do_batch_local():
                     """Solo commit LOCAL al WAL. No llama conn.sync(). Rápido: escritura en disco local, sin red."""
-                    # [Fix v5-4d] Adquirir _conn_native_lock antes de conn.cursor().
-                    # RIESGO: Un _push_to_cloud() de un execute_batch() ANTERIOR puede estar
-                    # corriendo conn.sync() mientras este nuevo batch llama conn.cursor().
-                    # El lock serializa ambos. timeout=5.0 → RECONNECT si sync demora.
                     try:
-                        acquired = self._conn_native_lock.acquire(timeout=5.0)
-                        if not acquired:
-                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
-                        try:
-                            cursor = self.conn.cursor()
-                            for query, params in operations:
-                                cursor.execute(query, params or ())
-                            self.conn.commit()   # WAL local — instantáneo
-                        finally:
-                            self._conn_native_lock.release()
+                        cursor = self.conn.cursor()
+                        for query, params in operations:
+                            cursor.execute(query, params or ())
+                        self.conn.commit()   # WAL local — instantáneo
                         return "OK", None
                     except Exception as inner_e:
                         try:
-                            # ROLLBACK fuera del lock: self.conn sigue válida
-                            self._conn_native_lock.acquire(timeout=1.0)
-                            try:
-                                self.conn.cursor().execute("ROLLBACK")
-                            finally:
-                                self._conn_native_lock.release()
+                            self.conn.cursor().execute("ROLLBACK")
                         except Exception:
                             pass
                         if self._is_reconnect_error(inner_e):
@@ -764,14 +675,7 @@ class HybridDatabase:
                             async with self._sync_lock:
                                 self._sync_pending = False
                                 try:
-                                    # [Fix v5-Fix3] Envolver conn.sync() con _conn_native_lock.
-                                    # Esto serializa el sync con todos los _do_X() que usan
-                                    # acquire(timeout=5.0): si sync está activo, los reads
-                                    # esperan máx 5s y luego retornan RECONNECT para retry.
-                                    def _do_sync():
-                                        with self._conn_native_lock:
-                                            self.conn.sync()
-                                    await asyncio.to_thread(_do_sync)
+                                    await asyncio.to_thread(self.conn.sync)
                                     self._last_sync = __import__('datetime').datetime.now()
                                 except Exception as sync_err:
                                     logger.warning(f"⚠️ Sync background a Turso falló (datos en WAL local): {sync_err}")
@@ -829,18 +733,10 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_script():
-                    # [Fix v5-4c] Adquirir _conn_native_lock antes de conn.cursor().
-                    # execute_script corre DDL/DML masivo y puede solaparse con conn.sync().
                     try:
-                        acquired = self._conn_native_lock.acquire(timeout=5.0)
-                        if not acquired:
-                            return "RECONNECT", RuntimeError("conn_lock_timeout: sync activo >5s")
-                        try:
-                            cursor = self.conn.cursor()
-                            cursor.executescript(script_sql)
-                            # executescript hace auto-COMMIT al final del script
-                        finally:
-                            self._conn_native_lock.release()
+                        cursor = self.conn.cursor()
+                        cursor.executescript(script_sql)
+                        # executescript hace auto-COMMIT al final del script
                         return "OK", None
                     except Exception as inner_e:
                         if self._is_reconnect_error(inner_e):
