@@ -1111,3 +1111,64 @@ window.loadRobotSyncLogs = async function() {
     }
 }
 
+// ==========================================
+// AJUSTES DEL SISTEMA [NEW]
+// ==========================================
+window.loadAjustesSistema = async function() {
+    try {
+        const response = await fetch(`${API_CONFIG}ajustes/`);
+        if (!response.ok) throw new Error("Error obteniendo ajustes del sistema");
+        const ajustes = await response.json();
+
+        // Mapeo de clave de DB a ID de input
+        const mapIds = {
+            'limite_contratos_temporales': 'ajuste-limite-contratos',
+            'vencimiento_dias_alerta': 'ajuste-dias-alerta',
+            'dias_alerta_bloqueante': 'ajuste-dias-bloqueante',
+            'dia_cierre_rrhh': 'ajuste-dia-cierre'
+        };
+
+        // Rellenar valores
+        ajustes.forEach(a => {
+            const inputId = mapIds[a.clave];
+            if (inputId) {
+                const el = document.getElementById(inputId);
+                if (el) el.value = a.valor;
+            }
+        });
+
+    } catch (e) {
+        console.error("Error cargando ajustes del sistema", e);
+        showToast("Error al cargar ajustes numéricos", "error");
+    }
+};
+
+window.saveAjusteSistema = async function(clave, inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const valor = input.value.trim();
+    if (!valor) {
+        showToast("El valor no puede estar vacío", "error");
+        return;
+    }
+
+    // El backend espera int, así que enviaremos como número o string validable
+    try {
+        const response = await fetch(`${API_CONFIG}ajustes/${clave}/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(valor) // FastAPI `valor: str = Body(...)` lo recibirá
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Error al guardar el ajuste");
+        }
+
+        showToast(`Ajuste actualizado correctamente`, "success");
+    } catch (e) {
+        console.error("Error guardando ajuste:", e);
+        showToast(e.message, "error");
+    }
+};
