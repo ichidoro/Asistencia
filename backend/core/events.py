@@ -109,9 +109,13 @@ async def lifespan(app: FastAPI):
 
                 startup_manager.update(80, "Cargando parámetros del sistema...")
                 _t = datetime.now()
+                from backend.repositories.calendario import CalendarioRepository
+                cal_repo = CalendarioRepository()
+                
                 await config_repo.init_tables()
                 await turno_repo.init_tables()
-                logger.info(f"⏱️ config+turno init_tables: {(datetime.now()-_t).total_seconds():.2f}s")
+                await cal_repo.init_db()
+                logger.info(f"⏱️ config+turno+calendario init_tables: {(datetime.now()-_t).total_seconds():.2f}s")
 
                 await db.clear_schema_cache()
 
