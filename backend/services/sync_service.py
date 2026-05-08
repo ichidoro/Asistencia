@@ -363,25 +363,48 @@ class SyncService:
 
     async def sync_marcaciones(self, fecha_inicio: str = None, fecha_fin: str = None, areas: List[str] = None, ruts: List[str] = None, force_recalculate: bool = False, skip_recalc: bool = False) -> Dict[str, Any]:
         """
-        Sincronizar marcaciones de asistencia desde BioAlba (Mensual) y RECALCULAR ASISTENCIA.
-        Permite filtrar por áreas específicas o por RUTs individuales.
+        Sincronizar marcaciones de asistencia desde BioAlba y RECALCULAR ASISTENCIA.
+        Soporta rangos multi-mes: si fecha_inicio y fecha_fin abarcan más de un mes,
+        descarga todos los meses involucrados desde BioAlba.
         ruts: Lista de RUTs limpios (sin puntos/guiones) para filtrar marcaciones individuales.
-        force_recalculate: Si es True, recalcula todo el mes incluso si no hay marcas nuevas.
+        force_recalculate: Si es True, recalcula todo el rango incluso si no hay marcas nuevas.
         skip_recalc: Si es True, sólo guarda las marcaciones raw y omite el recálculo de asistencia.
                      Usar cuando el caller realizará el reproceso completo por su cuenta.
         """
         try:
-            # Determinar Mes y Año a sincronizar
-            # Si viene fecha_inicio, usamos ese mes. Si no, el mes actual.
+            import calendar
+            from datetime import timedelta as _td
+
+            # ── Determinar el rango real de fechas ──────────────────────────
             now = datetime.now()
             if fecha_inicio:
                 dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-                mes, anio = dt_ini.month, dt_ini.year
             else:
-                mes, anio = now.month, now.year
+                dt_ini = now.replace(day=1)  # primer día del mes actual
+                fecha_inicio = dt_ini.strftime("%Y-%m-%d")
 
-            logger.info(f"🔄 Iniciando sincronización de marcaciones (Mes: {anio}-{mes:02d}, Force: {force_recalculate})...")
-            
+            if fecha_fin:
+                dt_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
+            else:
+                _, last = calendar.monthrange(dt_ini.year, dt_ini.month)
+                dt_fin = dt_ini.replace(day=last)
+                fecha_fin = dt_fin.strftime("%Y-%m-%d")
+
+            # Construir lista de (mes, anio) que cubre el rango completo
+            meses_a_sincronizar = []
+            cur = dt_ini.replace(day=1)
+            while cur <= dt_fin:
+                meses_a_sincronizar.append((cur.month, cur.year))
+                if cur.month == 12:
+                    cur = cur.replace(year=cur.year + 1, month=1)
+                else:
+                    cur = cur.replace(month=cur.month + 1)
+
+            logger.info(
+                f"🔄 Iniciando sync de marcaciones (rango: {fecha_inicio} → {fecha_fin}, "
+                f"meses: {len(meses_a_sincronizar)}, Force: {force_recalculate})..."
+            )
+
             # Reset stats
             self.stats = {
                 'marcaciones_nuevas': 0,
@@ -393,63 +416,73 @@ class SyncService:
                 'duracion_segundos': 0,
                 'filtrados': 0
             }
-            
+
             start_time = datetime.now()
-            
+
             # 1. Conectar DB y calcular RUTs válidos ANTES de descargar
-            # (Permite filtrado temprano en el parser: ~128 dicts en vez de ~15,503)
             await db.connect()
             turno_repo = TurnoRepository(db)
-            
+
             from backend.repositories.empleado import EmpleadoRepository
             empleado_repo = EmpleadoRepository(db)
-            
+
             if ruts and len(ruts) > 0:
-                # Filtro granular por RUTs individuales (sync de empleado específico)
                 ruts_limpios = set(r.replace('.', '').replace('-', '').strip().upper() for r in ruts)
                 logger.info(f"👤 Filtro individual por RUT: {ruts_limpios}")
                 valid_ruts = ruts_limpios
             elif areas and len(areas) > 0:
-                 logger.info(f"👥 Filtrando por áreas específicas (incluyendo cambios pendientes): {areas}")
-                 valid_ruts = set(await empleado_repo.get_ruts_by_areas_with_pending(areas))
+                logger.info(f"👥 Filtrando por áreas específicas (incluyendo cambios pendientes): {areas}")
+                valid_ruts = set(await empleado_repo.get_ruts_by_areas_with_pending(areas))
             else:
-                 # Default: Todos los empleados locales (Implicit filter)
-                 logger.info("👥 Filtrando por TODOS los empleados locales (Implicito)")
-                 valid_ruts = set(await empleado_repo.get_all_ruts())
-            
+                logger.info("👥 Filtrando por TODOS los empleados locales (Implicito)")
+                valid_ruts = set(await empleado_repo.get_all_ruts())
+
             logger.info(f"👥 Total empleados válidos para sync: {len(valid_ruts)}")
-            
-            # 2. Obtener marcaciones de BioAlba con filtro temprano de RUT.
-            # ruts_set=valid_ruts → el parser descarta filas de otros empleados ANTES de crear dicts.
-            # Esto reduce RAM de ~15,000 objetos a solo los relevantes para este batch (~100-200).
-            # ⚠️ NO cachear aquí: el cache de todo el mes requeriría descarga SIN filtro,
-            # lo que anularía la optimización de ruts_set y subiría RAM y tiempo de parseo.
+
+            # 2. Descargar marcaciones de BioAlba para CADA MES del rango
+            # BioAlba solo expone un Excel mensual, por lo que iteramos.
+            marcaciones_bioalba = []
             async with self.scraper:
-                marcaciones_bioalba = await self.scraper.get_marcaciones(
-                    mes=mes, anio=anio, ruts_set=valid_ruts
-                )
-            
+                for mes_iter, anio_iter in meses_a_sincronizar:
+                    logger.info(f"📥 Descargando BioAlba: {anio_iter}-{mes_iter:02d}...")
+                    lote = await self.scraper.get_marcaciones(
+                        mes=mes_iter, anio=anio_iter, ruts_set=valid_ruts
+                    )
+                    marcaciones_bioalba.extend(lote)
+                    logger.info(f"   → {len(lote)} marcaciones obtenidas para {anio_iter}-{mes_iter:02d}")
+
+            # Filtrar sólo marcaciones dentro del rango exacto fecha_inicio..fecha_fin
+            # (el Excel mensual puede tener días del mes fuera del rango solicitado)
+            marcaciones_bioalba = [
+                m for m in marcaciones_bioalba
+                if m.get('fecha_hora', '') >= fecha_inicio
+                and m.get('fecha_hora', '')[:10] <= fecha_fin
+            ]
+            logger.info(f"📊 Total marcaciones en rango tras filtro exacto: {len(marcaciones_bioalba)}")
+
             if not marcaciones_bioalba:
-                logger.warning("No se obtuvieron marcaciones de BioAlba")
+                logger.warning("No se obtuvieron marcaciones de BioAlba para el rango indicado")
                 self.stats['fin'] = datetime.now().isoformat()
                 return self.stats
-            
-            # 3. Optimización: Obtener Hashes existentes para no machacar la DB
-            existing_hashes = await turno_repo.get_existing_hashes(mes, anio)
-            logger.debug(f"💾 Hashes existentes en DB: {len(existing_hashes)}")
 
-            # [BIOALBA_GATE_PROTECTION]: Soberanía de Turno (Pre-filtrado de marcas)
-            import calendar
-            _, last_day = calendar.monthrange(anio, mes)
-            fecha_ini_mes = f"{anio}-{mes:02d}-01"
-            fecha_fin_mes = f"{anio}-{mes:02d}-{last_day}"
+            # 3. Obtener Hashes existentes para TODO el rango (no solo un mes)
+            existing_hashes = set()
+            for mes_iter, anio_iter in meses_a_sincronizar:
+                existing_hashes |= await turno_repo.get_existing_hashes(mes_iter, anio_iter)
+            logger.debug(f"💾 Hashes existentes en DB (rango completo): {len(existing_hashes)}")
+
+            # [BIOALBA_GATE_PROTECTION]: Soberanía de Turno sobre el RANGO REAL
+            # FIX: antes el Gate solo cubría el mes de fecha_inicio, bloqueando
+            # todas las marcaciones de meses posteriores aunque el empleado tuviera
+            # turno asignado. Ahora opera sobre fecha_inicio..fecha_fin completo.
+            fecha_ini_mes = fecha_inicio   # límite inferior real del rango
+            fecha_fin_mes = fecha_fin      # límite superior real del rango
             
-            logger.info(f"🛡️ Bioalba Gate: Cargando mapa de asignaciones para {anio}-{mes:02d}...")
-            # Obtenemos asignaciones que se crucen con este mes.
-            # Si valid_ruts está acotado (sync de empleados específicos), filtramos solo esos RUTs
-            # para evitar cargar las asignaciones de TODOS los empleados cuando solo se procesan N.
+            logger.info(f"🛡️ Bioalba Gate: Cargando mapa de asignaciones para rango {fecha_ini_mes} → {fecha_fin_mes}...")
+            # Obtenemos asignaciones que se crucen con el RANGO COMPLETO (no solo un mes).
+            # FIX causa raíz: antes fecha_ini_mes/fecha_fin_mes eran 1er y último día del mes de
+            # fecha_inicio, ignorando los meses siguientes del rango multi-mes solicitado.
             if valid_ruts and len(valid_ruts) < 50:
-                # Filtro por RUTs específicos: evita N-ruts innecesarios en batch pequeño
                 rut_ph = ','.join('?' * len(valid_ruts))
                 gate_params = list(valid_ruts) + [fecha_fin_mes, fecha_ini_mes]
                 asigs_raw = await db.fetch_all(f"""
@@ -460,7 +493,6 @@ class SyncService:
                       AND (ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))
                 """, tuple(gate_params))
             else:
-                # Sync masivo (todos los empleados): cargar todo el mapa
                 asigs_raw = await db.fetch_all("""
                     SELECT e.id as emp_id, e.rut, ast.fecha_inicio, ast.fecha_fin 
                     FROM asignacion_turnos ast
@@ -479,7 +511,7 @@ class SyncService:
                 if rut_key not in asig_map_gate:
                     asig_map_gate[rut_key] = set()
                 
-                # Expandir fechas de la asignación dentro del mes actual
+                # Expandir fechas de la asignación dentro del RANGO REAL
                 start_dt = max(datetime.strptime(asig['fecha_inicio'], "%Y-%m-%d"), datetime.strptime(fecha_ini_mes, "%Y-%m-%d"))
                 end_str = asig['fecha_fin'] or fecha_fin_mes
                 end_dt = min(datetime.strptime(end_str, "%Y-%m-%d"), datetime.strptime(fecha_fin_mes, "%Y-%m-%d"))
@@ -496,11 +528,13 @@ class SyncService:
             # Removido Auto-Repair global
 
             if force_recalculate:
-                # Si es el mes actual, solo hasta hoy
-                limit_day = now.day if (anio == now.year and mes == now.month) else last_day
-                for d in range(1, limit_day + 1):
-                    fechas_afectadas.add(f"{anio}-{mes:02d}-{d:02d}")
-                logger.info(f"⚡ Forzando recálculo para {len(fechas_afectadas)} días del mes.")
+                # Forzar recálculo para todos los días del rango (puede ser multi-mes)
+                curr_force = dt_ini
+                while curr_force <= dt_fin:
+                    if curr_force <= now:  # no forzar días futuros
+                        fechas_afectadas.add(curr_force.strftime("%Y-%m-%d"))
+                    curr_force += _td(days=1)
+                logger.info(f"⚡ Forzando recálculo para {len(fechas_afectadas)} días del rango.")
 
             count_skipped = 0
             count_filtered = 0
