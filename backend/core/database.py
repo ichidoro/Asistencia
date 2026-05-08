@@ -46,7 +46,7 @@ class HybridDatabase:
         
         self._connected: bool = False
         self._last_sync: Optional[datetime] = None
-        self._force_turso_only = bool(settings.TURSO_DATABASE_URL and "cloud" in settings.TURSO_DATABASE_URL.lower())
+        self._force_turso_only = False
         self._schema_cache: Dict[str, List[str]] = {}  # Caché para migraciones rápidas
         self._in_transaction: bool = False  # Control de transacciones para batching
         self._reset_lock = asyncio.Lock()
@@ -70,7 +70,13 @@ class HybridDatabase:
         """Establece la conexión nativa con Turso (Embedded Replica o Remote)"""
         if self._connected:
             return
-        
+            
+        async with self._reset_lock:
+            if self._connected:
+                return
+            await self._connect_locked(retry)
+            
+    async def _connect_locked(self, retry: bool = True) -> None:
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             
@@ -115,11 +121,19 @@ class HybridDatabase:
                     err_msg = str(e).lower()
                     if (("invalid local state" in err_msg or "malformed" in err_msg or "local state is incorrect" in err_msg) and retry):
                         logger.warning(f"🩹 Estado local inconsistente detectado. Eliminando DB local para re-sincronizar desde cloud...")
+                        # Liberar handles residuales en Python/Rust y esperar a que el OS desbloquee el archivo
+                        import gc
+                        gc.collect()
+                        await asyncio.sleep(1.0)
+                        
                         # soft_only=False: borrar .db + aux. El servidor re-sincronizará
-                        # desde cloud (ya purgado). Esto soluciona el loop infinito cuando
-                        # .db existe pero .meta no (e.g. tras un hard_reset con sqlite3 directo).
-                        await self._cleanup_local_db_files(soft_only=False)
-                        return await self.connect(retry=False)
+                        # desde cloud (ya purgado).
+                        success = await self._cleanup_local_db_files(soft_only=False)
+                        if not success:
+                            logger.critical("🛑 Falló el cleanup del archivo DB principal (bloqueado). Abortando reconexión.")
+                            raise e
+                        
+                        return await self._connect_locked(retry=False)
                     raise e
 
             self._connected = True
@@ -197,7 +211,7 @@ class HybridDatabase:
             
             await self._cleanup_local_db_files(soft_only=False)  # Full reset: borra todo
             await asyncio.sleep(0.5)
-            await self.connect()
+            await self._connect_locked()
             logger.success("✅ Reset local completado — reconectado desde Turso Cloud")
 
     async def _cleanup_local_db_files(self, soft_only: bool = True) -> bool:
@@ -223,24 +237,46 @@ class HybridDatabase:
             base + "-info",
         ]
         
-        # El .meta es SAGRADO para libsql: contiene el frame de sincronización.
-        # Solo se borra en full cleanup (soft_only=False) cuando vamos a hacer
-        # fresh sync desde cloud de todas formas.
         meta_pattern = base + ".meta"
         
-        # El .db principal: solo en reset explícito
-        if soft_only:
-            patterns = aux_patterns  # NUNCA toca .db ni .meta
-            logger.debug("🧹 Cleanup SOFT: solo -wal/-shm/-info (DB y .meta preservados)")
-        else:
-            patterns = [base] + aux_patterns + [meta_pattern]
-            logger.warning("🗑️ Cleanup FULL: eliminando .db + aux files")
+        deleted = 0
         
+        if not soft_only:
+            logger.warning("🗑️ Cleanup FULL: intentando eliminar .db + aux files")
+            # CRÍTICO: Si no podemos eliminar/renombrar .db, NO debemos eliminar .meta
+            if os.path.exists(base):
+                db_deleted = False
+                try:
+                    os.remove(base)
+                    deleted += 1
+                    logger.debug(f"🗑️ Eliminado: {os.path.basename(base)}")
+                    db_deleted = True
+                except PermissionError:
+                    corrupt_name = base + f".corrupt_{int(datetime.now().timestamp())}"
+                    try:
+                        os.rename(base, corrupt_name)
+                        deleted += 1
+                        logger.warning(f"🩹 Archivo bloqueado, movido a: {os.path.basename(corrupt_name)}")
+                        db_deleted = True
+                    except Exception as e2:
+                        logger.error(f"🚨 Error crítico limpiando {os.path.basename(base)}: {e2}")
+                        logger.critical("🛑 Abortando cleanup para NO desincronizar .db y .meta!")
+                        return False # Abortar limpieza para no romper la DB
+                
+                # Si falló por otra razón y no está marcado como eliminado
+                if not db_deleted and os.path.exists(base):
+                    logger.critical("🛑 No se pudo eliminar .db. Abortando cleanup.")
+                    return False
+            
+            patterns = aux_patterns + [meta_pattern]
+        else:
+            logger.debug("🧹 Cleanup SOFT: solo -wal/-shm/-info (DB y .meta preservados)")
+            patterns = aux_patterns
+            
         # Archivos corrupt_* siempre elegibles
         corrupt_pattern = os.path.join(local_dir, "*.corrupt_*")
         patterns.extend(glob.glob(corrupt_pattern))
         
-        deleted = 0
         for f in patterns:
             if os.path.exists(f):
                 try:
@@ -397,6 +433,8 @@ class HybridDatabase:
             try:
                 def _do_execute():
                     try:
+                        if self.conn is None:
+                            raise Exception("conn is None")
                         cursor = self.conn.cursor()
                         try:
                             cursor.execute(query, params or ())
@@ -414,9 +452,16 @@ class HybridDatabase:
                                 raise
                         return cursor, None
                     except Exception as inner_e:
+                        if "malformed" in str(inner_e).lower() or "corrupt" in str(inner_e).lower():
+                            logger.error(f"CORRUPTION in EXECUTE query: {query} with params: {params} -> {inner_e}")
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
                         raise inner_e
+                    except BaseException as panic_e:
+                        name = type(panic_e).__name__.lower()
+                        if "panic" in name or "pyo3" in name:
+                            return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
+                        raise panic_e
 
                 # Lecturas: acceso directo (SQLite local es thread-safe para reads)
                 # Escrituras: serializar con _db_lock para evitar race condition con scheduler
@@ -517,14 +562,23 @@ class HybridDatabase:
             try:
                 def _do_fetch():
                     try:
+                        if self.conn is None:
+                            raise Exception("conn is None")
                         cursor = self.conn.cursor()
                         rows = cursor.execute(query, params or ()).fetchall()
                         cols = [col[0] for col in cursor.description]
                         return [dict(zip(cols, row)) for row in rows], None
                     except Exception as inner_e:
+                        if "malformed" in str(inner_e).lower() or "corrupt" in str(inner_e).lower():
+                            logger.error(f"CORRUPTION in FETCH query: {query} with params: {params} -> {inner_e}")
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
                         raise inner_e
+                    except BaseException as panic_e:
+                        name = type(panic_e).__name__.lower()
+                        if "panic" in name or "pyo3" in name:
+                            return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
+                        raise panic_e
 
                 # Lecturas sin _db_lock: la réplica embebida lee del archivo local
                 # (no hace round-trip a la nube), es thread-safe para lecturas concurrentes.
@@ -617,6 +671,8 @@ class HybridDatabase:
                 def _do_batch_local():
                     """Solo commit LOCAL al WAL. No llama conn.sync(). Rápido: escritura en disco local, sin red."""
                     try:
+                        if self.conn is None:
+                            raise Exception("conn is None")
                         cursor = self.conn.cursor()
                         for query, params in operations:
                             cursor.execute(query, params or ())
@@ -624,12 +680,18 @@ class HybridDatabase:
                         return "OK", None
                     except Exception as inner_e:
                         try:
-                            self.conn.cursor().execute("ROLLBACK")
+                            if self.conn:
+                                self.conn.cursor().execute("ROLLBACK")
                         except Exception:
                             pass
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
                         raise inner_e
+                    except BaseException as panic_e:
+                        name = type(panic_e).__name__.lower()
+                        if "panic" in name or "pyo3" in name:
+                            return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
+                        raise panic_e
 
                 # ── Adquisición del lock (máx 10s) ──────────────────────────
                 try:
@@ -734,6 +796,8 @@ class HybridDatabase:
             try:
                 def _do_script():
                     try:
+                        if self.conn is None:
+                            raise Exception("conn is None")
                         cursor = self.conn.cursor()
                         cursor.executescript(script_sql)
                         # executescript hace auto-COMMIT al final del script
@@ -742,6 +806,11 @@ class HybridDatabase:
                         if self._is_reconnect_error(inner_e):
                             return "RECONNECT", inner_e
                         raise inner_e
+                    except BaseException as panic_e:
+                        name = type(panic_e).__name__.lower()
+                        if "panic" in name or "pyo3" in name:
+                            return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
+                        raise panic_e
 
                 try:
                     async with asyncio.timeout(30):
