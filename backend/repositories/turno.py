@@ -651,7 +651,13 @@ class TurnoRepository:
                 batch_params.append((emp_id, rut, fecha_hora, tipo, equipo, hash_val))
 
             if batch_params:
-                await self.db.executemany(query, batch_params, suppress_auto_sync=suppress_auto_sync)
+                import asyncio
+                chunk_size = 100
+                for i in range(0, len(batch_params), chunk_size):
+                    chunk = batch_params[i:i + chunk_size]
+                    await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)
+                    # Pause to allow Turso Sync Rust engine to flush frames cleanly
+                    await asyncio.sleep(0.2)
                 return True
             return False
             

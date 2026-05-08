@@ -95,8 +95,8 @@ class HybridDatabase:
                         asyncio.to_thread(
                             libsql.connect,
                             database=str(self.db_path),
-                            # sync_url=self.turso_url,
-                            # auth_token=self.turso_token,
+                            sync_url=self.turso_url,
+                            auth_token=self.turso_token,
                             # SIN sync_interval: elimina el hilo Rust en background.
                             # RAZÓN: sync_interval lanzaba un hilo Rust paralelo que competía
                             # con APScheduler y execute_batch() sobre los mismos archivos WAL,

@@ -202,7 +202,13 @@ class AsistenciaRepository:
             )
             params_list.append(params)
 
-        await self.db.executemany(query, params_list, suppress_auto_sync=suppress_auto_sync)
+        import asyncio
+        chunk_size = 100
+        for i in range(0, len(params_list), chunk_size):
+            chunk = params_list[i:i + chunk_size]
+            await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)
+            # Pause to allow Turso Sync Rust engine to flush frames cleanly
+            await asyncio.sleep(0.2)
 
 
 
