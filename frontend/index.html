@@ -1312,6 +1312,12 @@
                                         onclick="if(typeof loadRobotSyncLogs === 'function') loadRobotSyncLogs()">🤖
                                         Robot BioAlba</button>
                                 </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="sistema-config-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-sistema" type="button" role="tab"
+                                        onclick="if(typeof loadAjustesSistema === 'function') loadAjustesSistema()">⚙️
+                                        Sistema</button>
+                                </li>
                             </ul>
                         </div>
                         <div class="card-body p-4">
@@ -1563,6 +1569,72 @@
                                                 </tr>
                                             </tbody>
                                         </table>
+                                    </div>
+                                </div>
+
+                                <!-- Tab Ajustes del Sistema -->
+                                <div class="tab-pane fade" id="tab-sistema" role="tabpanel">
+                                    <div class="d-flex justify-content-between align-items-center mb-4">
+                                        <h4 class="fw-bold mb-0"><i class="bi bi-gear-fill text-secondary me-2"></i>Ajustes del Sistema</h4>
+                                    </div>
+                                    <div class="alert alert-warning py-2 small mb-4">
+                                        <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Precaución:</strong> Modificar estos valores numéricos afecta el comportamiento global de alertas y cierres. Sólo ingresar valores numéricos enteros.
+                                    </div>
+
+                                    <div class="row g-4">
+                                        <!-- Tarjeta Contratos -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border-0 shadow-sm">
+                                                <div class="card-header bg-white fw-bold py-3">
+                                                    <i class="bi bi-file-earmark-text text-primary me-2"></i>Contratos y Vencimientos
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small text-muted">Límite de Contratos Temporales</label>
+                                                        <div class="input-group">
+                                                            <input type="number" class="form-control" id="ajuste-limite-contratos" min="1" max="10" placeholder="Ej: 3">
+                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('limite_contratos_temporales', 'ajuste-limite-contratos')" title="Guardar"><i class="bi bi-save"></i></button>
+                                                        </div>
+                                                        <div class="form-text">Cantidad máxima de contratos temporales antes de ser indefinido.</div>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small text-muted">Días Alerta Vencimiento (Normal)</label>
+                                                        <div class="input-group">
+                                                            <input type="number" class="form-control" id="ajuste-dias-alerta" min="1" max="60" placeholder="Ej: 45">
+                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('vencimiento_dias_alerta', 'ajuste-dias-alerta')" title="Guardar"><i class="bi bi-save"></i></button>
+                                                        </div>
+                                                        <div class="form-text">Días de anticipación para alerta amarilla.</div>
+                                                    </div>
+                                                    <div class="mb-0">
+                                                        <label class="form-label fw-bold small text-muted">Días Alerta Bloqueante (Crítica)</label>
+                                                        <div class="input-group">
+                                                            <input type="number" class="form-control" id="ajuste-dias-bloqueante" min="1" max="30" placeholder="Ej: 15">
+                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('dias_alerta_bloqueante', 'ajuste-dias-bloqueante')" title="Guardar"><i class="bi bi-save"></i></button>
+                                                        </div>
+                                                        <div class="form-text">Días de anticipación para alerta roja/bloqueante.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Tarjeta Operaciones HR -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border-0 shadow-sm">
+                                                <div class="card-header bg-white fw-bold py-3">
+                                                    <i class="bi bi-calendar-check text-success me-2"></i>Operaciones de Cierre
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small text-muted">Día de Cierre de RRHH</label>
+                                                        <div class="input-group">
+                                                            <input type="number" class="form-control" id="ajuste-dia-cierre" min="1" max="31" placeholder="Ej: 20">
+                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('dia_cierre_rrhh', 'ajuste-dia-cierre')" title="Guardar"><i class="bi bi-save"></i></button>
+                                                        </div>
+                                                        <div class="form-text">Día del mes en que se procesan los cierres.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
