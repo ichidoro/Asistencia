@@ -415,6 +415,14 @@ async def get_email_rrhh(
     """Obtener ajuste específico de email RRHH para evitar 307"""
     return await service.get_ajuste("email_notificaciones_rrhh")
 
+@router.get("/ajustes/")
+async def get_all_ajustes(
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+):
+    """Obtener todos los ajustes globales"""
+    return await service.get_all_ajustes()
+
 @router.get("/ajustes/{clave}/")
 async def get_ajuste(
     clave: str,
@@ -431,7 +439,28 @@ async def set_ajuste(
     service: ConfiguracionService = Depends(get_config_service),
     current_user: SecurityContext = Depends(RequirePermission("configuracion.correo"))
 ):
-    """Guardar o actualizar un ajuste global"""
+    """Guardar o actualizar un ajuste global con validaciones estrictas"""
+    # 1. Validación de Reglas de Negocio Críticas para evitar Error 500
+    claves_numericas_criticas = [
+        "vencimiento_dias_alerta", 
+        "dias_alerta_bloqueante", 
+        "limite_contratos_temporales", 
+        "dia_cierre_rrhh"
+    ]
+    
+    if clave in claves_numericas_criticas:
+        try:
+            val_int = int(valor)
+            if val_int < 1:
+                raise ValueError("El valor no puede ser menor a 1")
+            
+            # Restricción especial para el cierre de RRHH para evitar problemas con Febrero
+            if clave == "dia_cierre_rrhh" and val_int > 28:
+                raise HTTPException(status_code=400, detail="El día de cierre no puede ser mayor a 28 para prevenir errores en Febrero.")
+                
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Valor inválido para {clave}: Debe ser un número entero válido mayor a 0.")
+
     success = await service.set_ajuste(clave, valor)
     return {"success": success, "message": "Ajuste guardado"}
 
