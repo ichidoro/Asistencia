@@ -34,7 +34,6 @@ class CalendarioService:
         return count
 
     async def get_feriados(self, year: int = None):
-        await self.repo.init_db()
         if not year:
             year = date.today().year
         return await self.repo.get_all_feriados(year)

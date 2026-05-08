@@ -2602,8 +2602,8 @@ async function openCierrePeriodoModal() {
     window.cierreWizardState = { currentStep: 1, evaluacion: null, fIni, fFin, area, aceptarInasistencias: false };
 
     try {
-        const url = \`/api/cierre/pre-evaluacion?fecha_inicio=\${fIni}&fecha_fin=\${fFin}&area=\${encodeURIComponent(area)}\`;
-        const resp = await fetch(url, { headers: { 'Authorization': \`Bearer \${AuthService.token}\` } });
+        const url = `/api/cierre/pre-evaluacion?fecha_inicio=${fIni}&fecha_fin=${fFin}&area=${encodeURIComponent(area)}`;
+        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.token}` } });
         const data = await resp.json();
         
         if (!resp.ok) throw new Error(data.detail || "Fallo en pre-evaluación");
@@ -2611,18 +2611,18 @@ async function openCierrePeriodoModal() {
         window.cierreWizardState.evaluacion = data;
         renderWizardStep(1);
     } catch (e) {
-        document.getElementById('wizard-content').innerHTML = \`
+        document.getElementById('wizard-content').innerHTML = `
             <div class="alert alert-danger">
                 <h5><i class="bi bi-x-circle-fill"></i> Error de Validación</h5>
-                <p>\${e.message}</p>
+                <p>${e.message}</p>
             </div>
-        \`;
+        `;
     }
 }
 
 function updateWizardTabs(step) {
     for (let i = 1; i <= 5; i++) {
-        const tab = document.getElementById(\`wiz-tab-\${i}\`);
+        const tab = document.getElementById(`wiz-tab-${i}`);
         if (i === step) {
             tab.classList.add('active');
             tab.classList.remove('bg-light');
@@ -2644,21 +2644,21 @@ function renderWizardStep(step) {
 
     if (step === 1) { // Anomalías
         if (ev.anomalias > 0) {
-            const list = ev.detalle_anomalias.map(a => \`<li>\${a.fecha} - \${a.nombre_completo}</li>\`).join('');
-            content.innerHTML = \`
+            const list = ev.detalle_anomalias.map(a => `<li>${a.fecha} - ${a.nombre_completo}</li>`).join('');
+            content.innerHTML = `
                 <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: Anomalías Detectadas</h4>
-                <p>Se encontraron <strong>\${ev.anomalias} anomalías</strong> que bloquean el cierre. Debes solucionarlas en la grilla de marcaciones antes de continuar.</p>
-                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>\${list}</ul></div>
-            \`;
+                <p>Se encontraron <strong>${ev.anomalias} anomalías</strong> que bloquean el cierre. Debes solucionarlas en la grilla de marcaciones antes de continuar.</p>
+                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+            `;
             btnNext.style.display = 'none';
         } else {
-            content.innerHTML = \`
+            content.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
                     <h4 class="mt-3">Sin Anomalías</h4>
                     <p class="text-muted">Las marcaciones están íntegras. Puede continuar al siguiente paso.</p>
                 </div>
-            \`;
+            `;
             btnNext.style.display = 'inline-block';
             btnNext.innerHTML = 'Siguiente Paso <i class="bi bi-arrow-right"></i>';
             btnNext.className = 'btn btn-dark fw-bold px-4';
@@ -2666,83 +2666,83 @@ function renderWizardStep(step) {
         }
     } else if (step === 2) { // En Curso
         if (ev.en_curso > 0) {
-            const list = ev.detalle_en_curso.map(a => \`<li>\${a.fecha} - \${a.nombre_completo} (Salida teórica: \${a.hora_salida_teorica || 'N/A'})</li>\`).join('');
-            content.innerHTML = \`
+            const list = ev.detalle_en_curso.map(a => `<li>${a.fecha} - ${a.nombre_completo} (Salida teórica: ${a.hora_salida_teorica || 'N/A'})</li>`).join('');
+            content.innerHTML = `
                 <h4 class="text-warning fw-bold"><i class="bi bi-clock-history"></i> HARD STOP: Turnos en Curso</h4>
-                <p>Hay <strong>\${ev.en_curso} empleados</strong> con turno activo. No puedes cerrar hasta que terminen su jornada.</p>
-                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>\${list}</ul></div>
-            \`;
+                <p>Hay <strong>${ev.en_curso} empleados</strong> con turno activo. No puedes cerrar hasta que terminen su jornada.</p>
+                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+            `;
             btnNext.style.display = 'none';
         } else {
-            content.innerHTML = \`
+            content.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
                     <h4 class="mt-3">Sin Turnos en Curso</h4>
                     <p class="text-muted">Todos los turnos del periodo han finalizado.</p>
                 </div>
-            \`;
+            `;
             btnNext.style.display = 'inline-block';
             btnNext.onclick = () => renderWizardStep(3);
         }
     } else if (step === 3) { // HE Pendientes
         if (ev.he_pendientes > 0) {
-            const list = ev.detalle_he.map(a => \`<li>\${a.fecha} - \${a.nombre_completo} (\${a.minutos_autorizados} min)</li>\`).join('');
-            content.innerHTML = \`
+            const list = ev.detalle_he.map(a => `<li>${a.fecha} - ${a.nombre_completo} (${a.minutos_autorizados} min)</li>`).join('');
+            content.innerHTML = `
                 <h4 class="text-primary fw-bold"><i class="bi bi-exclamation-circle"></i> HARD STOP: Horas Extras Pendientes</h4>
-                <p>Existen <strong>\${ev.he_pendientes} registros</strong> de Horas Extras pendientes de aprobación/rechazo.</p>
-                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>\${list}</ul></div>
-            \`;
+                <p>Existen <strong>${ev.he_pendientes} registros</strong> de Horas Extras pendientes de aprobación/rechazo.</p>
+                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+            `;
             btnNext.style.display = 'none';
         } else {
-            content.innerHTML = \`
+            content.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
                     <h4 class="mt-3">Sin HE Pendientes</h4>
                     <p class="text-muted">Todas las Horas Extras han sido resueltas.</p>
                 </div>
-            \`;
+            `;
             btnNext.style.display = 'inline-block';
             btnNext.onclick = () => renderWizardStep(4);
         }
     } else if (step === 4) { // Inasistencias (Soft Stop)
         if (ev.inasistencias_injustificadas > 0) {
-            const list = ev.detalle_ina.map(a => \`<li>\${a.fecha} - \${a.nombre_completo}</li>\`).join('');
-            content.innerHTML = \`
+            const list = ev.detalle_ina.map(a => `<li>${a.fecha} - ${a.nombre_completo}</li>`).join('');
+            content.innerHTML = `
                 <h4 class="text-info fw-bold"><i class="bi bi-info-circle"></i> SOFT STOP: Inasistencias no justificadas</h4>
-                <p>Hay <strong>\${ev.inasistencias_injustificadas} inasistencias</strong>. Si cierra ahora, se consolidarán como inasistencias definitivas sin goce de sueldo.</p>
-                <div class="border rounded p-3 bg-light mb-3" style="max-height:150px; overflow-y:auto;"><ul>\${list}</ul></div>
+                <p>Hay <strong>${ev.inasistencias_injustificadas} inasistencias</strong>. Si cierra ahora, se consolidarán como inasistencias definitivas sin goce de sueldo.</p>
+                <div class="border rounded p-3 bg-light mb-3" style="max-height:150px; overflow-y:auto;"><ul>${list}</ul></div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="chk-aceptar-inasistencias" onchange="window.cierreWizardState.aceptarInasistencias = this.checked; document.getElementById('btn-wizard-next').disabled = !this.checked;">
                     <label class="form-check-label fw-bold" for="chk-aceptar-inasistencias">
                         Acepto consolidar estas inasistencias.
                     </label>
                 </div>
-            \`;
+            `;
             btnNext.style.display = 'inline-block';
             btnNext.disabled = true;
             btnNext.onclick = () => renderWizardStep(5);
         } else {
-            content.innerHTML = \`
+            content.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
                     <h4 class="mt-3">Sin Inasistencias Pendientes</h4>
                     <p class="text-muted">No hay inasistencias injustificadas en el periodo.</p>
                 </div>
-            \`;
+            `;
             window.cierreWizardState.aceptarInasistencias = true;
             btnNext.style.display = 'inline-block';
             btnNext.disabled = false;
             btnNext.onclick = () => renderWizardStep(5);
         }
     } else if (step === 5) { // Reporte Final
-        content.innerHTML = \`
+        content.innerHTML = `
             <h4 class="fw-bold mb-4"><i class="bi bi-file-text"></i> Previsualización de Cierre</h4>
             <div class="row">
                 <div class="col-6 mb-3">
                     <div class="card bg-light border-0 shadow-sm h-100">
                         <div class="card-body">
                             <h6 class="text-muted text-uppercase small fw-bold">Horas Extras Aprobadas</h6>
-                            <h3 class="text-primary mb-0">\${ev.resumen.he_aprobadas_horas || 0} hrs <small class="fs-6 text-muted">(\${ev.resumen.he_aprobadas_count || 0} reg.)</small></h3>
+                            <h3 class="text-primary mb-0">${ev.resumen.he_aprobadas_horas || 0} hrs <small class="fs-6 text-muted">(${ev.resumen.he_aprobadas_count || 0} reg.)</small></h3>
                         </div>
                     </div>
                 </div>
@@ -2750,7 +2750,7 @@ function renderWizardStep(step) {
                     <div class="card bg-light border-0 shadow-sm h-100">
                         <div class="card-body">
                             <h6 class="text-muted text-uppercase small fw-bold">Inasistencias Selladas</h6>
-                            <h3 class="text-danger mb-0">\${ev.inasistencias_injustificadas}</h3>
+                            <h3 class="text-danger mb-0">${ev.inasistencias_injustificadas}</h3>
                         </div>
                     </div>
                 </div>
@@ -2758,7 +2758,7 @@ function renderWizardStep(step) {
             <div class="alert alert-warning mt-3 border-warning">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Atención:</strong> Esta acción sellará el periodo. Los empleados en el biométrico NO podrán alterar la asistencia de estas fechas retrospectivamente.
             </div>
-        \`;
+        `;
         btnNext.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
         btnNext.className = 'btn btn-warning fw-bold px-4';
         btnNext.disabled = false;
@@ -2783,7 +2783,7 @@ async function confirmarCierreRRHH() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': \`Bearer \${AuthService.token}\`
+                'Authorization': `Bearer ${AuthService.token}`
             },
             body: JSON.stringify({
                 fecha_inicio: s.fIni,

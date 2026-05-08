@@ -106,11 +106,11 @@ class HybridDatabase:
                             # _batch_bg llama sync_to_cloud_explicit() al final del batch.
                             # Benchmark: 112 inserts = 72,000ms → 1ms (72,000x más rápido).
                         ),
-                        timeout=3.0
+                        timeout=15.0
                     )
                     logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync_interval=30s)")
                 except asyncio.TimeoutError:
-                    logger.warning("⏱️ Timeout de 3s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
+                    logger.warning("⏱️ Timeout de 15s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
                     # Fallback puro a SQLite local (Réplica)
                     self.conn = await asyncio.to_thread(
                         libsql.connect,
@@ -911,7 +911,11 @@ class HybridDatabase:
             elif "walconflict" in err_msg.lower() or "wal frame" in err_msg.lower():
                 logger.debug(f"☁️ sync_from_cloud pospuesto (WAL conflict leve, resolvemos en prox iteración)")
             else:
-                logger.error(f"❌ Error en Sync nativo: {e}")
+                if "server returned a higher frame_no" in err_msg or "larger than what we sent" in err_msg:
+                    # Auto-heal en background para no bloquear el hilo de exception handling
+                    asyncio.create_task(self._auto_heal_sync_conflict())
+                else:
+                    logger.error(f"❌ Error en Sync nativo: {e}")
 
     async def sync_to_cloud_explicit(self) -> None:
         """
@@ -935,7 +939,40 @@ class HybridDatabase:
             self._last_sync = datetime.now()
             logger.info(f"☁️ [Sync explícito] WAL -> Turso Cloud en {elapsed_ms}ms")
         except Exception as e:
-            logger.warning(f"⚠️ sync_to_cloud_explicit falló (datos seguros en WAL local): {e}")
+            err_msg = str(e)
+            if "server returned a higher frame_no" in err_msg or "larger than what we sent" in err_msg:
+                logger.critical(f"⚠️ sync_to_cloud_explicit falló por Frame Mismatch. Iniciando Auto-Healing.")
+                asyncio.create_task(self._auto_heal_sync_conflict())
+            else:
+                logger.warning(f"⚠️ sync_to_cloud_explicit falló (datos seguros en WAL local): {e}")
+
+    async def _auto_heal_sync_conflict(self) -> None:
+        """Destruye la réplica local para forzar a libSQL a clonar nuevamente desde la nube debido a un conflicto de frames."""
+        logger.critical("🚨 Detectado Frame Mismatch en Turso! Iniciando auto-recuperación destructiva de la réplica local...")
+        try:
+            # 1. Desconectar local
+            if hasattr(self, 'conn') and self.conn:
+                self.conn.close()
+                self._connected = False
+            
+            # 2. Borrar archivos locales
+            import os
+            db_path = settings.LOCAL_DB_PATH
+            for ext in ['', '-wal', '-shm']:
+                f = f"{db_path}{ext}"
+                if os.path.exists(f):
+                    try:
+                        os.remove(f)
+                        logger.info(f"🗑️ Eliminado {f}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo eliminar {f}: {e}")
+            
+            # 3. Reconectar (esto forzará el full clone)
+            logger.info("🔄 Reconectando para clonar desde Turso Cloud...")
+            await self.connect()
+            logger.success("✅ Auto-recuperación exitosa. Base de datos re-sincronizada desde la nube.")
+        except Exception as e:
+            logger.error(f"❌ Fallo masivo en auto-recuperación: {e}")
 
 
     async def initialize_v2_sync(self) -> None:

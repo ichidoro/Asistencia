@@ -233,6 +233,60 @@ class ConfiguracionRepository:
             VALUES ('dia_cierre_rrhh', '25', 'Día del mes por defecto para cierre de periodo RRHH')
         """)
 
+        # 7.1. Tabla Notificaciones Areas [NEW]
+        if not await self.db.table_exists("notificaciones_areas"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS notificaciones_areas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    area TEXT NOT NULL UNIQUE,
+                    emails TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logger.info("✨ Tabla 'notificaciones_areas' creada exitosamente")
+
+        # 7.2. Tabla Estados Asistencia [NEW]
+        if not await self.db.table_exists("estados_asistencia"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS estados_asistencia (
+                    codigo TEXT PRIMARY KEY,
+                    nombre_display TEXT NOT NULL,
+                    short_label TEXT NOT NULL,
+                    descripcion TEXT,
+                    color_clase TEXT DEFAULT 'badge-state-neutral',
+                    icono_bi TEXT DEFAULT 'bi-circle',
+                    es_sistema INTEGER DEFAULT 1,
+                    activo INTEGER DEFAULT 1,
+                    orden INTEGER DEFAULT 99,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logger.info("✨ Tabla 'estados_asistencia' creada exitosamente")
+            # Semilla inicial
+            seed_data = [
+                ('OK',                'OK',                 'OK',  'El empleado asistió y cumplió su horario correctamente.',                    'badge-state-success',  'bi-check-circle-fill',          1, 1,  1),
+                ('INASISTENCIA',      'INASISTENCIA',       'INA', 'El empleado no se presentó y no tiene marcas ni justificación.',             'badge-state-danger',   'bi-x-circle-fill',              1, 1,  2),
+                ('ATRASO',            'ATRASO',             'ATR', 'El empleado llegó tarde respecto a su hora de entrada teórica.',             'badge-state-warning',  'bi-clock-fill',                 1, 1,  3),
+                ('SALIDA_ADELANTADA', 'SALIDA ADELANTADA',  'SAL', 'El empleado se retiró antes de su hora de salida teórica.',                 'badge-state-info',     'bi-box-arrow-left',             1, 1,  4),
+                ('ATR_SAD',           'ATRASO + SAL. ADEL.','A+S', 'El empleado llegó tarde Y se fue antes. Combinación de ambos eventos.',      'badge-state-warning',  'bi-clock-fill',                 1, 1,  5),
+                ('PER_ATR',           'PERMISO + ATRASO',   'P+A', 'El empleado tiene permiso registrado y además llegó tarde.',                 'badge-state-warning',  'bi-clock-fill',                 1, 1,  6),
+                ('EN_CURSO',          'EN TURNO',           'ENC', 'El empleado marcó entrada hoy y su turno aún no ha terminado.',              'badge-state-success',  'bi-play-circle-fill',           1, 1,  7),
+                ('LIBRE',             'LIBRE',              'LIB', 'Día de descanso según el turno asignado. No es un día laboral.',             'badge-state-neutral',  'bi-cup-hot-fill',               1, 1,  8),
+                ('FERIADO',           'FERIADO',            'FER', 'Día festivo legal en Chile. No es jornada laboral.',                         'badge-state-warning',  'bi-calendar-heart-fill',        1, 1,  9),
+                ('EXTRA',             'JORNADA EXTRA',      'EXT', 'El empleado trabajó en un día que no le correspondía (libre o feriado).',    'badge-state-info',     'bi-plus-circle-fill',           1, 1, 10),
+                ('JORNADA_ESPECIAL',  'JORNADA ESPECIAL',   'ESP', 'Excepción manual: vacaciones, licencia médica, permiso de día, etc.',        'badge-state-info',     'bi-star-fill',                  1, 1, 11),
+                ('ANOMALIA',          'ANOMALÍA',           'ANO', 'Inconsistencia en marcas (ej: hay entrada pero nunca se registró salida).',  'bg-dark text-white',   'bi-exclamation-triangle-fill',  1, 1, 12),
+                ('PERMISO',           'PERMISO',            'PER', 'El empleado cuenta con un permiso de horas aprobado para ese día.',          'badge-state-info',     'bi-calendar-check-fill',        1, 1, 13),
+            ]
+            for row in seed_data:
+                await self.db.execute(
+                    """INSERT OR IGNORE INTO estados_asistencia
+                       (codigo, nombre_display, short_label, descripcion, color_clase, icono_bi, es_sistema, activo, orden)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    row
+                )
+
         # 8. Tabla de Periodos de Empleo (Multi-Contrato) [NEW V15]
         if not await self.db.table_exists("periodos_empleo"):
             logger.info("🛠️ Creando tabla 'periodos_empleo' para gestión de reincorporaciones...")
