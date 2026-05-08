@@ -1117,6 +1117,7 @@ class HybridDatabase:
         return (
             self._connected
             and self.conn is not None
+            and self.use_turso
             and not self._force_turso_only
             and hasattr(self.conn, 'sync')
         )
