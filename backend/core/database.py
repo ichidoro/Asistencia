@@ -90,25 +90,26 @@ class HybridDatabase:
             else:
                 logger.info(f"🔌 Conectando a Embedded Replica: {self.db_path}")
                 try:
-                    # Timeout 3s (Hilo Rojo): evita colgar el inicio si Turso Cloud no responde rápido.
+                    # Timeout 15s: evita colgar el inicio si Turso Cloud no responde rápido.
                     self.conn = await asyncio.wait_for(
                         asyncio.to_thread(
                             libsql.connect,
                             database=str(self.db_path),
                             sync_url=self.turso_url,
                             auth_token=self.turso_token,
-                            sync_interval=30,  # Auto-sync a Turso cada 30s en background.
-                            offline=True,      # OFFLINE WRITES: commit() escribe 100% en disco local (~1ms).
-                            # Sin offline=True: cada commit() verifica frames WAL con Turso Cloud
-                            # → 640ms/registro → 72s para 112 registros (throttling de red).
-                            # Con offline=True: commit() = fsync local puro. La nube se actualiza
-                            # solo cuando el scheduler llama conn.sync() (cada 30s) o cuando
-                            # _batch_bg llama sync_to_cloud_explicit() al final del batch.
-                            # Benchmark: 112 inserts = 72,000ms → 1ms (72,000x más rápido).
+                            # SIN sync_interval: elimina el hilo Rust en background.
+                            # RAZÓN: sync_interval lanzaba un hilo Rust paralelo que competía
+                            # con APScheduler y execute_batch() sobre los mismos archivos WAL,
+                            # causando Frame Mismatch y WinError 32 en Windows.
+                            # El ÚNICO actor de sync ahora es el APScheduler (cada 300s) y
+                            # execute_batch() al final de cada batch de importación.
+                            # Benchmark de escrituras con offline=True: 72,000ms → 1ms (sin cambio).
+                            offline=True,   # OFFLINE WRITES: commit() = fsync local puro (~1ms).
                         ),
                         timeout=15.0
                     )
-                    logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync_interval=30s)")
+                    logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync manual vía APScheduler)")
+
                 except asyncio.TimeoutError:
                     logger.warning("⏱️ Timeout de 15s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
                     # Fallback puro a SQLite local (Réplica)
@@ -947,32 +948,100 @@ class HybridDatabase:
                 logger.warning(f"⚠️ sync_to_cloud_explicit falló (datos seguros en WAL local): {e}")
 
     async def _auto_heal_sync_conflict(self) -> None:
-        """Destruye la réplica local para forzar a libSQL a clonar nuevamente desde la nube debido a un conflicto de frames."""
-        logger.critical("🚨 Detectado Frame Mismatch en Turso! Iniciando auto-recuperación destructiva de la réplica local...")
+        """
+        Destruye y reconstruye la réplica local cuando libsql detecta un Frame Mismatch.
+
+        CAUSAS CONOCIDAS DEL FRAME MISMATCH:
+        - El servidor Turso Cloud avanzó sus frames (otra escritura directa al cloud,
+          rollback, o migración) mientras la réplica local estaba offline o desconectada.
+        - La réplica local tiene un .meta file apuntando a un frame que ya no existe.
+        
+        PROTOCOLO DE RECUPERACIÓN:
+        1. Cerrar la conexión libsql (libera el hilo de sync_interval).
+        2. Esperar 3s en Windows para que el OS libere los file handles del Rust backend.
+        3. Borrar TODOS los archivos locales, INCLUYENDO .meta (que guarda el frame pointer).
+        4. Reconectar: libsql hace un full-clone desde Turso Cloud desde frame 0.
+        """
+        # Guard: Evitar ejecuciones concurrentes o bucle infinito de auto-heal
+        if getattr(self, '_auto_heal_in_progress', False):
+            logger.warning("⏸️ Auto-heal ya en progreso, descartando solicitud duplicada")
+            return
+        self._auto_heal_in_progress = True
+        
+        logger.critical("🚨 Frame Mismatch con Turso Cloud! Iniciando auto-recuperación de réplica...")
         try:
-            # 1. Desconectar local
-            if hasattr(self, 'conn') and self.conn:
-                self.conn.close()
-                self._connected = False
+            # 1. Cerrar conexión y anular referencia para liberar handles del Rust backend
+            if self.conn:
+                try:
+                    await asyncio.to_thread(self.conn.close)
+                    logger.info("🔌 Conexión libsql cerrada")
+                except Exception as close_err:
+                    logger.warning(f"⚠️ Error al cerrar conn (ignorado): {close_err}")
+                finally:
+                    self.conn = None
+                    self._connected = False
             
-            # 2. Borrar archivos locales
-            import os
-            db_path = settings.LOCAL_DB_PATH
-            for ext in ['', '-wal', '-shm']:
-                f = f"{db_path}{ext}"
+            # 2. Forzar liberación de handles de Rust en Windows
+            #    El hilo de sync_interval de libsql puede tardar hasta 2-3s en soltar handles
+            import gc
+            gc.collect()
+            await asyncio.sleep(3.0)  # Espera crítica para Windows: libera file handles del OS
+            
+            # 3. Borrar TODOS los archivos de réplica local, INCLUYENDO .meta
+            #    .meta es el archivo que guarda el frame pointer — SIN borrarlo, el heal falla
+            db_path_str = str(self.db_path)
+            files_to_delete = [
+                db_path_str,            # .db  — base de datos local
+                db_path_str + "-wal",   # -wal — write-ahead log
+                db_path_str + "-shm",   # -shm — shared memory index del WAL
+                db_path_str + "-info",  # -info — FRAME POINTER (SDK Python de libsql)
+                db_path_str + ".meta",  # .meta — FRAME POINTER (versiones nuevas de libsql)
+            ]
+            
+            deleted = []
+            failed = []
+            for f in files_to_delete:
                 if os.path.exists(f):
                     try:
                         os.remove(f)
-                        logger.info(f"🗑️ Eliminado {f}")
-                    except Exception as e:
-                        logger.warning(f"⚠️ No se pudo eliminar {f}: {e}")
+                        deleted.append(os.path.basename(f))
+                        logger.info(f"🗑️ Eliminado: {os.path.basename(f)}")
+                    except PermissionError:
+                        # Último recurso: renombrar (libera el path, el handle se cierra al GC)
+                        corrupt_name = f + f".corrupt_{int(datetime.now().timestamp())}"
+                        try:
+                            os.rename(f, corrupt_name)
+                            deleted.append(os.path.basename(f) + "→.corrupt")
+                            logger.warning(f"🩹 Movido a backup: {os.path.basename(corrupt_name)}")
+                        except Exception as rename_err:
+                            failed.append(os.path.basename(f))
+                            logger.error(f"❌ No se pudo eliminar/renombrar {os.path.basename(f)}: {rename_err}")
             
-            # 3. Reconectar (esto forzará el full clone)
-            logger.info("🔄 Reconectando para clonar desde Turso Cloud...")
+            if failed:
+                logger.critical(
+                    f"🛑 Auto-heal PARCIAL: {len(deleted)} borrados, {len(failed)} bloqueados: {failed}. "
+                    "El .meta file puede persistir. Reinicia el servidor para completar la recuperación."
+                )
+            else:
+                logger.info(f"✅ Archivos eliminados: {', '.join(deleted)}")
+            
+            # 4. Reconectar — libsql hará full-clone desde Turso Cloud (frame 0)
+            logger.info("🔄 Reconectando y clonando réplica desde Turso Cloud...")
+            await asyncio.sleep(0.5)
             await self.connect()
-            logger.success("✅ Auto-recuperación exitosa. Base de datos re-sincronizada desde la nube.")
+            logger.success("✅ Auto-recuperación exitosa. Réplica re-sincronizada desde la nube (frame 0).")
+            
         except Exception as e:
-            logger.error(f"❌ Fallo masivo en auto-recuperación: {e}")
+            logger.error(f"❌ Fallo en auto-recuperación: {e}")
+            # Intentar reconectar de todas formas para no dejar la DB sin conexión
+            try:
+                if not self._connected:
+                    await self.connect()
+            except Exception:
+                pass
+        finally:
+            self._auto_heal_in_progress = False
+
 
 
     async def initialize_v2_sync(self) -> None:

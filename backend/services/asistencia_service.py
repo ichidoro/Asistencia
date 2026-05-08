@@ -165,8 +165,10 @@ class AsistenciaService:
 
         # Justificaciones
         q_just = f"""
-            SELECT j.*, t.nombre as tipo_nombre, t.con_goce_sueldo, t.pagador,
-                   t.dias_corridos, t.genera_deuda_horaria
+            SELECT j.*, t.nombre as tipo_nombre, t.nomenclatura as tipo_nomenclatura,
+                   t.con_goce_sueldo, t.pagador, t.dias_corridos, t.genera_deuda_horaria,
+                   t.sobreescribe_feriados, t.descuenta_remuneracion,
+                   t.es_horas_sindicales, t.es_por_horas
             FROM justificaciones j
             JOIN justificacion_tipos t ON j.tipo_id = t.id
             WHERE j.empleado_id IN ({ids_placeholder})
@@ -491,8 +493,10 @@ class AsistenciaService:
         # Justificaciones del período
         all_justs = await db.fetch_all(
             """
-            SELECT j.*, t.nombre as tipo_nombre, t.con_goce_sueldo, t.pagador,
-                   t.dias_corridos, t.genera_deuda_horaria
+            SELECT j.*, t.nombre as tipo_nombre, t.nomenclatura as tipo_nomenclatura,
+                   t.con_goce_sueldo, t.pagador, t.dias_corridos, t.genera_deuda_horaria,
+                   t.sobreescribe_feriados, t.descuenta_remuneracion,
+                   t.es_horas_sindicales, t.es_por_horas
             FROM justificaciones j JOIN justificacion_tipos t ON j.tipo_id = t.id
             WHERE j.empleado_id = ?
             """,

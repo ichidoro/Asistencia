@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     # TAREAS PROGRAMADAS
     # ============================================
     SYNC_ENABLED: bool = True
-    SYNC_INTERVAL_SECONDS: int = 90  # Sync cada 90s — turso.io tiene latencia internacional (~30-60s por sync)
+    SYNC_INTERVAL_SECONDS: int = 300  # Sync cada 5 min — único actor (sin sync_interval de libsql).
     
     BACKUP_ENABLED: bool = True
     BACKUP_INTERVAL_HOURS: int = 24
