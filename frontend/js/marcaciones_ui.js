@@ -471,32 +471,43 @@ async function _loadMarcacionesDataImpl() {
     }
 }
 
-async function syncMarcacionesBioAlba(areas = null) {
+async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, fechaFinOverride = null) {
     const btn = document.querySelector('button[onclick="syncMarcacionesBioAlba()"]');
-    const originalContent = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conectando...';
+    const originalContent = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conectando...'; }
 
-    // Se asume que sync sincroniza el mes seleccionado en los dropdowns
-    const mes = stateMarcacionesApp.month;
-    const anio = stateMarcacionesApp.year;
+    // ── RANGO DE FECHAS ─────────────────────────────────────────────────────
+    // Prioridad: override del modal → rango RRHH del toolbar → primer día del mes
+    let fechaInicio = fechaInicioOverride || stateMarcacionesApp.fechaInicioRRHH;
+    let fechaFin    = fechaFinOverride    || stateMarcacionesApp.fechaFinRRHH;
 
-    // Calcular fechas inicio/fin para el endpoint de sync (que espera rango fechas, o adaptarlo)
-    // El endpoint de sync actual recibe fecha_inicio y fecha_fin.
-    // Vamos a enviar el primer dia del mes
-    const fechaInicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
+    // Fallback: si todavía no hay fechas, usar primer y último día del mes seleccionado
+    if (!fechaInicio) {
+        const mes  = stateMarcacionesApp.month;
+        const anio = stateMarcacionesApp.year;
+        fechaInicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
+    }
+    if (!fechaFin) {
+        const dtFin = new Date(fechaInicio);
+        dtFin.setMonth(dtFin.getMonth() + 1);
+        dtFin.setDate(dtFin.getDate() - 1);
+        fechaFin = dtFin.toISOString().split('T')[0];
+    }
+
+    console.log(`[Sync BioAlba] Rango: ${fechaInicio} → ${fechaFin}`, areas ? `Áreas: ${areas.join(', ')}` : 'Todas las áreas');
 
     try {
-        // Construir payload
+        // Construir payload (áreas son body, fechas van en query params)
         const payload = areas ? { areas } : {};
 
-        // Crear AbortController para timeout de 5 minutos (sincronizaciones grandes)
+        // Crear AbortController para timeout de 5 minutos
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutos
+        const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando... (esto puede tardar varios minutos)';
+        if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando... (esto puede tardar varios minutos)';
 
-        const resp = await fetch(`/api/sync/asistencia/now/?fecha_inicio=${fechaInicio}`, {
+        const url = `/api/sync/asistencia/now/?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -509,33 +520,23 @@ async function syncMarcacionesBioAlba(areas = null) {
 
         if (resp.ok) {
             const areasMsg = areas ? ` (${areas.length} área${areas.length > 1 ? 's' : ''})` : ' (todas las áreas)';
-            showToast(`Sincronización Exitosa${areasMsg}: ${result.marcaciones_nuevas} nuevas, ${result.dias_recalculados} recalculos.`, 'success');
-            if (typeof window.loadMarcacionesData === 'function') {
-            window.loadMarcacionesData(); // Recargar vista
-        }
+            const rangoMsg = `${fechaInicio} → ${fechaFin}`;
+            const stats = result.stats || result;
+            showToast(`✅ Sync BioAlba${areasMsg} [${rangoMsg}]: ${stats.marcaciones_nuevas ?? 0} nuevas, ${stats.dias_recalculados ?? 0} recálculos.`, 'success');
+            if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
         } else {
-            showToast("Error en sincronización: " + (result.detail || 'Error desconocido'), "error");
+            showToast('❌ Error en sincronización: ' + (result.detail || 'Error desconocido'), 'error');
         }
     } catch (e) {
-        console.error('Error en sincronización:', e);
-
+        console.error('[Sync BioAlba] Error:', e);
         if (e.name === 'AbortError') {
-            showToast("⏱️ Timeout: La sincronización tardó más de 5 minutos. Por favor, verifica los logs del servidor.", "error");
-        } else if (e.message.includes('fetch')) {
-            showToast("❌ Error de conexión: El servidor no respondió. Por favor, verifica que esté ejecutándose.", "error");
+            showToast('⏱️ Timeout: La sincronización tardó más de 5 minutos.', 'error');
         } else {
-            showToast("❌ Error de conexión: " + e.message, "error");
+            showToast('❌ Error de conexión: ' + e.message, 'error');
         }
-
-        // Intentar recargar la vista de todos modos (puede que se haya sincronizado parcialmente)
-        try {
-            await window.loadMarcacionesData();
-        } catch (reloadError) {
-            console.error('Error recargando datos:', reloadError);
-        }
+        try { await window.loadMarcacionesData(); } catch (_) {}
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
+        if (btn) { btn.disabled = false; btn.innerHTML = originalContent; }
     }
 }
 
@@ -544,61 +545,78 @@ async function syncMarcacionesBioAlba(areas = null) {
 // ============================================
 
 function openSyncMarcacionesModal() {
-    // Crear modal dinámicamente si no existe
-    if (!document.getElementById('modal-sync-marcaciones')) {
-        const modalHTML = `
-            <div class="modal fade" id="modal-sync-marcaciones" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">
-                                <i class="bi bi-funnel"></i> Sincronizar por Áreas
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p class="text-muted">
-                                <i class="bi bi-info-circle"></i> 
-                                Selecciona las áreas que deseas sincronizar para el mes actual:
-                            </p>
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="select-all-areas-sync"
-                                           onchange="toggleAllAreasSync(this.checked)">
-                                    <label class="form-check-label fw-bold" for="select-all-areas-sync">
-                                        Seleccionar Todas
-                                    </label>
-                                </div>
-                                <hr>
+    // Pre-llenar fechas desde el estado actual del toolbar
+    const fInicio = stateMarcacionesApp.fechaInicioRRHH || '';
+    const fFin    = stateMarcacionesApp.fechaFinRRHH    || '';
+
+    // Destruir modal previo para re-renderizarlo con fechas actualizadas
+    const existente = document.getElementById('modal-sync-marcaciones');
+    if (existente) {
+        bootstrap.Modal.getInstance(existente)?.dispose();
+        existente.remove();
+    }
+
+    const modalHTML = `
+        <div class="modal fade" id="modal-sync-marcaciones" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-funnel"></i> Sincronizar por Áreas
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted mb-2">
+                            <i class="bi bi-info-circle"></i>
+                            Selecciona el rango de fechas y las áreas a sincronizar con BioAlba.
+                        </p>
+                        <!-- Rango de fechas -->
+                        <div class="row g-2 mb-3">
+                            <div class="col">
+                                <label class="form-label small fw-semibold mb-1">Desde</label>
+                                <input type="date" class="form-control form-control-sm" id="sync-areas-fecha-inicio"
+                                       value="${fInicio}">
                             </div>
-                            <div id="areas-sync-list" class="mb-3">
-                                <div class="text-center">
-                                    <div class="spinner-border spinner-border-sm text-primary"></div>
-                                    <span class="ms-2">Cargando áreas...</span>
-                                </div>
+                            <div class="col">
+                                <label class="form-label small fw-semibold mb-1">Hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="sync-areas-fecha-fin"
+                                       value="${fFin}">
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                Cancelar
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="confirmSyncMarcaciones()">
-                                <i class="bi bi-cloud-download"></i> Sincronizar
-                            </button>
+                        <!-- Selección de áreas -->
+                        <div class="mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="select-all-areas-sync"
+                                       onchange="toggleAllAreasSync(this.checked)">
+                                <label class="form-check-label fw-bold" for="select-all-areas-sync">
+                                    Seleccionar Todas
+                                </label>
+                            </div>
+                            <hr class="my-2">
                         </div>
+                        <div id="areas-sync-list" class="mb-3" style="max-height:260px;overflow-y:auto">
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                                <span class="ms-2">Cargando áreas...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmSyncMarcaciones()">
+                            <i class="bi bi-cloud-download"></i> Sincronizar
+                        </button>
                     </div>
                 </div>
             </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-    }
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
 
-    // Cargar áreas
+    // Cargar áreas y mostrar modal
     loadAreasForSync();
-
-    // Mostrar modal
-    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-sync-marcaciones'));
-    modal.show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-sync-marcaciones')).show();
 }
 
 async function loadAreasForSync() {
@@ -615,7 +633,7 @@ async function loadAreasForSync() {
 
         container.innerHTML = areas.map(area => `
             <div class="form-check">
-                <input class="form-check-input area-sync-checkbox" type="checkbox" 
+                <input class="form-check-input area-sync-checkbox" type="checkbox"
                        value="${area}" id="area-sync-${area.replace(/\s+/g, '-')}">
                 <label class="form-check-label" for="area-sync-${area.replace(/\s+/g, '-')}">
                     ${area}
@@ -630,34 +648,41 @@ async function loadAreasForSync() {
 }
 
 function toggleAllAreasSync(checked) {
-    const checkboxes = document.querySelectorAll('.area-sync-checkbox');
-    checkboxes.forEach(cb => cb.checked = checked);
+    document.querySelectorAll('.area-sync-checkbox').forEach(cb => cb.checked = checked);
 }
 
 async function confirmSyncMarcaciones() {
     const btnConfirm = document.querySelector('#modal-sync-marcaciones .btn-primary');
-    if (btnConfirm) btnConfirm.blur(); // Liberar foco para evitar advertencia ARIA 🧬
+    if (btnConfirm) btnConfirm.blur();
 
-    const checkboxes = document.querySelectorAll('.area-sync-checkbox:checked');
-    const selectedAreas = Array.from(checkboxes).map(cb => cb.value);
+    // Leer fechas del modal
+    const fInicio = document.getElementById('sync-areas-fecha-inicio')?.value || '';
+    const fFin    = document.getElementById('sync-areas-fecha-fin')?.value    || '';
 
-    if (selectedAreas.length === 0) {
-        alert('⚠️ Selecciona al menos un área para sincronizar');
+    if (!fInicio || !fFin) {
+        alert('⚠️ Debes indicar el rango de fechas (Desde / Hasta).');
+        return;
+    }
+    if (fFin < fInicio) {
+        alert('⚠️ La fecha "Hasta" no puede ser anterior a "Desde".');
         return;
     }
 
-    // Cerrar modal
-    const modalEl = document.getElementById('modal-sync-marcaciones');
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    
-    // Liberar foco de cualquier elemento dentro del modal antes de ocultar 
-    // para evitar advertencias de ARIA sobre elementos enfocados ocultos.
-    if (document.activeElement) document.activeElement.blur();
-    
-    if (modal) modal.hide();
+    const checkboxes   = document.querySelectorAll('.area-sync-checkbox:checked');
+    const selectedAreas = Array.from(checkboxes).map(cb => cb.value);
 
-    // Sincronizar con filtro de áreas
-    await syncMarcacionesBioAlba(selectedAreas);
+    if (selectedAreas.length === 0) {
+        alert('⚠️ Selecciona al menos un área para sincronizar.');
+        return;
+    }
+
+    // Cerrar modal liberando foco (evita advertencia ARIA)
+    const modalEl = document.getElementById('modal-sync-marcaciones');
+    if (document.activeElement) document.activeElement.blur();
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+
+    // Sincronizar con áreas Y rango de fechas
+    await syncMarcacionesBioAlba(selectedAreas, fInicio, fFin);
 }
 
 
