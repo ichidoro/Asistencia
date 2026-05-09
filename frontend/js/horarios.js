@@ -1071,10 +1071,10 @@ window.addWeekTab = function (triggerChange = true) {
     const tabContainer = document.getElementById('pills-tab-weeks');
     const contentContainer = document.getElementById('pills-tabContent-weeks');
 
-    // Nombre de la pestaña según tipo: Ciclo Inteligente usa "Turno / Opción", otros usan "Semana"
+    // Nombre de la pestaña según tipo: Ciclo Inteligente usa la etiqueta, otros usan "Semana"
     const tipoSelect = document.querySelector('select[name="tipo_programacion"]');
     const isInteligente = tipoSelect && tipoSelect.value === 'ROTATIVO_INTELIGENTE';
-    const tabName = isInteligente ? `Turno / Opción ${i}` : `Semana ${i}`;
+    const tabName = isInteligente ? `Opción ${i}` : `Semana ${i}`;
 
     // Create Tab
     const li = document.createElement('li');
@@ -1093,6 +1093,18 @@ window.addWeekTab = function (triggerChange = true) {
 
     const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
     div.innerHTML = `
+        <div class="row mb-2 etiqueta-bloque-container" style="${isInteligente ? '' : 'display:none;'}">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-primary">Nombre del Ciclo/Opción</label>
+                <input type="text" id="etiqueta-bloque-${i}" class="form-control form-control-sm etiqueta-input" list="etiquetas-sugeridas" placeholder="Ej: Mañana, Tarde, Noche" value="Opción ${i}" oninput="document.getElementById('pill-week-${i}-tab').innerText = this.value || 'Opción ${i}'">
+                <datalist id="etiquetas-sugeridas">
+                    <option value="Mañana"></option>
+                    <option value="Tarde"></option>
+                    <option value="Noche"></option>
+                    <option value="Jornada Normal"></option>
+                </datalist>
+            </div>
+        </div>
         <div class="table-responsive">
             <table class="table table-sm text-center align-middle">
                 <thead>
