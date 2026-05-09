@@ -181,9 +181,30 @@ async function initializeApp() {
 
   console.log('✅ Aplicación base lista (Secuencia de inicio pendiente)');
 
+  // Initialize Turnos Guard
+  checkTurnosExist();
+
   // Start health monitoring
   updateSystemStatus();
   setInterval(updateSystemStatus, 30000); // Check every 30s
+}
+
+// Check if any turnos exist
+window._hasTurnos = null;
+async function checkTurnosExist() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/turnos/stats/por-area`);
+    if (res.ok) {
+      const stats = await res.json();
+      const globales = stats.globales || 0;
+      const locales = Object.values(stats.areas || {}).reduce((a, b) => a + b, 0);
+      window._hasTurnos = (globales + locales) > 0;
+      return window._hasTurnos;
+    }
+  } catch (e) {
+    console.error("Error al verificar turnos:", e);
+  }
+  return true; // Fallback to true to prevent locking out on network error
 }
 
 function setupEventListeners() {
@@ -333,6 +354,36 @@ function setupEventListeners() {
 }
 
 function switchPage(pageName) {
+  // Onboarding Guard: Prevent access to empleados if no turnos exist
+  if (pageName === 'empleados') {
+    if (window._hasTurnos === false) {
+      alert("Debes configurar al menos un turno en el sistema antes de gestionar empleados.");
+      switchPage('configuracion');
+      setTimeout(() => {
+        const tabHorarios = document.getElementById('horarios-tab');
+        if (tabHorarios) tabHorarios.click();
+      }, 100);
+      return;
+    } else if (window._hasTurnos === null) {
+      checkTurnosExist().then(hasTurnos => {
+        if (!hasTurnos) {
+          alert("Debes configurar al menos un turno en el sistema antes de gestionar empleados.");
+          switchPage('configuracion');
+          setTimeout(() => {
+            const tabHorarios = document.getElementById('horarios-tab');
+            if (tabHorarios) tabHorarios.click();
+          }, 100);
+        } else {
+          _executeSwitchPage(pageName);
+        }
+      });
+      return;
+    }
+  }
+  _executeSwitchPage(pageName);
+}
+
+function _executeSwitchPage(pageName) {
   const targetPage = document.getElementById(`page-${pageName}`);
   if (targetPage && targetPage.classList.contains('active')) {
       return; // Ya estamos aquí

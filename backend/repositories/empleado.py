@@ -155,7 +155,7 @@ class EmpleadoRepository:
             empleado.apellido_paterno,
             empleado.apellido_materno,
             empleado.cargo,
-            empleado.area,
+            empleado.area_id,
             empleado.compania,
             empleado.email,
             empleado.telefono,

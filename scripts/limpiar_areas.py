@@ -19,8 +19,10 @@ async def limpiar_datos(opcion):
         script_sql = ""
         
         if opcion in ['1', '3']:
-            print("🧹 Preparando limpieza de la tabla 'areas'...")
+            print("🧹 Preparando limpieza de la tabla 'areas' y 'areas_alias'...")
             script_sql += """
+                DELETE FROM areas_alias;
+                DELETE FROM sqlite_sequence WHERE name='areas_alias';
                 DELETE FROM areas;
                 DELETE FROM sqlite_sequence WHERE name='areas';
             """
