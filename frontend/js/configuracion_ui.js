@@ -1172,3 +1172,119 @@ window.saveAjusteSistema = async function(clave, inputId) {
         showToast(e.message, "error");
     }
 };
+
+// ==========================================
+// CATÁLOGO DE ÁREAS Y ALIAS (AUDITORÍA)
+// ==========================================
+window.cargarCatalogoAreas = async function() {
+    const container = document.getElementById('areas-catalogo-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="text-muted mt-2">Cargando catálogo...</div>
+        </div>
+    `;
+
+    try {
+        const response = await fetch('/api/configuracion/areas/');
+        if (!response.ok) throw new Error("Error obteniendo catálogo de áreas");
+        const areas = await response.json();
+
+        if (!areas || areas.length === 0) {
+            container.innerHTML = '<div class="col-12"><div class="alert alert-info border-0 shadow-sm"><i class="bi bi-info-circle me-2"></i> No hay áreas registradas.</div></div>';
+            return;
+        }
+
+        container.innerHTML = areas.map(area => {
+            const aliasHtml = area.alias.length > 0 
+                ? area.alias.map(al => `
+                    <div class="d-flex justify-content-between align-items-center bg-white p-2 mb-2 rounded border border-light shadow-sm" id="alias-row-${al.id}">
+                        <div class="text-danger fw-bold small"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> ${al.alias}</div>
+                        <button class="btn btn-sm btn-outline-danger border-0" onclick="confirmDeleteAlias(${al.id}, '${al.alias}')" title="Desvincular Error">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                  `).join('')
+                : `<div class="text-muted small text-center font-monospace py-2 bg-light rounded"><i class="bi bi-check-circle text-success me-1"></i> Área Limpia. Sin errores redirigidos.</div>`;
+
+            const badgeCls = area.alias.length > 0 ? "bg-danger" : "bg-success";
+            
+            return `
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center py-3">
+                            <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-building me-2 text-primary"></i>${area.nombre}</h6>
+                            <span class="badge ${badgeCls} rounded-pill">${area.alias.length} errores</span>
+                        </div>
+                        <div class="card-body p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
+                            ${aliasHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error(error);
+        container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
+    }
+};
+
+window.confirmDeleteAlias = function(aliasId, aliasNombre) {
+    if(typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '¿Desvincular Alias?',
+            html: `Se desvinculará el texto erróneo <b>"${aliasNombre}"</b>.<br><br><i>Nota: Si el reloj control vuelve a enviar este texto, el Guardián detendrá la sincronización nuevamente para pedir revisión.</i>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, desvincular',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                deleteAlias(aliasId);
+            }
+        });
+    } else {
+        if(confirm(`¿Desvincular el texto erróneo "${aliasNombre}"?\n\nNota: Si el reloj control vuelve a enviar este texto, el Guardián detendrá la sincronización nuevamente para pedir revisión.`)) {
+            deleteAlias(aliasId);
+        }
+    }
+};
+
+window.deleteAlias = async function(aliasId) {
+    try {
+        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error("Error al desvincular el alias");
+        
+        // Remove optimistic DOM Element just in case, but usually we just reload
+        const row = document.getElementById(`alias-row-${aliasId}`);
+        if(row) {
+            row.style.opacity = '0.5';
+            setTimeout(() => {
+                cargarCatalogoAreas(); // Reload the catalog to update badges
+            }, 300);
+        } else {
+            cargarCatalogoAreas();
+        }
+        
+        if(typeof showToast === 'function') {
+            showToast("Alias desvinculado exitosamente.", "success");
+        } else if(typeof Swal !== 'undefined') {
+            Swal.fire('Desvinculado!', 'El alias ha sido eliminado.', 'success');
+        }
+    } catch(error) {
+        console.error(error);
+        if(typeof showToast === 'function') {
+            showToast(error.message, "error");
+        } else {
+            alert(error.message);
+        }
+    }
+};
