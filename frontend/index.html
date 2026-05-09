@@ -2207,6 +2207,41 @@
                 </div>
             </div>
 
+            <!-- Modal para Resolución de Áreas Desconocidas (Guardián) -->
+            <div id="modal-resolver-areas" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header bg-warning text-dark">
+                            <h5 class="modal-title fw-bold"><i class="bi bi-shield-exclamation me-2"></i>Áreas Nuevas Detectadas</h5>
+                            <button type="button" class="btn-close" onclick="cancelarResolucionAreas()"></button>
+                        </div>
+                        <div class="modal-body p-4">
+                            <div class="alert alert-warning border-0 shadow-sm mb-4">
+                                <strong>¡Atención!</strong> Se han encontrado áreas en BioAlba que no existen en nuestro catálogo. 
+                                Debes indicar si son áreas nuevas (se crearán) o si son un error ortográfico (se asignarán como alias a un área existente).
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Área detectada en BioAlba</th>
+                                            <th>Resolución (Dejar en blanco para crear como NUEVA)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-resolver-areas">
+                                        <!-- Inyectado por JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light">
+                            <button type="button" class="btn btn-secondary" onclick="cancelarResolucionAreas()">Cancelar Sincronización</button>
+                            <button type="button" class="btn btn-primary fw-bold" onclick="guardarResolucionAreas()">Guardar y Reanudar Sincronización</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Modal para Selección de Áreas y Empleados (Sync) -->
             <div id="modal-sync-areas" class="modal">
                 <div class="modal-content" style="max-width: 650px;">

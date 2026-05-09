@@ -100,24 +100,13 @@ class EmpleadoService:
         return await self.repository.get_by_rut(rut)
 
     async def get_distinct_areas(self) -> List[str]:
-        """Obtener lista de áreas únicas registradas combinando con el catálogo maestro (BioAlba)"""
+        """Obtener lista de áreas únicas registradas en el catálogo maestro"""
         try:
-            # 1. Áreas en Base de Datos Local
             db_areas = await self.repository.get_all_areas()
-            areas_set = set(db_areas)
-            
-            # 2. Áreas Conocidas (Catálogo Maestro)
-            from backend.core.constants import KNOWN_AREAS
-            for area in KNOWN_AREAS:
-                if area:
-                    # Normalización preventiva
-                    areas_set.add(area.strip().upper())
-            
-            # Ordenar alfabéticamente
-            return sorted(list(areas_set))
+            return sorted(db_areas)
         except Exception as e:
-            from backend.core.constants import KNOWN_AREAS
-            return sorted(KNOWN_AREAS)
+            logger.error(f"Error obteniendo áreas: {e}")
+            return []
     
     async def get_empleado_by_rut(self, rut: str) -> Empleado:
         """

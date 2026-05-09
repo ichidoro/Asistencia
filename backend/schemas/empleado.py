@@ -15,7 +15,8 @@ class EmpleadoBase(BaseModel):
     apellido_paterno: str = Field(default="", max_length=100, description="Apellido paterno")
     apellido_materno: str = Field(default="", max_length=100, description="Apellido materno")
     cargo: Optional[str] = Field(None, max_length=100, description="Cargo del empleado")
-    area: Optional[str] = Field(None, max_length=100, description="Área o departamento")
+    area_id: Optional[int] = Field(None, description="ID relacional del área")
+    area: Optional[str] = Field(None, max_length=100, description="Área o departamento (Virtual/Lectura)")
     compania: Optional[str] = Field(None, max_length=100, description="Compañía")
     email: Optional[str] = Field(None, max_length=100, description="Email corporativo")
     telefono: Optional[str] = Field(None, max_length=20, description="Teléfono de contacto")
@@ -99,6 +100,7 @@ class EmpleadoUpdate(_ValidateDatesMixin, BaseModel):
     apellido_paterno: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido_materno: Optional[str] = Field(None, min_length=1, max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
+    area_id: Optional[int] = None
     area: Optional[str] = Field(None, max_length=100)
     compania: Optional[str] = Field(None, max_length=100)
     email: Optional[str] = Field(None, max_length=100)

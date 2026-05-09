@@ -25,6 +25,20 @@ class EmpleadoRepository:
         
         if not await self.db.table_exists("empleados"):
             query = """
+            CREATE TABLE IF NOT EXISTS areas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            
+            CREATE TABLE IF NOT EXISTS areas_alias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alias TEXT NOT NULL UNIQUE,
+                area_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE CASCADE
+            );
+            
             CREATE TABLE IF NOT EXISTS empleados (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rut TEXT NOT NULL UNIQUE,
@@ -32,7 +46,7 @@ class EmpleadoRepository:
                 apellido_paterno TEXT NOT NULL,
                 apellido_materno TEXT NOT NULL,
                 cargo TEXT,
-                area TEXT,
+                area_id INTEGER,
                 compania TEXT,
                 email TEXT,
                 telefono TEXT,
@@ -44,7 +58,8 @@ class EmpleadoRepository:
                 cant_contratos INTEGER DEFAULT 1,
                 decision_vencimiento TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (area_id) REFERENCES areas (id)
             )
             """
             
@@ -58,7 +73,7 @@ class EmpleadoRepository:
                 "CREATE INDEX IF NOT EXISTS idx_empleados_activo ON empleados(activo)"
             )
             await self.db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_empleados_area ON empleados(area)"
+                "CREATE INDEX IF NOT EXISTS idx_empleados_area ON empleados(area_id)"
             )
             logger.info("✨ Tabla empleados creada desde cero")
         else:
@@ -70,13 +85,14 @@ class EmpleadoRepository:
             CREATE TABLE IF NOT EXISTS historial_areas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 empleado_id INTEGER NOT NULL,
-                area TEXT NOT NULL,
+                area_id INTEGER NOT NULL,
                 fecha_desde TEXT NOT NULL,
                 fecha_hasta TEXT,
                 es_actual INTEGER DEFAULT 1,
                 validado INTEGER DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                FOREIGN KEY (empleado_id) REFERENCES empleados (id)
+                FOREIGN KEY (empleado_id) REFERENCES empleados (id),
+                FOREIGN KEY (area_id) REFERENCES areas (id)
             )
             """
             await self.db.execute(query_hist)
@@ -90,10 +106,10 @@ class EmpleadoRepository:
                 if count_hist["count"] == 0:
                     logger.info("🔄 Poblando historial de áreas inicial desde tabla empleados...")
                     await self.db.execute("""
-                        INSERT INTO historial_areas (empleado_id, area, fecha_desde, es_actual, validado)
-                        SELECT id, area, COALESCE(fecha_ingreso, '2020-01-01'), 1, 1 
+                        INSERT INTO historial_areas (empleado_id, area_id, fecha_desde, es_actual, validado)
+                        SELECT id, area_id, COALESCE(fecha_ingreso, '2020-01-01'), 1, 1 
                         FROM empleados 
-                        WHERE area IS NOT NULL AND area != ''
+                        WHERE area_id IS NOT NULL
                     """)
                     logger.success("✅ Historial inicial poblado exitosamente")
             except Exception as e:
@@ -128,7 +144,7 @@ class EmpleadoRepository:
         query = """
         INSERT INTO empleados (
             rut, nombre, apellido_paterno, apellido_materno,
-            cargo, area, compania, email, telefono, genero, activo,
+            cargo, area_id, compania, email, telefono, genero, activo,
             fecha_nacimiento, fecha_ingreso, fecha_salida, tipo_contrato, cant_contratos, decision_vencimiento
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
@@ -163,8 +179,9 @@ class EmpleadoRepository:
     async def get_by_id(self, empleado_id: int) -> Optional[Empleado]:
         """Obtener empleado por ID (con info de turno asignado)"""
         query = """
-            SELECT e.*, MAX(at.fecha_inicio) as fecha_asignacion_turno
+            SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
             WHERE e.id = ?
             GROUP BY e.id
@@ -179,7 +196,12 @@ class EmpleadoRepository:
     
     async def get_by_rut(self, rut: str) -> Optional[Empleado]:
         """Obtener empleado por RUT"""
-        query = "SELECT * FROM empleados WHERE rut = ?"
+        query = """
+            SELECT e.*, a.nombre as area
+            FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id
+            WHERE e.rut = ?
+        """
         
         result = await self.db.fetch_one(query, (rut,))
         
@@ -199,8 +221,9 @@ class EmpleadoRepository:
     ) -> List[Empleado]:
         """Obtener todos los empleados con paginación y ordenamiento filtrado por áreas"""
         query = """
-            SELECT e.*, MAX(at.fecha_inicio) as fecha_asignacion_turno
+            SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
         """
         params = []
@@ -212,7 +235,7 @@ class EmpleadoRepository:
             
         if areas is not None and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            conditions.append(f"e.area IN ({placeholders})")
+            conditions.append(f"a.nombre IN ({placeholders})")
             params.extend(areas)
             
         if conditions:
@@ -254,8 +277,9 @@ class EmpleadoRepository:
     ) -> List[Empleado]:
         """Buscar empleados con filtros y ordenamiento implementando RLS por áreas"""
         query = """
-            SELECT e.*, MAX(at.fecha_inicio) as fecha_asignacion_turno
+            SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
             WHERE 1=1
         """
@@ -267,7 +291,7 @@ class EmpleadoRepository:
             if area and area not in areas_permitidas:
                 return [] # 403 Virtual, el user buscó fuera de su scope
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            query += f" AND e.area IN ({placeholders})"
+            query += f" AND a.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
         
         if q:
@@ -282,7 +306,7 @@ class EmpleadoRepository:
             params.extend([search_pattern] * 5)
         
         if area:
-            query += " AND e.area = ?"
+            query += " AND a.nombre = ?"
             params.append(area)
         
         if compania:
@@ -326,11 +350,16 @@ class EmpleadoRepository:
             
         if areas is not None and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            conditions.append(f"area IN ({placeholders})")
+            query_from = "SELECT COUNT(*) as total FROM empleados e LEFT JOIN areas a ON e.area_id = a.id"
+            conditions.append(f"a.nombre IN ({placeholders})")
             params.extend(areas)
-            
+        else:
+            query_from = "SELECT COUNT(*) as total FROM empleados e"
+
         if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+            query = query_from + " WHERE " + " AND ".join(conditions)
+        else:
+            query = query_from
         
         result = await self.db.fetch_one(query, tuple(params) if params else None)
         
@@ -370,7 +399,7 @@ class EmpleadoRepository:
             
         # Crear placeholders para la query IN (?, ?, ?)
         placeholders = ",".join(["?"] * len(areas))
-        query = f"SELECT rut FROM empleados WHERE area IN ({placeholders})"
+        query = f"SELECT e.rut FROM empleados e LEFT JOIN areas a ON e.area_id = a.id WHERE a.nombre IN ({placeholders})"
         
         results = await self.db.fetch_all(query, tuple(areas))
         return [row['rut'] for row in results]
@@ -390,9 +419,11 @@ class EmpleadoRepository:
         query = f"""
             SELECT DISTINCT e.rut 
             FROM empleados e
+            LEFT JOIN areas a_actual ON e.area_id = a_actual.id
             LEFT JOIN historial_areas h ON e.id = h.empleado_id
-            WHERE e.area IN ({placeholders})
-               OR (h.area IN ({placeholders}) AND h.validado = 0)
+            LEFT JOIN areas a_hist ON h.area_id = a_hist.id
+            WHERE a_actual.nombre IN ({placeholders})
+               OR (a_hist.nombre IN ({placeholders}) AND h.validado = 0)
         """
         
         # Duplicamos los parámetros porque el placeholder se usa dos veces
@@ -402,7 +433,7 @@ class EmpleadoRepository:
 
     async def get_all_areas(self) -> List[str]:
         """Obtener lista de todas las áreas únicas registradas localmente"""
-        query = "SELECT DISTINCT area FROM empleados WHERE area IS NOT NULL AND area != '' ORDER BY area ASC"
+        query = "SELECT DISTINCT nombre as area FROM areas ORDER BY nombre ASC"
         results = await self.db.fetch_all(query)
         return [row['area'] for row in results]
 
@@ -426,9 +457,11 @@ class EmpleadoRepository:
         params.extend([future_date, today])
 
         query = f"""
-            SELECT * FROM empleados 
-            WHERE activo = 1 {area_filter}
-            AND fecha_salida IS NOT NULL AND (fecha_salida <= ?)
+            SELECT e.*, a.nombre as area 
+            FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id 
+            WHERE e.activo = 1 {area_filter}
+            AND e.fecha_salida IS NOT NULL AND (e.fecha_salida <= ?)
             ORDER BY 
                 CASE 
                     WHEN fecha_salida IS NULL THEN 1 
@@ -469,8 +502,9 @@ class EmpleadoRepository:
             params.extend(areas)
 
         query = f"""
-            SELECT e.*
+            SELECT e.*, a.nombre as area
             FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id
             WHERE e.fecha_salida BETWEEN ? AND ? {area_filter}
             ORDER BY e.fecha_salida ASC
         """
@@ -493,7 +527,7 @@ class EmpleadoRepository:
         areas_permitidas: Optional[List[str]] = None
     ) -> int:
         """Contar empleados con filtros de búsqueda y RLS"""
-        query = "SELECT COUNT(*) as total FROM empleados WHERE 1=1"
+        query = "SELECT COUNT(*) as total FROM empleados e LEFT JOIN areas a ON e.area_id = a.id WHERE 1=1"
         params = []
         
         # Security Data Scoping
@@ -501,7 +535,7 @@ class EmpleadoRepository:
             if area and area not in areas_permitidas:
                 return 0
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            query += f" AND area IN ({placeholders})"
+            query += f" AND a.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
         
         if q:
@@ -540,7 +574,7 @@ class EmpleadoRepository:
             apellido_paterno = ?,
             apellido_materno = ?,
             cargo = ?,
-            area = ?,
+            area_id = ?,
             compania = ?,
             email = ?,
             telefono = ?,
@@ -562,7 +596,7 @@ class EmpleadoRepository:
             empleado.apellido_paterno,
             empleado.apellido_materno,
             empleado.cargo,
-            empleado.area,
+            empleado.area_id,
             empleado.compania,
             empleado.email,
             empleado.telefono,
@@ -634,10 +668,11 @@ class EmpleadoRepository:
             params = areas
 
         query = f"""
-        SELECT area, COUNT(*) as count 
-        FROM empleados 
-        WHERE area IS NOT NULL AND area != '' AND activo = 1 {area_filter}
-        GROUP BY area
+        SELECT a.nombre as area, COUNT(*) as count 
+        FROM empleados e
+        LEFT JOIN areas a ON e.area_id = a.id
+        WHERE a.nombre IS NOT NULL AND a.nombre != '' AND e.activo = 1 {area_filter}
+        GROUP BY a.nombre
         ORDER BY count DESC
         """
         
@@ -646,7 +681,7 @@ class EmpleadoRepository:
 
     async def get_birthdays(self, month: Optional[int] = None, area: Optional[str] = None, areas_permitidas: Optional[List[str]] = None) -> List[Empleado]:
         """Obtener empleados que cumplen años con RLS"""
-        query = "SELECT * FROM empleados WHERE activo = 1 AND fecha_nacimiento IS NOT NULL"
+        query = "SELECT e.*, a.nombre as area FROM empleados e LEFT JOIN areas a ON e.area_id = a.id WHERE e.activo = 1 AND e.fecha_nacimiento IS NOT NULL"
         params = []
         
         if month:
@@ -655,11 +690,11 @@ class EmpleadoRepository:
             params.append(month)
             
         if area:
-            query += " AND area = ?"
+            query += " AND a.nombre = ?"
             params.append(area)
         elif areas_permitidas and len(areas_permitidas) > 0:
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            query += f" AND area IN ({placeholders})"
+            query += f" AND a.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
             
         query += " ORDER BY substr(fecha_nacimiento, 6, 5) ASC" # Ordenar por mes/día
@@ -675,7 +710,7 @@ class EmpleadoRepository:
         area_params = []
         if areas and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            area_filter_clause = f" WHERE area IN ({placeholders})"
+            area_filter_clause = f" LEFT JOIN areas a ON empleados.area_id = a.id WHERE a.nombre IN ({placeholders})"
             area_params = areas
 
         # Cargos
@@ -693,7 +728,7 @@ class EmpleadoRepository:
         if areas:
             metadata["areas"] = areas
         else:
-            metadata["areas"] = [r["area"] for r in await self.db.fetch_all("SELECT DISTINCT area FROM empleados WHERE area IS NOT NULL AND area != '' ORDER BY area")]
+            metadata["areas"] = [r["nombre"] for r in await self.db.fetch_all("SELECT nombre FROM areas ORDER BY nombre")]
         
         # Compañías
         # Apply area filter to companies as well.
@@ -712,10 +747,11 @@ class EmpleadoRepository:
         Implementa RLS para limitar la lista a las áreas permitidas del supervisor.
         """
         query = """
-            SELECT id, 
-                   (apellido_paterno || ' ' || COALESCE(NULLIF(apellido_materno,''),'') || ' ' || nombre) as nombre_completo,
-                   rut, area, activo
-            FROM empleados 
+            SELECT e.id, 
+                   (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
+                   e.rut, a.nombre as area, e.activo
+            FROM empleados e
+            LEFT JOIN areas a ON e.area_id = a.id
             WHERE 1=1
         """
         params = []
@@ -730,23 +766,23 @@ class EmpleadoRepository:
             if area:
                 if area not in areas_permitidas:
                     return []
-                query += " AND area = ?"
+                query += " AND a.nombre = ?"
                 params.append(area)
             else:
                 # Si no pide área, mostrar todas sus permitidas
                 placeholders = ",".join(["?"] * len(areas_permitidas))
-                query += f" AND area IN ({placeholders})"
+                query += f" AND a.nombre IN ({placeholders})"
                 params.extend(areas_permitidas)
         elif area:
             # Caso SuperUser: Filtra solo por el área solicitada
-            query += " AND area = ?"
+            query += " AND a.nombre = ?"
             params.append(area)
 
         if activo is not None:
-            query += " AND activo = ?"
+            query += " AND e.activo = ?"
             params.append(1 if activo else 0)
             
-        query += " ORDER BY apellido_paterno ASC, apellido_materno ASC, nombre ASC"
+        query += " ORDER BY e.apellido_paterno ASC, e.apellido_materno ASC, e.nombre ASC"
         
         return await self.db.fetch_all(query, tuple(params))
 
@@ -757,21 +793,22 @@ class EmpleadoRepository:
     async def get_historial_areas(self, empleado_id: int) -> List[dict]:
         """Obtener el historial completo de áreas de un empleado"""
         query = """
-            SELECT id, empleado_id, area, fecha_desde, fecha_hasta, es_actual, validado, created_at
-            FROM historial_areas
-            WHERE empleado_id = ?
-            ORDER BY fecha_desde DESC, id DESC
+            SELECT h.id, h.empleado_id, a.nombre as area, h.fecha_desde, h.fecha_hasta, h.es_actual, h.validado, h.created_at
+            FROM historial_areas h
+            LEFT JOIN areas a ON h.area_id = a.id
+            WHERE h.empleado_id = ?
+            ORDER BY h.fecha_desde DESC, h.id DESC
         """
         return await self.db.fetch_all(query, (empleado_id,))
 
-    async def add_historial_area(self, empleado_id: int, area: str, fecha_desde: str, fecha_hasta: Optional[str] = None, es_actual: bool = True, validado: bool = True) -> int:
+    async def add_historial_area(self, empleado_id: int, area_id: int, fecha_desde: str, fecha_hasta: Optional[str] = None, es_actual: bool = True, validado: bool = True) -> int:
         """Añadir un nuevo registro de área al historial"""
         query = """
-            INSERT INTO historial_areas (empleado_id, area, fecha_desde, fecha_hasta, es_actual, validado)
+            INSERT INTO historial_areas (empleado_id, area_id, fecha_desde, fecha_hasta, es_actual, validado)
             VALUES (?, ?, ?, ?, ?, ?)
         """
         cursor = await self.db.execute(query, (
-            empleado_id, area, fecha_desde, fecha_hasta, 
+            empleado_id, area_id, fecha_desde, fecha_hasta, 
             1 if es_actual else 0, 
             1 if validado else 0
         ))
@@ -797,12 +834,13 @@ class EmpleadoRepository:
     async def get_area_at_date(self, empleado_id: int, fecha: str) -> Optional[str]:
         """Obtener el área del empleado en una fecha específica"""
         query = """
-            SELECT area 
-            FROM historial_areas 
-            WHERE empleado_id = ? 
-              AND fecha_desde <= ? 
-              AND (fecha_hasta IS NULL OR fecha_hasta >= ?)
-            ORDER BY es_actual DESC, fecha_desde DESC
+            SELECT a.nombre as area 
+            FROM historial_areas h
+            LEFT JOIN areas a ON h.area_id = a.id
+            WHERE h.empleado_id = ? 
+              AND h.fecha_desde <= ? 
+              AND (h.fecha_hasta IS NULL OR h.fecha_hasta >= ?)
+            ORDER BY h.es_actual DESC, h.fecha_desde DESC
             LIMIT 1
         """
         result = await self.db.fetch_one(query, (empleado_id, fecha, fecha))

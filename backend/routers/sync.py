@@ -11,6 +11,7 @@ from loguru import logger
 from backend.schemas.sync import SyncEmpleadosRequest, SyncAsistenciaRequest, SyncPreviewRequest
 from fastapi.responses import StreamingResponse
 import asyncio
+from pydantic import BaseModel
 
 from backend.core.security import SecurityContext, RequirePermission
 from backend.core.database import db
@@ -70,6 +71,41 @@ async def preview_empleados(
     service = SyncService()
     areas = request.areas if request else None
     return await service.preview_empleados(areas=areas)
+
+
+class ResolverAreasRequest(BaseModel):
+    resoluciones: Dict[str, str]  # { "BODEGASS": "BODEGA", "NUEVA_AREA": "NUEVA_AREA" }
+
+@router.post(
+    "/resolver-areas/",
+    summary="Resolver áreas desconocidas (Guardián)",
+    description="Asigna alias ortográficos o crea nuevas áreas en el catálogo."
+)
+async def resolver_areas(
+    request: ResolverAreasRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    from backend.repositories.area import AreaRepository
+    await db.connect()
+    area_repo = AreaRepository(db)
+    
+    for area_bioalba, resolucion in request.resoluciones.items():
+        if area_bioalba == resolucion:
+            # Create new area if it doesn't exist
+            existing = await area_repo.get_area_by_name(resolucion)
+            if not existing:
+                await area_repo.create_area(resolucion)
+        else:
+            # Create alias
+            area_real = await area_repo.get_area_by_name(resolucion)
+            if not area_real:
+                area_id = await area_repo.create_area(resolucion)
+            else:
+                area_id = area_real['id']
+            await area_repo.create_alias(area_bioalba, area_id)
+            
+    return {"status": "ok", "message": "Áreas resueltas correctamente. Puede reanudar la sincronización."}
+
 
 
 @router.post(
@@ -176,7 +212,10 @@ async def sincronizar_empleados_stream(
             service._progress_callback = _on_progress
 
             stats = await service.sync_empleados(areas=areas, ruts=ruts)
-            await progress_q.put(('done', stats))
+            if stats and stats.get("status") == "requires_confirmation":
+                await progress_q.put(('requires_confirmation', stats))
+            else:
+                await progress_q.put(('done', stats))
         except Exception as err:
             logger.error(f"❌ [Stream Sync] Error en task: {err}")
             await progress_q.put(('error', {'message': str(err)}))
@@ -203,6 +242,9 @@ async def sincronizar_empleados_stream(
                 yield f"event: start\ndata: {json.dumps(data)}\n\n"
             elif event_type == 'progress':
                 yield f"event: progress\ndata: {json.dumps(data)}\n\n"
+            elif event_type == 'requires_confirmation':
+                yield f"event: requires_confirmation\ndata: {json.dumps(data)}\n\n"
+                done = True
             elif event_type == 'done':
                 yield f"event: done\ndata: {json.dumps(data)}\n\n"
                 done = True

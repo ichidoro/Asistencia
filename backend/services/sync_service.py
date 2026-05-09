@@ -82,31 +82,26 @@ class SyncService:
         """
         Obtener lista de áreas disponibles.
         
-        Si refresh=False (default): Combina áreas conocidas + existentes en DB local (Rápido).
+        Si refresh=False (default): Obtiene las áreas existentes en el catálogo local (Rápido).
         Si refresh=True: Descarga el Excel de BioAlba y extrae todas las áreas únicas (Lento - Deep Scan).
         """
         try:
             if not refresh:
-                logger.info("🔍 Obteniendo áreas (DB + Constantes)...")
+                logger.info("🔍 Obteniendo áreas (DB)...")
                 
-                # 1. Áreas Conocidas (Hardcoded)
-                from backend.core.constants import KNOWN_AREAS
-                areas_set = set(KNOWN_AREAS)
-                
-                # 2. Áreas en Base de Datos Local
+                areas_set = set()
+                # Áreas en Base de Datos Local
                 try:
-                    async def _fetch_db_areas():
-                        if not db._connected:
-                            await db.connect()
-                        return await db.fetch_all("SELECT DISTINCT area FROM empleados WHERE area IS NOT NULL AND area != ''")
-
-                    rows = await asyncio.wait_for(_fetch_db_areas(), timeout=2.0)
-                    for row in rows:
-                        if row['area']:
-                            areas_set.add(str(row['area']).strip())
+                    from backend.repositories.area import AreaRepository
+                    if not db._connected:
+                        await db.connect()
+                    area_repo = AreaRepository(db)
+                    db_areas = await area_repo.get_all_areas()
+                    for area in db_areas:
+                        areas_set.add(str(area).strip())
                     
                 except Exception as db_err:
-                    logger.warning(f"⚠️ Error DB Áreas (usando fallback): {db_err}")
+                    logger.warning(f"⚠️ Error DB Áreas: {db_err}")
                     
                 return sorted(list(areas_set))
             
@@ -132,8 +127,7 @@ class SyncService:
             
         except Exception as e:
             logger.error(f"❌ Error obteniendo áreas: {e}")
-            from backend.core.constants import KNOWN_AREAS
-            return sorted(KNOWN_AREAS)
+            return []
 
     async def preview_empleados(self, areas: List[str] = None) -> List[Dict[str, Any]]:
         """
@@ -241,6 +235,26 @@ class SyncService:
             await db.connect()
             repo = EmpleadoRepository(db)
             service = EmpleadoService(repo)
+            from backend.repositories.area import AreaRepository
+            area_repo = AreaRepository(db)
+            
+            # --- NUEVO: GUARDIÁN DE ÁREAS ---
+            # Validar que todas las áreas de los empleados a sincronizar existan en el catálogo o alias
+            areas_desconocidas = set()
+            for emp_data in empleados_bioalba:
+                area_raw = str(emp_data.get('area', '')).strip()
+                if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
+                    area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
+                    if not area_id:
+                        areas_desconocidas.add(area_raw)
+            
+            if areas_desconocidas:
+                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas desconocidas.")
+                return {
+                    "status": "requires_confirmation",
+                    "nuevas_areas": sorted(list(areas_desconocidas))
+                }
+            # --------------------------------
             
             # Preparar set de RUTs seleccionados (si existe filtro granular)
             ruts_seleccionados = None
@@ -708,6 +722,19 @@ class SyncService:
             empleado_existente = None
         
         if empleado_existente:
+            # Recuperar Area ID
+            from backend.repositories.area import AreaRepository
+            area_repo = AreaRepository(db)
+            area_raw = str(emp_data.get('area', '')).strip()
+            area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
+            
+            if area_id_res:
+                emp_data['area_id'] = area_id_res
+                # También actualizar el virtual si se quiere para consistencia del diff
+                area_real = await area_repo.get_area_by_id(area_id_res)
+                if area_real:
+                    emp_data['area'] = area_real['nombre']
+                    
             # Empleado existe, verificar si hay cambios
             cambios = self._detectar_cambios(empleado_existente, emp_data)
             
@@ -775,13 +802,24 @@ class SyncService:
         else:
             # Empleado nuevo, crear
             try:
+                from backend.repositories.area import AreaRepository
+                area_repo = AreaRepository(db)
+                area_raw = str(emp_data.get('area', '')).strip()
+                area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
+                area_virtual = emp_data.get('area')
+                if area_id_res:
+                    area_real = await area_repo.get_area_by_id(area_id_res)
+                    if area_real:
+                        area_virtual = area_real['nombre']
+
                 empleado_create = EmpleadoCreate(
                     rut=emp_data['rut'],
                     nombre=emp_data.get('nombre', ''),
                     apellido_paterno=emp_data.get('apellido_paterno', ''),
                     apellido_materno=emp_data.get('apellido_materno', ''),
                     cargo=emp_data.get('cargo'),
-                    area=emp_data.get('area'),
+                    area_id=area_id_res,
+                    area=area_virtual,
                     compania=emp_data.get('compania'),
                     email=emp_data.get('email'),
                     telefono=emp_data.get('telefono'),

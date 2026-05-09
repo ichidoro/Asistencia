@@ -2000,6 +2000,11 @@ window.confirmSync = async function () {
           } else if (eventType === 'progress') {
             updateBatchOverlayProgress(eventData.idx, eventData.total, eventData.nombre);
             console.log(`📌 [Sync] ${eventData.idx}/${eventData.total}: ${eventData.nombre}`);
+          } else if (eventType === 'requires_confirmation') {
+            hideBatchLoadingOverlay();
+            const nuevasAreas = eventData.nuevas_areas || [];
+            showResolverAreasModal(nuevasAreas);
+            finalStats = null;
           } else if (eventType === 'done') {
             finalStats = eventData;
           } else if (eventType === 'error') {
@@ -2068,6 +2073,86 @@ window.confirmSync = async function () {
     btnSync.disabled = false;
   }
 }
+
+window.showResolverAreasModal = function(nuevasAreas) {
+  const tbody = document.getElementById('tbody-resolver-areas');
+  tbody.innerHTML = '';
+  
+  if (nuevasAreas.length === 0) return;
+  
+  nuevasAreas.forEach((area, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="fw-bold">${area}</td>
+      <td>
+        <input type="text" class="form-control form-control-sm input-resolucion-area" 
+               data-area-bioalba="${area}" 
+               placeholder="Nombre correcto (o deje en blanco para crear)">
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  const modal = new bootstrap.Modal(document.getElementById('modal-resolver-areas'));
+  modal.show();
+};
+
+window.cancelarResolucionAreas = function() {
+  const modalEl = document.getElementById('modal-resolver-areas');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  alert("Sincronización cancelada. Debe resolver las áreas antes de continuar.");
+};
+
+window.guardarResolucionAreas = async function() {
+  const inputs = document.querySelectorAll('.input-resolucion-area');
+  const resoluciones = [];
+  
+  inputs.forEach(input => {
+    resoluciones.push({
+      area_bioalba: input.dataset.areaBioalba,
+      resolucion: input.value.trim() || input.dataset.areaBioalba
+    });
+  });
+  
+  const btnGuardar = document.querySelector('#modal-resolver-areas .btn-primary');
+  btnGuardar.disabled = true;
+  btnGuardar.innerText = 'Guardando...';
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/sync/resolver-areas/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(resoluciones)
+    });
+    
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      alert(`Error al guardar resoluciones: ${err.detail || 'Error desconocido'}`);
+      return;
+    }
+    
+    // Cerrar modal
+    const modalEl = document.getElementById('modal-resolver-areas');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+    
+    // Recargar filtros de áreas en la UI
+    if (typeof loadConfiguracionesBasicas === 'function') {
+      await loadConfiguracionesBasicas();
+    }
+    
+    // Reanudar la sincronización automáticamente
+    window.confirmSync();
+    
+  } catch (error) {
+    console.error("Error al resolver áreas:", error);
+    alert("Hubo un problema al guardar la resolución de áreas.");
+  } finally {
+    btnGuardar.disabled = false;
+    btnGuardar.innerText = 'Guardar y Reanudar Sincronización';
+  }
+};
 
 // ==========================================
 // LOGICA DE SYNC ASISTENCIA (Manual por Areas)
