@@ -42,6 +42,17 @@ async def search_bioalba_empleado(
 
 
 @router.get(
+    "/guardian/check/",
+    summary="Verificar Guardián de Áreas",
+    description="Descarga datos de BioAlba y verifica si hay áreas no mapeadas antes de abrir el modal."
+)
+async def check_guardian_areas(
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    return await service.check_guardian_areas()
+
+@router.get(
     "/areas-preview/",
     summary="Previsualizar áreas de BioAlba",
     description="Retorna las áreas disponibles. Si refresh=true, escanea BioAlba en vivo (lento)."

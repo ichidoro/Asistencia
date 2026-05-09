@@ -98,7 +98,12 @@ class SyncService:
                     area_repo = AreaRepository(db)
                     db_areas = await area_repo.get_all_areas()
                     for area in db_areas:
-                        areas_set.add(str(area).strip())
+                        if isinstance(area, dict) and 'nombre' in area:
+                            areas_set.add(str(area['nombre']).strip())
+                        elif hasattr(area, 'nombre'):
+                            areas_set.add(str(area.nombre).strip())
+                        else:
+                            areas_set.add(str(area).strip())
                     
                 except Exception as db_err:
                     logger.warning(f"⚠️ Error DB Áreas: {db_err}")
@@ -128,6 +133,48 @@ class SyncService:
         except Exception as e:
             logger.error(f"❌ Error obteniendo áreas: {e}")
             return []
+
+    async def check_guardian_areas(self) -> Dict[str, Any]:
+        """
+        Guardián de Áreas (Pre-Check): Descarga empleados, extrae áreas, verifica contra DB local.
+        Retorna status: requires_confirmation o ok.
+        """
+        try:
+            logger.info("🛡️ Guardián de Áreas: Verificando integridad de catálogo...")
+            
+            empleados_bioalba = _get_empleados_cache()
+            if empleados_bioalba is None:
+                async with self.scraper:
+                    empleados_bioalba = await self.scraper.get_empleados()
+                if empleados_bioalba:
+                    _set_empleados_cache(empleados_bioalba)
+            
+            if not empleados_bioalba:
+                return {"status": "ok"}
+            
+            await db.connect()
+            from backend.repositories.area import AreaRepository
+            area_repo = AreaRepository(db)
+            
+            areas_desconocidas = set()
+            for emp_data in empleados_bioalba:
+                area_raw = str(emp_data.get('area', '')).strip()
+                if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
+                    area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
+                    if not area_id:
+                        areas_desconocidas.add(area_raw)
+                        
+            if areas_desconocidas:
+                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas desconocidas antes de la sincronización.")
+                return {
+                    "status": "requires_confirmation",
+                    "nuevas_areas": sorted(list(areas_desconocidas))
+                }
+                
+            return {"status": "ok"}
+        except Exception as e:
+            logger.error(f"❌ Error en check_guardian_areas: {e}")
+            return {"status": "error", "message": str(e)}
 
     async def preview_empleados(self, areas: List[str] = None) -> List[Dict[str, Any]]:
         """

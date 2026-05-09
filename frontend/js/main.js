@@ -244,9 +244,26 @@ function setupEventListeners() {
     nextPage();
   });
 
-  // Sync button (Two-Step workflow)
+  // Sync button (Two-Step workflow + Guardian Pre-Check)
   btnSync.addEventListener('click', async () => {
-    openSyncModal();
+    try {
+      showBatchLoadingOverlay("Analizando integridad de áreas con BioAlba...");
+      const res = await fetch(`${API_BASE_URL}/sync/guardian/check/`);
+      if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+      
+      const data = await res.json();
+      hideBatchLoadingOverlay();
+      
+      if (data.status === "requires_confirmation") {
+        showResolverAreasModal(data.nuevas_areas);
+      } else {
+        openSyncModal();
+      }
+    } catch (error) {
+      hideBatchLoadingOverlay();
+      console.error("Error validando guardián:", error);
+      alert("Error al verificar la integridad con BioAlba: " + error.message);
+    }
   });
 
   // Mobile Sidebar Toggle
