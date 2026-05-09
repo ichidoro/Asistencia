@@ -67,3 +67,51 @@ class AreaRepository:
             ORDER BY al.alias ASC
         """
         return await self.db.fetch_all(query)
+
+    async def get_areas_with_aliases(self) -> List[Dict]:
+        """
+        Obtiene todas las áreas y sus alias asociados construyendo una estructura jerárquica:
+        [
+            {
+                "id": 1,
+                "nombre": "BODEGA",
+                "alias": [{"id": 1, "alias": "BODEGASS"}, ...]
+            }, ...
+        ]
+        """
+        query = """
+            SELECT a.id as area_id, a.nombre as area_nombre, 
+                   al.id as alias_id, al.alias as alias_nombre
+            FROM areas a
+            LEFT JOIN areas_alias al ON a.id = al.area_id
+            ORDER BY a.nombre ASC, al.alias ASC
+        """
+        rows = await self.db.fetch_all(query)
+        
+        # Agrupar en Python
+        areas_dict = {}
+        for row in rows:
+            area_id = row["area_id"]
+            if area_id not in areas_dict:
+                areas_dict[area_id] = {
+                    "id": area_id,
+                    "nombre": row["area_nombre"],
+                    "alias": []
+                }
+            
+            if row["alias_id"]:
+                areas_dict[area_id]["alias"].append({
+                    "id": row["alias_id"],
+                    "alias": row["alias_nombre"]
+                })
+                
+        return list(areas_dict.values())
+
+    async def delete_alias(self, alias_id: int) -> bool:
+        """Elimina un alias específico (desvincular error)"""
+        query = "DELETE FROM areas_alias WHERE id = ?"
+        cursor = await self.db.execute(query, (alias_id,))
+        if cursor.rowcount > 0:
+            logger.info(f"🗑️ Alias ID {alias_id} eliminado exitosamente. El Guardián volverá a interceptarlo si aparece.")
+            return True
+        return False

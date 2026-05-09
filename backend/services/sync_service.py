@@ -158,7 +158,7 @@ class SyncService:
             
             # Cruzar con DB local para detectar nuevos vs existentes
             await db.connect()
-            rows = await db.fetch_all("SELECT rut, nombre, apellido_paterno, area, activo FROM empleados")
+            rows = await db.fetch_all("SELECT e.rut, e.nombre, e.apellido_paterno, a.nombre as area, e.activo FROM empleados e LEFT JOIN areas a ON e.area_id = a.id")
             ruts_locales = {}
             for r in rows:
                 rut_clean = str(r['rut']).replace('.', '').replace('-', '').strip().upper()

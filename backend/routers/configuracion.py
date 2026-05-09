@@ -700,3 +700,30 @@ async def seed_estados_asistencia(
         )
     return {"success": True, "message": f"Tabla inicializada con {len(seed_data)} estados.", "count": len(seed_data)}
 
+# ============================================
+# ÁREAS Y ALIAS (CATÁLOGO Y AUDITORÍA)
+# ============================================
+
+@router.get("/areas/", response_model=List[Dict[str, Any]])
+async def get_catalogo_areas(
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+):
+    """Obtener el catálogo de áreas principales y sus alias (errores redirigidos)"""
+    from backend.repositories.area import AreaRepository
+    repo = AreaRepository(db)
+    return await repo.get_areas_with_aliases()
+
+@router.delete("/areas/alias/{alias_id}", status_code=204)
+async def delete_area_alias(
+    alias_id: int,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Desvincular (eliminar) un alias. El Guardián volverá a atraparlo si reincide."""
+    from backend.repositories.area import AreaRepository
+    repo = AreaRepository(db)
+    success = await repo.delete_alias(alias_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Alias no encontrado")
+    return
