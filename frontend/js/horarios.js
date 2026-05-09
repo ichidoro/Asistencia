@@ -83,6 +83,8 @@ async function saveTurno() {
     weekContainers.forEach((container, wIdx) => {
         const numSemana = wIdx + 1;
         const rows = container.querySelectorAll('.dias-input-body tr');
+        const etiquetaInput = container.querySelector('.etiqueta-input');
+        const etiquetaValor = etiquetaInput ? etiquetaInput.value : null;
 
         rows.forEach(row => {
             const chkLibre = row.querySelector('.chk-libre');
@@ -94,6 +96,7 @@ async function saveTurno() {
             turno.dias.push({
                 num_semana: numSemana,
                 dia_semana: parseInt(row.dataset.day),
+                etiqueta_bloque: etiquetaValor,
                 es_libre: isLibre,
                 horas_teoricas: horas,
                 hora_entrada: isLibre ? null : row.querySelector('.time-in').value,
@@ -206,6 +209,14 @@ async function openModalHorario(id = null) {
             Object.entries(dias_agrupados).forEach(([sem, dias]) => {
                 const container = document.getElementById(`week-container-${sem}`);
                 if (!container) return;
+                
+                // Cargar etiqueta_bloque
+                const etiquetaInput = container.querySelector('.etiqueta-input');
+                if (etiquetaInput && dias.length > 0 && dias[0].etiqueta_bloque) {
+                    etiquetaInput.value = dias[0].etiqueta_bloque;
+                    document.getElementById(`pill-week-${sem}-tab`).innerText = dias[0].etiqueta_bloque;
+                }
+
                 const rows = container.querySelectorAll('.dias-input-body tr');
 
                 dias.forEach(d => {
