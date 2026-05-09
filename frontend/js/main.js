@@ -255,6 +255,7 @@ function setupEventListeners() {
       hideBatchLoadingOverlay();
       
       if (data.status === "requires_confirmation") {
+        window._resolverMode = 'guardian';
         showResolverAreasModal(data.nuevas_areas);
       } else {
         openSyncModal();
@@ -1804,7 +1805,7 @@ let _syncSelectedAreas = [];
 // ========================
 window.syncLoadEmpleadosPreview = async function () {
   const allCheckboxes = document.querySelectorAll('.area-checkbox');
-  const allDisabled = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.disabled);
+  const allDisabled = allCheckboxes.length === 0 || Array.from(allCheckboxes).every(cb => cb.disabled);
 
   if (allDisabled) {
     alert("⛔ Bloqueo de Sincronización:\n\nNo es posible sincronizar empleados porque no existen turnos disponibles en el sistema. Debe crear al menos un turno antes de sincronizar.");
@@ -2074,6 +2075,7 @@ window.confirmSync = async function () {
           } else if (eventType === 'requires_confirmation') {
             hideBatchLoadingOverlay();
             const nuevasAreas = eventData.nuevas_areas || [];
+            window._resolverMode = 'stream';
             showResolverAreasModal(nuevasAreas);
             finalStats = null;
           } else if (eventType === 'done') {
@@ -2213,7 +2215,13 @@ window.guardarResolucionAreas = async function() {
     }
     
     // Reanudar la sincronización automáticamente
-    window.confirmSync();
+    if (window._resolverMode === 'guardian') {
+      if (typeof openSyncModal === 'function') {
+        openSyncModal();
+      }
+    } else {
+      window.confirmSync();
+    }
     
   } catch (error) {
     console.error("Error al resolver áreas:", error);

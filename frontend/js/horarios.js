@@ -71,6 +71,11 @@ async function saveTurno() {
         dias: []
     };
 
+    if (turno.areas.length === 0) {
+        alert("Debe seleccionar al menos un área para el turno.");
+        return;
+    }
+
     // Collect weeks
     const weekContainers = document.querySelectorAll('.week-container');
     let totalHoras = 0;
@@ -258,18 +263,6 @@ async function openModalHorario(id = null) {
     modalInstance.show();
 }
 
-window.toggleTodasAreasTurno = function(chk) {
-    document.querySelectorAll('.chk-area-turno').forEach(cb => cb.checked = chk.checked);
-};
-
-window.checkTodasAreasTurnoStatus = function() {
-    const allCbs = document.querySelectorAll('.chk-area-turno');
-    const checkedCbs = document.querySelectorAll('.chk-area-turno:checked');
-    const chkTodas = document.getElementById('chk-todas-areas-turno');
-    if (chkTodas && allCbs.length > 0) {
-        chkTodas.checked = (allCbs.length === checkedCbs.length);
-    }
-};
 
 /**
  * Puebla el contenedor de áreas del turno con las áreas disponibles en el sistema.
@@ -278,18 +271,26 @@ async function populateAreaSelect(selectedAreas = []) {
     const container = document.getElementById('container-areas-turno');
     if (!container) return;
 
-    // Intentar obtener áreas de la API stats
+    // Intentar obtener áreas de la API
     let areas = [];
     try {
-        const resp = await fetch('/api/turnos/stats/por-area');
+        const resp = await fetch('/api/empleados/areas/');
         if (resp.ok) {
-            const stats = await resp.json();
-            areas = Object.keys(stats).sort();
-        } else {
-            throw new Error("Stats no disponibles");
+            areas = await resp.json();
         }
+        
+        // Si no hay áreas locales (e.g. primera instalación o DB limpia), hacer fallback a BioAlba
+        if (!areas || areas.length === 0) {
+            console.warn("No hay áreas locales, intentando cargar desde BioAlba...");
+            const respBioAlba = await fetch('/api/sync/areas-preview/');
+            if (respBioAlba.ok) {
+                areas = await respBioAlba.json();
+            }
+        }
+        
+        areas.sort();
     } catch (e) { 
-        console.error("Error cargando áreas para turno desde stats, intentando fallback", e);
+        console.error("Error cargando áreas para turno desde API, intentando fallback", e);
         if (window.allEmployeesBulk && window.allEmployeesBulk.length > 0) {
             areas = [...new Set(window.allEmployeesBulk.map(e => e.area).filter(a => a))].sort();
         } else {
@@ -323,14 +324,13 @@ async function populateAreaSelect(selectedAreas = []) {
         const isChecked = selectedAreas.includes(a);
         return `
             <div class="form-check m-1">
-                <input class="form-check-input chk-area-turno" type="checkbox" value="${a}" id="chk-area-turno-${i}" ${isChecked ? 'checked' : ''} onchange="checkTodasAreasTurnoStatus()">
+                <input class="form-check-input chk-area-turno" type="checkbox" value="${a}" id="chk-area-turno-${i}" ${isChecked ? 'checked' : ''}>
                 <label class="form-check-label small" for="chk-area-turno-${i}">${a}</label>
             </div>
         `;
     }).join('');
 
     container.innerHTML = html;
-    checkTodasAreasTurnoStatus();
 }
 
 // ==========================================
@@ -929,15 +929,11 @@ function renderModalHtml() {
                             <div class="col-md-4">
                                 <label class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">
                                     <span>Áreas de Visibilidad</span>
-                                    <div class="form-check form-switch mb-0">
-                                        <input class="form-check-input" type="checkbox" id="chk-todas-areas-turno" onchange="toggleTodasAreasTurno(this)">
-                                        <label class="form-check-label text-muted fw-normal small" for="chk-todas-areas-turno">Todas</label>
-                                    </div>
                                 </label>
                                 <div id="container-areas-turno" class="border border-success rounded p-2 overflow-auto" style="max-height: 120px; background-color: #f8fff9;">
                                     <div class="text-center text-muted small py-2">Cargando áreas...</div>
                                 </div>
-                                <div class="form-text small">Define qué áreas pueden usar este turno. Si no seleccionas ninguna, el turno será global.</div>
+                                <div class="form-text small">Selecciona al menos un área a la cual estará asignado este turno.</div>
                             </div>
                         </div>
 
