@@ -2106,13 +2106,12 @@ window.cancelarResolucionAreas = function() {
 
 window.guardarResolucionAreas = async function() {
   const inputs = document.querySelectorAll('.input-resolucion-area');
-  const resoluciones = [];
+  const resoluciones = {};
   
   inputs.forEach(input => {
-    resoluciones.push({
-      area_bioalba: input.dataset.areaBioalba,
-      resolucion: input.value.trim() || input.dataset.areaBioalba
-    });
+    const areaBioalba = input.dataset.areaBioalba;
+    const resolucion = input.value.trim() || areaBioalba;
+    resoluciones[areaBioalba] = resolucion;
   });
   
   const btnGuardar = document.querySelector('#modal-resolver-areas .btn-primary');
@@ -2123,7 +2122,7 @@ window.guardarResolucionAreas = async function() {
     const response = await fetch(`${API_BASE_URL}/sync/resolver-areas/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(resoluciones)
+      body: JSON.stringify({ resoluciones: resoluciones })
     });
     
     if (!response.ok) {
