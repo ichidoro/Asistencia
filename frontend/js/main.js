@@ -1803,9 +1803,42 @@ let _syncSelectedAreas = [];
 // PASO 2: Preview de Empleados
 // ========================
 window.syncLoadEmpleadosPreview = async function () {
+  const allCheckboxes = document.querySelectorAll('.area-checkbox');
+  const allDisabled = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.disabled);
+
+  if (allDisabled) {
+    alert("⛔ Bloqueo de Sincronización:\n\nNo es posible sincronizar empleados porque no existen turnos disponibles en el sistema. Debe crear al menos un turno antes de sincronizar.");
+    
+    // Cerrar modal
+    const modalEl = document.getElementById('syncModal');
+    if (modalEl && window.bootstrap) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }
+    
+    // Llevar a la pestaña de configuración de turnos
+    const navConfig = document.getElementById('nav-configuracion') || document.querySelector('[data-page="configuracion"]');
+    if (navConfig) {
+        navConfig.click();
+        setTimeout(() => {
+            const tabHorarios = document.getElementById('horarios-tab');
+            if (tabHorarios) tabHorarios.click();
+        }, 100);
+    }
+    return;
+  }
+
   // Recolectar áreas seleccionadas
   const checkboxes = document.querySelectorAll('.area-checkbox:checked');
   _syncSelectedAreas = Array.from(checkboxes).map(cb => cb.value);
+
+  // Si no seleccionó nada (la intención es "todas"), enviar sólo las habilitadas.
+  // Evitamos sincronizar áreas bloqueadas porque generarían empleados sin turno.
+  if (_syncSelectedAreas.length === 0) {
+      const enabledCheckboxes = document.querySelectorAll('.area-checkbox:not(:disabled)');
+      _syncSelectedAreas = Array.from(enabledCheckboxes).map(cb => cb.value);
+      if (_syncSelectedAreas.length === 0) return; // Fallback
+  }
 
   // Transición visual a paso 2
   document.getElementById('sync-step-1').style.display = 'none';
