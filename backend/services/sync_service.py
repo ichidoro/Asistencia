@@ -249,11 +249,23 @@ class SyncService:
                         areas_desconocidas.add(area_raw)
             
             if areas_desconocidas:
-                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas desconocidas.")
-                return {
-                    "status": "requires_confirmation",
-                    "nuevas_areas": sorted(list(areas_desconocidas))
-                }
+                # Comprobar si la tabla está completamente vacía (Carga Inicial Automática)
+                total_areas_rows = await db.fetch_all("SELECT COUNT(*) AS total FROM areas")
+                total_areas = total_areas_rows[0]['total'] if total_areas_rows else 0
+                
+                if total_areas == 0:
+                    logger.info(f"🌱 Primera ejecución: Auto-poblando {len(areas_desconocidas)} áreas maestras.")
+                    async with db.transaction():
+                        for area_nueva in sorted(list(areas_desconocidas)):
+                            await db.execute("INSERT INTO areas (nombre) VALUES (?)", (area_nueva,))
+                    # Limpiamos las áreas desconocidas porque ya las registramos
+                    areas_desconocidas.clear()
+                else:
+                    logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas desconocidas.")
+                    return {
+                        "status": "requires_confirmation",
+                        "nuevas_areas": sorted(list(areas_desconocidas))
+                    }
             # --------------------------------
             
             # Preparar set de RUTs seleccionados (si existe filtro granular)
