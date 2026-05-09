@@ -98,6 +98,12 @@ class TurnoRepository:
         if not await self.db.column_exists("turno_dias", "horas_teoricas"):
             try: await self.db.execute("ALTER TABLE turno_dias ADD COLUMN horas_teoricas REAL DEFAULT 0")
             except Exception as e: logger.debug(f"[Migration] horas_teoricas ya existe o error benigno: {e}")
+        if not await self.db.column_exists("turno_dias", "etiqueta_bloque"):
+            try: 
+                await self.db.execute("ALTER TABLE turno_dias ADD COLUMN etiqueta_bloque TEXT")
+                logger.info("✨ Migración: Columna 'etiqueta_bloque' agregada a turno_dias")
+            except Exception as e: 
+                logger.error(f"❌ Error agregando columna etiqueta_bloque: {e}")
 
         # ⚡ Índice compuesto para turno_dias (acelera búsqueda de config diaria en el motor)
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_turno_dias_lookup ON turno_dias(turno_id, dia_semana, num_semana)")
@@ -398,15 +404,15 @@ class TurnoRepository:
                 INSERT INTO turno_dias (
                     turno_id, dia_semana, num_semana, es_libre, horas_teoricas,
                     hora_entrada, hora_salida, cruza_medianoche,
-                    hora_entrada_2, hora_salida_2, cruza_medianoche_2
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    hora_entrada_2, hora_salida_2, cruza_medianoche_2, etiqueta_bloque
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
             for dia in turno.dias:
                 params_dia = (
                     turno_id, dia.dia_semana, dia.num_semana, dia.es_libre, dia.horas_teoricas,
                     dia.hora_entrada, dia.hora_salida, dia.cruza_medianoche,
-                    dia.hora_entrada_2, dia.hora_salida_2, dia.cruza_medianoche_2
+                    dia.hora_entrada_2, dia.hora_salida_2, dia.cruza_medianoche_2, dia.etiqueta_bloque
                 )
                 await self.db.execute(sql_dia, params_dia)
             
@@ -846,14 +852,14 @@ class TurnoRepository:
                 INSERT INTO turno_dias (
                     turno_id, dia_semana, num_semana, es_libre, horas_teoricas,
                     hora_entrada, hora_salida, cruza_medianoche, 
-                    hora_entrada_2, hora_salida_2, cruza_medianoche_2
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    hora_entrada_2, hora_salida_2, cruza_medianoche_2, etiqueta_bloque
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             for dia in turno.dias:
                 p_dia = (
                     turno_id, dia.dia_semana, dia.num_semana, dia.es_libre, dia.horas_teoricas,
                     dia.hora_entrada, dia.hora_salida, dia.cruza_medianoche,
-                    dia.hora_entrada_2, dia.hora_salida_2, dia.cruza_medianoche_2
+                    dia.hora_entrada_2, dia.hora_salida_2, dia.cruza_medianoche_2, dia.etiqueta_bloque
                 )
                 await self.db.execute(sql_dia, p_dia)
 

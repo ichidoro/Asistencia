@@ -22,6 +22,7 @@ class TurnoSegmentoResponse(TurnoSegmentoCreate):
 class TurnoDiaCreate(BaseModel):
     dia_semana: int = Field(..., ge=0, le=6, description="0=Lunes, 6=Domingo")
     num_semana: int = Field(1, ge=1, description="Número de semana en el ciclo (1, 2, 3...)")
+    etiqueta_bloque: Optional[str] = Field(None, description="Etiqueta visual del bloque (ej: Mañana, Tarde)")
     es_libre: bool = False
     horas_teoricas: float = Field(0.0, ge=0)
     hora_entrada: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
