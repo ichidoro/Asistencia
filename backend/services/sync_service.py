@@ -765,9 +765,14 @@ class SyncService:
                     
                     if not ya_existe_pendiente:
                         logger.info(f"📝 Creando registro de cambio de área PENDIENTE para {empleado_existente.rut}")
+                        
+                        from backend.repositories.area import AreaRepository
+                        area_repo = AreaRepository(db)
+                        area_id_val = await area_repo.find_area_id_by_name_or_alias(nueva_area)
+                        
                         record_id = await service.repository.add_historial_area(
                             empleado_id=empleado_existente.id,
-                            area=nueva_area,
+                            area_id=area_id_val,
                             fecha_desde=datetime.now().strftime("%Y-%m-%d"),
                             es_actual=False, # Aún no es el actual "validado"
                             validado=False   # Requiere acción del usuario
@@ -800,9 +805,16 @@ class SyncService:
                 hist = await service.repository.get_historial_areas(empleado_existente.id)
                 if not hist:
                     logger.warning(f"⚠️ Empleado {rut} sin historial de área. Creando uno base...")
+                    
+                    from backend.repositories.area import AreaRepository
+                    area_repo = AreaRepository(db)
+                    area_id_val = empleado_existente.area_id
+                    if not area_id_val and empleado_existente.area:
+                        area_id_val = await area_repo.find_area_id_by_name_or_alias(empleado_existente.area)
+                        
                     await service.repository.add_historial_area(
                         empleado_id=empleado_existente.id,
-                        area=empleado_existente.area or "Sin Área",
+                        area_id=area_id_val,
                         fecha_desde=empleado_existente.fecha_ingreso or datetime.now().strftime("%Y-%m-%d"),
                         es_actual=True,
                         validado=True
@@ -866,7 +878,7 @@ class SyncService:
                 if nuevo_emp and nuevo_emp.id:
                     await service.repository.add_historial_area(
                         empleado_id=nuevo_emp.id,
-                        area=nuevo_emp.area or "Sin Área",
+                        area_id=nuevo_emp.area_id,
                         fecha_desde=nuevo_emp.fecha_ingreso or datetime.now().strftime("%Y-%m-%d"),
                         es_actual=True,
                         validado=True
