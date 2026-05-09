@@ -78,6 +78,18 @@ async def get_turnos(
     """Listar todos los turnos disponibles, opcionalmente filtrados por área"""
     return await service.get_all_turnos(area=area)
 
+@router.get("/stats/por-area")
+async def get_turnos_stats_por_area(
+    service: TurnoService = Depends(get_turno_service),
+    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+):
+    """
+    Devuelve un diccionario { "Nombre Area": cantidad_turnos }
+    para ayudar al frontend a saber si un área tiene o no turnos antes de
+    sincronizar o mostrar la interfaz.
+    """
+    return await service.get_stats_por_area()
+
 @router.post("/asignar/")
 async def asignar_turno(
     asignacion: AsignacionCreate,

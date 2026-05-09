@@ -2346,23 +2346,25 @@ class AsistenciaService:
         """Raw list of asistencia rows for a date range (internal helper)."""
         db = self.repository.db
         q = """
-            SELECT a.*, e.nombre, e.apellido_paterno, e.apellido_materno, e.area, e.rut,
+            SELECT a.*, e.nombre, e.apellido_paterno, e.apellido_materno, ar.nombre as area, e.rut,
                    he.estado as estado_he, he.minutos_autorizados as minutos_extra_autorizados
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
             WHERE a.fecha BETWEEN ? AND ?
         """
         params: list = [fecha_inicio, fecha_fin]
         if area and area != 'Todas':
-            q += " AND e.area = ?"
+            q += " AND ar.nombre = ?"
             params.append(area)
         if turno_id:
             q += " AND a.turno_asignado_id = ?"
             params.append(turno_id)
         if areas_permitidas:
             placeholders = ','.join('?' * len(areas_permitidas))
-            q += f" AND e.area IN ({placeholders})"
+            q += f" AND ar.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
         q += " ORDER BY e.apellido_paterno, e.apellido_materno, e.nombre, a.fecha"
         rows = await db.fetch_all(q, tuple(params))
@@ -2402,19 +2404,21 @@ class AsistenciaService:
         #   1. Sin turno asignado → no aparece en la grilla.
         #   2. Inactivo (activo=0) → no aparece en la grilla.
         q_emp = """
-            SELECT DISTINCT e.*
+            SELECT DISTINCT e.*, ar.nombre as area
             FROM empleados e
             INNER JOIN asignacion_turnos ast ON e.id = ast.empleado_id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE e.activo = 1
               AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?)
         """
         params_emp: list = [fecha_fin, fecha_inicio]
         if area and area != 'Todas':
-            q_emp += " AND e.area = ?"
+            q_emp += " AND ar.nombre = ?"
             params_emp.append(area)
         if areas_permitidas:
             ph = ','.join('?' * len(areas_permitidas))
-            q_emp += f" AND e.area IN ({ph})"
+            q_emp += f" AND ar.nombre IN ({ph})"
             params_emp.extend(areas_permitidas)
         if turno_id:
             q_emp += " AND ast.turno_id = ?"
@@ -2755,19 +2759,21 @@ class AsistenciaService:
     ) -> Dict:
         db = self.repository.db
         q = """
-            SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.area,
+            SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, ar.nombre as area,
                    COUNT(a.fecha) as dias_procesados,
                    SUM(CASE WHEN a.estado = 'OK' THEN 1 ELSE 0 END) as dias_ok,
                    SUM(CASE WHEN a.estado = 'INASISTENCIA' THEN 1 ELSE 0 END) as inasistencias,
                    SUM(CASE WHEN a.estado = 'ATRASO' THEN 1 ELSE 0 END) as atrasos,
                    SUM(a.horas_trabajadas) as total_horas
             FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             LEFT JOIN asistencias a ON e.id = a.empleado_id AND a.fecha BETWEEN ? AND ?
             WHERE e.activo = 1
         """
         params = [fecha_inicio, fecha_fin]
         if area:
-            q += " AND e.area = ?"
+            q += " AND ar.nombre = ?"
             params.append(area)
         if turno_id:
             q += " AND a.turno_asignado_id = ?"
@@ -2786,17 +2792,28 @@ class AsistenciaService:
             SELECT 
                 COALESCE((SELECT SUM(h.minutos_autorizados) FROM horas_extras h
                           JOIN empleados e2 ON h.empleado_id = e2.id
+                          LEFT JOIN historial_areas ha2 ON e2.id = ha2.empleado_id AND ha2.es_actual = 1 AND ha2.validado = 1
+                          LEFT JOIN areas ar2 ON ha2.area_id = ar2.id
                           WHERE h.fecha BETWEEN ? AND ? AND e2.activo = 1
-                          AND h.estado = 'APROBADO'), 0) as total_he_aprobado,
+                          AND h.estado = 'APROBADO' {area_condition_sub}), 0) as total_he_aprobado,
                 SUM(CASE WHEN a.minutos_deuda > 0 THEN a.minutos_deuda ELSE 0 END) as total_deuda
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND e.activo = 1
         """
-        params = [fecha_inicio, fecha_fin, fecha_inicio, fecha_fin]
+        params = [fecha_inicio, fecha_fin]
+        area_cond_sub = ""
         if area:
-            q_sum += " AND e.area = ?"
+            area_cond_sub = " AND ar2.nombre = ?"
+            params.append(area)
+        q_sum = q_sum.format(area_condition_sub=area_cond_sub)
+        params.extend([fecha_inicio, fecha_fin])
+        
+        if area:
+            q_sum += " AND ar.nombre = ?"
             params.append(area)
         if turno_id:
             q_sum += " AND a.turno_asignado_id = ?"

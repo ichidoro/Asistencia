@@ -21,9 +21,9 @@ class DashboardAnalytics:
         
         # 1. Filtro de Área
         if area and area != 'Todas':
-            emp_conditions.append("e.area = ?")
-            asis_conditions.append("COALESCE(h.area, e.area) = ?")
-            just_conditions.append("COALESCE(h_j.area, e.area) = ?")
+            emp_conditions.append("(SELECT ar.nombre FROM historial_areas h1 LEFT JOIN areas ar ON h1.area_id = ar.id WHERE h1.empleado_id = e.id AND h1.validado = 1 ORDER BY h1.id DESC LIMIT 1) = ?")
+            asis_conditions.append("COALESCE(h.area, 'Sin Área') = ?")
+            just_conditions.append("COALESCE(h_j.area, 'Sin Área') = ?")
             params.append(area)
             
         # 2. Filtro de Seguridad RLS
@@ -34,9 +34,9 @@ class DashboardAnalytics:
                 just_conditions.append("1=0")
             elif "TODAS" not in [a.upper() for a in areas_permitidas]:
                 placeholders = ",".join(["?"] * len(areas_permitidas))
-                emp_conditions.append(f"e.area IN ({placeholders})")
-                asis_conditions.append(f"COALESCE(h.area, e.area) IN ({placeholders})")
-                just_conditions.append(f"COALESCE(h_j.area, e.area) IN ({placeholders})")
+                emp_conditions.append(f"(SELECT ar.nombre FROM historial_areas h1 LEFT JOIN areas ar ON h1.area_id = ar.id WHERE h1.empleado_id = e.id AND h1.validado = 1 ORDER BY h1.id DESC LIMIT 1) IN ({placeholders})")
+                asis_conditions.append(f"COALESCE(h.area, 'Sin Área') IN ({placeholders})")
+                just_conditions.append(f"COALESCE(h_j.area, 'Sin Área') IN ({placeholders})")
                 params.extend(areas_permitidas)
 
         # JOINS para Asistencias
@@ -377,7 +377,7 @@ class DashboardAnalytics:
             # SUM(minutos) se usaba incorrectamente como conteo, lo que inflaba los números.
             query_areas = f"""
                 SELECT 
-                    e.area, 
+                    COALESCE(h.area, 'Sin Área') as area, 
                     -- Minutos acumulados (solo para el índice de eficiencia)
                     SUM(a.minutos_atraso)                as min_atraso,
                     SUM(a.minutos_salida_adelantada)     as min_salida,
@@ -605,7 +605,7 @@ class DashboardAnalytics:
             query = f"""
                 SELECT 
                     e.apellido_paterno || ' ' || COALESCE(e.apellido_materno, '') || ' ' || e.nombre as nombre_completo,
-                    e.area,
+                    COALESCE(h.area, 'Sin Área') as area,
                     COUNT(*) as eventos_fuga,
                     SUM(a.minutos_atraso) as total_atraso,
                     SUM(a.minutos_salida_adelantada) as total_sad,
@@ -641,7 +641,7 @@ class DashboardAnalytics:
             query = f"""
                 SELECT 
                     e.apellido_paterno || ' ' || COALESCE(e.apellido_materno, '') || ' ' || e.nombre as nombre_completo,
-                    e.area,
+                    COALESCE(h.area, 'Sin Área') as area,
                     SUM(a.minutos_deuda) as total_deuda_min,
                     ROUND(SUM(a.minutos_deuda) / 60.0, 1) as deuda_horas,
                     SUM(CASE WHEN a.minutos_deuda > 0 THEN 1 ELSE 0 END) as dias_deuda
@@ -674,7 +674,7 @@ class DashboardAnalytics:
             params = [fecha_inicio, fecha_fin] + filters['params'] + filters['horario_params']
             query = f"""
                 SELECT 
-                    e.area,
+                    COALESCE(h.area, 'Sin Área') as area,
                     CAST(strftime('%w', a.fecha) AS INTEGER) as dia_semana,
                     SUM(a.minutos_atraso) + SUM(a.minutos_salida_adelantada) as total_fugas,
                     SUM(CASE WHEN a.minutos_atraso > 0 THEN 1 ELSE 0 END) + 
@@ -686,8 +686,8 @@ class DashboardAnalytics:
                 AND e.activo = 1
                 AND (a.minutos_atraso > 0 OR a.minutos_salida_adelantada > 0)
                 {filters['asis_cond']} {filters['horario_asis_cond']}
-                GROUP BY e.area, dia_semana
-                ORDER BY e.area, dia_semana
+                GROUP BY COALESCE(h.area, 'Sin Área'), dia_semana
+                ORDER BY COALESCE(h.area, 'Sin Área'), dia_semana
             """
             rows = await self.db.fetch_all(query, tuple(params))
             return [{

@@ -828,6 +828,10 @@ class EmpleadoService:
         area_anterior = empleado.area
         nueva_area = data.area or "Sin Área"
         
+        from backend.repositories.area import AreaRepository
+        area_repo = AreaRepository(self.repository.db)
+        area_id_val = await area_repo.find_area_id_by_name_or_alias(nueva_area)
+        
         if area_anterior and area_anterior != nueva_area:
             logger.info(f"🚩 Detección de cambio de área en reincorporación para {empleado.rut}: '{area_anterior}' -> '{nueva_area}'")
             # Podríamos grabar un log de auditoría aquí si fuera necesario
@@ -872,13 +876,13 @@ class EmpleadoService:
                         fecha_salida = ?,
                         tipo_contrato = ?,
                         cargo = ?,
-                        area = ?,
+                        area_id = ?,
                         compania = ?,
                         cant_contratos = 1,
                         decision_vencimiento = NULL,
                         updated_at = datetime('now')
                     WHERE id = ?
-                """, (data.fecha_inicio, data.fecha_fin, data.tipo_contrato, data.cargo, data.area, data.compania, empleado_id))
+                """, (data.fecha_inicio, data.fecha_fin, data.tipo_contrato, data.cargo, area_id_val, data.compania, empleado_id))
                 
                 # 5. Cerrar Historial de Area anterior y abrir el nuevo (Paso 2 Wizard)
                 await self.repository.db.execute("""
@@ -887,9 +891,9 @@ class EmpleadoService:
                 """, (fecha_fin_anterior, empleado_id))
                 
                 await self.repository.db.execute("""
-                    INSERT INTO historial_areas (empleado_id, area, fecha_desde, es_actual, validado)
+                    INSERT INTO historial_areas (empleado_id, area_id, fecha_desde, es_actual, validado)
                     VALUES (?, ?, ?, 1, 1)
-                """, (empleado_id, data.area, data.fecha_inicio))
+                """, (empleado_id, area_id_val, data.fecha_inicio))
                 
                 # 6. Asignación Atómica de Turno (Paso 3 Wizard)
                 from backend.repositories.turno import TurnoRepository

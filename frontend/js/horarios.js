@@ -67,7 +67,7 @@ async function saveTurno() {
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
         es_turno_cortado: !!document.getElementById('chkCortado').checked,
-        area: formData.get('area') || null,
+        areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         dias: []
     };
 
@@ -174,8 +174,10 @@ async function openModalHorario(id = null) {
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
             if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "09:00";
             
-            // Cargar áreas en el select antes de setear el valor (await para evitar flash)
-            await populateAreaSelect(turno.area);
+            // Cargar áreas (soporta nuevo modelo areas: List[str] o fallback antiguo area: str)
+            let areasToSelect = turno.areas || [];
+            if (turno.area && areasToSelect.length === 0) areasToSelect = [turno.area];
+            await populateAreaSelect(areasToSelect);
 
             const inputMetaBol = document.getElementById('input-meta-bolsa');
             if (inputMetaBol) inputMetaBol.value = turno.tipo_programacion === 'FLEXIBLE_BOLSA' ? turno.meta_horas_semanales : 176;
@@ -241,7 +243,7 @@ async function openModalHorario(id = null) {
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
         handleTipoProgramacionChange();
-        await populateAreaSelect();
+        await populateAreaSelect([]);
     }
 
     // Limpiar instancia Bootstrap anterior antes de mostrar el modal.
@@ -256,38 +258,79 @@ async function openModalHorario(id = null) {
     modalInstance.show();
 }
 
+window.toggleTodasAreasTurno = function(chk) {
+    document.querySelectorAll('.chk-area-turno').forEach(cb => cb.checked = chk.checked);
+};
+
+window.checkTodasAreasTurnoStatus = function() {
+    const allCbs = document.querySelectorAll('.chk-area-turno');
+    const checkedCbs = document.querySelectorAll('.chk-area-turno:checked');
+    const chkTodas = document.getElementById('chk-todas-areas-turno');
+    if (chkTodas && allCbs.length > 0) {
+        chkTodas.checked = (allCbs.length === checkedCbs.length);
+    }
+};
+
 /**
- * Puebla el selector de áreas del turno con las áreas disponibles en el sistema.
+ * Puebla el contenedor de áreas del turno con las áreas disponibles en el sistema.
  */
-async function populateAreaSelect(selectedValue = null) {
-    const areaSelect = document.getElementById('input-area-turno');
-    if (!areaSelect) return;
+async function populateAreaSelect(selectedAreas = []) {
+    const container = document.getElementById('container-areas-turno');
+    if (!container) return;
 
-    // Intentar obtener áreas de la lista precargada en bulk o fetch directo
+    // Intentar obtener áreas de la API stats
     let areas = [];
-    if (window.allEmployeesBulk && window.allEmployeesBulk.length > 0) {
-        areas = [...new Set(window.allEmployeesBulk.map(e => e.area).filter(a => a))].sort();
-    } else {
-        // Fallback: Fetch rápido de empleados para sacar áreas
-        try {
-            const resp = await fetch('/api/empleados/search/?limit=500&activo=true');
-            const data = await resp.json();
-            const emps = data.empleados || data.items || data;
-            if (Array.isArray(emps)) {
-                areas = [...new Set(emps.map(e => e.area).filter(a => a))].sort();
+    try {
+        const resp = await fetch('/api/turnos/stats/por-area');
+        if (resp.ok) {
+            const stats = await resp.json();
+            areas = Object.keys(stats).sort();
+        } else {
+            throw new Error("Stats no disponibles");
+        }
+    } catch (e) { 
+        console.error("Error cargando áreas para turno desde stats, intentando fallback", e);
+        if (window.allEmployeesBulk && window.allEmployeesBulk.length > 0) {
+            areas = [...new Set(window.allEmployeesBulk.map(e => e.area).filter(a => a))].sort();
+        } else {
+            try {
+                const resp = await fetch('/api/empleados/search/?limit=500&activo=true');
+                const data = await resp.json();
+                const emps = data.empleados || data.items || data;
+                if (Array.isArray(emps)) {
+                    areas = [...new Set(emps.map(e => e.area).filter(a => a))].sort();
+                }
+            } catch (e2) {
+                console.error("Fallo definitivo al cargar áreas", e2);
             }
-        } catch (e) { console.error("Error cargando áreas para selector de turno", e); }
+        }
     }
 
-    // Inyección de salvaguarda: Si el turno ya era de MANTENCION pero el área
-    // está 'vacía' de empleados, lo forzamos en la lista para no perder data.
-    if (selectedValue && !areas.includes(selectedValue)) {
-        areas.push(selectedValue);
-        areas.sort();
+    // Inyección de salvaguarda para áreas que ya tenía asignadas pero no están en la lista actual
+    selectedAreas.forEach(sa => {
+        if (!areas.includes(sa)) {
+            areas.push(sa);
+        }
+    });
+    areas.sort();
+
+    if (areas.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted small py-2">No hay áreas disponibles</div>';
+        return;
     }
 
-    areaSelect.innerHTML = '<option value="">🌎 (Global / Todas las Áreas)</option>' +
-        areas.map(a => `<option value="${a}" ${a === selectedValue ? 'selected' : ''}>${a}</option>`).join('');
+    const html = areas.map((a, i) => {
+        const isChecked = selectedAreas.includes(a);
+        return \`
+            <div class="form-check m-1">
+                <input class="form-check-input chk-area-turno" type="checkbox" value="\${a}" id="chk-area-turno-\${i}" \${isChecked ? 'checked' : ''} onchange="checkTodasAreasTurnoStatus()">
+                <label class="form-check-label small" for="chk-area-turno-\${i}">\${a}</label>
+            </div>
+        \`;
+    }).join('');
+
+    container.innerHTML = html;
+    checkTodasAreasTurnoStatus();
 }
 
 // ==========================================
@@ -884,11 +927,17 @@ function renderModalHtml() {
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label for="input-area-turno" class="form-label fw-bold text-success">Área de Visibilidad</label>
-                                <select id="input-area-turno" class="form-select border-success" name="area">
-                                    <option value="">🌎 (Global / Todas las Áreas)</option>
-                                </select>
-                                <div class="form-text small">Define quién puede ver y asignar este turno.</div>
+                                <label class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">
+                                    <span>Áreas de Visibilidad</span>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="chk-todas-areas-turno" onchange="toggleTodasAreasTurno(this)">
+                                        <label class="form-check-label text-muted fw-normal small" for="chk-todas-areas-turno">Todas</label>
+                                    </div>
+                                </label>
+                                <div id="container-areas-turno" class="border border-success rounded p-2 overflow-auto" style="max-height: 120px; background-color: #f8fff9;">
+                                    <div class="text-center text-muted small py-2">Cargando áreas...</div>
+                                </div>
+                                <div class="form-text small">Define qué áreas pueden usar este turno. Si no seleccionas ninguna, el turno será global.</div>
                             </div>
                         </div>
 

@@ -30,6 +30,9 @@ class TurnoService:
         else:
             return await self.repository.get_all_turnos(include_details=include_details)
 
+    async def get_stats_por_area(self) -> Dict[str, int]:
+        return await self.repository.get_stats_por_area()
+
     async def assign_turno(self, asignacion: AsignacionCreate) -> int:
         return await self.repository.create_asignacion(asignacion)
 
@@ -74,8 +77,10 @@ class TurnoService:
 
         # 2. Obtener Empleados (Directo por SQL para evitar imports circulares/lento)
         query_emps = """
-            SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, e.area, e.cargo, e.fecha_salida 
+            SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, ar.nombre as area, e.cargo, e.fecha_salida 
             FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE (
                 -- Solo considerar empleados que estuvieron contratados en algún momento de este mes
                 (e.fecha_salida IS NULL OR e.fecha_salida >= ?)
@@ -103,7 +108,7 @@ class TurnoService:
             end_period, start_period # justificaciones
         ]
         if area:
-            query_emps += " AND e.area = ?"
+            query_emps += " AND ar.nombre = ?"
             params_emps.append(area)
         
         # Orden estricto: Paterno -> Materno -> Nombre

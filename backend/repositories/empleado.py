@@ -181,7 +181,8 @@ class EmpleadoRepository:
         query = """
             SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
             WHERE e.id = ?
             GROUP BY e.id
@@ -199,7 +200,8 @@ class EmpleadoRepository:
         query = """
             SELECT e.*, a.nombre as area
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             WHERE e.rut = ?
         """
         
@@ -223,7 +225,8 @@ class EmpleadoRepository:
         query = """
             SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
         """
         params = []
@@ -279,7 +282,8 @@ class EmpleadoRepository:
         query = """
             SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
             WHERE 1=1
         """
@@ -350,7 +354,8 @@ class EmpleadoRepository:
             
         if areas is not None and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            query_from = "SELECT COUNT(*) as total FROM empleados e LEFT JOIN areas a ON e.area_id = a.id"
+            query_from = """SELECT COUNT(*) as total FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id"""
             conditions.append(f"a.nombre IN ({placeholders})")
             params.extend(areas)
         else:
@@ -399,7 +404,8 @@ class EmpleadoRepository:
             
         # Crear placeholders para la query IN (?, ?, ?)
         placeholders = ",".join(["?"] * len(areas))
-        query = f"SELECT e.rut FROM empleados e LEFT JOIN areas a ON e.area_id = a.id WHERE a.nombre IN ({placeholders})"
+        query = f"""SELECT e.rut FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id WHERE a.nombre IN ({placeholders})"""
         
         results = await self.db.fetch_all(query, tuple(areas))
         return [row['rut'] for row in results]
@@ -419,7 +425,8 @@ class EmpleadoRepository:
         query = f"""
             SELECT DISTINCT e.rut 
             FROM empleados e
-            LEFT JOIN areas a_actual ON e.area_id = a_actual.id
+            LEFT JOIN historial_areas ha_actual ON e.id = ha_actual.empleado_id AND ha_actual.es_actual = 1 AND ha_actual.validado = 1
+            LEFT JOIN areas a_actual ON ha_actual.area_id = a_actual.id
             LEFT JOIN historial_areas h ON e.id = h.empleado_id
             LEFT JOIN areas a_hist ON h.area_id = a_hist.id
             WHERE a_actual.nombre IN ({placeholders})
@@ -459,7 +466,8 @@ class EmpleadoRepository:
         query = f"""
             SELECT e.*, a.nombre as area 
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id 
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id 
             WHERE e.activo = 1 {area_filter}
             AND e.fecha_salida IS NOT NULL AND (e.fecha_salida <= ?)
             ORDER BY 
@@ -504,7 +512,8 @@ class EmpleadoRepository:
         query = f"""
             SELECT e.*, a.nombre as area
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             WHERE e.fecha_salida BETWEEN ? AND ? {area_filter}
             ORDER BY e.fecha_salida ASC
         """
@@ -527,7 +536,8 @@ class EmpleadoRepository:
         areas_permitidas: Optional[List[str]] = None
     ) -> int:
         """Contar empleados con filtros de búsqueda y RLS"""
-        query = "SELECT COUNT(*) as total FROM empleados e LEFT JOIN areas a ON e.area_id = a.id WHERE 1=1"
+        query = """SELECT COUNT(*) as total FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id WHERE 1=1"""
         params = []
         
         # Security Data Scoping
@@ -670,7 +680,8 @@ class EmpleadoRepository:
         query = f"""
         SELECT a.nombre as area, COUNT(*) as count 
         FROM empleados e
-        LEFT JOIN areas a ON e.area_id = a.id
+        LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
         WHERE a.nombre IS NOT NULL AND a.nombre != '' AND e.activo = 1 {area_filter}
         GROUP BY a.nombre
         ORDER BY count DESC
@@ -681,7 +692,8 @@ class EmpleadoRepository:
 
     async def get_birthdays(self, month: Optional[int] = None, area: Optional[str] = None, areas_permitidas: Optional[List[str]] = None) -> List[Empleado]:
         """Obtener empleados que cumplen años con RLS"""
-        query = "SELECT e.*, a.nombre as area FROM empleados e LEFT JOIN areas a ON e.area_id = a.id WHERE e.activo = 1 AND e.fecha_nacimiento IS NOT NULL"
+        query = """SELECT e.*, a.nombre as area FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id WHERE e.activo = 1 AND e.fecha_nacimiento IS NOT NULL"""
         params = []
         
         if month:
@@ -710,7 +722,7 @@ class EmpleadoRepository:
         area_params = []
         if areas and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            area_filter_clause = f" LEFT JOIN areas a ON empleados.area_id = a.id WHERE a.nombre IN ({placeholders})"
+            area_filter_clause = f" LEFT JOIN historial_areas ha ON empleados.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1 LEFT JOIN areas a ON ha.area_id = a.id WHERE a.nombre IN ({placeholders})"
             area_params = areas
 
         # Cargos
@@ -751,7 +763,8 @@ class EmpleadoRepository:
                    (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
                    e.rut, a.nombre as area, e.activo
             FROM empleados e
-            LEFT JOIN areas a ON e.area_id = a.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             WHERE 1=1
         """
         params = []

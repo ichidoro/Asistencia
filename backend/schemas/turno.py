@@ -57,7 +57,7 @@ class TurnoBase(BaseModel):
     anclaje_salida_minutos: int = 0 # Nuevo campo para marcas tardías filtrables
     es_turno_cortado: bool = False # Añadido para consistencia
     hora_limite_ficticia: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$", description="Hora trigger para la inasistencia temprana en Horarios Bolsa")
-    area: Optional[str] = None # Nuevo: Área de visibilidad (None = Global)
+    areas: List[str] = [] # Nuevo: Lista de nombres de áreas
     turno_padre_id: Optional[int] = None # Para versionamiento: ID del turno original
     fecha_vigencia: Optional[str] = None # YYYY-MM-DD: Desde cuándo aplica esta versión
 

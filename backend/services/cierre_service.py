@@ -16,7 +16,7 @@ class CierreService:
         params_area = []
         filtro_area = ""
         if area and area != 'Todas':
-            filtro_area = " AND e.area = ?"
+            filtro_area = " AND ar.nombre = ?"
             params_area = [area]
 
         # ── HARD STOP 1: Horas extras pendientes ──────────────────────────────
@@ -26,6 +26,8 @@ class CierreService:
                    he.minutos_autorizados
             FROM horas_extras he
             JOIN empleados e ON he.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'PENDIENTE'
             {filtro_area}
@@ -40,9 +42,11 @@ class CierreService:
         query_anomalias = f"""
             SELECT a.id, a.fecha, a.hora_entrada_real, a.hora_salida_real,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   e.area
+                   ar.nombre AS area
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'ANOMALIA'
               AND NOT EXISTS (
@@ -66,9 +70,11 @@ class CierreService:
             SELECT a.id, a.fecha, a.hora_entrada_real,
                    a.hora_salida_teorica,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   e.area
+                   ar.nombre AS area
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'EN_CURSO'
             {filtro_area}
@@ -90,9 +96,11 @@ class CierreService:
         query_ina = f"""
             SELECT a.id, a.fecha,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   e.area
+                   ar.nombre AS area
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'INASISTENCIA'
             {filtro_area}
@@ -117,6 +125,8 @@ class CierreService:
                 SUM(CASE WHEN a.estado = 'ANOMALIA' THEN 1 ELSE 0 END)                             AS anomalias
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
             {filtro_area}
         """
@@ -131,6 +141,8 @@ class CierreService:
                    COUNT(*) AS he_count
             FROM horas_extras he
             JOIN empleados e ON he.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'APROBADO'
             {filtro_area}

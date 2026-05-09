@@ -41,11 +41,11 @@ class DashboardService:
         params = [today_str, hora_inicio_teorica_start, hora_inicio_teorica_end]
         
         if area:
-            area_condition = "AND e.area = ?"
+            area_condition = "AND ar.nombre = ?"
             params.append(area)
         elif areas_permitidas:
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            area_condition = f"AND e.area IN ({placeholders})"
+            area_condition = f"AND ar.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
 
         # 1. Total de Empleados esperados PARA ESTE TURNO ESPECIFICO
@@ -57,6 +57,8 @@ class DashboardService:
                 SUM(CASE WHEN a.estado = 'EN_CURSO' THEN 1 ELSE 0 END) as alertas_en_curso
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha = ? 
               AND a.hora_entrada_teorica >= ? AND a.hora_entrada_teorica <= ?
               AND e.activo = 1 {area_condition}
@@ -100,20 +102,22 @@ class DashboardService:
         params = []
         
         if area:
-            area_condition = "AND area = ?"
+            area_condition = "AND ar.nombre = ?"
             params.append(area)
         elif areas_permitidas:
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            area_condition = f"AND area IN ({placeholders})"
+            area_condition = f"AND ar.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
 
         query = f"""
             SELECT 
-                COALESCE(genero, 'No Especificado') as genero,
+                COALESCE(e.genero, 'No Especificado') as genero,
                 COUNT(*) as cantidad
-            FROM empleados
-            WHERE activo = 1 {area_condition}
-            GROUP BY genero
+            FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE e.activo = 1 {area_condition}
+            GROUP BY e.genero
         """
         
         try:
@@ -131,11 +135,11 @@ class DashboardService:
         params = [fecha_inicio, fecha_fin]
         
         if area:
-            area_condition = "AND e.area = ?"
+            area_condition = "AND ar.nombre = ?"
             params.append(area)
         elif areas_permitidas:
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            area_condition = f"AND e.area IN ({placeholders})"
+            area_condition = f"AND ar.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
 
         try:
@@ -148,6 +152,8 @@ class DashboardService:
                     SUM(a.horas_trabajadas) as total_horas_trabajadas
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? AND e.activo = 1 {area_condition}
             """
             kpi_result = await self.db.fetch_one(query_kpis, tuple(params))
@@ -167,6 +173,8 @@ class DashboardService:
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
                 LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? 
                 AND a.minutos_extra_bruto > 0
                 AND e.activo = 1 {area_condition}
@@ -181,6 +189,8 @@ class DashboardService:
                 SELECT SUM(j.minutos_trabajados) as total_minutos
                 FROM jornadas_especiales j
                 JOIN empleados e ON j.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE j.fecha >= ? AND j.fecha <= ?
                 AND e.activo = 1 {area_condition}
             """
@@ -200,12 +210,16 @@ class DashboardService:
                 SELECT 
                     COALESCE((SELECT SUM(he2.minutos_autorizados) FROM horas_extras he2
                               JOIN empleados e2 ON he2.empleado_id = e2.id
+                              LEFT JOIN historial_areas ha2 ON e2.id = ha2.empleado_id AND ha2.es_actual = 1 AND ha2.validado = 1
+                              LEFT JOIN areas ar2 ON ha2.area_id = ar2.id
                               WHERE he2.fecha >= ? AND he2.fecha <= ? AND e2.activo = 1
-                              AND he2.estado = 'APROBADO' {area_condition}), 0) as total_min_extra,
+                              AND he2.estado = 'APROBADO' {area_condition.replace('ar.nombre', 'ar2.nombre')}), 0) as total_min_extra,
                     SUM(a.horas_teoricas * 60) as total_min_teoricos,
                     SUM(a.minutos_atraso + a.minutos_salida_adelantada) as total_min_desviacion
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? AND e.activo = 1 {area_condition}
             """
             ratio_result = await self.db.fetch_one(query_ratios, tuple(params + params))
@@ -225,6 +239,8 @@ class DashboardService:
                 FROM justificaciones j
                 JOIN justificacion_tipos t ON j.tipo_id = t.id
                 JOIN empleados e ON j.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE j.fecha_inicio >= ? AND j.fecha_inicio <= ? AND e.activo = 1 {area_condition}
             """
             permisos_result = await self.db.fetch_one(query_permisos, tuple(params))
@@ -232,14 +248,14 @@ class DashboardService:
             total_justificaciones = permisos_result.get('total_justificaciones', 0) or 0
             
             # Obtener dotación activa para el ratio
-            query_dotacion = f"SELECT COUNT(*) as dotacion FROM empleados e WHERE e.activo = 1 {area_condition}"
+            query_dotacion = f"SELECT COUNT(*) as dotacion FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1 LEFT JOIN areas ar ON ha.area_id = ar.id WHERE e.activo = 1 {area_condition}"
             dotacion_result = await self.db.fetch_one(query_dotacion, tuple(params[2:])) 
             dotacion = dotacion_result.get('dotacion', 1) or 1
             
             intensidad_permisos = round((total_permisos / dotacion * 100), 1)
 
             # 1.3 Composición de Dotación (Indefinidos vs Temporales)
-            query_contratos = f"SELECT tipo_contrato, COUNT(*) as cantidad FROM empleados e WHERE e.activo = 1 {area_condition} GROUP BY tipo_contrato"
+            query_contratos = f"SELECT e.tipo_contrato, COUNT(*) as cantidad FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1 LEFT JOIN areas ar ON ha.area_id = ar.id WHERE e.activo = 1 {area_condition} GROUP BY e.tipo_contrato"
             contratos_result = await self.db.fetch_all(query_contratos, tuple(params[2:]))
             composicion_contratos = {row['tipo_contrato'] or 'No Especificado': row['cantidad'] for row in contratos_result}
 
@@ -248,6 +264,8 @@ class DashboardService:
                 SELECT a.estado, COUNT(*) as cantidad
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? 
                 AND a.estado NOT IN ('OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'EN_CURSO', 'JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'PENDIENTE', 'NO_ACTIVO')
                 AND e.activo = 1 {area_condition}
@@ -262,6 +280,8 @@ class DashboardService:
                 SELECT e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre as empleado, SUM(a.minutos_atraso) as deuda_minutos
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? AND a.minutos_atraso > 0 AND e.activo = 1 {area_condition}
                 GROUP BY e.id
                 ORDER BY deuda_minutos DESC
@@ -274,6 +294,8 @@ class DashboardService:
                 SELECT e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre as empleado, SUM(a.horas_trabajadas - a.horas_teoricas) as sum_he
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? 
                 AND a.estado IN ('EXTRA', 'OK', 'DESBORDE_LEY88', 'H.E_BOLSA')
                 AND a.horas_trabajadas > a.horas_teoricas
@@ -292,6 +314,8 @@ class DashboardService:
                     SUM(CASE WHEN a.horas_trabajadas > a.horas_teoricas AND a.estado IN ('EXTRA', 'OK', 'DESBORDE_LEY88', 'H.E_BOLSA') THEN (a.horas_trabajadas - a.horas_teoricas) ELSE 0 END) as horas_extras
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? AND e.activo = 1 {area_condition}
                 GROUP BY a.fecha
                 ORDER BY a.fecha ASC

@@ -167,12 +167,14 @@ class HoraExtraRepository:
                 COUNT(*) as total_registros
             FROM horas_extras h
             JOIN empleados e ON e.id = h.empleado_id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             WHERE h.fecha BETWEEN ? AND ?
         """
         params: list = [fecha_ini, fecha_fin]
         if areas_permitidas:
             placeholders = ','.join(['?' for _ in areas_permitidas])
-            q += f" AND e.area IN ({placeholders})"
+            q += f" AND a.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
 
         row = await self.db.fetch_one(q, tuple(params))

@@ -1007,17 +1007,19 @@ async def get_filters_data(
         extra_cond = ""
         params_emp: list = [turno_id]
         if area:
-            extra_cond += " AND e.area = ?"
+            extra_cond += " AND a.nombre = ?"
             params_emp.append(area)
         if areas_permitidas:
             ph = ",".join("?" * len(areas_permitidas))
-            extra_cond += f" AND e.area IN ({ph})"
+            extra_cond += f" AND a.nombre IN ({ph})"
             params_emp.extend(areas_permitidas)
         emp_rows = await db.fetch_all(f"""
             SELECT e.id,
                    (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
-                   e.rut, e.area, e.activo
+                   e.rut, a.nombre as area, e.activo
             FROM empleados e
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             INNER JOIN asignacion_turnos ast ON e.id = ast.empleado_id
             WHERE e.activo = 1
               AND ast.turno_id = ?
@@ -1049,11 +1051,13 @@ async def get_empleados_sin_turno_activos(
     params = []
     if areas_permitidas:
         placeholders = ",".join("?" for _ in areas_permitidas)
-        area_filter = f" AND e.area IN ({placeholders})"
+        area_filter = f" AND a.nombre IN ({placeholders})"
         params = areas_permitidas
     query = f"""
-        SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, e.area
+        SELECT e.id, e.nombre, e.apellido_paterno, e.apellido_materno, a.nombre as area
         FROM empleados e
+        LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+        LEFT JOIN areas a ON ha.area_id = a.id
         WHERE e.activo = 1
           {area_filter}
           AND e.id NOT IN (

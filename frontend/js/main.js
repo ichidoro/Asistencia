@@ -1713,6 +1713,7 @@ async function loadBioAlbaAreas(refresh = false) {
 
   try {
     const url = `${API_BASE_URL}/sync/areas-preview/?refresh=${refresh}`;
+    const statsUrl = `${API_BASE_URL}/turnos/stats/por-area`;
     console.log(`📡 Fetching Areas from: ${url}`);
 
     // Timeout de 30 segundos si es refresh, si no 10
@@ -1720,21 +1721,29 @@ async function loadBioAlbaAreas(refresh = false) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
 
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'Cache-Control': 'no-cache, no-store'
-      }
-    });
+    const [resAreas, resStats] = await Promise.all([
+      fetch(url, {
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache, no-store' }
+      }),
+      fetch(statsUrl, {
+        headers: { 'Cache-Control': 'no-cache, no-store' }
+      }).catch(() => ({ ok: false })) // Fallback si falla stats
+    ]);
     clearTimeout(timeoutId);
 
-    console.log(`✅ Response Status: ${res.status}`);
+    console.log(`✅ Response Status Areas: ${resAreas.status}`);
 
-    if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+    if (!resAreas.ok) throw new Error(`Error HTTP: ${resAreas.status}`);
 
-    const areas = await res.json();
+    const areas = await resAreas.json();
+    let stats = { areas: {}, globales: 0 };
+    if (resStats.ok) {
+        stats = await resStats.json();
+    }
+    
     console.log(`📦 Areas received: ${areas.length}`);
-    renderSyncAreas(areas);
+    renderSyncAreas(areas, stats);
 
   } catch (error) {
     console.error("❌ Error loading areas:", error);
@@ -1746,7 +1755,7 @@ async function loadBioAlbaAreas(refresh = false) {
   }
 }
 
-function renderSyncAreas(areas) {
+function renderSyncAreas(areas, stats = { areas: {}, globales: 0 }) {
   const syncAreasList = document.getElementById('sync-areas-list');
   if (!syncAreasList) return;
 
@@ -1757,11 +1766,23 @@ function renderSyncAreas(areas) {
 
   let html = '';
   areas.forEach((area, index) => {
+    // Si la DB tiene al menos 1 turno global, no bloqueamos ninguna área,
+    // ya que el global aplica a todas.
+    const turnosGlobales = stats.globales || 0;
+    const turnosArea = stats.areas[area] || 0;
+    
+    // El área está "sin turnos" si no hay globales Y no hay específicos de esa área
+    const sinTurnos = (turnosGlobales === 0 && turnosArea === 0);
+    
+    const disabledAttr = sinTurnos ? 'disabled' : '';
+    const badgeHtml = sinTurnos ? '<span class="badge bg-danger ms-2">Sin Turnos (Bloqueado)</span>' : `<span class="badge bg-success ms-2">${turnosArea + turnosGlobales} turnos</span>`;
+    const labelClass = sinTurnos ? 'text-muted text-decoration-line-through' : '';
+
     html += `
       <div class="form-check mb-1">
-        <input class="form-check-input area-checkbox" type="checkbox" value="${area}" id="area-check-${index}">
-        <label class="form-check-label" for="area-check-${index}">
-          ${area}
+        <input class="form-check-input area-checkbox" type="checkbox" value="${area}" id="area-check-${index}" ${disabledAttr}>
+        <label class="form-check-label ${labelClass}" for="area-check-${index}">
+          ${area} ${badgeHtml}
         </label>
       </div>
     `;

@@ -102,6 +102,19 @@ class TurnoRepository:
         # ⚡ Índice compuesto para turno_dias (acelera búsqueda de config diaria en el motor)
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_turno_dias_lookup ON turno_dias(turno_id, dia_semana, num_semana)")
 
+        # 2.5 Tabla Relacional Turno_Areas (N a N)
+        if not await self.db.table_exists("turno_areas"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS turno_areas (
+                    turno_id INTEGER NOT NULL,
+                    area_id INTEGER NOT NULL,
+                    PRIMARY KEY (turno_id, area_id),
+                    FOREIGN KEY (turno_id) REFERENCES turnos (id) ON DELETE CASCADE,
+                    FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE CASCADE
+                )
+            """)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_turno_areas_area ON turno_areas(area_id)")
+
         # 3. Tabla Turno Segmentos (Micro-Shifts Opcional)
         if not await self.db.table_exists("turno_segmentos"):
             await self.db.execute("""
@@ -360,21 +373,25 @@ class TurnoRepository:
                     nombre, tipo_programacion,
                     tolerancia_retraso_alerta, tolerancia_retraso_descuento,
                     redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, es_turno_cortado,
-                    anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia, area,
+                    anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     turno_padre_id, fecha_vigencia
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.es_turno_cortado,
-                turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia, turno.area,
+                turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.turno_padre_id, turno.fecha_vigencia
             )
             
-            # Usar db.execute (Hybrid) en lugar de local_conn
             cursor = await self.db.execute(sql_turno, params_turno)
             turno_id = cursor.lastrowid
+            
+            # Asociar a múltiples áreas
+            if turno.areas:
+                for area_name in turno.areas:
+                    await self.db.execute("INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ?", (turno_id, area_name))
             
             # 2. Insertar Días
             sql_dia = """
@@ -411,11 +428,15 @@ class TurnoRepository:
             if not include_details:
                 return turnos_list
 
-            # Enriquecer con días (Solo si se solicita)
+            # Enriquecer con días y áreas (Solo si se solicita)
             for t in turnos_list:
                 dias_query = "SELECT * FROM turno_dias WHERE turno_id = ? ORDER BY dia_semana"
                 dias = await self.db.fetch_all(dias_query, (t['id'],))
                 t['dias'] = dias
+                
+                areas_query = "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?"
+                areas_res = await self.db.fetch_all(areas_query, (t['id'],))
+                t['areas'] = [r['nombre'] for r in areas_res]
             
             return turnos_list
         except Exception as e:
@@ -438,9 +459,10 @@ class TurnoRepository:
             query = f"""
                 SELECT DISTINCT t.*
                 FROM turnos t
-                WHERE t.area IN ({placeholders})
-                   OR t.area IS NULL
-                   OR t.area = ''
+                LEFT JOIN turno_areas ta ON t.id = ta.turno_id
+                LEFT JOIN areas a ON ta.area_id = a.id
+                WHERE a.nombre IN ({placeholders})
+                   OR ta.area_id IS NULL -- Fallback para turnos huérfanos/globales
                 ORDER BY t.nombre
             """
             turnos_list = await self.db.fetch_all(query, tuple(areas))
@@ -448,16 +470,47 @@ class TurnoRepository:
             if not include_details:
                 return turnos_list
 
-            # Enriquecer con días (Solo si se solicita)
+            # Enriquecer con días y áreas (Solo si se solicita)
             for t in turnos_list:
                 dias_query = "SELECT * FROM turno_dias WHERE turno_id = ? ORDER BY dia_semana"
                 dias = await self.db.fetch_all(dias_query, (t['id'],))
                 t['dias'] = dias
+                
+                areas_query = "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?"
+                areas_res = await self.db.fetch_all(areas_query, (t['id'],))
+                t['areas'] = [r['nombre'] for r in areas_res]
 
             return turnos_list
         except Exception as e:
             logger.error(f"Error getting turnos by areas '{areas}': {e}")
             return []
+
+    async def get_stats_por_area(self) -> Dict[str, int]:
+        """Devuelve un mapa con la cantidad de turnos asignados a cada área"""
+        try:
+            # Selecciona todas las areas y hace COUNT de los turnos asociados
+            query = """
+                SELECT a.nombre as area_nombre, COUNT(ta.turno_id) as turnos_count
+                FROM areas a
+                LEFT JOIN turno_areas ta ON a.id = ta.area_id
+                GROUP BY a.id, a.nombre
+            """
+            rows = await self.db.fetch_all(query)
+            # También podríamos incluir los turnos globales (si hay) y sumarlos a todas las áreas, 
+            # pero estrictamente queremos saber cuántos turnos están explícitamente disponibles para el área.
+            # Ojo: Si hay turnos sin área (huérfanos), aplican a todos. Sumémoslos.
+            query_globales = """
+                SELECT COUNT(*) as count 
+                FROM turnos t 
+                WHERE NOT EXISTS (SELECT 1 FROM turno_areas ta WHERE ta.turno_id = t.id)
+            """
+            globales_res = await self.db.fetch_one(query_globales)
+            turnos_globales = globales_res['count'] if globales_res else 0
+            
+            return {row['area_nombre']: row['turnos_count'] + turnos_globales for row in rows}
+        except Exception as e:
+            logger.error(f"Error en stats por área: {e}")
+            return {}
 
     async def create_asignacion(self, asignacion: AsignacionCreate) -> int:
         """
@@ -758,7 +811,7 @@ class TurnoRepository:
                     nombre=?, tipo_programacion=?, meta_horas_semanales=?,
                     tolerancia_retraso_alerta=?, tolerancia_retraso_descuento=?,
                     redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, es_turno_cortado=?,
-                    anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?, area=?,
+                    anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     turno_padre_id=?, fecha_vigencia=?
                 WHERE id=?
             """
@@ -766,11 +819,18 @@ class TurnoRepository:
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.es_turno_cortado,
-                turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia, turno.area,
+                turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.turno_padre_id, turno.fecha_vigencia,
                 turno_id
             )
             await self.db.execute(sql_update, params)
+            
+            # 1.5 Update turno_areas
+            await self.db.execute("DELETE FROM turno_areas WHERE turno_id = ?", (turno_id,))
+            if turno.areas:
+                for area_name in turno.areas:
+                    await self.db.execute("INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ?", (turno_id, area_name))
+            
             
             # 2. Recrear Días
             # Borrar anteriores
