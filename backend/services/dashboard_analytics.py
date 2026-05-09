@@ -42,8 +42,9 @@ class DashboardAnalytics:
         # JOINS para Asistencias
         asis_join = """
             LEFT JOIN (
-                SELECT h1.empleado_id, h1.area, h1.fecha_desde, h1.fecha_hasta
+                SELECT h1.empleado_id, ar.nombre as area, h1.fecha_desde, h1.fecha_hasta
                 FROM historial_areas h1
+                LEFT JOIN areas ar ON h1.area_id = ar.id
                 WHERE h1.validado = 1
                 AND h1.id = (
                     SELECT MAX(h2.id) FROM historial_areas h2 
@@ -58,8 +59,9 @@ class DashboardAnalytics:
         # JOINS para Justificaciones (Basado en fecha de inicio)
         just_join = """
             LEFT JOIN (
-                SELECT h1.empleado_id, h1.area, h1.fecha_desde, h1.fecha_hasta
+                SELECT h1.empleado_id, ar.nombre as area, h1.fecha_desde, h1.fecha_hasta
                 FROM historial_areas h1
+                LEFT JOIN areas ar ON h1.area_id = ar.id
                 WHERE h1.validado = 1
                 AND h1.id = (
                     SELECT MAX(h2.id) FROM historial_areas h2 
