@@ -1222,11 +1222,19 @@ function handleTipoProgramacionChange() {
 
     // Actualiza el texto de las pestañas de semanas según el tipo de programación activo
     document.querySelectorAll('#pills-tab-weeks .nav-link').forEach((tab, index) => {
-        tab.textContent = tipo === 'ROTATIVO_INTELIGENTE' ? `Turno / Opción ${index + 1}` : `Semana ${index + 1}`;
+        // Obtenemos el input correspondiente si existe para preservar la etiqueta ingresada
+        const etiquetaInput = document.getElementById(`etiqueta-bloque-${index + 1}`);
+        const currentEtiqueta = etiquetaInput && etiquetaInput.value ? etiquetaInput.value : `Opción ${index + 1}`;
+        tab.textContent = tipo === 'ROTATIVO_INTELIGENTE' ? currentEtiqueta : `Semana ${index + 1}`;
     });
 
     const divAddWeek = document.getElementById('btn-add-week-container');
     if (divAddWeek) divAddWeek.style.display = isRotativo ? 'block' : 'none';
+
+    // Mostrar/ocultar los inputs de nombre del ciclo
+    document.querySelectorAll('.etiqueta-bloque-container').forEach(container => {
+        container.style.display = tipo === 'ROTATIVO_INTELIGENTE' ? '' : 'none';
+    });
 
     // Si cambia a no-rotativo y hay semanas extra visibles, ocultarlas sin destruir el DOM:
     // Ocultamos las semanas extra SIN destruir el DOM (evita el bucle setupModalListeners -> handleTipoProgramacionChange)
