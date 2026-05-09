@@ -1107,7 +1107,7 @@ window.addWeekTab = function (triggerChange = true) {
         <div class="row mb-2 etiqueta-bloque-container" style="${isInteligente ? '' : 'display:none;'}">
             <div class="col-md-4">
                 <label class="form-label small fw-bold text-primary">Nombre del Ciclo/Opción</label>
-                <input type="text" id="etiqueta-bloque-${i}" class="form-control form-control-sm etiqueta-input" list="etiquetas-sugeridas" placeholder="Ej: Mañana, Tarde, Noche" value="Opción ${i}" oninput="document.getElementById('pill-week-${i}-tab').innerText = this.value || 'Opción ${i}'">
+                <input type="text" id="etiqueta-bloque-${i}" class="form-control form-control-sm etiqueta-input" list="etiquetas-sugeridas" placeholder="Ej: Mañana, Tarde, Noche" value="" oninput="document.getElementById('pill-week-${i}-tab').innerText = this.value.trim() || 'Opción ${i}'">
                 <datalist id="etiquetas-sugeridas">
                     <option value="Mañana"></option>
                     <option value="Tarde"></option>
@@ -1224,7 +1224,7 @@ function handleTipoProgramacionChange() {
     document.querySelectorAll('#pills-tab-weeks .nav-link').forEach((tab, index) => {
         // Obtenemos el input correspondiente si existe para preservar la etiqueta ingresada
         const etiquetaInput = document.getElementById(`etiqueta-bloque-${index + 1}`);
-        const currentEtiqueta = etiquetaInput && etiquetaInput.value ? etiquetaInput.value : `Opción ${index + 1}`;
+        const currentEtiqueta = etiquetaInput && etiquetaInput.value.trim() ? etiquetaInput.value.trim() : `Opción ${index + 1}`;
         tab.textContent = tipo === 'ROTATIVO_INTELIGENTE' ? currentEtiqueta : `Semana ${index + 1}`;
     });
 

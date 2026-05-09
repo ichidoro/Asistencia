@@ -79,7 +79,7 @@ async def get_auditoria_bloqueo(
     area_filter = ""
     if areas_permitidas:
         placeholders = ",".join("?" for _ in areas_permitidas)
-        area_filter = f"AND h.area IN ({placeholders})"
+        area_filter = f"AND a_table.nombre IN ({placeholders})"
 
     # Bloqueo solo por ausencia de turno asignado, no por marcaciones.
     # Regla: Si tienes turno asignado -> apareces en la grilla. Las marcaciones no determinan acceso.
@@ -97,12 +97,13 @@ async def get_auditoria_bloqueo(
                 e.apellido_paterno, 
                 e.apellido_materno,
                 e.cargo,
-                h.area, 
+                a_table.nombre as area, 
                 MIN(DATE(l.fecha_hora)) as fecha,
                 'CRITICA' as tipo_anomalia
             FROM logs_raw l
             JOIN empleados e ON l.empleado_id = e.id
             JOIN historial_areas h ON e.id = h.empleado_id
+            LEFT JOIN areas a_table ON h.area_id = a_table.id
             WHERE h.es_actual = 1
               {area_filter}
               AND l.fecha_hora >= ? AND l.fecha_hora <= ?
@@ -110,7 +111,7 @@ async def get_auditoria_bloqueo(
                   SELECT empleado_id FROM asignacion_turnos
                   WHERE fecha_fin IS NULL OR fecha_fin >= ?
               )
-            GROUP BY e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, h.area
+            GROUP BY e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a_table.nombre
 
             UNION ALL
 
@@ -125,11 +126,12 @@ async def get_auditoria_bloqueo(
                 e.apellido_paterno, 
                 e.apellido_materno,
                 e.cargo,
-                h.area, 
+                a_table.nombre as area, 
                 '{fecha_inicio_mes}' as fecha,
                 'PREVENTIVA' as tipo_anomalia
             FROM empleados e
             JOIN historial_areas h ON e.id = h.empleado_id
+            LEFT JOIN areas a_table ON h.area_id = a_table.id
             WHERE h.es_actual = 1 AND e.activo = 1
               {area_filter}
               AND e.id NOT IN (

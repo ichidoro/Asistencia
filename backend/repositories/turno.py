@@ -231,6 +231,14 @@ class TurnoRepository:
             ("minutos_salida_adelantada", "INTEGER DEFAULT 0"),
             ("updated_at", "TEXT DEFAULT '2026-01-01 00:00:00'"),
             ("minutos_colacion_real", "INTEGER DEFAULT 0"),
+            ("minutos_exceso_colacion", "INTEGER DEFAULT 0"),
+            ("minutos_colacion_auto", "INTEGER DEFAULT 0"),
+            ("minutos_permiso_personal_deuda", "INTEGER DEFAULT 0"),
+            ("hora_salida_colacion", "TEXT"),
+            ("hora_entrada_colacion", "TEXT"),
+            ("hora_inicio_permiso", "TEXT"),
+            ("hora_termino_permiso", "TEXT"),
+            ("minutos_permisos_detectados", "INTEGER DEFAULT 0"),
             # ── Flags independientes de eventos (v2.0) ──────────────────────
             # Permiten medir atrasos, salidas adelantadas y permisos como
             # métricas separadas, incluso cuando coexisten en el mismo día.

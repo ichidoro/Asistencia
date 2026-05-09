@@ -16,13 +16,11 @@ async def limpiar_areas():
     try:
         await db.connect()
         
-        print("🧹 Ejecutando limpieza de tablas 'areas' y 'areas_alias'...")
+        print("🧹 Ejecutando limpieza de la tabla 'areas'...")
         
         script_sql = """
             DELETE FROM areas;
             DELETE FROM sqlite_sequence WHERE name='areas';
-            DELETE FROM areas_alias;
-            DELETE FROM sqlite_sequence WHERE name='areas_alias';
         """
         
         # Ejecutamos el script de eliminación
@@ -32,7 +30,7 @@ async def limpiar_areas():
         # Forzamos sincronización a la nube explícitamente para que impacte el server Turso
         await db.sync_to_cloud_explicit()
         
-        print("✅ ¡Éxito! Las tablas 'areas' y 'areas_alias' han sido vaciadas completamente, tanto a nivel local como en Turso Cloud.")
+        print("✅ ¡Éxito! La tabla 'areas' ha sido vaciada completamente, tanto a nivel local como en Turso Cloud.")
         print("💡 Ahora puedes ir a la aplicación e iniciar una sincronización para descargar las áreas frescas desde BioAlba.")
         
     except Exception as e:

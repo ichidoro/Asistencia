@@ -261,13 +261,14 @@ class AsistenciaRepository:
                 a.horas_teoricas, a.hora_entrada_teorica, a.hora_salida_teorica, a.turno_asignado_id,
                 a.hora_salida_colacion, a.hora_entrada_colacion, a.hora_inicio_permiso, a.hora_termino_permiso, a.minutos_permisos_detectados,
                 a.tiene_atraso, a.tiene_salida_adelantada, a.tiene_permiso,
-                e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, h.area, e.activo,
+                e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, a_table.nombre as area, e.activo,
                 t.nombre as turno_nombre
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
             LEFT JOIN historial_areas h ON e.id = h.empleado_id 
                 AND a.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
+            LEFT JOIN areas a_table ON h.area_id = a_table.id
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.fecha >= COALESCE(e.fecha_ingreso, '1900-01-01')
@@ -283,11 +284,11 @@ class AsistenciaRepository:
                 return []
             
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            query += f" AND h.area IN ({placeholders})"
+            query += f" AND a_table.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
         
         if area:
-            query += " AND h.area = ?"
+            query += " AND a_table.nombre = ?"
             params.append(area)
             
         if empleado_id:
@@ -325,13 +326,14 @@ class AsistenciaRepository:
             JOIN empleados e ON a.empleado_id = e.id
             JOIN historial_areas h ON e.id = h.empleado_id 
                 AND a.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
+            LEFT JOIN areas a_table ON h.area_id = a_table.id
             WHERE a.fecha BETWEEN ? AND ?
         """
         params = [fecha_inicio, fecha_fin]
 
         if areas_permitidas:
             placeholders = ",".join(["?"] * len(areas_permitidas))
-            query += f" AND h.area IN ({placeholders})"
+            query += f" AND a_table.nombre IN ({placeholders})"
             params.extend(areas_permitidas)
 
         query += " GROUP BY a.fecha ORDER BY a.fecha ASC"
@@ -393,7 +395,8 @@ class AsistenciaRepository:
             AND (
                 cp.area IS NULL 
                 OR cp.area = (
-                    SELECT h.area FROM historial_areas h 
+                    SELECT a_table.nombre FROM historial_areas h 
+                    LEFT JOIN areas a_table ON h.area_id = a_table.id
                     WHERE h.empleado_id = ? 
                     AND ? BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
                     LIMIT 1
@@ -429,7 +432,8 @@ class AsistenciaRepository:
             AND (
                 cp.area IS NULL 
                 OR cp.area = (
-                    SELECT h.area FROM historial_areas h 
+                    SELECT a_table.nombre FROM historial_areas h 
+                    LEFT JOIN areas a_table ON h.area_id = a_table.id
                     WHERE h.empleado_id = ? 
                     AND cp.fecha_fin >= h.fecha_desde AND cp.fecha_inicio <= COALESCE(h.fecha_hasta, '2099-12-31')
                     LIMIT 1
