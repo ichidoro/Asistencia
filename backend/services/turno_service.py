@@ -30,7 +30,7 @@ class TurnoService:
         else:
             return await self.repository.get_all_turnos(include_details=include_details)
 
-    async def get_stats_por_area(self) -> Dict[str, int]:
+    async def get_stats_por_area(self) -> Dict[str, Any]:
         return await self.repository.get_stats_por_area()
 
     async def assign_turno(self, asignacion: AsignacionCreate) -> int:

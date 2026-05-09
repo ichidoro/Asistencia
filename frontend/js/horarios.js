@@ -321,12 +321,12 @@ async function populateAreaSelect(selectedAreas = []) {
 
     const html = areas.map((a, i) => {
         const isChecked = selectedAreas.includes(a);
-        return \`
+        return `
             <div class="form-check m-1">
-                <input class="form-check-input chk-area-turno" type="checkbox" value="\${a}" id="chk-area-turno-\${i}" \${isChecked ? 'checked' : ''} onchange="checkTodasAreasTurnoStatus()">
-                <label class="form-check-label small" for="chk-area-turno-\${i}">\${a}</label>
+                <input class="form-check-input chk-area-turno" type="checkbox" value="${a}" id="chk-area-turno-${i}" ${isChecked ? 'checked' : ''} onchange="checkTodasAreasTurnoStatus()">
+                <label class="form-check-label small" for="chk-area-turno-${i}">${a}</label>
             </div>
-        \`;
+        `;
     }).join('');
 
     container.innerHTML = html;
@@ -345,7 +345,7 @@ function renderHorariosUI() {
         const html = `
             <div id="horarios-view" class="fade-in">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2>📅 Configuración de Horarios</h2>
+                    <h2>📅 Configuración de Turnos</h2>
                     <button class="btn btn-primary" onclick="openModalHorario()">
                         <i class="bi bi-plus-lg"></i> Nuevo Turno
                     </button>

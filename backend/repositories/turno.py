@@ -485,7 +485,7 @@ class TurnoRepository:
             logger.error(f"Error getting turnos by areas '{areas}': {e}")
             return []
 
-    async def get_stats_por_area(self) -> Dict[str, int]:
+    async def get_stats_por_area(self) -> Dict[str, Any]:
         """Devuelve un mapa con la cantidad de turnos asignados a cada área"""
         try:
             # Selecciona todas las areas y hace COUNT de los turnos asociados
@@ -507,10 +507,15 @@ class TurnoRepository:
             globales_res = await self.db.fetch_one(query_globales)
             turnos_globales = globales_res['count'] if globales_res else 0
             
-            return {row['area_nombre']: row['turnos_count'] + turnos_globales for row in rows}
+            areas_dict = {row['area_nombre']: row['turnos_count'] for row in rows}
+            
+            return {
+                "areas": areas_dict,
+                "globales": turnos_globales
+            }
         except Exception as e:
             logger.error(f"Error en stats por área: {e}")
-            return {}
+            return {"areas": {}, "globales": 0}
 
     async def create_asignacion(self, asignacion: AsignacionCreate) -> int:
         """
