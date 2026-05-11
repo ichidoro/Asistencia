@@ -727,3 +727,46 @@ async def delete_area_alias(
     if not success:
         raise HTTPException(status_code=404, detail="Alias no encontrado")
     return
+
+# ============================================
+# CARGOS Y ALIAS (CATÁLOGO Y AUDITORÍA)
+# ============================================
+
+@router.get("/cargos/", response_model=List[Dict[str, Any]])
+async def get_catalogo_cargos(
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+):
+    """Obtener el catálogo de cargos principales y sus alias"""
+    from backend.repositories.cargo import CargoRepository
+    repo = CargoRepository(db)
+    return await repo.get_cargos_with_aliases()
+
+@router.delete("/cargos/alias/{alias_id}", status_code=204)
+async def delete_cargo_alias(
+    alias_id: int,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Desvincular (eliminar) un alias de cargo."""
+    from backend.repositories.cargo import CargoRepository
+    repo = CargoRepository(db)
+    success = await repo.delete_alias(alias_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Alias no encontrado")
+    return
+
+# ============================================
+# GÉNEROS (CATÁLOGO)
+# ============================================
+
+@router.get("/generos/", response_model=List[Dict[str, Any]])
+async def get_catalogo_generos(
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+):
+    """Obtener el catálogo de géneros"""
+    query = "SELECT id, nombre FROM cat_generos ORDER BY nombre ASC"
+    rows = await db.fetch_all(query)
+    return [dict(r) for r in rows]
+
