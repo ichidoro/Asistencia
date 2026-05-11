@@ -475,8 +475,28 @@ async function openModalBono(bono = null) {
     modal.style.display = 'flex';
 }
 
-function closeModalBono() {
+function closeModalBono(fromSave = false) {
     document.getElementById('modal-bono').style.display = 'none';
+
+    if (!fromSave && window.isWizardFlow && window.wizardCurrentStep === 'bonos') {
+        Swal.fire({
+            title: "¿Omitir Bonos?",
+            text: "No has guardado el bono actual. ¿Deseas saltar al siguiente paso?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Sí, ir a Justificaciones",
+            cancelButtonText: "No, seguir editando",
+            reverseButtons: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                if (typeof window.abrirConfigJustificacionWizard === 'function') {
+                    window.abrirConfigJustificacionWizard();
+                }
+            } else {
+                openModalBono();
+            }
+        });
+    }
 }
 
 function addBonoReglaRow(regla = null) {
@@ -591,7 +611,7 @@ async function saveBono() {
         }
 
         showToast(`Bono ${id ? 'actualizado' : 'creado'} correctamente`, "success");
-        closeModalBono();
+        closeModalBono(true);
         loadBonos();
 
         if (window.isWizardFlow && window.wizardCurrentStep === 'bonos') {
@@ -799,8 +819,41 @@ function openModalTipoJ(tipo = null) {
     modal.style.display = 'flex';
 }
 
-function closeModalTipoJ() {
+function closeModalTipoJ(fromSave = false) {
     document.getElementById('modal-tipo-justificacion').style.display = 'none';
+
+    if (!fromSave && window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {
+        Swal.fire({
+            title: "¿Finalizar Configuración?",
+            text: "No has guardado la justificación. ¿Deseas finalizar la configuración inicial?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Sí, finalizar",
+            cancelButtonText: "No, seguir editando",
+            reverseButtons: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Finalizar flujo y continuar
+                window.isWizardFlow = false;
+                window.wizardCurrentStep = null;
+                Swal.fire({
+                    title: "¡Configuración Lista!",
+                    text: "Ahora puedes proceder a sincronizar los empleados.",
+                    icon: "success",
+                    confirmButtonText: "Ir a Sincronización"
+                }).then(() => {
+                    const btnSincronizar = document.getElementById('sincronizar-datos');
+                    if (btnSincronizar) {
+                        btnSincronizar.click();
+                    } else if (typeof window.syncEmpleados === 'function') {
+                        window.syncEmpleados();
+                    }
+                });
+            } else {
+                openModalTipoJ();
+            }
+        });
+    }
 }
 
 async function saveTipoJustificacion() {
@@ -852,7 +905,7 @@ async function saveTipoJustificacion() {
         if (!response.ok) throw new Error("Error al guardar");
 
         showToast("Configuración guardada", "success");
-        closeModalTipoJ();
+        closeModalTipoJ(true);
         loadTiposJustificacion();
 
         if (window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {

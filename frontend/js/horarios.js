@@ -134,6 +134,7 @@ async function saveTurno() {
         if (!response.ok) throw new Error("Error guardando turno");
 
         await loadTurnos();
+        window._isSavingTurno = true;
         closeModalHorario();
         showNotification(currentTurnoId ? "Turno actualizado" : "Turno creado", "success");
 
@@ -450,6 +451,30 @@ function renderHorariosUI() {
             const modalWrapper = document.createElement('div');
             modalWrapper.innerHTML = renderModalHtml();
             document.body.appendChild(modalWrapper.firstElementChild);
+            
+            const newlyCreatedModal = document.getElementById('modalTurno');
+            newlyCreatedModal.addEventListener('hidden.bs.modal', function() {
+                if (!window._isSavingTurno && window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
+                    Swal.fire({
+                        title: "¿Omitir Turnos?",
+                        text: "No has guardado el turno actual. ¿Deseas saltar al siguiente paso?",
+                        icon: "warning",
+                        showCancelButton: true,
+                        confirmButtonText: "Sí, ir a Bonos",
+                        cancelButtonText: "No, seguir editando",
+                        reverseButtons: true
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            if (typeof window.abrirConfigBonoWizard === 'function') {
+                                window.abrirConfigBonoWizard();
+                            }
+                        } else {
+                            openModalHorario(currentTurnoId);
+                        }
+                    });
+                }
+                window._isSavingTurno = false; // reset
+            });
         }
 
         setupModalListeners();
