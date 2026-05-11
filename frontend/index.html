@@ -2302,6 +2302,38 @@
                 </div>
             </div>
 
+            <!-- Modal Visual para Extracción de Géneros (Fake Guardian) -->
+            <div id="modal-resolver-generos" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title fw-bold"><i class="bi bi-gender-ambiguous me-2"></i>Extracción de Géneros / Sexo</h5>
+                            <button type="button" class="btn-close btn-close-white" onclick="cancelarResolucionGeneros()"></button>
+                        </div>
+                        <div class="modal-body p-4 text-center">
+                            <div class="mb-3">
+                                <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                            </div>
+                            <h5 class="mb-3">Extracción Exitosa</h5>
+                            <p class="text-muted">
+                                El sistema ha extraído los datos de género/sexo desde BioAlba y los ha estandarizado automáticamente a los formatos reconocidos: 
+                            </p>
+                            <div class="d-flex justify-content-center gap-2 mb-3">
+                                <span class="badge bg-primary fs-6"><i class="bi bi-gender-male me-1"></i>Masculino</span>
+                                <span class="badge bg-danger fs-6"><i class="bi bi-gender-female me-1"></i>Femenino</span>
+                                <span class="badge bg-secondary fs-6">Otro</span>
+                            </div>
+                            <p class="text-muted small">
+                                No se requiere resolución manual. Estos datos ya vendrán cargados en la ficha de cada empleado.
+                            </p>
+                        </div>
+                        <div class="modal-footer bg-light justify-content-center">
+                            <button type="button" class="btn btn-primary fw-bold w-50" onclick="continuarResolucionGeneros()">Entendido, Continuar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Modal para Selección de Áreas y Empleados (Sync) -->
             <div id="modal-sync-areas" class="modal">
                 <div class="modal-content" style="max-width: 650px;">
