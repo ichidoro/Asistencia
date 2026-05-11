@@ -24,6 +24,7 @@ class Empleado:
     
     # Información laboral
     cargo: Optional[str] = None
+    cargo_id: Optional[int] = None
     area_id: Optional[int] = None
     area: Optional[str] = None  # Virtual: Nombre del área
     compania: Optional[str] = None
@@ -89,6 +90,7 @@ class Empleado:
             "apellido_paterno": self.apellido_paterno,
             "apellido_materno": self.apellido_materno,
             "cargo": self.cargo,
+            "cargo_id": self.cargo_id,
             "area_id": self.area_id,
             "area": self.area,
             "compania": self.compania,
@@ -118,6 +120,7 @@ class Empleado:
             apellido_paterno=data.get("apellido_paterno", ""),
             apellido_materno=data.get("apellido_materno", ""),
             cargo=data.get("cargo"),
+            cargo_id=data.get("cargo_id"),
             area_id=data.get("area_id"),
             area=data.get("area"),
             compania=data.get("compania"),

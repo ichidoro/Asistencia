@@ -15,6 +15,7 @@ class EmpleadoBase(BaseModel):
     apellido_paterno: str = Field(default="", max_length=100, description="Apellido paterno")
     apellido_materno: str = Field(default="", max_length=100, description="Apellido materno")
     cargo: Optional[str] = Field(None, max_length=100, description="Cargo del empleado")
+    cargo_id: Optional[int] = Field(None, description="ID relacional del cargo")
     area_id: Optional[int] = Field(None, description="ID relacional del área")
     area: Optional[str] = Field(None, max_length=100, description="Área o departamento (Virtual/Lectura)")
     compania: Optional[str] = Field(None, max_length=100, description="Compañía")

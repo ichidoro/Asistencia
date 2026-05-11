@@ -118,6 +118,40 @@ async def resolver_areas(
     return {"status": "ok", "message": "Áreas resueltas correctamente. Puede reanudar la sincronización."}
 
 
+class ResolverCargosRequest(BaseModel):
+    resoluciones: Dict[str, str]  # { "BODEGUEROO": "BODEGUERO", "NUEVO_CARGO": "NUEVO_CARGO" }
+
+@router.post(
+    "/resolver-cargos/",
+    summary="Resolver cargos desconocidos (Guardián)",
+    description="Asigna alias ortográficos o crea nuevos cargos en el catálogo."
+)
+async def resolver_cargos(
+    request: ResolverCargosRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    from backend.repositories.cargo import CargoRepository
+    await db.connect()
+    cargo_repo = CargoRepository(db)
+    
+    for cargo_bioalba, resolucion in request.resoluciones.items():
+        if cargo_bioalba == resolucion:
+            # Create new cargo if it doesn't exist
+            existing = await cargo_repo.get_cargo_by_name(resolucion)
+            if not existing:
+                await cargo_repo.create_cargo(resolucion)
+        else:
+            # Create alias
+            cargo_real = await cargo_repo.get_cargo_by_name(resolucion)
+            if not cargo_real:
+                cargo_id = await cargo_repo.create_cargo(resolucion)
+            else:
+                cargo_id = cargo_real['id']
+            await cargo_repo.create_alias(cargo_bioalba, cargo_id)
+            
+    return {"status": "ok", "message": "Cargos resueltos correctamente. Puede reanudar la sincronización."}
+
+
 
 @router.post(
     "/empleados/",

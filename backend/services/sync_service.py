@@ -295,12 +295,26 @@ class SyncService:
                     if not area_id:
                         areas_desconocidas.add(area_raw)
             
-            if areas_desconocidas:
-                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas desconocidas.")
-                return {
-                    "status": "requires_confirmation",
-                    "nuevas_areas": sorted(list(areas_desconocidas))
-                }
+            from backend.repositories.cargo import CargoRepository
+            cargo_repo = CargoRepository(db)
+            
+            # --- NUEVO: GUARDIÁN DE CARGOS ---
+            cargos_desconocidos = set()
+            for emp_data in empleados_bioalba:
+                cargo_raw = str(emp_data.get('cargo', '')).strip()
+                if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
+                    cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
+                    if not cargo_id:
+                        cargos_desconocidos.add(cargo_raw)
+
+            if areas_desconocidas or cargos_desconocidos:
+                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas y {len(cargos_desconocidos)} cargos desconocidos.")
+                res = {"status": "requires_confirmation"}
+                if areas_desconocidas:
+                    res["nuevas_areas"] = sorted(list(areas_desconocidas))
+                if cargos_desconocidos:
+                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos))
+                return res
             # --------------------------------
             
             # Preparar set de RUTs seleccionados (si existe filtro granular)
@@ -769,8 +783,10 @@ class SyncService:
             empleado_existente = None
         
         if empleado_existente:
-            # Recuperar Area ID
+            # Recuperar Area ID y Cargo ID
             from backend.repositories.area import AreaRepository
+            from backend.repositories.cargo import CargoRepository
+            
             area_repo = AreaRepository(db)
             area_raw = str(emp_data.get('area', '')).strip()
             area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
@@ -781,6 +797,16 @@ class SyncService:
                 area_real = await area_repo.get_area_by_id(area_id_res)
                 if area_real:
                     emp_data['area'] = area_real['nombre']
+                    
+            cargo_repo = CargoRepository(db)
+            cargo_raw = str(emp_data.get('cargo', '')).strip()
+            cargo_id_res = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw) if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar'] else None
+            
+            if cargo_id_res:
+                emp_data['cargo_id'] = cargo_id_res
+                cargo_real = await cargo_repo.get_cargo_by_id(cargo_id_res)
+                if cargo_real:
+                    emp_data['cargo'] = cargo_real['nombre']
                     
             # Empleado existe, verificar si hay cambios
             cambios = self._detectar_cambios(empleado_existente, emp_data)
@@ -862,6 +888,8 @@ class SyncService:
             # Empleado nuevo, crear
             try:
                 from backend.repositories.area import AreaRepository
+                from backend.repositories.cargo import CargoRepository
+                
                 area_repo = AreaRepository(db)
                 area_raw = str(emp_data.get('area', '')).strip()
                 area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
@@ -871,12 +899,22 @@ class SyncService:
                     if area_real:
                         area_virtual = area_real['nombre']
 
+                cargo_repo = CargoRepository(db)
+                cargo_raw = str(emp_data.get('cargo', '')).strip()
+                cargo_id_res = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw) if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar'] else None
+                cargo_virtual = emp_data.get('cargo')
+                if cargo_id_res:
+                    cargo_real = await cargo_repo.get_cargo_by_id(cargo_id_res)
+                    if cargo_real:
+                        cargo_virtual = cargo_real['nombre']
+
                 empleado_create = EmpleadoCreate(
                     rut=emp_data['rut'],
                     nombre=emp_data.get('nombre', ''),
                     apellido_paterno=emp_data.get('apellido_paterno', ''),
                     apellido_materno=emp_data.get('apellido_materno', ''),
-                    cargo=emp_data.get('cargo'),
+                    cargo=cargo_virtual,
+                    cargo_id=cargo_id_res,
                     area_id=area_id_res,
                     area=area_virtual,
                     compania=emp_data.get('compania'),
@@ -962,6 +1000,7 @@ class SyncService:
             'apellido_paterno': 'apellido_paterno',
             'apellido_materno': 'apellido_materno',
             'cargo': 'cargo',
+            'cargo_id': 'cargo_id',
             'area': 'area',
             'compania': 'compania',
             'email': 'email',

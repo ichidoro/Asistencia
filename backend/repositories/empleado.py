@@ -39,6 +39,20 @@ class EmpleadoRepository:
                 FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE CASCADE
             );
             
+            CREATE TABLE IF NOT EXISTS cargos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            
+            CREATE TABLE IF NOT EXISTS cargos_alias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alias TEXT NOT NULL UNIQUE,
+                cargo_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (cargo_id) REFERENCES cargos (id) ON DELETE CASCADE
+            );
+            
             CREATE TABLE IF NOT EXISTS empleados (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rut TEXT NOT NULL UNIQUE,
@@ -46,6 +60,7 @@ class EmpleadoRepository:
                 apellido_paterno TEXT NOT NULL,
                 apellido_materno TEXT NOT NULL,
                 cargo TEXT,
+                cargo_id INTEGER,
                 area_id INTEGER,
                 compania TEXT,
                 email TEXT,
@@ -59,7 +74,8 @@ class EmpleadoRepository:
                 decision_vencimiento TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                FOREIGN KEY (area_id) REFERENCES areas (id)
+                FOREIGN KEY (area_id) REFERENCES areas (id),
+                FOREIGN KEY (cargo_id) REFERENCES cargos (id)
             )
             """
             
@@ -123,7 +139,8 @@ class EmpleadoRepository:
                 "fecha_nacimiento": "TEXT",
                 "cant_contratos": "INTEGER DEFAULT 1",
                 "genero": "TEXT",
-                "decision_vencimiento": "TEXT"
+                "decision_vencimiento": "TEXT",
+                "cargo_id": "INTEGER REFERENCES cargos(id)"
             }
 
             for col_name, col_def in new_columns.items():
@@ -133,6 +150,29 @@ class EmpleadoRepository:
                         logger.info(f"✨ Migración: Columna '{col_name}' agregada a empleados")
                     except Exception as e:
                         logger.error(f"❌ Error agregando {col_name}: {e}")
+            
+            # --- NUEVO: Creación de tablas de cargos para migración de DBs existentes ---
+            if not await self.db.table_exists("cargos"):
+                await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS cargos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                """)
+                logger.info("✨ Tabla cargos creada (migración)")
+            
+            if not await self.db.table_exists("cargos_alias"):
+                await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS cargos_alias (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    alias TEXT NOT NULL UNIQUE,
+                    cargo_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (cargo_id) REFERENCES cargos (id) ON DELETE CASCADE
+                );
+                """)
+                logger.info("✨ Tabla cargos_alias creada (migración)")
             
         except Exception as e:
             logger.warning(f"⚠️ Error en migración de esquema de empleados: {e}")
@@ -144,9 +184,9 @@ class EmpleadoRepository:
         query = """
         INSERT INTO empleados (
             rut, nombre, apellido_paterno, apellido_materno,
-            cargo, area_id, compania, email, telefono, genero, activo,
+            cargo, cargo_id, area_id, compania, email, telefono, genero, activo,
             fecha_nacimiento, fecha_ingreso, fecha_salida, tipo_contrato, cant_contratos, decision_vencimiento
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         cursor = await self.db.execute(query, (
@@ -155,6 +195,7 @@ class EmpleadoRepository:
             empleado.apellido_paterno,
             empleado.apellido_materno,
             empleado.cargo,
+            empleado.cargo_id,
             empleado.area_id,
             empleado.compania,
             empleado.email,
@@ -584,6 +625,7 @@ class EmpleadoRepository:
             apellido_paterno = ?,
             apellido_materno = ?,
             cargo = ?,
+            cargo_id = ?,
             area_id = ?,
             compania = ?,
             email = ?,
@@ -606,6 +648,7 @@ class EmpleadoRepository:
             empleado.apellido_paterno,
             empleado.apellido_materno,
             empleado.cargo,
+            empleado.cargo_id,
             empleado.area_id,
             empleado.compania,
             empleado.email,
