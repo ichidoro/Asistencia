@@ -90,25 +90,25 @@ class HybridDatabase:
             else:
                 logger.info(f"🔌 Conectando a Embedded Replica: {self.db_path}")
                 try:
-                    # Timeout 15s: evita colgar el inicio si Turso Cloud no responde rápido.
-                    self.conn = await asyncio.wait_for(
-                        asyncio.to_thread(
+                    if self.use_turso and self.turso_url:
+                        # Timeout 15s: evita colgar el inicio si Turso Cloud no responde rápido.
+                        self.conn = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                libsql.connect,
+                                database=str(self.db_path),
+                                sync_url=self.turso_url,
+                                auth_token=self.turso_token,
+                                offline=True,
+                            ),
+                            timeout=15.0
+                        )
+                        logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync manual vía APScheduler)")
+                    else:
+                        self.conn = await asyncio.to_thread(
                             libsql.connect,
-                            database=str(self.db_path),
-                            sync_url=self.turso_url,
-                            auth_token=self.turso_token,
-                            # SIN sync_interval: elimina el hilo Rust en background.
-                            # RAZÓN: sync_interval lanzaba un hilo Rust paralelo que competía
-                            # con APScheduler y execute_batch() sobre los mismos archivos WAL,
-                            # causando Frame Mismatch y WinError 32 en Windows.
-                            # El ÚNICO actor de sync ahora es el APScheduler (cada 300s) y
-                            # execute_batch() al final de cada batch de importación.
-                            # Benchmark de escrituras con offline=True: 72,000ms → 1ms (sin cambio).
-                            offline=True,   # OFFLINE WRITES: commit() = fsync local puro (~1ms).
-                        ),
-                        timeout=15.0
-                    )
-                    logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync manual vía APScheduler)")
+                            database=str(self.db_path)
+                        )
+                        logger.info("📁 Conexión local establecida (Turso Cloud deshabilitado o no configurado)")
 
                 except asyncio.TimeoutError:
                     logger.warning("⏱️ Timeout de 15s al conectar con Turso Cloud. Entrando en modo LOCAL OFFLINE puro para evitar bloqueos.")
@@ -167,7 +167,7 @@ class HybridDatabase:
             # La réplica local ya tiene datos válidos (libsql los mantiene).
             # El sync trae cambios de Turso Cloud desde la última vez, pero
             # no es urgente — el scheduler lo repetirá cada 90s de todas formas.
-            if hasattr(self.conn, 'sync') and not self._force_turso_only:
+            if hasattr(self.conn, 'sync') and self.use_turso and not self._force_turso_only:
                 async def _bg_initial_sync():
                     try:
                         await asyncio.wait_for(
@@ -330,7 +330,7 @@ class HybridDatabase:
         # ANTES de cerrar la conexión. Esto asegura que los datos locales
         # (en WAL) se repliquen al Cloud y no se pierdan si algo externo
         # limpia los archivos WAL antes del próximo startup.
-        if self.sync_supported:
+        if hasattr(self.conn, 'sync') and self.use_turso:
             try:
                 await asyncio.to_thread(self.conn.sync)
                 logger.info("🔄 Sync final completado (datos locales empujados a Cloud)")
@@ -728,7 +728,7 @@ class HybridDatabase:
                 # al terminar toda la secuencia de batches, evitando que conn.sync()
                 # de un batch previo compita con el cursor() del siguiente batch
                 # sobre el objeto libsql nativo (causa del bloqueo silencioso de 22s).
-                if self.sync_supported and not suppress_auto_sync:
+                if hasattr(self.conn, 'sync') and self.use_turso and not suppress_auto_sync:
                     # Coalescing sync: si ya hay un sync en vuelo, no lanzar otro.
                     # Evita el 429 cuando execute_batch se llama N veces en rápida
                     # sucesión (ej: reproceso de 49 empleados → 49 fire-and-forget).
@@ -1077,7 +1077,7 @@ class HybridDatabase:
             await self.connect()
 
         try:
-            if self.sync_supported:
+            if hasattr(self.conn, 'sync') and self.use_turso:
                 await self.sync_from_cloud()
             return await self.execute(query, params)
         except Exception as e:

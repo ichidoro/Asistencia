@@ -16,33 +16,25 @@ async def limpiar_datos(opcion):
     try:
         await db.connect()
         
-        script_sql = ""
+        
         
         if opcion in ['1', '4']:
-            print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos' y 'cargos_alias'...")
-            script_sql += """
-                DELETE FROM areas_alias;
-                DELETE FROM sqlite_sequence WHERE name='areas_alias';
-                DELETE FROM areas;
-                DELETE FROM sqlite_sequence WHERE name='areas';
-                DELETE FROM cargos_alias;
-                DELETE FROM sqlite_sequence WHERE name='cargos_alias';
-                DELETE FROM cargos;
-                DELETE FROM sqlite_sequence WHERE name='cargos';
-            """
+            print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos', 'cargos_alias' y 'cat_generos'...")
+            for tabla in ["areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"]:
+                try:
+                    if await db.table_exists(tabla):
+                        await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
+                except Exception:
+                    pass
             
         if opcion in ['2', '4']:
             print("🧹 Preparando limpieza de tablas 'turnos' y 'turno_dias'...")
-            script_sql += """
-                DELETE FROM asignacion_turnos;
-                DELETE FROM sqlite_sequence WHERE name='asignacion_turnos';
-                DELETE FROM turno_dias;
-                DELETE FROM sqlite_sequence WHERE name='turno_dias';
-                DELETE FROM turno_areas;
-                DELETE FROM sqlite_sequence WHERE name='turno_areas';
-                DELETE FROM turnos;
-                DELETE FROM sqlite_sequence WHERE name='turnos';
-            """
+            for tabla in ["asignacion_turnos", "turno_dias", "turno_areas", "turnos"]:
+                try:
+                    if await db.table_exists(tabla):
+                        await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
+                except Exception:
+                    pass
 
         if opcion in ['3', '4']:
             print("🧹 Preparando limpieza de la tabla 'empleados' (que contiene Género) y sus historiales...")
@@ -66,12 +58,7 @@ async def limpiar_datos(opcion):
                 except Exception as e:
                     pass
             
-        if script_sql:
-            print("⏳ Ejecutando script de eliminación en SQLite local...")
-            try:
-                await db.execute_script(script_sql)
-            except Exception as e:
-                print(f"⚠️ Advertencia en script general: {e}")
+        
             
             print("☁️ Forzando sincronización hacia Turso Cloud...")
             await db.sync_to_cloud_explicit()
