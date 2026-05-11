@@ -2464,7 +2464,7 @@ window.abrirConfigBonoWizard = function() {
   switchPage('configuracion');
   setTimeout(() => {
     // Switch to Bonos tab inside configuracion
-    const tabBonos = document.querySelector('button[data-bs-target="#bonos-tab"]');
+    const tabBonos = document.getElementById('bonos-tab');
     if (tabBonos) tabBonos.click();
     
     if (typeof openModalBono === 'function') {
@@ -2484,7 +2484,7 @@ window.abrirConfigJustificacionWizard = function() {
   switchPage('configuracion');
   setTimeout(() => {
     // Switch to Justificaciones tab inside configuracion
-    const tabJust = document.querySelector('button[data-bs-target="#justificaciones-tab"]');
+    const tabJust = document.getElementById('justificaciones-tab');
     if (tabJust) tabJust.click();
     
     if (typeof openModalTipoJ === 'function') {

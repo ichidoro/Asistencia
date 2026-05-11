@@ -19,8 +19,14 @@ async def limpiar_datos(opcion):
         
         
         if opcion in ['1', '4']:
-            print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos', 'cargos_alias' y 'cat_generos'...")
-            for tabla in ["areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"]:
+            print("🧹 Preparando limpieza de configuraciones del flujo inicial (áreas, cargos, géneros, bonos, justificaciones)...")
+            tablas_configuracion = [
+                "bono_asignaciones", "bono_reglas", "bonos", 
+                "justificacion_tipos", "cat_pagadores",
+                "notificaciones_areas",
+                "areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"
+            ]
+            for tabla in tablas_configuracion:
                 try:
                     if await db.table_exists(tabla):
                         await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
@@ -28,8 +34,8 @@ async def limpiar_datos(opcion):
                     pass
             
         if opcion in ['2', '4']:
-            print("🧹 Preparando limpieza de tablas 'turnos' y 'turno_dias'...")
-            for tabla in ["asignacion_turnos", "turno_dias", "turno_areas", "turnos"]:
+            print("🧹 Preparando limpieza de tablas de turnos...")
+            for tabla in ["asignacion_turnos", "turno_segmentos", "plantillas_planificacion", "turno_dias", "turno_areas", "turnos"]:
                 try:
                     if await db.table_exists(tabla):
                         await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
@@ -37,15 +43,17 @@ async def limpiar_datos(opcion):
                     pass
 
         if opcion in ['3', '4']:
-            print("🧹 Preparando limpieza de la tabla 'empleados' (que contiene Género) y sus historiales...")
+            print("🧹 Preparando limpieza de la tabla 'empleados' y datos transaccionales (asistencias, justificaciones, historiales)...")
             tablas_empleados = [
+                "cierres_periodos",
+                "logs_raw",
+                "horas_extras",
+                "jornadas_especiales",
+                "bolsa_horas_resumen",
+                "asistencias",
                 "justificaciones",
-                "alertas_asistencia",
-                "asistencia_diaria",
-                "historial_turnos",
                 "historial_areas",
-                "historial_cargos",
-                "empleados_periodos",
+                "periodos_empleo",
                 "empleados"
             ]
             for tabla in tablas_empleados:
@@ -73,9 +81,9 @@ def menu():
     print("=" * 50)
     print("🛠️  HERRAMIENTA DE DESARROLLO - LIMPIEZA DE TABLAS")
     print("=" * 50)
-    print("1. Limpiar tablas 'areas' y 'cargos'")
-    print("2. Limpiar tablas de 'turnos' (turnos, turno_dias, turno_areas, asignacion_turnos)")
-    print("3. Limpiar tabla 'empleados' (incluye GÉNERO, asistencias e historiales)")
+    print("1. Limpiar tablas 'areas', 'cargos', 'generos', 'bonos' y 'justificaciones'")
+    print("2. Limpiar tablas de 'turnos' completas")
+    print("3. Limpiar tabla 'empleados' (incluye asistencias e historiales)")
     print("4. Limpiar TODA LA BASE DE DATOS (Opciones 1, 2 y 3)")
     print("5. Salir")
     print("=" * 50)

@@ -19,7 +19,22 @@ window.appendCargoToInput = function (element, cargo) {
     }
     input.value = current + cargo;
     // Keep dropdown open? No, default bootstrap behavior closes it, which feels right.
-}
+};
+
+window.filterCargosDropdown = function(inputElement) {
+    const filter = inputElement.value.toLowerCase();
+    const ul = inputElement.closest('ul');
+    const items = ul.querySelectorAll('.cargo-item');
+    
+    items.forEach(item => {
+        const text = item.textContent || item.innerText;
+        if (text.toLowerCase().indexOf(filter) > -1) {
+            item.parentElement.style.display = "";
+        } else {
+            item.parentElement.style.display = "none";
+        }
+    });
+};
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -293,10 +308,32 @@ async function loadMetadata() {
         const listCargos = document.getElementById('list-cargos');
 
         // Populate Cargos
-        if (data.cargos) {
-            globalCargosList = data.cargos; // [NEW] Save to global
+        let allCargos = new Set(data.cargos || []);
+        
+        try {
+            const cargosRes = await fetch('/api/configuracion/cargos/');
+            if (cargosRes.ok) {
+                const catalogCargos = await cargosRes.json();
+                catalogCargos.forEach(c => allCargos.add(c.nombre || c.cargo_nombre));
+            }
+        } catch(e) {
+            console.warn("Could not load catalog cargos", e);
+        }
+
+        const cargosArray = Array.from(allCargos).sort();
+        
+        if (cargosArray.length > 0) {
+            globalCargosList = cargosArray; // Save to global
+            
+            let listCargos = document.getElementById('list-cargos');
+            if (!listCargos) {
+                listCargos = document.createElement('datalist');
+                listCargos.id = 'list-cargos';
+                document.body.appendChild(listCargos);
+            }
+            
             if (listCargos) {
-                listCargos.innerHTML = data.cargos.map(c => `<option value="${c}">`).join('');
+                listCargos.innerHTML = cargosArray.map(c => `<option value="${c}">`).join('');
             }
         }
 
@@ -406,7 +443,11 @@ function renderBonos() {
 // ==========================================
 // BONOS: MODAL Y FORMULARIO
 // ==========================================
-function openModalBono(bono = null) {
+async function openModalBono(bono = null) {
+    if (globalCargosList.length === 0) {
+        await loadMetadata();
+    }
+    
     const modal = document.getElementById('modal-bono');
     const title = document.getElementById('modal-bono-title');
     const form = document.getElementById('form-bono');
@@ -489,9 +530,12 @@ function addBonoReglaRow(regla = null) {
                     <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-plus-circle"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto;">
+                    <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto; width: 250px;">
+                        <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." onkeyup="filterCargosDropdown(this)" onclick="event.stopPropagation()">
+                        </li>
                         ${globalCargosList.map(c =>
-        `<li><a class="dropdown-item small py-2" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`
+        `<li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`
     ).join('') || '<li><span class="dropdown-item text-muted">Cargando...</span></li>'}
                     </ul>
                 </div>
