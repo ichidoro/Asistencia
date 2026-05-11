@@ -137,6 +137,26 @@ async function saveTurno() {
         closeModalHorario();
         showNotification(currentTurnoId ? "Turno actualizado" : "Turno creado", "success");
 
+        if (window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
+            Swal.fire({
+                title: "Turno Guardado",
+                text: "¿Desea crear otro turno o continuar al siguiente paso?",
+                icon: "success",
+                showCancelButton: true,
+                confirmButtonText: "Crear otro turno",
+                cancelButtonText: "Siguiente paso (Bonos)",
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    openModalHorario(); // Nuevo turno
+                } else {
+                    if (typeof window.abrirConfigBonoWizard === 'function') {
+                        window.abrirConfigBonoWizard();
+                    }
+                }
+            });
+        }
+
     } catch (error) {
         console.error(error);
         alert("Error al guardar: " + error.message);

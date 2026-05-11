@@ -549,6 +549,27 @@ async function saveBono() {
         showToast(`Bono ${id ? 'actualizado' : 'creado'} correctamente`, "success");
         closeModalBono();
         loadBonos();
+
+        if (window.isWizardFlow && window.wizardCurrentStep === 'bonos') {
+            Swal.fire({
+                title: "Bono Guardado",
+                text: "¿Desea crear otro bono o continuar al siguiente paso?",
+                icon: "success",
+                showCancelButton: true,
+                confirmButtonText: "Crear otro bono",
+                cancelButtonText: "Siguiente paso (Justificaciones)",
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    openModalBono();
+                } else {
+                    if (typeof window.abrirConfigJustificacionWizard === 'function') {
+                        window.abrirConfigJustificacionWizard();
+                    }
+                }
+            });
+        }
+
     } catch (error) {
         console.error(error);
         alert("Error al guardar bono: " + error.message);
@@ -789,6 +810,27 @@ async function saveTipoJustificacion() {
         showToast("Configuración guardada", "success");
         closeModalTipoJ();
         loadTiposJustificacion();
+
+        if (window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {
+            Swal.fire({
+                title: "Justificación Guardada",
+                text: "¿Desea crear otra o continuar a la Sincronización Final?",
+                icon: "success",
+                showCancelButton: true,
+                confirmButtonText: "Crear otra",
+                cancelButtonText: "Ir a Sincronización",
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    openModalTipoJ(); // It's openModalTipoJ according to the definition below
+                } else {
+                    if (typeof window.irASincronizacionFinal === 'function') {
+                        window.irASincronizacionFinal();
+                    }
+                }
+            });
+        }
+
     } catch (error) {
         alert(error.message);
     }

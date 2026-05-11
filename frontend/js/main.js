@@ -2430,6 +2430,9 @@ window.abrirConfigTurnoWizard = function() {
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
   
+  window.isWizardFlow = true;
+  window.wizardCurrentStep = 'turnos';
+
   loadModule('horarios');
   setTimeout(() => {
     if (typeof openModalHorario === 'function') {
@@ -2452,6 +2455,9 @@ window.abrirConfigBonoWizard = function() {
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
   
+  window.isWizardFlow = true;
+  window.wizardCurrentStep = 'bonos';
+
   loadModule('configuracion');
   setTimeout(() => {
     // Switch to Bonos tab inside configuracion
@@ -2469,14 +2475,17 @@ window.abrirConfigJustificacionWizard = function() {
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
   
+  window.isWizardFlow = true;
+  window.wizardCurrentStep = 'justificaciones';
+
   loadModule('configuracion');
   setTimeout(() => {
     // Switch to Justificaciones tab inside configuracion
     const tabJust = document.querySelector('button[data-bs-target="#justificaciones-tab"]');
     if (tabJust) tabJust.click();
     
-    if (typeof openModalTipoJustificacion === 'function') {
-      openModalTipoJustificacion();
+    if (typeof openModalTipoJ === 'function') {
+      openModalTipoJ();
     }
   }, 600);
 };
@@ -2486,6 +2495,9 @@ window.irASincronizacionFinal = function() {
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
   
+  window.isWizardFlow = false;
+  window.wizardCurrentStep = null;
+
   if (typeof openSyncModal === 'function') {
     openSyncModal();
   }
