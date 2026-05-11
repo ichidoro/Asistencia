@@ -135,7 +135,7 @@ async function saveTurno() {
 
         await loadTurnos();
         window._isSavingTurno = true;
-        closeModalHorario();
+        closeModalHorario(true);
         showNotification(currentTurnoId ? "Turno actualizado" : "Turno creado", "success");
 
         if (window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
@@ -1012,22 +1012,22 @@ function renderModalHtml() {
                         <h6>Reglas de Asistencia</h6>
                         <div class="row g-3 mb-4 p-3 bg-light rounded border">
                             <!-- Fila 1: Gobernanza de Tiempos (Sétrica 3 columnas) -->
-                            <div class="col-md-3">
+                            <div class="col-md-3 gobernanza-col">
                                 <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Alerta (min)</label>
                                 <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" value="5">
                                 <div class="form-text small" style="font-size: 0.7rem;">Aviso visual de retraso.</div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3 gobernanza-col">
                                 <label for="input-tol-desc" class="form-label small fw-bold">Tol. Descuento (min)</label>
                                 <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" value="15">
                                 <div class="form-text small" style="font-size: 0.7rem;">Criterio para descuento real.</div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3 gobernanza-col">
                                 <label for="input-anclaje" class="form-label small fw-bold" title="Minutos antes de la entrada que se anclan al inicio oficial">Anclaje Entrada (min)</label>
                                 <input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" value="0">
                                 <div class="form-text small" style="font-size: 0.7rem;">Captura marcas tempranas.</div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3 gobernanza-col">
                                 <label for="input-anclaje-salida" class="form-label small fw-bold" title="Minutos después de la salida que se anclan al fin oficial">Anclaje Salida (min)</label>
                                 <input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" value="0">
                                 <div class="form-text small" style="font-size: 0.7rem;">Filtra HE pequeñas.</div>
@@ -1061,7 +1061,7 @@ function renderModalHtml() {
                             </div>
                         </div>
 
-                        <div class="row g-3 mb-4">
+                        <div class="row g-3 mb-4" id="rowTurnoCortado">
                             <div class="col-md-6">
                                 <div class="form-check form-switch p-3 bg-white border rounded">
                                     <input class="form-check-input ms-0 me-2" type="checkbox" id="chkCortado" name="es_turno_cortado" onchange="toggleCortadoUI()">
@@ -1242,11 +1242,37 @@ function toggleColacionInput() {
     updateAllCalculations();
 }
 
-function closeModalHorario() {
+function closeModalHorario(fromSave = false) {
     const el = document.getElementById('modalTurno');
     if (el) {
         const modal = bootstrap.Modal.getInstance(el);
         if (modal) modal.hide();
+    }
+
+    if (!fromSave && window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
+        if (window._isSavingTurno) {
+            window._isSavingTurno = false;
+            return;
+        }
+        Swal.fire({
+            title: "¿Omitir Horarios?",
+            text: "No has guardado el horario actual. ¿Deseas saltar al siguiente paso?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Sí, ir a Bonos",
+            cancelButtonText: "No, seguir editando",
+            reverseButtons: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                if (typeof window.abrirConfigBonoWizard === 'function') {
+                    window.abrirConfigBonoWizard();
+                }
+            } else {
+                if (typeof openModalHorario === 'function') {
+                    openModalHorario();
+                }
+            }
+        });
     }
 }
 
@@ -1264,6 +1290,25 @@ function handleTipoProgramacionChange() {
     // Visibilidad del bloque de Hora Ficticia: sólo visible en modo Bolsa Flexible
     const divLineaFicticia = document.getElementById('divLineaFicticia');
     if (divLineaFicticia) divLineaFicticia.style.display = isFlexible ? 'flex' : 'none';
+
+    // Ocultar Gobernanza de Tiempos si es Flexible
+    document.querySelectorAll('.gobernanza-col').forEach(col => {
+        col.style.display = isFlexible ? 'none' : 'block';
+    });
+
+    // Ocultar switch de Turno Cortado si es Flexible
+    const rowTurnoCortado = document.getElementById('rowTurnoCortado');
+    if (rowTurnoCortado) {
+        rowTurnoCortado.style.display = isFlexible ? 'none' : 'flex';
+        // Si se oculta, asegurar que el checkbox se apague para no generar data corrupta
+        if (isFlexible) {
+            const chkCortado = document.getElementById('chkCortado');
+            if (chkCortado && chkCortado.checked) {
+                chkCortado.checked = false;
+                toggleCortadoUI(); // Asegura de ocultar las columnas col-bloque-2
+            }
+        }
+    }
 
     // Actualiza el texto de las pestañas de semanas según el tipo de programación activo
     document.querySelectorAll('#pills-tab-weeks .nav-link').forEach((tab, index) => {
@@ -1364,7 +1409,10 @@ function updateAllCalculations() {
     if (!tipoSelect) return;
 
     const tipo = tipoSelect.value;
-    if (tipo === 'FLEXIBLE_BOLSA') return; // Flexible is manual
+    if (tipo === 'FLEXIBLE_BOLSA') {
+        document.querySelectorAll('.alert-hours-warning').forEach(alert => alert.remove());
+        return; // Flexible is manual
+    }
 
     const isCortado = document.getElementById('chkCortado').checked;
     const colacionAuto = document.getElementById('chkColacion').checked;

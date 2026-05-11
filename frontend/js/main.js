@@ -1035,7 +1035,7 @@ window.nextPage = function() {
 };
 
 // Modal Functions
-function openModal(empleadoId = null) {
+async function openModal(empleadoId = null) {
   currentEmpleadoId = empleadoId;
   const dangerZone = document.getElementById('danger-zone-container');
   const tabHistorial = document.getElementById('tab-li-historial');
@@ -1046,6 +1046,9 @@ function openModal(empleadoId = null) {
     const firstTab = new bootstrap.Tab(firstTabEl);
     firstTab.show();
   }
+
+  // Populate dynamic select
+  await populateGenerosSelect();
 
   if (empleadoId) {
     document.getElementById('modal-title').textContent = 'Editar Empleado';
@@ -1069,6 +1072,35 @@ function closeModal() {
   const inputGenero = document.getElementById('input-genero');
   if (inputGenero) inputGenero.value = '';
   currentEmpleadoId = null;
+}
+
+async function populateGenerosSelect() {
+  const select = document.getElementById('input-genero');
+  if (!select) return;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/configuracion/generos/`);
+    if (!response.ok) throw new Error('Error fetching generos');
+    
+    const generos = await response.json();
+    
+    // Preserve current value if any
+    const currentValue = select.value;
+    
+    select.innerHTML = '<option value="">No especificado</option>';
+    generos.forEach(g => {
+      const option = document.createElement('option');
+      option.value = g.nombre; // The backend expects string names right now!
+      option.textContent = g.nombre;
+      select.appendChild(option);
+    });
+    
+    if (currentValue) {
+      select.value = currentValue;
+    }
+  } catch (err) {
+    console.error('Error cargando cat_generos:', err);
+  }
 }
 
 async function loadEmpleadoData(id) {
@@ -2391,42 +2423,13 @@ window.guardarResolucionCargos = async function() {
 };
 
 window.showModalGeneros = function() {
-  const modalEl = document.getElementById('modal-resolver-generos');
-  if (modalEl) {
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
-  }
-};
-
-window.cancelarResolucionGeneros = function() {
-  const modalEl = document.getElementById('modal-resolver-generos');
-  const modal = bootstrap.Modal.getInstance(modalEl);
-  if (modal) modal.hide();
-};
-
-window.continuarResolucionGeneros = async function() {
-  const modalEl = document.getElementById('modal-resolver-generos');
-  const btn = modalEl ? modalEl.querySelector('.btn-primary') : null;
-  
-  if (btn) {
-    btn.disabled = true;
-    btn.innerText = "Guardando...";
-  }
-
-  try {
-    await fetch('/api/sync/resolver-generos/', { method: 'POST' });
-  } catch (error) {
-    console.error("Error al guardar géneros:", error);
-  }
-
-  const modal = bootstrap.Modal.getInstance(modalEl);
-  if (modal) modal.hide();
-  
-  // Show Wizard instead of going directly to sync modal
+  // Los géneros ahora se resuelven automáticamente en el backend.
+  // Saltamos directo al Wizard de configuración inicial.
   const wizardEl = document.getElementById('modal-wizard-configuracion');
   if (wizardEl) {
     const wizardModal = new bootstrap.Modal(wizardEl);
     wizardModal.show();
+    if (typeof resetWizard === 'function') resetWizard();
   }
 };
 

@@ -163,9 +163,8 @@ async def resolver_generos_endpoint():
     al confirmar la acción desde el frontend, siguiendo el hilo de sincronización.
     """
     try:
-        await db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (1, 'Masculino')")
-        await db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (2, 'Femenino')")
-        await db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (3, 'Otro')")
+        # Los géneros ahora se resuelven automáticamente durante la creación del empleado.
+        # Este endpoint se mantiene por retrocompatibilidad con el frontend temporalmente.
         return {"status": "ok", "message": "Géneros guardados correctamente."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

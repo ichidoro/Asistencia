@@ -66,11 +66,9 @@ async def limpiar_datos(opcion):
                 except Exception as e:
                     pass
             
-        
-            
-            print("☁️ Forzando sincronización hacia Turso Cloud...")
-            await db.sync_to_cloud_explicit()
-            print("✅ ¡Éxito! Las tablas seleccionadas han sido vaciadas completamente, tanto a nivel local como en Turso Cloud.")
+        print("☁️ Forzando sincronización hacia Turso Cloud...")
+        await db.sync_to_cloud_explicit()
+        print("✅ ¡Éxito! Las tablas seleccionadas han sido vaciadas completamente, tanto a nivel local como en Turso Cloud.")
             
     except Exception as e:
         print(f"❌ Ocurrió un error al limpiar los datos: {e}")

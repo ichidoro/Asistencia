@@ -184,13 +184,6 @@ class EmpleadoRepository:
                 );
                 """)
                 logger.info("✨ Tabla cat_generos creada (migración)")
-                
-            try:
-                await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (1, 'Masculino')")
-                await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (2, 'Femenino')")
-                await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (3, 'Otro')")
-            except Exception as e:
-                pass
 
             
         except Exception as e:
@@ -211,10 +204,16 @@ class EmpleadoRepository:
         # Mapeo manual si viene solo genero (por compatibilidad)
         gen_id = empleado.genero_id
         if gen_id is None and empleado.genero:
-            g = str(empleado.genero).lower()
-            if g in ['masculino', 'm', 'hombre']: gen_id = 1
-            elif g in ['femenino', 'f', 'mujer']: gen_id = 2
-            elif g in ['otro', 'o']: gen_id = 3
+            g_name = str(empleado.genero).strip()
+            res_gen = await self.db.fetch_one("SELECT id FROM cat_generos WHERE LOWER(nombre) = ?", (g_name.lower(),))
+            if res_gen:
+                gen_id = res_gen['id']
+            else:
+                try:
+                    cursor_gen = await self.db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (g_name,))
+                    gen_id = cursor_gen.lastrowid
+                except Exception:
+                    pass
             
         cursor = await self.db.execute(query, (
             empleado.rut,
@@ -678,10 +677,16 @@ class EmpleadoRepository:
         # Mapeo manual si viene solo genero (por compatibilidad)
         gen_id = empleado.genero_id
         if gen_id is None and empleado.genero:
-            g = str(empleado.genero).lower()
-            if g in ['masculino', 'm', 'hombre']: gen_id = 1
-            elif g in ['femenino', 'f', 'mujer']: gen_id = 2
-            elif g in ['otro', 'o']: gen_id = 3
+            g_name = str(empleado.genero).strip()
+            res_gen = await self.db.fetch_one("SELECT id FROM cat_generos WHERE LOWER(nombre) = ?", (g_name.lower(),))
+            if res_gen:
+                gen_id = res_gen['id']
+            else:
+                try:
+                    cursor_gen = await self.db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (g_name,))
+                    gen_id = cursor_gen.lastrowid
+                except Exception:
+                    pass
             
         await self.db.execute(query, (
             empleado.rut,
