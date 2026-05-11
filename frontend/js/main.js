@@ -276,7 +276,8 @@ function setupEventListeners() {
       hideBatchLoadingOverlay();
       
       if (data.status === "requires_confirmation") {
-        window._resolverMode = 'guardian';
+        const isInitialSync = !localStorage.getItem('wizard_completed');
+        window._resolverMode = isInitialSync ? 'guardian' : 'stream';
         window._pendingCargos = data.nuevos_cargos || []; // Guardar cargos pendientes para después de áreas
         
         if (data.nuevas_areas && data.nuevas_areas.length > 0) {
@@ -284,10 +285,14 @@ function setupEventListeners() {
         } else if (data.nuevos_cargos && data.nuevos_cargos.length > 0) {
           showResolverCargosModal(data.nuevos_cargos);
         } else {
-          showModalGeneros();
+          if (isInitialSync) {
+            if (typeof showModalGeneros === 'function') showModalGeneros();
+          } else {
+            openSyncModal();
+          }
         }
       } else {
-        showModalGeneros();
+        openSyncModal();
       }
     } catch (error) {
       hideBatchLoadingOverlay();
@@ -2290,7 +2295,7 @@ window.guardarResolucionAreas = async function() {
         }
       }
     } else {
-      window.confirmSync();
+      openSyncModal();
     }
     
   } catch (error) {
@@ -2373,7 +2378,7 @@ window.guardarResolucionCargos = async function() {
         showModalGeneros();
       }
     } else {
-      window.confirmSync();
+      openSyncModal();
     }
     
   } catch (error) {
