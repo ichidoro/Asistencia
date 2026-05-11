@@ -183,13 +183,14 @@ class EmpleadoRepository:
                     nombre TEXT NOT NULL UNIQUE
                 );
                 """)
-                try:
-                    await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (1, 'Masculino')")
-                    await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (2, 'Femenino')")
-                    await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (3, 'Otro')")
-                except Exception as e:
-                    pass
                 logger.info("✨ Tabla cat_generos creada (migración)")
+                
+            try:
+                await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (1, 'Masculino')")
+                await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (2, 'Femenino')")
+                await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (3, 'Otro')")
+            except Exception as e:
+                pass
 
             
         except Exception as e:
