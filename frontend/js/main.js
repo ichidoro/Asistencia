@@ -284,10 +284,10 @@ function setupEventListeners() {
         } else if (data.nuevos_cargos && data.nuevos_cargos.length > 0) {
           showResolverCargosModal(data.nuevos_cargos);
         } else {
-          openSyncModal();
+          showModalGeneros();
         }
       } else {
-        openSyncModal();
+        showModalGeneros();
       }
     } catch (error) {
       hideBatchLoadingOverlay();
@@ -2278,8 +2278,8 @@ window.guardarResolucionAreas = async function() {
       if (window._pendingCargos && window._pendingCargos.length > 0) {
         showResolverCargosModal(window._pendingCargos);
       } else {
-        if (typeof openSyncModal === 'function') {
-          openSyncModal();
+        if (typeof showModalGeneros === 'function') {
+          showModalGeneros();
         }
       }
     } else {
@@ -2362,8 +2362,8 @@ window.guardarResolucionCargos = async function() {
     
     // Reanudar la sincronización automáticamente
     if (window._resolverMode === 'guardian') {
-      if (typeof openSyncModal === 'function') {
-        openSyncModal();
+      if (typeof showModalGeneros === 'function') {
+        showModalGeneros();
       }
     } else {
       window.confirmSync();
