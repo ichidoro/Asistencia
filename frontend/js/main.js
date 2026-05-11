@@ -2433,8 +2433,11 @@ window.abrirConfigTurnoWizard = function() {
   window.isWizardFlow = true;
   window.wizardCurrentStep = 'turnos';
 
-  loadModule('horarios');
+  switchPage('configuracion');
   setTimeout(() => {
+    const tabHorarios = document.getElementById('horarios-tab');
+    if (tabHorarios) tabHorarios.click();
+    
     if (typeof openModalHorario === 'function') {
       openModalHorario();
       Swal.fire({
@@ -2458,7 +2461,7 @@ window.abrirConfigBonoWizard = function() {
   window.isWizardFlow = true;
   window.wizardCurrentStep = 'bonos';
 
-  loadModule('configuracion');
+  switchPage('configuracion');
   setTimeout(() => {
     // Switch to Bonos tab inside configuracion
     const tabBonos = document.querySelector('button[data-bs-target="#bonos-tab"]');
@@ -2478,7 +2481,7 @@ window.abrirConfigJustificacionWizard = function() {
   window.isWizardFlow = true;
   window.wizardCurrentStep = 'justificaciones';
 
-  loadModule('configuracion');
+  switchPage('configuracion');
   setTimeout(() => {
     // Switch to Justificaciones tab inside configuracion
     const tabJust = document.querySelector('button[data-bs-target="#justificaciones-tab"]');
