@@ -18,7 +18,7 @@ async def limpiar_datos(opcion):
         
         script_sql = ""
         
-        if opcion in ['1', '3']:
+        if opcion in ['1', '4']:
             print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos' y 'cargos_alias'...")
             script_sql += """
                 DELETE FROM areas_alias;
@@ -31,7 +31,7 @@ async def limpiar_datos(opcion):
                 DELETE FROM sqlite_sequence WHERE name='cargos';
             """
             
-        if opcion in ['2', '3']:
+        if opcion in ['2', '4']:
             print("🧹 Preparando limpieza de tablas 'turnos' y 'turno_dias'...")
             script_sql += """
                 DELETE FROM asignacion_turnos;
@@ -43,10 +43,36 @@ async def limpiar_datos(opcion):
                 DELETE FROM turnos;
                 DELETE FROM sqlite_sequence WHERE name='turnos';
             """
+
+        if opcion in ['3', '4']:
+            print("🧹 Preparando limpieza de la tabla 'empleados' (que contiene Género) y sus historiales...")
+            tablas_empleados = [
+                "justificaciones",
+                "alertas_asistencia",
+                "asistencia_diaria",
+                "historial_turnos",
+                "historial_areas",
+                "historial_cargos",
+                "empleados_periodos",
+                "empleados"
+            ]
+            for tabla in tablas_empleados:
+                try:
+                    await db.execute_script(f"""
+                        DELETE FROM {tabla};
+                        DELETE FROM sqlite_sequence WHERE name='{tabla}';
+                    """)
+                except Exception as e:
+                    # Si la tabla no existe aún (porque es del Plan Maestro), lo ignoramos
+                    if "no such table" not in str(e).lower():
+                        print(f"⚠️ Nota al limpiar {tabla}: {e}")
             
         if script_sql:
-            print("⏳ Ejecutando script de eliminación en SQLite...")
-            await db.execute_script(script_sql)
+            print("⏳ Ejecutando script de eliminación en SQLite local...")
+            try:
+                await db.execute_script(script_sql)
+            except Exception as e:
+                print(f"⚠️ Advertencia en script general: {e}")
             
             print("☁️ Forzando sincronización hacia Turso Cloud...")
             await db.sync_to_cloud_explicit()
@@ -63,20 +89,21 @@ def menu():
     print("=" * 50)
     print("1. Limpiar tablas 'areas' y 'cargos'")
     print("2. Limpiar tablas de 'turnos' (turnos, turno_dias, turno_areas, asignacion_turnos)")
-    print("3. Limpiar TODAS las anteriores (areas, cargos y turnos)")
-    print("4. Salir")
+    print("3. Limpiar tabla 'empleados' (incluye GÉNERO, asistencias e historiales)")
+    print("4. Limpiar TODA LA BASE DE DATOS (Opciones 1, 2 y 3)")
+    print("5. Salir")
     print("=" * 50)
     
-    opcion = input("Elige una opción (1-4): ").strip()
+    opcion = input("Elige una opción (1-5): ").strip()
     return opcion
 
 if __name__ == "__main__":
     while True:
         op = menu()
-        if op == '4':
+        if op == '5':
             print("Saliendo...")
             break
-        elif op in ['1', '2', '3']:
+        elif op in ['1', '2', '3', '4']:
             asyncio.run(limpiar_datos(op))
             break
         else:
