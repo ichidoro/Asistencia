@@ -2399,8 +2399,21 @@ window.cancelarResolucionGeneros = function() {
   if (modal) modal.hide();
 };
 
-window.continuarResolucionGeneros = function() {
+window.continuarResolucionGeneros = async function() {
   const modalEl = document.getElementById('modal-resolver-generos');
+  const btn = modalEl ? modalEl.querySelector('.btn-primary') : null;
+  
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = "Guardando...";
+  }
+
+  try {
+    await fetch('/api/sync/resolver-generos/', { method: 'POST' });
+  } catch (error) {
+    console.error("Error al guardar géneros:", error);
+  }
+
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
   

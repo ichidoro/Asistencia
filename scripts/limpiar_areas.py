@@ -19,8 +19,8 @@ async def limpiar_datos(opcion):
         
         
         if opcion in ['1', '4']:
-            print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos' y 'cargos_alias'...")
-            for tabla in ["areas_alias", "areas", "cargos_alias", "cargos"]:
+            print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos', 'cargos_alias' y 'cat_generos'...")
+            for tabla in ["areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"]:
                 try:
                     if await db.table_exists(tabla):
                         await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")

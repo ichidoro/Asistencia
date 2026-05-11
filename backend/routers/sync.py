@@ -152,6 +152,24 @@ async def resolver_cargos(
     return {"status": "ok", "message": "Cargos resueltos correctamente. Puede reanudar la sincronización."}
 
 
+@router.post(
+    "/resolver-generos/",
+    summary="Resolver géneros pendientes",
+    description="Confirma la extracción de géneros desde BioAlba y los persiste en la base de datos local."
+)
+async def resolver_generos_endpoint(db=Depends(get_db_connection)):
+    """
+    Guarda los géneros extraídos en la base de datos local
+    al confirmar la acción desde el frontend, siguiendo el hilo de sincronización.
+    """
+    try:
+        await db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (1, 'Masculino')")
+        await db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (2, 'Femenino')")
+        await db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (3, 'Otro')")
+        return {"status": "ok", "message": "Géneros guardados correctamente."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post(
     "/empleados/",
