@@ -277,7 +277,15 @@ function setupEventListeners() {
       
       if (data.status === "requires_confirmation") {
         window._resolverMode = 'guardian';
-        showResolverAreasModal(data.nuevas_areas);
+        window._pendingCargos = data.nuevos_cargos || []; // Guardar cargos pendientes para después de áreas
+        
+        if (data.nuevas_areas && data.nuevas_areas.length > 0) {
+          showResolverAreasModal(data.nuevas_areas);
+        } else if (data.nuevos_cargos && data.nuevos_cargos.length > 0) {
+          showResolverCargosModal(data.nuevos_cargos);
+        } else {
+          openSyncModal();
+        }
       } else {
         openSyncModal();
       }
@@ -2267,8 +2275,12 @@ window.guardarResolucionAreas = async function() {
     
     // Reanudar la sincronización automáticamente
     if (window._resolverMode === 'guardian') {
-      if (typeof openSyncModal === 'function') {
-        openSyncModal();
+      if (window._pendingCargos && window._pendingCargos.length > 0) {
+        showResolverCargosModal(window._pendingCargos);
+      } else {
+        if (typeof openSyncModal === 'function') {
+          openSyncModal();
+        }
       }
     } else {
       window.confirmSync();
@@ -2277,6 +2289,89 @@ window.guardarResolucionAreas = async function() {
   } catch (error) {
     console.error("Error al resolver áreas:", error);
     alert("Hubo un problema al guardar la resolución de áreas.");
+  } finally {
+    btnGuardar.disabled = false;
+    btnGuardar.innerText = 'Guardar y Reanudar Sincronización';
+  }
+};
+
+window.showResolverCargosModal = function(nuevosCargos) {
+  const tbody = document.getElementById('tbody-resolver-cargos');
+  tbody.innerHTML = '';
+  
+  if (nuevosCargos.length === 0) return;
+  
+  nuevosCargos.forEach((cargo, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="fw-bold">${cargo}</td>
+      <td>
+        <input type="text" class="form-control form-control-sm input-resolucion-cargo" 
+               data-cargo-bioalba="${cargo}" 
+               placeholder="Nombre correcto (o deje en blanco para crear)">
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  const modal = new bootstrap.Modal(document.getElementById('modal-resolver-cargos'));
+  modal.show();
+};
+
+window.cancelarResolucionCargos = function() {
+  const modalEl = document.getElementById('modal-resolver-cargos');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  alert("Sincronización cancelada. Debe resolver los cargos antes de continuar.");
+};
+
+window.guardarResolucionCargos = async function() {
+  const inputs = document.querySelectorAll('.input-resolucion-cargo');
+  const resoluciones = {};
+  
+  inputs.forEach(input => {
+    const cargoBioalba = input.dataset.cargoBioalba;
+    const resolucion = input.value.trim() || cargoBioalba;
+    resoluciones[cargoBioalba] = resolucion;
+  });
+  
+  const btnGuardar = document.querySelector('#modal-resolver-cargos .btn-primary');
+  btnGuardar.disabled = true;
+  btnGuardar.innerText = 'Guardando...';
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/sync/resolver-cargos/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resoluciones: resoluciones })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      alert(`Error al guardar resoluciones: ${err.detail || 'Error desconocido'}`);
+      return;
+    }
+    
+    // Cerrar modal
+    const modalEl = document.getElementById('modal-resolver-cargos');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+    
+    // Limpiar pending cargos ya que fueron resueltos
+    window._pendingCargos = [];
+    
+    // Reanudar la sincronización automáticamente
+    if (window._resolverMode === 'guardian') {
+      if (typeof openSyncModal === 'function') {
+        openSyncModal();
+      }
+    } else {
+      window.confirmSync();
+    }
+    
+  } catch (error) {
+    console.error("Error al resolver cargos:", error);
+    alert("Hubo un problema al guardar la resolución de cargos.");
   } finally {
     btnGuardar.disabled = false;
     btnGuardar.innerText = 'Guardar y Reanudar Sincronización';
