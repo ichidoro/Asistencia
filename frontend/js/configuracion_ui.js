@@ -527,7 +527,7 @@ function addBonoReglaRow(regla = null) {
             <div class="col-md-2">
                 <label for="rule-asistencia-${rowIdx}" class="small text-muted">% Asist.</label>
                 <div class="input-group input-group-sm">
-                    <input type="number" id="rule-asistencia-${rowIdx}" class="rule-asistencia form-control" value="${regla ? regla.asistencia_minima : 100}" min="0" max="100" step="1">
+                    <input type="number" id="rule-asistencia-${rowIdx}" class="rule-asistencia form-control" value="${regla ? regla.asistencia_minima : 0}" min="0" max="100" step="1">
                 </div>
             </div>
             <div class="col-md-2 text-center">
@@ -583,7 +583,7 @@ async function saveBono() {
         reglas.push({
             monto: parseFloat(row.querySelector('.rule-monto').value) || 0,
             tipo_contrato: row.querySelector('.rule-contrato').value || null,
-            asistencia_minima: parseFloat(row.querySelector('.rule-asistencia').value) || 100.0,
+            asistencia_minima: parseFloat(row.querySelector('.rule-asistencia').value) || 0.0,
             cargo_requerido: row.querySelector('.rule-cargo').value || null,
             cargos_excluidos: row.querySelector('.rule-excluidos').value || null,
             es_proporcional: row.querySelector('.rule-proporcional').checked
@@ -767,7 +767,7 @@ window.renderTiposJustificacion = function () {
 // ==========================================
 // JUSTIFICACIONES: MODAL Y FORMULARIO
 // ==========================================
-function openModalTipoJ(tipo = null) {
+window.openModalTipoJ = function(tipo = null) {
     const modal = document.getElementById('modal-tipo-justificacion');
     const title = document.getElementById('modal-tipo-j-title');
     const form = document.getElementById('form-tipo-justificacion');
@@ -987,7 +987,9 @@ window.closeModalGestionPagadores = async function () {
     // Retomar el Wizard si corresponde
     if (window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {
         if (typeof pagadoresList !== 'undefined' && pagadoresList.length > 0) {
-            if (typeof openModalTipoJ === 'function') {
+            if (typeof window.openModalTipoJ === 'function') {
+                window.openModalTipoJ();
+            } else if (typeof openModalTipoJ === 'function') {
                 openModalTipoJ();
             }
         } else {

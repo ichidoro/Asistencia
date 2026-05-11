@@ -48,12 +48,12 @@ class TurnoDiaResponse(TurnoDiaCreate):
 class TurnoBase(BaseModel):
     nombre: str
     tipo_programacion: str = "FIJO"  # FIJO, ROTATIVO, LIBRE, FLEXIBLE_BOLSA
-    tolerancia_retraso_alerta: int = 5
-    tolerancia_retraso_descuento: int = 15
+    tolerancia_retraso_alerta: int = 0
+    tolerancia_retraso_descuento: int = 0
     redondeo_minutos: int = 0
-    meta_horas_semanales: float = 44.0
-    descuento_colacion_auto: bool = True
-    minutos_colacion_auto: int = 30
+    meta_horas_semanales: float = 0.0
+    descuento_colacion_auto: bool = False
+    minutos_colacion_auto: int = 0
     anclaje_entrada_minutos: int = 0 # Nuevo campo para marcas tempranas
     anclaje_salida_minutos: int = 0 # Nuevo campo para marcas tardías filtrables
     es_turno_cortado: bool = False # Añadido para consistencia

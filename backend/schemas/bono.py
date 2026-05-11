@@ -7,7 +7,7 @@ from datetime import date, datetime
 # ==========================================
 class BonoReglaBase(BaseModel):
     monto: float = Field(..., ge=0)
-    asistencia_minima: float = Field(100.0, ge=0, le=100.0, description="Porcentaje de asistencia requerido")
+    asistencia_minima: float = Field(0.0, ge=0, le=100.0, description="Porcentaje de asistencia requerido")
     tipo_contrato: Optional[str] = Field(None, description="Indefinido, Temporal, etc.")
     cargo_requerido: Optional[str] = Field(None, description="Cargo específico para este bono")
     cargos_excluidos: Optional[str] = Field(None, description="Lista separada por comas de cargos excluidos")

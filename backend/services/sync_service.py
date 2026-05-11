@@ -817,6 +817,14 @@ class SyncService:
             area_raw = str(emp_data.get('area', '')).strip()
             area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
             
+            # FALLBACK: Si no se encontró el área, crearla o asignar 'Sin Asignar'
+            if not area_id_res:
+                nombre_area_nueva = area_raw if area_raw and area_raw not in ['---', 'None'] else 'Sin Asignar'
+                area_id_res = await area_repo.find_area_id_by_name_or_alias(nombre_area_nueva)
+                if not area_id_res:
+                    logger.info(f"Creando área faltante durante sync update: {nombre_area_nueva}")
+                    area_id_res = await area_repo.create_area(nombre_area_nueva)
+
             if area_id_res:
                 emp_data['area_id'] = area_id_res
                 # También actualizar el virtual si se quiere para consistencia del diff
@@ -857,6 +865,11 @@ class SyncService:
                         area_repo = AreaRepository(db)
                         area_id_val = await area_repo.find_area_id_by_name_or_alias(nueva_area)
                         
+                        if not area_id_val:
+                            nombre_area_nueva = nueva_area if nueva_area and nueva_area not in ['---', 'None'] else 'Sin Asignar'
+                            logger.info(f"Creando área faltante para historial pendiente: {nombre_area_nueva}")
+                            area_id_val = await area_repo.create_area(nombre_area_nueva)
+
                         record_id = await service.repository.add_historial_area(
                             empleado_id=empleado_existente.id,
                             area_id=area_id_val,
@@ -898,7 +911,12 @@ class SyncService:
                     area_id_val = empleado_existente.area_id
                     if not area_id_val and empleado_existente.area:
                         area_id_val = await area_repo.find_area_id_by_name_or_alias(empleado_existente.area)
-                        
+                    
+                    if not area_id_val:
+                        area_id_val = await area_repo.find_area_id_by_name_or_alias('Sin Asignar')
+                        if not area_id_val:
+                            area_id_val = await area_repo.create_area('Sin Asignar')
+
                     await service.repository.add_historial_area(
                         empleado_id=empleado_existente.id,
                         area_id=area_id_val,
@@ -919,6 +937,16 @@ class SyncService:
                 area_repo = AreaRepository(db)
                 area_raw = str(emp_data.get('area', '')).strip()
                 area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
+                
+                # FALLBACK: Si no se encontró el área, crearla o asignar 'Sin Asignar'
+                if not area_id_res:
+                    nombre_area_nueva = area_raw if area_raw and area_raw not in ['---', 'None'] else 'Sin Asignar'
+                    # Buscar nuevamente por si 'Sin Asignar' ya existe
+                    area_id_res = await area_repo.find_area_id_by_name_or_alias(nombre_area_nueva)
+                    if not area_id_res:
+                        logger.info(f"Creando área faltante durante sync: {nombre_area_nueva}")
+                        area_id_res = await area_repo.create_area(nombre_area_nueva)
+                
                 area_virtual = emp_data.get('area')
                 if area_id_res:
                     area_real = await area_repo.get_area_by_id(area_id_res)
