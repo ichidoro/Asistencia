@@ -19,12 +19,16 @@ async def limpiar_datos(opcion):
         script_sql = ""
         
         if opcion in ['1', '3']:
-            print("🧹 Preparando limpieza de la tabla 'areas' y 'areas_alias'...")
+            print("🧹 Preparando limpieza de la tabla 'areas', 'areas_alias', 'cargos' y 'cargos_alias'...")
             script_sql += """
                 DELETE FROM areas_alias;
                 DELETE FROM sqlite_sequence WHERE name='areas_alias';
                 DELETE FROM areas;
                 DELETE FROM sqlite_sequence WHERE name='areas';
+                DELETE FROM cargos_alias;
+                DELETE FROM sqlite_sequence WHERE name='cargos_alias';
+                DELETE FROM cargos;
+                DELETE FROM sqlite_sequence WHERE name='cargos';
             """
             
         if opcion in ['2', '3']:
@@ -57,9 +61,9 @@ def menu():
     print("=" * 50)
     print("🛠️  HERRAMIENTA DE DESARROLLO - LIMPIEZA DE TABLAS")
     print("=" * 50)
-    print("1. Limpiar tabla 'areas'")
+    print("1. Limpiar tablas 'areas' y 'cargos'")
     print("2. Limpiar tablas de 'turnos' (turnos, turno_dias, turno_areas, asignacion_turnos)")
-    print("3. Limpiar TODAS las anteriores (areas y turnos)")
+    print("3. Limpiar TODAS las anteriores (areas, cargos y turnos)")
     print("4. Salir")
     print("=" * 50)
     
