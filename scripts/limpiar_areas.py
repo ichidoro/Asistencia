@@ -19,11 +19,11 @@ async def limpiar_datos(opcion):
         
         
         if opcion in ['1', '4']:
-            print("🧹 Preparando limpieza de configuraciones del flujo inicial (áreas, cargos, géneros, bonos, justificaciones)...")
+            print("🧹 Preparando limpieza de configuraciones del flujo inicial (áreas, cargos, géneros, bonos, justificaciones, feriados)...")
             tablas_configuracion = [
                 "bono_asignaciones", "bono_reglas", "bonos", 
                 "justificacion_tipos", "cat_pagadores",
-                "notificaciones_areas",
+                "notificaciones_areas", "feriados",
                 "areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"
             ]
             for tabla in tablas_configuracion:
@@ -47,6 +47,8 @@ async def limpiar_datos(opcion):
             tablas_empleados = [
                 "cierres_periodos",
                 "logs_raw",
+                "sync_logs",
+                "logs_auditoria",
                 "horas_extras",
                 "jornadas_especiales",
                 "bolsa_horas_resumen",
