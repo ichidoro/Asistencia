@@ -157,7 +157,7 @@ async def resolver_cargos(
     summary="Resolver géneros pendientes",
     description="Confirma la extracción de géneros desde BioAlba y los persiste en la base de datos local."
 )
-async def resolver_generos_endpoint(db=Depends(get_db_connection)):
+async def resolver_generos_endpoint():
     """
     Guarda los géneros extraídos en la base de datos local
     al confirmar la acción desde el frontend, siguiendo el hilo de sincronización.

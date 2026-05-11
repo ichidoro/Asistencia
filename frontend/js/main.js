@@ -2417,6 +2417,75 @@ window.continuarResolucionGeneros = async function() {
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
   
+  // Show Wizard instead of going directly to sync modal
+  const wizardEl = document.getElementById('modal-wizard-configuracion');
+  if (wizardEl) {
+    const wizardModal = new bootstrap.Modal(wizardEl);
+    wizardModal.show();
+  }
+};
+
+window.abrirConfigTurnoWizard = function() {
+  const modalEl = document.getElementById('modal-wizard-configuracion');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  
+  loadModule('horarios');
+  setTimeout(() => {
+    if (typeof openModalHorario === 'function') {
+      openModalHorario();
+      Swal.fire({
+          title: "Paso 4: Crear Turnos",
+          text: "Crea tu primer turno. Una vez guardado, puedes volver al menú de Sincronizar Empleados.",
+          icon: "info",
+          toast: true,
+          position: "top-end",
+          timer: 5000,
+          showConfirmButton: false
+      });
+    }
+  }, 600);
+};
+
+window.abrirConfigBonoWizard = function() {
+  const modalEl = document.getElementById('modal-wizard-configuracion');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  
+  loadModule('configuracion');
+  setTimeout(() => {
+    // Switch to Bonos tab inside configuracion
+    const tabBonos = document.querySelector('button[data-bs-target="#bonos-tab"]');
+    if (tabBonos) tabBonos.click();
+    
+    if (typeof openModalBono === 'function') {
+      openModalBono();
+    }
+  }, 600);
+};
+
+window.abrirConfigJustificacionWizard = function() {
+  const modalEl = document.getElementById('modal-wizard-configuracion');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  
+  loadModule('configuracion');
+  setTimeout(() => {
+    // Switch to Justificaciones tab inside configuracion
+    const tabJust = document.querySelector('button[data-bs-target="#justificaciones-tab"]');
+    if (tabJust) tabJust.click();
+    
+    if (typeof openModalTipoJustificacion === 'function') {
+      openModalTipoJustificacion();
+    }
+  }, 600);
+};
+
+window.irASincronizacionFinal = function() {
+  const modalEl = document.getElementById('modal-wizard-configuracion');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  
   if (typeof openSyncModal === 'function') {
     openSyncModal();
   }
