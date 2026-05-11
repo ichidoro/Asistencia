@@ -160,6 +160,7 @@ class SyncService:
             
             areas_desconocidas = set()
             cargos_desconocidos = set()
+            generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
                 if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
@@ -173,13 +174,21 @@ class SyncService:
                     if not cargo_id:
                         cargos_desconocidos.add(cargo_raw)
                         
-            if areas_desconocidas or cargos_desconocidos:
-                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas y {len(cargos_desconocidos)} cargos desconocidos.")
+                genero_raw = str(emp_data.get('genero', '')).strip()
+                if genero_raw and genero_raw not in ['---', 'None', 'Sin Asignar']:
+                    genero_row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero_raw,))
+                    if not genero_row:
+                        generos_desconocidos.add(genero_raw)
+                        
+            if areas_desconocidas or cargos_desconocidos or generos_desconocidos:
+                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas, {len(cargos_desconocidos)} cargos y {len(generos_desconocidos)} géneros desconocidos.")
                 res = {"status": "requires_confirmation"}
                 if areas_desconocidas:
                     res["nuevas_areas"] = sorted(list(areas_desconocidas))
                 if cargos_desconocidos:
                     res["nuevos_cargos"] = sorted(list(cargos_desconocidos))
+                if generos_desconocidos:
+                    res["nuevos_generos"] = sorted(list(generos_desconocidos))
                 return res
                 
             return {"status": "ok"}
@@ -294,11 +303,15 @@ class SyncService:
             repo = EmpleadoRepository(db)
             service = EmpleadoService(repo)
             from backend.repositories.area import AreaRepository
+            from backend.repositories.cargo import CargoRepository
             area_repo = AreaRepository(db)
+            cargo_repo = CargoRepository(db)
             
             # --- NUEVO: GUARDIÁN DE ÁREAS ---
             # Validar que todas las áreas de los empleados a sincronizar existan en el catálogo o alias
             areas_desconocidas = set()
+            cargos_desconocidos = set()
+            generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
                 if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
@@ -306,25 +319,27 @@ class SyncService:
                     if not area_id:
                         areas_desconocidas.add(area_raw)
             
-            from backend.repositories.cargo import CargoRepository
-            cargo_repo = CargoRepository(db)
-            
-            # --- NUEVO: GUARDIÁN DE CARGOS ---
-            cargos_desconocidos = set()
-            for emp_data in empleados_bioalba:
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
                 if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
                     cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
                     if not cargo_id:
                         cargos_desconocidos.add(cargo_raw)
 
-            if areas_desconocidas or cargos_desconocidos:
-                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas y {len(cargos_desconocidos)} cargos desconocidos.")
+                genero_raw = str(emp_data.get('genero', '')).strip()
+                if genero_raw and genero_raw not in ['---', 'None', 'Sin Asignar']:
+                    genero_row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero_raw,))
+                    if not genero_row:
+                        generos_desconocidos.add(genero_raw)
+
+            if areas_desconocidas or cargos_desconocidos or generos_desconocidos:
+                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas, {len(cargos_desconocidos)} cargos y {len(generos_desconocidos)} géneros desconocidos.")
                 res = {"status": "requires_confirmation"}
                 if areas_desconocidas:
                     res["nuevas_areas"] = sorted(list(areas_desconocidas))
                 if cargos_desconocidos:
                     res["nuevos_cargos"] = sorted(list(cargos_desconocidos))
+                if generos_desconocidos:
+                    res["nuevos_generos"] = sorted(list(generos_desconocidos))
                 return res
             # --------------------------------
             

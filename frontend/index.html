@@ -2388,6 +2388,41 @@
                 </div>
             </div>
 
+            <!-- Modal para Resolución de Géneros Desconocidos (Guardián) -->
+            <div id="modal-resolver-generos" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title fw-bold"><i class="bi bi-gender-ambiguous me-2"></i>Nuevos Géneros Detectados</h5>
+                            <button type="button" class="btn-close btn-close-white" onclick="cancelarResolucionGeneros()"></button>
+                        </div>
+                        <div class="modal-body p-4">
+                            <div class="alert alert-info border-0 shadow-sm mb-4">
+                                <strong>¡Atención!</strong> Se han encontrado valores de género en BioAlba que no existen en el catálogo local.
+                                Serán agregados automáticamente. Revise y confirme para continuar.
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Género detectado</th>
+                                            <th class="text-center">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-resolver-generos">
+                                        <!-- Inyectado por JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light">
+                            <button type="button" class="btn btn-secondary" onclick="cancelarResolucionGeneros()">Cancelar Sincronización</button>
+                            <button type="button" class="btn btn-primary fw-bold" onclick="guardarResolucionGeneros()">Crear Géneros y Continuar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
             
             <!-- Modal Asistente de Configuración Inicial -->

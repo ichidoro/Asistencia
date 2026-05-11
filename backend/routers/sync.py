@@ -152,21 +152,32 @@ async def resolver_cargos(
     return {"status": "ok", "message": "Cargos resueltos correctamente. Puede reanudar la sincronización."}
 
 
+class ResolverGenerosRequest(BaseModel):
+    resoluciones: List[str]  # Lista de géneros a insertar (e.g. ["Masculino", "Femenino"])
+
 @router.post(
     "/resolver-generos/",
     summary="Resolver géneros pendientes",
     description="Confirma la extracción de géneros desde BioAlba y los persiste en la base de datos local."
 )
-async def resolver_generos_endpoint():
+async def resolver_generos_endpoint(
+    request: ResolverGenerosRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+):
     """
     Guarda los géneros extraídos en la base de datos local
     al confirmar la acción desde el frontend, siguiendo el hilo de sincronización.
     """
     try:
-        # Los géneros ahora se resuelven automáticamente durante la creación del empleado.
-        # Este endpoint se mantiene por retrocompatibilidad con el frontend temporalmente.
+        await db.connect()
+        for genero in request.resoluciones:
+            # Insertar solo si no existe
+            existente = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero,))
+            if not existente:
+                await db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (genero,))
         return {"status": "ok", "message": "Géneros guardados correctamente."}
     except Exception as e:
+        logger.error(f"Error guardando géneros: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

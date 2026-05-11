@@ -279,14 +279,22 @@ function setupEventListeners() {
         const isInitialSync = !localStorage.getItem('wizard_completed');
         window._resolverMode = isInitialSync ? 'guardian' : 'stream';
         window._pendingCargos = data.nuevos_cargos || []; // Guardar cargos pendientes para después de áreas
+        window._pendingGeneros = data.nuevos_generos || []; // Guardar géneros pendientes
         
         if (data.nuevas_areas && data.nuevas_areas.length > 0) {
           showResolverAreasModal(data.nuevas_areas);
         } else if (data.nuevos_cargos && data.nuevos_cargos.length > 0) {
           showResolverCargosModal(data.nuevos_cargos);
+        } else if (data.nuevos_generos && data.nuevos_generos.length > 0) {
+          showResolverGenerosModal(data.nuevos_generos);
         } else {
           if (isInitialSync) {
-            if (typeof showModalGeneros === 'function') showModalGeneros();
+            const wizardEl = document.getElementById('modal-wizard-configuracion');
+            if (wizardEl) {
+              const wizardModal = new bootstrap.Modal(wizardEl);
+              wizardModal.show();
+              if (typeof resetWizard === 'function') resetWizard();
+            }
           } else {
             openSyncModal();
           }
@@ -2173,12 +2181,17 @@ window.confirmSync = async function () {
             window._resolverMode = 'stream';
             const nuevasAreas = eventData.nuevas_areas || [];
             const nuevosCargos = eventData.nuevos_cargos || [];
+            const nuevosGeneros = eventData.nuevos_generos || [];
             
+            window._pendingCargos = nuevosCargos;
+            window._pendingGeneros = nuevosGeneros;
+
             if (nuevasAreas.length > 0) {
-              window._pendingCargos = nuevosCargos;
               showResolverAreasModal(nuevasAreas);
             } else if (nuevosCargos.length > 0) {
               showResolverCargosModal(nuevosCargos);
+            } else if (nuevosGeneros.length > 0) {
+              showResolverGenerosModal(nuevosGeneros);
             }
             finalStats = null;
           } else if (eventType === 'done') {
@@ -2321,13 +2334,25 @@ window.guardarResolucionAreas = async function() {
     if (window._resolverMode === 'guardian') {
       if (window._pendingCargos && window._pendingCargos.length > 0) {
         showResolverCargosModal(window._pendingCargos);
+      } else if (window._pendingGeneros && window._pendingGeneros.length > 0) {
+        showResolverGenerosModal(window._pendingGeneros);
       } else {
-        if (typeof showModalGeneros === 'function') {
-          showModalGeneros();
+        const wizardEl = document.getElementById('modal-wizard-configuracion');
+        if (wizardEl) {
+          const wizardModal = new bootstrap.Modal(wizardEl);
+          wizardModal.show();
+          if (typeof resetWizard === 'function') resetWizard();
         }
       }
     } else {
-      openSyncModal();
+      // Flujo Stream
+      if (window._pendingCargos && window._pendingCargos.length > 0) {
+        showResolverCargosModal(window._pendingCargos);
+      } else if (window._pendingGeneros && window._pendingGeneros.length > 0) {
+        showResolverGenerosModal(window._pendingGeneros);
+      } else {
+        openSyncModal();
+      }
     }
     
   } catch (error) {
@@ -2406,11 +2431,23 @@ window.guardarResolucionCargos = async function() {
     
     // Reanudar la sincronización automáticamente
     if (window._resolverMode === 'guardian') {
-      if (typeof showModalGeneros === 'function') {
-        showModalGeneros();
+      if (window._pendingGeneros && window._pendingGeneros.length > 0) {
+        showResolverGenerosModal(window._pendingGeneros);
+      } else {
+        const wizardEl = document.getElementById('modal-wizard-configuracion');
+        if (wizardEl) {
+          const wizardModal = new bootstrap.Modal(wizardEl);
+          wizardModal.show();
+          if (typeof resetWizard === 'function') resetWizard();
+        }
       }
     } else {
-      openSyncModal();
+      // Flujo Stream
+      if (window._pendingGeneros && window._pendingGeneros.length > 0) {
+        showResolverGenerosModal(window._pendingGeneros);
+      } else {
+        openSyncModal();
+      }
     }
     
   } catch (error) {
@@ -2422,14 +2459,79 @@ window.guardarResolucionCargos = async function() {
   }
 };
 
-window.showModalGeneros = function() {
-  // Los géneros ahora se resuelven automáticamente en el backend.
-  // Saltamos directo al Wizard de configuración inicial.
-  const wizardEl = document.getElementById('modal-wizard-configuracion');
-  if (wizardEl) {
-    const wizardModal = new bootstrap.Modal(wizardEl);
-    wizardModal.show();
-    if (typeof resetWizard === 'function') resetWizard();
+window.showResolverGenerosModal = function(nuevosGeneros) {
+  const tbody = document.getElementById('tbody-resolver-generos');
+  tbody.innerHTML = '';
+  
+  if (nuevosGeneros.length === 0) return;
+  
+  nuevosGeneros.forEach((genero, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="fw-bold">${genero}</td>
+      <td class="text-center text-success"><i class="bi bi-plus-circle-fill"></i> Se creará automáticamente</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  const modal = new bootstrap.Modal(document.getElementById('modal-resolver-generos'));
+  modal.show();
+};
+
+window.cancelarResolucionGeneros = function() {
+  const modalEl = document.getElementById('modal-resolver-generos');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  alert("Sincronización cancelada. Debe resolver los géneros antes de continuar.");
+};
+
+window.guardarResolucionGeneros = async function() {
+  if (!window._pendingGeneros || window._pendingGeneros.length === 0) {
+    return;
+  }
+  
+  const btnGuardar = document.querySelector('#modal-resolver-generos .btn-primary');
+  btnGuardar.disabled = true;
+  btnGuardar.innerText = 'Guardando...';
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/sync/resolver-generos/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resoluciones: window._pendingGeneros })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      alert(`Error al guardar géneros: ${err.detail || 'Error desconocido'}`);
+      return;
+    }
+    
+    // Cerrar modal
+    const modalEl = document.getElementById('modal-resolver-generos');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+    
+    window._pendingGeneros = [];
+    
+    // Reanudar la sincronización automáticamente
+    if (window._resolverMode === 'guardian') {
+      const wizardEl = document.getElementById('modal-wizard-configuracion');
+      if (wizardEl) {
+        const wizardModal = new bootstrap.Modal(wizardEl);
+        wizardModal.show();
+        if (typeof resetWizard === 'function') resetWizard();
+      }
+    } else {
+      openSyncModal();
+    }
+    
+  } catch (error) {
+    console.error("Error al resolver géneros:", error);
+    alert("Hubo un problema al guardar los géneros.");
+  } finally {
+    btnGuardar.disabled = false;
+    btnGuardar.innerText = 'Crear Géneros y Continuar';
   }
 };
 
