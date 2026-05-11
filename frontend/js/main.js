@@ -2133,9 +2133,16 @@ window.confirmSync = async function () {
             console.log(`📌 [Sync] ${eventData.idx}/${eventData.total}: ${eventData.nombre}`);
           } else if (eventType === 'requires_confirmation') {
             hideBatchLoadingOverlay();
-            const nuevasAreas = eventData.nuevas_areas || [];
             window._resolverMode = 'stream';
-            showResolverAreasModal(nuevasAreas);
+            const nuevasAreas = eventData.nuevas_areas || [];
+            const nuevosCargos = eventData.nuevos_cargos || [];
+            
+            if (nuevasAreas.length > 0) {
+              window._pendingCargos = nuevosCargos;
+              showResolverAreasModal(nuevasAreas);
+            } else if (nuevosCargos.length > 0) {
+              showResolverCargosModal(nuevosCargos);
+            }
             finalStats = null;
           } else if (eventType === 'done') {
             finalStats = eventData;
@@ -2377,6 +2384,31 @@ window.guardarResolucionCargos = async function() {
     btnGuardar.innerText = 'Guardar y Reanudar Sincronización';
   }
 };
+
+window.showModalGeneros = function() {
+  const modalEl = document.getElementById('modal-resolver-generos');
+  if (modalEl) {
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+  }
+};
+
+window.cancelarResolucionGeneros = function() {
+  const modalEl = document.getElementById('modal-resolver-generos');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+};
+
+window.continuarResolucionGeneros = function() {
+  const modalEl = document.getElementById('modal-resolver-generos');
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+  
+  if (typeof openSyncModal === 'function') {
+    openSyncModal();
+  }
+};
+
 
 // ==========================================
 // LOGICA DE SYNC ASISTENCIA (Manual por Areas)
