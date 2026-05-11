@@ -1295,6 +1295,11 @@
                                         Géneros</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="pagadores-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-pagadores" type="button" role="tab"
+                                        onclick="if(typeof openTabPagadores === 'function') openTabPagadores()">🏦 Pagadores</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="bonos-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-bonos" type="button" role="tab">💰 Bonos</button>
                                 </li>
@@ -1400,6 +1405,40 @@
                                         <div class="text-center py-5">
                                             <div class="spinner-border text-primary" role="status"></div>
                                             <div class="text-muted mt-2">Cargando catálogo...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Tab Pagadores -->
+                                <div class="tab-pane fade" id="tab-pagadores" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-8 mx-auto">
+                                            <div class="card border-0 bg-light">
+                                                <div class="card-body p-4">
+                                                    <h5 class="fw-bold mb-4">🏦 Gestión de Pagadores</h5>
+                                                    <p class="text-muted small mb-4">Defina las entidades responsables del pago de los beneficios o permisos.</p>
+                                                    <div class="mb-3">
+                                                        <label for="config-new-pagador-nombre" class="form-label small fw-bold text-muted">Nombre del Nuevo Pagador</label>
+                                                        <div class="input-group">
+                                                            <input type="text" id="config-new-pagador-nombre" class="form-control" placeholder="Nombre (Ej: Seguro x)">
+                                                            <button class="btn btn-primary" onclick="addPagadorFromConfig()">Añadir</button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="table-responsive" style="max-height: 400px;">
+                                                        <table class="table table-sm table-hover">
+                                                            <thead class="table-light">
+                                                                <tr>
+                                                                    <th>Nombre</th>
+                                                                    <th style="width: 80px;">Estado</th>
+                                                                    <th style="width: 50px;"></th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="config-pagadores-list-body">
+                                                                <!-- Inyectado por JS -->
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

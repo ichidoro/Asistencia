@@ -95,21 +95,6 @@ class ConfiguracionRepository:
                 )
             """)
     
-            # Semilla inicial de Pagadores Legales (Batch ⚡)
-            pagadores_legales = [
-                ("Empleador", 1),
-                ("Entidad de Salud (FONASA/ISAPRE)", 1),
-                ("Mutual de Seguridad / ISL", 1),
-                ("Sin Goce de Sueldo", 1)
-            ]
-            try:
-                await self.db.executemany(
-                    "INSERT OR IGNORE INTO cat_pagadores (nombre, activo) VALUES (?, ?)",
-                    pagadores_legales
-                )
-            except Exception as e_p:
-                logger.debug(f"Semilla pagadores: {e_p}")
-
         # 5. Tabla Justificaciones (Registros)
         if not await self.db.table_exists("justificaciones"):
             await self.db.execute("""

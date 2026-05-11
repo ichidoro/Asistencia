@@ -986,10 +986,7 @@ window.closeModalGestionPagadores = function () {
 }
 
 function renderPagadoresList() {
-    const body = document.getElementById('pagadores-list-body');
-    if (!body) return;
-
-    body.innerHTML = pagadoresList.map(p => `
+    const html = pagadoresList.map(p => `
         <tr>
             <td class="small fw-bold">${p.nombre}</td>
             <td><span class="badge ${p.activo ? 'bg-success' : 'bg-secondary'}">${p.activo ? 'Activo' : 'Inactivo'}</span></td>
@@ -1000,6 +997,38 @@ function renderPagadoresList() {
             </td>
         </tr>
     `).join('') || '<tr><td colspan="3" class="text-center text-muted">No hay pagadores extra.</td></tr>';
+
+    const bodyModal = document.getElementById('pagadores-list-body');
+    if (bodyModal) bodyModal.innerHTML = html;
+
+    const bodyConfig = document.getElementById('config-pagadores-list-body');
+    if (bodyConfig) bodyConfig.innerHTML = html;
+}
+
+window.openTabPagadores = function () {
+    renderPagadoresList();
+}
+
+window.addPagadorFromConfig = async function () {
+    const input = document.getElementById('config-new-pagador-nombre');
+    const nombre = input.value.trim();
+    if (!nombre) return;
+
+    try {
+        const response = await fetch(`${API_CONFIG}pagadores/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, activo: true })
+        });
+        if (!response.ok) throw new Error("Error al añadir");
+
+        input.value = '';
+        showToast("Pagador añadido", "success");
+        await loadPagadores();
+        renderPagadoresList();
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
 window.addPagador = async function () {

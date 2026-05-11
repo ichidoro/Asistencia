@@ -2492,8 +2492,15 @@ window.abrirConfigJustificacionWizard = function() {
     const tabJust = document.getElementById('justificaciones-tab');
     if (tabJust) tabJust.click();
     
-    if (typeof openModalTipoJ === 'function') {
-      openModalTipoJ();
+    if (typeof pagadoresList !== 'undefined' && pagadoresList.length === 0) {
+      if (typeof openModalGestionPagadores === 'function') {
+        openModalGestionPagadores();
+        showToast("Por favor, ingrese al menos un pagador antes de crear justificaciones.", "warning");
+      }
+    } else {
+      if (typeof openModalTipoJ === 'function') {
+        openModalTipoJ();
+      }
     }
   }, 600);
 };
