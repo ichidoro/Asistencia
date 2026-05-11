@@ -113,7 +113,40 @@ async function saveTurno() {
         const metaInputObj = document.getElementById('input-meta-bolsa');
         turno.meta_horas_semanales = metaInputObj ? parseFloat(metaInputObj.value) || 176 : 176;
     } else {
-        turno.meta_horas_semanales = totalHoras;
+        const metaInputObj = document.getElementById('input-meta-jornada');
+        turno.meta_horas_semanales = metaInputObj ? parseFloat(metaInputObj.value) || 44 : 44;
+    }
+
+    if (turno.tipo_programacion !== 'FLEXIBLE_BOLSA') {
+        let hasMismatch = false;
+        let mismatchDetails = [];
+        
+        weekContainers.forEach((container, wIdx) => {
+            const numSemana = wIdx + 1;
+            const totalSemana = Array.from(container.querySelectorAll('.hours-calc'))
+                .reduce((acc, input) => acc + (parseFloat(input.value) || 0), 0);
+            
+            if (totalSemana !== turno.meta_horas_semanales && totalSemana > 0) {
+                hasMismatch = true;
+                mismatchDetails.push(`Semana ${numSemana}: <strong>${totalSemana.toFixed(1)} hrs</strong>`);
+            }
+        });
+
+        if (hasMismatch) {
+            const result = await Swal.fire({
+                title: "Inconsistencia de Horas",
+                html: `La jornada objetivo del turno es de <b>${turno.meta_horas_semanales} hrs</b>, pero la planificación suma diferente:<br><br>` + 
+                      mismatchDetails.join('<br>') + 
+                      `<br><br>¿Estás seguro de que deseas guardar este turno así?`,
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#f59e0b",
+                confirmButtonText: "Sí, guardar igual",
+                cancelButtonText: "No, corregir",
+                reverseButtons: true
+            });
+            if (!result.isConfirmed) return;
+        }
     }
 
     try {
@@ -202,6 +235,7 @@ async function openModalHorario(id = null) {
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
             if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "09:00";
+            if (form.meta_horas_semanales) form.meta_horas_semanales.value = turno.meta_horas_semanales || 44;
             
             // Cargar áreas (soporta nuevo modelo areas: List[str] o fallback antiguo area: str)
             let areasToSelect = turno.areas || [];
@@ -274,6 +308,7 @@ async function openModalHorario(id = null) {
         }
     } else {
         form.reset();
+        if (form.meta_horas_semanales) form.meta_horas_semanales.value = 44;
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = 30;
         toggleColacionInput();
@@ -969,11 +1004,11 @@ function renderModalHtml() {
                 <div class="modal-body p-4">
                     <form id="formTurno">
                         <div class="row g-3 mb-4">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label for="input-nombre-turno" class="form-label">Nombre del Turno</label>
                                 <input type="text" id="input-nombre-turno" class="form-control" name="nombre" required placeholder="Ej: Operativo Mañana">
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
                                     <option value="FIJO">Horario Fijo</option>
@@ -982,7 +1017,15 @@ function renderModalHtml() {
                                     <option value="FLEXIBLE_BOLSA">Flexible (Bolsa de Horas)</option>
                                 </select>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3" id="div-meta-jornada">
+                                <label for="input-meta-jornada" class="form-label fw-bold text-primary">Jornada Semanal</label>
+                                <div class="input-group">
+                                    <input type="number" id="input-meta-jornada" class="form-control border-primary" name="meta_horas_semanales" value="44" step="0.5" oninput="updateAllCalculations()">
+                                    <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
+                                </div>
+                                <div class="form-text small text-primary">Meta de horas esperadas.</div>
+                            </div>
+                            <div class="col-md-3">
                                 <label class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">
                                     <span>Áreas de Visibilidad</span>
                                 </label>
@@ -1291,6 +1334,9 @@ function handleTipoProgramacionChange() {
     const divLineaFicticia = document.getElementById('divLineaFicticia');
     if (divLineaFicticia) divLineaFicticia.style.display = isFlexible ? 'flex' : 'none';
 
+    const divMetaJornada = document.getElementById('div-meta-jornada');
+    if (divMetaJornada) divMetaJornada.style.display = isFlexible ? 'none' : 'block';
+
     // Ocultar Gobernanza de Tiempos si es Flexible
     document.querySelectorAll('.gobernanza-col').forEach(col => {
         col.style.display = isFlexible ? 'none' : 'block';
@@ -1451,18 +1497,21 @@ function updateAllCalculations() {
             row.querySelector('.hours-calc').value = Math.max(0, total.toFixed(2));
         });
 
-        // Validación 44 horas
+        // Validación de horas
         const totalSemana = Array.from(container.querySelectorAll('.hours-calc'))
             .reduce((acc, input) => acc + (parseFloat(input.value) || 0), 0);
 
+        const metaInput = document.getElementById('input-meta-jornada');
+        const metaHoras = metaInput ? (parseFloat(metaInput.value) || 44) : 44;
+
         let alertDiv = container.querySelector('.alert-hours-warning');
-        if (totalSemana > 44) {
+        if (totalSemana !== metaHoras && totalSemana > 0) {
             if (!alertDiv) {
                 alertDiv = document.createElement('div');
                 alertDiv.className = 'alert alert-warning p-1 mt-2 small alert-hours-warning';
                 container.appendChild(alertDiv);
             }
-            alertDiv.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Atención: Esta semana suma <strong>${totalSemana.toFixed(1)}</strong> horas (Máx legal sugerido: 44h).`;
+            alertDiv.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Atención: Esta semana suma <strong>${totalSemana.toFixed(1)}</strong> hrs (Objetivo: ${metaHoras}h).`;
         } else if (alertDiv) {
             alertDiv.remove();
         }

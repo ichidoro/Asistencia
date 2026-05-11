@@ -384,15 +384,15 @@ class TurnoRepository:
             # 1. Insertar Turno Padre
             sql_turno = """
                 INSERT INTO turnos (
-                    nombre, tipo_programacion,
+                    nombre, tipo_programacion, meta_horas_semanales,
                     tolerancia_retraso_alerta, tolerancia_retraso_descuento,
                     redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, es_turno_cortado,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     turno_padre_id, fecha_vigencia
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
-                turno.nombre, turno.tipo_programacion,
+                turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.es_turno_cortado,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
