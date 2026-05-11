@@ -106,8 +106,9 @@ class EmpleadoUpdate(_ValidateDatesMixin, BaseModel):
     compania: Optional[str] = Field(None, max_length=100)
     email: Optional[str] = Field(None, max_length=100)
     telefono: Optional[str] = Field(None, max_length=20)
-    genero: Optional[str] = Field(None, max_length=20)
-    activo: Optional[bool] = None
+    genero: Optional[str] = Field(None, max_length=20, description="Género (Hombre/Mujer/Otro)")
+    genero_id: Optional[int] = Field(None, description="ID del género en la tabla cat_generos")
+    activo: Optional[bool] = True
     fecha_nacimiento: Optional[str] = None
     fecha_ingreso: Optional[str] = None
     fecha_salida: Optional[str] = None

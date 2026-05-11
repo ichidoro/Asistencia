@@ -32,8 +32,8 @@ class Empleado:
     # Contacto
     email: Optional[str] = None
     telefono: Optional[str] = None
-    
-    # Estado
+    genero: Optional[str] = None
+    genero_id: Optional[int] = None
     activo: bool = True
     
     # Fechas
@@ -97,6 +97,7 @@ class Empleado:
             "email": self.email,
             "telefono": self.telefono,
             "genero": self.genero,
+            "genero_id": self.genero_id,
             "activo": self.activo,
             "fecha_nacimiento": self.fecha_nacimiento,
             "fecha_ingreso": self.fecha_ingreso,
@@ -127,7 +128,8 @@ class Empleado:
             email=data.get("email"),
             telefono=data.get("telefono"),
             genero=data.get("genero"),
-            activo=data.get("activo", True),
+            genero_id=data.get("genero_id"),
+            activo=bool(data.get("activo", True)),
             fecha_nacimiento=data.get("fecha_nacimiento"),
             fecha_ingreso=data.get("fecha_ingreso"),
             fecha_salida=data.get("fecha_salida"),

@@ -139,6 +139,7 @@ class EmpleadoRepository:
                 "fecha_nacimiento": "TEXT",
                 "cant_contratos": "INTEGER DEFAULT 1",
                 "genero": "TEXT",
+                "genero_id": "INTEGER",
                 "decision_vencimiento": "TEXT",
                 "cargo_id": "INTEGER REFERENCES cargos(id)"
             }
@@ -173,6 +174,23 @@ class EmpleadoRepository:
                 );
                 """)
                 logger.info("✨ Tabla cargos_alias creada (migración)")
+                
+            # --- NUEVO: Tabla de cat_generos ---
+            if not await self.db.table_exists("cat_generos"):
+                await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS cat_generos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL UNIQUE
+                );
+                """)
+                try:
+                    await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (1, 'Masculino')")
+                    await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (2, 'Femenino')")
+                    await self.db.execute("INSERT OR IGNORE INTO cat_generos (id, nombre) VALUES (3, 'Otro')")
+                except Exception as e:
+                    pass
+                logger.info("✨ Tabla cat_generos creada (migración)")
+
             
         except Exception as e:
             logger.warning(f"⚠️ Error en migración de esquema de empleados: {e}")
@@ -184,11 +202,19 @@ class EmpleadoRepository:
         query = """
         INSERT INTO empleados (
             rut, nombre, apellido_paterno, apellido_materno,
-            cargo, cargo_id, area_id, compania, email, telefono, genero, activo,
+            cargo, cargo_id, area_id, compania, email, telefono, genero, genero_id, activo,
             fecha_nacimiento, fecha_ingreso, fecha_salida, tipo_contrato, cant_contratos, decision_vencimiento
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
+        # Mapeo manual si viene solo genero (por compatibilidad)
+        gen_id = empleado.genero_id
+        if gen_id is None and empleado.genero:
+            g = str(empleado.genero).lower()
+            if g in ['masculino', 'm', 'hombre']: gen_id = 1
+            elif g in ['femenino', 'f', 'mujer']: gen_id = 2
+            elif g in ['otro', 'o']: gen_id = 3
+            
         cursor = await self.db.execute(query, (
             empleado.rut,
             empleado.nombre,
@@ -201,6 +227,7 @@ class EmpleadoRepository:
             empleado.email,
             empleado.telefono,
             empleado.genero,
+            gen_id,
             1 if empleado.activo else 0,
             empleado.fecha_nacimiento,
             empleado.fecha_ingreso,
@@ -220,10 +247,11 @@ class EmpleadoRepository:
     async def get_by_id(self, empleado_id: int) -> Optional[Empleado]:
         """Obtener empleado por ID (con info de turno asignado)"""
         query = """
-            SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
+            SELECT e.*, a.nombre as area, cg.nombre as genero_nombre, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas a ON ha.area_id = a.id
+            LEFT JOIN cat_generos cg ON e.genero_id = cg.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
             WHERE e.id = ?
             GROUP BY e.id
@@ -239,10 +267,11 @@ class EmpleadoRepository:
     async def get_by_rut(self, rut: str) -> Optional[Empleado]:
         """Obtener empleado por RUT"""
         query = """
-            SELECT e.*, a.nombre as area
+            SELECT e.*, a.nombre as area, cg.nombre as genero_nombre
             FROM empleados e
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas a ON ha.area_id = a.id
+            LEFT JOIN cat_generos cg ON e.genero_id = cg.id
             WHERE e.rut = ?
         """
         
@@ -264,10 +293,11 @@ class EmpleadoRepository:
     ) -> List[Empleado]:
         """Obtener todos los empleados con paginación y ordenamiento filtrado por áreas"""
         query = """
-            SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
+            SELECT e.*, a.nombre as area, cg.nombre as genero_nombre, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas a ON ha.area_id = a.id
+            LEFT JOIN cat_generos cg ON e.genero_id = cg.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
         """
         params = []
@@ -321,10 +351,11 @@ class EmpleadoRepository:
     ) -> List[Empleado]:
         """Buscar empleados con filtros y ordenamiento implementando RLS por áreas"""
         query = """
-            SELECT e.*, a.nombre as area, MAX(at.fecha_inicio) as fecha_asignacion_turno
+            SELECT e.*, a.nombre as area, cg.nombre as genero_nombre, MAX(at.fecha_inicio) as fecha_asignacion_turno
             FROM empleados e
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas a ON ha.area_id = a.id
+            LEFT JOIN cat_generos cg ON e.genero_id = cg.id
             LEFT JOIN asignacion_turnos at ON e.id = at.empleado_id
             WHERE 1=1
         """
@@ -631,6 +662,7 @@ class EmpleadoRepository:
             email = ?,
             telefono = ?,
             genero = ?,
+            genero_id = ?,
             activo = ?,
             fecha_nacimiento = ?,
             fecha_ingreso = ?,
@@ -642,6 +674,14 @@ class EmpleadoRepository:
         WHERE id = ?
         """
         
+        # Mapeo manual si viene solo genero (por compatibilidad)
+        gen_id = empleado.genero_id
+        if gen_id is None and empleado.genero:
+            g = str(empleado.genero).lower()
+            if g in ['masculino', 'm', 'hombre']: gen_id = 1
+            elif g in ['femenino', 'f', 'mujer']: gen_id = 2
+            elif g in ['otro', 'o']: gen_id = 3
+            
         await self.db.execute(query, (
             empleado.rut,
             empleado.nombre,
@@ -654,6 +694,7 @@ class EmpleadoRepository:
             empleado.email,
             empleado.telefono,
             empleado.genero,
+            gen_id,
             1 if empleado.activo else 0,
             empleado.fecha_nacimiento,
             empleado.fecha_ingreso,
