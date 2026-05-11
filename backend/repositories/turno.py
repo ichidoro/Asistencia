@@ -19,9 +19,9 @@ class TurnoRepository:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     nombre TEXT NOT NULL,
                     tipo_programacion TEXT NOT NULL, -- FIJO, ROTATIVO, FLEXIBLE_BOLSA
-                    meta_horas_semanales REAL DEFAULT 44.0,
-                    tolerancia_retraso_alerta INTEGER DEFAULT 5,
-                    tolerancia_retraso_descuento INTEGER DEFAULT 15,
+                    meta_horas_semanales REAL DEFAULT 0.0,
+                    tolerancia_retraso_alerta INTEGER DEFAULT 0,
+                    tolerancia_retraso_descuento INTEGER DEFAULT 0,
                     redondeo_minutos INTEGER DEFAULT 0,
                     descuento_colacion_auto BOOLEAN DEFAULT 0,
                     minutos_colacion_auto INTEGER DEFAULT 0,

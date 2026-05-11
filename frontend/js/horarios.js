@@ -53,17 +53,42 @@ async function saveTurno() {
     const form = document.getElementById('formTurno');
     const formData = new FormData(form);
 
+    if (document.getElementById('chkColacion').checked) {
+        if (!document.getElementById('numColacion').value) {
+            alert("Debe ingresar los minutos de colación automática.");
+            return;
+        }
+    }
+
+    if (formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') {
+        const metaInputObj = document.getElementById('input-meta-bolsa');
+        if (!metaInputObj || !metaInputObj.value) {
+            alert("Debe ingresar la meta mensual (Hrs Totales) para la bolsa flexible.");
+            return;
+        }
+        if (!formData.get('hora_limite_ficticia')) {
+            alert("Debe ingresar la Hora Límite Ficticia para Bolsa Flexible.");
+            return;
+        }
+    } else {
+        const metaInputObj = document.getElementById('input-meta-jornada');
+        if (!metaInputObj || !metaInputObj.value) {
+            alert("Debe ingresar la jornada semanal (Hrs).");
+            return;
+        }
+    }
+
     // Build object
     const turno = {
         nombre: formData.get('nombre'),
         tipo_programacion: formData.get('tipo_programacion'),
-        tolerancia_retraso_alerta: parseInt(formData.get('tolerancia_retraso_alerta')),
-        tolerancia_retraso_descuento: parseInt(formData.get('tolerancia_retraso_descuento')),
+        tolerancia_retraso_alerta: parseInt(formData.get('tolerancia_retraso_alerta') || 0),
+        tolerancia_retraso_descuento: parseInt(formData.get('tolerancia_retraso_descuento') || 0),
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
-        minutos_colacion_auto: document.getElementById('chkColacion').checked ? (parseInt(document.getElementById('numColacion').value) || 0) : 0,
+        minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
         es_turno_cortado: !!document.getElementById('chkCortado').checked,
@@ -111,10 +136,10 @@ async function saveTurno() {
 
     if (turno.tipo_programacion === 'FLEXIBLE_BOLSA') {
         const metaInputObj = document.getElementById('input-meta-bolsa');
-        turno.meta_horas_semanales = metaInputObj ? parseFloat(metaInputObj.value) || 176 : 176;
+        turno.meta_horas_semanales = parseFloat(metaInputObj.value);
     } else {
         const metaInputObj = document.getElementById('input-meta-jornada');
-        turno.meta_horas_semanales = metaInputObj ? parseFloat(metaInputObj.value) || 44 : 44;
+        turno.meta_horas_semanales = parseFloat(metaInputObj.value);
     }
 
     if (turno.tipo_programacion !== 'FLEXIBLE_BOLSA') {
@@ -234,8 +259,8 @@ async function openModalHorario(id = null) {
             form.redondeo_minutos.value = String(turno.redondeo_minutos || 0);
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
-            if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "09:00";
-            if (form.meta_horas_semanales) form.meta_horas_semanales.value = turno.meta_horas_semanales || 44;
+            if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "";
+            if (form.meta_horas_semanales) form.meta_horas_semanales.value = turno.meta_horas_semanales || "";
             
             // Cargar áreas (soporta nuevo modelo areas: List[str] o fallback antiguo area: str)
             let areasToSelect = turno.areas || [];
@@ -243,11 +268,11 @@ async function openModalHorario(id = null) {
             await populateAreaSelect(areasToSelect);
 
             const inputMetaBol = document.getElementById('input-meta-bolsa');
-            if (inputMetaBol) inputMetaBol.value = turno.tipo_programacion === 'FLEXIBLE_BOLSA' ? turno.meta_horas_semanales : 176;
+            if (inputMetaBol) inputMetaBol.value = turno.tipo_programacion === 'FLEXIBLE_BOLSA' ? (turno.meta_horas_semanales || "") : "";
 
             const chkColacion = document.getElementById('chkColacion');
             chkColacion.checked = turno.descuento_colacion_auto;
-            document.getElementById('numColacion').value = turno.minutos_colacion_auto || 30;
+            document.getElementById('numColacion').value = turno.minutos_colacion_auto || "";
             toggleColacionInput();
 
             // Llenar Semanas
@@ -308,11 +333,11 @@ async function openModalHorario(id = null) {
         }
     } else {
         form.reset();
-        if (form.meta_horas_semanales) form.meta_horas_semanales.value = 44;
+        if (form.meta_horas_semanales) form.meta_horas_semanales.value = "";
         if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
         if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
         document.getElementById('chkColacion').checked = false;
-        document.getElementById('numColacion').value = 30;
+        document.getElementById('numColacion').value = "";
         toggleColacionInput();
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
@@ -1022,7 +1047,7 @@ function renderModalHtml() {
                             <div class="col-md-3" id="div-meta-jornada">
                                 <label for="input-meta-jornada" class="form-label fw-bold text-primary">Jornada Semanal</label>
                                 <div class="input-group">
-                                    <input type="number" id="input-meta-jornada" class="form-control border-primary" name="meta_horas_semanales" value="44" step="0.5" oninput="updateAllCalculations()">
+                                    <input type="number" id="input-meta-jornada" class="form-control border-primary" name="meta_horas_semanales" value="" step="0.5" oninput="updateAllCalculations()" required>
                                     <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
                                 </div>
                                 <div class="form-text small text-primary">Meta de horas esperadas.</div>
@@ -1041,13 +1066,13 @@ function renderModalHtml() {
                         <div class="row g-3 mb-4" id="divLineaFicticia" style="display:none;">
                             <div class="col-md-6 border-start border-danger border-4 ps-3">
                                 <label for="input-hora-ficticia" class="form-label fw-bold text-danger">Hora Límite Ficticia (Trigger Inasistencia)</label>
-                                <input type="time" id="input-hora-ficticia" class="form-control border-danger" name="hora_limite_ficticia" value="09:00">
+                                <input type="time" id="input-hora-ficticia" class="form-control border-danger" name="hora_limite_ficticia" value="" required>
                                 <div class="form-text small text-danger">Si a esta hora no hay marcación, se emitirá alerta de INASISTENCIA (Reversible).</div>
                             </div>
                             <div class="col-md-6 border-start border-primary border-4 ps-3" id="colMetaBolsa">
                                 <label for="input-meta-bolsa" class="form-label fw-bold text-primary">Meta Mensual (Hrs Totales)</label>
                                 <div class="input-group">
-                                    <input type="number" id="input-meta-bolsa" class="form-control border-primary" value="176" step="0.5">
+                                    <input type="number" id="input-meta-bolsa" class="form-control border-primary" value="" step="0.5" required>
                                     <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
                                 </div>
                                 <div class="form-text small text-primary">Para Art. 25 BIS en Chile, usualmente son 176 o 180 horas al mes.</div>
@@ -1097,7 +1122,7 @@ function renderModalHtml() {
                                     </div>
                                     <div id="divColacionTime" style="display:none; width: 100px;">
                                         <div class="input-group input-group-sm">
-                                            <input type="number" class="form-control" id="numColacion" placeholder="Min" value="30" oninput="updateAllCalculations()">
+                                            <input type="number" class="form-control" id="numColacion" placeholder="Min" value="" oninput="updateAllCalculations()" required>
                                             <span class="input-group-text">min</span>
                                         </div>
                                     </div>
@@ -1504,10 +1529,10 @@ function updateAllCalculations() {
             .reduce((acc, input) => acc + (parseFloat(input.value) || 0), 0);
 
         const metaInput = document.getElementById('input-meta-jornada');
-        const metaHoras = metaInput ? (parseFloat(metaInput.value) || 44) : 44;
+        const metaHoras = metaInput ? parseFloat(metaInput.value) : NaN;
 
         let alertDiv = container.querySelector('.alert-hours-warning');
-        if (totalSemana !== metaHoras && totalSemana > 0) {
+        if (!isNaN(metaHoras) && totalSemana !== metaHoras && totalSemana > 0) {
             if (!alertDiv) {
                 alertDiv = document.createElement('div');
                 alertDiv.className = 'alert alert-warning p-1 mt-2 small alert-hours-warning';

@@ -18,7 +18,7 @@ async def limpiar_datos(opcion):
         
         
         
-        if opcion in ['1', '4']:
+        if opcion in ['1', '5']:
             print("🧹 Preparando limpieza de configuraciones del flujo inicial (áreas, cargos, géneros, bonos, justificaciones, feriados)...")
             tablas_configuracion = [
                 "bono_asignaciones", "bono_reglas", "bonos", 
@@ -33,7 +33,7 @@ async def limpiar_datos(opcion):
                 except Exception:
                     pass
             
-        if opcion in ['2', '4']:
+        if opcion in ['2', '5']:
             print("🧹 Preparando limpieza de tablas de turnos...")
             for tabla in ["asignacion_turnos", "turno_segmentos", "plantillas_planificacion", "turno_dias", "turno_areas", "turnos"]:
                 try:
@@ -42,9 +42,9 @@ async def limpiar_datos(opcion):
                 except Exception:
                     pass
 
-        if opcion in ['3', '4']:
-            print("🧹 Preparando limpieza de la tabla 'empleados' y datos transaccionales (asistencias, justificaciones, historiales)...")
-            tablas_empleados = [
+        if opcion in ['4', '3', '5']:
+            print("🧹 Preparando limpieza de registros transaccionales (asistencias, marcaciones brutas, horas extras)...")
+            tablas_transaccionales = [
                 "cierres_periodos",
                 "logs_raw",
                 "sync_logs",
@@ -53,7 +53,21 @@ async def limpiar_datos(opcion):
                 "jornadas_especiales",
                 "bolsa_horas_resumen",
                 "asistencias",
-                "justificaciones",
+                "justificaciones"
+            ]
+            for tabla in tablas_transaccionales:
+                try:
+                    if await db.table_exists(tabla):
+                        await db.execute_script(f"""
+                            DELETE FROM {tabla};
+                            DELETE FROM sqlite_sequence WHERE name='{tabla}';
+                        """)
+                except Exception:
+                    pass
+
+        if opcion in ['3', '5']:
+            print("🧹 Preparando limpieza de la tabla 'empleados' y sus historiales...")
+            tablas_empleados = [
                 "historial_areas",
                 "periodos_empleo",
                 "empleados"
@@ -83,21 +97,22 @@ def menu():
     print("=" * 50)
     print("1. Limpiar tablas 'areas', 'cargos', 'generos', 'bonos' y 'justificaciones'")
     print("2. Limpiar tablas de 'turnos' completas")
-    print("3. Limpiar tabla 'empleados' (incluye asistencias e historiales)")
-    print("4. Limpiar TODA LA BASE DE DATOS (Opciones 1, 2 y 3)")
-    print("5. Salir")
+    print("3. Limpiar tabla 'empleados' (ATENCIÓN: Borra asistencias y marcaciones también)")
+    print("4. Limpiar SOLO datos Transaccionales (marcaciones logs_raw, asistencias, horas extras)")
+    print("5. Limpiar TODA LA BASE DE DATOS (Opciones 1, 2, 3 y 4)")
+    print("6. Salir")
     print("=" * 50)
     
-    opcion = input("Elige una opción (1-5): ").strip()
+    opcion = input("Elige una opción (1-6): ").strip()
     return opcion
 
 if __name__ == "__main__":
     while True:
         op = menu()
-        if op == '5':
+        if op == '6':
             print("Saliendo...")
             break
-        elif op in ['1', '2', '3', '4']:
+        elif op in ['1', '2', '3', '4', '5']:
             asyncio.run(limpiar_datos(op))
             break
         else:

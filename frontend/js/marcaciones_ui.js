@@ -2981,9 +2981,9 @@ function renderVistaAnalitica(respData, container) {
         let acumBolsa=0, excedido=false, metaMin=0;
 
         if (esBolsa && emp.info) {
-            // meta_horas_semanales en bolsa flexible es la meta mensual total (ej: 176 hrs)
+            // meta_horas_semanales en bolsa flexible es la meta mensual total
             let metaOriginal = emp.info.meta_mensual_minutos
-                   || Math.round((emp.info.meta_horas_semanales || 176) * 60);
+                   || Math.round((emp.info.meta_horas_semanales || 0) * 60);
 
             // --- Lógica Art 25 bis: Reducción proporcional por ausencias justificadas ---
             let diasProgramados = 0;

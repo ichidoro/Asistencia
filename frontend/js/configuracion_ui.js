@@ -980,9 +980,25 @@ window.openModalGestionPagadores = function () {
     document.getElementById('modal-gestion-pagadores').style.display = 'flex';
 }
 
-window.closeModalGestionPagadores = function () {
+window.closeModalGestionPagadores = async function () {
     document.getElementById('modal-gestion-pagadores').style.display = 'none';
-    loadPagadores(); // Recargar select al cerrar por si hubo cambios
+    await loadPagadores(); // Recargar select al cerrar por si hubo cambios
+    
+    // Retomar el Wizard si corresponde
+    if (window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {
+        if (typeof pagadoresList !== 'undefined' && pagadoresList.length > 0) {
+            if (typeof openModalTipoJ === 'function') {
+                openModalTipoJ();
+            }
+        } else {
+            // Si no crearon ninguno, volver a mostrar el modal del wizard para no dejar la pantalla en negro
+            const modalEl = document.getElementById('modal-wizard-configuracion');
+            if (modalEl) {
+                const m = bootstrap.Modal.getOrCreateInstance(modalEl);
+                m.show();
+            }
+        }
+    }
 }
 
 function renderPagadoresList() {
