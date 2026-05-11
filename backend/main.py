@@ -42,6 +42,12 @@ def configure_logging():
     logger.remove()  # Remover handler por defecto
     # Console handler
     if sys.stdout is not None:
+        if sys.platform == "win32":
+            try:
+                sys.stdout.reconfigure(encoding='utf-8')
+            except Exception:
+                pass
+        
         logger.add(
             sys.stdout,
             colorize=True,

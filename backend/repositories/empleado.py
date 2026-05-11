@@ -79,7 +79,7 @@ class EmpleadoRepository:
             )
             """
             
-            await self.db.execute(query)
+            await self.db.execute_script(query)
             
             # Crear índices
             await self.db.execute(
@@ -113,7 +113,7 @@ class EmpleadoRepository:
             """
             await self.db.execute(query_hist)
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_historial_emp ON historial_areas(empleado_id)")
-            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_historial_area ON historial_areas(area)")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_historial_area ON historial_areas(area_id)")
             logger.info("✨ Tabla historial_areas creada")
             
             # Auto-poblar historial inicial para empleados existentes
