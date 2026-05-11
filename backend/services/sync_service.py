@@ -155,21 +155,32 @@ class SyncService:
             await db.connect()
             from backend.repositories.area import AreaRepository
             area_repo = AreaRepository(db)
+            from backend.repositories.cargo import CargoRepository
+            cargo_repo = CargoRepository(db)
             
             areas_desconocidas = set()
+            cargos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
                 if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
                     area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
+
+                cargo_raw = str(emp_data.get('cargo', '')).strip()
+                if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
+                    cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
+                    if not cargo_id:
+                        cargos_desconocidos.add(cargo_raw)
                         
-            if areas_desconocidas:
-                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas desconocidas antes de la sincronización.")
-                return {
-                    "status": "requires_confirmation",
-                    "nuevas_areas": sorted(list(areas_desconocidas))
-                }
+            if areas_desconocidas or cargos_desconocidos:
+                logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas y {len(cargos_desconocidos)} cargos desconocidos.")
+                res = {"status": "requires_confirmation"}
+                if areas_desconocidas:
+                    res["nuevas_areas"] = sorted(list(areas_desconocidas))
+                if cargos_desconocidos:
+                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos))
+                return res
                 
             return {"status": "ok"}
         except Exception as e:
