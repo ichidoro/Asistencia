@@ -58,14 +58,13 @@ async def limpiar_datos(opcion):
             ]
             for tabla in tablas_empleados:
                 try:
-                    await db.execute_script(f"""
-                        DELETE FROM {tabla};
-                        DELETE FROM sqlite_sequence WHERE name='{tabla}';
-                    """)
+                    if await db.table_exists(tabla):
+                        await db.execute_script(f"""
+                            DELETE FROM {tabla};
+                            DELETE FROM sqlite_sequence WHERE name='{tabla}';
+                        """)
                 except Exception as e:
-                    # Si la tabla no existe aún (porque es del Plan Maestro), lo ignoramos
-                    if "no such table" not in str(e).lower():
-                        print(f"⚠️ Nota al limpiar {tabla}: {e}")
+                    pass
             
         if script_sql:
             print("⏳ Ejecutando script de eliminación en SQLite local...")
