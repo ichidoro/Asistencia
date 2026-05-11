@@ -309,6 +309,8 @@ async function openModalHorario(id = null) {
     } else {
         form.reset();
         if (form.meta_horas_semanales) form.meta_horas_semanales.value = 44;
+        if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
+        if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = 30;
         toggleColacionInput();
@@ -995,7 +997,7 @@ function renderModalHtml() {
     return `
     <!-- Sin clase 'fade': la animación Bootstrap de fade causaba Layout Shifts masivos (CLS 60+) -->
     <div class="modal" id="modalTurno" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalTurnoLabel">Nuevo Turno</h5>
@@ -1057,12 +1059,12 @@ function renderModalHtml() {
                             <!-- Fila 1: Gobernanza de Tiempos (Sétrica 3 columnas) -->
                             <div class="col-md-3 gobernanza-col">
                                 <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Alerta (min)</label>
-                                <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" value="5">
+                                <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" value="0">
                                 <div class="form-text small" style="font-size: 0.7rem;">Aviso visual de retraso.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
                                 <label for="input-tol-desc" class="form-label small fw-bold">Tol. Descuento (min)</label>
-                                <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" value="15">
+                                <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" value="0">
                                 <div class="form-text small" style="font-size: 0.7rem;">Criterio para descuento real.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
