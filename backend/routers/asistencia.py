@@ -738,7 +738,7 @@ async def condonar_deuda(
                 await service.repository.toggle_condonacion_deuda(
                     empleado_id=emp_id,
                     fecha=fecha_str,
-                    condonar=request.condonar
+                    tipo_condonacion=request.tipo_condonacion
                 )
                 
                 # 2. Reprocesar solo ese dia para ese empleado para que el CASE en el upsert surta efecto
@@ -749,7 +749,7 @@ async def condonar_deuda(
                     force=True
                 )
                 
-        accion = "condonada" if request.condonar else "revocada"
+        accion = "condonada" if request.tipo_condonacion > 0 else "revocada"
         return {"success": True, "message": f"Deuda {accion} correctamente para {len(request.empleados_ids)} empleado(s) en {dias_totales} día(s)."}
     except Exception as e:
         logger.error(f"Error al condonar deuda: {str(e)}")

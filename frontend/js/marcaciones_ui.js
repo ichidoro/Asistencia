@@ -4229,17 +4229,31 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                     <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px;">
                         <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
                     </div>
-                    ${e.deuda_condonada 
-                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', false)" style="background:var(--danger-color, #f43f5e); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Revocar Condonación (Restaurar Deuda)">Revocar Perdonazo</button>`
-                        : (e.minutos_salida_adelantada > 0 ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', true)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Deuda (Regalar Salida Adelantada)">Perdonazo</button>` : '')
+                    <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; max-width: 150px;">
+                    ${e.deuda_condonada > 0
+                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 0)" style="background:var(--danger-color, #f43f5e); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Revocar Condonación (Restaurar Deuda)">Revocar Perdonazo</button>`
+                        : ''
                     }
+                    ${e.deuda_condonada === 0 && e.minutos_atraso > 0
+                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 2)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Atraso">Perd. Atraso</button>`
+                        : ''
+                    }
+                    ${e.deuda_condonada === 0 && e.minutos_salida_adelantada > 0
+                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 1)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Salida">Perd. Salida</button>`
+                        : ''
+                    }
+                    ${e.deuda_condonada === 0 && e.minutos_atraso > 0 && e.minutos_salida_adelantada > 0
+                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 3)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Ambas">Perd. Ambos</button>`
+                        : ''
+                    }
+                    </div>
                 </div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_atraso, 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_salida_adelantada, 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins((e.minutos_exceso_colacion || 0), 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins((e.minutos_permisos_detectados || 0), 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Comp.</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>
-                ${e.deuda_condonada ? `<div style="margin-top:6px; font-size:0.65rem; color:var(--success-color, #10b981); font-weight:600; text-align:center;"><i class="bi bi-check-circle me-1"></i>Deuda Condonada</div>` : ''}
+                ${e.deuda_condonada > 0 ? `<div style="margin-top:6px; font-size:0.65rem; color:var(--success-color, #10b981); font-weight:600; text-align:center;"><i class="bi bi-check-circle me-1"></i>Deuda Condonada</div>` : ''}
             </div>
         </div>
 
@@ -4255,15 +4269,16 @@ function _escAttr(html) {
 }
 
 
-window.toggleCondonacionDeuda = async function(empleadoId, fecha, condonar) {
-    if(!confirm(`¿Estás seguro que deseas ${condonar ? 'CONDONAR (Perdonazo)' : 'REVOCAR la condonación de'} la deuda horaria del empleado el ${fecha}?`)) return;
+window.toggleCondonacionDeuda = async function(empleadoId, fecha, tipo_condonacion) {
+    const isRevoke = tipo_condonacion === 0;
+    if(!confirm(`¿Estás seguro que deseas ${isRevoke ? 'REVOCAR la condonación de' : 'CONDONAR (Perdonazo)'} la deuda horaria del empleado el ${fecha}?`)) return;
 
     try {
         const payload = {
             empleados_ids: [empleadoId],
             fecha_inicio: fecha,
             fecha_fin: fecha,
-            condonar: condonar
+            tipo_condonacion: tipo_condonacion
         };
         const response = await fetch('/api/asistencia/condonar-deuda/', {
             method: 'POST',

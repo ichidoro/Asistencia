@@ -1185,6 +1185,8 @@ async function executePerdonazoMasivo() {
         const fechaInicio = document.getElementById('perdonazo-fecha-inicio').value;
         const fechaFin = document.getElementById('perdonazo-fecha-fin').value;
         const condonar = document.getElementById('perdonazo-accion').checked;
+        const tipoCondonacionBase = parseInt(document.getElementById('perdonazo-tipo').value) || 1;
+        const tipoCondonacion = condonar ? tipoCondonacionBase : 0;
 
         if (!fechaInicio || !fechaFin) {
             alert("Debe seleccionar un rango de fechas válido.");
@@ -1216,7 +1218,7 @@ async function executePerdonazoMasivo() {
             empleados_ids: empleadosIds,
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
-            condonar: condonar
+            tipo_condonacion: tipoCondonacion
         };
 
         const resp = await fetch('/api/asistencia/condonar-deuda/', {

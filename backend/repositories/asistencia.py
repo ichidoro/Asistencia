@@ -117,14 +117,15 @@ class AsistenciaRepository:
         """
         await self.batch_upsert_asistencia([data])
 
-    async def toggle_condonacion_deuda(self, empleado_id: int, fecha: str, condonar: bool) -> None:
+    async def toggle_condonacion_deuda(self, empleado_id: int, fecha: str, tipo_condonacion: int) -> None:
         """
         Cambia el estado de condonación de deuda para un registro de asistencia.
         Condonar deuda anula los minutos de deuda a 0 en el cálculo, sin alterar las marcas.
+        Tipos: 0=Ninguno, 1=Salida Adelantada, 2=Atraso, 3=Ambos
         """
         query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
-        val = 1 if condonar else 0
-        await self.db.execute(query, (val, empleado_id, fecha))
+        await self.batch_upsert_asistencia([]) # just in case
+        await self.db.execute_batch([(query, (tipo_condonacion, empleado_id, fecha))])
 
     async def batch_upsert_asistencia(self, data_list: List[Dict[str, Any]], bypass_cierre_check: bool = False, suppress_auto_sync: bool = False) -> None:
         """
@@ -167,10 +168,24 @@ class AsistenciaRepository:
                 minutos_colacion=excluded.minutos_colacion,
                 minutos_colacion_real=excluded.minutos_colacion_real,
                 horas_trabajadas=excluded.horas_trabajadas,
-                minutos_deuda=CASE WHEN asistencias.deuda_condonada = 1 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_salida_adelantada) ELSE excluded.minutos_deuda END,
+                minutos_deuda=CASE 
+                    WHEN asistencias.deuda_condonada = 3 THEN 0
+                    WHEN asistencias.deuda_condonada = 2 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_atraso)
+                    WHEN asistencias.deuda_condonada = 1 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_salida_adelantada)
+                    ELSE excluded.minutos_deuda 
+                END,
                 minutos_extra_bruto=excluded.minutos_extra_bruto,
-                minutos_salida_adelantada=CASE WHEN asistencias.deuda_condonada = 1 THEN 0 ELSE excluded.minutos_salida_adelantada END,
-                estado=CASE WHEN asistencias.deuda_condonada = 1 AND excluded.estado = 'SALIDA_ADELANTADA' THEN 'OK' ELSE excluded.estado END,
+                minutos_salida_adelantada=CASE 
+                    WHEN asistencias.deuda_condonada IN (1, 3) THEN 0 
+                    ELSE excluded.minutos_salida_adelantada 
+                END,
+                estado=CASE 
+                    WHEN asistencias.deuda_condonada = 3 AND excluded.estado IN ('ATRASO', 'SALIDA_ADELANTADA') THEN 'OK'
+                    WHEN asistencias.deuda_condonada = 2 AND excluded.estado = 'ATRASO' AND excluded.tiene_salida_adelantada = 0 THEN 'OK'
+                    WHEN asistencias.deuda_condonada = 2 AND excluded.estado = 'ATRASO' AND excluded.tiene_salida_adelantada = 1 THEN 'SALIDA_ADELANTADA'
+                    WHEN asistencias.deuda_condonada = 1 AND excluded.estado = 'SALIDA_ADELANTADA' THEN 'OK'
+                    ELSE excluded.estado 
+                END,
                 observaciones=excluded.observaciones,
                 origen=excluded.origen,
                 minutos_exceso_colacion=excluded.minutos_exceso_colacion,
@@ -181,8 +196,8 @@ class AsistenciaRepository:
                 hora_inicio_permiso=excluded.hora_inicio_permiso,
                 hora_termino_permiso=excluded.hora_termino_permiso,
                 minutos_permisos_detectados=excluded.minutos_permisos_detectados,
-                tiene_atraso=excluded.tiene_atraso,
-                tiene_salida_adelantada=CASE WHEN asistencias.deuda_condonada = 1 THEN 0 ELSE excluded.tiene_salida_adelantada END,
+                tiene_atraso=CASE WHEN asistencias.deuda_condonada IN (2, 3) THEN 0 ELSE excluded.tiene_atraso END,
+                tiene_salida_adelantada=CASE WHEN asistencias.deuda_condonada IN (1, 3) THEN 0 ELSE excluded.tiene_salida_adelantada END,
                 tiene_permiso=excluded.tiene_permiso,
                 num_semana_ganadora=excluded.num_semana_ganadora,
                 marcas_consumidas_ids=excluded.marcas_consumidas_ids,
