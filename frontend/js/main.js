@@ -242,6 +242,23 @@ function setupEventListeners() {
     await saveEmpleado();
   });
 
+  // Lógica de validación dinámica para Tipo de Contrato y Fecha Término
+  const inputTipoContrato = document.getElementById('input-tipo-contrato');
+  const inputFechaSalida = document.getElementById('input-fecha-salida');
+  
+  if (inputTipoContrato && inputFechaSalida) {
+      inputTipoContrato.addEventListener('change', () => {
+          if (inputTipoContrato.value === 'Indefinido') {
+              inputFechaSalida.disabled = true;
+              inputFechaSalida.value = ''; // Limpiar valor si pasa a Indefinido
+              inputFechaSalida.removeAttribute('required');
+          } else {
+              inputFechaSalida.disabled = false;
+              inputFechaSalida.setAttribute('required', 'required');
+          }
+      });
+  }
+
   // Search and Filter
   let searchTimeout;
   const handleSearchAndFilter = () => {
@@ -1068,6 +1085,13 @@ async function openModal(empleadoId = null) {
     if (dangerZone) dangerZone.classList.add('d-none');
     if (tabHistorial) tabHistorial.style.display = 'none'; // Ocultar si es nuevo
     formEmpleado.reset();
+
+    // Estado inicial por defecto (Nuevo)
+    const inputTipoContrato = document.getElementById('input-tipo-contrato');
+    if (inputTipoContrato) {
+        inputTipoContrato.value = 'Indefinido';
+        inputTipoContrato.dispatchEvent(new Event('change'));
+    }
   }
 
   modal.classList.add('active');
@@ -1113,7 +1137,12 @@ async function loadEmpleadoData(id) {
     document.getElementById('input-fecha-ingreso').value = empleado.fecha_ingreso || '';
     document.getElementById('input-fecha-nacimiento').value = empleado.fecha_nacimiento || '';
     document.getElementById('input-fecha-salida').value = empleado.fecha_salida || '';
-    document.getElementById('input-tipo-contrato').value = empleado.tipo_contrato || 'Indefinido';
+    const tipoContratoInput = document.getElementById('input-tipo-contrato');
+    tipoContratoInput.value = empleado.tipo_contrato || 'Indefinido';
+    tipoContratoInput.dispatchEvent(new Event('change')); // Ajustar campos dinámicamente
+    // Asegurarnos de que el valor se mantenga si cambió a algo inválido antes (solo por seguridad)
+    document.getElementById('input-fecha-salida').value = empleado.tipo_contrato === 'Indefinido' ? '' : (empleado.fecha_salida || '');
+    
     document.getElementById('input-cant-contratos').value = empleado.cant_contratos || 1;
     document.getElementById('input-activo').value = empleado.activo.toString();
 

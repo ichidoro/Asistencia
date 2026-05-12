@@ -348,13 +348,15 @@ class EmpleadoService:
             fecha_inicio = old_fecha_salida or empleado_updated.fecha_ingreso or hoy
             if fecha_inicio > hoy: fecha_inicio = hoy
             
-            logger.info(f"🔄 Cambio de contrato/estado detectado para {empleado_id}. Gatillando Auto-Healing.")
-            # Usamos BackgroundTasks o ejecución directa según el contexto, aquí es directo por ser service
-            await self.asis_service.reprocesar_periodo_empleado(
-                empleado_id=empleado_id,
-                fecha_inicio=fecha_inicio,
-                fecha_fin=hoy,
-                force=True
+            logger.info(f"🔄 Cambio de contrato/estado detectado para {empleado_id}. Gatillando Auto-Healing en background.")
+            import asyncio
+            asyncio.create_task(
+                self.asis_service.reprocesar_periodo_empleado(
+                    empleado_id=empleado_id,
+                    fecha_inicio=fecha_inicio,
+                    fecha_fin=hoy,
+                    force=True
+                )
             )
 
         return empleado_updated
@@ -639,12 +641,15 @@ class EmpleadoService:
             if updated_empleado.fecha_ingreso and fecha_inicio < updated_empleado.fecha_ingreso:
                 fecha_inicio = updated_empleado.fecha_ingreso
 
-            logger.info(f"🔄 AUTO-HEALING: Reprocesando asistencia de {updated_empleado.nombre} (ID {empleado_id}) desde {fecha_inicio} hasta hoy.")
-            await self.asis_service.reprocesar_periodo_empleado(
-                empleado_id=empleado_id,
-                fecha_inicio=fecha_inicio,
-                fecha_fin=hoy_str,
-                force=True
+            logger.info(f"🔄 AUTO-HEALING: Reprocesando asistencia de {updated_empleado.nombre} (ID {empleado_id}) desde {fecha_inicio} hasta hoy en background.")
+            import asyncio
+            asyncio.create_task(
+                self.asis_service.reprocesar_periodo_empleado(
+                    empleado_id=empleado_id,
+                    fecha_inicio=fecha_inicio,
+                    fecha_fin=hoy_str,
+                    force=True
+                )
             )
 
         return updated_empleado
@@ -774,12 +779,15 @@ class EmpleadoService:
         if self.asis_service:
             from datetime import date
             hoy = date.today().strftime("%Y-%m-%d")
-            logger.info(f"🔄 Baja registrada para {empleado_id}. Limpiando periodos póstumos.")
-            await self.asis_service.reprocesar_periodo_empleado(
-                empleado_id=empleado_id,
-                fecha_inicio=updated_empleado.fecha_salida,
-                fecha_fin=hoy,
-                force=True
+            logger.info(f"🔄 Baja registrada para {empleado_id}. Limpiando periodos póstumos en background.")
+            import asyncio
+            asyncio.create_task(
+                self.asis_service.reprocesar_periodo_empleado(
+                    empleado_id=empleado_id,
+                    fecha_inicio=updated_empleado.fecha_salida,
+                    fecha_fin=hoy,
+                    force=True
+                )
             )
 
         return updated_empleado

@@ -3667,25 +3667,33 @@ window.vaSetViewMode = function(mode) {
 
 // ─── CONTENIDO DE CELDA SEGÚN VIEWMODE ──────────────────────────────────────
 function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
-    // Proyección visual de LIBRE o FERIADO para fechas sin datos (futuras o sin marcas)
+    // Proyección visual de LIBRE o FERIADO para fechas sin datos o guardadas sin marcas
+    const est = di ? di.estado : null;
+    let esFeriadoPuro = isFer || est === 'FERIADO';
+    let esLibrePuro = est === 'LIBRE';
+
     if (!di || !di.estado) {
-        if (isFer) {
-            // Badge FER proyectado
-            return `<div class="badge-status badge-state-warning" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.65;"><span><i class="bi bi-calendar-heart-fill me-1"></i>FER</span></div>`;
-        }
         if (emp && emp.turno_dias && dateStr) {
             const dt2 = new Date(dateStr + 'T00:00:00');
-            // js getDay(): 0=Dom,1=Lun...6=Sab → Python: Mon=0..Sun=6
             const pyDay = dt2.getDay() === 0 ? 6 : dt2.getDay() - 1;
             const dayInfo = emp.turno_dias[pyDay];
             if (dayInfo && dayInfo.es_libre) {
-                // Badge LIB proyectado
-                return `<div class="badge-status badge-state-neutral" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.55;"><span><i class="bi bi-cup-hot-fill me-1"></i>LIB</span></div>`;
+                esLibrePuro = true;
             }
         }
+    }
+
+    if (esFeriadoPuro && (!est || est === 'FERIADO')) {
+        return `<div class="badge-status badge-state-warning" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.65;"><span><i class="bi bi-calendar-heart-fill me-1"></i>FER</span></div>`;
+    }
+    if (esLibrePuro && (!est || est === 'LIBRE')) {
+        return `<div class="badge-status badge-state-neutral" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.55;"><span><i class="bi bi-cup-hot-fill me-1"></i>LIB</span></div>`;
+    }
+
+    if (!di || !di.estado) {
         return '';
     }
-    const est = di.estado;
+    
     const hasEff = ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO'].includes(est);
 
     let resultHtml = '';

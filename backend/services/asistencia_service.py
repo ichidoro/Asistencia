@@ -581,6 +581,105 @@ class AsistenciaService:
         # En modo normal se hace checkpoint cada 50 días para limitar exposición al WAL.
         CHECKPOINT_INTERVAL = 50 if not collect_only else 0
 
+        # Inicializar rotativo_offset histórico si es posible
+        rotativo_offset = 0
+        last_asist = await db.fetch_one(
+            "SELECT fecha, num_semana_ganadora, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
+            (empleado_id, start.strftime("%Y-%m-%d"))
+        )
+        if last_asist and last_asist['num_semana_ganadora'] and last_asist['turno_asignado_id'] and first_assignment:
+            t_id = last_asist['turno_asignado_id']
+            tot_sems = turno_weeks_count.get(t_id, 1)
+            if tot_sems > 1:
+                last_dt = datetime.strptime(last_asist['fecha'], "%Y-%m-%d")
+                f_asig_dt = datetime.strptime(first_assignment, "%Y-%m-%d")
+                if f_asig_dt.weekday() == 6:
+                    f_asig_dt = f_asig_dt + timedelta(days=1)
+                else:
+                    f_asig_dt = f_asig_dt - timedelta(days=f_asig_dt.weekday())
+                d_diff = (last_dt - f_asig_dt).days
+                mat_sem = (d_diff // 7) % tot_sems + 1 if d_diff >= 0 else 1
+                rotativo_offset = last_asist['num_semana_ganadora'] - mat_sem
+
+        # ── FALLBACK: Deducir offset desde los primeros logs cuando no hay asistencias previas ──
+        # Para ROTATIVO_INTELIGENTE: cada empleado puede iniciar en una semana diferente
+        # del ciclo. Si no hay registro histórico, usamos el primer log de Entrada para
+        # determinar en qué semana real está el empleado (min_delta contra turno_dias).
+        if rotativo_offset == 0 and first_assignment and turno_ids:
+            _TIPOS_E_INIT = {'entrada', 'e', 'in', 'i', 'ingreso', 'in-entrada'}
+            for t_id_init in turno_ids:
+                tot_sems_init = turno_weeks_count.get(t_id_init, 1)
+                if tot_sems_init <= 1:
+                    continue
+                # ¿Es turno rotativo?
+                tipo_prog_init = None
+                for sems_init in turno_detalles.get(t_id_init, {}).values():
+                    for cfg_init in sems_init.values():
+                        tipo_prog_init = cfg_init.get('tipo_programacion')
+                        break
+                    if tipo_prog_init:
+                        break
+                if tipo_prog_init != 'ROTATIVO_INTELIGENTE':
+                    continue
+
+                f_asig_dt_init = datetime.strptime(first_assignment, "%Y-%m-%d")
+                # Mismo ajuste: Domingo → siguiente Lunes
+                if f_asig_dt_init.weekday() == 6:
+                    f_asig_dt_init = f_asig_dt_init + timedelta(days=1)
+                else:
+                    f_asig_dt_init = f_asig_dt_init - timedelta(days=f_asig_dt_init.weekday())
+
+                # Buscar el primer log de Entrada disponible
+                for log_init in all_logs:
+                    tipo_log = str(log_init.get('tipo') or '').strip().lower()
+                    if tipo_log not in _TIPOS_E_INIT:
+                        continue
+                    try:
+                        first_log_dt_init = datetime.strptime(log_init['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        continue
+
+                    log_fecha_init = log_init['fecha_hora'][:10]
+                    try:
+                        log_dt_init = datetime.strptime(log_fecha_init, "%Y-%m-%d")
+                    except ValueError:
+                        continue
+                    dsem_init = log_dt_init.weekday()
+
+                    d_diff_init = (log_dt_init - f_asig_dt_init).days
+                    mat_sem_init = (d_diff_init // 7) % tot_sems_init + 1 if d_diff_init >= 0 else 1
+
+                    # Calcular winner_sem (min_delta) para este log de anclaje
+                    winner_init = mat_sem_init
+                    min_d_init = None
+                    for nsem_init in range(1, tot_sems_init + 1):
+                        cfg_init_d = turno_detalles.get(t_id_init, {}).get(nsem_init, {}).get(dsem_init)
+                        if not cfg_init_d or cfg_init_d.get('es_libre'):
+                            continue
+                        ent_str_init = cfg_init_d.get('hora_entrada')
+                        sal_str_init = cfg_init_d.get('hora_salida')
+                        if not ent_str_init or not sal_str_init:
+                            continue
+                        try:
+                            t_ent_init = datetime.strptime(f"{log_fecha_init} {str(ent_str_init)[:5]}", "%Y-%m-%d %H:%M")
+                        except ValueError:
+                            continue
+                        # Corregir si el turno es nocturno y la entrada es antes de medianoche del día anterior
+                        if cfg_init_d.get('cruza_medianoche') and first_log_dt_init.hour < 12:
+                            t_ent_init -= timedelta(days=1)
+                        diff_s_init = abs((first_log_dt_init - t_ent_init).total_seconds())
+                        if min_d_init is None or diff_s_init < min_d_init:
+                            min_d_init = diff_s_init
+                            winner_init = nsem_init
+
+                    rotativo_offset = winner_init - mat_sem_init
+                    logger.info(
+                        f"🔍 [ROTATIVO_INIT] Emp {empleado_id}: primer log={log_init['fecha_hora']} "
+                        f"mat_sem={mat_sem_init} winner_sem={winner_init} offset={rotativo_offset}"
+                    )
+                    break  # Solo necesitamos el primer log
+                break  # Solo procesamos el primer turno rotativo
+
         while current <= end:
             fecha_str = current.strftime("%Y-%m-%d")
             ayer_str = (current - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -622,16 +721,22 @@ class AsistenciaService:
                 'feriados': feriados_dict,
                 'periodos_empleo': {empleado_id: periodos},
                 'first_assignments': {empleado_id: first_assignment},
+                'rotativo_offset': rotativo_offset
             }
 
             try:
                 # ⚡ OPTIMIZACIÓN: save=False → acumular en RAM, NO commit individual a Turso
                 result = await self.procesar_empleado_dia(
-                    empleado_id, fecha_str,
-                    save=False, force=force,
+                    empleado_id, 
+                    fecha_str, 
+                    save=False, 
+                    force=force, 
                     bulk_ctx=static_ctx,
-                    marcas_consumidas_session=marcas_consumidas,
+                    marcas_consumidas_session=marcas_consumidas
                 )
+                
+                # Update offset for next iteration
+                rotativo_offset = static_ctx.get('rotativo_offset', rotativo_offset)
                 if result:
                     # ⚡ DELTA: solo guardar si el resultado difiere del existente en DB
                     existing = asistencias_map.get(fecha_str)
@@ -650,7 +755,8 @@ class AsistenciaService:
                             'minutos_autorizados': result.get('_he_minutos_autorizados', 0),
                             'estado': he_estado or 'PENDIENTE',
                         })
-                    elif he_estado == 'PENDIENTE':
+                    else:
+                        # Sin HE ni estado especial: eliminar registro previo (puede ser corrupto)
                         he_to_delete.append((empleado_id, fecha_str))
                     asistencias_map[fecha_str] = result
                 else:
@@ -1201,7 +1307,14 @@ class AsistenciaService:
                 else:
                     # Caso normal: ancla es Entrada. Recorrer desde el ancla con balance.
                     balance = 0
+                    first_log_dt = datetime.strptime(ancla['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    max_dt = first_log_dt + timedelta(hours=20)
+                    
                     for l in marcas_disponibles[idx:]:
+                        l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                        if l_dt > max_dt:
+                            break
+                            
                         t = str(l.get('tipo', '') or '').strip().lower()
                         if t in _TIPOS_E:
                             balance += 1
@@ -1216,8 +1329,19 @@ class AsistenciaService:
         config_dia = None
         semana_ganadora = 1
         if asignacion:
-            tid = asignacion['id']
+            # En las rutas principales (get_bulk_context, reprocesar_periodo_empleado),
+            # la query es SELECT t.*, ... por lo que asignacion['id'] = turnos.id = turno_id.
+            # En contextos manuales puede existir el campo 'turno_id' separado.
+            tid = asignacion.get('turno_id') or asignacion['id']
             f_asig_ini = self._parse_date(asignacion.get('asignacion_desde')) or self._parse_date(asignacion.get('fecha_inicio'))
+            if f_asig_ini:
+                # Normalizar al lunes de la semana de trabajo del empleado.
+                # Si la asignación empieza el Domingo (weekday=6), el empleado realmente
+                # trabaja desde el Lunes SIGUIENTE → sumar 1 día en vez de restar 6.
+                if f_asig_ini.weekday() == 6:  # Domingo
+                    f_asig_ini = f_asig_ini + timedelta(days=1)
+                else:
+                    f_asig_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
 
             if bulk_ctx:
                 total_sems = bulk_ctx['turnos_weeks'].get(tid, 1)
@@ -1254,9 +1378,16 @@ class AsistenciaService:
 
                         semana_ganadora = winner_sem
                         config_dia = bulk_ctx['turnos'].get(tid, {}).get(winner_sem, {}).get(dia_semana)
+                        
+                        dias_diff = (dt - f_asig_ini).days if f_asig_ini else 0
+                        matematica_sem = (dias_diff // 7) % total_sems + 1 if dias_diff >= 0 else 1
+                        bulk_ctx['rotativo_offset'] = winner_sem - matematica_sem
                     else:
                         dias_diff = (dt - f_asig_ini).days if f_asig_ini else 0
-                        num_sem_activa = (dias_diff // 7) % total_sems + 1 if dias_diff >= 0 else 1
+                        matematica_sem = (dias_diff // 7) % total_sems + 1 if dias_diff >= 0 else 1
+                        offset = bulk_ctx.get('rotativo_offset', 0)
+                        num_sem_activa = (matematica_sem + offset - 1) % total_sems + 1
+                        
                         semana_ganadora = num_sem_activa
                         config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
                 else:
@@ -1344,12 +1475,13 @@ class AsistenciaService:
         es_nocturno_pre = bool(config_dia and config_dia.get('cruza_medianoche') and not es_libre_config)
 
         # FIX: Blindaje legal - Turnos nocturnos heredan el estado de feriado del día en que terminan (día principal)
-        if es_nocturno_pre:
-            fecha_manana = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
-            if not is_holiday and fecha_manana in feriados_dict:
-                is_holiday = True
-            elif is_holiday and fecha_manana not in feriados_dict:
-                is_holiday = False
+        # Desactivado a petición del usuario: los turnos que inician en feriado DEBEN marcarse como feriado en UI
+        # if es_nocturno_pre:
+        #     fecha_manana = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        #     if not is_holiday and fecha_manana in feriados_dict:
+        #         is_holiday = True
+        #     elif is_holiday and fecha_manana not in feriados_dict:
+        #         is_holiday = False
 
         # FIX: Blindaje legal - Límite de las 21:00 hrs en víspera de festivo (Aplica a todos los turnos diurnos/tarde)
         if not is_holiday and config_dia and config_dia.get('hora_salida') and not es_nocturno_pre:
@@ -1915,7 +2047,14 @@ class AsistenciaService:
                 # ÚLTIMA salida después de la entrada — regla de negocio:
                 # primera marca = entrada, última marca = salida.
                 salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
-                dt_salida_fin = salidas_post[-1][0] if salidas_post else None
+                if salidas_post:
+                    dt_salida_fin = salidas_post[-1][0]
+                elif len(entradas) > 1:
+                    dt_salida_fin = entradas[-1][0]
+                    entradas = entradas[:-1]
+                    res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Última marca tratada como Salida. "
+                else:
+                    dt_salida_fin = None
 
                 # ── COLACIÓN Y PERMISOS REALES (marcas intermedias nocturno) ───────────
                 if len(salidas_post) >= 2 and len(entradas) >= 2:
@@ -1995,7 +2134,14 @@ class AsistenciaService:
                 # primera marca = entrada, última marca = salida.
                 # Las marcas intermedias (colación) se ignoran.
                 salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
-                dt_salida_fin = salidas_post[-1][0] if salidas_post else None
+                if salidas_post:
+                    dt_salida_fin = salidas_post[-1][0]
+                elif len(entradas) > 1:
+                    dt_salida_fin = entradas[-1][0]
+                    entradas = entradas[:-1]
+                    res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Última marca tratada como Salida. "
+                else:
+                    dt_salida_fin = None
 
                 # ── COLACIÓN Y PERMISOS REALES (marcas intermedias diurno) ─────────────
                 if len(salidas_post) >= 2 and len(entradas) >= 2:
@@ -2102,9 +2248,9 @@ class AsistenciaService:
                 res['observaciones'] += 'Jornada en curso (falta salida).'
                 return res
                         
-            if ventana_en_curso == 0 and not es_hoy:
-                # Comportamiento conservador (DT-4): si no hay ventana configurada, retornar None sin generar estado
-                return None
+            # if ventana_en_curso == 0 and not es_hoy:
+            #     # Comportamiento conservador (DT-4): si no hay ventana configurada, retornar None sin generar estado
+            #     return None
                         
             # Si no es hoy y ya pasó el límite de en curso
             if es_libre_dia or is_holiday:
