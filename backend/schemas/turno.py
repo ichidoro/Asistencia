@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import date, time
 
 # ==========================================
@@ -47,7 +47,7 @@ class TurnoDiaResponse(TurnoDiaCreate):
 # ==========================================
 class TurnoBase(BaseModel):
     nombre: str
-    tipo_programacion: str = "FIJO"  # FIJO, ROTATIVO_INTELIGENTE, LIBRE, FLEXIBLE_BOLSA
+    tipo_programacion: Literal['FIJO', 'DINAMICO_FLEXIBLE', 'FLEXIBLE_BOLSA'] = 'FIJO'
     tolerancia_retraso_alerta: int = 0
     tolerancia_retraso_descuento: int = 0
     redondeo_minutos: int = 0

@@ -389,6 +389,35 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Lógica para cálculo automático de Edad
+  const inputFechaNacimiento = document.getElementById('input-fecha-nacimiento');
+  const badgeEdad = document.getElementById('badge-edad');
+  
+  if (inputFechaNacimiento && badgeEdad) {
+      inputFechaNacimiento.addEventListener('input', () => {
+          const val = inputFechaNacimiento.value;
+          if (!val) {
+              badgeEdad.style.display = 'none';
+              badgeEdad.innerText = '';
+              return;
+          }
+          const hoy = new Date();
+          const nacimiento = new Date(val);
+          let edad = hoy.getFullYear() - nacimiento.getFullYear();
+          const m = hoy.getMonth() - nacimiento.getMonth();
+          if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
+              edad--;
+          }
+          if (!isNaN(edad)) {
+              badgeEdad.style.display = 'inline-block';
+              badgeEdad.innerText = `${edad} años`;
+          } else {
+              badgeEdad.style.display = 'none';
+              badgeEdad.innerText = '';
+          }
+      });
+  }
 }
 
 function switchPage(pageName) {
@@ -1092,6 +1121,11 @@ async function openModal(empleadoId = null) {
         inputTipoContrato.value = 'Indefinido';
         inputTipoContrato.dispatchEvent(new Event('change'));
     }
+    
+    const inputFechaNacimiento = document.getElementById('input-fecha-nacimiento');
+    if (inputFechaNacimiento) {
+        inputFechaNacimiento.dispatchEvent(new Event('input'));
+    }
   }
 
   modal.classList.add('active');
@@ -1135,7 +1169,9 @@ async function loadEmpleadoData(id) {
     document.getElementById('input-email').value = empleado.email || '';
     document.getElementById('input-telefono').value = empleado.telefono || '';
     document.getElementById('input-fecha-ingreso').value = empleado.fecha_ingreso || '';
-    document.getElementById('input-fecha-nacimiento').value = empleado.fecha_nacimiento || '';
+    const inputFechaNacimiento = document.getElementById('input-fecha-nacimiento');
+    inputFechaNacimiento.value = empleado.fecha_nacimiento || '';
+    inputFechaNacimiento.dispatchEvent(new Event('input')); // Actualizar badge de edad
     document.getElementById('input-fecha-salida').value = empleado.fecha_salida || '';
     const tipoContratoInput = document.getElementById('input-tipo-contrato');
     tipoContratoInput.value = empleado.tipo_contrato || 'Indefinido';
@@ -2806,7 +2842,7 @@ window.loadTurnosForNewArea = async function(areaName) {
                 
                 let tipoPlanificacion = 'Fijo';
                 let horario = '';
-                if (t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
                     tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
                     horario = '(Múltiples opciones)';
                 } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {

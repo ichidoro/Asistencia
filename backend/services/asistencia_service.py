@@ -595,7 +595,7 @@ class AsistenciaService:
         CHECKPOINT_INTERVAL = 50 if not collect_only else 0
 
         # Inicializar rotativo_offset histórico si es posible
-        rotativo_offset_dict = {}
+        rotativo_last_sem_dict = {}
         last_asist = await db.fetch_one(
             "SELECT fecha, num_semana_ganadora, turno_asignado_id FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
             (empleado_id, start.strftime("%Y-%m-%d"))
@@ -612,13 +612,13 @@ class AsistenciaService:
                     f_asig_dt = f_asig_dt - timedelta(days=f_asig_dt.weekday())
                 d_diff = (last_dt - f_asig_dt).days
                 mat_sem = (d_diff // 7) % tot_sems + 1 if d_diff >= 0 else 1
-                rotativo_offset_dict[empleado_id] = last_asist['num_semana_ganadora'] - mat_sem
+                rotativo_last_sem_dict[empleado_id] = last_asist['num_semana_ganadora']
 
         # ── FALLBACK: Deducir offset desde los primeros logs cuando no hay asistencias previas ──
-        # Para ROTATIVO_INTELIGENTE: cada empleado puede iniciar en una semana diferente
+        # Para DINAMICO_FLEXIBLE: cada empleado puede iniciar en una semana diferente
         # del ciclo. Si no hay registro histórico, usamos el primer log de Entrada para
         # determinar en qué semana real está el empleado (min_delta contra turno_dias).
-        if empleado_id not in rotativo_offset_dict and first_assignment and turno_ids:
+        if empleado_id not in rotativo_last_sem_dict and first_assignment and turno_ids:
             _TIPOS_E_INIT = {'entrada', 'e', 'in', 'i', 'ingreso', 'in-entrada'}
             for t_id_init in turno_ids:
                 tot_sems_init = turno_weeks_count.get(t_id_init, 1)
@@ -632,7 +632,7 @@ class AsistenciaService:
                         break
                     if tipo_prog_init:
                         break
-                if tipo_prog_init != 'ROTATIVO_INTELIGENTE':
+                if tipo_prog_init != 'DINAMICO_FLEXIBLE':
                     continue
 
                 f_asig_dt_init = datetime.strptime(first_assignment, "%Y-%m-%d")
@@ -681,14 +681,15 @@ class AsistenciaService:
                         if cfg_init_d.get('cruza_medianoche') and first_log_dt_init.hour < 12:
                             t_ent_init -= timedelta(days=1)
                         diff_s_init = abs((first_log_dt_init - t_ent_init).total_seconds())
+                        diff_s_init = min(diff_s_init, 86400 - diff_s_init) # Wrap around 24 hours
                         if min_d_init is None or diff_s_init < min_d_init:
                             min_d_init = diff_s_init
                             winner_init = nsem_init
 
-                    rotativo_offset_dict[empleado_id] = winner_init - mat_sem_init
+                    rotativo_last_sem_dict[empleado_id] = winner_init
                     logger.info(
                         f"🔍 [ROTATIVO_INIT] Emp {empleado_id}: primer log={log_init['fecha_hora']} "
-                        f"mat_sem={mat_sem_init} winner_sem={winner_init} offset={rotativo_offset_dict[empleado_id]}"
+                        f"winner_sem={winner_init}"
                     )
                     break  # Solo necesitamos el primer log
                 break  # Solo procesamos el primer turno rotativo
@@ -734,7 +735,7 @@ class AsistenciaService:
                 'feriados': feriados_dict,
                 'periodos_empleo': {empleado_id: periodos},
                 'first_assignments': {empleado_id: first_assignment},
-                'rotativo_offset_dict': rotativo_offset_dict
+                'rotativo_last_sem_dict': rotativo_last_sem_dict
             }
 
             try:
@@ -1286,23 +1287,19 @@ class AsistenciaService:
         marcas_disponibles = [log for log in raw_logs if log.get('id') not in consumidas_emp]
         marcas_disponibles.sort(key=lambda x: x['fecha_hora'])
 
-        # ── EXTRACCIÓN CRONOLÓGICA (Solo ROTATIVO_INTELIGENTE) ─────────────────
+        # ── EXTRACCIÓN CRONOLÓGICA (Solo DINAMICO_FLEXIBLE) ─────────────────
         tipo_prog = None
         if asignacion:
             tipo_prog = asignacion.get('tipo_programacion')
             
         block_inteligente = []
-        if tipo_prog == 'ROTATIVO_INTELIGENTE':
-            # [DT-1] Algoritmo de balance D3: ancla = primera marca cuya fecha_hora
-            # inicia en el día calendario procesado. El bloque se cierra cuando
-            # balance(Entrada+1/Salida-1) llega a 0. Sin timedeltas. Sin ventanas.
-            # Fuente: §9.2 del manual. Patrón canónico: FLEXIBLE_BOLSA.
-
-            # Tipos reconocidos (mismos que en _calculate_attendance)
+        if tipo_prog == 'DINAMICO_FLEXIBLE':
+            # [DT-1] Algoritmo de balance: Consumir todas las marcas del día calendario actual.
+            # Si al finalizar el día el balance es > 0 (Ej: turno nocturno), seguir consumiendo
+            # hasta que el balance llegue a 0 o se exceda el límite de 20 horas.
             _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
             _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
 
-            # Buscar el ancla: primera marca del día calendario (fecha_hora[:10] == fecha)
             ancla = next(
                 (l for l in marcas_disponibles if l.get('fecha_hora', '')[:10] == fecha),
                 None
@@ -1313,30 +1310,51 @@ class AsistenciaService:
                 tipo_ancla = str(ancla.get('tipo', '') or '').strip().lower()
 
                 if tipo_ancla in _TIPOS_S:
-                    # [D9] Ancla es Salida Huérfana → bloque de 1 marca, ANOMALIA
-                    # Se consume inmediatamente para no bloquear días siguientes (DT-8 / D10)
+                    # [D9] Ancla es Salida Huérfana
                     block_inteligente = [ancla]
-                    consumidas_emp.add(ancla.get('id'))  # D10: consumir por ID
+                    consumidas_emp.add(ancla.get('id'))
                 else:
-                    # Caso normal: ancla es Entrada. Recorrer desde el ancla con balance.
                     balance = 0
                     first_log_dt = datetime.strptime(ancla['fecha_hora'], "%Y-%m-%d %H:%M:%S")
                     max_dt = first_log_dt + timedelta(hours=20)
                     
-                    for l in marcas_disponibles[idx:]:
-                        l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                        if l_dt > max_dt:
+                    ultimo_idx = -1
+                    
+                    # 1. Consumir todo el día calendario
+                    for i in range(idx, len(marcas_disponibles)):
+                        l = marcas_disponibles[i]
+                        if l.get('fecha_hora', '').startswith(fecha):
+                            block_inteligente.append(l)
+                            consumidas_emp.add(l.get('id'))
+                            ultimo_idx = i
+                            
+                            t = str(l.get('tipo', '') or '').strip().lower()
+                            if t in _TIPOS_E:
+                                balance += 1
+                            elif t in _TIPOS_S:
+                                balance -= 1
+                        else:
                             break
                             
-                        t = str(l.get('tipo', '') or '').strip().lower()
-                        if t in _TIPOS_E:
-                            balance += 1
-                        elif t in _TIPOS_S:
-                            balance -= 1
-                        block_inteligente.append(l)
-                        consumidas_emp.add(l.get('id'))  # D10: consumir por ID en tiempo real
-                        if balance <= 0:
-                            break  # Sesión cerrada. Sin timedeltas. Sin ventanas.
+                    # 2. Si balance > 0, seguir hasta cerrarlo (turno nocturno)
+                    if balance > 0 and ultimo_idx != -1:
+                        for i in range(ultimo_idx + 1, len(marcas_disponibles)):
+                            l = marcas_disponibles[i]
+                            l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                            if l_dt > max_dt:
+                                break
+                                
+                            block_inteligente.append(l)
+                            consumidas_emp.add(l.get('id'))
+                            
+                            t = str(l.get('tipo', '') or '').strip().lower()
+                            if t in _TIPOS_E:
+                                balance += 1
+                            elif t in _TIPOS_S:
+                                balance -= 1
+                                
+                            if balance <= 0:
+                                break
 
         # ── DETERMINACIÓN DE config_dia ────────────────────────────────────────
         config_dia = None
@@ -1359,22 +1377,57 @@ class AsistenciaService:
             if bulk_ctx:
                 total_sems = bulk_ctx['turnos_weeks'].get(tid, 1)
 
-                if tipo_prog == 'ROTATIVO_INTELIGENTE' and total_sems > 1:
-                    if f_asig_ini:
-                        monday_dt = dt - timedelta(days=dt.weekday())
-                        monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
-                        semanas_diff = (monday_dt - monday_ini).days // 7
-                    else:
-                        semanas_diff = 0
+                if tipo_prog == 'DINAMICO_FLEXIBLE' and total_sems > 1:
+                    if block_inteligente:
+                        first_log_dt = datetime.strptime(block_inteligente[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                        winner_sem = 1
+                        min_delta = None
+
+                        for num_semana_eval in range(1, total_sems + 1):
+                            sem_config = bulk_ctx['turnos'].get(tid, {}).get(num_semana_eval, {}).get(dia_semana)
+                            if not sem_config or sem_config.get('es_libre'):
+                                continue
+                            
+                            ent_str = sem_config.get('hora_entrada')
+                            sal_str = sem_config.get('hora_salida')
+                            if not ent_str or not sal_str:
+                                continue
+                                
+                            t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
+                            
+                            if block_inteligente[0]['tipo'] == 'Entrada':
+                                diff_seconds = abs((first_log_dt - t_in_dt).total_seconds())
+                            else:
+                                t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
+                                if sem_config.get('cruza_medianoche'):
+                                    t_out_dt += timedelta(days=1)
+                                diff_seconds = abs((first_log_dt - t_out_dt).total_seconds())
+                                
+                            diff_seconds = min(diff_seconds, 86400 - diff_seconds) # Wrap around 24 hours
+
+                            if min_delta is None or diff_seconds < min_delta:
+                                min_delta = diff_seconds
+                                winner_sem = num_semana_eval
+
+                        semana_ganadora = winner_sem
+                        config_dia = bulk_ctx['turnos'].get(tid, {}).get(winner_sem, {}).get(dia_semana)
                         
-                    matematica_sem = (semanas_diff % total_sems) + 1 if semanas_diff >= 0 else 1
-                    
-                    offset_dict = bulk_ctx.get('rotativo_offset_dict', {})
-                    offset = offset_dict.get(empleado_id, 0) if isinstance(offset_dict, dict) else 0
-                    num_sem_activa = ((matematica_sem + offset - 1) % total_sems) + 1
-                    
-                    semana_ganadora = num_sem_activa
-                    config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
+                        if 'rotativo_last_sem_dict' not in bulk_ctx:
+                            bulk_ctx['rotativo_last_sem_dict'] = {}
+                        bulk_ctx['rotativo_last_sem_dict'][empleado_id] = winner_sem
+                    else:
+                        # Si no hay logs, usamos la última alternativa conocida SÓLO para evaluar inasistencias en el PASADO.
+                        # Si el día es hoy o futuro y no hay marcas, en Rotativo Inteligente NO PODEMOS adivinar el turno.
+                        is_future = dt.date() >= datetime.now().date()
+                        if is_future:
+                            # No adivinar el futuro: sin marcas no hay turno asignado aún
+                            semana_ganadora = None
+                            config_dia = None
+                        else:
+                            last_sem_dict = bulk_ctx.get('rotativo_last_sem_dict', {})
+                            num_sem_activa = last_sem_dict.get(empleado_id, 1) if isinstance(last_sem_dict, dict) else 1
+                            semana_ganadora = num_sem_activa
+                            config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
                 else:
                     # Turnos Fijos o normales
                     if f_asig_ini and total_sems > 1:
@@ -1393,19 +1446,46 @@ class AsistenciaService:
                 )
                 total_sems = (res_weeks['total'] or 1) if res_weeks else 1
 
-                if tipo_prog == 'ROTATIVO_INTELIGENTE' and total_sems > 1:
-                    if f_asig_ini:
-                        monday_dt = dt - timedelta(days=dt.weekday())
-                        monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
-                        semanas_diff = (monday_dt - monday_ini).days // 7
+                if tipo_prog == 'DINAMICO_FLEXIBLE' and total_sems > 1:
+                    if block_inteligente:
+                        first_log_dt = datetime.strptime(block_inteligente[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                        winner_sem = 1
+                        min_delta = None
+                        for num_semana_eval in range(1, total_sems + 1):
+                            todas_semanas = await db.fetch_all(
+                                "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
+                                (tid, dia_semana, num_semana_eval)
+                            )
+                            for sc in todas_semanas:
+                                ent_str = sc.get('hora_entrada')
+                                sal_str = sc.get('hora_salida')
+                                if not ent_str or not sal_str:
+                                    continue
+                                t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
+                                
+                                if block_inteligente[0]['tipo'] == 'Entrada':
+                                    diff_s = abs((first_log_dt - t_in_dt).total_seconds())
+                                else:
+                                    t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
+                                    if sc.get('cruza_medianoche'):
+                                        t_out_dt += timedelta(days=1)
+                                    diff_s = abs((first_log_dt - t_out_dt).total_seconds())
+                                    
+                                if min_delta is None or diff_s < min_delta:
+                                    min_delta = diff_s
+                                    winner_sem = num_semana_eval
+                        semana_ganadora = winner_sem
+                        rows = await db.fetch_all(
+                            "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
+                            (tid, dia_semana, winner_sem)
+                        )
                     else:
-                        semanas_diff = 0
-                    num_sem_activa = (semanas_diff % total_sems) + 1 if semanas_diff >= 0 else 1
-                    semana_ganadora = num_sem_activa
-                    rows = await db.fetch_all(
-                        "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
-                        (tid, dia_semana, num_sem_activa)
-                    )
+                        num_sem_activa = 1 # Fallback since we can't persist state easily in individual queries
+                        semana_ganadora = num_sem_activa
+                        rows = await db.fetch_all(
+                            "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
+                            (tid, dia_semana, num_sem_activa)
+                        )
                 else:
                     rows = await db.fetch_all(
                         "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
@@ -1428,6 +1508,30 @@ class AsistenciaService:
                         ):
                             if campo in padre:
                                 config_dia[campo] = padre[campo]
+        # ── SELECCIÓN DE OPCIÓN PARA DINAMICO_FLEXIBLE ───────────────────────
+        if config_dia:
+            config_dia = dict(config_dia)  # Copia para no mutar el origen del bulk_ctx
+            if tipo_prog == 'DINAMICO_FLEXIBLE' and config_dia.get('hora_entrada_2') and config_dia.get('hora_salida_2') and block_inteligente:
+                first_log_dt = datetime.strptime(block_inteligente[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                ent_str_1 = config_dia.get('hora_entrada')
+                ent_str_2 = config_dia.get('hora_entrada_2')
+                
+                if ent_str_1 and ent_str_2:
+                    t_in_dt_1 = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str_1}:00", "%Y-%m-%d %H:%M:%S")
+                    t_in_dt_2 = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str_2}:00", "%Y-%m-%d %H:%M:%S")
+                    
+                    diff_1 = abs((first_log_dt - t_in_dt_1).total_seconds())
+                    diff_2 = abs((first_log_dt - t_in_dt_2).total_seconds())
+                    
+                    diff_1 = min(diff_1, 86400 - diff_1)
+                    diff_2 = min(diff_2, 86400 - diff_2)
+                    
+                    if diff_2 < diff_1:
+                        config_dia['hora_entrada'] = config_dia['hora_entrada_2']
+                        config_dia['hora_salida'] = config_dia['hora_salida_2']
+                        if 'cruza_medianoche_2' in config_dia:
+                            config_dia['cruza_medianoche'] = config_dia['cruza_medianoche_2']
+
         # ── EXTRACCIÓN DE PROPIEDADES BASE ────────────────────────────────────
         es_libre_config = bool(config_dia and config_dia.get('es_libre'))
         es_nocturno_pre = bool(config_dia and config_dia.get('cruza_medianoche') and not es_libre_config)
@@ -1453,7 +1557,7 @@ class AsistenciaService:
                 # Turno diurno/tarde: truncar salida a las 21:00
                 salida_str = str(config_dia.get('hora_salida', '00:00'))[:5]
                 if salida_str > '21:00':
-                    config_dia = dict(config_dia)  # copia para no mutar el origen del bulk_ctx
+                    # config_dia = dict(config_dia)  # copia para no mutar el origen del bulk_ctx (ya copiado)
                     config_dia['hora_salida'] = '21:00'
                     if config_dia.get('hora_entrada'):
                         t_ent = datetime.strptime(str(config_dia['hora_entrada'])[:5], "%H:%M")
@@ -1504,7 +1608,7 @@ class AsistenciaService:
         # ── LOGS PARA ESTE DÍA ────────────────────────────────────────────────
         is_bolsa = tipo_prog == 'FLEXIBLE_BOLSA'
         
-        if tipo_prog == 'ROTATIVO_INTELIGENTE':
+        if tipo_prog == 'DINAMICO_FLEXIBLE':
             logs = block_inteligente
         elif is_bolsa:
             # Bolsa Flexible Inteligente: empareja Entradas con Salidas sin importar el día
@@ -1939,21 +2043,22 @@ class AsistenciaService:
             if not pares:
                 return
 
-            # DT-14: Lógica de Colación vs Permiso
-            minutos_auto = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
-            tol_exceso = int(turno.get('tolerancia_exceso_colacion_minutos', 0) or 0) if turno else 0
-            limite_colacion = minutos_auto + tol_exceso
+            min_auto = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
+            min_normal = int(config_dia.get('minutos_colacion', 0) or 0) if config_dia else 0
+            target_col = min_auto if min_auto > 0 else min_normal
 
             mejor_par = None
-            menor_diff = float('inf')
-
-            for p in pares:
-                duracion = p[2]
-                if duracion <= limite_colacion:
-                    diff = abs(duracion - minutos_auto)
+            if len(pares) == 1:
+                mejor_par = pares[0]
+            elif target_col > 0:
+                menor_diff = float('inf')
+                for p in pares:
+                    diff = abs(p[2] - target_col)
                     if diff < menor_diff:
                         menor_diff = diff
                         mejor_par = p
+            else:
+                mejor_par = max(pares, key=lambda x: x[2])
 
             minutos_permisos = 0
             if mejor_par:
@@ -2015,7 +2120,7 @@ class AsistenciaService:
                 if h_ent_teorica:
                     hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
                     
-                    if turno.get('tipo_programacion') == 'ROTATIVO_INTELIGENTE' and fecha == datetime.now().strftime("%Y-%m-%d"):
+                    if turno.get('tipo_programacion') == 'DINAMICO_FLEXIBLE' and fecha == datetime.now().strftime("%Y-%m-%d"):
                         # Para evitar Inasistencia prematura en Rotativos Inteligentes, 
                         # simplemente no la marcamos el mismo día si no hay marcas,
                         # ya que no sabemos a ciencia cierta qué ciclo les tocaba.

@@ -599,9 +599,15 @@ async function loadBulkData() {
         }
 
         select.innerHTML = '<option value="">Seleccione un turno...</option>' +
-            (lista || []).map(t =>
-                `<option value="${t.id}">${t.nombre} (${t.tipo_programacion})</option>`
-            ).join('');
+            (lista || []).map(t => {
+                let tipoPlanificacion = 'Fijo';
+                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+                    tipoPlanificacion = 'Ciclo Inteligente';
+                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
+                    tipoPlanificacion = 'Bolsa de Horas';
+                }
+                return `<option value="${t.id}">${t.nombre} (${tipoPlanificacion})</option>`;
+            }).join('');
     }
 
     // 4. Set fecha hoy
@@ -867,9 +873,15 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
         if (hintEl) hintEl.innerHTML = hintHtml;
 
         select.innerHTML = '<option value="">Seleccione un turno...</option>' +
-            (lista || []).map(t =>
-                `<option value="${t.id}">${t.nombre} (${t.tipo_programacion})</option>`
-            ).join('');
+            (lista || []).map(t => {
+                let tipoPlanificacion = 'Fijo';
+                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+                    tipoPlanificacion = 'Ciclo Inteligente';
+                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
+                    tipoPlanificacion = 'Bolsa de Horas';
+                }
+                return `<option value="${t.id}">${t.nombre} (${tipoPlanificacion})</option>`;
+            }).join('');
 
         // Restaurar selección previa si sigue disponible
         if (prevValue && select.querySelector(`option[value="${prevValue}"]`)) {
@@ -1004,10 +1016,20 @@ function renderTurnosTable() {
         return;
     }
 
-    tbody.innerHTML = turnosList.map(t => `
+    tbody.innerHTML = turnosList.map(t => {
+        let tipoBadge = 'Fijo';
+        if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+            tipoBadge = 'Ciclo Inteligente (Smart Match)';
+        } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
+            tipoBadge = 'Flexible (Bolsa de Horas)';
+        } else if (t.tipo_programacion === 'FIJO') {
+            tipoBadge = 'Horario Fijo';
+        }
+
+        return `
         <tr>
             <td class="fw-bold">${t.nombre}</td>
-            <td><span class="badge bg-secondary">${t.tipo_programacion}</span></td>
+            <td><span class="badge bg-secondary">${tipoBadge}</span></td>
             <td>${t.meta_horas_semanales} hrs</td>
             <td>${t.tolerancia_retraso_alerta} min / ${t.tolerancia_retraso_descuento} min</td>
             <td>
@@ -1021,7 +1043,7 @@ function renderTurnosTable() {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function renderModalHtml() {
@@ -1045,7 +1067,7 @@ function renderModalHtml() {
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
                                     <option value="FIJO">Horario Fijo</option>
-                                    <option value="ROTATIVO_INTELIGENTE">Ciclo Inteligente (Smart Match)</option>
+                                    <option value="DINAMICO_FLEXIBLE">Ciclo Inteligente (Smart Match)</option>
                                     <option value="FLEXIBLE_BOLSA">Flexible (Bolsa de Horas)</option>
                                 </select>
                             </div>
@@ -1166,10 +1188,10 @@ function renderModalHtml() {
                             </div>
                             <div id="btn-add-week-container" class="mt-2" style="display:none;">
                                 <button type="button" class="btn btn-sm btn-outline-success" onclick="addWeekTab()">
-                                    <i class="bi bi-plus-circle"></i> Añadir Semana al Ciclo
+                                    <i class="bi bi-plus-circle"></i> Añadir Opción
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeLastWeekTab()">
-                                    <i class="bi bi-dash-circle"></i> Quitar Última Semana
+                                    <i class="bi bi-dash-circle"></i> Quitar Última Opción
                                 </button>
                             </div>
                         </div>
@@ -1216,7 +1238,7 @@ window.addWeekTab = function (triggerChange = true) {
 
     // Nombre de la pestaña según tipo: Ciclo Inteligente usa la etiqueta, otros usan "Semana"
     const tipoSelect = document.querySelector('select[name="tipo_programacion"]');
-    const isInteligente = tipoSelect && tipoSelect.value === 'ROTATIVO_INTELIGENTE';
+    const isInteligente = tipoSelect && tipoSelect.value === 'DINAMICO_FLEXIBLE';
     const tabName = isInteligente ? `Opción ${i}` : `Semana ${i}`;
 
     // Create Tab
@@ -1372,7 +1394,7 @@ function handleTipoProgramacionChange() {
 
     const tipo = tipoSelect.value;
     const isFlexible = tipo === 'FLEXIBLE_BOLSA';
-    const isRotativo = tipo === 'ROTATIVO_INTELIGENTE';
+    const isRotativo = tipo === 'DINAMICO_FLEXIBLE';
 
     // Visibilidad del bloque de Hora Ficticia: sólo visible en modo Bolsa Flexible
     const divLineaFicticia = document.getElementById('divLineaFicticia');
@@ -1405,7 +1427,7 @@ function handleTipoProgramacionChange() {
         // Obtenemos el input correspondiente si existe para preservar la etiqueta ingresada
         const etiquetaInput = document.getElementById(`etiqueta-bloque-${index + 1}`);
         const currentEtiqueta = etiquetaInput && etiquetaInput.value.trim() ? etiquetaInput.value.trim() : `Opción ${index + 1}`;
-        tab.textContent = tipo === 'ROTATIVO_INTELIGENTE' ? currentEtiqueta : `Semana ${index + 1}`;
+        tab.textContent = tipo === 'DINAMICO_FLEXIBLE' ? currentEtiqueta : `Semana ${index + 1}`;
     });
 
     const divAddWeek = document.getElementById('btn-add-week-container');
@@ -1413,7 +1435,7 @@ function handleTipoProgramacionChange() {
 
     // Mostrar/ocultar los inputs de nombre del ciclo
     document.querySelectorAll('.etiqueta-bloque-container').forEach(container => {
-        container.style.display = tipo === 'ROTATIVO_INTELIGENTE' ? '' : 'none';
+        container.style.display = tipo === 'DINAMICO_FLEXIBLE' ? '' : 'none';
     });
 
     // Si cambia a no-rotativo y hay semanas extra visibles, ocultarlas sin destruir el DOM:

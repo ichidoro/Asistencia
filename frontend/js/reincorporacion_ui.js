@@ -228,9 +228,9 @@ async function reincLoadTurnos(area) {
         
         select.innerHTML = '<option value="">-- Seleccionar Turno --</option>' + 
             turnos.map(t => {
-                let tipoPlanificacion = 'Fijo';
                 let horario = '';
-                if (t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+                let tipoPlanificacion = 'Fijo';
+                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
                     tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
                     horario = '(Múltiples opciones)';
                 } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {

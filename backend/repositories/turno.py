@@ -18,7 +18,7 @@ class TurnoRepository:
                 CREATE TABLE IF NOT EXISTS turnos (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     nombre TEXT NOT NULL,
-                    tipo_programacion TEXT NOT NULL, -- FIJO, ROTATIVO_INTELIGENTE, FLEXIBLE_BOLSA
+                    tipo_programacion TEXT NOT NULL, -- FIJO, DINAMICO_FLEXIBLE, FLEXIBLE_BOLSA
                     meta_horas_semanales REAL DEFAULT 0.0,
                     tolerancia_retraso_alerta INTEGER DEFAULT 0,
                     tolerancia_retraso_descuento INTEGER DEFAULT 0,

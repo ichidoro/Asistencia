@@ -992,7 +992,13 @@ window.updateVisorPDF = function(isDownload = false) {
             } else {
                 let e = config.hora_entrada ? config.hora_entrada.substring(0, 5) : "--:--";
                 let s = config.hora_salida ? config.hora_salida.substring(0, 5) : "--:--";
-                row.push(`${e} a ${s}`);
+                let text = `${e} a ${s}`;
+                if (config.hora_entrada_2 && config.hora_salida_2) {
+                    let e2 = config.hora_entrada_2.substring(0, 5);
+                    let s2 = config.hora_salida_2.substring(0, 5);
+                    text += `\no\n${e2} a ${s2}`;
+                }
+                row.push(text);
             }
         }
         tbody.push(row);
@@ -1076,6 +1082,8 @@ window.updateVisorPDF = function(isDownload = false) {
             a.hora_entrada_real || '--:--',
             a.hora_salida_colacion || '--:--',
             a.hora_entrada_colacion || '--:--',
+            a.hora_inicio_permiso || '--:--',
+            a.hora_termino_permiso || '--:--',
             a.hora_salida_real || '--:--',
             a.horas_trabajadas > 0 ? formatDecimalToTime(a.horas_trabajadas) : '--:--',
             (a.minutos_extra_autorizados > 0) ? formatMinutesToHHMM(a.minutos_extra_autorizados) : '--:--',
@@ -1083,7 +1091,7 @@ window.updateVisorPDF = function(isDownload = false) {
             a.minutos_atraso > 0 ? formatMinutesToHHMM(a.minutos_atraso) : '--:--',
             a.minutos_salida_adelantada > 0 ? formatMinutesToHHMM(a.minutos_salida_adelantada) : '--:--',
             a.minutos_exceso_colacion > 0 ? formatMinutesToHHMM(a.minutos_exceso_colacion) : '--:--',
-            a.minutos_permiso_descontar > 0 ? formatMinutesToHHMM(a.minutos_permiso_descontar) : (a.permiso_activo ? 'Día Completo' : '--:--'),
+            (a.minutos_permisos_detectados > 0 || a.minutos_permiso_personal_deuda > 0) ? formatMinutesToHHMM((a.minutos_permisos_detectados || 0) + (a.minutos_permiso_personal_deuda || 0)) : (a.permiso_activo ? 'Día Completo' : '--:--'),
             a.minutos_deuda > 0 ? formatMinutesToHHMM(a.minutos_deuda) : '--:--'
         ];
     });
@@ -1093,11 +1101,11 @@ window.updateVisorPDF = function(isDownload = false) {
         head: [
             [
                 { content: 'DATOS GENERALES', colSpan: 2, styles: { halign: 'center', fillColor: [230, 230, 230] } },
-                { content: 'MARCACIONES', colSpan: 4, styles: { halign: 'center', fillColor: [226, 240, 217] } },
+                { content: 'MARCACIONES', colSpan: 6, styles: { halign: 'center', fillColor: [226, 240, 217] } },
                 { content: 'TIEMPOS ACUMULADOS', colSpan: 3, styles: { halign: 'center', fillColor: [255, 242, 204] } },
                 { content: 'DEUDAS E INCIDENCIAS', colSpan: 5, styles: { halign: 'center', fillColor: [252, 228, 214] } }
             ],
-            ['Fecha', 'Estado', 'Entrada\nTurno', 'Inicio\nColación', 'Fin\nColación', 'Salida\nTurno', 'Horas\nTrabajadas', 'Horas\nExtras', 'Total\nColación', 'ATRASOS', 'Salida\nAdelantada', 'Exceso\nColación', 'Permisos', 'Deuda']
+            ['Fecha', 'Estado', 'Entrada\nTurno', 'Inicio\nColación', 'Fin\nColación', 'Inicio\nPermiso', 'Fin\nPermiso', 'Salida\nTurno', 'Horas\nTrabajadas', 'Horas\nExtras', 'Total\nColación', 'ATRASOS', 'Salida\nAdelantada', 'Exceso\nColación', 'Permisos', 'Deuda']
         ],
         body: tableBody,
         startY: startY,
@@ -2050,7 +2058,7 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
                 turnos.map(t => {
                     let horario = '';
                     let tipoPlanificacion = 'Fijo';
-                    if (t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+                    if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
                         tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
                         horario = '(Múltiples opciones horarias)';
                     } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
