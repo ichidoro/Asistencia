@@ -1393,22 +1393,37 @@ class AsistenciaService:
                             if not ent_str or not sal_str:
                                 continue
                                 
-                            t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
-                            
-                            if block_inteligente[0]['tipo'] == 'Entrada':
-                                diff_seconds = abs((first_log_dt - t_in_dt).total_seconds())
-                            else:
-                                t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
-                                if sem_config.get('cruza_medianoche'):
-                                    t_out_dt += timedelta(days=1)
-                                diff_seconds = abs((first_log_dt - t_out_dt).total_seconds())
-                                
-                            diff_seconds = min(diff_seconds, 86400 - diff_seconds) # Wrap around 24 hours
+                            diff_seconds = 0
+                            has_in = False
+                            has_out = False
+                            for log in block_inteligente:
+                                log_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                if log['tipo'] == 'Entrada' and not has_in:
+                                    t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
+                                    diff_in = abs((log_dt - t_in_dt).total_seconds())
+                                    diff_in = min(diff_in, 86400 - diff_in)
+                                    diff_seconds += diff_in
+                                    has_in = True
+                                elif log['tipo'] == 'Salida' and not has_out:
+                                    t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
+                                    if sem_config.get('cruza_medianoche'):
+                                        t_out_dt += timedelta(days=1)
+                                    diff_out = abs((log_dt - t_out_dt).total_seconds())
+                                    diff_out = min(diff_out, 86400 - diff_out)
+                                    diff_seconds += diff_out
+                                    has_out = True
+                                    
+                            if not has_in and not has_out:
+                                diff_seconds = float('inf')
 
                             if min_delta is None or diff_seconds < min_delta:
+                                logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_seconds}. NEW MIN_DELTA!")
                                 min_delta = diff_seconds
                                 winner_sem = num_semana_eval
+                            else:
+                                logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_seconds}. (min is {min_delta})")
 
+                        logger.info(f"DIA {fecha} Emp {empleado_id}: WINNER_SEM FINALLY CHOSEN: {winner_sem}")
                         semana_ganadora = winner_sem
                         config_dia = bulk_ctx['turnos'].get(tid, {}).get(winner_sem, {}).get(dia_semana)
                         
@@ -1461,19 +1476,36 @@ class AsistenciaService:
                                 sal_str = sc.get('hora_salida')
                                 if not ent_str or not sal_str:
                                     continue
-                                t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
-                                
-                                if block_inteligente[0]['tipo'] == 'Entrada':
-                                    diff_s = abs((first_log_dt - t_in_dt).total_seconds())
-                                else:
-                                    t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
-                                    if sc.get('cruza_medianoche'):
-                                        t_out_dt += timedelta(days=1)
-                                    diff_s = abs((first_log_dt - t_out_dt).total_seconds())
+                                diff_s = 0
+                                has_in = False
+                                has_out = False
+                                for log in block_inteligente:
+                                    log_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                    if log['tipo'] == 'Entrada' and not has_in:
+                                        t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
+                                        diff_in = abs((log_dt - t_in_dt).total_seconds())
+                                        diff_in = min(diff_in, 86400 - diff_in)
+                                        diff_s += diff_in
+                                        has_in = True
+                                    elif log['tipo'] == 'Salida' and not has_out:
+                                        t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
+                                        if sc.get('cruza_medianoche'):
+                                            t_out_dt += timedelta(days=1)
+                                        diff_out = abs((log_dt - t_out_dt).total_seconds())
+                                        diff_out = min(diff_out, 86400 - diff_out)
+                                        diff_s += diff_out
+                                        has_out = True
+                                        
+                                if not has_in and not has_out:
+                                    diff_s = float('inf')
                                     
                                 if min_delta is None or diff_s < min_delta:
+                                    logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_s}. NEW MIN_DELTA!")
                                     min_delta = diff_s
                                     winner_sem = num_semana_eval
+                                else:
+                                    logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_s}. (min is {min_delta})")
+                        logger.info(f"DIA {fecha} Emp {empleado_id}: WINNER_SEM FINALLY CHOSEN (No Bulk): {winner_sem}")
                         semana_ganadora = winner_sem
                         rows = await db.fetch_all(
                             "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",

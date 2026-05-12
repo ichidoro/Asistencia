@@ -117,6 +117,15 @@ class AsistenciaRepository:
         """
         await self.batch_upsert_asistencia([data])
 
+    async def toggle_condonacion_deuda(self, empleado_id: int, fecha: str, condonar: bool) -> None:
+        """
+        Cambia el estado de condonación de deuda para un registro de asistencia.
+        Condonar deuda anula los minutos de deuda a 0 en el cálculo, sin alterar las marcas.
+        """
+        query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
+        val = 1 if condonar else 0
+        await self.db.execute(query, (val, empleado_id, fecha))
+
     async def batch_upsert_asistencia(self, data_list: List[Dict[str, Any]], bypass_cierre_check: bool = False, suppress_auto_sync: bool = False) -> None:
         """
         Guarda o actualiza múltiples registros de asistencia procesada.
@@ -158,7 +167,7 @@ class AsistenciaRepository:
                 minutos_colacion=excluded.minutos_colacion,
                 minutos_colacion_real=excluded.minutos_colacion_real,
                 horas_trabajadas=excluded.horas_trabajadas,
-                minutos_deuda=excluded.minutos_deuda,
+                minutos_deuda=CASE WHEN asistencias.deuda_condonada = 1 THEN 0 ELSE excluded.minutos_deuda END,
                 minutos_extra_bruto=excluded.minutos_extra_bruto,
                 minutos_salida_adelantada=excluded.minutos_salida_adelantada,
                 estado=excluded.estado,
@@ -265,7 +274,7 @@ class AsistenciaRepository:
                 a.minutos_salida_adelantada, a.minutos_exceso_colacion, a.minutos_colacion_auto, a.minutos_permiso_personal_deuda, a.updated_at,
                 a.horas_teoricas, a.hora_entrada_teorica, a.hora_salida_teorica, a.turno_asignado_id,
                 a.hora_salida_colacion, a.hora_entrada_colacion, a.hora_inicio_permiso, a.hora_termino_permiso, a.minutos_permisos_detectados,
-                a.tiene_atraso, a.tiene_salida_adelantada, a.tiene_permiso,
+                a.tiene_atraso, a.tiene_salida_adelantada, a.tiene_permiso, a.deuda_condonada,
                 e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, a_table.nombre as area, e.activo,
                 t.nombre as turno_nombre
             FROM asistencias a

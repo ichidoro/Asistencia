@@ -119,6 +119,16 @@ async def lifespan(app: FastAPI):
 
                 await db.clear_schema_cache()
 
+                # Esperar a que la sincronización inicial con Turso termine
+                if hasattr(db, '_bg_sync_task') and not db._bg_sync_task.done():
+                    startup_manager.update(90, "Sincronizando con nube (Turso Cloud)...")
+                    _t_sync = datetime.now()
+                    try:
+                        await db._bg_sync_task
+                        logger.info(f"⏱️ Sync inicial completado en: {(datetime.now()-_t_sync).total_seconds():.2f}s")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Sync inicial abortado/fallido: {e}")
+
                 startup_manager.update(100, "Iniciando Dashboard...", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")

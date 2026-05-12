@@ -179,10 +179,11 @@ class BioAlbaScraper:
             
             # Filtro por RUT: si se provee, BioAlba filtra en servidor
             rut_param = rut_filter or ""
+            cache_buster = int(_t.time())
             
             # 1. VISITAR PAGINA DE FILTRO PRIMERO (Prime Session)
             # Esto es necesario para que el servidor genere el estado de sesión correcto
-            filter_url = f"{self.base_url}/marcaciones?namerutcmp={rut_param}&bday-month={month_str}"
+            filter_url = f"{self.base_url}/marcaciones?namerutcmp={rut_param}&bday-month={month_str}&_cb={cache_buster}"
             logger.info(f"🌍 Visitando filtro: {filter_url}")
             
             async with self.session.get(filter_url) as resp_filter:
@@ -194,7 +195,7 @@ class BioAlbaScraper:
             logger.info(f"📥 Descargando logs de asistencia (Mes: {month_str}{filter_label})...")
             
             # URL verificada para descarga mensual
-            download_url = f"{self.base_url}/marcacion/ver/excel?namerutcmp={rut_param}&bday-month={month_str}"
+            download_url = f"{self.base_url}/marcacion/ver/excel?namerutcmp={rut_param}&bday-month={month_str}&_cb={cache_buster}"
             
             # Headers indispensables para evitar error 500
             headers = {

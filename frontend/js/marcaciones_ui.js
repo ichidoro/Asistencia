@@ -488,10 +488,11 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         fechaInicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
     }
     if (!fechaFin) {
-        const dtFin = new Date(fechaInicio);
-        dtFin.setMonth(dtFin.getMonth() + 1);
-        dtFin.setDate(dtFin.getDate() - 1);
-        fechaFin = dtFin.toISOString().split('T')[0];
+        // Calcular el último día del mes correctamente evitando problemas de Timezone
+        const mes  = stateMarcacionesApp.month;
+        const anio = stateMarcacionesApp.year;
+        const ultimoDia = new Date(anio, mes, 0).getDate(); // mes es 1-12, 'mes' como parámetro de Date(year, monthIndex) donde monthIndex es 0-11. Pero Date(year, month, 0) nos da el último día del mes especificado!
+        fechaFin = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
     }
 
     console.log(`[Sync BioAlba] Rango: ${fechaInicio} → ${fechaFin}`, areas ? `Áreas: ${areas.join(', ')}` : 'Todas las áreas');
@@ -1541,6 +1542,59 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         
         if (brutoPotencial > 0) {
             const dt = new Date(dateStr + 'T00:00:00');
+            
+            // --- CÁLCULO DE ORIGEN/CONTEXTO DE HORAS EXTRAS ---
+            let contextoTags = [];
+            
+            // 1. Trabajo en Colación (Tomó menos colación de la permitida)
+            if (di.minutos_colacion_real !== undefined && di.minutos_colacion_auto !== undefined) {
+                if (di.minutos_colacion_real > 0 && di.minutos_colacion_auto > di.minutos_colacion_real) {
+                    let extraMin = di.minutos_colacion_auto - di.minutos_colacion_real;
+                    contextoTags.push(`<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mb-1" title="Colación tomada: ${di.minutos_colacion_real}m de ${di.minutos_colacion_auto}m"><i class="bi bi-cup-hot"></i> +${extraMin}m (Colación reducida)</span>`);
+                }
+            }
+            
+            // 2. Llegada Temprana Efectiva (Fuera del margen de anclaje)
+            if (di.hora_entrada_teorica && di.hora_entrada_real) {
+                let entTeo = new Date(`1970-01-01T${di.hora_entrada_teorica}`);
+                let entReal = new Date(`1970-01-01T${di.hora_entrada_real}`);
+                // Ajuste por si cruza medianoche inversamente
+                if (entReal > entTeo && (entReal - entTeo) > 12 * 3600000) entReal.setDate(entReal.getDate() - 1);
+                
+                let diffEntradaMin = Math.round((entTeo - entReal) / 60000); 
+                let obsLlegada = (di.observaciones || '').toLowerCase();
+                // Verificamos si hay observación de que quedó FUERA del anclaje
+                if (diffEntradaMin > 0 && obsLlegada.includes('llegada anticipada') && obsLlegada.includes('fuera del anclaje')) {
+                    contextoTags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle mb-1"><i class="bi bi-box-arrow-in-right"></i> +${diffEntradaMin}m (Ingreso Anticipado)</span>`);
+                }
+            }
+            
+            // 3. Salida Tardía Efectiva
+            if (di.hora_salida_teorica && di.hora_salida_real) {
+                let salTeo = new Date(`1970-01-01T${di.hora_salida_teorica}`);
+                let salReal = new Date(`1970-01-01T${di.hora_salida_real}`);
+                // Ajuste por cruce de medianoche
+                if (salReal < salTeo && (salTeo - salReal) > 12 * 3600000) salReal.setDate(salReal.getDate() + 1);
+                
+                let diffSalidaMin = Math.round((salReal - salTeo) / 60000);
+                let obsSalida = (di.observaciones || '').toLowerCase();
+                // Si salió tarde y no fue anclado (es decir, el tiempo real se mantuvo y generó horas)
+                if (diffSalidaMin > 0 && !obsSalida.includes('salida dentro del anclaje')) {
+                    contextoTags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle mb-1"><i class="bi bi-box-arrow-right"></i> +${diffSalidaMin}m (Salida Tardía)</span>`);
+                }
+            }
+            
+            // 4. Día Libre / Feriado
+            if (isEsp) { // Si es Extra por día libre
+                contextoTags.push(`<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle mb-1"><i class="bi bi-star-fill"></i> Jornada en Día Libre</span>`);
+            }
+            
+            // Fallback si no identificó nada específico pero hay horas extras
+            if (contextoTags.length === 0) {
+                contextoTags.push(`<span class="text-muted small">Exceso de jornada</span>`);
+            }
+            // -----------------------------------------------------
+
             diasHE.push({
                 fecha: dateStr,
                 fechaLabel: `${dayNames[dt.getDay()]} ${dt.getDate()}-${String(dt.getMonth()+1).padStart(2,'0')}`,
@@ -1548,7 +1602,8 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                 autorizados: di.minutos_extra_autorizados || 0,
                 estado: (di.estado_he === 'N/A' || !di.estado_he) ? 'PENDIENTE' : di.estado_he,
                 hora_entrada: di.hora_entrada_real || '--',
-                hora_salida: di.hora_salida_real || '--'
+                hora_salida: di.hora_salida_real || '--',
+                contexto: contextoTags.join('<br>')
             });
         }
     });
@@ -1575,6 +1630,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             <td class="font-monospace text-center">${d.hora_entrada}</td>
             <td class="font-monospace text-center">${d.hora_salida}</td>
             <td class="fw-bold text-center" style="color:#1e40af">${formatMinutesToHHMM(d.bruto)}</td>
+            <td style="font-size: 0.75rem; line-height: 1.2;" class="align-middle">${d.contexto}</td>
             <td class="text-center">${estadoBadge}</td>
             <td class="text-center">
                 ${d.estado !== 'APROBADO' ? `<button class="btn btn-sm btn-outline-success py-0 px-2" onclick="submitSingleHE(${empleadoId},'${d.fecha}','APROBADO',${d.bruto})" title="Aprobar"><i class="bi bi-check-lg"></i></button>` : ''}
@@ -1631,6 +1687,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <th class="text-center">Entrada</th>
                                         <th class="text-center">Salida</th>
                                         <th class="text-center">HE Bruto</th>
+                                        <th style="min-width: 140px;">Origen / Motivo</th>
                                         <th class="text-center">Estado</th>
                                         <th class="text-center">Acción</th>
                                     </tr>

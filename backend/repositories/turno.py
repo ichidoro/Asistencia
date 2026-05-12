@@ -258,6 +258,8 @@ class TurnoRepository:
             # ── [DT-9 y DT-10] Persistencia Atómica de Siembra ─────────────
             ("num_semana_ganadora",      "INTEGER DEFAULT 1"),
             ("marcas_consumidas_ids",    "TEXT DEFAULT '[]'"),
+            # ── Condonación de Deuda (Perdonazo) ─────────────
+            ("deuda_condonada",          "INTEGER DEFAULT 0"),
         ]
         for col, type_def in columns_check:
             if not await self.db.column_exists("asistencias", col):
