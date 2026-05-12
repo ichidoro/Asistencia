@@ -1083,32 +1083,8 @@ function closeModal() {
 }
 
 async function populateGenerosSelect() {
-  const select = document.getElementById('input-genero');
-  if (!select) return;
-  
-  try {
-    const response = await fetch(`${API_BASE_URL}/configuracion/generos/`);
-    if (!response.ok) throw new Error('Error fetching generos');
-    
-    const generos = await response.json();
-    
-    // Preserve current value if any
-    const currentValue = select.value;
-    
-    select.innerHTML = '<option value="">No especificado</option>';
-    generos.forEach(g => {
-      const option = document.createElement('option');
-      option.value = g.nombre; // The backend expects string names right now!
-      option.textContent = g.nombre;
-      select.appendChild(option);
-    });
-    
-    if (currentValue) {
-      select.value = currentValue;
-    }
-  } catch (err) {
-    console.error('Error cargando cat_generos:', err);
-  }
+  // Ya no es un select, es un input de solo lectura llenado por la sincronización
+  return;
 }
 
 async function loadEmpleadoData(id) {

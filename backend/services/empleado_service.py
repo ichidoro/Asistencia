@@ -57,16 +57,20 @@ class EmpleadoService:
             apellido_paterno=empleado_data.apellido_paterno,
             apellido_materno=empleado_data.apellido_materno,
             cargo=empleado_data.cargo,
+            cargo_id=empleado_data.cargo_id,
+            area_id=empleado_data.area_id,
             area=empleado_data.area,
             compania=empleado_data.compania,
             email=empleado_data.email,
             telefono=empleado_data.telefono,
             genero=empleado_data.genero,
+            genero_id=getattr(empleado_data, 'genero_id', None),
             activo=empleado_data.activo,
             fecha_ingreso=empleado_data.fecha_ingreso,
             fecha_salida=empleado_data.fecha_salida,
             fecha_nacimiento=empleado_data.fecha_nacimiento,
-            tipo_contrato=empleado_data.tipo_contrato
+            tipo_contrato=empleado_data.tipo_contrato,
+            cant_contratos=empleado_data.cant_contratos
         )
         
         # Crear en DB
