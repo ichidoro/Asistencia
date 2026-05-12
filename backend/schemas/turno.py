@@ -56,6 +56,8 @@ class TurnoBase(BaseModel):
     minutos_colacion_auto: int = 0
     anclaje_entrada_minutos: int = 0 # Nuevo campo para marcas tempranas
     anclaje_salida_minutos: int = 0 # Nuevo campo para marcas tardías filtrables
+    ventana_en_curso_minutos: int = 0 # (DT-4) Reemplazo de margen duro de 3h para estados EN_CURSO
+    tolerancia_exceso_colacion_minutos: int = 0 # (DT-14) Margen para diferenciar colación de permisos
     es_turno_cortado: bool = False # Añadido para consistencia
     hora_limite_ficticia: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$", description="Hora trigger para la inasistencia temprana en Horarios Bolsa")
     areas: List[str] = [] # Nuevo: Lista de nombres de áreas

@@ -1103,7 +1103,8 @@ class AsistenciaService:
         if bulk_ctx and asist_ayer and asist_ayer.get('turno_asignado_id'):
             tid_ayer = asist_ayer['turno_asignado_id']
             dia_semana_ayer = (dt - timedelta(days=1)).weekday()
-            config_ayer = bulk_ctx['turnos'].get(tid_ayer, {}).get(1, {}).get(dia_semana_ayer)
+            sem_gan_ayer = asist_ayer.get('num_semana_ganadora', 1)
+            config_ayer = bulk_ctx['turnos'].get(tid_ayer, {}).get(sem_gan_ayer, {}).get(dia_semana_ayer)
 
         # ── PARADIGMA DE CONSUMO (STATE MACHINE) ──────────────────────────────
         if marcas_consumidas_session is None:
@@ -1112,50 +1113,21 @@ class AsistenciaService:
             marcas_consumidas_session[empleado_id] = set()
         consumidas_emp = marcas_consumidas_session[empleado_id]
 
-        # Siembra: si hay asistencia de ayer procesada con turno nocturno,
-        # pre-consumir las marcas que ayer ya usó.
-        if not consumidas_emp and asist_ayer and asist_ayer.get('hora_salida_real'):
-            salida_ayer_ts = f"{ayer_str} {asist_ayer['hora_salida_real']}"
-            
-            h_ent_teo_ayer = asist_ayer.get('hora_entrada_teorica')
-            h_sal_teo_ayer = asist_ayer.get('hora_salida_teorica')
-            fue_trasnoche = False
-            
-            if h_ent_teo_ayer and h_sal_teo_ayer and h_sal_teo_ayer < h_ent_teo_ayer:
-                fue_trasnoche = True
-            elif asist_ayer.get('hora_entrada_real') and asist_ayer['hora_entrada_real'] > asist_ayer['hora_salida_real']:
-                fue_trasnoche = True
-
-            # Si fue trasnoche, la salida real de ayer está en el día de HOY
-            if fue_trasnoche:
-                salida_ayer_ts = f"{fecha} {asist_ayer['hora_salida_real']}"
-                
-            for log in raw_logs:
-                if log['fecha_hora'] <= salida_ayer_ts:
-                    consumidas_emp.add(log.get('id'))
-
-        # ── FIX: Turno Nocturno interceptado como Jornada Especial ─────────────
-        # CASO: turno noche con entrada en festivo (ej. Jue→Vie festivo).
-        # Cuando el interceptor mueve las marcas a jornadas_especiales, limpia
-        # hora_salida_real → None en la fila de asistencias. Al procesar el
-        # día siguiente (Sáb), la siembra de arriba no activa porque la condición
-        # asist_ayer.get('hora_salida_real') es falsy.
-        # Resultado: las marcas del Vie nocturno quedan disponibles → el Sáb las
-        # re-consume → anomalía de marcas separadas en dos días.
-        #
-        # Corrección: si ayer tiene observaciones de "procesadas en jornadas_especiales"
-        # Y la sesión aún no tiene marcas pre-consumidas para este empleado,
-        # buscar en jornadas_especiales para obtener la hora de salida real y sembrar.
+        # Siembra (DT-10): Utilizar marcas_consumidas_ids en lugar de heurística de timestamps
         if not consumidas_emp and asist_ayer:
-            obs_ayer = asist_ayer.get('observaciones') or ''
-            if 'procesadas en jornadas_especiales' in obs_ayer:
-                # Consultar jornadas_especiales para recuperar hora_salida real
-                je_ayer = await db.fetch_one(
-                    "SELECT hora_salida FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
-                    (empleado_id, ayer_str)
-                )
-                if je_ayer and je_ayer['hora_salida']:
-                    hora_salida_je = str(je_ayer['hora_salida'])
+            marcas_ayer_json = asist_ayer.get('marcas_consumidas_ids')
+            if marcas_ayer_json and marcas_ayer_json != '[]':
+                try:
+                    import json
+                    ids_ayer = json.loads(marcas_ayer_json)
+                    for id_ayer in ids_ayer:
+                        consumidas_emp.add(id_ayer)
+                except Exception as e:
+                    logger.error(f"Error parsing marcas_consumidas_ids from yesterday for {empleado_id}: {e}")
+            else:
+                # ── FALLBACK TRANSICIONAL PARA DATOS ANTIGUOS ───────────────────
+                if asist_ayer.get('hora_salida_real'):
+                    salida_ayer_ts = f"{ayer_str} {asist_ayer['hora_salida_real']}"
                     
                     h_ent_teo_ayer = asist_ayer.get('hora_entrada_teorica')
                     h_sal_teo_ayer = asist_ayer.get('hora_salida_teorica')
@@ -1163,28 +1135,33 @@ class AsistenciaService:
                     
                     if h_ent_teo_ayer and h_sal_teo_ayer and h_sal_teo_ayer < h_ent_teo_ayer:
                         fue_trasnoche = True
-                    else:
-                        je_entrada_row = await db.fetch_one(
-                            "SELECT hora_entrada FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
-                            (empleado_id, ayer_str)
-                        )
-                        hora_entrada_je = str(je_entrada_row['hora_entrada']) if je_entrada_row and je_entrada_row['hora_entrada'] else None
-                        if hora_entrada_je and hora_salida_je < hora_entrada_je:
-                            fue_trasnoche = True
+                    elif asist_ayer.get('hora_entrada_real') and asist_ayer['hora_entrada_real'] > asist_ayer['hora_salida_real']:
+                        fue_trasnoche = True
 
                     if fue_trasnoche:
-                        # Fue trasnoche: salida está en el día de HOY
-                        salida_je_ts = f"{fecha} {hora_salida_je}"
-                    else:
-                        salida_je_ts = f"{ayer_str} {hora_salida_je}"
-
-                    logger.info(
-                        f"🔄 [Siembra JE] Empleado {empleado_id}: pre-consumiendo marcas nocturnas "
-                        f"interceptadas como JE en {ayer_str} (salida: {salida_je_ts})"
-                    )
+                        salida_ayer_ts = f"{fecha} {asist_ayer['hora_salida_real']}"
+                        
                     for log in raw_logs:
-                        if log['fecha_hora'] <= salida_je_ts:
+                        if log['fecha_hora'] <= salida_ayer_ts:
                             consumidas_emp.add(log.get('id'))
+
+                obs_ayer = asist_ayer.get('observaciones') or ''
+                if 'procesadas en jornadas_especiales' in obs_ayer and not consumidas_emp:
+                    je_ayer = await db.fetch_one("SELECT hora_salida, hora_entrada FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (empleado_id, ayer_str))
+                    if je_ayer and je_ayer['hora_salida']:
+                        hora_salida_je = str(je_ayer['hora_salida'])
+                        hora_entrada_je = str(je_ayer['hora_entrada']) if je_ayer['hora_entrada'] else None
+                        
+                        fue_trasnoche = False
+                        if h_ent_teo_ayer and h_sal_teo_ayer and h_sal_teo_ayer < h_ent_teo_ayer:
+                            fue_trasnoche = True
+                        elif hora_entrada_je and hora_salida_je < hora_entrada_je:
+                            fue_trasnoche = True
+
+                        salida_je_ts = f"{fecha} {hora_salida_je}" if fue_trasnoche else f"{ayer_str} {hora_salida_je}"
+                        for log in raw_logs:
+                            if log['fecha_hora'] <= salida_je_ts:
+                                consumidas_emp.add(log.get('id'))
 
         # Filtrar marcas disponibles (no consumidas)
         marcas_disponibles = [log for log in raw_logs if log.get('id') not in consumidas_emp]
@@ -1197,38 +1174,47 @@ class AsistenciaService:
             
         block_inteligente = []
         if tipo_prog == 'ROTATIVO_INTELIGENTE':
-            fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
-            # Un bloque pertenece a hoy si la PRIMERA marca ocurre entre hoy 00:00:00 y mañana a las 04:00:00
-            limite_inferior = fecha_dt
-            limite_superior = fecha_dt + timedelta(hours=28) # Hasta las 04:00 AM del día siguiente
+            # [DT-1] Algoritmo de balance D3: ancla = primera marca cuya fecha_hora
+            # inicia en el día calendario procesado. El bloque se cierra cuando
+            # balance(Entrada+1/Salida-1) llega a 0. Sin timedeltas. Sin ventanas.
+            # Fuente: §9.2 del manual. Patrón canónico: FLEXIBLE_BOLSA.
 
-            first_mark_idx = -1
-            for idx, l in enumerate(marcas_disponibles):
-                l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                if limite_inferior <= l_dt <= limite_superior:
-                    first_mark_idx = idx
-                    break
-                elif l_dt > limite_superior:
-                    break
-                    
-            if first_mark_idx != -1:
-                first_mark = marcas_disponibles[first_mark_idx]
-                block_inteligente = [first_mark]
-                
-                # Agrupar TODAS las marcas que caigan dentro de la ventana de 28 horas
-                # definida por limite_inferior y limite_superior.
-                for l in marcas_disponibles[first_mark_idx + 1:]:
-                    l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                    if l_dt <= limite_superior:
+            # Tipos reconocidos (mismos que en _calculate_attendance)
+            _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+            _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+
+            # Buscar el ancla: primera marca del día calendario (fecha_hora[:10] == fecha)
+            ancla = next(
+                (l for l in marcas_disponibles if l.get('fecha_hora', '')[:10] == fecha),
+                None
+            )
+
+            if ancla:
+                idx = marcas_disponibles.index(ancla)
+                tipo_ancla = str(ancla.get('tipo', '') or '').strip().lower()
+
+                if tipo_ancla in _TIPOS_S:
+                    # [D9] Ancla es Salida Huérfana → bloque de 1 marca, ANOMALIA
+                    # Se consume inmediatamente para no bloquear días siguientes (DT-8 / D10)
+                    block_inteligente = [ancla]
+                    consumidas_emp.add(ancla.get('id'))  # D10: consumir por ID
+                else:
+                    # Caso normal: ancla es Entrada. Recorrer desde el ancla con balance.
+                    balance = 0
+                    for l in marcas_disponibles[idx:]:
+                        t = str(l.get('tipo', '') or '').strip().lower()
+                        if t in _TIPOS_E:
+                            balance += 1
+                        elif t in _TIPOS_S:
+                            balance -= 1
                         block_inteligente.append(l)
-                    else:
-                        break
-                
-                for m in block_inteligente:
-                    consumidas_emp.add(m.get('id'))
+                        consumidas_emp.add(l.get('id'))  # D10: consumir por ID en tiempo real
+                        if balance <= 0:
+                            break  # Sesión cerrada. Sin timedeltas. Sin ventanas.
 
         # ── DETERMINACIÓN DE config_dia ────────────────────────────────────────
         config_dia = None
+        semana_ganadora = 1
         if asignacion:
             tid = asignacion['id']
             f_asig_ini = self._parse_date(asignacion.get('asignacion_desde')) or self._parse_date(asignacion.get('fecha_inicio'))
@@ -1266,10 +1252,12 @@ class AsistenciaService:
                                 min_delta = diff_seconds
                                 winner_sem = num_semana_eval
 
+                        semana_ganadora = winner_sem
                         config_dia = bulk_ctx['turnos'].get(tid, {}).get(winner_sem, {}).get(dia_semana)
                     else:
                         dias_diff = (dt - f_asig_ini).days if f_asig_ini else 0
                         num_sem_activa = (dias_diff // 7) % total_sems + 1 if dias_diff >= 0 else 1
+                        semana_ganadora = num_sem_activa
                         config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
                 else:
                     # Turnos Fijos o normales
@@ -1278,6 +1266,7 @@ class AsistenciaService:
                         num_sem_activa = (dias_diff // 7) % total_sems + 1
                     else:
                         num_sem_activa = 1
+                    semana_ganadora = num_sem_activa
                     config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
             else:
                 # Sin bulk_ctx: consultas individuales
@@ -1314,6 +1303,7 @@ class AsistenciaService:
                                 if min_delta is None or diff_s < min_delta:
                                     min_delta = diff_s
                                     winner_sem = num_semana_eval
+                        semana_ganadora = winner_sem
                         rows = await db.fetch_all(
                             "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
                             (tid, dia_semana, winner_sem)
@@ -1321,6 +1311,7 @@ class AsistenciaService:
                     else:
                         dias_diff = (dt - f_asig_ini).days if f_asig_ini else 0
                         num_sem_activa = (dias_diff // 7) % total_sems + 1 if dias_diff >= 0 else 1
+                        semana_ganadora = num_sem_activa
                         rows = await db.fetch_all(
                             "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
                             (tid, dia_semana, num_sem_activa)
@@ -1399,7 +1390,7 @@ class AsistenciaService:
                         logs.append(log)
                         ultimo_idx = i
                         t_m = str(log.get('tipo', '') or '').strip().lower()
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1', ''}:
+                        if t_m in {'entrada', 'entry', 'e', 'in', '1'}:  # [DT-16b] '' removido — D8
                             balance += 1
                         elif t_m in {'salida', 'exit', 's', 'out', '2'}:
                             balance -= 1
@@ -1412,11 +1403,11 @@ class AsistenciaService:
                         log = marcas_disponibles[i]
                         logs.append(log)
                         t_m = str(log.get('tipo', '') or '').strip().lower()
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1', ''}:
+                        if t_m in {'entrada', 'entry', 'e', 'in', '1'}:  # [DT-16b] '' removido — D8
                             balance += 1
                         elif t_m in {'salida', 'exit', 's', 'out', '2'}:
                             balance -= 1
-                            
+
                         if balance <= 0:
                             break
         else:
@@ -1426,11 +1417,32 @@ class AsistenciaService:
             # (el motor de consumo gestiona eso mediante el set consumidas_emp).
             # Los días DIURNOS solo pueden usar marcas de su propio día calendario.
             if es_nocturno_pre:
-                # Turnos nocturnos: marcas del día actual + hasta 14h del día siguiente
-                # (cubre salidas de madrugada/mañana del día siguiente)
-                dt_actual = datetime.strptime(fecha, "%Y-%m-%d")
-                ventana_noc_fin = (dt_actual + timedelta(hours=38)).strftime("%Y-%m-%d %H:%M:%S")
-                logs = [l for l in marcas_disponibles if l.get('fecha_hora', '') <= ventana_noc_fin]
+                # [DT-7] Turnos fijos nocturnos consumen por balance Entrada/Salida
+                # Ancla: primera marca del día calendario. Sin ventanas (38h removida).
+                ancla = next(
+                    (l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)),
+                    None
+                )
+                logs = []
+                if ancla:
+                    idx = marcas_disponibles.index(ancla)
+                    t_ancla = str(ancla.get('tipo', '') or '').strip().lower()
+                    if t_ancla in {'salida', 'exit', 's', 'out', '2'}:
+                        # [D9] Ancla es Salida Huérfana
+                        logs = [ancla]
+                    else:
+                        balance = 0
+                        for i in range(idx, len(marcas_disponibles)):
+                            l = marcas_disponibles[i]
+                            t = str(l.get('tipo', '') or '').strip().lower()
+                            if t in {'entrada', 'entry', 'e', 'in', '1'}:
+                                balance += 1
+                            elif t in {'salida', 'exit', 's', 'out', '2'}:
+                                balance -= 1
+                            
+                            logs.append(l)
+                            if balance <= 0:
+                                break
             elif dia_restringido:
                 # Solo marcas que caen físicamente en este día calendario
                 logs = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
@@ -1500,31 +1512,29 @@ class AsistenciaService:
             return None
 
         # ── APLICACIÓN DE AGOTAMIENTO ATÓMICO (MEMORIA) ───────────────────────
-        if resultado and resultado.get('hora_entrada_real') and logs:
-            # Para días libres: consumir solo marcas del día calendario
-            if es_libre_config:
-                ventana_consumo_ini = f"{fecha} 00:00:00"
-                ventana_consumo_fin = f"{fecha} 23:59:59"
-            elif es_nocturno_pre:
-                # Para turnos nocturnos: consumir desde 6h antes hasta 33h después del inicio del día
-                # Esto cubre: entrada nocturna (ayer tarde) + salida nocturna (mañana temprano)
-                dt_actual = datetime.strptime(fecha, "%Y-%m-%d")
-                ventana_consumo_ini = (dt_actual - timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-                ventana_consumo_fin = (dt_actual + timedelta(hours=33)).strftime("%Y-%m-%d %H:%M:%S")
-            else:
-                # Para turnos diurnos: solo consumir marcas del mismo día calendario
-                ventana_consumo_ini = f"{fecha} 00:00:00"
-                ventana_consumo_fin = f"{fecha} 23:59:59"
+        # [DT-13] Guard sin chequeo de hora_entrada_real:
+        # Si el día es ANOMALIA por Salida Huérfana, hora_entrada_real=None pero los
+        # logs DEBEN consumirse para no contaminar los días siguientes (D9).
+        if resultado:
+            resultado['num_semana_ganadora'] = semana_ganadora
+            
+            ids_consumidos = []
+            if logs:
+                # [DT-8] Agotamiento atómico (D10): el motor consume estrictamente
+                # los IDs asignados al bloque sin heurísticas de tiempo ni ventanas.
+                for log in logs:
+                    if log.get('id'):
+                        ids_consumidos.append(log.get('id'))
+                        consumidas_emp.add(log.get('id'))
 
-            for log in logs:
-                fh = log.get('fecha_hora', '')
-                if ventana_consumo_ini <= fh <= ventana_consumo_fin:
-                    consumidas_emp.add(log.get('id'))
+                # Consumir también los auth-previos si existían
+                m_auth_previo = resultado.get('_log_id_entrada')
+                if m_auth_previo:
+                    ids_consumidos.append(m_auth_previo)
+                    consumidas_emp.add(m_auth_previo)
 
-            # Consumir también los auth-previos si existían
-            m_auth_previo = resultado.get('_log_id_entrada')
-            if m_auth_previo:
-                consumidas_emp.add(m_auth_previo)
+            import json
+            resultado['marcas_consumidas_ids'] = json.dumps(ids_consumidos)
 
         # ── FASE 2 (Fix B2): PRESERVACIÓN DE DECISIONES HUMANAS ───────────────
         # Fuente primaria: horas_extras (nueva tabla)
@@ -1758,8 +1768,10 @@ class AsistenciaService:
 
         # ── CONFIG DÍA ────────────────────────────────────────────────────────
         redondeo = int(config_dia.get('redondeo_intervalo', 0) or 0) if config_dia else 0
-        anclaje_min = int(turno.get('anclaje_entrada_minutos', 0) or 0) if turno else 0
-        anclaje_sal_min = int(turno.get('anclaje_salida_minutos', 0) or 0) if turno else 0
+        anclaje_min     = int((config_dia or {}).get('anclaje_entrada_minutos') or
+                              turno.get('anclaje_entrada_minutos', 0) or 0) if turno else 0  # [DT-12]
+        anclaje_sal_min = int((config_dia or {}).get('anclaje_salida_minutos') or
+                              turno.get('anclaje_salida_minutos', 0) or 0) if turno else 0   # [DT-12]
         h_ent_teorica = None
         h_sal_teorica = None
 
@@ -1781,11 +1793,54 @@ class AsistenciaService:
                 res['horas_teoricas'] = float(config_dia['horas_teoricas'])
 
         # ── TIPOS BIOALBA ──────────────────────────────────────────────────────
-        TIPOS_ENTRADA = {'entrada', 'entry', 'e', 'in', '1', ''}
+        TIPOS_ENTRADA = {'entrada', 'entry', 'e', 'in', '1'}
         TIPOS_SALIDA  = {'salida', 'exit', 's', 'out', '2'}
 
         def tipo_mark(log):
             return str(log.get('tipo', '') or '').strip().lower()
+
+        def _procesar_pares_intermedios(salidas_int, entradas_int):
+            pares = []
+            for s_int, e_int in zip(salidas_int, entradas_int):
+                if e_int > s_int:
+                    pares.append((s_int, e_int, (e_int - s_int).total_seconds() / 60))
+            if not pares:
+                return
+
+            # DT-14: Lógica de Colación vs Permiso
+            minutos_auto = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
+            tol_exceso = int(turno.get('tolerancia_exceso_colacion_minutos', 0) or 0) if turno else 0
+            limite_colacion = minutos_auto + tol_exceso
+
+            mejor_par = None
+            menor_diff = float('inf')
+
+            for p in pares:
+                duracion = p[2]
+                if duracion <= limite_colacion:
+                    diff = abs(duracion - minutos_auto)
+                    if diff < menor_diff:
+                        menor_diff = diff
+                        mejor_par = p
+
+            minutos_permisos = 0
+            if mejor_par:
+                res['minutos_colacion_real'] = int(round(mejor_par[2]))
+                res['hora_salida_colacion'] = mejor_par[0].strftime("%H:%M:%S")
+                res['hora_entrada_colacion'] = mejor_par[1].strftime("%H:%M:%S")
+
+            permisos_puros = []
+            for p in pares:
+                if p != mejor_par:
+                    minutos_permisos += p[2]
+                    permisos_puros.append(p)
+
+            if minutos_permisos > 0:
+                res['minutos_permisos_detectados'] = int(minutos_permisos)
+                res['minutos_permiso_personal_deuda'] = res.get('minutos_permiso_personal_deuda', 0) + int(minutos_permisos)
+                res['observaciones'] += f"Permiso detectado en reloj ({int(minutos_permisos)} min). "
+                res['hora_inicio_permiso'] = permisos_puros[0][0].strftime("%H:%M:%S")
+                res['hora_termino_permiso'] = permisos_puros[-1][1].strftime("%H:%M:%S")
 
         # Clasificar logs disponibles
         logs_sorted = sorted(logs, key=lambda l: l.get('fecha_hora', ''))
@@ -1866,31 +1921,7 @@ class AsistenciaService:
                 if len(salidas_post) >= 2 and len(entradas) >= 2:
                     salidas_intermedias = [s[0] for s in salidas_post[:-1]]
                     entradas_intermedias = [e[0] for e in entradas[1:]]
-                    
-                    pares_intermedios = []
-                    for s_int, e_int in zip(salidas_intermedias, entradas_intermedias):
-                        if e_int > s_int:
-                            pares_intermedios.append((s_int, e_int))
-                    
-                    if pares_intermedios:
-                        ultima_salida, ultima_entrada = pares_intermedios[-1]
-                        colacion_real_min = (ultima_entrada - ultima_salida).total_seconds() / 60
-                        res['minutos_colacion_real'] = int(round(colacion_real_min))
-                        res['hora_salida_colacion'] = ultima_salida.strftime("%H:%M:%S")
-                        res['hora_entrada_colacion'] = ultima_entrada.strftime("%H:%M:%S")
-                        
-                        minutos_permisos = 0
-                        for s_per, e_per in pares_intermedios[:-1]:
-                            minutos_permisos += (e_per - s_per).total_seconds() / 60
-                            
-                        if pares_intermedios[:-1]:
-                            res['hora_inicio_permiso'] = pares_intermedios[0][0].strftime("%H:%M:%S")
-                            res['hora_termino_permiso'] = pares_intermedios[-2][1].strftime("%H:%M:%S")
-                            
-                        if minutos_permisos > 0:
-                            res['minutos_permisos_detectados'] = int(minutos_permisos)
-                            res['minutos_permiso_personal_deuda'] = res.get('minutos_permiso_personal_deuda', 0) + int(minutos_permisos)
-                            res['observaciones'] += f"Permiso detectado en reloj ({int(minutos_permisos)} min). "
+                    _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
 
             elif salidas:
                 # Solo hay salidas, sin entrada → borde frío (entrada antes del sync)
@@ -1970,31 +2001,7 @@ class AsistenciaService:
                 if len(salidas_post) >= 2 and len(entradas) >= 2:
                     salidas_intermedias = [s[0] for s in salidas_post[:-1]]
                     entradas_intermedias = [e[0] for e in entradas[1:]]
-                    
-                    pares_intermedios = []
-                    for s_int, e_int in zip(salidas_intermedias, entradas_intermedias):
-                        if e_int > s_int:
-                            pares_intermedios.append((s_int, e_int))
-                    
-                    if pares_intermedios:
-                        ultima_salida, ultima_entrada = pares_intermedios[-1]
-                        colacion_real_min = (ultima_entrada - ultima_salida).total_seconds() / 60
-                        res['minutos_colacion_real'] = int(round(colacion_real_min))
-                        res['hora_salida_colacion'] = ultima_salida.strftime("%H:%M:%S")
-                        res['hora_entrada_colacion'] = ultima_entrada.strftime("%H:%M:%S")
-                        
-                        minutos_permisos = 0
-                        for s_per, e_per in pares_intermedios[:-1]:
-                            minutos_permisos += (e_per - s_per).total_seconds() / 60
-                            
-                        if pares_intermedios[:-1]:
-                            res['hora_inicio_permiso'] = pares_intermedios[0][0].strftime("%H:%M:%S")
-                            res['hora_termino_permiso'] = pares_intermedios[-2][1].strftime("%H:%M:%S")
-                            
-                        if minutos_permisos > 0:
-                            res['minutos_permisos_detectados'] = int(minutos_permisos)
-                            res['minutos_permiso_personal_deuda'] = res.get('minutos_permiso_personal_deuda', 0) + int(minutos_permisos)
-                            res['observaciones'] += f"Permiso detectado en reloj ({int(minutos_permisos)} min). "
+                    _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
             elif salidas:
                 dt_salida_fin = salidas[0][0]
 
@@ -2082,10 +2089,11 @@ class AsistenciaService:
             hoy_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             es_hoy = (fecha_dt >= hoy_dt)
             
-            # Determinar si aún está "en curso" (no ha pasado la hora de cierre esperada)
+            # Determinar si aún está "en curso" (DT-4: usar ventana_en_curso_minutos)
             en_curso_por_hora = False
-            if h_sal_teorica:
-                limite_cierre = h_sal_teorica + timedelta(hours=3)
+            ventana_en_curso = int(turno.get('ventana_en_curso_minutos', 0) or 0) if turno else 0
+            if h_sal_teorica and ventana_en_curso > 0:
+                limite_cierre = h_sal_teorica + timedelta(minutes=ventana_en_curso)
                 if datetime.now() < limite_cierre:
                     en_curso_por_hora = True
             
@@ -2093,6 +2101,10 @@ class AsistenciaService:
                 res['estado'] = 'EN_CURSO'
                 res['observaciones'] += 'Jornada en curso (falta salida).'
                 return res
+                        
+            if ventana_en_curso == 0 and not es_hoy:
+                # Comportamiento conservador (DT-4): si no hay ventana configurada, retornar None sin generar estado
+                return None
                         
             # Si no es hoy y ya pasó el límite de en curso
             if es_libre_dia or is_holiday:
@@ -2117,9 +2129,9 @@ class AsistenciaService:
             res['minutos_colacion_auto'] = minutos_colacion_permitidos
 
             # Si hay marcas intermedias (colación real), usamos ese tiempo.
-            # Según la regla de negocio: si la colación es menor a la programada, se descuenta la programada.
+            # DT-3: El tiempo real medido es la fuente de verdad (sin MAX)
             if res.get('minutos_colacion_real', 0) > 0:
-                minutos_colacion = max(res['minutos_colacion_real'], minutos_colacion_permitidos)
+                minutos_colacion = res['minutos_colacion_real']
             else:
                 # Si no hay marcas intermedias, aplicamos el descuento automático si está configurado
                 if config_dia and int(colacion_flag or 0):
@@ -2160,10 +2172,11 @@ class AsistenciaService:
 
 
         tolerancia_retraso = int(turno.get('tolerancia_retraso_descuento', 0) or 0) if turno else 0
+        tolerancia_alerta = int(turno.get('tolerancia_retraso_alerta', 0) or 0) if turno else 0
 
         # Horas extra brutas y Deuda de tiempo total (Lógica Financiera Pura - Modelo Doble Eje)
         ht = config_dia.get('horas_teoricas') if config_dia else None
-        horas_teoricas = float(ht) if ht is not None else 8.0
+        horas_teoricas = float(ht) if ht is not None else 0.0  # [DT-11] 8.0 → 0.0: D6 nunca asume horas teóricas
         min_teoricos = float(horas_teoricas * 60)
         
         # Si es feriado o libre, NO exigimos horas teóricas
@@ -2185,6 +2198,9 @@ class AsistenciaService:
         if diff_ent_exacto > tolerancia_retraso:
             # Atraso como incidencia disciplinaria (no se borra si compensó con extras)
             res['minutos_atraso'] = diff_ent_exacto
+        elif diff_ent_exacto > tolerancia_alerta:
+            # DT-2: Alerta visual de retraso sin incidencia disciplinaria
+            res['alerta_atraso'] = True
 
         if diff_sal_exacto > 0:
             res['minutos_salida_adelantada'] = diff_sal_exacto
@@ -2238,21 +2254,22 @@ class AsistenciaService:
         # ── DETERMINACIÓN DE ESTADO FINAL ─────────────────────────────────────
         minutos_reales_brutos = int(horas_trabajadas * 60)
         
-        # Una salida adelantada solo se considera falta (para cambiar el estado) 
-        # si efectivamente genera deuda diaria, o si estamos en bolsa (donde la deuda diaria es 0, 
-        # pero la salida física antes de hora sigue siendo incidencia a menos que supere la meta diaria)
+        # [DT-15] Capturar SAD físico ANTES de la lógica financiera — D7 estricto (P1 aprobado)
+        # hubo_sad_fisico = hubo marca de salida antes de la hora teórica
+        # Este flag es independiente de si hay deuda o no. Eje Disciplinario != Eje Financiero.
+        hubo_sad_fisico = res.get('minutos_salida_adelantada', 0) > 0
+
+        # Una salida adelantada solo cambia el ESTADO (para efectos de deuda) si genera deuda diaria,
+        # o si estamos en bolsa (donde la deuda diaria es 0 pero la salida física antes de hora es incidencia
+        # a menos que supere la meta diaria)
         has_sad = False
-        if res.get('minutos_salida_adelantada', 0) > 0:
+        if hubo_sad_fisico:
             if is_bolsa:
-                 has_sad = True
+                has_sad = True
             else:
-                 # Si compensó llegando antes (minutos_deuda == 0), no es falta
-                 has_sad = minutos_deuda > 0
-                 
-            # Si no califica como falta (porque compensó las horas), limpiamos el indicador numérico
-            # para evitar que la UI lo sume a la columna "Deuda" (Sad(m)).
-            if not has_sad:
-                 res['minutos_salida_adelantada'] = 0
+                # [DT-15] NO borrar minutos_salida_adelantada cuando no hay deuda.
+                # Los minutos se preservan para reportes del Eje Disciplinario.
+                has_sad = minutos_deuda > 0
 
         has_permiso = res.get('minutos_permisos_detectados', 0) > 0 or res.get('minutos_permiso_personal_deuda', 0) > 0
 
@@ -2261,7 +2278,10 @@ class AsistenciaService:
         # Estadísticas: "cuántos llegaron tarde" = COUNT WHERE tiene_atraso=1
         #               "cuántos salieron antes"  = COUNT WHERE tiene_salida_adelantada=1
         res['tiene_atraso']             = 1 if diff_ent > tolerancia_retraso else 0
-        res['tiene_salida_adelantada']  = 1 if has_sad else 0
+        # [DT-15] tiene_salida_adelantada usa hubo_sad_fisico (no has_sad) — D7 estricto
+        # El flag es 1 si hubo SAD físico, independientemente de si hay deuda financiera.
+        # Permite reportes como "cuántos empleados salieron antes" sin mezclar con deuda.
+        res['tiene_salida_adelantada']  = 1 if hubo_sad_fisico else 0
         res['tiene_permiso']            = 1 if has_permiso else 0
 
         # ── Estado PRIMARIO del día (jerarquía de gravedad) ──────────────────

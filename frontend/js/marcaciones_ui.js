@@ -3565,7 +3565,7 @@ function _analiticaCellBadge(di) {
     // Solo se muestran si el flag es verdadero Y el estado primario no lo representa ya
     const extraBadges = [];
 
-    if (di.tiene_atraso && est !== 'ATRASO') {
+    if ((di.tiene_atraso || di.alerta_atraso) && est !== 'ATRASO') {
         const [ac, al] = badgeMap['ATRASO'] || ['badge-state-warning', '<i class="bi bi-clock-fill me-1"></i>ATR'];
         extraBadges.push(`<div class="badge-status ${ac}" style="${stdBadgeStyle}"><span>${al}</span></div>`);
     }
@@ -3909,6 +3909,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     // Incidencias Array
     let incidencias = [];
     if (e.minutos_atraso > 0) incidencias.push(`Atraso de ${formatExactMinutesToTime(e.minutos_atraso)} en entrada`);
+    else if (e.alerta_atraso) incidencias.push(`Alerta de atraso en entrada (tolerancia superada)`);
+    
     if (e.minutos_salida_adelantada > 0) incidencias.push(`Salida anticipada por ${formatExactMinutesToTime(e.minutos_salida_adelantada)}`);
     if (e.minutos_deuda > 0 && e.minutos_atraso === 0 && e.minutos_salida_adelantada === 0) incidencias.push(`Deuda total de ${formatExactMinutesToTime(e.minutos_deuda)}`);
     if (e.tiene_permiso || e.tiene_permiso_hora || e.permiso_activo || e.minutos_permisos_detectados > 0) {
@@ -4031,7 +4033,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
                 <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Entrada</div>
                 <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_entrada_teorica ? (e.hora_entrada_teorica.length === 5 ? e.hora_entrada_teorica + ':00' : e.hora_entrada_teorica) : '--:--:--'}</div>
-                <div style="width: 35%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_entrada_real || '--:--:--'}</div>
+                <div style="width: 35%; text-align: center; color: ${e.alerta_atraso ? 'var(--warning-color, #f59e0b)' : 'var(--text-primary, #1e293b)'}; font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_entrada_real || '--:--:--'}</div>
             </div>
             <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
                 <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Salida</div>

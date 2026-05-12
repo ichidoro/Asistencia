@@ -299,6 +299,7 @@ class ConfiguracionService:
                 
                 if emp:
                     recipients = await self.get_destinatarios_rrhh(emp.area)
+                    employee_payload = None  # DT-6: inicializar fuera del if para evitar UnboundLocalError
                     if recipients:
                         employee_payload = {
                         "nombre": emp.nombre,

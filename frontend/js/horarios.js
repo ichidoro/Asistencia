@@ -87,6 +87,8 @@ async function saveTurno() {
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
+        ventana_en_curso_minutos: parseInt(formData.get('ventana_en_curso_minutos') || 0),
+        tolerancia_exceso_colacion_minutos: parseInt(formData.get('tolerancia_exceso_colacion_minutos') || 0),
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
@@ -257,6 +259,8 @@ async function openModalHorario(id = null) {
             form.tolerancia_retraso_alerta.value = turno.tolerancia_retraso_alerta;
             form.tolerancia_retraso_descuento.value = turno.tolerancia_retraso_descuento;
             form.redondeo_minutos.value = String(turno.redondeo_minutos || 0);
+            if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = String(turno.ventana_en_curso_minutos || 0);
+            if (form.tolerancia_exceso_colacion_minutos) form.tolerancia_exceso_colacion_minutos.value = String(turno.tolerancia_exceso_colacion_minutos || 0);
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
             if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "";
@@ -336,6 +340,8 @@ async function openModalHorario(id = null) {
         if (form.meta_horas_semanales) form.meta_horas_semanales.value = "";
         if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
         if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
+        if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = 0;
+        if (form.tolerancia_exceso_colacion_minutos) form.tolerancia_exceso_colacion_minutos.value = 0;
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = "";
         toggleColacionInput();
@@ -1128,6 +1134,18 @@ function renderModalHtml() {
                                     </div>
                                 </div>
                                 <div class="form-text small">Tiempo que se resta de la jornada total.</div>
+                            </div>
+
+                            <!-- Fila 3: Cierre y Excesos (Nuevos campos DT-4 y DT-14) -->
+                            <div class="col-md-6">
+                                <label for="input-ventana-curso" class="form-label small fw-bold">Ventana de Jornada En Curso (min)</label>
+                                <input type="number" id="input-ventana-curso" class="form-control" name="ventana_en_curso_minutos" value="0">
+                                <div class="form-text small">Minutos post-salida donde la jornada sigue abierta (Ej: 180 min). 0 para anular anomalías.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="input-exceso-col" class="form-label small fw-bold">Tol. Exceso Colación (min)</label>
+                                <input type="number" id="input-exceso-col" class="form-control" name="tolerancia_exceso_colacion_minutos" value="0">
+                                <div class="form-text small">Si la salida excede este margen sobre la colación base, se clasifica como Permiso Personal.</div>
                             </div>
                         </div>
 

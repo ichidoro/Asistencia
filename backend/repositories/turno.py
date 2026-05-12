@@ -245,6 +245,9 @@ class TurnoRepository:
             ("tiene_atraso",             "INTEGER NOT NULL DEFAULT 0"),
             ("tiene_salida_adelantada",  "INTEGER NOT NULL DEFAULT 0"),
             ("tiene_permiso",            "INTEGER NOT NULL DEFAULT 0"),
+            # ── [DT-9 y DT-10] Persistencia Atómica de Siembra ─────────────
+            ("num_semana_ganadora",      "INTEGER DEFAULT 1"),
+            ("marcas_consumidas_ids",    "TEXT DEFAULT '[]'"),
         ]
         for col, type_def in columns_check:
             if not await self.db.column_exists("asistencias", col):

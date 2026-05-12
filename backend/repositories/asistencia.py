@@ -144,8 +144,9 @@ class AsistenciaRepository:
                 minutos_exceso_colacion, minutos_colacion_auto, minutos_permiso_personal_deuda,
                 hora_salida_colacion, hora_entrada_colacion, hora_inicio_permiso,
                 hora_termino_permiso, minutos_permisos_detectados,
-                tiene_atraso, tiene_salida_adelantada, tiene_permiso
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tiene_atraso, tiene_salida_adelantada, tiene_permiso,
+                num_semana_ganadora, marcas_consumidas_ids
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 turno_asignado_id=excluded.turno_asignado_id,
                 hora_entrada_teorica=excluded.hora_entrada_teorica,
@@ -174,6 +175,8 @@ class AsistenciaRepository:
                 tiene_atraso=excluded.tiene_atraso,
                 tiene_salida_adelantada=excluded.tiene_salida_adelantada,
                 tiene_permiso=excluded.tiene_permiso,
+                num_semana_ganadora=excluded.num_semana_ganadora,
+                marcas_consumidas_ids=excluded.marcas_consumidas_ids,
                 updated_at=datetime('now')
         """
         
@@ -199,6 +202,8 @@ class AsistenciaRepository:
                 d.get('tiene_atraso', 0),
                 d.get('tiene_salida_adelantada', 0),
                 d.get('tiene_permiso', 0),
+                d.get('num_semana_ganadora', 1),
+                d.get('marcas_consumidas_ids', '[]'),
             )
             params_list.append(params)
 

@@ -640,7 +640,11 @@ class SyncService:
             count_skipped = 0
             count_filtered = 0
             count_gate_blocked = 0
-            
+            count_tipo_invalido = 0
+
+            # Tipos válidos reconocidos por el motor de asistencia (D8)
+            _TIPOS_VALIDOS = {'entrada', 'entry', 'e', 'in', '1', 'salida', 'exit', 's', 'out', '2'}
+
             # 4. Procesar y Filtrar
             logs_to_save = []
             ruts_afectados = set()  # RUTs que tuvieron marcaciones nuevas en este batch
@@ -663,26 +667,38 @@ class SyncService:
                     if not fecha_str or rut_clean not in asig_map_gate or fecha_str not in asig_map_gate[rut_clean]:
                         count_gate_blocked += 1
                         continue  # [RFC PASO 1] Descarte estricto: no llega a logs_to_save
-                    
+
                     tipo = log_data.get('tipo')
-                    
+
+                    # [D8 SANITIZACIÓN]: Marcas con tipo desconocido no ingresan a logs_raw.
+                    # El motor solo reconoce Entrada/Salida. Tipo vacío, nulo o desconocido
+                    # corrompería el balance del motor → descarte silencioso.
+                    tipo_norm = str(tipo or '').strip().lower()
+                    if tipo_norm not in _TIPOS_VALIDOS:
+                        count_tipo_invalido += 1
+                        logger.debug(
+                            f"⚠️ [D8] Marcación descartada: RUT={rut_clean}, "
+                            f"fecha={fecha_hora}, tipo='{tipo}' (tipo inválido)"
+                        )
+                        continue
+
                     # [ATOMIC_HASH_PROTECTION]: SHA256 Sovereign Hash
                     raw_string = f"{rut}|{fecha_hora}|{tipo or ''}"
                     hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
-                    
+
                     if hash_val in existing_hashes:
                         count_skipped += 1
-                        continue # Skip duplicate
-                        
+                        continue  # Skip duplicate
+
                     # Es nuevo -> Acumular para batch
                     logs_to_save.append(log_data)
                     self.stats['marcaciones_nuevas'] += 1
                     ruts_afectados.add(rut_clean)  # Registrar RUT afectado para acotar recálculo
-                    
+
                     if fecha_hora:
                         fecha_str = fecha_hora.split(' ')[0]
                         fechas_afectadas.add(fecha_str)
-                        
+
                 except Exception as e:
                     logger.error(f"Error preparando marcación para batch: {e}")
                     self.stats['errores'] += 1
@@ -742,6 +758,7 @@ class SyncService:
             self.stats['duracion_segundos'] = (datetime.now() - start_time).total_seconds()
             self.stats['bloqueados_sin_asig'] = count_gate_blocked
             self.stats['filtrados_area'] = count_filtered
+            self.stats['tipo_invalido_descartado'] = count_tipo_invalido
             
             # --- NUEVO: Grabar log de sincronización ---
             try:
@@ -765,6 +782,7 @@ class SyncService:
                 f"✅ Sync Completo: {self.stats['marcaciones_nuevas']} nuevas, "
                 f"{count_skipped} duplicadas, "
                 f"{count_gate_blocked} bloqueadas por Bioalba Gate (Sin Asignación), "
+                f"{count_tipo_invalido} descartadas por tipo inválido (D8), "
                 f"{self.stats['dias_recalculados']} días recal."
             )
             return self.stats
