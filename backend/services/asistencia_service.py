@@ -1505,6 +1505,7 @@ class AsistenciaService:
                             'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
                             'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
                             'tipo_programacion', 'nombre',
+                            'ventana_en_curso_minutos', 'tolerancia_exceso_colacion_minutos'
                         ):
                             if campo in padre:
                                 config_dia[campo] = padre[campo]

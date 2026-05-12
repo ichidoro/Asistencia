@@ -1110,24 +1110,24 @@ function renderModalHtml() {
                         <div class="row g-3 mb-4 p-3 bg-light rounded border">
                             <!-- Fila 1: Gobernanza de Tiempos (Sétrica 3 columnas) -->
                             <div class="col-md-3 gobernanza-col">
-                                <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Alerta (min)</label>
+                                <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Atraso Visual (min)</label>
                                 <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Aviso visual de retraso.</div>
+                                <div class="form-text small" style="font-size: 0.7rem;">Si llega tarde hasta estos minutos, marca amarilla pero NO genera deuda.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
-                                <label for="input-tol-desc" class="form-label small fw-bold">Tol. Descuento (min)</label>
+                                <label for="input-tol-desc" class="form-label small fw-bold">Tolerancia Atraso Real (min)</label>
                                 <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Criterio para descuento real.</div>
+                                <div class="form-text small" style="font-size: 0.7rem;">Si excede estos minutos, se genera Deuda (Atraso) y marca roja.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
-                                <label for="input-anclaje" class="form-label small fw-bold" title="Minutos antes de la entrada que se anclan al inicio oficial">Anclaje Entrada (min)</label>
+                                <label for="input-anclaje" class="form-label small fw-bold" title="Minutos antes de la entrada que se asimilan al inicio oficial">Rango Anticipación Entrada (min)</label>
                                 <input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Captura marcas tempranas.</div>
+                                <div class="form-text small" style="font-size: 0.7rem;">Marcas dentro de este tiempo previo se asumen como entrada a la hora en punto.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
-                                <label for="input-anclaje-salida" class="form-label small fw-bold" title="Minutos después de la salida que se anclan al fin oficial">Anclaje Salida (min)</label>
+                                <label for="input-anclaje-salida" class="form-label small fw-bold" title="Minutos después de la salida que se asimilan al fin oficial">Rango Demora Salida (min)</label>
                                 <input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Filtra HE pequeñas.</div>
+                                <div class="form-text small" style="font-size: 0.7rem;">Marcas dentro de este tiempo posterior se asumen como salida a la hora en punto.</div>
                             </div>
 
                             <!-- Fila 2: Ajustes de Cálculo (Simétrica 2 columnas) -->
@@ -1138,7 +1138,7 @@ function renderModalHtml() {
                                     <option value="15">Intervalos de 15 min</option>
                                     <option value="30">Intervalos de 30 min</option>
                                 </select>
-                                <div class="form-text small">Alinea marcas al bloque más cercano.</div>
+                                <div class="form-text small">Redondea la hora real de la marca a bloques cerrados (Ej: 08:04 -> 08:00).</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="chkColacion" class="form-label small fw-bold">Colación Automática</label>
@@ -1154,19 +1154,19 @@ function renderModalHtml() {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="form-text small">Tiempo que se resta de la jornada total.</div>
+                                <div class="form-text small">Resta estos minutos fijos a las horas trabajadas si NO hay marcas de colación explícitas.</div>
                             </div>
 
                             <!-- Fila 3: Cierre y Excesos (Nuevos campos DT-4 y DT-14) -->
                             <div class="col-md-6">
-                                <label for="input-ventana-curso" class="form-label small fw-bold">Ventana de Jornada En Curso (min)</label>
+                                <label for="input-ventana-curso" class="form-label small fw-bold">Límite de Espera para Cierre (min)</label>
                                 <input type="number" id="input-ventana-curso" class="form-control" name="ventana_en_curso_minutos" value="0">
-                                <div class="form-text small">Minutos post-salida donde la jornada sigue abierta (Ej: 180 min). 0 para anular anomalías.</div>
+                                <div class="form-text small">¿Cuánto tiempo máximo se espera la marca de salida antes de dar la jornada por incompleta? (Ej: 180 min = 3 hrs). Usa 0 para infinito.</div>
                             </div>
                             <div class="col-md-6">
-                                <label for="input-exceso-col" class="form-label small fw-bold">Tol. Exceso Colación (min)</label>
+                                <label for="input-exceso-col" class="form-label small fw-bold">Tolerancia para ser Permiso (min)</label>
                                 <input type="number" id="input-exceso-col" class="form-control" name="tolerancia_exceso_colacion_minutos" value="0">
-                                <div class="form-text small">Si la salida excede este margen sobre la colación base, se clasifica como Permiso Personal.</div>
+                                <div class="form-text small">Minutos extras de demora sobre una colación normal que convierten el exceso en un Permiso Personal.</div>
                             </div>
                         </div>
 
