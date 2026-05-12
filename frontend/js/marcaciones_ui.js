@@ -4224,15 +4224,22 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             </div>
 
             <!-- Deuda -->
-            <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
-                <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
-                    <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
+            <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px; position:relative;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                    <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px;">
+                        <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
+                    </div>
+                    ${e.deuda_condonada 
+                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', false)" style="background:var(--danger-color, #f43f5e); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Revocar Condonación (Restaurar Deuda)">Revocar Perdonazo</button>`
+                        : (e.minutos_salida_adelantada > 0 ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', true)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Deuda (Regalar Salida Adelantada)">Perdonazo</button>` : '')
+                    }
                 </div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_deuda > 0 ? e.minutos_atraso : 0, 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_deuda > 0 ? e.minutos_salida_adelantada : 0, 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins(e.minutos_deuda > 0 ? (e.minutos_exceso_colacion || 0) : 0, 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins(e.minutos_deuda > 0 ? (e.minutos_permisos_detectados || 0) : 0, 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_atraso, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_salida_adelantada, 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins((e.minutos_exceso_colacion || 0), 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins((e.minutos_permisos_detectados || 0), 'var(--danger-color, #f43f5e)')}</div>
+                <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Comp.</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>
+                ${e.deuda_condonada ? `<div style="margin-top:6px; font-size:0.65rem; color:var(--success-color, #10b981); font-weight:600; text-align:center;"><i class="bi bi-check-circle me-1"></i>Deuda Condonada</div>` : ''}
             </div>
         </div>
 
@@ -4248,3 +4255,46 @@ function _escAttr(html) {
 }
 
 
+window.toggleCondonacionDeuda = async function(empleadoId, fecha, condonar) {
+    if(!confirm(`¿Estás seguro que deseas ${condonar ? 'CONDONAR (Perdonazo)' : 'REVOCAR la condonación de'} la deuda horaria del empleado el ${fecha}?`)) return;
+
+    try {
+        const payload = {
+            empleados_ids: [empleadoId],
+            fecha_inicio: fecha,
+            fecha_fin: fecha,
+            condonar: condonar
+        };
+        const response = await fetch('/api/asistencia/condonar-deuda/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Error al actualizar la condonación');
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Éxito',
+            text: `Deuda ${condonar ? 'condonada' : 'restaurada'} exitosamente.`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+
+        // Remover popover actual y refrescar grilla
+        document.querySelectorAll('.popover').forEach(p => p.remove());
+        if (typeof window.renderVistaAnalitica === 'function') {
+            await window.renderVistaAnalitica();
+        }
+
+    } catch (error) {
+        console.error('Error toggle condonacion:', error);
+        Swal.fire('Error', error.message, 'error');
+    }
+};

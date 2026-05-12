@@ -158,6 +158,24 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
+    const btnPerdonazo = document.getElementById('btn-perdonazo');
+    const btnRevocarPerdonazo = document.getElementById('btn-revocar-perdonazo');
+    if (btnPerdonazo && btnRevocarPerdonazo) {
+        const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
+        
+        btnPerdonazo.classList.add('d-none');
+        btnRevocarPerdonazo.classList.add('d-none');
+        
+        if (asistJ) {
+            if (asistJ.deuda_condonada) {
+                btnRevocarPerdonazo.classList.remove('d-none');
+            } else if (asistJ.minutos_salida_adelantada > 0) {
+                btnPerdonazo.classList.remove('d-none');
+            }
+        }
+    }
+
     if (marcacionesManualesState.decisionInstance) {
         marcacionesManualesState.decisionInstance.show();
     }
@@ -193,6 +211,32 @@ function proceedToValidation() {
         );
     } else {
         console.error("Función openValidationModal no encontrada.");
+    }
+}
+
+function proceedToPerdonazo() {
+    closeAsistenciaActionModal();
+    if (typeof window.toggleCondonacionDeuda === 'function') {
+        window.toggleCondonacionDeuda(
+            marcacionesManualesState.currentEmpId,
+            marcacionesManualesState.currentDate,
+            0 // 0 significa que actualmente NO está condonada, queremos condonarla
+        );
+    } else {
+        console.error("Función toggleCondonacionDeuda no encontrada.");
+    }
+}
+
+function proceedToRevocarPerdonazo() {
+    closeAsistenciaActionModal();
+    if (typeof window.toggleCondonacionDeuda === 'function') {
+        window.toggleCondonacionDeuda(
+            marcacionesManualesState.currentEmpId,
+            marcacionesManualesState.currentDate,
+            1 // 1 significa que actualmente SÍ está condonada, queremos revocarla
+        );
+    } else {
+        console.error("Función toggleCondonacionDeuda no encontrada.");
     }
 }
 
@@ -1064,5 +1108,146 @@ async function savePermissionEntry() {
     } catch (e) {
         console.error("Error guardando permiso:", e);
         alert("Error de conexión");
+    }
+}
+
+// ==========================================
+// LÓGICA DE PERDONAZO MASIVO
+// ==========================================
+
+async function openPerdonazoMasivoModal() {
+    const modalEl = document.getElementById('modal-perdonazo-masivo');
+    if (!modalEl) return;
+
+    // Poblar dropdown de áreas
+    const areaSelect = document.getElementById('perdonazo-area');
+    if (areaSelect) {
+        areaSelect.innerHTML = '<option value="">Todas las Áreas</option>';
+        try {
+            const resp = await fetch('/api/empleados/areas/');
+            if (resp.ok) {
+                const areas = await resp.json();
+                areas.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a;
+                    opt.textContent = a;
+                    areaSelect.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error("Error cargando áreas para perdonazo masivo", e);
+        }
+    }
+
+    // Setear fechas por defecto al mes actual o al filtro actual
+    const startDateInput = document.getElementById('perdonazo-fecha-inicio');
+    const endDateInput = document.getElementById('perdonazo-fecha-fin');
+    const repInicio = document.getElementById('rep-fecha-inicio');
+    const repFin = document.getElementById('rep-fecha-fin');
+
+    if (repInicio && repFin && repInicio.value && repFin.value) {
+        startDateInput.value = repInicio.value;
+        endDateInput.value = repFin.value;
+    } else {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+        startDateInput.value = firstDay;
+        endDateInput.value = lastDay;
+    }
+
+    if (typeof bootstrap !== 'undefined') {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    } else {
+        modalEl.style.display = 'block';
+        modalEl.classList.add('show');
+    }
+}
+
+function closePerdonazoMasivoModal() {
+    const modalEl = document.getElementById('modal-perdonazo-masivo');
+    if (typeof bootstrap !== 'undefined' && modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    } else if (modalEl) {
+        modalEl.style.display = 'none';
+        modalEl.classList.remove('show');
+    }
+}
+
+async function executePerdonazoMasivo() {
+    const btn = document.querySelector('#form-perdonazo-masivo button[type="submit"]');
+    const originalText = btn.innerHTML;
+    
+    try {
+        const area = document.getElementById('perdonazo-area').value;
+        const fechaInicio = document.getElementById('perdonazo-fecha-inicio').value;
+        const fechaFin = document.getElementById('perdonazo-fecha-fin').value;
+        const condonar = document.getElementById('perdonazo-accion').checked;
+
+        if (!fechaInicio || !fechaFin) {
+            alert("Debe seleccionar un rango de fechas válido.");
+            return;
+        }
+
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+        btn.disabled = true;
+
+        // 1. Obtener empleados del área (o todos)
+        let searchUrl = '/api/empleados/search/?limit=5000&activo=true';
+        if (area) {
+            searchUrl += `&area=${encodeURIComponent(area)}`;
+        }
+        
+        const empResp = await fetch(searchUrl);
+        if (!empResp.ok) throw new Error("Error obteniendo lista de empleados");
+        const empData = await empResp.json();
+        const emps = empData.empleados || empData.items || empData;
+        const empleadosIds = emps.map(e => e.id);
+
+        if (empleadosIds.length === 0) {
+            alert("No se encontraron empleados activos para el área seleccionada.");
+            return;
+        }
+
+        // 2. Ejecutar condonación
+        const payload = {
+            empleados_ids: empleadosIds,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            condonar: condonar
+        };
+
+        const resp = await fetch('/api/asistencia/condonar-deuda/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.detail || "Error en la operación masiva");
+        }
+
+        const result = await resp.json();
+        alert(`Proceso completado.\\nRegistros procesados/condonados: ${result.registros_procesados || 'OK'}`);
+        closePerdonazoMasivoModal();
+        
+        // Refrescar si existe la función
+        if (typeof loadReporte === 'function') {
+            loadReporte();
+        } else if (typeof window.loadMarcacionesData === 'function') {
+            window.loadMarcacionesData();
+        }
+
+    } catch (e) {
+        console.error("Error en executePerdonazoMasivo:", e);
+        alert(`Error: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 }
