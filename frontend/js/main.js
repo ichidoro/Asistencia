@@ -2774,7 +2774,25 @@ window.loadTurnosForNewArea = async function(areaName) {
             turnos.forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t.id;
-                opt.textContent = t.nombre;
+                
+                let tipoPlanificacion = 'Fijo';
+                let horario = '';
+                if (t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
+                    tipoPlanificacion = 'Ciclo Inteligente';
+                    horario = ' (Múltiples opciones)';
+                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
+                    tipoPlanificacion = 'Bolsa Flexible';
+                } else if (t.tipo_programacion === 'ROTATIVO') {
+                    tipoPlanificacion = 'Ciclo Rotativo';
+                    horario = ' (Varias semanas)';
+                } else if (t.dias && t.dias.length > 0) {
+                    const diaLaboral = t.dias.find(d => !d.es_libre) || t.dias[0];
+                    const he = diaLaboral.hora_entrada ? diaLaboral.hora_entrada.substring(0,5) : '--:--';
+                    const hs = diaLaboral.hora_salida ? diaLaboral.hora_salida.substring(0,5) : '--:--';
+                    horario = ` (${he} - ${hs})`;
+                }
+                
+                opt.textContent = `[${tipoPlanificacion}] ${t.nombre}${horario}`;
                 turnoSelect.appendChild(opt);
             });
         } else {

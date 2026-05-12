@@ -1045,7 +1045,6 @@ function renderModalHtml() {
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
                                     <option value="FIJO">Horario Fijo</option>
-                                    <option value="ROTATIVO">Ciclo Rotativo</option>
                                     <option value="ROTATIVO_INTELIGENTE">Ciclo Inteligente (Smart Match)</option>
                                     <option value="FLEXIBLE_BOLSA">Flexible (Bolsa de Horas)</option>
                                 </select>
@@ -1373,7 +1372,7 @@ function handleTipoProgramacionChange() {
 
     const tipo = tipoSelect.value;
     const isFlexible = tipo === 'FLEXIBLE_BOLSA';
-    const isRotativo = tipo === 'ROTATIVO' || tipo === 'ROTATIVO_INTELIGENTE';
+    const isRotativo = tipo === 'ROTATIVO_INTELIGENTE';
 
     // Visibilidad del bloque de Hora Ficticia: sólo visible en modo Bolsa Flexible
     const divLineaFicticia = document.getElementById('divLineaFicticia');
