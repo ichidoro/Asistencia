@@ -24,6 +24,7 @@ from backend.schemas.asistencia import (
     JustificacionCreate,
     AsignacionIndividual,
     BatchSyncRequest,
+    CondonarDeudaRequest,
 )
 
 router = APIRouter(
@@ -702,6 +703,57 @@ async def procesar_asistencia(
         "message": f"Procesamiento completado para {stats['total_dias']} días",
         "stats": stats
     }
+
+@router.post("/condonar-deuda/")
+async def condonar_deuda(
+    request: CondonarDeudaRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Condona o revoca la condonación de la deuda horaria para uno o más empleados
+    en un rango de fechas. Si la deuda es condonada, los minutos de deuda se fuerzan a 0.
+    """
+    if not request.empleados_ids:
+        raise HTTPException(status_code=400, detail="Debe especificar al menos un empleado.")
+
+    # Generar rango de fechas
+    from datetime import datetime, timedelta
+    try:
+        start_date = datetime.strptime(request.fecha_inicio, "%Y-%m-%d").date()
+        end_date = datetime.strptime(request.fecha_fin, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use AAAA-MM-DD.")
+    
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="La fecha de inicio no puede ser mayor a la fecha de fin.")
+
+    dias_totales = (end_date - start_date).days + 1
+    fechas = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(dias_totales)]
+
+    try:
+        for emp_id in request.empleados_ids:
+            for fecha_str in fechas:
+                # 1. Marcar condonacion en la BD
+                await service.repository.toggle_condonacion_deuda(
+                    empleado_id=emp_id,
+                    fecha=fecha_str,
+                    condonar=request.condonar
+                )
+                
+                # 2. Reprocesar solo ese dia para ese empleado para que el CASE en el upsert surta efecto
+                await service.reprocesar_periodo_empleado(
+                    empleado_id=emp_id,
+                    fecha_inicio=fecha_str,
+                    fecha_fin=fecha_str,
+                    force=True
+                )
+                
+        accion = "condonada" if request.condonar else "revocada"
+        return {"success": True, "message": f"Deuda {accion} correctamente para {len(request.empleados_ids)} empleado(s) en {dias_totales} día(s)."}
+    except Exception as e:
+        logger.error(f"Error al condonar deuda: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @router.post("/reproceso-masivo-async/", status_code=202)
 async def reproceso_masivo_async(

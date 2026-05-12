@@ -21,6 +21,12 @@ class AprobarHERequest(BaseModel):
     horas: float
     comentario: Optional[str] = None
 
+class CondonarDeudaRequest(BaseModel):
+    empleados_ids: List[int]
+    fecha_inicio: str
+    fecha_fin: str
+    condonar: bool
+
 class AsignacionIndividual(BaseModel):
     empleado_id: int
     fecha: str

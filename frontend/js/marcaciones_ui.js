@@ -4106,6 +4106,49 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
     const shiftName = e.turno_nombre || (empInfo && empInfo.turno) || 'SIN PROGRAMACIÓN';
 
+    let heBreakdownHtml = '';
+    if (heBruta > 0) {
+        let txtArr = [];
+        if (!e.horas_teoricas || isFer || e.estado === 'LIBRE' || e.estado === 'JORNADA_ESPECIAL') {
+            txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Día Inhábil/Libre:</span> <span style="font-family:monospace;font-weight:700;">${valMins(heBruta, 'var(--success-color, #10b981)')}</span></div>`);
+        } else {
+            const timeToMins = (t) => {
+                if(!t) return 0;
+                let p = t.split(':');
+                return parseInt(p[0],10)*60 + parseInt(p[1],10);
+            };
+            let hr_ent = e.hora_entrada_real;
+            let ht_ent = e.hora_entrada_teorica;
+            if (hr_ent && ht_ent) {
+                let diff = timeToMins(ht_ent) - timeToMins(hr_ent);
+                if (diff > 0) {
+                    txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Ingreso Anticipado:</span> <span style="font-family:monospace;font-weight:700;">${valMins(diff, 'var(--success-color, #10b981)')}</span></div>`);
+                }
+            }
+            let hr_sal = e.hora_salida_real;
+            let ht_sal = e.hora_salida_teorica;
+            if (hr_sal && ht_sal) {
+                let diff = timeToMins(hr_sal) - timeToMins(ht_sal);
+                if (diff > 0) {
+                    txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Salida Posterior:</span> <span style="font-family:monospace;font-weight:700;">${valMins(diff, 'var(--success-color, #10b981)')}</span></div>`);
+                }
+            }
+            if (txtArr.length === 0) {
+                txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Ajuste/Excedente:</span> <span style="font-family:monospace;font-weight:700;">${valMins(heBruta, 'var(--success-color, #10b981)')}</span></div>`);
+            }
+        }
+        
+        if (txtArr.length > 0) {
+            heBreakdownHtml = `
+            <div style="margin-top:8px; padding-top:6px; border-top:1px dashed rgba(16, 185, 129, 0.3);">
+                <div style="font-size:0.6rem; color:var(--text-secondary,#64748b); font-weight:700; margin-bottom:4px;">ORIGEN APROXIMADO HE:</div>
+                <div style="font-size:0.7rem; display:flex; flex-direction:column; gap:2px;">
+                    ${txtArr.join('')}
+                </div>
+            </div>`;
+        }
+    }
+
     const html = `
     <div style="width: 340px; font-family: 'Inter', sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 12px; border-radius: 6px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium);">
         
@@ -4177,6 +4220,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Pendiente</span> ${valMins(hePendiente, 'var(--success-color, #10b981)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Rechazada</span> ${valMins(heRechazada, 'var(--success-color, #10b981)')}</div>
                 <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(heTotal, 'var(--success-color, #10b981)')}</div>
+                ${heBreakdownHtml}
             </div>
 
             <!-- Deuda -->
