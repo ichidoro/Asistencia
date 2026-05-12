@@ -2778,23 +2778,25 @@ window.loadTurnosForNewArea = async function(areaName) {
                 let tipoPlanificacion = 'Fijo';
                 let horario = '';
                 if (t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-                    tipoPlanificacion = 'Ciclo Inteligente';
-                    horario = ' (Múltiples opciones)';
+                    tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
+                    horario = '(Múltiples opciones)';
                 } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-                    tipoPlanificacion = 'Bolsa Flexible';
-                } else if (t.tipo_programacion === 'ROTATIVO') {
-                    tipoPlanificacion = 'Ciclo Rotativo';
-                    horario = ' (Varias semanas)';
+                    tipoPlanificacion = 'Flexible (Bolsa de Horas)';
                 } else if (t.dias && t.dias.length > 0) {
                     const diaLaboral = t.dias.find(d => !d.es_libre) || t.dias[0];
                     const he = diaLaboral.hora_entrada ? diaLaboral.hora_entrada.substring(0,5) : '--:--';
                     const hs = diaLaboral.hora_salida ? diaLaboral.hora_salida.substring(0,5) : '--:--';
-                    horario = ` (${he} - ${hs})`;
+                    horario = `(${he} - ${hs})`;
                 }
                 
-                opt.textContent = `[${tipoPlanificacion}] ${t.nombre}${horario}`;
+                opt.setAttribute('data-tipo', tipoPlanificacion);
+                opt.setAttribute('data-horario', horario);
+                opt.textContent = t.nombre;
                 turnoSelect.appendChild(opt);
             });
+            turnoSelect.removeEventListener('change', window.updateTurnoInfoLabel);
+            turnoSelect.addEventListener('change', window.updateTurnoInfoLabel);
+            turnoSelect.dispatchEvent(new Event('change'));
         } else {
             console.log("⚠️ No se encontraron turnos específicos. Buscando globales...");
             turnoSelect.innerHTML = '<option value="">⚠️ Sin turnos en esta área</option>';

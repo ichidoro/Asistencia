@@ -1971,6 +1971,28 @@ function openRegularizacionModal(anomalias, fecha) {
 /**
  * Abre el modal de asignación individual filtrando por área.
  */
+// Actualizar etiqueta dinámica de tipo de programación del turno
+window.updateTurnoInfoLabel = function(e) {
+    const select = e.target;
+    let infoDiv = select.nextElementSibling;
+    if (!infoDiv || !infoDiv.classList.contains('turno-dynamic-info')) {
+        infoDiv = document.createElement('div');
+        infoDiv.className = 'turno-dynamic-info form-text text-primary mt-1 fw-bold';
+        select.parentNode.insertBefore(infoDiv, select.nextSibling);
+    }
+    
+    if (select.selectedIndex >= 0 && select.value) {
+        const option = select.options[select.selectedIndex];
+        const tipo = option.getAttribute('data-tipo');
+        const horario = option.getAttribute('data-horario');
+        if (tipo) {
+            infoDiv.innerHTML = `<i class="bi bi-info-square me-1"></i>Tipo Planificación: <span class="badge bg-primary text-white">${tipo}</span> <span>${horario || ''}</span>`;
+            return;
+        }
+    }
+    infoDiv.innerHTML = '';
+};
+
 async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = '') {
     const modalEl = document.getElementById('modal-asignar-turno-individual');
     if (!modalEl) return;
@@ -2029,22 +2051,24 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
                     let horario = '';
                     let tipoPlanificacion = 'Fijo';
                     if (t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-                        tipoPlanificacion = 'Ciclo Inteligente';
-                        horario = ' (Múltiples opciones horarias)';
+                        tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
+                        horario = '(Múltiples opciones horarias)';
                     } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-                        tipoPlanificacion = 'Bolsa Flexible';
-                    } else if (t.tipo_programacion === 'ROTATIVO') {
-                        tipoPlanificacion = 'Ciclo Rotativo';
-                        horario = ' (Varias semanas)';
+                        tipoPlanificacion = 'Flexible (Bolsa de Horas)';
                     } else if (t.dias && t.dias.length > 0) {
                         const diaLaboral = t.dias.find(d => !d.es_libre) || t.dias[0];
                         const he = diaLaboral.hora_entrada ? diaLaboral.hora_entrada.substring(0,5) : '--:--';
                         const hs = diaLaboral.hora_salida ? diaLaboral.hora_salida.substring(0,5) : '--:--';
-                        horario = ` (${he} - ${hs})`;
+                        horario = `(${he} - ${hs})`;
                     }
-                    return `<option value="${t.id}">[${tipoPlanificacion}] ${t.nombre}${horario}</option>`;
+                    return `<option value="${t.id}" data-tipo="${tipoPlanificacion}" data-horario="${horario}">${t.nombre}</option>`;
                 }).join('');
             document.getElementById('asig-indiv-alerta-area').innerHTML = `<i class="bi bi-info-circle me-1"></i> Mostrando ${turnos.length} turnos válidos para <strong>${area}</strong>.`;
+            
+            // Trigger change event to initialize dynamic label
+            selectTurno.removeEventListener('change', window.updateTurnoInfoLabel);
+            selectTurno.addEventListener('change', window.updateTurnoInfoLabel);
+            selectTurno.dispatchEvent(new Event('change'));
         }
     } catch (e) {
         console.error("\u274c Error cargando turnos para:", area, e);
@@ -3242,7 +3266,7 @@ function renderVistaAnalitica(respData, container) {
             const empNameEsc = (emp.nombre_completo||'').replace(/'/g,"\\'");
             const hEnt = di && di.hora_entrada_real ? `'${di.hora_entrada_real}'` : 'null';
             const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
-            const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode);
+            const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode, isFer);
             const tooltipData = _buildRichTooltipData(di, d, dt, feriadoDesc, isWE, emp);
             return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
                         onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
@@ -3642,17 +3666,20 @@ window.vaSetViewMode = function(mode) {
 }
 
 // ─── CONTENIDO DE CELDA SEGÚN VIEWMODE ──────────────────────────────────────
-function _analiticaCellContent(di, dateStr, emp, viewMode) {
-    // Proyección visual de LIBRE para fechas sin datos (futuras o sin marcas)
-    // Si no hay registro pero el empleado tiene turno con ese día marcado como libre → mostrar LIB
+function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
+    // Proyección visual de LIBRE o FERIADO para fechas sin datos (futuras o sin marcas)
     if (!di || !di.estado) {
+        if (isFer) {
+            // Badge FER proyectado
+            return `<div class="badge-status badge-state-warning" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.65;"><span><i class="bi bi-calendar-heart-fill me-1"></i>FER</span></div>`;
+        }
         if (emp && emp.turno_dias && dateStr) {
             const dt2 = new Date(dateStr + 'T00:00:00');
             // js getDay(): 0=Dom,1=Lun...6=Sab → Python: Mon=0..Sun=6
             const pyDay = dt2.getDay() === 0 ? 6 : dt2.getDay() - 1;
             const dayInfo = emp.turno_dias[pyDay];
             if (dayInfo && dayInfo.es_libre) {
-                // Badge LIB proyectado (visual únicamente, no guardado en BD)
+                // Badge LIB proyectado
                 return `<div class="badge-status badge-state-neutral" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.55;"><span><i class="bi bi-cup-hot-fill me-1"></i>LIB</span></div>`;
             }
         }

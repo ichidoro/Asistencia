@@ -47,7 +47,7 @@ class TurnoDiaResponse(TurnoDiaCreate):
 # ==========================================
 class TurnoBase(BaseModel):
     nombre: str
-    tipo_programacion: str = "FIJO"  # FIJO, ROTATIVO, LIBRE, FLEXIBLE_BOLSA
+    tipo_programacion: str = "FIJO"  # FIJO, ROTATIVO_INTELIGENTE, LIBRE, FLEXIBLE_BOLSA
     tolerancia_retraso_alerta: int = 0
     tolerancia_retraso_descuento: int = 0
     redondeo_minutos: int = 0
