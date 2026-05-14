@@ -24,6 +24,76 @@ if TYPE_CHECKING:
 scheduler = AsyncIOScheduler()
 
 
+async def _recalcular_periodo_activo():
+    """
+    Recalcula la tabla `asistencias` para el período activo al arrancar.
+
+    La tabla `asistencias` es un caché calculado: si el servidor estuvo apagado
+    varios días, los días nuevos no tienen registro y la grilla muestra inasistencias
+    incorrectas. Esta función corre en background (no bloquea la UI) y llama
+    `procesar_dia` para cada día del período activo de RRHH.
+    """
+    # Pequeña pausa: esperar a que el sync inicial con Turso termine
+    # antes de recalcular (para tener los datos más frescos disponibles).
+    await asyncio.sleep(5)
+    try:
+        from datetime import timedelta
+        from backend.services.asistencia_service import AsistenciaService
+        from backend.repositories.asistencia import AsistenciaRepository
+
+        logger.info("🔄 [Startup] Iniciando recálculo automático del período activo...")
+
+        # Determinar rango activo: desde el día después del último cierre hasta hoy
+        hoy = datetime.now().date()
+        fecha_inicio = None
+        fecha_fin = hoy
+
+        try:
+            ultimo_cierre = await db.fetch_one(
+                "SELECT fecha_fin FROM periodos_rrhh WHERE estado='cerrado' ORDER BY fecha_fin DESC LIMIT 1"
+            )
+            if ultimo_cierre and ultimo_cierre["fecha_fin"]:
+                from datetime import date
+                last_fin = datetime.strptime(ultimo_cierre["fecha_fin"], "%Y-%m-%d").date()
+                fecha_inicio = last_fin + timedelta(days=1)
+            else:
+                # Sin cierres previos: usar inicio del mes pasado
+                fecha_inicio = hoy.replace(day=1) - timedelta(days=1)
+                fecha_inicio = fecha_inicio.replace(day=26)  # día 26 del mes anterior
+        except Exception:
+            # Fallback: mes anterior día 26 → hoy
+            fecha_inicio = hoy.replace(day=1) - timedelta(days=1)
+            fecha_inicio = fecha_inicio.replace(day=26)
+
+        if fecha_inicio > fecha_fin:
+            logger.info("🔄 [Startup] Período activo vacío — sin días a recalcular.")
+            return
+
+        asist_repo = AsistenciaRepository(db)
+        asist_service = AsistenciaService(asist_repo)
+
+        dias_a_recalc = []
+        cur = fecha_inicio
+        while cur <= fecha_fin:
+            dias_a_recalc.append(cur.strftime("%Y-%m-%d"))
+            cur += timedelta(days=1)
+
+        logger.info(f"🔄 [Startup] Recalculando {len(dias_a_recalc)} días ({fecha_inicio} → {fecha_fin})...")
+
+        for fecha_str in dias_a_recalc:
+            try:
+                await asist_service.procesar_dia(fecha_str)
+                # Pausa breve para no saturar el WAL durante el arranque
+                await asyncio.sleep(0.05)
+            except Exception as e:
+                logger.warning(f"⚠️ [Startup] Error recalculando {fecha_str}: {e}")
+
+        logger.success(f"✅ [Startup] Recálculo automático completado: {len(dias_a_recalc)} días procesados.")
+
+    except Exception as e:
+        logger.error(f"❌ [Startup] Error en recálculo automático del período activo: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -132,6 +202,12 @@ async def lifespan(app: FastAPI):
                 startup_manager.update(100, "Iniciando Dashboard...", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
+
+                # 4b. Recálculo automático del período activo al arrancar
+                # Problema: la tabla `asistencias` es un caché calculado. Si pasaron días nuevos
+                # desde el último apagado, la grilla muestra inasistencias incorrectas hasta que
+                # el usuario presiona "Reprocesar". Esta tarea lo hace automáticamente en background.
+                asyncio.create_task(_recalcular_periodo_activo())
 
                 # 4. Iniciar Sincronización Automática
                 if settings.SYNC_ENABLED:
