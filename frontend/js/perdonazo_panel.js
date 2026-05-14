@@ -120,15 +120,32 @@ window.toggleModoPerdonazo = function(activo) {
     window._perdonazoState.activo = activo;
     window._perdonazoState.seleccionados.clear();
     document.body.classList.toggle('modo-perdonazo', activo);
-    // Re-renderizar toolbar para reflejar estado visual del switch
-    const container = document.getElementById('page-marcaciones');
-    if (container && typeof renderMarcacionesToolbar === 'function') {
-        renderMarcacionesToolbar(container);
+
+    // ── Actualizar visualmente SOLO el wrapper del switch, sin destruir el toolbar ──
+    const wrapper = document.getElementById('perdonazo-switch-wrapper');
+    if (wrapper) {
+        wrapper.style.background = activo ? '#f0fdf4' : '#fff';
+        wrapper.style.borderColor = activo ? '#86efac' : '#e2e8f0';
     }
+    const lbl = document.querySelector('label[for="perdonazo-switch"]');
+    if (lbl) {
+        lbl.style.color = activo ? '#047857' : '#64748b';
+        const ico = lbl.querySelector('i.bi-gift-fill');
+        if (ico) ico.style.color = activo ? '#10b981' : '#64748b';
+    }
+
+    // ── Re-renderizar SOLO el cuerpo de la grilla para agregar/quitar los click en encabezados ──
+    if (typeof window.loadMarcacionesData === 'function') {
+        // Solo si ya hay datos cargados (evitar carga vacía en el primer toggle)
+        if (window.stateMarcacionesApp.data) {
+            window.loadMarcacionesData();
+        }
+    }
+
     if (activo) {
         Swal.fire({
             icon: 'info',
-            title: 'Modo Perdonazos activo',
+            title: '🎁 Modo Perdonazos activo',
             html: 'Haz <b>clic en el encabezado de una fecha</b> para gestionar los perdonazos de ese día.',
             timer: 3500,
             showConfirmButton: false,

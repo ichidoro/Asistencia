@@ -383,11 +383,18 @@ window.loadMarcacionesData = async function() {
         _loadMarcacionesDebounceTimer = setTimeout(resolve, 300);
     });
 
+    // Verificar nuevamente después del debounce (otra llamada puede haber tomado el lock)
+    if (_loadMarcacionesInProgress) {
+        console.log('⏳ loadMarcacionesData: tomada por otra llamada durante debounce, saliendo');
+        return;
+    }
+
     _loadMarcacionesInProgress = true;
     try {
         return await _loadMarcacionesDataImpl();
     } finally {
         _loadMarcacionesInProgress = false;
+        _loadMarcacionesDebounceTimer = null;
     }
 };
 
@@ -3182,13 +3189,19 @@ function renderVistaAnalitica(respData, container) {
             if (!isEsp && !esBolsa) {
                 // En Bolsa Flexible no existen atrasos, salidas adelantadas ni deuda diaria.
                 // Es un modelo de acumulación pura donde solo importa el balance contra la meta mensual.
-                d_tot   += (di.minutos_deuda || 0);
-                min_atr += (di.minutos_atraso || 0);
-                min_sad += (di.minutos_salida_adelantada || 0);
+
+                // ✅ Si el día tiene deuda condonada, NO acumular en las columnas de deuda
+                const tieneCondonacion = (di.deuda_condonada || 0) > 0;
+
+                if (!tieneCondonacion) {
+                    d_tot   += (di.minutos_deuda || 0);
+                    min_atr += (di.minutos_atraso || 0);
+                    min_sad += (di.minutos_salida_adelantada || 0);
+                }
                 min_col += (di.minutos_exceso_colacion || 0);
                 min_per += (di.minutos_permiso_personal_deuda || 0);
-                if ((di.minutos_atraso||0) > 0)                cnt_atr++;
-                if ((di.minutos_salida_adelantada||0) > 0)     cnt_sad++;
+                if ((di.minutos_atraso||0) > 0 && !tieneCondonacion)  cnt_atr++;
+                if ((di.minutos_salida_adelantada||0) > 0 && !tieneCondonacion) cnt_sad++;
                 if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
             }
             if (di.estado === 'INASISTENCIA') cnt_inas++;
