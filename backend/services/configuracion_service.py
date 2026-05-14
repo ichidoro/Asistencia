@@ -299,24 +299,25 @@ class ConfiguracionService:
                 
                 if emp:
                     recipients = await self.get_destinatarios_rrhh(emp.area)
-                    employee_payload = None  # DT-6: inicializar fuera del if para evitar UnboundLocalError
                     if recipients:
                         employee_payload = {
-                        "nombre": emp.nombre,
-                        "nombre_completo": emp.nombre_completo,
-                        "rut_formateado": emp.rut_formateado,
-                        "cargo": emp.cargo,
-                        "area": emp.area
-                    }
-                    await self.notification_service.send_justification_email(
-                        employee_data=employee_payload,
-                        type_name=tipo['nombre'],
-                        start_date=str(j.fecha_inicio),
-                        end_date=str(j.fecha_fin),
-                        recipients=recipients,
-                        observations=j.observaciones, # [NEW]
-                        days_count=dias_solicitados   # [NEW]
-                    )
+                            "nombre": emp.nombre,
+                            "nombre_completo": emp.nombre_completo,
+                            "rut_formateado": emp.rut_formateado,
+                            "cargo": emp.cargo,
+                            "area": emp.area
+                        }
+                        await self.notification_service.send_justification_email(
+                            employee_data=employee_payload,
+                            type_name=tipo['nombre'],
+                            start_date=str(j.fecha_inicio),
+                            end_date=str(j.fecha_fin),
+                            recipients=recipients,
+                            observations=j.observaciones,
+                            days_count=dias_solicitados
+                        )
+                    else:
+                        logger.debug(f"Sin destinatarios RRHH para área '{emp.area}', notificación omitida.")
             except Exception as e:
                 logger.error(f"Error al enviar notificación de justificación: {e}")
                 

@@ -551,10 +551,59 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         const result = await resp.json();
 
         if (resp.ok) {
-            const areasMsg = areas ? ` (${areas.length} área${areas.length > 1 ? 's' : ''})` : ' (todas las áreas)';
-            const rangoMsg = `${fechaInicio} → ${fechaFin}`;
             const stats = result.stats || result;
-            showToast(`✅ Sync BioAlba${areasMsg} [${rangoMsg}]: ${stats.marcaciones_nuevas ?? 0} nuevas, ${stats.dias_recalculados ?? 0} recálculos.`, 'success');
+            const nuevas        = stats.marcaciones_nuevas    ?? 0;
+            const recalc        = stats.dias_recalculados     ?? 0;
+            const bloqueadas    = stats.bloqueados_sin_asig   ?? 0;
+            const filtradas     = stats.filtrados_area        ?? 0;
+            const errores       = stats.errores               ?? 0;
+            const duracion      = stats.duracion_segundos     ? parseFloat(stats.duracion_segundos).toFixed(1) : '—';
+            const areasLabel    = areas ? `${areas.length} área${areas.length > 1 ? 's' : ''}` : 'Todas las áreas';
+
+            const iconoNuevas   = nuevas > 0 ? '🟢' : '⚪';
+            const mensajeExtra  = nuevas === 0
+                ? '<p style="color:#64748b;font-size:0.85rem;margin-top:8px;">No hay marcaciones nuevas para el período. Los datos ya estaban actualizados.</p>'
+                : '';
+
+            await Swal.fire({
+                title: '<span style="font-size:1.1rem;font-weight:800;color:#1e293b;">☁️ Sincronización BioAlba</span>',
+                html: `
+                    <div style="text-align:left;font-family:'Inter',sans-serif;">
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+                            <span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:999px;">${areasLabel}</span>
+                            <span style="background:#f1f5f9;color:#475569;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:999px;">${fechaInicio} → ${fechaFin}</span>
+                            <span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:3px 8px;border-radius:999px;">⏱ ${duracion}s</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                            <div style="background:${nuevas > 0 ? '#f0fdf4' : '#f8fafc'};border:1px solid ${nuevas > 0 ? '#86efac' : '#e2e8f0'};border-radius:10px;padding:12px;text-align:center;">
+                                <div style="font-size:1.6rem;font-weight:800;color:${nuevas > 0 ? '#16a34a' : '#94a3b8'};">${nuevas}</div>
+                                <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">${iconoNuevas} Marcaciones nuevas</div>
+                            </div>
+                            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;text-align:center;">
+                                <div style="font-size:1.6rem;font-weight:800;color:#2563eb;">${recalc}</div>
+                                <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">📅 Días recalculados</div>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                                <span style="font-size:0.75rem;color:#64748b;">🔒 Sin asignación</span>
+                                <span style="font-weight:700;color:#f59e0b;font-size:0.85rem;">${bloqueadas}</span>
+                            </div>
+                            <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                                <span style="font-size:0.75rem;color:#64748b;">❌ Errores</span>
+                                <span style="font-weight:700;color:${errores > 0 ? '#dc2626' : '#10b981'};font-size:0.85rem;">${errores}</span>
+                            </div>
+                        </div>
+                        ${mensajeExtra}
+                    </div>
+                `,
+                icon: nuevas > 0 ? 'success' : 'info',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#6366f1',
+                showCloseButton: true,
+                customClass: { popup: 'shadow-lg' }
+            });
+
             if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
         } else {
             showToast('❌ Error en sincronización: ' + (result.detail || 'Error desconocido'), 'error');

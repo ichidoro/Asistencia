@@ -653,8 +653,8 @@ class SyncService:
                     rut = str(log_data.get('rut', '')).strip()
                     rut_clean = rut.replace(".", "").replace("-", "").strip()
                     
-                    # FILTRO 1: Solo empleados sincronizados
-                    if rut not in valid_ruts:
+                    # FILTRO 1: Solo empleados sincronizados (comparar RUT limpio vs set limpio)
+                    if rut_clean not in valid_ruts:
                         count_filtered += 1
                         continue
 

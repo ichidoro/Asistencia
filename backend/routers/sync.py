@@ -439,14 +439,18 @@ async def sincronizar_asistencia(
 )
 async def sincronizar_asistencia_sync(
     fecha_inicio: Optional[str] = Query(None, description="AAAA-MM-DD"),
+    fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD"),
     request: SyncAsistenciaRequest = None
 ) -> Dict[str, Any]:
     service = SyncService()
-    
-    _inicio = request.fecha_inicio if request and request.fecha_inicio else fecha_inicio
-    _fin = request.fecha_fin if request else None
-    areas = request.areas if request else None
-    
+
+    # Prioridad: body > query param
+    _inicio = (request.fecha_inicio if request and request.fecha_inicio else None) or fecha_inicio
+    _fin    = (request.fecha_fin    if request and request.fecha_fin    else None) or fecha_fin
+    areas   = request.areas if request else None
+
+    logger.info(f"📅 Sync marcaciones: {_inicio} → {_fin} | áreas: {areas or 'todas'}")
+
     stats = await service.sync_marcaciones(_inicio, _fin, areas, force_recalculate=True)
     return {
         "message": "Sincronización de asistencia completada",

@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     # TAREAS PROGRAMADAS
     # ============================================
     SYNC_ENABLED: bool = True
-    SYNC_INTERVAL_SECONDS: int = 300  # Sync cada 5 min — único actor (sin sync_interval de libsql).
+    SYNC_INTERVAL_SECONDS: int = 120  # Sync cada 2 min — único actor. Sin fire-and-forget por-write (evita mutex contention en libsql).
     
     BACKUP_ENABLED: bool = True
     BACKUP_INTERVAL_HOURS: int = 24

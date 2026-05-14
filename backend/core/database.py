@@ -723,27 +723,14 @@ class HybridDatabase:
                     last_error = error_obj
                     continue
 
-                # ── Sync a Turso Cloud (FUERA del lock) ──────────────────────
-                # Si suppress_auto_sync=True, el caller hará sync_to_cloud_explicit()
-                # al terminar toda la secuencia de batches, evitando que conn.sync()
-                # de un batch previo compita con el cursor() del siguiente batch
-                # sobre el objeto libsql nativo (causa del bloqueo silencioso de 22s).
-                if hasattr(self.conn, 'sync') and self.use_turso and not suppress_auto_sync:
-                    # Coalescing sync: si ya hay un sync en vuelo, no lanzar otro.
-                    # Evita el 429 cuando execute_batch se llama N veces en rápida
-                    # sucesión (ej: reproceso de 49 empleados → 49 fire-and-forget).
-                    if not self._sync_pending and not self._sync_lock.locked():
-                        self._sync_pending = True
-                        async def _push_to_cloud():
-                            async with self._sync_lock:
-                                self._sync_pending = False
-                                try:
-                                    await asyncio.to_thread(self.conn.sync)
-                                    self._last_sync = __import__('datetime').datetime.now()
-                                except Exception as sync_err:
-                                    logger.warning(f"⚠️ Sync background a Turso falló (datos en WAL local): {sync_err}")
-                        asyncio.ensure_future(_push_to_cloud())
-
+                # ── Sync a Turso Cloud ────────────────────────────────────────
+                # El sync a la nube lo hace EXCLUSIVAMENTE el APScheduler (sync_from_cloud).
+                # Disparar un conn.sync() fire-and-forget aquí causaba contención de mutex
+                # en el objeto libsql nativo: si el recálculo de asistencia llegaba
+                # milisegundos después, su thread también intentaba acceder a self.conn,
+                # resultando en esperas de 200-600ms por el mutex interno de Rust.
+                # Los datos están seguros en el WAL local hasta el próximo ciclo del scheduler.
+                # suppress_auto_sync se mantiene por compatibilidad de firma con callers.
                 return
 
             except Exception as e:
