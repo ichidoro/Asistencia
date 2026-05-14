@@ -158,23 +158,6 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
-    const btnPerdonazo = document.getElementById('btn-perdonazo');
-    const btnRevocarPerdonazo = document.getElementById('btn-revocar-perdonazo');
-    if (btnPerdonazo && btnRevocarPerdonazo) {
-        const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
-        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
-        
-        btnPerdonazo.classList.add('d-none');
-        btnRevocarPerdonazo.classList.add('d-none');
-        
-        if (asistJ) {
-            if (asistJ.deuda_condonada) {
-                btnRevocarPerdonazo.classList.remove('d-none');
-            } else if (asistJ.minutos_salida_adelantada > 0) {
-                btnPerdonazo.classList.remove('d-none');
-            }
-        }
-    }
 
     if (marcacionesManualesState.decisionInstance) {
         marcacionesManualesState.decisionInstance.show();
@@ -214,31 +197,7 @@ function proceedToValidation() {
     }
 }
 
-function proceedToPerdonazo() {
-    closeAsistenciaActionModal();
-    if (typeof window.toggleCondonacionDeuda === 'function') {
-        window.toggleCondonacionDeuda(
-            marcacionesManualesState.currentEmpId,
-            marcacionesManualesState.currentDate,
-            0 // 0 significa que actualmente NO está condonada, queremos condonarla
-        );
-    } else {
-        console.error("Función toggleCondonacionDeuda no encontrada.");
-    }
-}
 
-function proceedToRevocarPerdonazo() {
-    closeAsistenciaActionModal();
-    if (typeof window.toggleCondonacionDeuda === 'function') {
-        window.toggleCondonacionDeuda(
-            marcacionesManualesState.currentEmpId,
-            marcacionesManualesState.currentDate,
-            1 // 1 significa que actualmente SÍ está condonada, queremos revocarla
-        );
-    } else {
-        console.error("Función toggleCondonacionDeuda no encontrada.");
-    }
-}
 
 async function proceedToRevertExtra() {
     closeAsistenciaActionModal();
@@ -1111,58 +1070,13 @@ async function savePermissionEntry() {
     }
 }
 
-// ==========================================
-// LÓGICA DE PERDONAZO MASIVO
-// ==========================================
+// Perdonazo masivo: delegado a window.executeCondonacionMasiva (marcaciones_ui.js)
+// Las funciones openPerdonazoMasivoModal/closePerdonazoMasivoModal/executePerdonazoMasivo
+// han sido reemplazadas por los nuevos flujos UX (switch + panel lateral por fecha)
 
-async function openPerdonazoMasivoModal() {
-    const modalEl = document.getElementById('modal-perdonazo-masivo');
-    if (!modalEl) return;
-
-    // Poblar dropdown de áreas
-    const areaSelect = document.getElementById('perdonazo-area');
-    if (areaSelect) {
-        areaSelect.innerHTML = '<option value="">Todas las Áreas</option>';
-        try {
-            const resp = await fetch('/api/empleados/areas/');
-            if (resp.ok) {
-                const areas = await resp.json();
-                areas.forEach(a => {
-                    const opt = document.createElement('option');
-                    opt.value = a;
-                    opt.textContent = a;
-                    areaSelect.appendChild(opt);
-                });
-            }
-        } catch (e) {
-            console.error("Error cargando áreas para perdonazo masivo", e);
-        }
-    }
-
-    // Setear fechas por defecto al mes actual o al filtro actual
-    const startDateInput = document.getElementById('perdonazo-fecha-inicio');
-    const endDateInput = document.getElementById('perdonazo-fecha-fin');
-    const repInicio = document.getElementById('rep-fecha-inicio');
-    const repFin = document.getElementById('rep-fecha-fin');
-
-    if (repInicio && repFin && repInicio.value && repFin.value) {
-        startDateInput.value = repInicio.value;
-        endDateInput.value = repFin.value;
-    } else {
-        const today = new Date();
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
-        startDateInput.value = firstDay;
-        endDateInput.value = lastDay;
-    }
-
-    if (typeof bootstrap !== 'undefined') {
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
-    } else {
-        modalEl.style.display = 'block';
-        modalEl.classList.add('show');
-    }
+/** @deprecated - Reemplazada por abrirPanelPerdonazoPorFecha() en perdonazo_panel.js */
+function openPerdonazoMasivoModal() {
+    console.warn('[DEPRECATED] openPerdonazoMasivoModal: usar el Switch Perdonazos + clic en columna de fecha.');
 }
 
 function closePerdonazoMasivoModal() {
@@ -1213,7 +1127,6 @@ async function executePerdonazoMasivo() {
             return;
         }
 
-        // 2. Ejecutar condonación
         const payload = {
             empleados_ids: empleadosIds,
             fecha_inicio: fechaInicio,
@@ -1223,7 +1136,10 @@ async function executePerdonazoMasivo() {
 
         const resp = await fetch('/api/asistencia/condonar-deuda/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('token')}`
+            },
             body: JSON.stringify(payload)
         });
 

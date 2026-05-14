@@ -40,6 +40,14 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
 // Referencia local (segura para re-declaración)
 // var stateMarcacionesApp = window.stateMarcacionesApp;
 
+// ============================================================
+// ESTADO CENTRALIZADO DEL SISTEMA PERDONAZO
+// ============================================================
+window._perdonazoState = window._perdonazoState || {
+    activo: false,              // Switch Perdonazos ON/OFF
+    seleccionados: new Set(),   // empleado_ids seleccionados via checkbox
+};
+
 // ==========================================
 // INICIALIZACIÓN
 // ==========================================
@@ -132,6 +140,22 @@ function renderMarcacionesToolbar(container) {
                         <label class="form-check-label small fw-bold text-muted ms-1" for="auto-refresh-switch">Auto</label>
                     </div>
                 </div>
+
+                <div class="d-flex align-items-center border rounded-3 px-3 py-1 shadow-sm" 
+                     id="perdonazo-switch-wrapper"
+                     style="height:38px; background: ${_perdonazoState.activo ? '#f0fdf4' : '#fff'}; border-color:${_perdonazoState.activo ? '#86efac' : '#e2e8f0'} !important; transition: background 0.3s;">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="perdonazo-switch"
+                               ${_perdonazoState.activo ? 'checked' : ''}
+                               onchange="toggleModoPerdonazo(this.checked)"
+                               style="border-color:${_perdonazoState.activo ? '#10b981' : '#e2e8f0'};">
+                        <label class="form-check-label small fw-bold ms-1" for="perdonazo-switch"
+                               style="color:${_perdonazoState.activo ? '#047857' : '#64748b'};">
+                            <i class="bi bi-gift-fill me-1" style="color:${_perdonazoState.activo ? '#10b981' : '#64748b'}"></i>Perdonazos
+                        </label>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -3271,11 +3295,19 @@ function renderVistaAnalitica(respData, container) {
         const bg = isFer ? 'background:#fff9c4' : isWE ? 'background:#f8f9fa' : '';
         const dateStrObj = dt.getDate().toString().padStart(2, '0') + '-' + monthNamesShort[dt.getMonth()];
         const dayShortName = dayNames[dt.getDay()].toUpperCase();
-        return `<th class="col-day text-center p-1" style="min-width:48px;font-size:0.65rem;white-space:nowrap;${bg}">
+        // En modo Perdonazos: encabezado es clickeable para abrir panel lateral
+        const perdonazoClick = `onclick="if(window._perdonazoState&&window._perdonazoState.activo){abrirPanelPerdonazoPorFecha('${d}')}"`;
+        const perdonazoStyle = window._perdonazoState?.activo
+            ? 'cursor:pointer;border-bottom:2px solid #10b981;'
+            : '';
+        return `<th class="col-day text-center p-1" style="min-width:48px;font-size:0.65rem;white-space:nowrap;${bg}${perdonazoStyle}" ${perdonazoClick}
+                    title="${window._perdonazoState?.activo ? 'Clic para gestionar perdonazos del día' : ''}">
                     <div style="font-weight:700;font-size:0.7rem;line-height:1.1">${dateStrObj}</div>
                     <div style="opacity:0.8;font-size:0.6rem;line-height:1.1">${dayShortName}</div>
+                    ${window._perdonazoState?.activo ? '<div style="font-size:0.55rem;color:#10b981;font-weight:600;">🎁</div>' : ''}
                 </th>`;
     }).join('');
+
 
     // ── 7. Filas de empleados ────────────────────────────────────────────────
     // Detectar si algún empleado del área tiene turno Bolsa Flexible (DEBE estar antes de bodyRows)
@@ -4083,9 +4115,25 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Auto)</span>`;
     }
 
-    // Observaciones
+    // Observaciones + evidencia de condonación
     let obsHtml = '';
-    if (e.observaciones) {
+    // Nota de evidencia de condonación (tiene prioridad visual, va al inicio de OBSERVACIONES)
+    if (e.deuda_condonada > 0) {
+        const tiposCondonacion = { 1: 'Salida Adelantada', 2: 'Atraso', 3: 'Atraso y Salida Adelantada' };
+        const tipoTexto = tiposCondonacion[e.deuda_condonada] || 'Deuda';
+        const notaCondonacion = `<div style="display:flex; align-items:center; gap:6px; font-size:0.7rem; color:#047857; font-weight:600;">
+            <i class="bi bi-check-circle-fill" style="color:#10b981; font-size:0.85rem;"></i>
+            Deuda condonada — ${tipoTexto}
+        </div>`;
+        obsHtml = `
+        <div style="background-color: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 8px; margin-top: 12px;">
+            <div style="color: #15803d; font-weight: 800; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 4px; text-transform: uppercase;">
+                ✓ PERDONAZO APLICADO
+            </div>
+            <div>${notaCondonacion}</div>
+            ${e.observaciones ? `<div style="margin-top:5px; color:#374151; font-size:0.7rem; line-height:1.4; border-top: 1px dashed #86efac; padding-top:5px;">${e.observaciones}</div>` : ''}
+        </div>`;
+    } else if (e.observaciones) {
         const isAlert = e.observaciones.includes('[ALERTA SISTEMA');
         const bg = isAlert ? 'var(--danger-light, #fef2f2)' : 'var(--light-bg, #f1f5f9)';
         const border = isAlert ? 'var(--danger-color, #ef4444)' : 'var(--border-color, #e2e8f0)';
@@ -4223,38 +4271,18 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 ${heBreakdownHtml}
             </div>
 
-            <!-- Deuda -->
-            <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px; position:relative;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                    <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px;">
-                        <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
-                    </div>
-                    <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; max-width: 150px;">
-                    ${e.deuda_condonada > 0
-                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 0)" style="background:var(--danger-color, #f43f5e); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Revocar Condonación (Restaurar Deuda)">Revocar Perdonazo</button>`
-                        : ''
-                    }
-                    ${e.deuda_condonada === 0 && e.minutos_atraso > 0
-                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 2)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Atraso">Perd. Atraso</button>`
-                        : ''
-                    }
-                    ${e.deuda_condonada === 0 && e.minutos_salida_adelantada > 0
-                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 1)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Salida">Perd. Salida</button>`
-                        : ''
-                    }
-                    ${e.deuda_condonada === 0 && e.minutos_atraso > 0 && e.minutos_salida_adelantada > 0
-                        ? `<button onclick="toggleCondonacionDeuda(${e.empleado_id}, '${e.fecha}', 3)" style="background:var(--success-color, #10b981); color:white; border:none; padding:2px 6px; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:600;" title="Condonar Ambas">Perd. Ambos</button>`
-                        : ''
-                    }
-                    </div>
+            <!-- Deuda: solo se renderiza si NO hay condonación activa -->
+            ${e.deuda_condonada > 0 ? '' : `
+            <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
+                <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
+                    <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
                 </div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_atraso, 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_salida_adelantada, 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins((e.minutos_exceso_colacion || 0), 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins((e.minutos_permisos_detectados || 0), 'var(--danger-color, #f43f5e)')}</div>
                 <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Comp.</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>
-                ${e.deuda_condonada > 0 ? `<div style="margin-top:6px; font-size:0.65rem; color:var(--success-color, #10b981); font-weight:600; text-align:center;"><i class="bi bi-check-circle me-1"></i>Deuda Condonada</div>` : ''}
-            </div>
+            </div>`}
         </div>
 
         ${obsHtml}
@@ -4268,17 +4296,31 @@ function _escAttr(html) {
     return html.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// ============================================================
+// NUEVA LÓGICA UNIFICADA DE CONDONACIÓN MASIVA
+// Reemplaza: promptCondonacionDeuda, toggleCondonacionDeuda, executeCondonacion
+// También reemplaza: executePerdonazoMasivo (marcaciones_manuales.js)
+// ============================================================
 
-window.toggleCondonacionDeuda = async function(empleadoId, fecha, tipo_condonacion) {
-    const isRevoke = tipo_condonacion === 0;
-    if(!confirm(`¿Estás seguro que deseas ${isRevoke ? 'REVOCAR la condonación de' : 'CONDONAR (Perdonazo)'} la deuda horaria del empleado el ${fecha}?`)) return;
+/**
+ * Ejecuta la condonación o revocación para una lista de empleados y rango de fechas.
+ * @param {number[]} empleadosIds - IDs de empleados a procesar
+ * @param {string} fechaInicio - Fecha inicio (YYYY-MM-DD)
+ * @param {string} fechaFin - Fecha fin (YYYY-MM-DD)
+ * @param {number} tipo - 0=Revocar, 1=Salida, 2=Atraso, 3=Ambos
+ * @param {Function} [onSuccess] - Callback opcional tras éxito
+ */
+window.executeCondonacionMasiva = async function(empleadosIds, fechaInicio, fechaFin, tipo, onSuccess) {
+    if (!empleadosIds || empleadosIds.length === 0) return;
+    tipo = parseInt(tipo, 10);
+    const isRevoke = tipo === 0;
 
     try {
         const payload = {
-            empleados_ids: [empleadoId],
-            fecha_inicio: fecha,
-            fecha_fin: fecha,
-            tipo_condonacion: tipo_condonacion
+            empleados_ids: empleadosIds.map(id => parseInt(id, 10)),
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            tipo_condonacion: tipo
         };
         const response = await fetch('/api/asistencia/condonar-deuda/', {
             method: 'POST',
@@ -4291,25 +4333,41 @@ window.toggleCondonacionDeuda = async function(empleadoId, fecha, tipo_condonaci
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.detail || 'Error al actualizar la condonación');
+            throw new Error(errData.detail || 'Error al procesar la condonación');
         }
 
+        const result = await response.json();
+        const cuenta = result.registros_procesados || empleadosIds.length;
+        const accion = isRevoke ? 'revocada' : 'condonada';
+        const tipotxt = { 0:'(Revocar)', 1:'Salida Adelantada', 2:'Atraso', 3:'Atraso + Salida' }[tipo] || '';
+
         Swal.fire({
-            icon: 'success',
-            title: 'Éxito',
-            text: `Deuda ${condonar ? 'condonada' : 'restaurada'} exitosamente.`,
-            timer: 2000,
+            icon: isRevoke ? 'warning' : 'success',
+            title: isRevoke ? 'Condonación Revocada' : '✓ Perdonazo Aplicado',
+            html: `<b>${cuenta}</b> registro(s) ${accion}.<br><small class="text-muted">${tipotxt}</small>`,
+            timer: 2500,
             showConfirmButton: false
         });
 
-        // Remover popover actual y refrescar grilla
+        // Cerrar panel lateral si estuviese abierto
+        cerrarPanelPerdonazo();
+        // Cerrar popovers del tooltip
         document.querySelectorAll('.popover').forEach(p => p.remove());
-        if (typeof window.renderVistaAnalitica === 'function') {
-            await window.renderVistaAnalitica();
+        // Desactivar modo switch perdonazo y limpiar selecciones
+        _perdonazoState.seleccionados.clear();
+        if (onSuccess) onSuccess();
+        // Refresco forzado desde API (fix bug raíz)
+        if (typeof window.loadMarcacionesData === 'function') {
+            window.loadMarcacionesData();
+        } else {
+            location.reload();
         }
 
     } catch (error) {
-        console.error('Error toggle condonacion:', error);
+        console.error('Error executeCondonacionMasiva:', error);
         Swal.fire('Error', error.message, 'error');
     }
 };
+
+
+

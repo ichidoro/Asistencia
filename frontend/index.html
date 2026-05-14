@@ -1195,11 +1195,7 @@
                                         id="btn-reportes-sincronizar" data-permiso="reportes.sincronizar">
                                         <i class="bi bi-cloud-arrow-down-fill"></i>
                                     </button>
-                                    <button class="btn btn-primary btn-sm text-white" onclick="openPerdonazoMasivoModal()"
-                                        title="Perdonazo Masivo (Condonación de Salidas Adelantadas)"
-                                        id="btn-reportes-perdonazo" data-permiso="asistencia.condonar">
-                                        <i class="bi bi-gift-fill"></i>
-                                    </button>
+
                                 </div>
                             </div>
                         </div>
@@ -1827,69 +1823,11 @@
                 </div>
             </div>
 
-            <!-- Modal Perdonazo Masivo -->
-            <div id="modal-perdonazo-masivo" class="modal fade" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-gradient-primary text-white"
-                            style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                            <h5 class="modal-title"><i class="bi bi-gift-fill me-2"></i>Perdonazo Masivo
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white"
-                                onclick="closePerdonazoMasivoModal()"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <div class="alert alert-success d-flex align-items-center mb-3">
-                                <i class="bi bi-info-circle-fill me-2 fs-4"></i>
-                                <small>Esta herramienta condonará (o revocará) masivamente la deuda por salidas adelantadas de los empleados seleccionados.</small>
-                            </div>
+            <!-- Modal Perdonazo Masivo eliminado: reemplazado por Switch + Panel Lateral (ver marcaciones_ui.js) -->
 
-                            <form id="form-perdonazo-masivo" onsubmit="event.preventDefault(); executePerdonazoMasivo()">
-                                <div class="mb-3">
-                                    <label for="perdonazo-area" class="form-label fw-bold small text-muted">Área a aplicar (Dejar vacío para todos)</label>
-                                    <select id="perdonazo-area" class="form-select">
-                                        <option value="">Todas las Áreas</option>
-                                    </select>
-                                </div>
 
-                                <div class="mb-3">
-                                    <label for="perdonazo-tipo" class="form-label fw-bold small text-muted">¿Qué deuda desea condonar?</label>
-                                    <select id="perdonazo-tipo" class="form-select">
-                                        <option value="1">Solo Salidas Adelantadas</option>
-                                        <option value="2">Solo Atrasos</option>
-                                        <option value="3">Ambos (Atrasos y Salidas Adelantadas)</option>
-                                    </select>
-                                </div>
 
-                                <div class="row g-2 mb-3">
-                                    <div class="col-6">
-                                        <label for="perdonazo-fecha-inicio" class="form-label fw-bold small text-muted">Desde</label>
-                                        <input type="date" id="perdonazo-fecha-inicio" class="form-control" required>
-                                    </div>
-                                    <div class="col-6">
-                                        <label for="perdonazo-fecha-fin" class="form-label fw-bold small text-muted">Hasta</label>
-                                        <input type="date" id="perdonazo-fecha-fin" class="form-control" required>
-                                    </div>
-                                </div>
 
-                                <div class="form-check bg-light p-2 rounded border mb-3">
-                                    <input class="form-check-input ms-1" type="checkbox" id="perdonazo-accion" checked>
-                                    <label class="form-check-label w-100 ps-2" for="perdonazo-accion">
-                                        <strong>Condonar Deuda (Aplicar Perdonazo)</strong>
-                                        <div class="text-muted small">Desmarque para REVOCAR condonaciones existentes en el rango.</div>
-                                    </label>
-                                </div>
-
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-success fw-bold py-2">
-                                        <i class="bi bi-check2-circle me-2"></i> Ejecutar Acción
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
             <div id="modal-empleado" class="modal">
                 <div class="modal-content" style="max-width: 900px; width: 95%;">
                     <div class="modal-header">
@@ -3507,22 +3445,10 @@
                                 <div class="fw-bold" style="color: #8e44ad;">Validar Jornada Especial</div>
                             </button>
 
-                            <!-- NUEVO: Perdonazo -->
-                            <button id="btn-perdonazo"
-                                class="btn py-3 d-flex flex-column align-items-center d-none"
-                                style="background-color: #ecfdf5; border-color: #10b981; color: #047857;"
-                                onclick="proceedToPerdonazo()">
-                                <i class="bi bi-shield-check mb-1 fs-4"></i>
-                                <div class="fw-bold">Aplicar Perdonazo (Condonar)</div>
-                            </button>
 
-                            <button id="btn-revocar-perdonazo"
-                                class="btn py-3 d-flex flex-column align-items-center d-none"
-                                style="background-color: #fef2f2; border-color: #ef4444; color: #b91c1c;"
-                                onclick="proceedToRevocarPerdonazo()">
-                                <i class="bi bi-shield-x mb-1 fs-4"></i>
-                                <div class="fw-bold">Revocar Perdonazo</div>
-                            </button>
+
+
+
 
                             <button class="btn btn-link text-secondary btn-sm mt-3 text-decoration-none"
                                 onclick="closeAsistenciaActionModal()">Cancelar</button>
@@ -3690,6 +3616,7 @@
             <script src="/static/js/justificaciones_individuales.js?v={{ startup_id }}"></script>
             <script src="/static/js/marcaciones_manuales.js?v={{ startup_id }}"></script>
             <script src="/static/js/marcaciones_ui.js?v={{ startup_id }}"></script>
+            <script src="/static/js/perdonazo_panel.js?v={{ startup_id }}"></script>
             <script src="/static/js/dashboard.js?v={{ startup_id }}"></script>
 
             <!-- Consola de Seguridad y Cierre -->
