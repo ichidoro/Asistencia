@@ -91,6 +91,7 @@ async function saveTurno() {
         tolerancia_exceso_colacion_minutos: parseInt(formData.get('tolerancia_exceso_colacion_minutos') || 0),
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
+        umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
         es_turno_cortado: !!document.getElementById('chkCortado').checked,
@@ -277,6 +278,8 @@ async function openModalHorario(id = null) {
             const chkColacion = document.getElementById('chkColacion');
             chkColacion.checked = turno.descuento_colacion_auto;
             document.getElementById('numColacion').value = turno.minutos_colacion_auto || "";
+            const umbralInput = document.getElementById('umbralColacion');
+            if (umbralInput) umbralInput.value = turno.umbral_horas_colacion !== undefined ? turno.umbral_horas_colacion : 0;
             toggleColacionInput();
 
             // Llenar Semanas
@@ -344,6 +347,8 @@ async function openModalHorario(id = null) {
         if (form.tolerancia_exceso_colacion_minutos) form.tolerancia_exceso_colacion_minutos.value = 0;
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = "";
+        const umbralInput = document.getElementById('umbralColacion');
+        if (umbralInput) umbralInput.value = "0";
         toggleColacionInput();
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
@@ -1153,8 +1158,15 @@ function renderModalHtml() {
                                             <span class="input-group-text">min</span>
                                         </div>
                                     </div>
+                                    <div id="divColacionUmbral" style="display:none; width: 140px;" class="ms-2">
+                                        <div class="input-group input-group-sm" title="Horas mínimas de trabajo para aplicar el descuento">
+                                            <span class="input-group-text">Umbral</span>
+                                            <input type="number" class="form-control" id="umbralColacion" placeholder="Hrs" value="0" step="0.5" required>
+                                            <span class="input-group-text" style="padding: 0.25rem 0.5rem;">hrs</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="form-text small">Resta estos minutos fijos a las horas trabajadas si NO hay marcas de colación explícitas.</div>
+                                <div class="form-text small">Resta estos minutos si NO hay marcas, siempre que las horas trabajadas superen el umbral.</div>
                             </div>
 
                             <!-- Fila 3: Cierre y Excesos (Nuevos campos DT-4 y DT-14) -->
@@ -1347,7 +1359,9 @@ function toggleCortadoUI() {
 function toggleColacionInput() {
     const chk = document.getElementById('chkColacion');
     const div = document.getElementById('divColacionTime');
+    const divUmbral = document.getElementById('divColacionUmbral');
     if (div) div.style.display = chk.checked ? 'block' : 'none';
+    if (divUmbral) divUmbral.style.display = chk.checked ? 'flex' : 'none';
     updateAllCalculations();
 }
 

@@ -530,7 +530,7 @@ class EmpleadoRepository:
         
         if areas and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            area_filter = f" AND area IN ({placeholders})"
+            area_filter = f" AND a.nombre IN ({placeholders})"
             params.extend(areas)
             
         params.extend([future_date, today])
@@ -578,7 +578,7 @@ class EmpleadoRepository:
         
         if areas and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            area_filter = f" AND area IN ({placeholders})"
+            area_filter = f" AND a.nombre IN ({placeholders})"
             params.extend(areas)
 
         query = f"""
@@ -632,7 +632,7 @@ class EmpleadoRepository:
             params.extend([search_pattern] * 5)
         
         if area:
-            query += " AND area = ?"
+            query += " AND a.nombre = ?"
             params.append(area)
         
         if compania:

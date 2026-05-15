@@ -54,6 +54,7 @@ class TurnoBase(BaseModel):
     meta_horas_semanales: float = 0.0
     descuento_colacion_auto: bool = False
     minutos_colacion_auto: int = 0
+    umbral_horas_colacion: float = 0.0 # Umbral para no descontar colación en jornadas cortas
     anclaje_entrada_minutos: int = 0 # Nuevo campo para marcas tempranas
     anclaje_salida_minutos: int = 0 # Nuevo campo para marcas tardías filtrables
     ventana_en_curso_minutos: int = 0 # (DT-4) Reemplazo de margen duro de 3h para estados EN_CURSO

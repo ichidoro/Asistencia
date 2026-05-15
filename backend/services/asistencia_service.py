@@ -1080,7 +1080,7 @@ class AsistenciaService:
             emp_info = bulk_ctx.get('empleados', {}).get(empleado_id)
         else:
             emp_row = await db.fetch_one(
-                "SELECT activo, fecha_ingreso, fecha_salida, area FROM empleados WHERE id = ?",
+                "SELECT activo, fecha_ingreso, fecha_salida FROM empleados WHERE id = ?",
                 (empleado_id,)
             )
             emp_info = dict(emp_row) if emp_row else None
@@ -1557,7 +1557,7 @@ class AsistenciaService:
                     if padre_row:
                         padre = dict(padre_row)
                         for campo in (
-                            'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
+                            'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion', 'umbral_horas_colacion',
                             'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                             'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
                             'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
@@ -2473,6 +2473,7 @@ class AsistenciaService:
             minutos_colacion = 0
             colacion_flag = config_dia.get('descuento_colacion_auto') if config_dia else None
             minutos_colacion_permitidos = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
+            umbral_horas = float(config_dia.get('umbral_horas_colacion', 0.0) or 0.0) if config_dia else 0.0
             res['minutos_colacion_auto'] = minutos_colacion_permitidos
 
             # Si hay marcas intermedias (colación real), usamos ese tiempo.
@@ -2482,13 +2483,17 @@ class AsistenciaService:
             else:
                 # Si no hay marcas intermedias, aplicamos el descuento automático si está configurado
                 if config_dia and int(colacion_flag or 0):
-                    minutos_colacion = minutos_colacion_permitidos
-                    if minutos_colacion > 0:
-                        mitad_jornada = r_ent + (r_sal - r_ent) / 2
-                        inicio_colacion_auto = mitad_jornada - timedelta(minutes=minutos_colacion / 2)
-                        fin_colacion_auto = mitad_jornada + timedelta(minutes=minutos_colacion / 2)
-                        res['hora_salida_colacion'] = inicio_colacion_auto.strftime("%H:%M:%S")
-                        res['hora_entrada_colacion'] = fin_colacion_auto.strftime("%H:%M:%S")
+                    if umbral_horas > 0 and horas_trabajadas < umbral_horas:
+                        logger.info(f"Omite colación auto: Horas trabajadas ({horas_trabajadas:.2f}) < Umbral ({umbral_horas:.2f})")
+                        minutos_colacion = 0
+                    else:
+                        minutos_colacion = minutos_colacion_permitidos
+                        if minutos_colacion > 0:
+                            mitad_jornada = r_ent + (r_sal - r_ent) / 2
+                            inicio_colacion_auto = mitad_jornada - timedelta(minutes=minutos_colacion / 2)
+                            fin_colacion_auto = mitad_jornada + timedelta(minutes=minutos_colacion / 2)
+                            res['hora_salida_colacion'] = inicio_colacion_auto.strftime("%H:%M:%S")
+                            res['hora_entrada_colacion'] = fin_colacion_auto.strftime("%H:%M:%S")
 
             res['minutos_exceso_colacion'] = max(0, minutos_colacion - minutos_colacion_permitidos)
             
@@ -3058,11 +3063,11 @@ class AsistenciaService:
         q = "SELECT estado, COUNT(*) as cnt FROM asistencias WHERE fecha = ?"
         params: list = [fecha]
         if area and area != 'Todas':
-            q += " AND empleado_id IN (SELECT id FROM empleados WHERE area = ?)"
+            q += " AND empleado_id IN (SELECT e.id FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1 LEFT JOIN areas a ON ha.area_id = a.id WHERE a.nombre = ?)"
             params.append(area)
         if areas_permitidas:
             ph = ','.join('?' * len(areas_permitidas))
-            q += f" AND empleado_id IN (SELECT id FROM empleados WHERE area IN ({ph}))"
+            q += f" AND empleado_id IN (SELECT e.id FROM empleados e LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1 LEFT JOIN areas a ON ha.area_id = a.id WHERE a.nombre IN ({ph}))"
             params.extend(areas_permitidas)
         q += " GROUP BY estado"
         rows = await db.fetch_all(q, tuple(params))
