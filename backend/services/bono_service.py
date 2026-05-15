@@ -15,6 +15,7 @@ ESTADOS_PRESENCIA = frozenset([
     "EXTRA", "EN_CURSO", "ANOMALIA", "JORNADA_ESPECIAL",
     "BOL", "BOLSA", "VACACIONES",
     "PER", "PER_ATR", "PER_SAD", "PER_ATR_SAD", "PERMISO",
+    "INASISTENCIA_COMPENSADA", "JORNADA_COMPENSATORIA"
 ])
 
 # ── Estados que NO son laborables (no cuentan para ningún cálculo) ──────────

@@ -233,7 +233,8 @@ async function cargarIntercambiosEmpleado(empleadoId) {
     try {
         const resp = await fetch(`/api/asistencia/intercambios/?fecha_inicio=${fIni}&fecha_fin=${fFin}`);
         if (!resp.ok) throw new Error('Error al listar');
-        const intercambios = await resp.json();
+        const jsonBody = await resp.json();
+        const intercambios = jsonBody.data || [];
 
         const delEmp = intercambios.filter(i => String(i.empleado_id) === String(empleadoId));
 
