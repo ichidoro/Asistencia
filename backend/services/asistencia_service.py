@@ -1439,10 +1439,24 @@ class AsistenciaService:
                             semana_ganadora = None
                             config_dia = None
                         else:
-                            last_sem_dict = bulk_ctx.get('rotativo_last_sem_dict', {})
-                            num_sem_activa = last_sem_dict.get(empleado_id, 1) if isinstance(last_sem_dict, dict) else 1
-                            semana_ganadora = num_sem_activa
-                            config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
+                            # [FIX] Si es DINAMICO_FLEXIBLE y NO HAY MARCAS,
+                            # buscamos si en *alguna* semana el día es libre. Si es así, 
+                            # asumimos que el empleado tomó su día libre rotativo.
+                            semana_libre = None
+                            for num_semana_eval in range(1, total_sems + 1):
+                                sem_config = bulk_ctx['turnos'].get(tid, {}).get(num_semana_eval, {}).get(dia_semana)
+                                if sem_config and sem_config.get('es_libre'):
+                                    semana_libre = num_semana_eval
+                                    break
+                            
+                            if semana_libre:
+                                semana_ganadora = semana_libre
+                                config_dia = bulk_ctx['turnos'].get(tid, {}).get(semana_libre, {}).get(dia_semana)
+                            else:
+                                last_sem_dict = bulk_ctx.get('rotativo_last_sem_dict', {})
+                                num_sem_activa = last_sem_dict.get(empleado_id, 1) if isinstance(last_sem_dict, dict) else 1
+                                semana_ganadora = num_sem_activa
+                                config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
                 else:
                     # Turnos Fijos o normales
                     if f_asig_ini and total_sems > 1:
@@ -1512,7 +1526,18 @@ class AsistenciaService:
                             (tid, dia_semana, winner_sem)
                         )
                     else:
-                        num_sem_activa = 1 # Fallback since we can't persist state easily in individual queries
+                        # [FIX] Mismo fallback para consultas individuales: buscar día libre
+                        semana_libre = None
+                        for num_semana_eval in range(1, total_sems + 1):
+                            sem_rows = await db.fetch_all(
+                                "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
+                                (tid, dia_semana, num_semana_eval)
+                            )
+                            if sem_rows and sem_rows[0]['es_libre']:
+                                semana_libre = num_semana_eval
+                                break
+                                
+                        num_sem_activa = semana_libre if semana_libre else 1
                         semana_ganadora = num_sem_activa
                         rows = await db.fetch_all(
                             "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
@@ -1615,7 +1640,14 @@ class AsistenciaService:
         #   30/04 (víspera) → is_holiday=True por regla víspera, día sig = 01/05 (FERIADO) → NO aplica ✅
         #   01/05 (feriado) → is_holiday=True por feriados_dict,  día sig = 02/05 (hábil)  → SÍ aplica ✅
         dia_siguiente_es_habil = fecha_manana not in feriados_dict
-        if is_holiday and es_nocturno_pre and config_dia and dia_siguiente_es_habil:
+        
+        # [FIX] No anular el Feriado si es un turno dinámico sin marcas 
+        # (no sabemos qué turno iba a hacer realmente)
+        puede_anular_feriado = True
+        if tipo_prog == 'DINAMICO_FLEXIBLE' and not block_inteligente:
+            puede_anular_feriado = False
+            
+        if is_holiday and es_nocturno_pre and config_dia and dia_siguiente_es_habil and puede_anular_feriado:
             hora_ini_str = str(config_dia.get('hora_entrada', '00:00'))[:5]
             hora_fin_str = str(config_dia.get('hora_salida',  '00:00'))[:5]
             try:

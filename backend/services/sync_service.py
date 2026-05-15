@@ -709,9 +709,19 @@ class SyncService:
                     rut_to_emp_id[r] for r in ruts_afectados if r in rut_to_emp_id
                 } or None
             else:
-                # Al sincronizar el área completa, recalculamos a todos los empleados
-                # para asegurar que se generen inasistencias (INA) si no hay marcas
-                empleados_afectados_ids = None
+                # [FIX-INAS-A] Al sincronizar por ÁREA, solo recalcular empleados que
+                # tuvieron marcas NUEVAS en este sync. Procesar todos los empleados (None)
+                # sobreescribe estados correctos de empleados DINAMICO_FLEXIBLE cuyos
+                # logs están en días adyacentes, generando INASISTENCIA falsas.
+                # La regla de negocio: si no hubo marcas nuevas para un empleado,
+                # su estado calculado anterior debe respetarse.
+                if ruts_afectados:
+                    empleados_afectados_ids = {
+                        rut_to_emp_id[r] for r in ruts_afectados if r in rut_to_emp_id
+                    } or None
+                else:
+                    # Sin marcas nuevas para nadie → no recalcular (evita trabajo inútil)
+                    empleados_afectados_ids = None
 
             # [ATOMIC_SYNC_TRANSACTION]: WAL-only — sin sync a cloud aquí
             #
@@ -753,19 +763,39 @@ class SyncService:
                 logger.info(f"⏭️ skip_recalc=True → omitiendo recálculo de {len(fechas_afectadas)} días (el caller lo hará)")
 
             # C. VALIDACIÓN DE INTEGRIDAD POST-SYNC
-            # Detecta discrepancias: logs_raw tiene marcaciones PERO asistencias dice INASISTENCIA
-            # Esto captura el caso donde el cloud sobreescribió correcciones locales.
+            # Detecta discrepancias: logs_raw tiene marcaciones PERO asistencias dice INASISTENCIA.
+            # [FIX-INAS-B] Ampliada para DINAMICO_FLEXIBLE: el motor asigna marcas de días
+            # adyacentes (D-1→D+2) como jornada del día D. La query usa UNION para mantener
+            # el JOIN exacto para turnos normales y la ventana amplia para DINAMICO_FLEXIBLE.
             if not skip_recalc:
                 try:
                     integrity_mismatches = await db.fetch_all("""
+                        -- Caso 1: Turnos normales — marcas en el mismo día exacto
                         SELECT DISTINCT a.empleado_id, a.fecha
                         FROM asistencias a
-                        INNER JOIN logs_raw lr ON a.empleado_id = lr.empleado_id 
+                        INNER JOIN logs_raw lr ON a.empleado_id = lr.empleado_id
                             AND a.fecha = date(lr.fecha_hora)
+                        LEFT JOIN turnos t ON a.turno_asignado_id = t.id
                         WHERE a.estado = 'INASISTENCIA'
                           AND a.fecha >= ?
                           AND lr.tipo IN ('Entrada', 'Salida', 'entrada', 'salida', 'entry', 'exit', 'e', 's', 'in', 'out', '1', '2')
-                    """, (fecha_ini_mes,))
+                          AND (t.tipo_programacion IS NULL OR t.tipo_programacion != 'DINAMICO_FLEXIBLE')
+
+                        UNION
+
+                        -- Caso 2: DINAMICO_FLEXIBLE — marcas en ventana D-1 a D+2
+                        -- El motor asigna estas marcas como jornada del día D aunque
+                        -- el timestamp sea de un día adyacente (turno día a día).
+                        SELECT DISTINCT a.empleado_id, a.fecha
+                        FROM asistencias a
+                        INNER JOIN logs_raw lr ON a.empleado_id = lr.empleado_id
+                            AND date(lr.fecha_hora) BETWEEN date(a.fecha, '-1 day') AND date(a.fecha, '+2 days')
+                        INNER JOIN turnos t ON a.turno_asignado_id = t.id
+                            AND t.tipo_programacion = 'DINAMICO_FLEXIBLE'
+                        WHERE a.estado = 'INASISTENCIA'
+                          AND a.fecha >= ?
+                          AND lr.tipo IN ('Entrada', 'Salida', 'entrada', 'salida', 'entry', 'exit', 'e', 's', 'in', 'out', '1', '2')
+                    """, (fecha_ini_mes, fecha_ini_mes))
                     
                     if integrity_mismatches:
                         logger.warning(f"🔍 Integridad: {len(integrity_mismatches)} discrepancias detectadas (INASISTENCIA con logs)")
@@ -780,7 +810,7 @@ class SyncService:
                         for mismatch in integrity_mismatches[:50]:  # Cap de seguridad
                             try:
                                 await asist_service.procesar_dia(
-                                    mismatch['fecha'], 
+                                    mismatch['fecha'],
                                     empleado_ids={mismatch['empleado_id']}
                                 )
                             except Exception as fix_err:
