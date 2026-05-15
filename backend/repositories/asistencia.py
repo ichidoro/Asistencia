@@ -485,3 +485,45 @@ class AsistenciaRepository:
         query = "DELETE FROM asistencias WHERE empleado_id = ? AND fecha < ?"
         cursor = await self.db.execute(query, [empleado_id, start_date.isoformat()])
         return cursor.rowcount
+
+    async def get_intercambio_por_fecha(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Busca si una fecha pertenece a un intercambio (como origen o destino) para un empleado."""
+        query = """
+            SELECT * FROM intercambios_dias 
+            WHERE empleado_id = ? AND (fecha_origen = ? OR fecha_destino = ?)
+        """
+        return await self.db.fetch_one(query, (empleado_id, fecha, fecha))
+
+    async def get_intercambios(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """Obtiene la lista de intercambios en un rango de fechas (considerando fecha_origen o fecha_destino)."""
+        query = """
+            SELECT id.id, id.empleado_id, id.fecha_origen, id.fecha_destino, id.observaciones, id.created_at,
+                   e.nombre, e.apellido_paterno, e.rut
+            FROM intercambios_dias id
+            JOIN empleados e ON id.empleado_id = e.id
+            WHERE (id.fecha_origen BETWEEN ? AND ?) OR (id.fecha_destino BETWEEN ? AND ?)
+            ORDER BY id.created_at DESC
+        """
+        return await self.db.fetch_all(query, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
+
+    async def create_intercambio(self, data: Dict[str, Any]) -> int:
+        """Crea un nuevo intercambio de días."""
+        query = """
+            INSERT INTO intercambios_dias (empleado_id, fecha_origen, fecha_destino, usuario_id, observaciones)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        params = (
+            data['empleado_id'],
+            data['fecha_origen'],
+            data['fecha_destino'],
+            data.get('usuario_id'),
+            data.get('observaciones')
+        )
+        cursor = await self.db.execute(query, params)
+        return cursor.lastrowid
+
+    async def delete_intercambio(self, intercambio_id: int) -> None:
+        """Elimina un intercambio de días."""
+        query = "DELETE FROM intercambios_dias WHERE id = ?"
+        await self.db.execute(query, (intercambio_id,))
+

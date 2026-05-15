@@ -45,3 +45,9 @@ class BatchSyncRequest(BaseModel):
 
 # Re-exportar JustificacionCreate para compatibilidad con el router
 from .justificacion import JustificacionCreate
+
+class IntercambioCreate(BaseModel):
+    empleado_id: int
+    fecha_origen: str  # YYYY-MM-DD (Día que debía trabajar pero faltará)
+    fecha_destino: str # YYYY-MM-DD (Día que debía ser libre pero trabajará)
+    observaciones: Optional[str] = None

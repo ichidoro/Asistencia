@@ -25,6 +25,7 @@ from backend.schemas.asistencia import (
     AsignacionIndividual,
     BatchSyncRequest,
     CondonarDeudaRequest,
+    IntercambioCreate,
 )
 
 router = APIRouter(
@@ -1820,3 +1821,74 @@ async def get_reproceso_status(
 
     return {**status, "pct": pct}
 
+
+@router.get("/intercambios/")
+async def get_intercambios(
+    fecha_inicio: str = Query(..., description="Fecha inicial AAAA-MM-DD"),
+    fecha_fin: str = Query(..., description="Fecha final AAAA-MM-DD"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Obtiene los intercambios de días en un rango de fechas."""
+    intercambios = await service.repository.get_intercambios(fecha_inicio, fecha_fin)
+    return {"success": True, "data": intercambios}
+
+
+@router.post("/intercambios/")
+async def create_intercambio(
+    data: IntercambioCreate,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Crea un nuevo intercambio de días y reprocesa ambas fechas."""
+    payload = data.dict()
+    payload['usuario_id'] = current_user.user_id
+    
+    intercambio_id = await service.repository.create_intercambio(payload)
+    
+    # Reprocesar ambas fechas (origen y destino) para que el Interceptor actúe
+    await service.reprocesar_periodo_empleado(
+        empleado_id=data.empleado_id,
+        fecha_inicio=data.fecha_origen,
+        fecha_fin=data.fecha_origen,
+        force=True
+    )
+    await service.reprocesar_periodo_empleado(
+        empleado_id=data.empleado_id,
+        fecha_inicio=data.fecha_destino,
+        fecha_fin=data.fecha_destino,
+        force=True
+    )
+    
+    return {"success": True, "message": "Intercambio registrado y fechas reprocesadas", "id": intercambio_id}
+
+
+@router.delete("/intercambios/{intercambio_id}/")
+async def delete_intercambio(
+    intercambio_id: int,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Elimina un intercambio de días."""
+    db = service.repository.db
+    # Obtener el intercambio para saber qué fechas reprocesar
+    intercambio = await db.fetch_one("SELECT * FROM intercambios_dias WHERE id = ?", (intercambio_id,))
+    if not intercambio:
+        raise HTTPException(status_code=404, detail="Intercambio no encontrado")
+        
+    await service.repository.delete_intercambio(intercambio_id)
+    
+    # Reprocesar sin el intercambio para volver al estado natural
+    await service.reprocesar_periodo_empleado(
+        empleado_id=intercambio['empleado_id'],
+        fecha_inicio=intercambio['fecha_origen'],
+        fecha_fin=intercambio['fecha_origen'],
+        force=True
+    )
+    await service.reprocesar_periodo_empleado(
+        empleado_id=intercambio['empleado_id'],
+        fecha_inicio=intercambio['fecha_destino'],
+        fecha_fin=intercambio['fecha_destino'],
+        force=True
+    )
+    return {"success": True, "message": "Intercambio eliminado y fechas devueltas a estado natural"}

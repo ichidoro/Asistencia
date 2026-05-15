@@ -1780,6 +1780,21 @@ class AsistenciaService:
                 await self.repository.delete_asistencia(empleado_id, fecha)
             return None
 
+        # ── INTERCEPTOR: DÍA COMPENSATORIO (Intercambio de Días 1x1) ───────────
+        intercambio = await self.repository.get_intercambio_por_fecha(empleado_id, fecha)
+        if intercambio:
+            if fecha == intercambio['fecha_origen'] and resultado.get('estado') in ('INASISTENCIA', 'FALTA'):
+                resultado['estado'] = 'INASISTENCIA_COMPENSADA'
+                resultado['minutos_deuda'] = 0
+                resultado['deuda_condonada'] = 3
+                resultado['observaciones'] = resultado.get('observaciones', '') + ' [Día Compensado por Intercambio]'
+            elif fecha == intercambio['fecha_destino'] and resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA', 'OK'):
+                # OK puede darse si en Destino le asignan un turno temporal o el motor evalúa OK,
+                # pero normalmente será JORNADA_ESPECIAL. Igual forzamos que no genere extras.
+                resultado['estado'] = 'JORNADA_COMPENSATORIA'
+                resultado['minutos_extra_bruto'] = 0
+                resultado['observaciones'] = resultado.get('observaciones', '') + ' [Jornada Trabajada por Compensación]'
+
         # ── APLICACIÓN DE AGOTAMIENTO ATÓMICO (MEMORIA) ───────────────────────
         # [DT-13] Guard sin chequeo de hora_entrada_real:
         # Si el día es ANOMALIA por Salida Huérfana, hora_entrada_real=None pero los

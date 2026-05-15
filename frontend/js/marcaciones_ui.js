@@ -156,6 +156,10 @@ function renderMarcacionesToolbar(container) {
                     </div>
                 </div>
 
+                <button class="btn btn-sm btn-outline-primary shadow-sm ms-2" onclick="window.abrirModalIntercambio ? window.abrirModalIntercambio() : console.warn('Intercambios panel not loaded')" title="Registrar Día Compensatorio" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
+                    <i class="bi bi-arrow-left-right"></i> <span class="fw-bold">Días Compensatorios</span>
+                </button>
+
             </div>
         </div>
 
@@ -1109,6 +1113,8 @@ window.updateVisorPDF = function(isDownload = false) {
         else if (estadoStr === 'SALIDA_ADELANTADA' || estadoStr === 'SAD') estadoBadge = 'Salida Adelantada';
         else if (estadoStr === 'ATR_SAD') estadoBadge = 'Atraso / Sal. Adelantada';
         else if (estadoStr === 'INASISTENCIA' || estadoStr === 'FALTA') estadoBadge = 'Inasistencia';
+        else if (estadoStr === 'INASISTENCIA_COMPENSADA') estadoBadge = 'Día Compensado';
+        else if (estadoStr === 'JORNADA_COMPENSATORIA') estadoBadge = 'Jornada Compensatoria';
         else if (estadoStr === 'LIBRE') estadoBadge = 'Día Libre';
         else if (estadoStr === 'NO_ACTIVO') estadoBadge = 'No Activo';
 
@@ -3734,7 +3740,9 @@ function _analiticaCellBadge(di) {
             'EXTRA':            ['badge-state-info',     '<i class="bi bi-plus-circle-fill me-1"></i>EXT'],
             'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
             'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
-            'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR']
+            'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR'],
+            'INASISTENCIA_COMPENSADA': ['badge-inasistencia-compensada', '<i class="bi bi-x-circle me-1"></i>COMP'],
+            'JORNADA_COMPENSATORIA':   ['badge-compensatorio',           '<i class="bi bi-arrow-left-right me-1"></i>COMP']
         });
     }
 
