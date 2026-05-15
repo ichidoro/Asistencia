@@ -277,12 +277,12 @@ class DashboardService:
             # 3. TOP 5 Deudores de Tiempo (Atrasos y salidas tempranas)
             # Usando un JOIN con una subquery o agregación
             query_deudores = f"""
-                SELECT e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre as empleado, SUM(a.minutos_atraso) as deuda_minutos
+                SELECT e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre as empleado, SUM(a.minutos_deuda) as deuda_minutos
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
                 LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
                 LEFT JOIN areas ar ON ha.area_id = ar.id
-                WHERE a.fecha >= ? AND a.fecha <= ? AND a.minutos_atraso > 0 AND e.activo = 1 {area_condition}
+                WHERE a.fecha >= ? AND a.fecha <= ? AND a.minutos_deuda > 0 AND e.activo = 1 {area_condition}
                 GROUP BY e.id
                 ORDER BY deuda_minutos DESC
                 LIMIT 5

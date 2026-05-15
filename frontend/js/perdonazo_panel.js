@@ -218,11 +218,11 @@ window.abrirPanelPerdonazoPorFecha = function(fecha) {
     let html = '';
 
     if (empConDeuda.length === 0 && empCondonados.length === 0) {
-        html = '<div style="text-align:center;padding:40px;color:#94a3b8;"><i class="bi bi-check-circle" style="font-size:2rem;display:block;margin-bottom:10px;"></i>Sin deudas pendientes este día</div>';
+        html = '<div style="text-align:center;padding:40px;color:#94a3b8;"><i class="bi bi-check-circle" style="font-size:2rem;display:block;margin-bottom:10px;"></i>Sin incidencias ni deudas pendientes este día</div>';
     } else {
         if (empConDeuda.length > 0) {
             html += `<div style="font-size:0.65rem;font-weight:800;color:#dc2626;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">
-                <i class="bi bi-exclamation-circle-fill me-1"></i> Con Deuda Pendiente (${empConDeuda.length})
+                <i class="bi bi-exclamation-circle-fill me-1"></i> Con Incidencias o Deuda (${empConDeuda.length})
             </div>`;
             for (const { emp, asist } of empConDeuda) {
                 const badges = [];

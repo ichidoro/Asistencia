@@ -2535,7 +2535,14 @@ class AsistenciaService:
         # ── SALDO META (Deuda / Extra) ─────────────────────────────────────────
         if is_bolsa:
             # En FLEXIBLE_BOLSA, la deuda diaria es 0, delegando el cálculo financiero al ciclo semanal/mensual
+            # Además, se anulan las incidencias disciplinarias diarias (atrasos y salidas adelantadas)
             minutos_deuda = 0
+            res['minutos_atraso'] = 0
+            res['minutos_salida_adelantada'] = 0
+            res['alerta_atraso'] = False
+            hubo_sad_fisico = False
+            diff_ent = 0
+            diff_sal_exacto = 0
             if minutos_permiso_deuda > 0:
                 res['observaciones'] += 'Saldo neutralizado por permiso. '
         elif is_holiday or es_libre_dia:

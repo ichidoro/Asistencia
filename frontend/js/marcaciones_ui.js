@@ -3459,11 +3459,11 @@ function renderVistaAnalitica(respData, container) {
             <td class="text-center align-middle tabular-nums text-danger" style="background:#f8fafc;font-size:0.8rem">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
             <td class="text-center align-middle tabular-nums fw-bold" style="background:#f8fafc;font-size:0.8rem">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
             ${showDeudas ? `
-            <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #ef4444">${r.min_col>0?_fmtMin(r.min_col):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_per>0?_fmtMin(r.min_per):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-danger fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
-            <td class="text-center align-middle tabular-nums fw-bold text-danger" style="background:#f8fafc;font-size:0.8rem">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-danger" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #ef4444">${r.d_tot>0 ? '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
+            <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''}" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b">${r.min_col>0?_fmtMin(r.min_col):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_per>0?_fmtMin(r.min_per):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''}" style="background:#f8fafc;font-size:0.8rem">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
+            <td class="text-center align-middle tabular-nums fw-bold text-muted" style="background:#f8fafc;font-size:0.8rem">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b">${r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
             <td class="text-center align-middle tabular-nums fw-bold ${sClass}" style="background:#f9fafb;font-size:0.8rem">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
             ${(hayBolsa && showSaldoMeta) ? (
                 r.esBolsa
@@ -3515,11 +3515,11 @@ function renderVistaAnalitica(respData, container) {
         <td class="tabular-nums text-danger">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
         <td class="tabular-nums fw-bold">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="border-left:3px solid #3b82f6; color:#3b82f6" class="tabular-nums fw-bold">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
         ${showDeudas ? `
-        <td style="border-left:3px solid #ef4444" class="tabular-nums ${tot.min_col>0?'text-danger fw-bold':''}">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
-        <td class="tabular-nums ${tot.min_per>0?'text-danger fw-bold':''}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
-        <td class="tabular-nums ${tot.min_atr>0?'text-danger fw-bold':''}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
-        <td class="tabular-nums ${tot.min_sad>0?'text-danger fw-bold':''}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
-        <td class="tabular-nums text-danger fw-bold">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="border-left:3px solid #ef4444" class="tabular-nums text-danger fw-bold">${tot.d_tot>0 ? '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
+        <td style="border-left:3px solid #64748b" class="tabular-nums ${tot.min_col>0?'text-muted fw-bold':''}">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
+        <td class="tabular-nums ${tot.min_per>0?'text-muted fw-bold':''}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
+        <td class="tabular-nums ${tot.min_atr>0?'text-muted fw-bold':''}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
+        <td class="tabular-nums ${tot.min_sad>0?'text-muted fw-bold':''}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
+        <td class="tabular-nums text-muted fw-bold">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="border-left:3px solid #64748b" class="tabular-nums text-muted fw-bold">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
         <td class="tabular-nums ${totSClass}">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
         ${(hayBolsa && showSaldoMeta) ? `<td colspan="3" style="background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.7rem;color:#8b5cf6;text-align:center" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>` : ''}
         <td colspan="${dates.length}"></td>
@@ -3568,7 +3568,7 @@ function renderVistaAnalitica(respData, container) {
 
     const incHeadersTop = showIncidencias ? `<th colspan="6" class="text-start px-2 th-bento th-bento-warning"><i class="bi bi-flag-fill me-1" style="font-size:0.75rem;color:#f59e0b"></i><span class="fw-bold">Incidencias</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showIncidencias')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">INCID</span></th>`;
     const heHeadersTop = showHE ? `<th colspan="4" class="text-start px-2 th-bento th-bento-primary"><i class="bi bi-lightning-charge-fill me-1" style="font-size:0.75rem;color:#3b82f6"></i><span class="fw-bold">Horas Extra</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showHE')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-primary"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showHE')" title="Expandir HE"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-lightning-charge-fill d-block mb-1" style="font-size:0.85rem;color:#3b82f6"></i><span style="font-size:0.65rem;letter-spacing:0.5px">HR EX</span></th>`;
-    const deudasHeadersTop = showDeudas ? `<th colspan="5" class="text-start px-2 th-bento th-bento-danger"><i class="bi bi-exclamation-triangle-fill me-1" style="font-size:0.75rem;color:#ef4444"></i><span class="fw-bold">Deudas</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-danger"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Deudas"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-exclamation-triangle-fill d-block mb-1" style="font-size:0.85rem;color:#ef4444"></i><span style="font-size:0.65rem;letter-spacing:0.5px">DEUDA</span></th>`;
+    const deudasHeadersTop = showDeudas ? `<th colspan="5" class="text-start px-2 th-bento th-bento-secondary" style="border-left:3px solid #64748b"><i class="bi bi-clock-history me-1" style="font-size:0.75rem;color:#64748b"></i><span class="fw-bold">Tiempo No Trabajado</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-secondary" style="border-left:3px solid #64748b"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Tiempos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-clock-history d-block mb-1" style="font-size:0.85rem;color:#64748b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">NO TRAB</span></th>`;
 
     // Columna SALDO META — solo visible si hay bolsa flexible en el área
     const saldoMetaHeaderTop = hayBolsa
@@ -4333,8 +4333,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 ${heBreakdownHtml}
             </div>
 
-            <!-- Deuda: solo se renderiza si NO hay condonación activa -->
-            ${e.deuda_condonada > 0 ? '' : `
+            <!-- Deuda: solo se renderiza si NO hay condonación activa y si REALMENTE existe deuda financiera -->
+            ${(e.deuda_condonada > 0 || !e.minutos_deuda || e.minutos_deuda <= 0) ? '' : `
             <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
                 <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
                     <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
