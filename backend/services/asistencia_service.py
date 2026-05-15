@@ -2146,7 +2146,7 @@ class AsistenciaService:
                 res['estado'] = 'INASISTENCIA'
                 res['observaciones'] = 'Inasistencia detectada (Bolsa Flexible sin marcas)'
                 logger.info(
-                    f"📋 INASISTENCIA: emp={empleado_id} fecha={fecha} "
+                    f"📋 INASISTENCIA: emp={emp_id} fecha={fecha} "
                     f"logs_count={len(logs)} "
                     f"turno={turno.get('nombre') if turno else 'N/A'} "
                     f"tipo_prog={turno.get('tipo_programacion') if turno else 'N/A'}"
@@ -2171,7 +2171,7 @@ class AsistenciaService:
                 res['estado'] = 'INASISTENCIA'
                 res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
                 logger.info(
-                    f"📋 INASISTENCIA: emp={empleado_id} fecha={fecha} "
+                    f"📋 INASISTENCIA: emp={emp_id} fecha={fecha} "
                     f"logs_count={len(logs)} "
                     f"turno={turno.get('nombre') if turno else 'N/A'} "
                     f"config_dia={'hábil' if config_dia else 'MISSING'}"
@@ -2374,7 +2374,7 @@ class AsistenciaService:
                     res['estado'] = 'INASISTENCIA'
                     res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
                     logger.info(
-                        f"📋 INASISTENCIA: emp={empleado_id} fecha={fecha} "
+                        f"📋 INASISTENCIA: emp={emp_id} fecha={fecha} "
                         f"logs_count={len(logs)} "
                         f"turno={turno.get('nombre') if turno else 'N/A'} "
                         f"config_dia={'hábil' if config_dia else 'MISSING'}"
