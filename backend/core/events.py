@@ -33,9 +33,6 @@ async def _recalcular_periodo_activo():
     incorrectas. Esta función corre en background (no bloquea la UI) y llama
     `procesar_dia` para cada día del período activo de RRHH.
     """
-    # Pequeña pausa: esperar a que el sync inicial con Turso termine
-    # antes de recalcular (para tener los datos más frescos disponibles).
-    await asyncio.sleep(5)
     try:
         from datetime import timedelta
         from backend.services.asistencia_service import AsistenciaService
@@ -202,12 +199,6 @@ async def lifespan(app: FastAPI):
                 startup_manager.update(100, "Iniciando Dashboard...", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
-
-                # 4b. Recálculo automático del período activo al arrancar
-                # Problema: la tabla `asistencias` es un caché calculado. Si pasaron días nuevos
-                # desde el último apagado, la grilla muestra inasistencias incorrectas hasta que
-                # el usuario presiona "Reprocesar". Esta tarea lo hace automáticamente en background.
-                asyncio.create_task(_recalcular_periodo_activo())
 
                 # 4. Iniciar Sincronización Automática
                 if settings.SYNC_ENABLED:
