@@ -137,6 +137,14 @@ class HybridDatabase:
                         return await self._connect_locked(retry=False)
                     raise e
 
+            # Verificar salud del WAL local después de reconectar
+            wal_path = str(self.db_path) + "-wal"
+            if os.path.exists(wal_path):
+                wal_size = os.path.getsize(wal_path)
+                logger.info(f"📋 WAL local presente: {wal_size} bytes (frames pendientes posibles)")
+            else:
+                logger.info(f"📋 WAL local vacío — sync inicial traerá datos frescos del cloud")
+
             self._connected = True
             
             # PRAGMAs de resiliencia y performance post-conexión
@@ -905,7 +913,7 @@ class HybridDatabase:
                 else:
                     logger.error(f"❌ Error en Sync nativo: {e}")
 
-    async def sync_to_cloud_explicit(self) -> None:
+    async def sync_to_cloud_explicit(self, max_retries: int = 3) -> bool:
         """
         Empuja el WAL local a Turso Cloud en un solo round-trip controlado.
 
@@ -913,26 +921,35 @@ class HybridDatabase:
         para consolidar N commits locales en 1 único conn.sync(), eliminando
         la contención sobre el objeto libsql nativo entre batches consecutivos.
 
-        Ejemplo (batch BioAlba, 3 meses):
-            for mes in meses:
-                await repo.save_raw_logs(logs, suppress_auto_sync=True)  # WAL local, ~2ms
-            await db.sync_to_cloud_explicit()  # 1 conn.sync() al final, ~20s
+        Implementa retry garantizado para asegurar que datos como INASISTENCIA o ATRASO
+        no se pierdan por un fallo transitorio de red.
         """
         if not self.sync_supported:
-            return
-        try:
-            t0 = asyncio.get_event_loop().time()
-            await asyncio.to_thread(self.conn.sync)
-            elapsed_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
-            self._last_sync = datetime.now()
-            logger.info(f"☁️ [Sync explícito] WAL -> Turso Cloud en {elapsed_ms}ms")
-        except Exception as e:
-            err_msg = str(e)
-            if "server returned a higher frame_no" in err_msg or "larger than what we sent" in err_msg:
-                logger.critical(f"⚠️ sync_to_cloud_explicit falló por Frame Mismatch. Iniciando Auto-Healing.")
-                asyncio.create_task(self._auto_heal_sync_conflict())
-            else:
-                logger.warning(f"⚠️ sync_to_cloud_explicit falló (datos seguros en WAL local): {e}")
+            return True
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                t0 = asyncio.get_event_loop().time()
+                await asyncio.to_thread(self.conn.sync)
+                elapsed_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
+                self._last_sync = datetime.now()
+                logger.info(f"☁️ [Sync explícito] WAL -> Turso Cloud en {elapsed_ms}ms (intento {attempt})")
+                return True
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "frame_no" in err_msg or "larger than" in err_msg:
+                    logger.critical(f"⚠️ sync_to_cloud_explicit falló por Frame Mismatch. Iniciando Auto-Healing.")
+                    asyncio.create_task(self._auto_heal_sync_conflict())
+                    return False
+                
+                if attempt < max_retries:
+                    wait = 2 ** attempt  # 2s, 4s, 8s
+                    logger.warning(f"⚠️ sync_to_cloud intento {attempt}/{max_retries} falló, retry en {wait}s: {e}")
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error(f"🔴 sync_to_cloud AGOTÓ reintentos. Datos SOLO en WAL local (riesgo de pérdida): {e}")
+                    return False
+        return False
 
     async def _auto_heal_sync_conflict(self) -> None:
         """

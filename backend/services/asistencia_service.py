@@ -2145,6 +2145,12 @@ class AsistenciaService:
                     return None  # Fecha futura, celda vacía
                 res['estado'] = 'INASISTENCIA'
                 res['observaciones'] = 'Inasistencia detectada (Bolsa Flexible sin marcas)'
+                logger.info(
+                    f"📋 INASISTENCIA: emp={empleado_id} fecha={fecha} "
+                    f"logs_count={len(logs)} "
+                    f"turno={turno.get('nombre') if turno else 'N/A'} "
+                    f"tipo_prog={turno.get('tipo_programacion') if turno else 'N/A'}"
+                )
                 return res
             if config_dia:
                 # Si el turno aún no ha comenzado (la hora teórica de entrada todavía
@@ -2164,6 +2170,12 @@ class AsistenciaService:
                         return None
                 res['estado'] = 'INASISTENCIA'
                 res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
+                logger.info(
+                    f"📋 INASISTENCIA: emp={empleado_id} fecha={fecha} "
+                    f"logs_count={len(logs)} "
+                    f"turno={turno.get('nombre') if turno else 'N/A'} "
+                    f"config_dia={'hábil' if config_dia else 'MISSING'}"
+                )
                 return res
             return None
 
@@ -2361,6 +2373,12 @@ class AsistenciaService:
                 else:
                     res['estado'] = 'INASISTENCIA'
                     res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
+                    logger.info(
+                        f"📋 INASISTENCIA: emp={empleado_id} fecha={fecha} "
+                        f"logs_count={len(logs)} "
+                        f"turno={turno.get('nombre') if turno else 'N/A'} "
+                        f"config_dia={'hábil' if config_dia else 'MISSING'}"
+                    )
             else:
                 if salida_real:
                     res['estado'] = 'ANOMALIA'

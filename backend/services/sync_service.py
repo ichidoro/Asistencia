@@ -752,6 +752,42 @@ class SyncService:
             elif fechas_afectadas and skip_recalc:
                 logger.info(f"⏭️ skip_recalc=True → omitiendo recálculo de {len(fechas_afectadas)} días (el caller lo hará)")
 
+            # C. VALIDACIÓN DE INTEGRIDAD POST-SYNC
+            # Detecta discrepancias: logs_raw tiene marcaciones PERO asistencias dice INASISTENCIA
+            # Esto captura el caso donde el cloud sobreescribió correcciones locales.
+            if not skip_recalc:
+                try:
+                    integrity_mismatches = await db.fetch_all("""
+                        SELECT DISTINCT a.empleado_id, a.fecha
+                        FROM asistencias a
+                        INNER JOIN logs_raw lr ON a.empleado_id = lr.empleado_id 
+                            AND a.fecha = date(lr.fecha_hora)
+                        WHERE a.estado = 'INASISTENCIA'
+                          AND a.fecha >= ?
+                          AND lr.tipo IN ('Entrada', 'Salida', 'entrada', 'salida', 'entry', 'exit', 'e', 's', 'in', 'out', '1', '2')
+                    """, (fecha_ini_mes,))
+                    
+                    if integrity_mismatches:
+                        logger.warning(f"🔍 Integridad: {len(integrity_mismatches)} discrepancias detectadas (INASISTENCIA con logs)")
+                        
+                        # Si no se instanció antes en la rama B, instanciar ahora
+                        if 'asist_service' not in locals():
+                            from backend.services.asistencia_service import AsistenciaService
+                            from backend.repositories.asistencia import AsistenciaRepository
+                            asist_repo = AsistenciaRepository(db)
+                            asist_service = AsistenciaService(asist_repo)
+                            
+                        for mismatch in integrity_mismatches[:50]:  # Cap de seguridad
+                            try:
+                                await asist_service.procesar_dia(
+                                    mismatch['fecha'], 
+                                    empleado_ids={mismatch['empleado_id']}
+                                )
+                            except Exception as fix_err:
+                                logger.error(f"❌ Error corrigiendo {mismatch['empleado_id']}@{mismatch['fecha']}: {fix_err}")
+                except Exception as integ_err:
+                    logger.error(f"⚠️ Error en validación de integridad: {integ_err}")
+
             
             # Finalizar
             self.stats['fin'] = datetime.now().isoformat()
