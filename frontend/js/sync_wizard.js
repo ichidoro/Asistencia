@@ -120,6 +120,8 @@ window.wizardNextStep = function() {
     }
     if (window._wizardState.currentStep === 4) {
         if (!guardarSeleccionesPaso4()) return;
+        finalizeWizardAndPreview();
+        return;
     }
 
     if (window._wizardState.currentStep < 5) {
@@ -534,33 +536,99 @@ function guardarSeleccionesPaso4() {
 // ==========================================
 // PASO 5: EMPLEADOS (PREVIEW MOCK)
 // ==========================================
-function fetchAndRenderWizardStep5() {
+async function fetchAndRenderWizardStep5() {
     const listContainer = document.getElementById('wizard-empleados-list');
+    const counter = document.getElementById('wizard-emp-counter');
+    
     if (listContainer) {
         listContainer.innerHTML = `
             <div class="text-center p-5">
-                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                <h5 class="mt-3 fw-bold">¡Todo listo para la sincronización!</h5>
-                <p class="text-muted">Ha resuelto todos los conflictos de Áreas, Cargos, Géneros, Turnos y Bonos.</p>
-                <p>Haga clic en <strong>Confirmar e Importar</strong> para finalizar la configuración y proceder con la descarga de empleados.</p>
+                <span class="spinner-border text-primary"></span>
+                <h5 class="mt-3">Generando previsualización...</h5>
             </div>
         `;
     }
-    const counter = document.getElementById('wizard-emp-counter');
-    if (counter) counter.textContent = "Listo";
-    
-    // Ocultar la barra de busqueda en este mock
-    const searchInputs = document.querySelectorAll('#wizard-step-5 .d-flex.gap-2.mb-2, #wizard-step-5 .mb-2');
-    searchInputs.forEach(el => el.classList.add('d-none'));
+
+    try {
+        const areasList = getConsolidatedAreas();
+        const ignoredCargos = [];
+        for (const [cargo, resolucion] of Object.entries(window._wizardState.resoluciones.cargos)) {
+            if (resolucion === "_IGNORE_") {
+                ignoredCargos.push(cargo);
+            }
+        }
+
+        const requestBody = {
+            areas: areasList,
+            ignored_cargos: ignoredCargos
+        };
+
+        const response = await fetch(`${API_BASE_URL}/sync/empleados/preview/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) throw new Error("Error en preview");
+        const res = await response.json();
+        const empList = res.empleados || [];
+
+        if (counter) counter.textContent = `${empList.length} listos`;
+        
+        if (empList.length === 0) {
+            listContainer.innerHTML = `<div class="alert alert-warning m-3">No se encontraron empleados para sincronizar con la configuración actual.</div>`;
+            return;
+        }
+
+        const tbodyHtml = empList.map((e, idx) => `
+            <tr>
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input wiz-chk-emp" data-rut="${e.rut}" checked>
+                </td>
+                <td>${e.rut}</td>
+                <td>${e.nombre} ${e.apellido_paterno}</td>
+                <td>${e.area || '<span class="text-danger">Sin Área</span>'}</td>
+                <td>
+                    ${e.activo 
+                        ? '<span class="badge bg-success">Activo</span>' 
+                        : '<span class="badge bg-secondary">Inactivo</span>'}
+                </td>
+            </tr>
+        `).join('');
+
+        listContainer.innerHTML = `
+            <div class="table-responsive" style="max-height: 300px;">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th class="text-center"><input type="checkbox" class="form-check-input" id="wiz-chk-emp-all" checked onchange="document.querySelectorAll('.wiz-chk-emp').forEach(chk => chk.checked = this.checked)"></th>
+                            <th>RUT</th>
+                            <th>Nombre</th>
+                            <th>Área</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tbodyHtml}</tbody>
+                </table>
+            </div>
+        `;
+
+        const searchInputs = document.querySelectorAll('#wizard-step-5 .d-flex.gap-2.mb-2, #wizard-step-5 .mb-2');
+        searchInputs.forEach(el => el.classList.remove('d-none'));
+
+    } catch (e) {
+        console.error(e);
+        if (listContainer) listContainer.innerHTML = `<div class="alert alert-danger m-3">Error al generar la previsualización de empleados.</div>`;
+    }
 }
 
 // ==========================================
-// FINALIZAR (MEGA-PAYLOAD)
+// FINALIZAR CONFIGURACIÓN Y PREVIEW (Paso 4 -> 5)
 // ==========================================
-window.confirmWizardSync = async function() {
-    // Guardar último paso
-    guardarSeleccionesPaso4();
-    
+async function finalizeWizardAndPreview() {
     const payload = {
         areas_resoluciones: window._wizardState.resoluciones.areas,
         cargos_resoluciones: window._wizardState.resoluciones.cargos,
@@ -571,14 +639,64 @@ window.confirmWizardSync = async function() {
 
     console.log("Enviando Mega-Payload a /wizard/finalize/:", payload);
     
-    // Deshabilitar botón
-    const btn = document.getElementById('btn-wizard-finish');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
-    btn.disabled = true;
+    const btnNext = document.getElementById('btn-wizard-next');
+    const originalText = btnNext.innerHTML;
+    btnNext.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...`;
+    btnNext.disabled = true;
 
     try {
         const response = await fetch(`${API_BASE_URL}/sync/wizard/finalize/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || `Error HTTP: ${response.status}`);
+        }
+
+        // Éxito, ahora podemos avanzar a Step 5 para el Preview
+        localStorage.setItem('wizard_completed', 'true');
+        window._wizardState.currentStep = 5;
+        updateWizardUI();
+    } catch (e) {
+        console.error("Error en finalize_wizard_sync:", e);
+        Swal.fire('Error', 'No se pudo aplicar la configuración inicial: ' + e.message, 'error');
+    } finally {
+        btnNext.innerHTML = originalText;
+        btnNext.disabled = false;
+    }
+}
+
+// ==========================================
+// CONFIRMAR IMPORTACIÓN (Paso 5)
+// ==========================================
+window.confirmWizardSync = async function() {
+    // Aquí disparamos el POST a /sync/empleados/ REAL
+    const areasList = getConsolidatedAreas();
+    const ignoredCargos = [];
+    for (const [cargo, resolucion] of Object.entries(window._wizardState.resoluciones.cargos)) {
+        if (resolucion === "_IGNORE_") {
+            ignoredCargos.push(cargo);
+        }
+    }
+
+    const payload = {
+        areas: areasList,
+        ignored_cargos: ignoredCargos
+    };
+
+    const btn = document.getElementById('btn-wizard-finish');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sincronizando...`;
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/sync/empleados/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -599,25 +717,22 @@ window.confirmWizardSync = async function() {
         const modal = bootstrap.Modal.getInstance(modalEl);
         if (modal) modal.hide();
         
-        localStorage.setItem('wizard_completed', 'true');
-        
         Swal.fire({
-            title: "Configuración Finalizada",
-            text: "Los catálogos y asignaciones se han guardado correctamente. Iniciando descarga de empleados...",
-            icon: "success",
-            timer: 2000,
-            showConfirmButton: false
+            title: "Sincronización Iniciada",
+            text: "La descarga de empleados está en progreso en segundo plano.",
+            icon: "success"
         });
 
-        // Al finalizar, cerramos el wizard y llamamos la descarga de empleados!
-        // Le pasamos null para ignorados porque ya se resolvieron.
-        setTimeout(() => {
-            openSyncModalPreview();
-        }, 2000);
-
+        // Mostrar UI de Progreso (si existe la función en main.js)
+        if (typeof showBatchLoadingOverlay === 'function') {
+            showBatchLoadingOverlay();
+            if (typeof startProgressPolling === 'function') {
+                startProgressPolling();
+            }
+        }
     } catch (e) {
-        console.error("Error en finalize_wizard_sync:", e);
-        Swal.fire('Error', 'No se pudo finalizar la configuración: ' + e.message, 'error');
+        console.error("Error iniciando sync empleados:", e);
+        Swal.fire('Error', 'No se pudo iniciar la sincronización: ' + e.message, 'error');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
