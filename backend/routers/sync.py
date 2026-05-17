@@ -99,8 +99,9 @@ async def wizard_provider_turnos(
 ) -> Dict[str, Any]:
     await db.connect()
     
-    # 1. Obtener todos los turnos activos
-    turnos = await db.fetch_all("SELECT id, nombre, es_default FROM cat_turnos WHERE activo = 1 ORDER BY es_default DESC, nombre ASC")
+    # 1. Obtener todos los turnos
+    turnos_records = await db.fetch_all("SELECT id, nombre FROM turnos ORDER BY nombre ASC")
+    turnos = [{"id": t["id"], "nombre": t["nombre"], "es_default": False} for t in turnos_records]
     
     # 2. Buscar asignaciones existentes para las áreas (ya sean áreas nuevas o existentes)
     from backend.repositories.area import AreaRepository
@@ -111,7 +112,7 @@ async def wizard_provider_turnos(
         area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
         if area_id:
             # Buscar turno asociado al área
-            asignacion = await db.fetch_one("SELECT turno_id FROM area_turnos WHERE area_id = ?", (area_id,))
+            asignacion = await db.fetch_one("SELECT turno_id FROM turno_areas WHERE area_id = ?", (area_id,))
             if asignacion:
                 pre_asignaciones[area_name] = asignacion['turno_id']
                 
@@ -132,7 +133,7 @@ async def wizard_provider_bonos(
     await db.connect()
     
     # 1. Obtener todos los bonos
-    bonos = await db.fetch_all("SELECT id, nombre, monto, descripcion FROM cat_bonos ORDER BY nombre ASC")
+    bonos = await db.fetch_all("SELECT id, nombre, descripcion FROM bonos ORDER BY nombre ASC")
     
     # 2. Buscar asignaciones existentes
     from backend.repositories.area import AreaRepository

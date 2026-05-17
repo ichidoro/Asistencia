@@ -2351,12 +2351,12 @@
                             </div>
 
                             <!-- PASO 1: Áreas -->
-                            <div id="wizard-step-1" class="wizard-step" style="display: block;">
+                            <div id="wizard-step-1" class="wizard-step">
                                 <h6 class="text-primary mb-3">Resolución de Áreas Nuevas</h6>
                                 <div class="alert alert-warning border-0 shadow-sm mb-3">
                                     <i class="bi bi-exclamation-triangle-fill me-2"></i> Áreas en BioAlba que no existen en nuestro sistema.
                                 </div>
-                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                                     <table class="table table-bordered align-middle table-sm">
                                         <thead class="table-light sticky-top">
                                             <tr>
@@ -2374,14 +2374,14 @@
                             </div>
 
                             <!-- PASO 2: Cargos y Géneros -->
-                            <div id="wizard-step-2" class="wizard-step" style="display: none;">
+                            <div id="wizard-step-2" class="wizard-step d-none">
                                 <h6 class="text-primary mb-3">Resolución de Cargos y Géneros Nuevos</h6>
                                 <div class="row">
                                     <div class="col-md-7">
                                         <div class="alert alert-warning border-0 shadow-sm mb-2 py-2">
                                             <i class="bi bi-briefcase-fill me-2"></i> Cargos desconocidos
                                         </div>
-                                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                                             <table class="table table-bordered align-middle table-sm">
                                                 <thead class="table-light sticky-top">
                                                     <tr>
@@ -2398,7 +2398,7 @@
                                         <div class="alert alert-info border-0 shadow-sm mb-2 py-2">
                                             <i class="bi bi-gender-ambiguous me-2"></i> Géneros nuevos
                                         </div>
-                                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                                             <table class="table table-bordered align-middle table-sm">
                                                 <thead class="table-light sticky-top">
                                                     <tr>
@@ -2414,12 +2414,12 @@
                             </div>
 
                             <!-- PASO 3: Turnos -->
-                            <div id="wizard-step-3" class="wizard-step" style="display: none;">
+                            <div id="wizard-step-3" class="wizard-step d-none">
                                 <h6 class="text-primary mb-3">Asignación de Turnos (Requisito Crítico)</h6>
                                 <div class="alert alert-danger border-0 shadow-sm mb-3">
                                     <i class="bi bi-shield-lock-fill me-2"></i> IMPORTANTE: Los empleados no se sincronizarán y quedarán excluidos si su Área no tiene un turno asignado.
                                 </div>
-                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                                     <table class="table table-bordered align-middle table-sm">
                                         <thead class="table-light sticky-top">
                                             <tr>
@@ -2438,12 +2438,12 @@
                             </div>
 
                             <!-- PASO 4: Bonos -->
-                            <div id="wizard-step-4" class="wizard-step" style="display: none;">
+                            <div id="wizard-step-4" class="wizard-step d-none">
                                 <h6 class="text-primary mb-3">Asignación de Bonos y Reglas</h6>
                                 <div class="alert alert-info border-0 shadow-sm mb-3">
                                     <i class="bi bi-cash-coin me-2"></i> Opcional: Revisa o define reglas financieras para las áreas. (Esto se puede configurar más adelante).
                                 </div>
-                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                                     <table class="table table-bordered align-middle table-sm">
                                         <thead class="table-light sticky-top">
                                             <tr>
@@ -2462,7 +2462,7 @@
                             </div>
 
                             <!-- PASO 5: Empleados (Preview) -->
-                            <div id="wizard-step-5" class="wizard-step" style="display: none;">
+                            <div id="wizard-step-5" class="wizard-step d-none">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="text-primary mb-0">Previsualización de Empleados</h6>
                                     <span id="wizard-emp-counter" class="badge bg-secondary">0 listos</span>
@@ -2479,7 +2479,7 @@
                                     <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllWizardEmps(true)">Marcar Todos</button>
                                     <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllWizardEmps(false)">Desmarcar Todos</button>
                                 </div>
-                                <div id="wizard-empleados-list" class="border rounded" style="max-height: 280px; overflow-y: auto; background: #f8f9fa;">
+                                <div id="wizard-empleados-list" class="border rounded" style="max-height: 450px; overflow-y: auto; background: #f8f9fa;">
                                     <div class="text-center p-4">
                                         <span class="spinner-border spinner-border-sm"></span> Evaluando empleados contra las reglas del Wizard...
                                     </div>
@@ -2498,7 +2498,7 @@
                             <div>
                                 <button type="button" class="btn btn-outline-secondary me-2" onclick="closeSyncWizard()">Cancelar</button>
                                 <button type="button" class="btn btn-primary fw-bold" id="btn-wizard-next" onclick="wizardNextStep()">Siguiente Paso <i class="bi bi-arrow-right"></i></button>
-                                <button type="button" class="btn btn-success fw-bold" id="btn-wizard-confirm" onclick="confirmWizardSync()" style="display: none;"><i class="bi bi-check-circle"></i> Confirmar e Importar</button>
+                                <button type="button" class="btn btn-success fw-bold d-none" id="btn-wizard-finish" onclick="confirmWizardSync()"><i class="bi bi-check-circle"></i> Confirmar e Importar</button>
                             </div>
                         </div>
                     </div>
@@ -3584,6 +3584,7 @@
             <script src="/static/js/cierre_ui.js?v={{ startup_id }}"></script>
 
             <!-- Inicializador Principal -->
+            <script src="/static/js/sync_wizard.js?v={{ startup_id }}"></script>
             <script src="/static/js/main.js?v={{ startup_id }}"></script>
 
             <!-- Modal de Detalle de Desviaciones (Dashboard) -->
