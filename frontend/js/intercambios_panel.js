@@ -42,7 +42,7 @@
                             <form id="form-intercambio">
                                 <!-- Empleado (Auto-seleccionado si se abre desde la grilla, o seleccionable) -->
                                 <div class="mb-3">
-                                    <label class="form-label fw-bold text-dark small">Empleado</label>
+                                    <label for="intercambio-empleado" class="form-label fw-bold text-dark small">Empleado</label>
                                     <select id="intercambio-empleado" class="form-select border-primary shadow-sm" required>
                                         <option value="">Seleccione un empleado...</option>
                                     </select>
@@ -50,13 +50,13 @@
 
                                 <div class="row g-3 mb-3">
                                     <div class="col-6">
-                                        <label class="form-label fw-bold text-dark small">Fecha Libre (Día a trabajar)</label>
+                                        <label for="intercambio-fecha-destino" class="form-label fw-bold text-dark small">Fecha Libre (Día a trabajar)</label>
                                         <input type="date" id="intercambio-fecha-destino" class="form-control" required
                                                title="Día que el empleado debía descansar, pero que aceptó trabajar.">
                                         <small class="text-muted" style="font-size:0.65rem;">Se pagará normal (sin H.E.)</small>
                                     </div>
                                     <div class="col-6">
-                                        <label class="form-label fw-bold text-dark small">Fecha Laboral (Día a faltar)</label>
+                                        <label for="intercambio-fecha-origen" class="form-label fw-bold text-dark small">Fecha Laboral (Día a faltar)</label>
                                         <input type="date" id="intercambio-fecha-origen" class="form-control" required
                                                title="Día que el empleado debía trabajar, pero que se tomará libre en compensación.">
                                         <small class="text-muted" style="font-size:0.65rem;">Se justificará sin deuda</small>
@@ -64,7 +64,7 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label fw-bold text-dark small">Observaciones / Motivo</label>
+                                    <label for="intercambio-observaciones" class="form-label fw-bold text-dark small">Observaciones / Motivo</label>
                                     <textarea id="intercambio-observaciones" class="form-control" rows="2" placeholder="Ej: Trato especial por contingencia en el área..." required></textarea>
                                 </div>
                             </form>

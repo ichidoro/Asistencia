@@ -91,7 +91,7 @@
             </div>
             <div class="panel-footer">
                 <div style="margin-bottom:10px;">
-                    <label style="font-size:0.75rem;font-weight:700;color:#374151;display:block;margin-bottom:5px;">¿Qué deuda condonar?</label>
+                    <label for="panel-tipo-condonacion" style="font-size:0.75rem;font-weight:700;color:#374151;display:block;margin-bottom:5px;">¿Qué deuda condonar?</label>
                     <select id="panel-tipo-condonacion" style="width:100%;padding:6px 10px;border:1px solid #d1fae5;border-radius:8px;font-size:0.8rem;background:#f0fdf4;color:#047857;font-weight:600;">
                         <option value="1">Solo Salida Adelantada</option>
                         <option value="2">Solo Atraso</option>
