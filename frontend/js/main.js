@@ -2463,14 +2463,14 @@ window.showResolverCargosModal = function(nuevosCargos) {
     tr.innerHTML = `
       <td class="text-center">
         <div class="form-check d-flex justify-content-center">
-          <input class="form-check-input checkbox-importar-cargo" type="checkbox" value="" data-cargo-bioalba="${cargo}" checked>
+          <input class="form-check-input checkbox-importar-cargo" type="checkbox" value="" data-cargo-bioalba="${cargo}">
         </div>
       </td>
       <td class="fw-bold">${cargo}</td>
       <td>
         <input type="text" class="form-control form-control-sm input-resolucion-cargo" 
                data-cargo-bioalba="${cargo}" 
-               placeholder="Nombre correcto (o deje en blanco para crear)">
+               placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
       </td>
     `;
     tbody.appendChild(tr);
