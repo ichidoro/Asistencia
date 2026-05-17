@@ -1152,17 +1152,17 @@ function renderModalHtml() {
                                         <input class="form-check-input" type="checkbox" id="chkColacion" name="descuento_colacion_auto" onchange="toggleColacionInput()">
                                         <label class="form-check-label small" for="chkColacion">Descontar</label>
                                     </div>
-                                    <div id="divColacionTime" style="display:none; width: 120px;">
+                                    <div id="divColacionTime" style="display:none; width: 140px;">
                                         <div class="input-group input-group-sm">
-                                            <input type="number" class="form-control text-center px-1" id="numColacion" placeholder="Min" value="" oninput="updateAllCalculations()" required>
-                                            <span class="input-group-text px-2">min</span>
+                                            <input type="number" class="form-control text-center" id="numColacion" placeholder="Min" value="" oninput="updateAllCalculations()" required>
+                                            <span class="input-group-text">min</span>
                                         </div>
                                     </div>
-                                    <div id="divColacionUmbral" style="display:none; width: 180px;" class="ms-2">
+                                    <div id="divColacionUmbral" style="display:none; width: 220px;" class="ms-2">
                                         <div class="input-group input-group-sm" title="Horas mínimas de trabajo para aplicar el descuento">
-                                            <span class="input-group-text px-2">Umbral</span>
-                                            <input type="number" class="form-control text-center px-1" id="umbralColacion" placeholder="Hrs" value="0" step="0.5" required>
-                                            <span class="input-group-text px-2">hrs</span>
+                                            <span class="input-group-text">Umbral</span>
+                                            <input type="number" class="form-control text-center" id="umbralColacion" placeholder="Hrs" value="0" step="0.5" required>
+                                            <span class="input-group-text">hrs</span>
                                         </div>
                                     </div>
                                 </div>

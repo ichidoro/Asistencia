@@ -2319,13 +2319,16 @@ window.showResolverAreasModal = function(nuevasAreas, conteoPorArea = {}) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="text-center align-middle">
-        <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" data-area-bioalba="${area}" checked>
+        <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" data-area-bioalba="${area}">
       </td>
-      <td class="fw-bold align-middle">${area} ${badgeHtml}</td>
+      <td class="fw-bold align-middle text-nowrap">${area}</td>
+      <td class="text-center align-middle">
+        ${conteo > 0 ? `<span class="badge bg-secondary rounded-pill px-3 py-2">${conteo} emp</span>` : `<span class="text-muted small">-</span>`}
+      </td>
       <td class="align-middle">
         <input type="text" class="form-control form-control-sm input-resolucion-area" 
                data-area-bioalba="${area}" 
-               placeholder="Nombre correcto (o deje en blanco para crear)">
+               placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
       </td>
     `;
     const cb = tr.querySelector('.checkbox-importar-area');

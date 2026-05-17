@@ -367,13 +367,17 @@ class BioAlbaScraper:
 
                     genero_raw = genero_raw_str or None  # Para el log
 
+                    area_raw = str(row[8]).strip() if len(row) > 8 and row[8] is not None and str(row[8]) not in ['---', 'None', ''] else "SIN ASIGNAR"
+                    if area_raw.upper() in ["SIN ASIGNAR", "POR ASIGNAR"]:
+                        area_raw = "SIN ASIGNAR"
+
                     empleados.append({
                         'rut':              rut,
                         'nombre':           partes_nombre['nombre'],
                         'apellido_paterno': partes_nombre['apellido_paterno'],
                         'apellido_materno': partes_nombre['apellido_materno'],
                         'cargo':    str(row[7]).strip() if len(row) > 7 and row[7] is not None and str(row[7]) not in ['---', 'None', ''] else None,
-                        'area':     str(row[8]).strip() if len(row) > 8 and row[8] is not None and str(row[8]) not in ['---', 'None', ''] else "Sin Asignar",
+                        'area':     area_raw,
                         'compania': str(row[5]).strip() if len(row) > 5 and row[5] is not None and str(row[5]) != '---' else 'Aguacol',
                         'email':    str(row[3]).strip() if len(row) > 3 and row[3] is not None and str(row[3]) not in ['---', 'None'] else None,
                         'telefono': str(row[4]).strip() if len(row) > 4 and row[4] is not None and str(row[4]) not in ['---', 'None'] else None,
