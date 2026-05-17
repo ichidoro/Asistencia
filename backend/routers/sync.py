@@ -101,6 +101,9 @@ async def resolver_areas(
     area_repo = AreaRepository(db)
     
     for area_bioalba, resolucion in request.resoluciones.items():
+        if resolucion == "_IGNORE_":
+            continue
+            
         if area_bioalba == resolucion:
             # Create new area if it doesn't exist
             existing = await area_repo.get_area_by_name(resolucion)

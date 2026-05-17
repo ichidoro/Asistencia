@@ -314,6 +314,11 @@ class SyncService:
             generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
+                
+                # Si el usuario seleccionó áreas específicas, el Guardián ignora las demás
+                if areas and len(areas) > 0 and area_raw not in areas:
+                    continue
+                    
                 if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
                     area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
                     if not area_id:

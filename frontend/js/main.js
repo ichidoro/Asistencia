@@ -2313,13 +2313,24 @@ window.showResolverAreasModal = function(nuevasAreas) {
   nuevasAreas.forEach((area, idx) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="fw-bold">${area}</td>
-      <td>
+      <td class="text-center align-middle">
+        <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" data-area-bioalba="${area}" checked>
+      </td>
+      <td class="fw-bold align-middle">${area}</td>
+      <td class="align-middle">
         <input type="text" class="form-control form-control-sm input-resolucion-area" 
                data-area-bioalba="${area}" 
                placeholder="Nombre correcto (o deje en blanco para crear)">
       </td>
     `;
+    const cb = tr.querySelector('.checkbox-importar-area');
+    const input = tr.querySelector('.input-resolucion-area');
+    cb.addEventListener('change', (e) => {
+      input.disabled = !e.target.checked;
+      if (!e.target.checked) {
+        input.value = '';
+      }
+    });
     tbody.appendChild(tr);
   });
   
@@ -2335,13 +2346,18 @@ window.cancelarResolucionAreas = function() {
 };
 
 window.guardarResolucionAreas = async function() {
-  const inputs = document.querySelectorAll('.input-resolucion-area');
+  const checkboxes = document.querySelectorAll('.checkbox-importar-area');
   const resoluciones = {};
   
-  inputs.forEach(input => {
-    const areaBioalba = input.dataset.areaBioalba;
-    const resolucion = input.value.trim() || areaBioalba;
-    resoluciones[areaBioalba] = resolucion;
+  checkboxes.forEach(cb => {
+    const areaBioalba = cb.dataset.areaBioalba;
+    if (cb.checked) {
+      const input = document.querySelector(`.input-resolucion-area[data-area-bioalba="${areaBioalba}"]`);
+      const resolucion = input && input.value.trim() ? input.value.trim() : areaBioalba;
+      resoluciones[areaBioalba] = resolucion;
+    } else {
+      resoluciones[areaBioalba] = "_IGNORE_";
+    }
   });
   
   const btnGuardar = document.querySelector('#modal-resolver-areas .btn-primary');
