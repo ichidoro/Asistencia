@@ -159,6 +159,7 @@ class SyncService:
             cargo_repo = CargoRepository(db)
             
             areas_desconocidas = set()
+            areas_conteo = {}
             cargos_desconocidos = {}
             generos_desconocidos = set()
             for emp_data in empleados_bioalba:
@@ -167,6 +168,7 @@ class SyncService:
                     area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
+                        areas_conteo[area_raw] = areas_conteo.get(area_raw, 0) + 1
 
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
                 if cargo_raw and cargo_raw not in ['---', 'None']:
@@ -187,6 +189,7 @@ class SyncService:
                 res = {"status": "requires_confirmation"}
                 if areas_desconocidas:
                     res["nuevas_areas"] = sorted(list(areas_desconocidas))
+                    res["nuevas_areas_conteo"] = areas_conteo
                 if cargos_desconocidos:
                     res["nuevos_cargos"] = sorted(list(cargos_desconocidos.keys()))
                     res["nuevos_cargos_por_area"] = {k: list(v) for k, v in cargos_desconocidos.items()}
