@@ -300,7 +300,7 @@ function setupEventListeners() {
         window._pendingGeneros = data.nuevos_generos || []; // Guardar géneros pendientes
         
         if (data.nuevas_areas && data.nuevas_areas.length > 0) {
-          showResolverAreasModal(data.nuevas_areas);
+          showResolverAreasModal(data.nuevas_areas, data.nuevas_areas_conteo);
         } else if (data.nuevos_cargos && data.nuevos_cargos.length > 0) {
           showResolverCargosModal(data.nuevos_cargos);
         } else if (data.nuevos_generos && data.nuevos_generos.length > 0) {
@@ -2230,7 +2230,7 @@ window.confirmSync = async function () {
             window._pendingGeneros = nuevosGeneros;
 
             if (nuevasAreas.length > 0) {
-              showResolverAreasModal(nuevasAreas);
+              showResolverAreasModal(nuevasAreas, eventData.nuevas_areas_conteo);
             } else if (nuevosCargos.length > 0) {
               showResolverCargosModal(nuevosCargos);
             } else if (nuevosGeneros.length > 0) {
@@ -2306,19 +2306,22 @@ window.confirmSync = async function () {
   }
 }
 
-window.showResolverAreasModal = function(nuevasAreas) {
+window.showResolverAreasModal = function(nuevasAreas, conteoPorArea = {}) {
   const tbody = document.getElementById('tbody-resolver-areas');
   tbody.innerHTML = '';
   
   if (nuevasAreas.length === 0) return;
   
   nuevasAreas.forEach((area, idx) => {
+    const conteo = conteoPorArea[area] || 0;
+    const badgeHtml = conteo > 0 ? `<span class="badge bg-secondary ms-2">${conteo} emp</span>` : '';
+    
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="text-center align-middle">
         <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" data-area-bioalba="${area}" checked>
       </td>
-      <td class="fw-bold align-middle">${area}</td>
+      <td class="fw-bold align-middle">${area} ${badgeHtml}</td>
       <td class="align-middle">
         <input type="text" class="form-control form-control-sm input-resolucion-area" 
                data-area-bioalba="${area}" 
