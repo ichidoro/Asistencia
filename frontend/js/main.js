@@ -2434,9 +2434,9 @@ window.guardarResolucionAreas = async function() {
       } else if (window._pendingGeneros && window._pendingGeneros.length > 0) {
         showResolverGenerosModal(window._pendingGeneros);
       } else {
-        // [SRE FIX] Reanudar la sincronización automáticamente en lugar de abortar
-        if (typeof confirmSync === 'function') {
-          setTimeout(confirmSync, 300);
+        if (window._newAreasImported) {
+          window._newAreasImported = false;
+          forzarCreacionTurnoAreaNueva();
         } else {
           openSyncModal();
         }
@@ -2557,9 +2557,9 @@ window.guardarResolucionCargos = async function() {
       if (window._pendingGeneros && window._pendingGeneros.length > 0) {
         showResolverGenerosModal(window._pendingGeneros);
       } else {
-        // [SRE FIX] Reanudar la sincronización automáticamente
-        if (typeof confirmSync === 'function') {
-          setTimeout(confirmSync, 300);
+        if (window._newAreasImported) {
+          window._newAreasImported = false;
+          forzarCreacionTurnoAreaNueva();
         } else {
           openSyncModal();
         }
@@ -2639,11 +2639,11 @@ window.guardarResolucionGeneros = async function() {
         if (typeof resetWizard === 'function') resetWizard();
       }
     } else {
-      // [SRE FIX] Reanudar la sincronización automáticamente
-      if (typeof confirmSync === 'function') {
-        setTimeout(confirmSync, 300);
+      if (window._newAreasImported) {
+        window._newAreasImported = false;
+        forzarCreacionTurnoAreaNueva();
       } else {
-        openSyncModal();
+        preguntarCreacionTurnoOpcional();
       }
     }
     
