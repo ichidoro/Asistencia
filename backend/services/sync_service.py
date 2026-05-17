@@ -163,13 +163,13 @@ class SyncService:
             generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
-                if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
+                if area_raw and area_raw not in ['---', 'None']:
                     area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
 
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
-                if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
+                if cargo_raw and cargo_raw not in ['---', 'None']:
                     cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
                     if not cargo_id:
                         if cargo_raw not in cargos_desconocidos:
@@ -177,7 +177,7 @@ class SyncService:
                         cargos_desconocidos[cargo_raw].add(area_raw)
                         
                 genero_raw = str(emp_data.get('genero', '')).strip()
-                if genero_raw and genero_raw not in ['---', 'None', 'Sin Asignar']:
+                if genero_raw and genero_raw not in ['---', 'None']:
                     genero_row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero_raw,))
                     if not genero_row:
                         generos_desconocidos.add(genero_raw)
@@ -322,13 +322,13 @@ class SyncService:
                 if areas and len(areas) > 0 and area_raw not in areas:
                     continue
                     
-                if area_raw and area_raw not in ['---', 'None', 'Sin Asignar']:
+                if area_raw and area_raw not in ['---', 'None']:
                     area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
             
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
-                if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
+                if cargo_raw and cargo_raw not in ['---', 'None']:
                     cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
                     if not cargo_id:
                         if cargo_raw not in cargos_desconocidos:
@@ -336,7 +336,7 @@ class SyncService:
                         cargos_desconocidos[cargo_raw].add(area_raw)
 
                 genero_raw = str(emp_data.get('genero', '')).strip()
-                if genero_raw and genero_raw not in ['---', 'None', 'Sin Asignar']:
+                if genero_raw and genero_raw not in ['---', 'None']:
                     genero_row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero_raw,))
                     if not genero_row:
                         generos_desconocidos.add(genero_raw)
@@ -910,7 +910,7 @@ class SyncService:
             
             area_repo = AreaRepository(db)
             area_raw = str(emp_data.get('area', '')).strip()
-            area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
+            area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None'] else None
             
             # FALLBACK: Si no se encontró el área, crearla o asignar 'Sin Asignar'
             if not area_id_res:
@@ -929,7 +929,7 @@ class SyncService:
                     
             cargo_repo = CargoRepository(db)
             cargo_raw = str(emp_data.get('cargo', '')).strip()
-            cargo_id_res = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw) if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar'] else None
+            cargo_id_res = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw) if cargo_raw and cargo_raw not in ['---', 'None'] else None
             
             if cargo_id_res:
                 emp_data['cargo_id'] = cargo_id_res
@@ -1031,7 +1031,7 @@ class SyncService:
                 
                 area_repo = AreaRepository(db)
                 area_raw = str(emp_data.get('area', '')).strip()
-                area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None', 'Sin Asignar'] else None
+                area_id_res = await area_repo.find_area_id_by_name_or_alias(area_raw) if area_raw and area_raw not in ['---', 'None'] else None
                 
                 # FALLBACK: Si no se encontró el área, crearla o asignar 'Sin Asignar'
                 if not area_id_res:
@@ -1050,7 +1050,7 @@ class SyncService:
 
                 cargo_repo = CargoRepository(db)
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
-                cargo_id_res = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw) if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar'] else None
+                cargo_id_res = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw) if cargo_raw and cargo_raw not in ['---', 'None'] else None
                 cargo_virtual = emp_data.get('cargo')
                 if cargo_id_res:
                     cargo_real = await cargo_repo.get_cargo_by_id(cargo_id_res)
