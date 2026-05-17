@@ -2681,6 +2681,7 @@ window.guardarResolucionGeneros = async function() {
 };
 
 window.forzarCreacionTurnoAreaNueva = function() {
+  window._isSyncFlowPending = true;
   switchPage('configuracion');
   setTimeout(() => {
     const tabHorarios = document.getElementById('horarios-tab');
