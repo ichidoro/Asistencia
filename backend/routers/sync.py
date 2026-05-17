@@ -156,7 +156,7 @@ class WizardFinalizeRequest(BaseModel):
     areas_resoluciones: Dict[str, str]
     cargos_resoluciones: Dict[str, str]
     generos_nuevos: List[str]
-    turnos_asignaciones: Dict[str, int]
+    turnos_asignaciones: Dict[str, Optional[int]]
     bonos_asignaciones: Dict[str, List[int]]
 
 @router.post(

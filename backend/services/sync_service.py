@@ -164,6 +164,7 @@ class SyncService:
             
             cargos_desconocidos = {}
             cargos_conocidos = set()
+            cargos_conocidos_por_area = {}
             generos_desconocidos = set()
             
             for emp_data in empleados_bioalba:
@@ -185,6 +186,9 @@ class SyncService:
                         cargos_desconocidos[cargo_raw].add(area_raw)
                     else:
                         cargos_conocidos.add(cargo_raw)
+                        if cargo_raw not in cargos_conocidos_por_area:
+                            cargos_conocidos_por_area[cargo_raw] = set()
+                        cargos_conocidos_por_area[cargo_raw].add(area_raw)
                         
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None']:
@@ -201,6 +205,7 @@ class SyncService:
                 "nuevos_cargos": sorted(list(cargos_desconocidos.keys())),
                 "nuevos_cargos_por_area": {k: list(v) for k, v in cargos_desconocidos.items()},
                 "cargos_conocidos": sorted(list(cargos_conocidos)),
+                "cargos_conocidos_por_area": {k: list(v) for k, v in cargos_conocidos_por_area.items()},
                 "nuevos_generos": sorted(list(generos_desconocidos))
             }
             
@@ -218,7 +223,7 @@ class SyncService:
         areas_resoluciones: Dict[str, str],
         cargos_resoluciones: Dict[str, str],
         generos_nuevos: List[str],
-        turnos_asignaciones: Dict[str, int],
+        turnos_asignaciones: Dict[str, Optional[int]],
         bonos_asignaciones: Dict[str, List[int]]
     ) -> None:
         """
@@ -422,8 +427,11 @@ class SyncService:
             # --- NUEVO: GUARDIÁN DE ÁREAS ---
             # Validar que todas las áreas de los empleados a sincronizar existan en el catálogo o alias
             areas_desconocidas = set()
+            areas_conocidas = set()
             areas_conteo = {}
             cargos_desconocidos = {}
+            cargos_conocidos = set()
+            cargos_conocidos_por_area = {}
             generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
@@ -437,6 +445,8 @@ class SyncService:
                     if not area_id:
                         areas_desconocidas.add(area_raw)
                         areas_conteo[area_raw] = areas_conteo.get(area_raw, 0) + 1
+                    else:
+                        areas_conocidas.add(area_raw)
             
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
                 if cargo_raw and cargo_raw not in ['---', 'None']:
@@ -445,6 +455,11 @@ class SyncService:
                         if cargo_raw not in cargos_desconocidos:
                             cargos_desconocidos[cargo_raw] = set()
                         cargos_desconocidos[cargo_raw].add(area_raw)
+                    else:
+                        cargos_conocidos.add(cargo_raw)
+                        if cargo_raw not in cargos_conocidos_por_area:
+                            cargos_conocidos_por_area[cargo_raw] = set()
+                        cargos_conocidos_por_area[cargo_raw].add(area_raw)
 
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None']:
@@ -461,6 +476,12 @@ class SyncService:
                 if cargos_desconocidos:
                     res["nuevos_cargos"] = sorted(list(cargos_desconocidos.keys()))
                     res["nuevos_cargos_por_area"] = {k: list(v) for k, v in cargos_desconocidos.items()}
+                
+                # Agregamos los conocidos también, para poder filtrarlos
+                res["cargos_conocidos"] = sorted(list(cargos_conocidos))
+                res["cargos_conocidos_por_area"] = {k: list(v) for k, v in cargos_conocidos_por_area.items()}
+                res["areas_conocidas"] = sorted(list(areas_conocidas))
+                
                 if generos_desconocidos:
                     res["nuevos_generos"] = sorted(list(generos_desconocidos))
                 return res
