@@ -137,10 +137,10 @@ class SyncService:
     async def check_guardian_areas(self) -> Dict[str, Any]:
         """
         Guardián de Áreas (Pre-Check): Descarga empleados, extrae áreas, verifica contra DB local.
-        Retorna status: requires_confirmation o ok.
+        Retorna status: requires_confirmation siempre que haya datos, para abrir el unificado Modal de Sincronización.
         """
         try:
-            logger.info("🛡️ Guardián de Áreas: Verificando integridad de catálogo...")
+            logger.info("🛡️ Guardián de Áreas: Verificando integridad de catálogo y preparando selector...")
             
             empleados_bioalba = _get_empleados_cache()
             if empleados_bioalba is None:
@@ -159,16 +159,22 @@ class SyncService:
             cargo_repo = CargoRepository(db)
             
             areas_desconocidas = set()
+            areas_conocidas = set()
             areas_conteo = {}
+            
             cargos_desconocidos = {}
+            cargos_conocidos = set()
             generos_desconocidos = set()
+            
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
                 if area_raw and area_raw not in ['---', 'None']:
                     area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
-                        areas_conteo[area_raw] = areas_conteo.get(area_raw, 0) + 1
+                    else:
+                        areas_conocidas.add(area_raw)
+                    areas_conteo[area_raw] = areas_conteo.get(area_raw, 0) + 1
 
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
                 if cargo_raw and cargo_raw not in ['---', 'None']:
@@ -177,6 +183,8 @@ class SyncService:
                         if cargo_raw not in cargos_desconocidos:
                             cargos_desconocidos[cargo_raw] = set()
                         cargos_desconocidos[cargo_raw].add(area_raw)
+                    else:
+                        cargos_conocidos.add(cargo_raw)
                         
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None']:
@@ -184,20 +192,23 @@ class SyncService:
                     if not genero_row:
                         generos_desconocidos.add(genero_raw)
                         
+            # Siempre retornamos requires_confirmation para que el Guardián actúe como Selector Principal.
+            res = {
+                "status": "requires_confirmation",
+                "nuevas_areas": sorted(list(areas_desconocidas)),
+                "areas_conocidas": sorted(list(areas_conocidas)),
+                "nuevas_areas_conteo": areas_conteo,
+                "nuevos_cargos": sorted(list(cargos_desconocidos.keys())),
+                "nuevos_cargos_por_area": {k: list(v) for k, v in cargos_desconocidos.items()},
+                "cargos_conocidos": sorted(list(cargos_conocidos)),
+                "nuevos_generos": sorted(list(generos_desconocidos))
+            }
+            
             if areas_desconocidas or cargos_desconocidos or generos_desconocidos:
                 logger.warning(f"⚠️ Guardián detectó {len(areas_desconocidas)} áreas, {len(cargos_desconocidos)} cargos y {len(generos_desconocidos)} géneros desconocidos.")
-                res = {"status": "requires_confirmation"}
-                if areas_desconocidas:
-                    res["nuevas_areas"] = sorted(list(areas_desconocidas))
-                    res["nuevas_areas_conteo"] = areas_conteo
-                if cargos_desconocidos:
-                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos.keys()))
-                    res["nuevos_cargos_por_area"] = {k: list(v) for k, v in cargos_desconocidos.items()}
-                if generos_desconocidos:
-                    res["nuevos_generos"] = sorted(list(generos_desconocidos))
-                return res
+            
+            return res
                 
-            return {"status": "ok"}
         except Exception as e:
             logger.error(f"❌ Error en check_guardian_areas: {e}")
             return {"status": "error", "message": str(e)}

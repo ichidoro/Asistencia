@@ -295,17 +295,22 @@ function setupEventListeners() {
       if (data.status === "requires_confirmation") {
         const isInitialSync = !localStorage.getItem('wizard_completed');
         window._resolverMode = isInitialSync ? 'guardian' : 'stream';
-        window._pendingCargos = data.nuevos_cargos || []; // Guardar cargos pendientes para después de áreas
-        window._pendingCargosPorArea = data.nuevos_cargos_por_area || {}; // Mapeo de cargos por área
-        window._pendingGeneros = data.nuevos_generos || []; // Guardar géneros pendientes
+        window._pendingCargos = data.nuevos_cargos || []; 
+        window._pendingCargosPorArea = data.nuevos_cargos_por_area || {}; 
+        window._pendingGeneros = data.nuevos_generos || []; 
+        window._areasConocidas = data.areas_conocidas || [];
+        window._cargosConocidos = data.cargos_conocidos || [];
         
-        if (data.nuevas_areas && data.nuevas_areas.length > 0) {
-          showResolverAreasModal(data.nuevas_areas, data.nuevas_areas_conteo);
-        } else if (data.nuevos_cargos && data.nuevos_cargos.length > 0) {
-          showResolverCargosModal(data.nuevos_cargos);
+        // Siempre mostramos el modal de áreas ahora, ya que unifica el selector.
+        // Si no hay nuevas áreas pero sí hay conocidas, también lo abrimos.
+        if ((data.nuevas_areas && data.nuevas_areas.length > 0) || (data.areas_conocidas && data.areas_conocidas.length > 0)) {
+          showResolverAreasModal(data.nuevas_areas || [], data.nuevas_areas_conteo || {}, data.areas_conocidas || []);
+        } else if ((data.nuevos_cargos && data.nuevos_cargos.length > 0) || (data.cargos_conocidas && data.cargos_conocidos.length > 0)) {
+          showResolverCargosModal(data.nuevos_cargos || [], data.cargos_conocidos || []);
         } else if (data.nuevos_generos && data.nuevos_generos.length > 0) {
           showResolverGenerosModal(data.nuevos_generos);
         } else {
+          // Si por alguna razón está completamente vacío
           if (isInitialSync) {
             const wizardEl = document.getElementById('modal-wizard-configuracion');
             if (wizardEl) {
@@ -1833,6 +1838,81 @@ function openSyncModal() {
   loadBioAlbaAreas();
 }
 
+window.openSyncModalPreview = function() {
+  const modalSync = document.getElementById('modal-sync-areas');
+  if (!modalSync) {
+    console.error("ERROR CRÍTICO: No se encontró el elemento #modal-sync-areas en el DOM");
+    return;
+  }
+  modalSync.classList.add('active');
+  
+  // Transición visual a paso 2
+  const step1 = document.getElementById('sync-step-1');
+  const step2 = document.getElementById('sync-step-2');
+  if (step1) step1.style.display = 'none';
+  if (step2) step2.style.display = 'block';
+  
+  const btnNext = document.getElementById('btn-sync-next');
+  const btnConfirm = document.getElementById('btn-sync-confirm');
+  if (btnNext) btnNext.style.display = 'none';
+  if (btnConfirm) btnConfirm.style.display = 'inline-block';
+  
+  const title = document.getElementById('sync-modal-title');
+  if (title) {
+    title.textContent = window._syncSelectedAreas && window._syncSelectedAreas.length > 0 
+      ? `Empleados (${window._syncSelectedAreas.join(', ')})` 
+      : 'Todos los Empleados';
+  }
+
+  const listContainer = document.getElementById('sync-empleados-list');
+  if (listContainer) {
+    listContainer.innerHTML = `<div class="text-center p-4">
+      <span class="spinner-border spinner-border-sm"></span> Descargando datos de BioAlba...<br>
+      <small class="text-muted">Esto puede tardar unos segundos</small>
+    </div>`;
+  }
+
+  // Llamar al endpoint
+  fetchSyncPreviewData();
+}
+
+async function fetchSyncPreviewData() {
+  const listContainer = document.getElementById('sync-empleados-list');
+  try {
+    const payload = {
+      areas: window._syncSelectedAreas && window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
+      ignored_cargos: window._ignoredCargos && window._ignoredCargos.length > 0 ? window._ignoredCargos : null
+    };
+    const response = await fetch(`${API_BASE_URL}/sync/empleados/preview/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    _syncPreviewData = await response.json();
+    
+    // Filtrar por cargos seleccionados (si no está ignorado, o si está en la selección)
+    if (window._syncSelectedCargos && window._syncSelectedCargos.length > 0 && window._syncSelectedAreas && window._syncSelectedAreas.length > 0) {
+       _syncPreviewData = _syncPreviewData.filter(emp => {
+           // Si el cargo (antes o después del mapeo) está ignorado, se quita.
+           // O si el backend ya lo filtra, mejor. El backend debería filtrarlo con ignored_cargos.
+           // Por si acaso, si no está en _syncSelectedCargos y tiene un área que pedimos.
+           return true; 
+       });
+    }
+
+    renderSyncEmpleados(_syncPreviewData);
+
+  } catch (error) {
+    console.error('Error en preview:', error);
+    if (listContainer) {
+      listContainer.innerHTML = `<div class="text-danger p-3 text-center">❌ Error: ${error.message}</div>`;
+    }
+  }
+}
+
 window.closeModalSync = function () {
   const modalSync = document.getElementById('modal-sync-areas');
   if (modalSync) modalSync.classList.remove('active');
@@ -2317,43 +2397,76 @@ window.confirmSync = async function () {
   }
 }
 
-window.showResolverAreasModal = function(nuevasAreas, conteoPorArea = {}) {
+window.showResolverAreasModal = function(nuevasAreas, conteoPorArea = {}, areasConocidas = []) {
   const tbody = document.getElementById('tbody-resolver-areas');
   tbody.innerHTML = '';
   
-  if (nuevasAreas.length === 0) return;
+  // Agregar texto de ayuda al modal si no existe
+  const modalHeader = document.querySelector('#modal-resolver-areas .modal-header');
+  let helpText = document.getElementById('guardian-areas-help-text');
+  if (!helpText && modalHeader) {
+    helpText = document.createElement('div');
+    helpText.id = 'guardian-areas-help-text';
+    helpText.className = 'alert alert-info mt-2 mb-0 w-100 fs-6';
+    helpText.innerHTML = `<strong>Paso 1: Selección de Áreas.</strong> Selecciona las áreas de las cuales deseas descargar empleados. Arriba podrás asignar un nombre a las áreas nuevas encontradas.`;
+    modalHeader.parentNode.insertBefore(helpText, modalHeader.nextSibling);
+  }
   
-  nuevasAreas.forEach((area, idx) => {
-    const conteo = conteoPorArea[area] || 0;
-    const badgeHtml = conteo > 0 ? `<span class="badge bg-secondary ms-2">${conteo} emp</span>` : '';
-    
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="text-center align-middle">
-        <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" id="check-area-${idx}" name="check-area-${idx}" data-area-bioalba="${area}">
-        <label for="check-area-${idx}" class="visually-hidden">Importar ${area}</label>
-      </td>
-      <td class="fw-bold align-middle text-nowrap"><label for="input-area-${idx}" style="cursor:pointer; margin:0;">${area}</label></td>
-      <td class="text-center align-middle">
-        ${conteo > 0 ? `<span class="badge bg-secondary rounded-pill px-3 py-2">${conteo} emp</span>` : `<span class="text-muted small">-</span>`}
-      </td>
-      <td class="align-middle">
-        <input type="text" class="form-control form-control-sm input-resolucion-area" 
-               id="input-area-${idx}" name="input-area-${idx}"
-               data-area-bioalba="${area}" 
-               placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
-      </td>
-    `;
-    const cb = tr.querySelector('.checkbox-importar-area');
-    const input = tr.querySelector('.input-resolucion-area');
-    cb.addEventListener('change', (e) => {
-      input.disabled = !e.target.checked;
-      if (!e.target.checked) {
-        input.value = '';
-      }
-    });
-    tbody.appendChild(tr);
-  });
+  if (nuevasAreas.length > 0) {
+      // Titulo para áreas nuevas
+      const trTitleNew = document.createElement('tr');
+      trTitleNew.innerHTML = `<td colspan="4" class="bg-light text-warning fw-bold"><i class="bi bi-shield-exclamation me-2"></i>Áreas Nuevas a Mapear</td>`;
+      tbody.appendChild(trTitleNew);
+      
+      nuevasAreas.forEach((area, idx) => {
+        const conteo = conteoPorArea[area] || 0;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="text-center align-middle">
+            <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" id="check-area-new-${idx}" name="check-area-new-${idx}" data-area-bioalba="${area}" data-is-new="true">
+            <label for="check-area-new-${idx}" class="visually-hidden">Importar ${area}</label>
+          </td>
+          <td class="fw-bold align-middle text-nowrap"><label for="input-area-new-${idx}" style="cursor:pointer; margin:0;">${area}</label></td>
+          <td class="text-center align-middle">
+            ${conteo > 0 ? `<span class="badge bg-secondary rounded-pill px-3 py-2">${conteo} emp</span>` : `<span class="text-muted small">-</span>`}
+          </td>
+          <td class="align-middle">
+            <input type="text" class="form-control form-control-sm input-resolucion-area" 
+                   id="input-area-new-${idx}" name="input-area-new-${idx}"
+                   data-area-bioalba="${area}" 
+                   placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
+          </td>
+        `;
+        const cb = tr.querySelector('.checkbox-importar-area');
+        const input = tr.querySelector('.input-resolucion-area');
+        cb.addEventListener('change', (e) => {
+          input.disabled = !e.target.checked;
+          if (!e.target.checked) {
+            input.value = '';
+          }
+        });
+        tbody.appendChild(tr);
+      });
+  }
+
+  if (areasConocidas.length > 0) {
+      // Titulo para áreas conocidas
+      const trTitleKnown = document.createElement('tr');
+      trTitleKnown.innerHTML = `<td colspan="4" class="bg-light text-success fw-bold"><i class="bi bi-check-circle me-2"></i>Áreas Ya Sincronizadas (Listas para seleccionar)</td>`;
+      tbody.appendChild(trTitleKnown);
+      
+      areasConocidas.forEach((area, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="text-center align-middle">
+            <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" id="check-area-known-${idx}" name="check-area-known-${idx}" data-area-bioalba="${area}" data-is-new="false">
+            <label for="check-area-known-${idx}" class="visually-hidden">Seleccionar ${area}</label>
+          </td>
+          <td class="fw-bold align-middle text-nowrap" colspan="3"><label for="check-area-known-${idx}" style="cursor:pointer; margin:0;">${area}</label></td>
+        `;
+        tbody.appendChild(tr);
+      });
+  }
   
   const modal = new bootstrap.Modal(document.getElementById('modal-resolver-areas'));
   modal.show();
@@ -2372,16 +2485,30 @@ window.guardarResolucionAreas = async function() {
   const ignoredAreas = [];
   let importedAreaCount = 0;
   
+  // Guardaremos aquí las áreas finales seleccionadas para descargar empleados
+  window._syncSelectedAreas = [];
+  
   checkboxes.forEach(cb => {
     const areaBioalba = cb.dataset.areaBioalba;
+    const isNew = cb.dataset.isNew === 'true';
+    
     if (cb.checked) {
-      const input = document.querySelector(`.input-resolucion-area[data-area-bioalba="${areaBioalba}"]`);
-      const resolucion = input && input.value.trim() ? input.value.trim() : areaBioalba;
-      resoluciones[areaBioalba] = resolucion;
-      importedAreaCount++;
+      if (isNew) {
+        const input = document.querySelector(`.input-resolucion-area[data-area-bioalba="${areaBioalba}"]`);
+        const resolucion = input && input.value.trim() ? input.value.trim() : areaBioalba;
+        resoluciones[areaBioalba] = resolucion;
+        importedAreaCount++;
+        // Agregamos a la lista de seleccionadas usando el nombre resuelto
+        window._syncSelectedAreas.push(resolucion);
+      } else {
+        // Si es un área conocida seleccionada, simplemente la agregamos
+        window._syncSelectedAreas.push(areaBioalba);
+      }
     } else {
-      resoluciones[areaBioalba] = "_IGNORE_";
-      ignoredAreas.push(areaBioalba);
+      if (isNew) {
+        resoluciones[areaBioalba] = "_IGNORE_";
+        ignoredAreas.push(areaBioalba);
+      }
     }
   });
 
@@ -2404,16 +2531,21 @@ window.guardarResolucionAreas = async function() {
   btnGuardar.innerText = 'Guardando...';
 
   try {
-    const response = await fetch(`${API_BASE_URL}/sync/resolver-areas/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resoluciones: resoluciones })
-    });
-    
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      alert(`Error al guardar resoluciones: ${err.detail || 'Error desconocido'}`);
-      return;
+    // Si hay resoluciones nuevas, las enviamos. Si no, seguimos de largo.
+    if (Object.keys(resoluciones).length > 0) {
+      const response = await fetch(`${API_BASE_URL}/sync/resolver-areas/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resoluciones: resoluciones })
+      });
+      
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        alert(`Error al guardar resoluciones: ${err.detail || 'Error desconocido'}`);
+        btnGuardar.disabled = false;
+        btnGuardar.innerText = 'Guardar y Continuar';
+        return;
+      }
     }
     
     // Cerrar modal
@@ -2428,8 +2560,8 @@ window.guardarResolucionAreas = async function() {
     
     // Reanudar la sincronización automáticamente
     if (window._resolverMode === 'guardian') {
-      if (window._pendingCargos && window._pendingCargos.length > 0) {
-        showResolverCargosModal(window._pendingCargos);
+      if ((window._pendingCargos && window._pendingCargos.length > 0) || (window._cargosConocidos && window._cargosConocidos.length > 0)) {
+        showResolverCargosModal(window._pendingCargos || [], window._cargosConocidos || []);
       } else if (window._pendingGeneros && window._pendingGeneros.length > 0) {
         showResolverGenerosModal(window._pendingGeneros);
       } else {
@@ -2442,8 +2574,8 @@ window.guardarResolucionAreas = async function() {
       }
     } else {
       // Flujo Stream
-      if (window._pendingCargos && window._pendingCargos.length > 0) {
-        showResolverCargosModal(window._pendingCargos);
+      if ((window._pendingCargos && window._pendingCargos.length > 0) || (window._cargosConocidos && window._cargosConocidos.length > 0)) {
+        showResolverCargosModal(window._pendingCargos || [], window._cargosConocidos || []);
       } else if (window._pendingGeneros && window._pendingGeneros.length > 0) {
         showResolverGenerosModal(window._pendingGeneros);
       } else {
@@ -2465,41 +2597,129 @@ window.guardarResolucionAreas = async function() {
   }
 };
 
-window.showResolverCargosModal = function(nuevosCargos) {
+window.showResolverCargosModal = function(nuevosCargos = [], cargosConocidos = []) {
   const tbody = document.getElementById('tbody-resolver-cargos');
   tbody.innerHTML = '';
   
-  if (nuevosCargos.length === 0) return;
+  // Texto de ayuda
+  const modalHeader = document.querySelector('#modal-resolver-cargos .modal-header');
+  let helpText = document.getElementById('guardian-cargos-help-text');
+  if (!helpText && modalHeader) {
+    helpText = document.createElement('div');
+    helpText.id = 'guardian-cargos-help-text';
+    helpText.className = 'alert alert-info mt-2 mb-0 w-100 fs-6';
+    helpText.innerHTML = `<strong>Paso 2: Selección de Cargos.</strong> Selecciona los cargos que deseas importar. Arriba podrás asignar un nombre a los cargos nuevos encontrados.`;
+    modalHeader.parentNode.insertBefore(helpText, modalHeader.nextSibling);
+  }
+
+  // Filtrar cargos para que SOLO se muestren los que pertenecen a las áreas seleccionadas en el paso anterior.
+  const areasSeleccionadas = window._syncSelectedAreas || [];
   
-  nuevosCargos.forEach((cargo, idx) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="text-center">
-        <div class="form-check d-flex justify-content-center">
-          <input class="form-check-input checkbox-importar-cargo" type="checkbox" id="check-cargo-${idx}" name="check-cargo-${idx}" value="" data-cargo-bioalba="${cargo}">
-          <label for="check-cargo-${idx}" class="visually-hidden">Importar ${cargo}</label>
-        </div>
-      </td>
-      <td class="fw-bold"><label for="input-cargo-${idx}" style="cursor:pointer; margin:0;">${cargo}</label></td>
-      <td>
-        <input type="text" class="form-control form-control-sm input-resolucion-cargo" 
-               id="input-cargo-${idx}" name="input-cargo-${idx}"
-               data-cargo-bioalba="${cargo}" 
-               placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+  const filtrarCargos = (cargos) => {
+    return cargos.filter(cargo => {
+      const areasOfCargo = window._pendingCargosPorArea[cargo] || [];
+      // Si no sabemos de qué área es, lo mostramos por seguridad.
+      if (areasOfCargo.length === 0) return true;
+      // Lo mostramos si al menos una de sus áreas fue seleccionada.
+      return areasOfCargo.some(a => areasSeleccionadas.includes(a));
+    });
+  };
+
+  const nuevosCargosFiltrados = filtrarCargos(nuevosCargos);
+  const cargosConocidosFiltrados = filtrarCargos(cargosConocidos);
+
+  if (nuevosCargosFiltrados.length === 0 && cargosConocidosFiltrados.length === 0) {
+     // Si no hay nada que mostrar (todos fueron filtrados), cerrar modal y seguir flujo
+     const modalEl = document.getElementById('modal-resolver-cargos');
+     const modal = bootstrap.Modal.getInstance(modalEl);
+     if (modal) modal.hide();
+     // Proceder al siguiente paso (géneros o preview)
+     if (window._pendingGeneros && window._pendingGeneros.length > 0) {
+       showResolverGenerosModal(window._pendingGeneros);
+     } else {
+       if (window._resolverMode === 'guardian') {
+         const wizardEl = document.getElementById('modal-wizard-configuracion');
+         if (wizardEl) {
+           const wizardModal = new bootstrap.Modal(wizardEl);
+           wizardModal.show();
+           if (typeof resetWizard === 'function') resetWizard();
+         }
+       } else {
+         if (window._newAreasImported) {
+           window._newAreasImported = false;
+           forzarCreacionTurnoAreaNueva();
+         } else {
+           openSyncModal();
+         }
+       }
+     }
+     return;
+  }
+  
+  if (nuevosCargosFiltrados.length > 0) {
+    const trTitleNew = document.createElement('tr');
+    trTitleNew.innerHTML = `<td colspan="3" class="bg-light text-warning fw-bold"><i class="bi bi-shield-exclamation me-2"></i>Cargos Nuevos a Mapear</td>`;
+    tbody.appendChild(trTitleNew);
+
+    nuevosCargosFiltrados.forEach((cargo, idx) => {
+      const areasOfCargo = window._pendingCargosPorArea[cargo] || [];
+      const areasContext = areasOfCargo.length > 0 ? `<br><small class="text-muted">Áreas: ${areasOfCargo.join(', ')}</small>` : '';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="text-center align-middle">
+          <div class="form-check d-flex justify-content-center">
+            <input class="form-check-input checkbox-importar-cargo" type="checkbox" id="check-cargo-new-${idx}" name="check-cargo-new-${idx}" value="" data-cargo-bioalba="${cargo}" data-is-new="true">
+            <label for="check-cargo-new-${idx}" class="visually-hidden">Importar ${cargo}</label>
+          </div>
+        </td>
+        <td class="fw-bold align-middle"><label for="input-cargo-new-${idx}" style="cursor:pointer; margin:0;">${cargo}${areasContext}</label></td>
+        <td class="align-middle">
+          <input type="text" class="form-control form-control-sm input-resolucion-cargo" 
+                 id="input-cargo-new-${idx}" name="input-cargo-new-${idx}"
+                 data-cargo-bioalba="${cargo}" 
+                 placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  if (cargosConocidosFiltrados.length > 0) {
+    const trTitleKnown = document.createElement('tr');
+    trTitleKnown.innerHTML = `<td colspan="3" class="bg-light text-success fw-bold"><i class="bi bi-check-circle me-2"></i>Cargos Ya Sincronizados</td>`;
+    tbody.appendChild(trTitleKnown);
+
+    cargosConocidosFiltrados.forEach((cargo, idx) => {
+      const areasOfCargo = window._pendingCargosPorArea[cargo] || [];
+      const areasContext = areasOfCargo.length > 0 ? `<br><small class="text-muted">Áreas: ${areasOfCargo.join(', ')}</small>` : '';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="text-center align-middle">
+          <div class="form-check d-flex justify-content-center">
+            <input class="form-check-input checkbox-importar-cargo" type="checkbox" id="check-cargo-known-${idx}" name="check-cargo-known-${idx}" value="" data-cargo-bioalba="${cargo}" data-is-new="false">
+            <label for="check-cargo-known-${idx}" class="visually-hidden">Seleccionar ${cargo}</label>
+          </div>
+        </td>
+        <td class="fw-bold align-middle" colspan="2"><label for="check-cargo-known-${idx}" style="cursor:pointer; margin:0;">${cargo}${areasContext}</label></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
   
   // Agregar listener para deshabilitar input si no se importa
   const checkboxes = tbody.querySelectorAll('.checkbox-importar-cargo');
   checkboxes.forEach(cb => {
     cb.addEventListener('change', function() {
-      const cargo = this.dataset.cargoBioalba;
-      const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargo}"]`);
-      if (input) {
-        input.disabled = !this.checked;
-        if (!this.checked) input.value = '';
+      const isNew = this.dataset.isNew === 'true';
+      if (isNew) {
+        const cargo = this.dataset.cargoBioalba;
+        const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargo}"]`);
+        if (input) {
+          input.disabled = !this.checked;
+          if (!this.checked) input.value = '';
+        }
       }
     });
   });
@@ -2519,19 +2739,31 @@ window.guardarResolucionCargos = async function() {
   const checkboxes = document.querySelectorAll('.checkbox-importar-cargo');
   const resoluciones = {};
   
+  // Guardaremos aquí los cargos finales seleccionados (opcional si se usa en otro lado)
+  window._syncSelectedCargos = [];
+
   checkboxes.forEach(cb => {
     const cargoBioalba = cb.dataset.cargoBioalba;
+    const isNew = cb.dataset.isNew === 'true';
+
     if (cb.checked) {
-      const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargoBioalba}"]`);
-      const resolucion = input && input.value.trim() ? input.value.trim() : cargoBioalba;
-      resoluciones[cargoBioalba] = resolucion;
+      if (isNew) {
+        const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargoBioalba}"]`);
+        const resolucion = input && input.value.trim() ? input.value.trim() : cargoBioalba;
+        resoluciones[cargoBioalba] = resolucion;
+        window._syncSelectedCargos.push(resolucion);
+      } else {
+        window._syncSelectedCargos.push(cargoBioalba);
+      }
       
       if (window._ignoredCargos) {
           const idx = window._ignoredCargos.indexOf(cargoBioalba);
           if (idx !== -1) window._ignoredCargos.splice(idx, 1);
       }
     } else {
-      resoluciones[cargoBioalba] = "_IGNORE_";
+      if (isNew) {
+        resoluciones[cargoBioalba] = "_IGNORE_";
+      }
       window._ignoredCargos = window._ignoredCargos || [];
       if (!window._ignoredCargos.includes(cargoBioalba)) {
           window._ignoredCargos.push(cargoBioalba);
@@ -2544,16 +2776,20 @@ window.guardarResolucionCargos = async function() {
   btnGuardar.innerText = 'Guardando...';
 
   try {
-    const response = await fetch(`${API_BASE_URL}/sync/resolver-cargos/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resoluciones: resoluciones })
-    });
-    
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      alert(`Error al guardar resoluciones: ${err.detail || 'Error desconocido'}`);
-      return;
+    if (Object.keys(resoluciones).length > 0) {
+      const response = await fetch(`${API_BASE_URL}/sync/resolver-cargos/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resoluciones: resoluciones })
+      });
+      
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        alert(`Error al guardar resoluciones: ${err.detail || 'Error desconocido'}`);
+        btnGuardar.disabled = false;
+        btnGuardar.innerText = 'Guardar y Continuar';
+        return;
+      }
     }
     
     // Cerrar modal
@@ -2563,6 +2799,7 @@ window.guardarResolucionCargos = async function() {
     
     // Limpiar pending cargos ya que fueron resueltos
     window._pendingCargos = [];
+    window._cargosConocidos = [];
     
     // Reanudar la sincronización automáticamente
     if (window._resolverMode === 'guardian') {
@@ -2585,7 +2822,7 @@ window.guardarResolucionCargos = async function() {
           window._newAreasImported = false;
           forzarCreacionTurnoAreaNueva();
         } else {
-          openSyncModal();
+          openSyncModalPreview();
         }
       }
     }
@@ -2667,7 +2904,7 @@ window.guardarResolucionGeneros = async function() {
         window._newAreasImported = false;
         forzarCreacionTurnoAreaNueva();
       } else {
-        preguntarCreacionTurnoOpcional();
+        openSyncModalPreview();
       }
     }
     
@@ -2681,7 +2918,8 @@ window.guardarResolucionGeneros = async function() {
 };
 
 window.forzarCreacionTurnoAreaNueva = function() {
-  window._isSyncFlowPending = true;
+  window.isWizardFlow = true;
+  window.wizardCurrentStep = 'turnos';
   switchPage('configuracion');
   setTimeout(() => {
     const tabHorarios = document.getElementById('horarios-tab');
@@ -2691,7 +2929,7 @@ window.forzarCreacionTurnoAreaNueva = function() {
       openModalHorario();
       Swal.fire({
           title: "¡Área Nueva Detectada!",
-          text: "Has sincronizado una nueva área. Por favor, crea un turno (horario) para esta área antes de continuar.",
+          text: "Has sincronizado una nueva área. Por favor, configura su Turno, Bonos y Justificaciones obligatorios.",
           icon: "warning",
           toast: true,
           position: "top-end",
@@ -2817,9 +3055,12 @@ window.irASincronizacionFinal = function() {
   window.wizardCurrentStep = null;
   localStorage.setItem('wizard_completed', 'true');
 
-  if (typeof openSyncModal === 'function') {
-    openSyncModal();
-  }
+  switchPage('empleados');
+  setTimeout(() => {
+    if (typeof openSyncModal === 'function') {
+      openSyncModal();
+    }
+  }, 400);
 };
 
 

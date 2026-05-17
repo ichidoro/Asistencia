@@ -196,6 +196,7 @@ async function saveTurno() {
 
         await loadTurnos();
         window._isSavingTurno = true;
+        window._hasTurnos = true;
         closeModalHorario(true);
         showNotification(currentTurnoId ? "Turno actualizado" : "Turno creado", "success");
 
@@ -215,26 +216,6 @@ async function saveTurno() {
                     if (typeof window.abrirConfigBonoWizard === 'function') {
                         window.abrirConfigBonoWizard();
                     }
-                }
-            });
-        } else if (window._isSyncFlowPending) {
-            Swal.fire({
-                title: "Turno Guardado",
-                text: "El horario para la nueva área se ha creado correctamente. ¿Deseas reanudar la sincronización de empleados?",
-                icon: "success",
-                showCancelButton: true,
-                confirmButtonText: "Sí, reanudar",
-                cancelButtonText: "No, seguir editando",
-                reverseButtons: true
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window._isSyncFlowPending = false;
-                    switchPage('empleados');
-                    setTimeout(() => {
-                        if (typeof openSyncModal === 'function') {
-                            openSyncModal();
-                        }
-                    }, 400);
                 }
             });
         }
