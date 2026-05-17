@@ -18,30 +18,7 @@ async def limpiar_datos(opcion):
         
         
         
-        if opcion in ['1', '5']:
-            print("🧹 Preparando limpieza de configuraciones del flujo inicial (áreas, cargos, géneros, bonos, justificaciones, feriados)...")
-            tablas_configuracion = [
-                "bono_asignaciones", "bono_reglas", "bonos", 
-                "justificacion_tipos", "cat_pagadores",
-                "notificaciones_areas", "feriados",
-                "areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"
-            ]
-            for tabla in tablas_configuracion:
-                try:
-                    if await db.table_exists(tabla):
-                        await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
-                except Exception:
-                    pass
-            
-        if opcion in ['2', '5']:
-            print("🧹 Preparando limpieza de tablas de turnos...")
-            for tabla in ["asignacion_turnos", "turno_segmentos", "plantillas_planificacion", "turno_dias", "turno_areas", "turnos"]:
-                try:
-                    if await db.table_exists(tabla):
-                        await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
-                except Exception:
-                    pass
-
+        # 1. Transaccionales (Hijos de todos)
         if opcion in ['4', '3', '5']:
             print("🧹 Preparando limpieza de registros transaccionales (asistencias, marcaciones brutas, horas extras)...")
             tablas_transaccionales = [
@@ -53,7 +30,8 @@ async def limpiar_datos(opcion):
                 "jornadas_especiales",
                 "bolsa_horas_resumen",
                 "asistencias",
-                "justificaciones"
+                "justificaciones",
+                "intercambios_dias"
             ]
             for tabla in tablas_transaccionales:
                 try:
@@ -65,6 +43,7 @@ async def limpiar_datos(opcion):
                 except Exception:
                     pass
 
+        # 2. Empleados (Hijos de Areas y Cargos)
         if opcion in ['3', '5']:
             print("🧹 Preparando limpieza de la tabla 'empleados' y sus historiales...")
             tablas_empleados = [
@@ -80,6 +59,32 @@ async def limpiar_datos(opcion):
                             DELETE FROM sqlite_sequence WHERE name='{tabla}';
                         """)
                 except Exception as e:
+                    pass
+
+        # 3. Turnos (Hijos de Areas)
+        if opcion in ['2', '5']:
+            print("🧹 Preparando limpieza de tablas de turnos...")
+            for tabla in ["asignacion_turnos", "turno_segmentos", "plantillas_planificacion", "turno_dias", "turno_areas", "turnos"]:
+                try:
+                    if await db.table_exists(tabla):
+                        await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
+                except Exception:
+                    pass
+
+        # 4. Configuraciones (Padres de todos)
+        if opcion in ['1', '5']:
+            print("🧹 Preparando limpieza de configuraciones del flujo inicial (áreas, cargos, géneros, bonos, justificaciones, feriados)...")
+            tablas_configuracion = [
+                "bono_asignaciones", "bono_reglas", "bonos", 
+                "justificacion_tipos", "cat_pagadores",
+                "notificaciones_areas", "feriados",
+                "areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"
+            ]
+            for tabla in tablas_configuracion:
+                try:
+                    if await db.table_exists(tabla):
+                        await db.execute_script(f"DELETE FROM {tabla}; DELETE FROM sqlite_sequence WHERE name='{tabla}';")
+                except Exception:
                     pass
             
         print("☁️ Forzando sincronización hacia Turso Cloud...")

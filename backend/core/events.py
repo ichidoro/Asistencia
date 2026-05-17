@@ -174,14 +174,17 @@ async def lifespan(app: FastAPI):
                 await emp_repo.create_table()
                 logger.info(f"⏱️ empleado create_table: {(datetime.now()-_t).total_seconds():.2f}s")
 
-                startup_manager.update(80, "Cargando parámetros del sistema...")
+                startup_manager.update(80, "Cargando parámetros del sistema y Feriados...")
                 _t = datetime.now()
-                from backend.repositories.calendario import CalendarioRepository
-                cal_repo = CalendarioRepository()
+                from backend.services.calendario_service import CalendarioService
+                cal_service = CalendarioService()
                 
                 await config_repo.init_tables()
                 await turno_repo.init_tables()
-                await cal_repo.init_db()
+                
+                # Sincronizar feriados del año actual automáticamente en cada arranque
+                from datetime import date
+                await cal_service.sync_chile_holidays(date.today().year)
                 logger.info(f"⏱️ config+turno+calendario init_tables: {(datetime.now()-_t).total_seconds():.2f}s")
 
                 await db.clear_schema_cache()
