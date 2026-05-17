@@ -1441,24 +1441,12 @@ class AsistenciaService:
                             semana_ganadora = None
                             config_dia = None
                         else:
-                            # [FIX] Si es DINAMICO_FLEXIBLE y NO HAY MARCAS,
-                            # buscamos si en *alguna* semana el día es libre. Si es así, 
-                            # asumimos que el empleado tomó su día libre rotativo.
-                            semana_libre = None
-                            for num_semana_eval in range(1, total_sems + 1):
-                                sem_config = bulk_ctx['turnos'].get(tid, {}).get(num_semana_eval, {}).get(dia_semana)
-                                if sem_config and sem_config.get('es_libre'):
-                                    semana_libre = num_semana_eval
-                                    break
-                            
-                            if semana_libre:
-                                semana_ganadora = semana_libre
-                                config_dia = bulk_ctx['turnos'].get(tid, {}).get(semana_libre, {}).get(dia_semana)
-                            else:
-                                last_sem_dict = bulk_ctx.get('rotativo_last_sem_dict', {})
-                                num_sem_activa = last_sem_dict.get(empleado_id, 1) if isinstance(last_sem_dict, dict) else 1
-                                semana_ganadora = num_sem_activa
-                                config_dia = bulk_ctx['turnos'].get(tid, {}).get(num_sem_activa, {}).get(dia_semana)
+                            # [FIX] Si es DINAMICO_FLEXIBLE y NO HAY MARCAS en un día pasado/presente,
+                            # NO asumimos ciegamente que fue su día libre. Respetamos la semana activa.
+                            last_sem_dict = bulk_ctx.get('rotativo_last_sem_dict', {})
+                            num_sem_activa = last_sem_dict.get(empleado_id, 1) if isinstance(last_sem_dict, dict) else 1
+                            semana_ganadora = num_sem_activa
+                            config_dia = bulk_ctx['turnos'].get(tid, {}).get(semana_ganadora, {}).get(dia_semana)
                 else:
                     # Turnos Fijos o normales
                     if f_asig_ini and total_sems > 1:
@@ -2887,11 +2875,18 @@ class AsistenciaService:
                 tid = r['turno_id']
                 if tid not in dias_por_turno:
                     dias_por_turno[tid] = {}
-                dias_por_turno[tid][r['dia_semana']] = {
-                    'es_libre': r['es_libre'],
-                    'hora_entrada': r['hora_entrada'],
-                    'hora_salida': r['hora_salida']
-                }
+                if r['dia_semana'] not in dias_por_turno[tid]:
+                    dias_por_turno[tid][r['dia_semana']] = {
+                        'es_libre': r['es_libre'],
+                        'hora_entrada': r['hora_entrada'],
+                        'hora_salida': r['hora_salida']
+                    }
+                else:
+                    # [BUSINESS_RULE: PROYECCIÓN UI DINAMICO_FLEXIBLE]
+                    # Si el turno tiene múltiples semanas (DINAMICO_FLEXIBLE),
+                    # el día solo se proyecta como LIBRE absoluto si en *todas*
+                    # las semanas es libre. De lo contrario, se cruza con 0 (bit-wise AND).
+                    dias_por_turno[tid][r['dia_semana']]['es_libre'] &= r['es_libre']
 
             for tid, dias_map in dias_por_turno.items():
                 primer_dia = 0 # Default Lunes
