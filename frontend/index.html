@@ -2322,214 +2322,185 @@
                 </div>
             </div>
 
-            <!-- Modal para Resolución de Áreas Desconocidas (Guardián) -->
-            <div id="modal-resolver-areas" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header bg-warning text-dark">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-shield-exclamation me-2"></i>Áreas Nuevas Detectadas</h5>
-                            <button type="button" class="btn-close" onclick="cancelarResolucionAreas()"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <div class="alert alert-warning border-0 shadow-sm mb-4">
-                                <strong>¡Atención!</strong> Se han encontrado áreas en BioAlba que no existen en nuestro catálogo. 
-                                Debes indicar si son áreas nuevas (se crearán) o si son un error ortográfico (se asignarán como alias a un área existente).
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-bordered align-middle">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th style="width: 80px;" class="text-center">Importar?</th>
-                                            <th>Área detectada en BioAlba</th>
-                                            <th class="text-center" style="width: 150px;">Cant. Empleados</th>
-                                            <th>Resolución (Dejar en blanco para crear como NUEVA)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tbody-resolver-areas">
-                                        <!-- Inyectado por JS -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarResolucionAreas()">Cancelar Sincronización</button>
-                            <button type="button" class="btn btn-primary fw-bold" onclick="guardarResolucionAreas()">Guardar y Reanudar Sincronización</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal para Resolución de Cargos Desconocidos (Guardián) -->
-            <div id="modal-resolver-cargos" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header bg-warning text-dark">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-briefcase-fill me-2"></i>Cargos (Labores) Nuevos Detectados</h5>
-                            <button type="button" class="btn-close" onclick="cancelarResolucionCargos()"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <div class="alert alert-warning border-0 shadow-sm mb-4">
-                                <strong>¡Atención!</strong> Se han encontrado cargos/labores en BioAlba que no existen en nuestro catálogo. 
-                                Debes indicar si son cargos nuevos (se crearán) o si son un error ortográfico (se asignarán como alias a un cargo existente).
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-bordered align-middle">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th class="text-center" style="width: 80px;">Importar?</th>
-                                            <th>Cargo detectado en BioAlba</th>
-                                            <th>Resolución (Dejar en blanco para crear como NUEVO)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tbody-resolver-cargos">
-                                        <!-- Inyectado por JS -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarResolucionCargos()">Cancelar Sincronización</button>
-                            <button type="button" class="btn btn-primary fw-bold" onclick="guardarResolucionCargos()">Guardar y Reanudar Sincronización</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal para Resolución de Géneros Desconocidos (Guardián) -->
-            <div id="modal-resolver-generos" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-md modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header bg-info text-white">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-gender-ambiguous me-2"></i>Nuevos Géneros Detectados</h5>
-                            <button type="button" class="btn-close btn-close-white" onclick="cancelarResolucionGeneros()"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <div class="alert alert-info border-0 shadow-sm mb-4">
-                                <strong>¡Atención!</strong> Se han encontrado valores de género en BioAlba que no existen en el catálogo local.
-                                Serán agregados automáticamente. Revise y confirme para continuar.
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-bordered align-middle">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Género detectado</th>
-                                            <th class="text-center">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tbody-resolver-generos">
-                                        <!-- Inyectado por JS -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarResolucionGeneros()">Cancelar Sincronización</button>
-                            <button type="button" class="btn btn-primary fw-bold" onclick="guardarResolucionGeneros()">Crear Géneros y Continuar</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
-            
-            <!-- Modal Asistente de Configuración Inicial -->
-            <div id="modal-wizard-configuracion" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
+            <!-- Modal Universal de Sincronización (Wizard de 5 Pasos) -->
+            <div id="modal-sync-wizard" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-centered">
                     <div class="modal-content shadow-lg border-0">
                         <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-gear-fill me-2"></i>Configuración de Empresa</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <h5 class="modal-title fw-bold"><i class="bi bi-magic me-2"></i>Asistente de Sincronización BioAlba</h5>
+                            <button type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
                         </div>
-                        <div class="modal-body p-4 text-center">
-                            <p class="mb-4">Para poder asignar a tus empleados correctamente, es recomendable configurar los siguientes parámetros. Si ya los has configurado, puedes avanzar directamente a la sincronización.</p>
-                            
-                            <div class="d-grid gap-3 mb-4">
-                                <button class="btn btn-outline-primary btn-lg d-flex justify-content-between align-items-center fw-bold" onclick="abrirConfigTurnoWizard()">
-                                    <span><i class="bi bi-clock-history me-2"></i> Crear Turnos</span>
-                                    <i class="bi bi-chevron-right"></i>
-                                </button>
-                                <button class="btn btn-outline-success btn-lg d-flex justify-content-between align-items-center fw-bold" onclick="abrirConfigBonoWizard()">
-                                    <span><i class="bi bi-cash-coin me-2"></i> Crear Bonos</span>
-                                    <i class="bi bi-chevron-right"></i>
-                                </button>
-                                <button class="btn btn-outline-warning btn-lg d-flex justify-content-between align-items-center fw-bold" onclick="abrirConfigJustificacionWizard()">
-                                    <span><i class="bi bi-file-earmark-medical me-2"></i> Crear Justificaciones</span>
-                                    <i class="bi bi-chevron-right"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="alert alert-info py-2 mb-0 text-start" role="alert">
-                                <i class="bi bi-info-circle-fill me-2"></i> 
-                                <small>Crea estos elementos ahora y luego vuelve aquí para sincronizar los empleados.</small>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light justify-content-between">
-                            <button type="button" class="btn btn-secondary" onclick="irASincronizacionFinal()">Saltar</button>
-                            <button type="button" class="btn btn-primary fw-bold px-4" onclick="irASincronizacionFinal()">
-                                <i class="bi bi-people-fill me-1"></i> Sincronizar Empleados
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Modal para Selección de Áreas y Empleados (Sync) -->
-            <div id="modal-sync-areas" class="modal">
-                <div class="modal-content" style="max-width: 650px;">
-                    <div class="modal-header">
-                        <h3 id="sync-modal-title">Sincronizar Empleados</h3>
-                        <button class="btn-close" onclick="closeModalSync()">×</button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- PASO ÚNICO: Preview de Empleados -->
-                        <div id="sync-step-2" style="display: block;">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div>
-                                    <!-- Espacio vacío, el botón volver se elimina porque ya no hay paso 1 -->
+                        <div class="modal-body p-4">
+                            <!-- Stepper UI -->
+                            <div class="d-flex justify-content-between mb-4 position-relative">
+                                <div class="progress position-absolute top-50 start-0 w-100 translate-middle-y" style="height: 2px; z-index: 0;">
+                                    <div id="sync-wizard-progress" class="progress-bar bg-primary" role="progressbar" style="width: 0%;"></div>
                                 </div>
-                                <span id="sync-emp-counter" class="badge bg-secondary">0 empleados</span>
+                                <div class="step-indicator active bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-1">1</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-2">2</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-3">3</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-4">4</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-5">5</div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold">
+                                <span>Áreas</span>
+                                <span>Cargos & Géneros</span>
+                                <span>Turnos</span>
+                                <span>Bonos</span>
+                                <span>Empleados</span>
                             </div>
 
-                            <!-- Barra de búsqueda -->
-                            <div class="mb-2">
-                                <input type="text" id="sync-emp-search" class="form-control form-control-sm" 
-                                    placeholder="🔍 Buscar por nombre o RUT..." oninput="filterSyncEmpleados()">
-                            </div>
-
-                            <div class="d-flex justify-content-between mb-2">
-                                <div>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSyncEmps(true)">Marcar Todos</button>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSyncEmps(false)">Desmarcar Todos</button>
+                            <!-- PASO 1: Áreas -->
+                            <div id="wizard-step-1" class="wizard-step" style="display: block;">
+                                <h6 class="text-primary mb-3">Resolución de Áreas Nuevas</h6>
+                                <div class="alert alert-warning border-0 shadow-sm mb-3">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Áreas en BioAlba que no existen en nuestro sistema.
                                 </div>
-                                <div>
-                                    <select class="form-select form-select-sm" id="sync-emp-filter-type" onchange="filterSyncEmpleados()">
+                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                    <table class="table table-bordered align-middle table-sm">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th style="width: 80px;" class="text-center">Importar</th>
+                                                <th>Área detectada</th>
+                                                <th class="text-center">Empleados</th>
+                                                <th>Acción (Vacío = Crear Nueva)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-wizard-areas">
+                                            <!-- Inyectado -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PASO 2: Cargos y Géneros -->
+                            <div id="wizard-step-2" class="wizard-step" style="display: none;">
+                                <h6 class="text-primary mb-3">Resolución de Cargos y Géneros Nuevos</h6>
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <div class="alert alert-warning border-0 shadow-sm mb-2 py-2">
+                                            <i class="bi bi-briefcase-fill me-2"></i> Cargos desconocidos
+                                        </div>
+                                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                            <table class="table table-bordered align-middle table-sm">
+                                                <thead class="table-light sticky-top">
+                                                    <tr>
+                                                        <th class="text-center" style="width: 60px;">Imp.</th>
+                                                        <th>Cargo</th>
+                                                        <th>Acción (Vacío = Nuevo)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tbody-wizard-cargos"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="alert alert-info border-0 shadow-sm mb-2 py-2">
+                                            <i class="bi bi-gender-ambiguous me-2"></i> Géneros nuevos
+                                        </div>
+                                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                            <table class="table table-bordered align-middle table-sm">
+                                                <thead class="table-light sticky-top">
+                                                    <tr>
+                                                        <th>Género</th>
+                                                        <th>Acción</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tbody-wizard-generos"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PASO 3: Turnos -->
+                            <div id="wizard-step-3" class="wizard-step" style="display: none;">
+                                <h6 class="text-primary mb-3">Asignación de Turnos (Requisito Crítico)</h6>
+                                <div class="alert alert-danger border-0 shadow-sm mb-3">
+                                    <i class="bi bi-shield-lock-fill me-2"></i> IMPORTANTE: Los empleados no se sincronizarán y quedarán excluidos si su Área no tiene un turno asignado.
+                                </div>
+                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                    <table class="table table-bordered align-middle table-sm">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Área a sincronizar</th>
+                                                <th>Turno Recomendado / Seleccionado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-wizard-turnos">
+                                            <!-- Inyectado -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-2 text-end">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="window.open('/turnos', '_blank')"><i class="bi bi-box-arrow-up-right"></i> Gestionar Turnos en nueva pestaña</button>
+                                </div>
+                            </div>
+
+                            <!-- PASO 4: Bonos -->
+                            <div id="wizard-step-4" class="wizard-step" style="display: none;">
+                                <h6 class="text-primary mb-3">Asignación de Bonos y Reglas</h6>
+                                <div class="alert alert-info border-0 shadow-sm mb-3">
+                                    <i class="bi bi-cash-coin me-2"></i> Opcional: Revisa o define reglas financieras para las áreas. (Esto se puede configurar más adelante).
+                                </div>
+                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                    <table class="table table-bordered align-middle table-sm">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Área</th>
+                                                <th>Bonos Asignados</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-wizard-bonos">
+                                            <!-- Inyectado -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-2 text-end">
+                                    <button class="btn btn-sm btn-outline-success" onclick="window.open('/bonos', '_blank')"><i class="bi bi-box-arrow-up-right"></i> Gestionar Bonos en nueva pestaña</button>
+                                </div>
+                            </div>
+
+                            <!-- PASO 5: Empleados (Preview) -->
+                            <div id="wizard-step-5" class="wizard-step" style="display: none;">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="text-primary mb-0">Previsualización de Empleados</h6>
+                                    <span id="wizard-emp-counter" class="badge bg-secondary">0 listos</span>
+                                </div>
+                                <div class="d-flex gap-2 mb-2">
+                                    <input type="text" id="wizard-emp-search" class="form-control form-control-sm" placeholder="🔍 Buscar empleado..." oninput="filterWizardEmpleados()">
+                                    <select class="form-select form-select-sm" id="wizard-emp-filter-type" onchange="filterWizardEmpleados()" style="width: 200px;">
                                         <option value="all">Mostrar Todos</option>
-                                        <option value="new_changed">Solo Nuevos / Con Cambios</option>
+                                        <option value="new_changed">Nuevos/Cambios</option>
+                                        <option value="error">Con Errores (Sin Turno)</option>
                                     </select>
                                 </div>
-                            </div>
-
-                            <div id="sync-empleados-list" class="border rounded"
-                                style="max-height: 380px; overflow-y: auto; background: #f8f9fa;">
-                                <div class="text-center p-4">
-                                    <span class="spinner-border spinner-border-sm"></span> Descargando datos de BioAlba...
+                                <div class="mb-2">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllWizardEmps(true)">Marcar Todos</button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllWizardEmps(false)">Desmarcar Todos</button>
+                                </div>
+                                <div id="wizard-empleados-list" class="border rounded" style="max-height: 280px; overflow-y: auto; background: #f8f9fa;">
+                                    <div class="text-center p-4">
+                                        <span class="spinner-border spinner-border-sm"></span> Evaluando empleados contra las reglas del Wizard...
+                                    </div>
+                                </div>
+                                <div class="mt-2 d-flex gap-2 text-muted" style="font-size: 0.75rem;">
+                                    <span><span class="badge bg-success">NUEVO</span></span>
+                                    <span><span class="badge bg-warning text-dark">CAMBIO</span></span>
+                                    <span><span class="badge bg-secondary">EXISTENTE</span></span>
+                                    <span><span class="badge bg-danger">OMITIDO (Sin Turno)</span></span>
                                 </div>
                             </div>
 
-                            <!-- Leyenda -->
-                            <div class="mt-2 d-flex gap-3 text-muted" style="font-size: 0.75rem;">
-                                <span><span class="badge bg-success">NUEVO</span> No existe en sistema</span>
-                                <span><span class="badge bg-warning text-dark">ÁREA</span> Cambió de área</span>
-                                <span><span class="badge bg-secondary">EXISTE</span> Sin cambios</span>
+                        </div>
+                        <div class="modal-footer bg-light justify-content-between">
+                            <button type="button" class="btn btn-secondary" id="btn-wizard-prev" onclick="wizardPrevStep()" disabled>Anterior</button>
+                            <div>
+                                <button type="button" class="btn btn-outline-secondary me-2" onclick="closeSyncWizard()">Cancelar</button>
+                                <button type="button" class="btn btn-primary fw-bold" id="btn-wizard-next" onclick="wizardNextStep()">Siguiente Paso <i class="bi bi-arrow-right"></i></button>
+                                <button type="button" class="btn btn-success fw-bold" id="btn-wizard-confirm" onclick="confirmWizardSync()" style="display: none;"><i class="bi bi-check-circle"></i> Confirmar e Importar</button>
                             </div>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" onclick="closeModalSync()">Cancelar</button>
-                        <!-- Botón para confirmar -->
-                        <button type="button" id="btn-sync-confirm" class="btn btn-success" onclick="confirmSync()" style="display: inline-block;">
-                            ✅ Confirmar Sincronización
-                        </button>
                     </div>
                 </div>
             </div>

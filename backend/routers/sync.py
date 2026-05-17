@@ -85,106 +85,100 @@ async def preview_empleados(
     return await service.preview_empleados(areas=areas, ignored_cargos=ignored_cargos)
 
 
-class ResolverAreasRequest(BaseModel):
-    resoluciones: Dict[str, str]  # { "BODEGASS": "BODEGA", "NUEVA_AREA": "NUEVA_AREA" }
+class WizardProviderRequest(BaseModel):
+    areas: List[str]
 
 @router.post(
-    "/resolver-areas/",
-    summary="Resolver áreas desconocidas (Guardián)",
-    description="Asigna alias ortográficos o crea nuevas áreas en el catálogo."
+    "/wizard/turnos/",
+    summary="Data Provider: Turnos para el Wizard",
+    description="Devuelve la lista de turnos disponibles y las pre-asignaciones existentes para las áreas dadas."
 )
-async def resolver_areas(
-    request: ResolverAreasRequest,
+async def wizard_provider_turnos(
+    request: WizardProviderRequest,
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
 ) -> Dict[str, Any]:
-    from backend.repositories.area import AreaRepository
     await db.connect()
+    
+    # 1. Obtener todos los turnos activos
+    turnos = await db.fetch_all("SELECT id, nombre, es_default FROM cat_turnos WHERE activo = 1 ORDER BY es_default DESC, nombre ASC")
+    
+    # 2. Buscar asignaciones existentes para las áreas (ya sean áreas nuevas o existentes)
+    from backend.repositories.area import AreaRepository
     area_repo = AreaRepository(db)
     
-    for area_bioalba, resolucion in request.resoluciones.items():
-        if resolucion == "_IGNORE_":
-            continue
-            
-        if area_bioalba == resolucion:
-            # Create new area if it doesn't exist
-            existing = await area_repo.get_area_by_name(resolucion)
-            if not existing:
-                await area_repo.create_area(resolucion)
-        else:
-            # Create alias
-            area_real = await area_repo.get_area_by_name(resolucion)
-            if not area_real:
-                area_id = await area_repo.create_area(resolucion)
-            else:
-                area_id = area_real['id']
-            await area_repo.create_alias(area_bioalba, area_id)
-            
-    return {"status": "ok", "message": "Áreas resueltas correctamente. Puede reanudar la sincronización."}
-
-
-class ResolverCargosRequest(BaseModel):
-    resoluciones: Dict[str, str]  # { "BODEGUEROO": "BODEGUERO", "NUEVO_CARGO": "NUEVO_CARGO" }
+    pre_asignaciones = {}
+    for area_name in request.areas:
+        area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
+        if area_id:
+            # Buscar turno asociado al área
+            asignacion = await db.fetch_one("SELECT turno_id FROM area_turnos WHERE area_id = ?", (area_id,))
+            if asignacion:
+                pre_asignaciones[area_name] = asignacion['turno_id']
+                
+    return {
+        "turnos": [dict(t) for t in turnos],
+        "pre_asignaciones": pre_asignaciones
+    }
 
 @router.post(
-    "/resolver-cargos/",
-    summary="Resolver cargos desconocidos (Guardián)",
-    description="Asigna alias ortográficos o crea nuevos cargos en el catálogo."
+    "/wizard/bonos/",
+    summary="Data Provider: Bonos para el Wizard",
+    description="Devuelve la lista de bonos disponibles y las pre-asignaciones existentes para las áreas dadas."
 )
-async def resolver_cargos(
-    request: ResolverCargosRequest,
+async def wizard_provider_bonos(
+    request: WizardProviderRequest,
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
 ) -> Dict[str, Any]:
-    from backend.repositories.cargo import CargoRepository
     await db.connect()
-    cargo_repo = CargoRepository(db)
     
-    for cargo_bioalba, resolucion in request.resoluciones.items():
-        if resolucion == "_IGNORE_":
-            continue
-            
-        if cargo_bioalba == resolucion:
-            # Create new cargo if it doesn't exist
-            existing = await cargo_repo.get_cargo_by_name(resolucion)
-            if not existing:
-                await cargo_repo.create_cargo(resolucion)
-        else:
-            # Create alias
-            cargo_real = await cargo_repo.get_cargo_by_name(resolucion)
-            if not cargo_real:
-                cargo_id = await cargo_repo.create_cargo(resolucion)
-            else:
-                cargo_id = cargo_real['id']
-            await cargo_repo.create_alias(cargo_bioalba, cargo_id)
-            
-    return {"status": "ok", "message": "Cargos resueltos correctamente. Puede reanudar la sincronización."}
+    # 1. Obtener todos los bonos
+    bonos = await db.fetch_all("SELECT id, nombre, monto, descripcion FROM cat_bonos ORDER BY nombre ASC")
+    
+    # 2. Buscar asignaciones existentes
+    from backend.repositories.area import AreaRepository
+    area_repo = AreaRepository(db)
+    
+    pre_asignaciones = {}
+    for area_name in request.areas:
+        area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
+        if area_id:
+            asignaciones = await db.fetch_all("SELECT bono_id FROM area_bonos WHERE area_id = ?", (area_id,))
+            if asignaciones:
+                pre_asignaciones[area_name] = [a['bono_id'] for a in asignaciones]
+                
+    return {
+        "bonos": [dict(b) for b in bonos],
+        "pre_asignaciones": pre_asignaciones
+    }
 
-
-class ResolverGenerosRequest(BaseModel):
-    resoluciones: List[str]  # Lista de géneros a insertar (e.g. ["Masculino", "Femenino"])
+class WizardFinalizeRequest(BaseModel):
+    areas_resoluciones: Dict[str, str]
+    cargos_resoluciones: Dict[str, str]
+    generos_nuevos: List[str]
+    turnos_asignaciones: Dict[str, int]
+    bonos_asignaciones: Dict[str, List[int]]
 
 @router.post(
-    "/resolver-generos/",
-    summary="Resolver géneros pendientes",
-    description="Confirma la extracción de géneros desde BioAlba y los persiste en la base de datos local."
+    "/wizard/finalize/",
+    summary="Finalizar Sincronización (Mega-Payload)",
+    description="Aplica todas las decisiones del Wizard en una sola transacción."
 )
-async def resolver_generos_endpoint(
-    request: ResolverGenerosRequest,
+async def wizard_finalize(
+    request: WizardFinalizeRequest,
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
-):
-    """
-    Guarda los géneros extraídos en la base de datos local
-    al confirmar la acción desde el frontend, siguiendo el hilo de sincronización.
-    """
+) -> Dict[str, Any]:
+    service = SyncService()
     try:
-        await db.connect()
-        for genero in request.resoluciones:
-            # Insertar solo si no existe
-            existente = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero,))
-            if not existente:
-                await db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (genero,))
-        return {"status": "ok", "message": "Géneros guardados correctamente."}
+        await service.finalize_wizard_sync(
+            areas_resoluciones=request.areas_resoluciones,
+            cargos_resoluciones=request.cargos_resoluciones,
+            generos_nuevos=request.generos_nuevos,
+            turnos_asignaciones=request.turnos_asignaciones,
+            bonos_asignaciones=request.bonos_asignaciones
+        )
+        return {"status": "ok", "message": "Catálogos y asignaciones sincronizados correctamente. Listo para descargar empleados."}
     except Exception as e:
-        logger.error(f"Error guardando géneros: {e}")
+        logger.error(f"Error en finalize_wizard_sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
