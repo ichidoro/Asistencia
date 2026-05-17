@@ -2717,6 +2717,7 @@ window.irASincronizacionFinal = function() {
   
   window.isWizardFlow = false;
   window.wizardCurrentStep = null;
+  localStorage.setItem('wizard_completed', 'true');
 
   if (typeof openSyncModal === 'function') {
     openSyncModal();

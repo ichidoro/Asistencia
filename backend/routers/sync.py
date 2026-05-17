@@ -138,6 +138,9 @@ async def resolver_cargos(
     cargo_repo = CargoRepository(db)
     
     for cargo_bioalba, resolucion in request.resoluciones.items():
+        if resolucion == "_IGNORE_":
+            continue
+            
         if cargo_bioalba == resolucion:
             # Create new cargo if it doesn't exist
             existing = await cargo_repo.get_cargo_by_name(resolucion)
