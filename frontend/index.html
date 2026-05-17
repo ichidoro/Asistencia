@@ -2481,30 +2481,12 @@
                         <button class="btn-close" onclick="closeModalSync()">×</button>
                     </div>
                     <div class="modal-body">
-                        <!-- PASO 1: Selección de Áreas -->
-                        <div id="sync-step-1">
-                            <p class="text-muted mb-3">Seleccione las áreas que desea sincronizar (deje todas vacías para sincronizar todo).</p>
-
-                            <div class="d-flex justify-content-between mb-2">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllAreas(true)">Marcar Todas</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllAreas(false)">Desmarcar Todas</button>
-                            </div>
-
-                            <div id="sync-areas-list" class="border rounded p-2"
-                                style="max-height: 300px; overflow-y: auto; background: #f8f9fa;">
-                                <div class="text-center p-3">
-                                    <span class="spinner-border spinner-border-sm"></span> Analizando áreas...
-                                </div>
-                            </div>
-
-                        </div>
-
-                        <!-- PASO 2: Preview de Empleados -->
-                        <div id="sync-step-2" style="display: none;">
+                        <!-- PASO ÚNICO: Preview de Empleados -->
+                        <div id="sync-step-2" style="display: block;">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="syncGoBackToStep1()">
-                                    ← Volver a Áreas
-                                </button>
+                                <div>
+                                    <!-- Espacio vacío, el botón volver se elimina porque ya no hay paso 1 -->
+                                </div>
                                 <span id="sync-emp-counter" class="badge bg-secondary">0 empleados</span>
                             </div>
 
@@ -2544,12 +2526,8 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="closeModalSync()">Cancelar</button>
-                        <!-- Paso 1: Botón para ver empleados -->
-                        <button type="button" id="btn-sync-next" class="btn btn-primary" onclick="syncLoadEmpleadosPreview()">
-                            Ver Empleados →
-                        </button>
-                        <!-- Paso 2: Botón para confirmar (oculto inicialmente) -->
-                        <button type="button" id="btn-sync-confirm" class="btn btn-success" onclick="confirmSync()" style="display: none;">
+                        <!-- Botón para confirmar -->
+                        <button type="button" id="btn-sync-confirm" class="btn btn-success" onclick="confirmSync()" style="display: inline-block;">
                             ✅ Confirmar Sincronización
                         </button>
                     </div>

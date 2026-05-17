@@ -1828,16 +1828,6 @@ function _resetBatchState() {
   onboardingQueue = [];
 }
 
-function openSyncModal() {
-  const modalSync = document.getElementById('modal-sync-areas');
-  if (!modalSync) {
-    console.error("ERROR CRÍTICO: No se encontró el elemento #modal-sync-areas en el DOM");
-    return;
-  }
-  modalSync.classList.add('active');
-  loadBioAlbaAreas();
-}
-
 window.openSyncModalPreview = function() {
   const modalSync = document.getElementById('modal-sync-areas');
   if (!modalSync) {
@@ -1845,17 +1835,6 @@ window.openSyncModalPreview = function() {
     return;
   }
   modalSync.classList.add('active');
-  
-  // Transición visual a paso 2
-  const step1 = document.getElementById('sync-step-1');
-  const step2 = document.getElementById('sync-step-2');
-  if (step1) step1.style.display = 'none';
-  if (step2) step2.style.display = 'block';
-  
-  const btnNext = document.getElementById('btn-sync-next');
-  const btnConfirm = document.getElementById('btn-sync-confirm');
-  if (btnNext) btnNext.style.display = 'none';
-  if (btnConfirm) btnConfirm.style.display = 'inline-block';
   
   const title = document.getElementById('sync-modal-title');
   if (title) {
@@ -1916,194 +1895,13 @@ async function fetchSyncPreviewData() {
 window.closeModalSync = function () {
   const modalSync = document.getElementById('modal-sync-areas');
   if (modalSync) modalSync.classList.remove('active');
-  // Resetear wizard al paso 1
-  const step1 = document.getElementById('sync-step-1');
-  const step2 = document.getElementById('sync-step-2');
-  if (step1) step1.style.display = 'block';
-  if (step2) step2.style.display = 'none';
-  const btnNext = document.getElementById('btn-sync-next');
-  const btnConfirm = document.getElementById('btn-sync-confirm');
-  if (btnNext) btnNext.style.display = 'inline-block';
-  if (btnConfirm) btnConfirm.style.display = 'none';
   const title = document.getElementById('sync-modal-title');
   if (title) title.textContent = 'Sincronizar Empleados';
   const search = document.getElementById('sync-emp-search');
   if (search) search.value = '';
 }
 
-async function loadBioAlbaAreas(refresh = false) {
-  const syncAreasList = document.getElementById('sync-areas-list');
-  if (!syncAreasList) return;
 
-  const msg = refresh ? 'Realizando escaneo profundo (descargando Excel)...' : 'Conectando con BioAlba para detectar áreas...';
-  syncAreasList.innerHTML = `<div class="text-center p-3 text-muted"><span class="spinner-border spinner-border-sm"></span> ${msg}</div>`;
-
-  try {
-    const url = `${API_BASE_URL}/sync/areas-preview/?refresh=${refresh}`;
-    const statsUrl = `${API_BASE_URL}/turnos/stats/por-area`;
-    console.log(`📡 Fetching Areas from: ${url}`);
-
-    // Timeout de 30 segundos si es refresh, si no 10
-    const timeoutValue = refresh ? 30000 : 10000;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutValue);
-
-    const [resAreas, resStats] = await Promise.all([
-      fetch(url, {
-        signal: controller.signal,
-        headers: { 'Cache-Control': 'no-cache, no-store' }
-      }),
-      fetch(statsUrl, {
-        headers: { 'Cache-Control': 'no-cache, no-store' }
-      }).catch(() => ({ ok: false })) // Fallback si falla stats
-    ]);
-    clearTimeout(timeoutId);
-
-    console.log(`✅ Response Status Areas: ${resAreas.status}`);
-
-    if (!resAreas.ok) throw new Error(`Error HTTP: ${resAreas.status}`);
-
-    const areas = await resAreas.json();
-    let stats = { areas: {}, globales: 0 };
-    if (resStats.ok) {
-        stats = await resStats.json();
-    }
-    
-    console.log(`📦 Areas received: ${areas.length}`);
-    renderSyncAreas(areas, stats);
-
-  } catch (error) {
-    console.error("❌ Error loading areas:", error);
-    let msg = error.message;
-    if (error.name === 'AbortError') {
-      msg = `Tiempo de espera agotado (${timeoutValue / 1000}s) - BioAlba está tardando demasiado.`;
-    }
-    syncAreasList.innerHTML = `<div class="text-danger p-3 text-center">❌ Error: ${msg}</div>`;
-  }
-}
-
-function renderSyncAreas(areas, stats = { areas: {}, globales: 0 }) {
-  const syncAreasList = document.getElementById('sync-areas-list');
-  if (!syncAreasList) return;
-
-  if (!areas || areas.length === 0) {
-    syncAreasList.innerHTML = '<div class="text-center p-3">No se encontraron áreas o no hay empleados.</div>';
-    return;
-  }
-
-  let html = '';
-  areas.forEach((area, index) => {
-    // Si la DB tiene al menos 1 turno global, no bloqueamos ninguna área,
-    // ya que el global aplica a todas.
-    const turnosGlobales = stats.globales || 0;
-    const turnosArea = stats.areas[area] || 0;
-    
-    // El área está "sin turnos" si no hay globales Y no hay específicos de esa área
-    const sinTurnos = (turnosGlobales === 0 && turnosArea === 0);
-    
-    const disabledAttr = sinTurnos ? 'disabled' : '';
-    const badgeHtml = sinTurnos ? '<span class="badge bg-danger ms-2">Sin Turnos (Bloqueado)</span>' : `<span class="badge bg-success ms-2">${turnosArea + turnosGlobales} turnos</span>`;
-    const labelClass = sinTurnos ? 'text-muted text-decoration-line-through' : '';
-
-    html += `
-      <div class="form-check mb-1">
-        <input class="form-check-input area-checkbox" type="checkbox" value="${area}" id="area-check-${index}" ${disabledAttr}>
-        <label class="form-check-label ${labelClass}" for="area-check-${index}">
-          ${area} ${badgeHtml}
-        </label>
-      </div>
-    `;
-  });
-  syncAreasList.innerHTML = html;
-}
-
-window.toggleAllAreas = function (checked) {
-  const checkboxes = document.querySelectorAll('.area-checkbox');
-  checkboxes.forEach(cb => cb.checked = checked);
-}
-
-// Cache de datos de preview para evitar re-descargas
-let _syncPreviewData = [];
-let _syncSelectedAreas = [];
-
-// ========================
-// PASO 2: Preview de Empleados
-// ========================
-window.syncLoadEmpleadosPreview = async function () {
-  const allCheckboxes = document.querySelectorAll('.area-checkbox');
-  const allDisabled = allCheckboxes.length === 0 || Array.from(allCheckboxes).every(cb => cb.disabled);
-
-  if (allDisabled) {
-    alert("⛔ Bloqueo de Sincronización:\n\nNo es posible sincronizar empleados porque no existen turnos disponibles en el sistema. Debe crear al menos un turno antes de sincronizar.");
-    
-    // Cerrar modal
-    const modalEl = document.getElementById('syncModal');
-    if (modalEl && window.bootstrap) {
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        if (modal) modal.hide();
-    }
-    
-    // Llevar a la pestaña de configuración de turnos
-    const navConfig = document.getElementById('nav-configuracion') || document.querySelector('[data-page="configuracion"]');
-    if (navConfig) {
-        navConfig.click();
-        setTimeout(() => {
-            const tabHorarios = document.getElementById('horarios-tab');
-            if (tabHorarios) tabHorarios.click();
-        }, 100);
-    }
-    return;
-  }
-
-  // Recolectar áreas seleccionadas
-  const checkboxes = document.querySelectorAll('.area-checkbox:checked');
-  _syncSelectedAreas = Array.from(checkboxes).map(cb => cb.value);
-
-  // Si no seleccionó nada (la intención es "todas"), enviar sólo las habilitadas.
-  // Evitamos sincronizar áreas bloqueadas porque generarían empleados sin turno.
-  if (_syncSelectedAreas.length === 0) {
-      const enabledCheckboxes = document.querySelectorAll('.area-checkbox:not(:disabled)');
-      _syncSelectedAreas = Array.from(enabledCheckboxes).map(cb => cb.value);
-      if (_syncSelectedAreas.length === 0) return; // Fallback
-  }
-
-  // Transición visual a paso 2
-  document.getElementById('sync-step-1').style.display = 'none';
-  document.getElementById('sync-step-2').style.display = 'block';
-  document.getElementById('btn-sync-next').style.display = 'none';
-  document.getElementById('btn-sync-confirm').style.display = 'inline-block';
-  document.getElementById('sync-modal-title').textContent = 
-    _syncSelectedAreas.length > 0 
-      ? `Empleados (${_syncSelectedAreas.join(', ')})` 
-      : 'Todos los Empleados';
-
-  const listContainer = document.getElementById('sync-empleados-list');
-  listContainer.innerHTML = `<div class="text-center p-4">
-    <span class="spinner-border spinner-border-sm"></span> Descargando datos de BioAlba...<br>
-    <small class="text-muted">Esto puede tardar unos segundos</small>
-  </div>`;
-
-  try {
-    const payload = {
-    areas: _syncSelectedAreas.length > 0 ? _syncSelectedAreas : null,
-    ignored_cargos: window._ignoredCargos && window._ignoredCargos.length > 0 ? window._ignoredCargos : null
-  };
-    const response = await fetch(`${API_BASE_URL}/sync/empleados/preview/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    _syncPreviewData = await response.json();
-    renderSyncEmpleados(_syncPreviewData);
-
-  } catch (error) {
-    console.error('Error en preview:', error);
-    listContainer.innerHTML = `<div class="text-danger p-3 text-center">❌ Error: ${error.message}</div>`;
-  }
-}
 
 function renderSyncEmpleados(empleados) {
   const listContainer = document.getElementById('sync-empleados-list');
@@ -2205,19 +2003,7 @@ window.filterSyncEmpleados = function () {
   updateSyncEmpCounter();
 }
 
-window.syncGoBackToStep1 = function () {
-  document.getElementById('sync-step-1').style.display = 'block';
-  document.getElementById('sync-step-2').style.display = 'none';
-  document.getElementById('btn-sync-next').style.display = 'inline-block';
-  document.getElementById('btn-sync-confirm').style.display = 'none';
-  document.getElementById('sync-modal-title').textContent = 'Sincronizar Empleados';
-  // Limpiar buscador y resetear visibilidad de todos los items
-  const searchEl = document.getElementById('sync-emp-search');
-  const filterTypeEl = document.getElementById('sync-emp-filter-type');
-  if (searchEl) searchEl.value = '';
-  if (filterTypeEl) filterTypeEl.value = 'all';
-  if (typeof filterSyncEmpleados === 'function') filterSyncEmpleados();
-}
+
 
 window.confirmSync = async function () {
   // 1. Recolectar RUTs seleccionados — solo de items VISIBLES (no filtrados)
@@ -2583,7 +2369,7 @@ window.guardarResolucionAreas = async function() {
           window._newAreasImported = false;
           forzarCreacionTurnoAreaNueva();
         } else {
-          openSyncModal();
+          openSyncModalPreview();
         }
       }
     }
@@ -2649,7 +2435,7 @@ window.showResolverCargosModal = function(nuevosCargos = [], cargosConocidos = [
            window._newAreasImported = false;
            forzarCreacionTurnoAreaNueva();
          } else {
-           openSyncModal();
+           openSyncModalPreview();
          }
        }
      }
@@ -2962,7 +2748,7 @@ window.preguntarCreacionTurnoOpcional = function() {
         }
       }, 500);
     } else {
-      openSyncModal();
+      openSyncModalPreview();
     }
   });
 };
@@ -3057,8 +2843,8 @@ window.irASincronizacionFinal = function() {
 
   switchPage('empleados');
   setTimeout(() => {
-    if (typeof openSyncModal === 'function') {
-      openSyncModal();
+    if (typeof openSyncModalPreview === 'function') {
+      openSyncModalPreview();
     }
   }, 400);
 };
