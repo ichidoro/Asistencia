@@ -1085,9 +1085,9 @@ function renderModalHtml() {
                                 <div class="form-text small text-primary">Meta de horas esperadas.</div>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">
+                                <div class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">
                                     <span>Áreas de Visibilidad</span>
-                                </label>
+                                </div>
                                 <div id="container-areas-turno" class="border border-success rounded p-2 overflow-auto" style="max-height: 120px; background-color: #f8fff9;">
                                     <div class="text-center text-muted small py-2">Cargando áreas...</div>
                                 </div>
@@ -1274,7 +1274,7 @@ window.addWeekTab = function (triggerChange = true) {
     div.innerHTML = `
         <div class="row mb-2 etiqueta-bloque-container" style="${isInteligente ? '' : 'display:none;'}">
             <div class="col-md-4">
-                <label class="form-label small fw-bold text-primary">Nombre del Ciclo/Opción</label>
+                <label for="etiqueta-bloque-${i}" class="form-label small fw-bold text-primary">Nombre del Ciclo/Opción</label>
                 <input type="text" id="etiqueta-bloque-${i}" class="form-control form-control-sm etiqueta-input" list="etiquetas-sugeridas" placeholder="Ej: Mañana, Tarde, Noche" value="" oninput="document.getElementById('pill-week-${i}-tab').innerText = this.value.trim() || 'Opción ${i}'">
                 <datalist id="etiquetas-sugeridas">
                     <option value="Mañana"></option>

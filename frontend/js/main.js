@@ -2319,14 +2319,16 @@ window.showResolverAreasModal = function(nuevasAreas, conteoPorArea = {}) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="text-center align-middle">
-        <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" data-area-bioalba="${area}">
+        <input type="checkbox" class="form-check-input checkbox-importar-area fs-5" id="check-area-${idx}" name="check-area-${idx}" data-area-bioalba="${area}">
+        <label for="check-area-${idx}" class="visually-hidden">Importar ${area}</label>
       </td>
-      <td class="fw-bold align-middle text-nowrap">${area}</td>
+      <td class="fw-bold align-middle text-nowrap"><label for="input-area-${idx}" style="cursor:pointer; margin:0;">${area}</label></td>
       <td class="text-center align-middle">
         ${conteo > 0 ? `<span class="badge bg-secondary rounded-pill px-3 py-2">${conteo} emp</span>` : `<span class="text-muted small">-</span>`}
       </td>
       <td class="align-middle">
         <input type="text" class="form-control form-control-sm input-resolucion-area" 
+               id="input-area-${idx}" name="input-area-${idx}"
                data-area-bioalba="${area}" 
                placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
       </td>
@@ -2463,12 +2465,14 @@ window.showResolverCargosModal = function(nuevosCargos) {
     tr.innerHTML = `
       <td class="text-center">
         <div class="form-check d-flex justify-content-center">
-          <input class="form-check-input checkbox-importar-cargo" type="checkbox" value="" data-cargo-bioalba="${cargo}">
+          <input class="form-check-input checkbox-importar-cargo" type="checkbox" id="check-cargo-${idx}" name="check-cargo-${idx}" value="" data-cargo-bioalba="${cargo}">
+          <label for="check-cargo-${idx}" class="visually-hidden">Importar ${cargo}</label>
         </div>
       </td>
-      <td class="fw-bold">${cargo}</td>
+      <td class="fw-bold"><label for="input-cargo-${idx}" style="cursor:pointer; margin:0;">${cargo}</label></td>
       <td>
         <input type="text" class="form-control form-control-sm input-resolucion-cargo" 
+               id="input-cargo-${idx}" name="input-cargo-${idx}"
                data-cargo-bioalba="${cargo}" 
                placeholder="Nombre correcto (o deje en blanco para crear)" disabled>
       </td>
@@ -2707,6 +2711,7 @@ window.preguntarCreacionTurnoOpcional = function() {
 window.abrirConfigTurnoWizard = function() {
   const modalEl = document.getElementById('modal-wizard-configuracion');
   const modal = bootstrap.Modal.getInstance(modalEl);
+  if (document.activeElement) document.activeElement.blur();
   if (modal) modal.hide();
   
   window.isWizardFlow = true;
@@ -2735,6 +2740,7 @@ window.abrirConfigTurnoWizard = function() {
 window.abrirConfigBonoWizard = function() {
   const modalEl = document.getElementById('modal-wizard-configuracion');
   const modal = bootstrap.Modal.getInstance(modalEl);
+  if (document.activeElement) document.activeElement.blur();
   if (modal) modal.hide();
   
   window.isWizardFlow = true;
@@ -2755,6 +2761,7 @@ window.abrirConfigBonoWizard = function() {
 window.abrirConfigJustificacionWizard = function() {
   const modalEl = document.getElementById('modal-wizard-configuracion');
   const modal = bootstrap.Modal.getInstance(modalEl);
+  if (document.activeElement) document.activeElement.blur();
   if (modal) modal.hide();
   
   window.isWizardFlow = true;
@@ -2782,6 +2789,7 @@ window.abrirConfigJustificacionWizard = function() {
 window.irASincronizacionFinal = function() {
   const modalEl = document.getElementById('modal-wizard-configuracion');
   const modal = bootstrap.Modal.getInstance(modalEl);
+  if (document.activeElement) document.activeElement.blur();
   if (modal) modal.hide();
   
   window.isWizardFlow = false;
