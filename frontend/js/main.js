@@ -296,6 +296,7 @@ function setupEventListeners() {
         const isInitialSync = !localStorage.getItem('wizard_completed');
         window._resolverMode = isInitialSync ? 'guardian' : 'stream';
         window._pendingCargos = data.nuevos_cargos || []; // Guardar cargos pendientes para después de áreas
+        window._pendingCargosPorArea = data.nuevos_cargos_por_area || {}; // Mapeo de cargos por área
         window._pendingGeneros = data.nuevos_generos || []; // Guardar géneros pendientes
         
         if (data.nuevas_areas && data.nuevas_areas.length > 0) {
@@ -2225,6 +2226,7 @@ window.confirmSync = async function () {
             const nuevosGeneros = eventData.nuevos_generos || [];
             
             window._pendingCargos = nuevosCargos;
+            window._pendingCargosPorArea = eventData.nuevos_cargos_por_area || {};
             window._pendingGeneros = nuevosGeneros;
 
             if (nuevasAreas.length > 0) {
@@ -2348,6 +2350,7 @@ window.cancelarResolucionAreas = function() {
 window.guardarResolucionAreas = async function() {
   const checkboxes = document.querySelectorAll('.checkbox-importar-area');
   const resoluciones = {};
+  const ignoredAreas = [];
   
   checkboxes.forEach(cb => {
     const areaBioalba = cb.dataset.areaBioalba;
@@ -2357,8 +2360,19 @@ window.guardarResolucionAreas = async function() {
       resoluciones[areaBioalba] = resolucion;
     } else {
       resoluciones[areaBioalba] = "_IGNORE_";
+      ignoredAreas.push(areaBioalba);
     }
   });
+
+  // Filtrar los cargos que pertenecen EXCLUSIVAMENTE a áreas ignoradas
+  if (window._pendingCargos && window._pendingCargos.length > 0) {
+      window._pendingCargos = window._pendingCargos.filter(cargo => {
+          const areasOfCargo = window._pendingCargosPorArea[cargo] || [];
+          if (areasOfCargo.length === 0) return true; // Si no hay mapeo, mantenerlo por seguridad
+          // Mantener si el cargo pertenece a al menos un área que NO fue ignorada
+          return areasOfCargo.some(a => !ignoredAreas.includes(a));
+      });
+  }
   
   const btnGuardar = document.querySelector('#modal-resolver-areas .btn-primary');
   btnGuardar.disabled = true;
@@ -2430,6 +2444,11 @@ window.showResolverCargosModal = function(nuevosCargos) {
   nuevosCargos.forEach((cargo, idx) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td class="text-center">
+        <div class="form-check d-flex justify-content-center">
+          <input class="form-check-input checkbox-importar-cargo" type="checkbox" value="" data-cargo-bioalba="${cargo}" checked>
+        </div>
+      </td>
       <td class="fw-bold">${cargo}</td>
       <td>
         <input type="text" class="form-control form-control-sm input-resolucion-cargo" 
@@ -2438,6 +2457,19 @@ window.showResolverCargosModal = function(nuevosCargos) {
       </td>
     `;
     tbody.appendChild(tr);
+  });
+  
+  // Agregar listener para deshabilitar input si no se importa
+  const checkboxes = tbody.querySelectorAll('.checkbox-importar-cargo');
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', function() {
+      const cargo = this.dataset.cargoBioalba;
+      const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargo}"]`);
+      if (input) {
+        input.disabled = !this.checked;
+        if (!this.checked) input.value = '';
+      }
+    });
   });
   
   const modal = new bootstrap.Modal(document.getElementById('modal-resolver-cargos'));
@@ -2452,13 +2484,18 @@ window.cancelarResolucionCargos = function() {
 };
 
 window.guardarResolucionCargos = async function() {
-  const inputs = document.querySelectorAll('.input-resolucion-cargo');
+  const checkboxes = document.querySelectorAll('.checkbox-importar-cargo');
   const resoluciones = {};
   
-  inputs.forEach(input => {
-    const cargoBioalba = input.dataset.cargoBioalba;
-    const resolucion = input.value.trim() || cargoBioalba;
-    resoluciones[cargoBioalba] = resolucion;
+  checkboxes.forEach(cb => {
+    const cargoBioalba = cb.dataset.cargoBioalba;
+    if (cb.checked) {
+      const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargoBioalba}"]`);
+      const resolucion = input && input.value.trim() ? input.value.trim() : cargoBioalba;
+      resoluciones[cargoBioalba] = resolucion;
+    } else {
+      resoluciones[cargoBioalba] = "_IGNORE_";
+    }
   });
   
   const btnGuardar = document.querySelector('#modal-resolver-cargos .btn-primary');

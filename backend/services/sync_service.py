@@ -159,7 +159,7 @@ class SyncService:
             cargo_repo = CargoRepository(db)
             
             areas_desconocidas = set()
-            cargos_desconocidos = set()
+            cargos_desconocidos = {}
             generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
@@ -172,7 +172,9 @@ class SyncService:
                 if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
                     cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
                     if not cargo_id:
-                        cargos_desconocidos.add(cargo_raw)
+                        if cargo_raw not in cargos_desconocidos:
+                            cargos_desconocidos[cargo_raw] = set()
+                        cargos_desconocidos[cargo_raw].add(area_raw)
                         
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None', 'Sin Asignar']:
@@ -186,7 +188,8 @@ class SyncService:
                 if areas_desconocidas:
                     res["nuevas_areas"] = sorted(list(areas_desconocidas))
                 if cargos_desconocidos:
-                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos))
+                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos.keys()))
+                    res["nuevos_cargos_por_area"] = {k: list(v) for k, v in cargos_desconocidos.items()}
                 if generos_desconocidos:
                     res["nuevos_generos"] = sorted(list(generos_desconocidos))
                 return res
@@ -310,7 +313,7 @@ class SyncService:
             # --- NUEVO: GUARDIÁN DE ÁREAS ---
             # Validar que todas las áreas de los empleados a sincronizar existan en el catálogo o alias
             areas_desconocidas = set()
-            cargos_desconocidos = set()
+            cargos_desconocidos = {}
             generos_desconocidos = set()
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
@@ -328,7 +331,9 @@ class SyncService:
                 if cargo_raw and cargo_raw not in ['---', 'None', 'Sin Asignar']:
                     cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
                     if not cargo_id:
-                        cargos_desconocidos.add(cargo_raw)
+                        if cargo_raw not in cargos_desconocidos:
+                            cargos_desconocidos[cargo_raw] = set()
+                        cargos_desconocidos[cargo_raw].add(area_raw)
 
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None', 'Sin Asignar']:
@@ -342,7 +347,8 @@ class SyncService:
                 if areas_desconocidas:
                     res["nuevas_areas"] = sorted(list(areas_desconocidas))
                 if cargos_desconocidos:
-                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos))
+                    res["nuevos_cargos"] = sorted(list(cargos_desconocidos.keys()))
+                    res["nuevos_cargos_por_area"] = {k: list(v) for k, v in cargos_desconocidos.items()}
                 if generos_desconocidos:
                     res["nuevos_generos"] = sorted(list(generos_desconocidos))
                 return res
