@@ -22,13 +22,14 @@ window.appendCargoToInput = function (element, cargo) {
 };
 
 window.filterCargosDropdown = function(inputElement) {
-    const filter = inputElement.value.toLowerCase();
+    const filter = inputElement.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const ul = inputElement.closest('ul');
     const items = ul.querySelectorAll('.cargo-item');
     
     items.forEach(item => {
         const text = item.textContent || item.innerText;
-        if (text.toLowerCase().indexOf(filter) > -1) {
+        const normalizedText = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (normalizedText.indexOf(filter) > -1) {
             item.parentElement.style.display = "";
         } else {
             item.parentElement.style.display = "none";
@@ -552,7 +553,7 @@ function addBonoReglaRow(regla = null) {
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onclick="event.stopPropagation()">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="event.stopPropagation()" onclick="event.stopPropagation()">
                         </li>
                         ${globalCargosList.map(c =>
         `<li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`

@@ -2112,8 +2112,8 @@ window.filterSyncEmpleados = function () {
   const filterType = document.getElementById('sync-emp-filter-type')?.value || 'all';
 
   document.querySelectorAll('.sync-emp-item').forEach(item => {
-    const nombre = item.dataset.nombre || '';
-    const rut    = item.dataset.rut    || '';
+    const nombre = (item.dataset.nombre || '').toLowerCase();
+    const rut    = (item.dataset.rut    || '').toLowerCase();
     const isNew  = item.dataset.esNuevo === 'true';
     const isChanged = item.dataset.cambioArea === 'true';
 
