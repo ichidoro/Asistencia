@@ -314,11 +314,11 @@ function setupEventListeners() {
               if (typeof resetWizard === 'function') resetWizard();
             }
           } else {
-            openSyncModal();
+            preguntarCreacionTurnoOpcional();
           }
         }
       } else {
-        openSyncModal();
+        preguntarCreacionTurnoOpcional();
       }
     } catch (error) {
       hideBatchLoadingOverlay();
@@ -2643,7 +2643,7 @@ window.guardarResolucionGeneros = async function() {
         window._newAreasImported = false;
         forzarCreacionTurnoAreaNueva();
       } else {
-        openSyncModal();
+        preguntarCreacionTurnoOpcional();
       }
     }
     
@@ -2675,6 +2675,33 @@ window.forzarCreacionTurnoAreaNueva = function() {
       });
     }
   }, 600);
+};
+
+window.preguntarCreacionTurnoOpcional = function() {
+  Swal.fire({
+    title: '¿Revisar Horarios?',
+    text: '¿Deseas crear o revisar horarios antes de sincronizar? Puede que necesites turnos distintos para los nuevos empleados.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#0d6efd',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: '<i class="bi bi-clock"></i> Sí, Revisar/Crear',
+    cancelButtonText: 'No, Sincronizar <i class="bi bi-arrow-right"></i>',
+    reverseButtons: true
+  }).then((result) => {
+    if (result.isConfirmed) {
+      switchPage('configuracion');
+      setTimeout(() => {
+        const tabHorarios = document.getElementById('horarios-tab');
+        if (tabHorarios) tabHorarios.click();
+        if (typeof openModalHorario === 'function') {
+          openModalHorario();
+        }
+      }, 500);
+    } else {
+      openSyncModal();
+    }
+  });
 };
 
 window.abrirConfigTurnoWizard = function() {
