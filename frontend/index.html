@@ -2515,8 +2515,16 @@
                             </div>
 
                             <div class="d-flex justify-content-between mb-2">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSyncEmps(true)">Marcar Todos</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSyncEmps(false)">Desmarcar Todos</button>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSyncEmps(true)">Marcar Todos</button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSyncEmps(false)">Desmarcar Todos</button>
+                                </div>
+                                <div>
+                                    <select class="form-select form-select-sm" id="sync-emp-filter-type" onchange="filterSyncEmpleados()">
+                                        <option value="all">Mostrar Todos</option>
+                                        <option value="new_changed">Solo Nuevos / Con Cambios</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div id="sync-empleados-list" class="border rounded"

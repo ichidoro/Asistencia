@@ -390,8 +390,13 @@ async def create_pagador(
     current_user: SecurityContext = Depends(RequirePermission("configuracion.bonos"))
 ):
     """Crear un nuevo pagador"""
-    new_id = await service.create_pagador(pagador.nombre)
-    return {"id": new_id, "message": "Pagador creado exitosamente"}
+    try:
+        new_id = await service.create_pagador(pagador.nombre)
+        return {"id": new_id, "message": "Pagador creado exitosamente"}
+    except ValueError as e:
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(status_code=400, detail="Ya existe un pagador con ese nombre.")
+        raise
 
 @router.put("/pagadores/{pagador_id}/", response_model=Dict[str, Any])
 async def update_pagador(
@@ -401,10 +406,15 @@ async def update_pagador(
     current_user: SecurityContext = Depends(RequirePermission("configuracion.bonos"))
 ):
     """Actualizar un pagador"""
-    updated = await service.update_pagador(pagador_id, pagador.nombre, pagador.activo)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Pagador no encontrado")
-    return {"id": pagador_id, "message": "Pagador actualizado exitosamente"}
+    try:
+        updated = await service.update_pagador(pagador_id, pagador.nombre, pagador.activo)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Pagador no encontrado")
+        return {"id": pagador_id, "message": "Pagador actualizado exitosamente"}
+    except ValueError as e:
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(status_code=400, detail="Ya existe un pagador con ese nombre.")
+        raise
 
 # --- AJUSTES GLOBALES ---
 @router.get("/ajustes/email_notificaciones_rrhh/")

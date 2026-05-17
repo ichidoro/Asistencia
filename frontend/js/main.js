@@ -2060,6 +2060,8 @@ function renderSyncEmpleados(empleados) {
     // ← dataset preserva correctamente cualquier caracter en el nombre
     label.dataset.nombre = (emp.nombre || '').toLowerCase();
     label.dataset.rut    = (emp.rut    || '').toLowerCase();
+    label.dataset.esNuevo = emp.es_nuevo ? 'true' : 'false';
+    label.dataset.cambioArea = emp.cambio_area ? 'true' : 'false';
 
     label.innerHTML = `
       <input class="form-check-input me-2 sync-emp-checkbox" type="checkbox" value="${emp.rut}"
@@ -2104,13 +2106,18 @@ window.toggleAllSyncEmps = function (checked) {
 
 window.filterSyncEmpleados = function () {
   const query = (document.getElementById('sync-emp-search')?.value || '').toLowerCase().trim();
+  const filterType = document.getElementById('sync-emp-filter-type')?.value || 'all';
+
   document.querySelectorAll('.sync-emp-item').forEach(item => {
     const nombre = item.dataset.nombre || '';
     const rut    = item.dataset.rut    || '';
-    const matches = !query || nombre.includes(query) || rut.includes(query);
-    // Usar clase CSS en lugar de style.display para que los selectores
-    // :not(.d-none) funcionen de forma confiable en todos los browsers
-    item.classList.toggle('d-none', !matches);
+    const isNew  = item.dataset.esNuevo === 'true';
+    const isChanged = item.dataset.cambioArea === 'true';
+
+    const matchesQuery = !query || nombre.includes(query) || rut.includes(query);
+    const matchesType = (filterType === 'all') || (isNew || isChanged);
+
+    item.classList.toggle('d-none', !(matchesQuery && matchesType));
   });
   updateSyncEmpCounter();
 }
@@ -2123,10 +2130,10 @@ window.syncGoBackToStep1 = function () {
   document.getElementById('sync-modal-title').textContent = 'Sincronizar Empleados';
   // Limpiar buscador y resetear visibilidad de todos los items
   const searchEl = document.getElementById('sync-emp-search');
-  if (searchEl) {
-    searchEl.value = '';
-    if (typeof filterSyncEmpleados === 'function') filterSyncEmpleados();
-  }
+  const filterTypeEl = document.getElementById('sync-emp-filter-type');
+  if (searchEl) searchEl.value = '';
+  if (filterTypeEl) filterTypeEl.value = 'all';
+  if (typeof filterSyncEmpleados === 'function') filterSyncEmpleados();
 }
 
 window.confirmSync = async function () {
