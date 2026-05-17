@@ -3639,6 +3639,8 @@ function renderVistaAnalitica(respData, container) {
         <span class="badge-status badge-state-warning"><i class="bi bi-clock-fill me-1"></i>ATR</span> Atraso
         <span class="badge-status badge-state-info"><i class="bi bi-box-arrow-left me-1"></i>SAD</span> Sal.Adelantada
         <span class="badge-status badge-state-danger"><i class="bi bi-x-circle-fill me-1"></i>INA</span> Inasistencia
+        <span class="badge-status badge-state-neutral"><i class="bi bi-cup-hot-fill me-1"></i>LIB</span> Libre (Auto)
+        <span class="badge-status badge-state-warning"><i class="bi bi-calendar-heart-fill me-1"></i>FER</span> Feriado
         <span class="badge-status badge-state-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>PER</span> Permiso
         <span class="ms-auto text-muted" style="font-size:0.68rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
     </div>`;
@@ -3751,15 +3753,23 @@ function _analiticaCellBadge(di) {
     // ── Badge del estado PRIMARIO ─────────────────────────────────────────────
     let pillClass = 'badge-state-neutral';
     let label = (estadosCache[est] && estadosCache[est].short_label) || (est === 'JORNADA_ESPECIAL' ? 'ESP' : (est.length <= 3 ? est : est.substring(0,3)));
+    let tooltipTitle = '';
 
     if (badgeMap[est]) {
         [pillClass, label] = badgeMap[est];
+        if (est === 'LIBRE') tooltipTitle = 'Día Libre (Asignación automática)';
+        else if (est === 'FERIADO') tooltipTitle = 'Feriado legal / Irrenunciable';
+        else if (est === 'INASISTENCIA') tooltipTitle = 'Inasistencia (Generada automáticamente)';
     } else if (di.nomenclatura) {
         pillClass = 'badge-state-info';
         label = di.nomenclatura;
     }
+    
+    if (!tooltipTitle && estadosCache[est] && estadosCache[est].descripcion) {
+        tooltipTitle = estadosCache[est].descripcion;
+    }
 
-    const primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}"><span>${label}</span></div>`;
+    const primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>`;
 
     // ── Badges secundarios según flags independientes ─────────────────────────
     // Solo se muestran si el flag es verdadero Y el estado primario no lo representa ya

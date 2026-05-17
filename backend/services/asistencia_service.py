@@ -1432,8 +1432,10 @@ class AsistenciaService:
                         bulk_ctx['rotativo_last_sem_dict'][empleado_id] = winner_sem
                     else:
                         # Si no hay logs, usamos la última alternativa conocida SÓLO para evaluar inasistencias en el PASADO.
-                        # Si el día es hoy o futuro y no hay marcas, en Rotativo Inteligente NO PODEMOS adivinar el turno.
-                        is_future = dt.date() >= datetime.now().date()
+                        # [BUSINESS_RULE: PREDICCIÓN DE DÍAS FUTUROS]
+                        # Solo se omite la predicción para días estrictamente mayores a hoy (>).
+                        # El día "hoy" (==) DEBE evaluarse para que los descansos y rotativas se marquen (ej. LIB).
+                        is_future = dt.date() > datetime.now().date()
                         if is_future:
                             # No adivinar el futuro: sin marcas no hay turno asignado aún
                             semana_ganadora = None
@@ -1595,6 +1597,7 @@ class AsistenciaService:
         es_nocturno_pre = bool(config_dia and config_dia.get('cruza_medianoche') and not es_libre_config)
 
         # ── LEY CHILE: Víspera de festivo ─────────────────────────────────────
+        # [BUSINESS_RULE: FERIADOS NOCTURNOS Y VÍSPERA (LEY CHILE)]
         # Art. 35 CT: desde las 21:00 hrs del día hábil anterior a un feriado,
         # ninguna jornada puede iniciar. Aplica a:
         #   a) Turnos NOCTURNOS que inician >= 21:00 en víspera de festivo:
@@ -1626,6 +1629,7 @@ class AsistenciaService:
                         config_dia['horas_teoricas'] = max(0.0, minutos_trabajo / 60.0)
 
         # ── LEY CHILE: Turno nocturno que INICIA en festivo (criterio mayoría de horas) ───
+        # [BUSINESS_RULE: MAYORÍA DE HORAS NOCTURNAS EN FESTIVO]
         # DT Ordinarios N°3686/2016 y N°4660/2018:
         # Los trabajadores en TURNOS ROTATIVOS pueden trabajar en el lapso 21:00-24:00
         # del feriado si el turno incide en dicho período, siempre que el descanso íntegro
