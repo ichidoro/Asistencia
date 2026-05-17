@@ -81,7 +81,8 @@ async def preview_empleados(
 ) -> List[Dict[str, Any]]:
     service = SyncService()
     areas = request.areas if request else None
-    return await service.preview_empleados(areas=areas)
+    ignored_cargos = request.ignored_cargos if request else None
+    return await service.preview_empleados(areas=areas, ignored_cargos=ignored_cargos)
 
 
 class ResolverAreasRequest(BaseModel):

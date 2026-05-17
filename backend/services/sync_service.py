@@ -202,7 +202,7 @@ class SyncService:
             logger.error(f"❌ Error en check_guardian_areas: {e}")
             return {"status": "error", "message": str(e)}
 
-    async def preview_empleados(self, areas: List[str] = None) -> List[Dict[str, Any]]:
+    async def preview_empleados(self, areas: List[str] = None, ignored_cargos: List[str] = None) -> List[Dict[str, Any]]:
         """
         Previsualizar empleados que serán sincronizados.
         Descarga BioAlba, filtra por áreas, y cruza con DB local para identificar nuevos vs existentes.
@@ -227,6 +227,13 @@ class SyncService:
                 empleados_bioalba = [
                     e for e in empleados_bioalba 
                     if str(e.get('area', '')).strip() in areas
+                ]
+
+            # Filtrar cargos ignorados
+            if ignored_cargos and len(ignored_cargos) > 0:
+                empleados_bioalba = [
+                    e for e in empleados_bioalba 
+                    if str(e.get('cargo', '')).strip() not in ignored_cargos
                 ]
             
             # Cruzar con DB local para detectar nuevos vs existentes
@@ -268,7 +275,7 @@ class SyncService:
             logger.error(f"❌ Error en preview: {e}")
             return []
 
-    async def sync_empleados(self, areas: List[str] = None, ruts: List[str] = None) -> Dict[str, Any]:
+    async def sync_empleados(self, areas: List[str] = None, ruts: List[str] = None, ignored_cargos: List[str] = None) -> Dict[str, Any]:
         """
         Sincronizar empleados desde BioAlba
         """
@@ -304,6 +311,13 @@ class SyncService:
                 logger.warning("No se obtuvieron empleados de BioAlba")
                 self.stats['fin'] = datetime.now().isoformat()
                 return self.stats
+                
+            # Filtrar cargos ignorados ANTES de que actúe el Guardián
+            if ignored_cargos and len(ignored_cargos) > 0:
+                empleados_bioalba = [
+                    e for e in empleados_bioalba 
+                    if str(e.get('cargo', '')).strip() not in ignored_cargos
+                ]
             
             await db.connect()
             repo = EmpleadoRepository(db)
