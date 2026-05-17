@@ -264,6 +264,7 @@ async def sincronizar_empleados_stream(
     """
     areas = request.areas if request else None
     ruts  = request.ruts  if request else None
+    ignored_cargos = request.ignored_cargos if request else None
     MAX_BATCH = 10
 
     if ruts and len(ruts) > MAX_BATCH:
@@ -290,7 +291,7 @@ async def sincronizar_empleados_stream(
 
             service._progress_callback = _on_progress
 
-            stats = await service.sync_empleados(areas=areas, ruts=ruts)
+            stats = await service.sync_empleados(areas=areas, ruts=ruts, ignored_cargos=ignored_cargos)
             if stats and stats.get("status") == "requires_confirmation":
                 await progress_q.put(('requires_confirmation', stats))
             else:

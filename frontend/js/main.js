@@ -2004,7 +2004,10 @@ window.syncLoadEmpleadosPreview = async function () {
   </div>`;
 
   try {
-    const payload = _syncSelectedAreas.length > 0 ? { areas: _syncSelectedAreas } : {};
+    const payload = {
+    areas: _syncSelectedAreas.length > 0 ? _syncSelectedAreas : null,
+    ignored_cargos: window._ignoredCargos && window._ignoredCargos.length > 0 ? window._ignoredCargos : null
+  };
     const response = await fetch(`${API_BASE_URL}/sync/empleados/preview/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2169,7 +2172,8 @@ window.confirmSync = async function () {
   // 2. Preparar payload
   const payload = {
     areas: _syncSelectedAreas.length > 0 ? _syncSelectedAreas : null,
-    ruts: selectedRuts
+    ruts: selectedRuts,
+    ignored_cargos: window._ignoredCargos && window._ignoredCargos.length > 0 ? window._ignoredCargos : null
   };
 
   const btnSync = document.getElementById('btn-sync');
@@ -2521,8 +2525,17 @@ window.guardarResolucionCargos = async function() {
       const input = document.querySelector(`.input-resolucion-cargo[data-cargo-bioalba="${cargoBioalba}"]`);
       const resolucion = input && input.value.trim() ? input.value.trim() : cargoBioalba;
       resoluciones[cargoBioalba] = resolucion;
+      
+      if (window._ignoredCargos) {
+          const idx = window._ignoredCargos.indexOf(cargoBioalba);
+          if (idx !== -1) window._ignoredCargos.splice(idx, 1);
+      }
     } else {
       resoluciones[cargoBioalba] = "_IGNORE_";
+      window._ignoredCargos = window._ignoredCargos || [];
+      if (!window._ignoredCargos.includes(cargoBioalba)) {
+          window._ignoredCargos.push(cargoBioalba);
+      }
     }
   });
   
