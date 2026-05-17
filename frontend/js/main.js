@@ -2357,6 +2357,7 @@ window.guardarResolucionAreas = async function() {
   const checkboxes = document.querySelectorAll('.checkbox-importar-area');
   const resoluciones = {};
   const ignoredAreas = [];
+  let importedAreaCount = 0;
   
   checkboxes.forEach(cb => {
     const areaBioalba = cb.dataset.areaBioalba;
@@ -2364,11 +2365,16 @@ window.guardarResolucionAreas = async function() {
       const input = document.querySelector(`.input-resolucion-area[data-area-bioalba="${areaBioalba}"]`);
       const resolucion = input && input.value.trim() ? input.value.trim() : areaBioalba;
       resoluciones[areaBioalba] = resolucion;
+      importedAreaCount++;
     } else {
       resoluciones[areaBioalba] = "_IGNORE_";
       ignoredAreas.push(areaBioalba);
     }
   });
+
+  if (importedAreaCount > 0) {
+      window._newAreasImported = true;
+  }
 
   // Filtrar los cargos que pertenecen EXCLUSIVAMENTE a áreas ignoradas
   if (window._pendingCargos && window._pendingCargos.length > 0) {
@@ -2428,7 +2434,12 @@ window.guardarResolucionAreas = async function() {
       } else if (window._pendingGeneros && window._pendingGeneros.length > 0) {
         showResolverGenerosModal(window._pendingGeneros);
       } else {
-        openSyncModal();
+        if (window._newAreasImported) {
+          window._newAreasImported = false;
+          forzarCreacionTurnoAreaNueva();
+        } else {
+          openSyncModal();
+        }
       }
     }
     
@@ -2546,7 +2557,12 @@ window.guardarResolucionCargos = async function() {
       if (window._pendingGeneros && window._pendingGeneros.length > 0) {
         showResolverGenerosModal(window._pendingGeneros);
       } else {
-        openSyncModal();
+        if (window._newAreasImported) {
+          window._newAreasImported = false;
+          forzarCreacionTurnoAreaNueva();
+        } else {
+          openSyncModal();
+        }
       }
     }
     
@@ -2623,7 +2639,12 @@ window.guardarResolucionGeneros = async function() {
         if (typeof resetWizard === 'function') resetWizard();
       }
     } else {
-      openSyncModal();
+      if (window._newAreasImported) {
+        window._newAreasImported = false;
+        forzarCreacionTurnoAreaNueva();
+      } else {
+        openSyncModal();
+      }
     }
     
   } catch (error) {
@@ -2633,6 +2654,27 @@ window.guardarResolucionGeneros = async function() {
     btnGuardar.disabled = false;
     btnGuardar.innerText = 'Crear Géneros y Continuar';
   }
+};
+
+window.forzarCreacionTurnoAreaNueva = function() {
+  switchPage('configuracion');
+  setTimeout(() => {
+    const tabHorarios = document.getElementById('horarios-tab');
+    if (tabHorarios) tabHorarios.click();
+    
+    if (typeof openModalHorario === 'function') {
+      openModalHorario();
+      Swal.fire({
+          title: "¡Área Nueva Detectada!",
+          text: "Has sincronizado una nueva área. Por favor, crea un turno (horario) para esta área antes de continuar.",
+          icon: "warning",
+          toast: true,
+          position: "top-end",
+          timer: 6000,
+          showConfirmButton: false
+      });
+    }
+  }, 600);
 };
 
 window.abrirConfigTurnoWizard = function() {

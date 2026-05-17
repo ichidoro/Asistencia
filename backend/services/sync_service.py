@@ -383,6 +383,42 @@ class SyncService:
                         continue
                 emp_filtrados.append(emp_data)
 
+            # --- AUDITORÍA DE SEGURIDAD (GUARDIÁN DE TURNOS) ---
+            # Impedir sincronización de empleados cuyas áreas no tienen turno asociado
+            from backend.repositories.turno import TurnoRepository
+            turno_repo = TurnoRepository(db)
+            turnos_stats = await turno_repo.get_stats_por_area()
+            
+            area_id_cache = {}
+            area_name_cache = {}
+            emp_validos = []
+            
+            for emp_data in emp_filtrados:
+                area_raw = str(emp_data.get('area', '')).strip()
+                if area_raw not in area_id_cache:
+                    area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
+                    area_id_cache[area_raw] = area_id
+                    if area_id:
+                        real_area = await area_repo.get_area_by_id(area_id)
+                        area_name_cache[area_raw] = real_area['nombre'] if real_area else None
+                    else:
+                        area_name_cache[area_raw] = None
+                        
+                real_area_name = area_name_cache.get(area_raw)
+                
+                if real_area_name:
+                    turnos_globales = turnos_stats.get('globales', 0)
+                    turnos_area = turnos_stats.get('areas', {}).get(real_area_name, 0)
+                    if turnos_globales == 0 and turnos_area == 0:
+                        logger.warning(f"⚠️ Sincronización bloqueada para {emp_data.get('rut')} porque su área ({real_area_name}) no tiene turnos configurados.")
+                        self.stats['errores'] += 1
+                        self.stats['detalles_errores'].append(f"{emp_data.get('rut', 'Desconocido')}: Área sin turnos configurados ({real_area_name})")
+                        continue
+                        
+                emp_validos.append(emp_data)
+                
+            emp_filtrados = emp_validos
+
             total_a_sync = len(emp_filtrados)
             logger.info(f"📊 Empleados a sincronizar: {total_a_sync} (filtrados: {self.stats['filtrados']})")
 
