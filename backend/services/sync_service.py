@@ -218,6 +218,156 @@ class SyncService:
             logger.error(f"❌ Error en check_guardian_areas: {e}")
             return {"status": "error", "message": str(e)}
 
+    async def commit_wizard_areas(
+        self,
+        resoluciones: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Paso 1 del Wizard: Persiste áreas y alias inmediatamente.
+        Retorna IDs de las áreas creadas para poder hacer rollback si el usuario retrocede.
+        """
+        from backend.repositories.area import AreaRepository
+        await db.connect()
+        creadas = []   # [{bioalba_name, local_name, id}]
+        ignoradas = []
+
+        async with db.transaction():
+            area_repo = AreaRepository(db)
+            for area_bioalba, resolucion in resoluciones.items():
+                if resolucion == "_IGNORE_":
+                    ignoradas.append(area_bioalba)
+                    continue
+
+                nombre_local = area_bioalba if resolucion == "_NEW_" else resolucion
+
+                existing = await area_repo.get_area_by_name(nombre_local)
+                if existing:
+                    area_id = existing['id']
+                    # Crear alias si el nombre de BioAlba es distinto al local
+                    if area_bioalba != nombre_local:
+                        await area_repo.create_alias(area_bioalba, area_id)
+                    # No contamos como "creada" (ya existía)
+                else:
+                    area_id = await area_repo.create_area(nombre_local)
+                    if area_bioalba != nombre_local:
+                        await area_repo.create_alias(area_bioalba, area_id)
+                    creadas.append({"bioalba_name": area_bioalba, "local_name": nombre_local, "id": area_id})
+
+        logger.info(f"✅ [WizardCommit] Áreas: {len(creadas)} creadas, {len(ignoradas)} ignoradas")
+        return {"creadas": creadas, "ignoradas": ignoradas}
+
+    async def commit_wizard_cargos(
+        self,
+        resoluciones: Dict[str, str],
+        generos: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Paso 2 del Wizard: Persiste cargos y géneros inmediatamente.
+        Retorna IDs de los cargos creados para rollback.
+        """
+        from backend.repositories.cargo import CargoRepository
+        await db.connect()
+        creados = []
+        ignorados = []
+        generos_creados = []
+
+        async with db.transaction():
+            cargo_repo = CargoRepository(db)
+
+            for cargo_bioalba, resolucion in resoluciones.items():
+                if resolucion == "_IGNORE_":
+                    ignorados.append(cargo_bioalba)
+                    continue
+
+                nombre_local = cargo_bioalba if resolucion == "_NEW_" else resolucion
+
+                existing = await cargo_repo.get_cargo_by_name(nombre_local)
+                if existing:
+                    cargo_id = existing['id']
+                    if cargo_bioalba != nombre_local:
+                        await cargo_repo.create_alias(cargo_bioalba, cargo_id)
+                else:
+                    cargo_id = await cargo_repo.create_cargo(nombre_local)
+                    if cargo_bioalba != nombre_local:
+                        await cargo_repo.create_alias(cargo_bioalba, cargo_id)
+                    creados.append({"bioalba_name": cargo_bioalba, "local_name": nombre_local, "id": cargo_id})
+
+            for genero in generos:
+                existente = await db.fetch_one(
+                    "SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero,)
+                )
+                if not existente:
+                    await db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (genero,))
+                    row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre = ?", (genero,))
+                    if row:
+                        generos_creados.append({"nombre": genero, "id": row['id']})
+
+        logger.info(f"✅ [WizardCommit] Cargos: {len(creados)} creados, {len(ignorados)} ignorados, {len(generos_creados)} géneros creados")
+        return {"creados": creados, "ignorados": ignorados, "generos_creados": generos_creados}
+
+    async def commit_wizard_turnos(
+        self,
+        asignaciones: Dict[str, Optional[int]]
+    ) -> Dict[str, Any]:
+        """
+        Paso 3 del Wizard: Persiste asignaciones de turno por área inmediatamente.
+        """
+        from backend.repositories.area import AreaRepository
+        await db.connect()
+        asignados = 0
+
+        async with db.transaction():
+            area_repo = AreaRepository(db)
+            for area_name, turno_id in asignaciones.items():
+                area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
+                if area_id:
+                    await db.execute("DELETE FROM turno_areas WHERE area_id = ?", (area_id,))
+                    if turno_id:
+                        await db.execute(
+                            "INSERT INTO turno_areas (area_id, turno_id) VALUES (?, ?)",
+                            (area_id, turno_id)
+                        )
+                        asignados += 1
+
+        logger.info(f"✅ [WizardCommit] Turnos: {asignados} asignaciones guardadas")
+        return {"asignados": asignados}
+
+    async def rollback_wizard_items(
+        self,
+        tipo: str,
+        ids: List[int]
+    ) -> Dict[str, Any]:
+        """
+        Rollback de sesión: Elimina registros creados en el wizard actual.
+        Solo elimina si el ID fue retornado por commit (nunca toca pre-existentes).
+        tipo: 'areas' | 'cargos'
+        """
+        if not ids:
+            return {"eliminados": 0}
+
+        await db.connect()
+        # Tabla principal y tabla de alias correspondientes
+        if tipo == 'areas':
+            tabla = 'areas'
+            tabla_alias = 'areas_alias'
+            fk_col = 'area_id'
+        else:
+            tabla = 'cargos'
+            tabla_alias = 'cargos_alias'
+            fk_col = 'cargo_id'
+
+        eliminados = 0
+        async with db.transaction():
+            for item_id in ids:
+                # Eliminar alias primero (FK)
+                await db.execute(f"DELETE FROM {tabla_alias} WHERE {fk_col} = ?", (item_id,))
+                # Eliminar el registro principal
+                await db.execute(f"DELETE FROM {tabla} WHERE id = ?", (item_id,))
+                eliminados += 1
+
+        logger.info(f"♻️ [WizardRollback] {eliminados} {tipo} eliminados (rollback de sesión)")
+        return {"eliminados": eliminados}
+
     async def finalize_wizard_sync(
         self,
         areas_resoluciones: Dict[str, str],

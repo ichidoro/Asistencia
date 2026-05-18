@@ -152,6 +152,92 @@ async def wizard_provider_bonos(
         "pre_asignaciones": pre_asignaciones
     }
 
+class WizardCommitAreasRequest(BaseModel):
+    resoluciones: Dict[str, str]  # bioalba_name -> local_name | _NEW_ | _IGNORE_
+
+@router.post(
+    "/wizard/commit/areas/",
+    summary="Wizard Paso 1: Persistir áreas",
+    description="Crea áreas y alias inmediatamente. Retorna IDs para rollback si el usuario retrocede."
+)
+async def wizard_commit_areas(
+    request: WizardCommitAreasRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    try:
+        result = await service.commit_wizard_areas(request.resoluciones)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"Error en commit_wizard_areas: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class WizardCommitCargosRequest(BaseModel):
+    resoluciones: Dict[str, str]  # bioalba_name -> local_name | _NEW_ | _IGNORE_
+    generos: List[str]
+
+@router.post(
+    "/wizard/commit/cargos/",
+    summary="Wizard Paso 2: Persistir cargos y géneros",
+    description="Crea cargos y géneros inmediatamente. Retorna IDs para rollback."
+)
+async def wizard_commit_cargos(
+    request: WizardCommitCargosRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    try:
+        result = await service.commit_wizard_cargos(request.resoluciones, request.generos)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"Error en commit_wizard_cargos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class WizardCommitTurnosRequest(BaseModel):
+    asignaciones: Dict[str, Optional[int]]  # area_name -> turno_id | null
+
+@router.post(
+    "/wizard/commit/turnos/",
+    summary="Wizard Paso 3: Persistir asignaciones de turno",
+    description="UPSERT de turno_areas para las áreas del wizard."
+)
+async def wizard_commit_turnos(
+    request: WizardCommitTurnosRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    try:
+        result = await service.commit_wizard_turnos(request.asignaciones)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"Error en commit_wizard_turnos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class WizardRollbackRequest(BaseModel):
+    tipo: str   # 'areas' | 'cargos'
+    ids: List[int]
+
+@router.delete(
+    "/wizard/rollback/",
+    summary="Wizard: Rollback de sesión",
+    description="Elimina registros creados en el wizard actual (solo los de esta sesión, por ID)."
+)
+async def wizard_rollback(
+    request: WizardRollbackRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    try:
+        result = await service.rollback_wizard_items(request.tipo, request.ids)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"Error en wizard_rollback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class WizardFinalizeRequest(BaseModel):
     areas_resoluciones: Dict[str, str]
     cargos_resoluciones: Dict[str, str]
