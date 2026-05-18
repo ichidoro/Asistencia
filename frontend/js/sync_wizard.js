@@ -1229,7 +1229,7 @@ window.confirmWizardSync = async function() {
     }
 
     try {
-        const response = await fetch(`${window.API_BASE_URL || ''}/sync/empleados/now/stream/`, {
+        const response = await fetch('/api/sync/empleados/now/stream/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

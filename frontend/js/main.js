@@ -2152,7 +2152,119 @@ window.confirmSync = async function () {
   }
 }
 
+/**
+ * Función puente para el Wizard: ejecuta el flujo SSE completo sin pasar por modal-sync-areas.
+ * El wizard llama esta función pasando el payload directamente.
+ * Tiene acceso a las variables internas de main.js (onboardingQueue, _batch, etc.)
+ */
+window._executeSyncFromWizard = async function(payload) {
+  const btnSync = document.getElementById('btn-sync');
+  if (btnSync) {
+    btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
+    btnSync.disabled = true;
+  }
 
+  showBatchLoadingOverlay('Conectando a BioAlba...');
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/sync/empleados/now/stream/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      hideBatchLoadingOverlay();
+      const errData = await response.json().catch(() => ({}));
+      alert(`❌ Error: ${errData.detail || 'Error desconocido'}`);
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalStats = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      let eventType = null;
+      let eventData = null;
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          try { eventData = JSON.parse(line.slice(6)); } catch { eventData = null; }
+        } else if (line === '' && eventType && eventData !== null) {
+          if (eventType === 'start') {
+            showBatchLoadingOverlay(`Sincronizando ${eventData.total || '?'} empleado(s)...`);
+          } else if (eventType === 'progress') {
+            updateBatchOverlayProgress(eventData.idx, eventData.total, eventData.nombre);
+          } else if (eventType === 'done') {
+            finalStats = eventData;
+          } else if (eventType === 'error') {
+            hideBatchLoadingOverlay();
+            alert(`❌ Error: ${eventData.message || 'Error desconocido'}`);
+          }
+          eventType = null;
+          eventData = null;
+        }
+      }
+    }
+
+    if (finalStats) {
+      const stats = finalStats;
+      await loadStats();
+      await loadEmpleados();
+
+      if (stats.nuevos_detalles && stats.nuevos_detalles.length > 0) {
+        console.log("🆕 [Wizard→SSE] Nuevos empleados para onboarding:", stats.nuevos_detalles);
+        onboardingQueue = [...stats.nuevos_detalles];
+        _batchTotalForOnboarding = onboardingQueue.length;
+
+        if (onboardingQueue.length > 1) {
+          _batch.active = true;
+          _batch.phase = 'edit';
+          _batch.editedEmployees = [];
+          _batch.syncPayload = [];
+          showToast(`🚀 Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
+        } else {
+          _batch.active = false;
+        }
+
+        const _spinMsg = _batchTotalForOnboarding > 1
+          ? `Preparando empleado 1 de ${_batchTotalForOnboarding}...`
+          : `Preparando empleado...`;
+        showBatchLoadingOverlay(_spinMsg);
+        setTimeout(() => { procesarColaOnboarding(); }, 1500);
+      } else {
+        hideBatchLoadingOverlay();
+        alert(`✅ Sincronización completada:\n` +
+          `- Nuevos: ${stats.empleados_nuevos}\n` +
+          `- Actualizados: ${stats.empleados_actualizados}\n` +
+          `- Sin cambios: ${stats.empleados_sin_cambios || 0}\n` +
+          `- Errores: ${stats.errores}`);
+      }
+    } else {
+      hideBatchLoadingOverlay();
+    }
+
+  } catch (error) {
+    hideBatchLoadingOverlay();
+    console.error('[Wizard→SSE] Error:', error);
+    alert('❌ Error de conexión al iniciar sincronización');
+  } finally {
+    if (btnSync) {
+      btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
+      btnSync.disabled = false;
+    }
+  }
+};
 
 // ==========================================
 // LOGICA DE SYNC ASISTENCIA (Manual por Areas)
