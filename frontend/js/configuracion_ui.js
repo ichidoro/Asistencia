@@ -457,6 +457,50 @@ async function openModalBono(bono = null) {
     form.reset();
     container.innerHTML = '';
 
+    // Cargar áreas para el selector de asignación
+    const areasContainer = document.getElementById('bono-areas-container');
+    try {
+        const areasRes = await fetch(`${API_BASE_URL}/configuracion/areas/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const areasData = areasRes.ok ? await areasRes.json() : [];
+        
+        // Obtener area_ids ya asignadas (si estamos editando)
+        let assignedAreaIds = new Set();
+        if (bono && bono.id) {
+            try {
+                const abRes = await fetch(`${API_BASE_URL}/sync/wizard/bonos/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ areas: areasData.map(a => a.nombre || a.name) })
+                });
+                if (abRes.ok) {
+                    const abData = await abRes.json();
+                    const preAsigs = abData.pre_asignaciones || {};
+                    for (const [areaId, bonoIds] of Object.entries(preAsigs)) {
+                        if (bonoIds.includes(bono.id)) assignedAreaIds.add(parseInt(areaId));
+                    }
+                }
+            } catch(e) { /* silenciar - no crítico */ }
+        }
+        
+        if (areasData.length > 0) {
+            areasContainer.innerHTML = areasData.map(a => {
+                const areaId = a.id;
+                const areaName = a.nombre || a.name;
+                const checked = assignedAreaIds.has(areaId) ? 'checked' : '';
+                return `<div class="form-check form-check-inline">
+                    <input class="form-check-input bono-area-chk" type="checkbox" value="${areaId}" id="bono-area-${areaId}" ${checked}>
+                    <label class="form-check-label small" for="bono-area-${areaId}">${areaName}</label>
+                </div>`;
+            }).join('');
+        } else {
+            areasContainer.innerHTML = '<span class="text-muted small">No hay áreas configuradas</span>';
+        }
+    } catch(e) {
+        areasContainer.innerHTML = '<span class="text-muted small">Error cargando áreas</span>';
+    }
+
     if (bono) {
         title.innerText = 'Editar Bono';
         document.getElementById('bono-id').value = bono.id;
@@ -590,8 +634,11 @@ async function saveBono() {
             es_proporcional: row.querySelector('.rule-proporcional').checked
         });
     });
+    // Recolectar áreas asignadas
+    const areaChecks = document.querySelectorAll('.bono-area-chk:checked');
+    const area_ids = Array.from(areaChecks).map(chk => parseInt(chk.value));
 
-    const body = { nombre, descripcion, activo, reglas };
+    const body = { nombre, descripcion, activo, reglas, area_ids };
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_CONFIG}bonos/${id}/` : `${API_CONFIG}bonos/`;
 

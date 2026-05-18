@@ -37,6 +37,7 @@ class BonoBase(BaseModel):
 
 class BonoCreate(BonoBase):
     reglas: List[BonoReglaBase] = []
+    area_ids: Optional[List[int]] = Field(None, description="IDs de áreas a las que asignar el bono")
 
 class BonoResponse(BonoBase):
     id: int

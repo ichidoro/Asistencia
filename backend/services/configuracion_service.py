@@ -19,30 +19,47 @@ class ConfiguracionService:
     # --- BONOS ---
     async def create_bono(self, bono: BonoCreate) -> int:
         bono_id = await self.repository.create_bono(bono)
-        if bono_id and bono.activo:
-             # Trigger: Recalcular para TODOS los empleados activos
-            try:
-                emp_repo = EmpleadoRepository(self.repository.db)
-                # FIX: Método correcto es get_all, no get_all_empleados
-                empleados = await emp_repo.get_all(limit=1000, activo=True)
-                
-                logger.info(f"Trigger create_bono: Recalculando asignaciones para {len(empleados)} empleados...")
-                for emp in empleados:
-                    await self.recalculate_assignments(emp)
-                logger.success("Trigger create_bono: Recálculo masivo completado.")
-                
-            except Exception as e:
-                logger.error(f"Error en trigger create_bono: {e}")
+        if bono_id:
+            # Persistir relación area_bonos si se proporcionaron area_ids
+            if bono.area_ids:
+                try:
+                    ops = [("INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)", (aid, bono_id)) for aid in bono.area_ids]
+                    await self.repository.db.execute_batch(ops)
+                    logger.info(f"Bono {bono_id} asignado a {len(bono.area_ids)} áreas")
+                except Exception as e:
+                    logger.error(f"Error asignando áreas al bono: {e}")
+
+            if bono.activo:
+                # Trigger: Recalcular para TODOS los empleados activos
+                try:
+                    emp_repo = EmpleadoRepository(self.repository.db)
+                    empleados = await emp_repo.get_all(limit=1000, activo=True)
+                    
+                    logger.info(f"Trigger create_bono: Recalculando asignaciones para {len(empleados)} empleados...")
+                    for emp in empleados:
+                        await self.recalculate_assignments(emp)
+                    logger.success("Trigger create_bono: Recálculo masivo completado.")
+                    
+                except Exception as e:
+                    logger.error(f"Error en trigger create_bono: {e}")
         return bono_id
 
     async def update_bono(self, bono_id: int, bono: BonoCreate) -> bool:
         updated = await self.repository.update_bono(bono_id, bono)
         if updated:
+            # Sincronizar relación area_bonos si se proporcionaron area_ids
+            if bono.area_ids is not None:
+                try:
+                    ops = [("DELETE FROM area_bonos WHERE bono_id = ?", (bono_id,))]
+                    ops += [("INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)", (aid, bono_id)) for aid in bono.area_ids]
+                    await self.repository.db.execute_batch(ops)
+                    logger.info(f"Bono {bono_id} re-asignado a {len(bono.area_ids)} áreas")
+                except Exception as e:
+                    logger.error(f"Error actualizando áreas del bono: {e}")
+
             # Trigger: Recalcular para TODOS los empleados activos
-            # Esto es pesado, se podría mover a background task en el futuro
             try:
                 emp_repo = EmpleadoRepository(self.repository.db)
-                # FIX: Método correcto es get_all, no get_all_empleados
                 empleados = await emp_repo.get_all(limit=1000, activo=True)
                 
                 logger.info(f"Trigger update_bono: Recalculando asignaciones para {len(empleados)} empleados...")

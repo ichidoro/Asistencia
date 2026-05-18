@@ -1093,7 +1093,8 @@ async function fetchAndRenderWizardStep5() {
 
         if (!response.ok) throw new Error("Error en preview");
         const res = await response.json();
-        const empList = res.empleados || [];
+        // El endpoint retorna una lista directamente O un objeto {empleados: [...]}
+        const empList = Array.isArray(res) ? res : (res.empleados || []);
 
         if (counter) counter.textContent = `${empList.length} listos`;
         
