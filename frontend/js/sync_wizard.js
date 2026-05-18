@@ -1191,7 +1191,7 @@ window.confirmWizardSync = async function() {
 
     if (!confirmResult.isConfirmed) return;
 
-    // 2. Preparar filtros globales para el flujo SSE en main.js
+    // 2. Preparar filtros globales
     window._syncSelectedAreas = getConsolidatedAreas();
 
     const ignoredCargos = [];
@@ -1210,136 +1210,23 @@ window.confirmWizardSync = async function() {
     const modal = bootstrap.Modal.getInstance(modalEl);
     if (modal) modal.hide();
 
-    // 5. Disparar el flujo SSE directamente (bypass de openSyncModalPreview + confirmSync)
+    // 5. Construir payload y llamar función puente en main.js
+    //    _executeSyncFromWizard tiene acceso a onboardingQueue, _batch, procesarColaOnboarding
     const payload = {
         areas: window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
         ruts: selectedRuts,
         ignored_cargos: ignoredCargos.length > 0 ? ignoredCargos : null
     };
 
-    const btnSync = document.getElementById('btn-sync');
-    if (btnSync) {
-        btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
-        btnSync.disabled = true;
-    }
-
-    // Mostrar spinner
-    if (typeof showBatchLoadingOverlay === 'function') {
-        showBatchLoadingOverlay('Conectando a BioAlba...');
-    }
-
-    try {
-        const response = await fetch('/api/sync/empleados/now/stream/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
-            const errData = await response.json().catch(() => ({}));
-            Swal.fire('Error', errData.detail || 'Error desconocido', 'error');
-            return;
-        }
-
-        // Leer el stream SSE — REUTILIZA la lógica EXACTA de confirmSync en main.js
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let finalStats = null;
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-
-            let eventType = null;
-            let eventData = null;
-            for (const line of lines) {
-                if (line.startsWith('event: ')) {
-                    eventType = line.slice(7).trim();
-                } else if (line.startsWith('data: ')) {
-                    try { eventData = JSON.parse(line.slice(6)); } catch { eventData = null; }
-                } else if (line === '' && eventType && eventData !== null) {
-                    if (eventType === 'start') {
-                        const total = eventData.total || '?';
-                        if (typeof showBatchLoadingOverlay === 'function')
-                            showBatchLoadingOverlay(`Sincronizando ${total} empleado(s)...`);
-                    } else if (eventType === 'progress') {
-                        if (typeof updateBatchOverlayProgress === 'function')
-                            updateBatchOverlayProgress(eventData.idx, eventData.total, eventData.nombre);
-                    } else if (eventType === 'done') {
-                        finalStats = eventData;
-                    } else if (eventType === 'error') {
-                        if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
-                        Swal.fire('Error', eventData.message || 'Error durante sincronización', 'error');
-                    }
-                    eventType = null;
-                    eventData = null;
-                }
-            }
-        }
-
-        // Stream completado — conectar al flujo de onboarding de main.js
-        if (finalStats) {
-            const stats = finalStats;
-            if (typeof loadStats === 'function') await loadStats();
-            if (typeof loadEmpleados === 'function') await loadEmpleados();
-
-            if (stats.nuevos_detalles && stats.nuevos_detalles.length > 0) {
-                console.log("🆕 [Wizard→SSE] Nuevos empleados para onboarding:", stats.nuevos_detalles);
-                window.onboardingQueue = [...stats.nuevos_detalles];
-                window._batchTotalForOnboarding = window.onboardingQueue.length;
-
-                if (window.onboardingQueue.length > 1) {
-                    window._batch = window._batch || {};
-                    window._batch.active = true;
-                    window._batch.phase = 'edit';
-                    window._batch.editedEmployees = [];
-                    window._batch.syncPayload = [];
-                    if (typeof showToast === 'function')
-                        showToast(`🚀 Batch: editarás ${window.onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
-                } else {
-                    window._batch = window._batch || {};
-                    window._batch.active = false;
-                }
-
-                // Transición al flujo de onboarding (editar → bonos → turnos → marcaciones → grilla)
-                const _spinMsg = window._batchTotalForOnboarding > 1
-                    ? `Preparando empleado 1 de ${window._batchTotalForOnboarding}...`
-                    : `Preparando empleado...`;
-                if (typeof showBatchLoadingOverlay === 'function') showBatchLoadingOverlay(_spinMsg);
-                setTimeout(() => {
-                    if (typeof procesarColaOnboarding === 'function') {
-                        procesarColaOnboarding();
-                    } else {
-                        console.error('[Wizard] procesarColaOnboarding no disponible');
-                        if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
-                    }
-                }, 1500);
-            } else {
-                if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
-                Swal.fire('Sincronización completada', 
-                    `Nuevos: ${stats.empleados_nuevos}\nActualizados: ${stats.empleados_actualizados}\nSin cambios: ${stats.empleados_sin_cambios || 0}\nErrores: ${stats.errores}`,
-                    stats.errores > 0 ? 'warning' : 'success');
-            }
+    // Esperar a que el wizard termine de cerrarse, luego disparar
+    setTimeout(() => {
+        if (typeof window._executeSyncFromWizard === 'function') {
+            window._executeSyncFromWizard(payload);
         } else {
-            if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+            console.error('[Wizard] _executeSyncFromWizard no disponible');
+            Swal.fire('Error', 'Función de sincronización no disponible.', 'error');
         }
-
-    } catch (error) {
-        if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
-        console.error('[Wizard] Error en sync stream:', error);
-        Swal.fire('Error', 'Error de conexión al iniciar sincronización', 'error');
-    } finally {
-        if (btnSync) {
-            btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
-            btnSync.disabled = false;
-        }
-    }
+    }, 500);
 };
 
 // ==========================================
