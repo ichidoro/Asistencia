@@ -642,21 +642,67 @@ async function fetchAndRenderWizardStep3_Pagadores() {
         container.innerHTML = `<div class="alert alert-danger">Error al cargar pagadores: ${e.message}</div>`;
     }
 }
+/**
+ * Helper: Abre un modal-hijo sobre el wizard sin conflictos de z-index/Top-Layer.
+ * Estrategia: Ocultar temporalmente el wizard → abrir modal-hijo → al cerrar el hijo,
+ * restaurar el wizard en el paso correcto.
+ * @param {string} childModalId - ID del modal custom a abrir
+ * @param {Function} openFn - Función que abre el modal (ej: openModalGestionPagadores)
+ * @param {Function} onCloseFn - Callback al cerrar el modal-hijo
+ */
+function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
+    const wizardEl = document.getElementById('modal-sync-wizard');
+    const wizardModal = wizardEl ? bootstrap.Modal.getInstance(wizardEl) : null;
+
+    // 1. Ocultar el wizard temporalmente (preserva _wizardState)
+    if (wizardModal) {
+        wizardModal.hide();
+    }
+
+    // 2. Esperar a que Bootstrap termine la animación de ocultar, luego abrir hijo
+    setTimeout(() => {
+        openFn();
+
+        // 3. Observar cierre del modal-hijo
+        const childEl = document.getElementById(childModalId);
+        if (childEl) {
+            const checkClose = setInterval(() => {
+                if (childEl.style.display === 'none' || childEl.style.display === '') {
+                    clearInterval(checkClose);
+                    // 4. Restaurar el wizard
+                    _wizardRestoreAfterChild(wizardEl, onCloseFn);
+                }
+            }, 300);
+        }
+    }, 350);
+}
+
+/**
+ * Restaura el wizard después de cerrar un modal-hijo.
+ */
+function _wizardRestoreAfterChild(wizardEl, onCloseFn) {
+    if (!wizardEl) return;
+    // Destruir instancia anterior para evitar conflictos Bootstrap
+    const oldInst = bootstrap.Modal.getInstance(wizardEl);
+    if (oldInst) oldInst.dispose();
+
+    const newInstance = new bootstrap.Modal(wizardEl, { backdrop: 'static', keyboard: false });
+    newInstance.show();
+
+    // Refrescar el contenido del paso actual
+    setTimeout(() => {
+        updateWizardUI();
+        if (onCloseFn) onCloseFn();
+    }, 350);
+}
 
 window._wizardAbrirPagadores = function() {
     if (typeof window.openModalGestionPagadores === 'function') {
-        window.openModalGestionPagadores();
-        // Observar cierre para refrescar
-        const modal = document.getElementById('modal-gestion-pagadores');
-        if (modal) {
-            const observer = new MutationObserver(() => {
-                if (modal.style.display === 'none' || modal.style.display === '') {
-                    observer.disconnect();
-                    fetchAndRenderWizardStep3_Pagadores();
-                }
-            });
-            observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
-        }
+        _wizardOpenChildModal(
+            'modal-gestion-pagadores',
+            () => window.openModalGestionPagadores(),
+            () => fetchAndRenderWizardStep3_Pagadores()
+        );
     } else {
         Swal.fire('Info', 'El módulo de pagadores aún no está cargado. Inicializa Configuración primero.', 'info');
     }
@@ -734,17 +780,11 @@ async function fetchAndRenderWizardStep4_TiposJ() {
 
 window._wizardAbrirTipoJ = function() {
     if (typeof window.openModalTipoJ === 'function') {
-        window.openModalTipoJ();
-        const modal = document.getElementById('modal-tipo-justificacion');
-        if (modal) {
-            const observer = new MutationObserver(() => {
-                if (modal.style.display === 'none' || modal.style.display === '') {
-                    observer.disconnect();
-                    fetchAndRenderWizardStep4_TiposJ();
-                }
-            });
-            observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
-        }
+        _wizardOpenChildModal(
+            'modal-tipo-justificacion',
+            () => window.openModalTipoJ(),
+            () => fetchAndRenderWizardStep4_TiposJ()
+        );
     } else {
         Swal.fire('Info', 'El módulo de justificaciones aún no está cargado. Inicializa Configuración primero.', 'info');
     }
@@ -1170,9 +1210,9 @@ window._wizardIrACrearTurno = function() {
                     if (modalTurnoEl) {
                         modalTurnoEl.addEventListener('hidden.bs.modal', function _onClose() {
                             modalTurnoEl.removeEventListener('hidden.bs.modal', _onClose);
-                            // 4. Volver al wizard en el Paso 3 y refrescar la lista de turnos
+                            // 4. Volver al wizard en el Paso 6 (Turnos) y refrescar la lista
                             if (wizardModalEl) {
-                                window._wizardState.currentStep = 3;
+                                window._wizardState.currentStep = 6;
                                 // Destruir instancia anterior para evitar conflicto Bootstrap
                                 const oldInst = bootstrap.Modal.getInstance(wizardModalEl);
                                 if (oldInst) oldInst.dispose();
@@ -1194,7 +1234,7 @@ window._wizardIrACrearTurno = function() {
     if (modalTurnoEl) {
         const _onClose = () => {
             modalTurnoEl.removeEventListener('hidden.bs.modal', _onClose);
-            // Refrescar el paso 3 para mostrar el turno recién creado
+            // Refrescar el paso 6 (Turnos) para mostrar el turno recién creado
             window._wizardRefrescarTurnos();
         };
         modalTurnoEl.addEventListener('hidden.bs.modal', _onClose);
@@ -1202,11 +1242,11 @@ window._wizardIrACrearTurno = function() {
 };
 
 /**
- * Recarga el Paso 3 sin cerrar el wizard.
+ * Recarga el Paso 6 (Turnos) sin cerrar el wizard.
  * Útil si el usuario ya creó un turno en otra pestaña.
  */
 window._wizardRefrescarTurnos = function() {
-    const step3 = document.getElementById('wizard-step-3');
+    const step3 = document.getElementById('wizard-step-6');
     const tableSection = step3 && step3.querySelector('.table-responsive');
     if (tableSection) {
         tableSection.innerHTML = `
