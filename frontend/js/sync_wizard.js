@@ -651,29 +651,37 @@ async function fetchAndRenderWizardStep3_Pagadores() {
  */
 function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
     const wizardEl = document.getElementById('modal-sync-wizard');
+    const wizardModal = wizardEl ? bootstrap.Modal.getInstance(wizardEl) : null;
 
-    // 1. Ocultar el wizard SIN usar Bootstrap .hide() para evitar que
-    //    Bootstrap agregue 'inert' a elementos hermanos (bloquea clics en modales custom).
-    if (wizardEl) {
-        wizardEl.style.visibility = 'hidden';
-        wizardEl.style.pointerEvents = 'none';
-        // Remover backdrops de Bootstrap que bloquean la interacción
-        document.querySelectorAll('.modal-backdrop').forEach(b => b.style.display = 'none');
+    // 1. Ocultar el wizard via Bootstrap API
+    if (wizardModal) {
+        wizardModal.hide();
     }
 
-    // 2. Esperar un frame para que se apliquen los estilos, luego abrir hijo
+    // 2. Esperar a que Bootstrap termine de ocultar, luego abrir hijo
     setTimeout(() => {
         openFn();
 
-        // 3. Observar cierre del modal-hijo (soporta AMBOS tipos de modal)
+        // 3. Bootstrap 5.3+ agrega 'inert' a todos los hermanos del modal activo.
+        //    Como el child modal es un modal CUSTOM (no Bootstrap), debemos remover
+        //    'inert' y 'aria-hidden' manualmente para que sea interactivo.
         const childEl = document.getElementById(childModalId);
         if (!childEl) return;
 
-        // Detectar si es un modal Bootstrap (tiene clase 'fade' o instancia Bootstrap)
+        // Remover inert del child y todos sus ancestros hasta el body
+        let el = childEl;
+        while (el && el !== document.body) {
+            el.removeAttribute('inert');
+            el.removeAttribute('aria-hidden');
+            el = el.parentElement;
+        }
+        // También remover inert del childEl directamente (por si acaso)
+        childEl.removeAttribute('inert');
+
+        // 4. Observar cierre del modal-hijo (soporta AMBOS tipos de modal)
         const isBsModal = childEl.classList.contains('fade') || bootstrap.Modal.getInstance(childEl);
 
         if (isBsModal) {
-            // Modal Bootstrap: escuchar evento hidden.bs.modal (una sola vez)
             const _onHidden = () => {
                 childEl.removeEventListener('hidden.bs.modal', _onHidden);
                 _wizardRestoreAfterChild(wizardEl, onCloseFn);
@@ -688,7 +696,7 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
                 }
             }, 300);
         }
-    }, 150);
+    }, 400);
 }
 
 /**
@@ -697,22 +705,19 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
 function _wizardRestoreAfterChild(wizardEl, onCloseFn) {
     if (!wizardEl) return;
 
-    // Restaurar visibilidad del wizard
-    wizardEl.style.visibility = '';
-    wizardEl.style.pointerEvents = '';
-    // Restaurar backdrops de Bootstrap
-    document.querySelectorAll('.modal-backdrop').forEach(b => b.style.display = '');
+    // Destruir instancia anterior para evitar conflictos Bootstrap
+    const oldInst = bootstrap.Modal.getInstance(wizardEl);
+    if (oldInst) oldInst.dispose();
 
-    // Asegurar que la instancia Bootstrap siga activa
-    if (!bootstrap.Modal.getInstance(wizardEl)) {
-        new bootstrap.Modal(wizardEl, { backdrop: 'static', keyboard: false }).show();
-    }
+    // Re-crear y mostrar
+    const newInstance = new bootstrap.Modal(wizardEl, { backdrop: 'static', keyboard: false });
+    newInstance.show();
 
     // Refrescar el contenido del paso actual
     setTimeout(() => {
         updateWizardUI();
         if (onCloseFn) onCloseFn();
-    }, 200);
+    }, 350);
 }
 
 window._wizardAbrirPagadores = function() {
@@ -1152,17 +1157,41 @@ async function fetchAndRenderWizardStep5() {
     }
 }
 
-// finalizeWizardAndPreview() ELIMINADA — código muerto.
-// Áreas/cargos/turnos se commitean progresivamente.
-// Bonos se guardan en memoria y se usan en procesarColaOnboarding (Fase C).
-
 // ==========================================
 // CONFIRMAR IMPORTACIÓN (Paso final del Wizard)
-// Restaura el puente al flujo SSE existente:
-// openSyncModalPreview → confirmSync → SSE → onboardingQueue → Fase C
+// Lee RUTs del paso 7 y dispara el flujo SSE directamente:
+// SSE → procesarColaOnboarding → editar → bonos → turnos → marcaciones → grilla
 // ==========================================
 window.confirmWizardSync = async function() {
-    // 1. Preparar filtros para el flujo SSE existente en main.js
+    // 1. Recolectar RUTs seleccionados del paso 7 del wizard
+    const checkedBoxes = document.querySelectorAll('.wiz-chk-emp:checked');
+    const allBoxes = document.querySelectorAll('.wiz-chk-emp');
+
+    if (checkedBoxes.length === 0) {
+        Swal.fire('Sin selección', 'Seleccione al menos un empleado para sincronizar.', 'warning');
+        return;
+    }
+
+    const selectedRuts = checkedBoxes.length < allBoxes.length
+        ? Array.from(checkedBoxes).map(cb => cb.dataset.rut)
+        : null;
+
+    const filterMsg = selectedRuts
+        ? `${selectedRuts.length} empleado(s) seleccionado(s)`
+        : `Todos los ${allBoxes.length} empleado(s)`;
+
+    const confirmResult = await Swal.fire({
+        title: '¿Iniciar sincronización?',
+        text: filterMsg,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, sincronizar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    // 2. Preparar filtros globales para el flujo SSE en main.js
     window._syncSelectedAreas = getConsolidatedAreas();
 
     const ignoredCargos = [];
@@ -1173,23 +1202,144 @@ window.confirmWizardSync = async function() {
     }
     window._ignoredCargos = ignoredCargos;
 
-    // 2. Marcar wizard como completado
+    // 3. Marcar wizard como completado
     localStorage.setItem('wizard_completed', 'true');
 
-    // 3. Cerrar wizard
+    // 4. Cerrar wizard
     const modalEl = document.getElementById('modal-sync-wizard');
     const modal = bootstrap.Modal.getInstance(modalEl);
     if (modal) modal.hide();
 
-    // 4. Puente al flujo existente: modal-sync-areas → confirmSync → SSE → onboarding
-    setTimeout(() => {
-        if (typeof openSyncModalPreview === 'function') {
-            openSyncModalPreview();
-        } else {
-            console.error('[Wizard] openSyncModalPreview no disponible');
-            Swal.fire('Error', 'No se pudo abrir el panel de sincronización de empleados.', 'error');
+    // 5. Disparar el flujo SSE directamente (bypass de openSyncModalPreview + confirmSync)
+    const payload = {
+        areas: window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
+        ruts: selectedRuts,
+        ignored_cargos: ignoredCargos.length > 0 ? ignoredCargos : null
+    };
+
+    const btnSync = document.getElementById('btn-sync');
+    if (btnSync) {
+        btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
+        btnSync.disabled = true;
+    }
+
+    // Mostrar spinner
+    if (typeof showBatchLoadingOverlay === 'function') {
+        showBatchLoadingOverlay('Conectando a BioAlba...');
+    }
+
+    try {
+        const response = await fetch(`${window.API_BASE_URL || ''}/sync/empleados/now/stream/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+            const errData = await response.json().catch(() => ({}));
+            Swal.fire('Error', errData.detail || 'Error desconocido', 'error');
+            return;
         }
-    }, 500);
+
+        // Leer el stream SSE — REUTILIZA la lógica EXACTA de confirmSync en main.js
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalStats = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            let eventType = null;
+            let eventData = null;
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    eventType = line.slice(7).trim();
+                } else if (line.startsWith('data: ')) {
+                    try { eventData = JSON.parse(line.slice(6)); } catch { eventData = null; }
+                } else if (line === '' && eventType && eventData !== null) {
+                    if (eventType === 'start') {
+                        const total = eventData.total || '?';
+                        if (typeof showBatchLoadingOverlay === 'function')
+                            showBatchLoadingOverlay(`Sincronizando ${total} empleado(s)...`);
+                    } else if (eventType === 'progress') {
+                        if (typeof updateBatchOverlayProgress === 'function')
+                            updateBatchOverlayProgress(eventData.idx, eventData.total, eventData.nombre);
+                    } else if (eventType === 'done') {
+                        finalStats = eventData;
+                    } else if (eventType === 'error') {
+                        if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+                        Swal.fire('Error', eventData.message || 'Error durante sincronización', 'error');
+                    }
+                    eventType = null;
+                    eventData = null;
+                }
+            }
+        }
+
+        // Stream completado — conectar al flujo de onboarding de main.js
+        if (finalStats) {
+            const stats = finalStats;
+            if (typeof loadStats === 'function') await loadStats();
+            if (typeof loadEmpleados === 'function') await loadEmpleados();
+
+            if (stats.nuevos_detalles && stats.nuevos_detalles.length > 0) {
+                console.log("🆕 [Wizard→SSE] Nuevos empleados para onboarding:", stats.nuevos_detalles);
+                window.onboardingQueue = [...stats.nuevos_detalles];
+                window._batchTotalForOnboarding = window.onboardingQueue.length;
+
+                if (window.onboardingQueue.length > 1) {
+                    window._batch = window._batch || {};
+                    window._batch.active = true;
+                    window._batch.phase = 'edit';
+                    window._batch.editedEmployees = [];
+                    window._batch.syncPayload = [];
+                    if (typeof showToast === 'function')
+                        showToast(`🚀 Batch: editarás ${window.onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
+                } else {
+                    window._batch = window._batch || {};
+                    window._batch.active = false;
+                }
+
+                // Transición al flujo de onboarding (editar → bonos → turnos → marcaciones → grilla)
+                const _spinMsg = window._batchTotalForOnboarding > 1
+                    ? `Preparando empleado 1 de ${window._batchTotalForOnboarding}...`
+                    : `Preparando empleado...`;
+                if (typeof showBatchLoadingOverlay === 'function') showBatchLoadingOverlay(_spinMsg);
+                setTimeout(() => {
+                    if (typeof procesarColaOnboarding === 'function') {
+                        procesarColaOnboarding();
+                    } else {
+                        console.error('[Wizard] procesarColaOnboarding no disponible');
+                        if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+                    }
+                }, 1500);
+            } else {
+                if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+                Swal.fire('Sincronización completada', 
+                    `Nuevos: ${stats.empleados_nuevos}\nActualizados: ${stats.empleados_actualizados}\nSin cambios: ${stats.empleados_sin_cambios || 0}\nErrores: ${stats.errores}`,
+                    stats.errores > 0 ? 'warning' : 'success');
+            }
+        } else {
+            if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+        }
+
+    } catch (error) {
+        if (typeof hideBatchLoadingOverlay === 'function') hideBatchLoadingOverlay();
+        console.error('[Wizard] Error en sync stream:', error);
+        Swal.fire('Error', 'Error de conexión al iniciar sincronización', 'error');
+    } finally {
+        if (btnSync) {
+            btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
+            btnSync.disabled = false;
+        }
+    }
 };
 
 // ==========================================
