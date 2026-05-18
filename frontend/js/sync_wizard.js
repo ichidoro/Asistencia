@@ -654,6 +654,11 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
     const wizardModal = wizardEl ? bootstrap.Modal.getInstance(wizardEl) : null;
 
     // 1. DESTRUIR completamente el wizard (no solo hide) para eliminar backdrop + inert
+    //    Primero sacar foco de cualquier elemento dentro del wizard para evitar
+    //    warnings de 'Blocked aria-hidden on element with focused descendant'
+    if (document.activeElement && wizardEl && wizardEl.contains(document.activeElement)) {
+        document.activeElement.blur();
+    }
     if (wizardModal) {
         wizardModal.dispose();
     }
@@ -691,14 +696,18 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
         const childEl = document.getElementById(childModalId);
         if (!childEl) return;
 
-        // Guard: MutationObserver para prevenir que cualquier cosa re-agregue inert
+        // Guard: MutationObserver para prevenir que cualquier cosa re-agregue inert/aria-hidden
         const observer = new MutationObserver(() => {
             if (childEl.hasAttribute('inert')) childEl.removeAttribute('inert');
+            if (childEl.hasAttribute('aria-hidden')) childEl.removeAttribute('aria-hidden');
             childEl.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
             // Limpiar ancestros también
             let p = childEl.parentElement;
             while (p && p !== document.body) {
                 if (p.hasAttribute('inert')) p.removeAttribute('inert');
+                if (p.hasAttribute('aria-hidden') && !p.matches('script, link, style')) {
+                    p.removeAttribute('aria-hidden');
+                }
                 p = p.parentElement;
             }
         });
@@ -750,6 +759,11 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
  */
 function _wizardRestoreAfterChild(wizardEl, onCloseFn) {
     if (!wizardEl) return;
+
+    // Sacar foco de cualquier elemento activo antes de restaurar wizard
+    if (document.activeElement) {
+        document.activeElement.blur();
+    }
 
     // Destruir instancia anterior para evitar conflictos Bootstrap
     const oldInst = bootstrap.Modal.getInstance(wizardEl);
