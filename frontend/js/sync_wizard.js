@@ -663,20 +663,44 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
         openFn();
 
         // 3. Bootstrap 5.3+ agrega 'inert' a todos los hermanos del modal activo.
-        //    Como el child modal es un modal CUSTOM (no Bootstrap), debemos remover
-        //    'inert' y 'aria-hidden' manualmente para que sea interactivo.
+        //    Necesitamos un MutationObserver para PERSISTENTEMENTE remover 'inert'
+        //    del modal hijo, porque Bootstrap lo re-aplica dinámicamente.
         const childEl = document.getElementById(childModalId);
         if (!childEl) return;
 
-        // Remover inert del child y todos sus ancestros hasta el body
-        let el = childEl;
-        while (el && el !== document.body) {
-            el.removeAttribute('inert');
-            el.removeAttribute('aria-hidden');
-            el = el.parentElement;
+        // Función helper para limpiar inert del child y sus ancestros
+        function _cleanInert() {
+            let el = childEl;
+            while (el && el !== document.body) {
+                if (el.hasAttribute('inert')) el.removeAttribute('inert');
+                if (el.hasAttribute('aria-hidden')) el.removeAttribute('aria-hidden');
+                el = el.parentElement;
+            }
+            if (childEl.hasAttribute('inert')) childEl.removeAttribute('inert');
+            if (childEl.hasAttribute('aria-hidden')) childEl.removeAttribute('aria-hidden');
+            // También limpiar todos los inputs/checkboxes dentro del modal
+            childEl.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
         }
-        // También remover inert del childEl directamente (por si acaso)
-        childEl.removeAttribute('inert');
+
+        // Limpiar inmediatamente
+        _cleanInert();
+
+        // Crear MutationObserver para detectar cuando Bootstrap re-agrega inert
+        const observer = new MutationObserver((mutations) => {
+            for (const mut of mutations) {
+                if (mut.type === 'attributes' && 
+                    (mut.attributeName === 'inert' || mut.attributeName === 'aria-hidden')) {
+                    _cleanInert();
+                }
+            }
+        });
+
+        // Observar cambios en atributos de TODOS los nodos del DOM
+        observer.observe(document.body, { 
+            attributes: true, 
+            attributeFilter: ['inert', 'aria-hidden'],
+            subtree: true 
+        });
 
         // 4. Observar cierre del modal-hijo (soporta AMBOS tipos de modal)
         const isBsModal = childEl.classList.contains('fade') || bootstrap.Modal.getInstance(childEl);
@@ -684,6 +708,7 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
         if (isBsModal) {
             const _onHidden = () => {
                 childEl.removeEventListener('hidden.bs.modal', _onHidden);
+                observer.disconnect(); // Limpiar observer
                 _wizardRestoreAfterChild(wizardEl, onCloseFn);
             };
             childEl.addEventListener('hidden.bs.modal', _onHidden);
@@ -692,6 +717,7 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
             const checkClose = setInterval(() => {
                 if (childEl.style.display === 'none' || childEl.style.display === '') {
                     clearInterval(checkClose);
+                    observer.disconnect(); // Limpiar observer
                     _wizardRestoreAfterChild(wizardEl, onCloseFn);
                 }
             }, 300);
