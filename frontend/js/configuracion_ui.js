@@ -513,6 +513,13 @@ async function openModalBono(bono = null) {
 function closeModalBono(fromSave = false) {
     document.getElementById('modal-bono').style.display = 'none';
 
+    // Si se abrió desde el wizard via _wizardCrearBono, ejecutar el callback de cierre
+    if (typeof window._wizardBonoCloseCallback === 'function') {
+        // Pequeño delay para que el DOM se actualice antes de refrescar el wizard
+        setTimeout(window._wizardBonoCloseCallback, 100);
+        return; // El callback maneja el flujo del wizard
+    }
+
     if (!fromSave && window.isWizardFlow && window.wizardCurrentStep === 'bonos') {
         Swal.fire({
             title: "¿Omitir Bonos?",

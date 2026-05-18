@@ -1435,12 +1435,23 @@ window._wizardCrearBono = function() {
         initConfiguracionUI();
     }
 
-    // Usar el helper centralizado para esconder wizard → abrir modal-bono → restaurar
-    _wizardOpenChildModal(
-        'modal-bono',
-        () => openModalBono(),
-        () => window._wizardRefrescarBonos()
-    );
+    // ── FIX DEFINITIVO: z-index elevation (no dispose, no setInterval, no aria-hidden) ──
+    // El wizard tiene z-index: 2050 !important (CSS). El modal-bono tiene z-index: 1060.
+    // Solución: elevamos modal-bono sobre el wizard mientras está abierto.
+    // Al cerrarse, restauramos y refrescamos la lista de bonos.
+    const modalBonoEl = document.getElementById('modal-bono');
+    if (modalBonoEl) {
+        modalBonoEl.style.zIndex = '2200'; // Por encima del wizard (2050)
+    }
+
+    // Registrar callback de cierre para restaurar z-index y refrescar
+    window._wizardBonoCloseCallback = function() {
+        if (modalBonoEl) modalBonoEl.style.zIndex = ''; // Restaurar z-index original
+        window._wizardBonoCloseCallback = null;
+        window._wizardRefrescarBonos();
+    };
+
+    openModalBono();
 };
 
 /**
