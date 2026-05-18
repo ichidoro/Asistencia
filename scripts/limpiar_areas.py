@@ -6,9 +6,9 @@ Herramienta de desarrollo para limpiar tablas de la base de datos.
 Borra en LOCAL (HybridDatabase) Y directamente en TURSO vía libsql,
 garantizando que ambas BDs queden limpias sin depender del WAL sync.
 
-Tablas con comportamiento especial:
-  - feriados: se borra SOLO en local (son datos auto-generados en startup).
-    Turso no tiene feriados, así que no hay nada que borrar allá.
+Todas las tablas deben quedar idénticas en ambas BDs.
+feriados se borra también en Turso: el startup lo reinsertará y lo pusheá
+a Turso al arrancar el servidor.
 """
 import asyncio
 import os
@@ -29,9 +29,9 @@ TURSO_TOKEN = (
     "HyHa_-uEPS_2YswqpWrSvX3CyqwkB5bj-uGOA549ug68cPgVK5TXBSMMjo1e0NJWwMQa8deBHL5UREuJKKyACA"
 )
 
-# Tablas que solo existen con datos en local (no sincronizadas a Turso)
-# No intentar borrarlas en Turso — Turso ya las tiene vacías por diseño
-SOLO_LOCAL = {'feriados'}
+# Sin excepciones: todas las tablas se borran en LOCAL y en TURSO.
+# feriados se borra también en Turso; el startup lo reinsertará y re-pusheará a Turso.
+SOLO_LOCAL = set()  # Vacío: sin excepciones
 
 
 def _turso_delete(tabla):

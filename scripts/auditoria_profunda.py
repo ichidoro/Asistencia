@@ -157,8 +157,8 @@ banner("3. CONTEOS DE FILAS")
 print(f"  {'TABLA':<38} {'LOCAL':>7} {'TURSO':>7}  STATUS")
 print(f"  {SEP2[:38]} {'-'*7} {'-'*7}  {'-'*10}")
 
-# Tablas con diferencia esperada (solo-local por diseño): no se cuentan como DIFF
-SOLO_LOCAL_TABLES = {'feriados'}
+# Sin excepciones por diseño: todas las tablas deben ser idénticas.
+SOLO_LOCAL_TABLES = set()  # Vacío
 
 count_diffs = {}
 row_counts  = {}
@@ -196,9 +196,9 @@ def normalize(v):
         return v
 
 data_diffs = {}
-# feriados: auto-generado en startup (calendarioService), solo-local por diseño.
-# Turso no tiene feriados — diferencia esperada, no es un problema de sync.
-SKIP = {'logs_auditoria', 'sync_logs', 'logs_raw', 'feriados'}
+# Omitidas: solo tablas de alto volumen / puramente operacionales.
+# feriados ahora se pushea a Turso en startup — debe estar en ambas BDs.
+SKIP = {'logs_auditoria', 'sync_logs', 'logs_raw'}
 MAX_ROWS = 50_000
 
 for table in sorted(common):

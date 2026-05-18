@@ -29,11 +29,9 @@ LOCAL_DB = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', 'data', 'local_db', 'asistencia_local.db')
 )
 
-# Tablas excluidas del chequeo fila-a-fila
-# - Operacionales/volumen: logs_auditoria, sync_logs, logs_raw, asistencias
-# - Solo-local por diseño: feriados (calendarioService los inserta localmente en cada startup,
-#   no se sincronizan a Turso — diferencia esperada y aceptable)
-SKIP_DATA = {'logs_auditoria', 'sync_logs', 'logs_raw', 'asistencias', 'feriados'}
+# Todas las tablas deben estar en ambas BDs (feriados se pushea a Turso en startup).
+# Solo se omiten tablas de alto volumen / puramente operacionales.
+SKIP_DATA = {'logs_auditoria', 'sync_logs', 'logs_raw', 'asistencias'}
 MAX_ROWS  = 10_000
 
 SEP = "=" * 62
@@ -125,7 +123,6 @@ print(f"  {'-'*35} {'-'*7} {'-'*7}  {'-'*10}")
 
 row_counts, count_diffs = {}, {}
 for table in sorted(common):
-    # feriados: diferencia esperada, marcar como INFO no DIFF
     try:
         _, lr = lq(f"SELECT COUNT(*) as c FROM '{table}'")
         _, tr = tq(f"SELECT COUNT(*) as c FROM '{table}'")
@@ -133,8 +130,6 @@ for table in sorted(common):
         row_counts[table] = (lc_n, tc_n)
         if lc_n == tc_n:
             st = "OK"
-        elif table in SKIP_DATA:
-            st = f"INFO (solo-local, esperado)" if lc_n > tc_n else f"INFO (solo-turso)"
         else:
             diff = lc_n - tc_n
             st = f"DIFF ({'+' if diff>0 else ''}{diff})"

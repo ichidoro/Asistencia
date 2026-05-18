@@ -39,10 +39,11 @@ LOCAL_DB = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', 'data', 'local_db', 'asistencia_local.db')
 )
 
-# Tablas que solo tienen datos en local — no se borran en Turso, no se comparan
-SOLO_LOCAL = {'feriados'}
-# Tablas omitidas de comparación fila-a-fila (volumen / operacionales + solo-local)
-SKIP_DATA  = {'logs_auditoria', 'sync_logs', 'logs_raw', 'asistencias', 'feriados'}
+# Todas las tablas deben ser idénticas en ambas BDs.
+# feriados ahora se pushea a Turso en startup via sync_to_cloud_explicit().
+SOLO_LOCAL = set()  # Vacío: no hay excepciones válidas
+# Tablas omitidas de comparación fila-a-fila (solo por volumen / operacionales)
+SKIP_DATA  = {'logs_auditoria', 'sync_logs', 'logs_raw', 'asistencias'}
 MAX_ROWS   = 10_000
 SEP        = "=" * 62
 
