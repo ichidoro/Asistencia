@@ -27,13 +27,59 @@ window._wizardState = {
 
 window.closeSyncWizard = function() {
     const modalEl = document.getElementById('modal-sync-wizard');
-    if (modalEl) {
-        const modalInstance = bootstrap.Modal.getInstance(modalEl);
-        if (modalInstance) {
-            modalInstance.hide();
-        }
-    }
+    if (!modalEl) return;
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    // Usar dispose() + blur + inert en lugar de hide() para evitar el warning
+    // "Blocked aria-hidden on element with focused descendant".
+    // hide() pone aria-hidden al FINAL de la animación CSS, cuando FocusTrap ya restauró
+    // el foco → el elemento puede tener foco en ese momento → warning.
+    // Con dispose() el FocusTrap se destruye inmediatamente → podemos blur con seguridad.
+    if (modalInstance) modalInstance.dispose();
+    modalEl.querySelectorAll('input, button, select, textarea, a, [tabindex]')
+        .forEach(el => el.blur());
+    modalEl.blur();
+    document.body.setAttribute('tabindex', '-1');
+    document.body.focus();
+    document.body.removeAttribute('tabindex');
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    setTimeout(() => {
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }, 0);
 };
+
+// ── FIX GLOBAL: Prevenir aria-hidden focus warning ───────────────────────────
+// Bootstrap emite 'hide.bs.modal' y luego agrega aria-hidden en el MISMO tick.
+// Usamos { capture: true } para que nuestro listener corra en FASE DE CAPTURA,
+// antes que el listener de Bootstrap (bubbling) → el foco ya está en body
+// cuando Bootstrap intenta marcar aria-hidden → cero warnings.
+(function _installWizardFocusFix() {
+    const install = () => {
+        const wizardEl = document.getElementById('modal-sync-wizard');
+        if (!wizardEl || wizardEl._focusFixInstalled) return;
+        wizardEl._focusFixInstalled = true;
+
+        document.addEventListener('hide.bs.modal', (e) => {
+            if (e.target !== wizardEl) return;
+            // Sacar foco de TODOS los elementos interactivos del wizard
+            wizardEl.querySelectorAll('input, button, select, textarea, a, [tabindex]')
+                .forEach(el => el.blur());
+            wizardEl.blur();
+            // Transferir foco al body de forma segura
+            document.body.setAttribute('tabindex', '-1');
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+        }, true); // <-- capture: true → fase de captura, antes que Bootstrap
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', install);
+    } else {
+        setTimeout(install, 0);
+    }
+})();
 
 window.startSyncWizard = function(data) {
     console.log("⚡ Iniciando Universal Sync Wizard...", data);
@@ -578,7 +624,10 @@ function renderWizardGeneros() {
 // ==========================================
 function getConsolidatedAreas() {
     const areasLocalNames = new Set();
-    
+
+    // Guard: _wizardState.data puede ser null si el paso 1 (API fetch) aún no se completó
+    if (!window._wizardState || !window._wizardState.data) return [];
+
     // Areas Conocidas
     const conocidas = window._wizardState.data.areas_conocidas || [];
     conocidas.forEach(a => {
@@ -586,7 +635,7 @@ function getConsolidatedAreas() {
             areasLocalNames.add(a);
         }
     });
-    
+
     // Areas Nuevas Resueltas (que no sean _IGNORE_)
     const nuevas = window._wizardState.data.nuevas_areas || [];
     nuevas.forEach(a => {
@@ -595,7 +644,7 @@ function getConsolidatedAreas() {
             areasLocalNames.add(res === "_NEW_" ? a : res);
         }
     });
-    
+
     return Array.from(areasLocalNames);
 }
 
@@ -678,19 +727,33 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
     const wizardEl = document.getElementById('modal-sync-wizard');
     const wizardModal = wizardEl ? bootstrap.Modal.getInstance(wizardEl) : null;
 
-    // 1. DESTRUIR completamente el wizard (no solo hide) para eliminar backdrop + inert
-    //    Primero sacar foco de cualquier elemento dentro del wizard para evitar
-    //    warnings de 'Blocked aria-hidden on element with focused descendant'
-    if (document.activeElement && wizardEl && wizardEl.contains(document.activeElement)) {
-        document.activeElement.blur();
-    }
+    // 1. DESTRUIR primero el wizard para matar el FocusTrap de Bootstrap.
+    // IMPORTANTE: dispose() debe ir ANTES del blur().
+    // Si hacemos blur() primero, el FocusTrap de Bootstrap intercepta el focusout
+    // y redirige el foco DE VUELTA al modal antes de que llegue dispose().
+    // Con dispose() primero, el FocusTrap ya no existe cuando hacemos blur() → sin warning.
+    // Nota: Bootstrap.dispose() NO llama hide() ni setea aria-hidden, por lo que no hay riesgo.
     if (wizardModal) {
         wizardModal.dispose();
     }
-    // Ocultar el DOM del wizard manualmente
+    // 2. Ahora que FocusTrap está muerto, blur es seguro.
+    if (wizardEl) {
+        wizardEl.removeAttribute('aria-hidden'); // Limpiar cualquier aria-hidden residual
+        const focusedInWizard = wizardEl.querySelectorAll('input, button, select, textarea, a, [tabindex]');
+        focusedInWizard.forEach(el => el.blur());
+        wizardEl.blur();
+        document.body.focus();
+    }
+    // 3. Ocultar el DOM del wizard manualmente y marcarlo INERT.
+    // 'inert' es la solución definitiva: garantiza que NINGÚN descendiente
+    // puede recibir foco por ningún mecanismo (FocusTrap._returnFocusElement,
+    // tab navigation, programmatic focus, etc.).
+    // Cuando Bootstrap abra el modal hijo y llame setAttribute('aria-hidden', true)
+    // en el wizard, no habrá ningún descendiente con foco → cero warning.
     if (wizardEl) {
         wizardEl.classList.remove('show');
         wizardEl.style.display = 'none';
+        wizardEl.setAttribute('inert', '');  // ← Fix definitivo
     }
 
     // 2. Limpiar TODOS los artefactos que Bootstrap deja:
@@ -706,16 +769,23 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
         document.body.style.removeProperty('overflow');
         document.body.style.removeProperty('padding-right');
 
-        // Remover inert de TODOS los elementos del DOM
-        document.querySelectorAll('[inert]').forEach(el => el.removeAttribute('inert'));
+        // Remover inert/aria-hidden de TODO el DOM EXCEPTO del wizard
+        // (el wizard permanece inert hasta que se restaure vía _wizardRestoreAfterChild)
+        document.querySelectorAll('[inert]').forEach(el => {
+            if (el !== wizardEl) el.removeAttribute('inert');
+        });
         document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
-            // No quitar aria-hidden de scripts o elements que legítimamente lo tienen
-            if (!el.matches('script, link, style, [data-permanent-aria-hidden]')) {
+            if (!el.matches('script, link, style, [data-permanent-aria-hidden]') && el !== wizardEl) {
                 el.removeAttribute('aria-hidden');
             }
         });
 
-        // 3. Ahora abrir el modal hijo en un DOM completamente limpio
+        // Segundo blur agresivo antes de abrir el modal hijo
+        document.body.setAttribute('tabindex', '-1');
+        document.body.focus();
+        document.body.removeAttribute('tabindex');
+
+        // 5. Ahora abrir el modal hijo en DOM limpio
         openFn();
 
         const childEl = document.getElementById(childModalId);
@@ -789,6 +859,9 @@ function _wizardRestoreAfterChild(wizardEl, onCloseFn) {
     if (document.activeElement) {
         document.activeElement.blur();
     }
+
+    // Quitar 'inert' antes de re-mostrar (fue puesto por _wizardOpenChildModal)
+    wizardEl.removeAttribute('inert');
 
     // Destruir instancia anterior para evitar conflictos Bootstrap
     const oldInst = bootstrap.Modal.getInstance(wizardEl);
@@ -968,9 +1041,29 @@ async function fetchAndRenderWizardStep7_Preview() { return fetchAndRenderWizard
 // PASO 3 (original): TURNOS (función original preservada para alias)
 // ==========================================
 async function fetchAndRenderWizardStep3() {
-    const tbody = document.getElementById('tbody-wizard-turnos');
+    // Guard: tbody-wizard-turnos puede no existir si el panel "No hay turnos" reemplazó
+    // la estructura de la tabla (la función de "no turnos" reemplaza .table-responsive).
+    // En ese caso reconstruimos la tabla completa antes de continuar.
+    let tbody = document.getElementById('tbody-wizard-turnos');
+    if (!tbody) {
+        const container = document.getElementById('wizard-step-6');
+        const tableSection = container && container.querySelector('.table-responsive');
+        if (tableSection) {
+            tableSection.innerHTML = `
+                <table class="table table-bordered align-middle table-sm">
+                    <thead class="table-light sticky-top">
+                        <tr><th>Área a sincronizar</th><th>Turno Recomendado / Seleccionado</th></tr>
+                    </thead>
+                    <tbody id="tbody-wizard-turnos"></tbody>
+                </table>`;
+            tbody = document.getElementById('tbody-wizard-turnos');
+        }
+    }
+    // Si aún no existe (el DOM del wizard no está cargado), salir silenciosamente
+    if (!tbody) return;
+
     tbody.innerHTML = `<tr><td colspan="2" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
-    
+
     const areasList = getConsolidatedAreas();
 
     try {
@@ -982,15 +1075,20 @@ async function fetchAndRenderWizardStep3() {
             },
             body: JSON.stringify({ areas: areasList })
         });
-        
+
+        // Guard post-await: si el wizard fue cerrado mientras esperábamos la respuesta,
+        // el tbody puede haber sido desconectado del DOM → evitar el error 'document.contains of null'
+        if (!document.contains(tbody)) return;
+
         if (!response.ok) throw new Error("Error obteniendo turnos");
         const res = await response.json();
-        
+
         window._wizardState.turnosDisponibles = res.turnos || [];
         window._wizardState.preAsignacionesTurnos = res.pre_asignaciones || {};
 
+        if (!document.contains(tbody)) return; // Re-check after state update
         tbody.innerHTML = '';
-        
+
         if (areasList.length === 0) {
             tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">No hay áreas seleccionadas.</td></tr>`;
             return;
@@ -1071,7 +1169,9 @@ async function fetchAndRenderWizardStep3() {
 
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="2" class="text-danger text-center">Error al cargar turnos.</td></tr>`;
+        if (document.contains(tbody)) {
+            tbody.innerHTML = `<tr><td colspan="2" class="text-danger text-center">Error al cargar turnos.</td></tr>`;
+        }
     }
 }
 
@@ -1090,9 +1190,26 @@ function guardarSeleccionesPaso3() {
 // PASO 4: BONOS
 // ==========================================
 async function fetchAndRenderWizardStep4() {
-    const tbody = document.getElementById('tbody-wizard-bonos');
+    // Guard: tbody-wizard-bonos puede no existir si el panel "Sin bonos" reemplazó la tabla.
+    let tbody = document.getElementById('tbody-wizard-bonos');
+    if (!tbody) {
+        const container = document.getElementById('wizard-step-5');
+        const tableSection = container && container.querySelector('.table-responsive');
+        if (tableSection) {
+            tableSection.innerHTML = `
+                <table class="table table-bordered align-middle table-sm">
+                    <thead class="table-light sticky-top">
+                        <tr><th>Área</th><th>Bonos Asignados</th></tr>
+                    </thead>
+                    <tbody id="tbody-wizard-bonos"></tbody>
+                </table>`;
+            tbody = document.getElementById('tbody-wizard-bonos');
+        }
+    }
+    if (!tbody) return;
+
     tbody.innerHTML = `<tr><td colspan="2" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>`;
-    
+
     const areasList = getConsolidatedAreas();
 
     try {
@@ -1104,15 +1221,19 @@ async function fetchAndRenderWizardStep4() {
             },
             body: JSON.stringify({ areas: areasList })
         });
-        
+
+        // Guard post-await: el wizard puede haberse cerrado mientras esperábamos
+        if (!document.contains(tbody)) return;
+
         if (!response.ok) throw new Error("Error obteniendo bonos");
         const res = await response.json();
-        
+
         window._wizardState.bonosDisponibles = res.bonos || [];
         window._wizardState.preAsignacionesBonos = res.pre_asignaciones || {};
 
+        if (!document.contains(tbody)) return;
         tbody.innerHTML = '';
-        
+
         if (areasList.length === 0) {
             tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">No hay áreas seleccionadas.</td></tr>`;
             return;
@@ -1181,7 +1302,9 @@ async function fetchAndRenderWizardStep4() {
 
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="2" class="text-danger text-center">Error al cargar bonos.</td></tr>`;
+        if (document.contains(tbody)) {
+            tbody.innerHTML = `<tr><td colspan="2" class="text-danger text-center">Error al cargar bonos.</td></tr>`;
+        }
     }
 }
 
@@ -1412,10 +1535,34 @@ window._wizardIrACrearTurno = function() {
         // El formulario del modal de Turno no está en el DOM todavía.
         // Necesitamos navegar a Configuración → Turnos para que el HTML se renderice.
 
-        // 1. Ocultar el wizard SIN destruirlo (el estado se preserva en window._wizardState)
         const wizardModalEl = document.getElementById('modal-sync-wizard');
         const wizardInstance = wizardModalEl ? bootstrap.Modal.getInstance(wizardModalEl) : null;
-        if (wizardInstance) wizardInstance.hide();
+
+        // IMPORTANTE: NO usar wizardInstance.hide() aquí.
+        // hide() usa animación CSS fade: al FINAL de la animación llama _hideModal()
+        // que pone aria-hidden DESPUÉS de que FocusTrap.deactivate() restaura el foco
+        // → si _returnFocusElement era btn-close, queda con foco → WARNING.
+        // Usamos el mismo patrón seguro de _wizardOpenChildModal:
+        // 1. dispose() mata el FocusTrap, 2. blur, 3. inert para neutralizar el elemento.
+        if (wizardInstance) wizardInstance.dispose();
+        if (wizardModalEl) {
+            wizardModalEl.querySelectorAll('input, button, select, textarea, a, [tabindex]')
+                .forEach(el => el.blur());
+            wizardModalEl.blur();
+            document.body.setAttribute('tabindex', '-1');
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+            wizardModalEl.classList.remove('show');
+            wizardModalEl.style.display = 'none';
+            wizardModalEl.setAttribute('inert', '');  // ← previene cualquier foco futuro
+        }
+        // Limpiar artefactos de Bootstrap
+        setTimeout(() => {
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }, 0);
 
         // 2. Navegar a Configuración para cargar el DOM del modal de turno
         if (typeof switchPage === 'function') {
@@ -1436,8 +1583,9 @@ window._wizardIrACrearTurno = function() {
                             modalTurnoEl.removeEventListener('hidden.bs.modal', _onClose);
                             // 4. Volver al wizard en el Paso 6 (Turnos) y refrescar la lista
                             if (wizardModalEl) {
+                                // Quitar inert antes de re-mostrar
+                                wizardModalEl.removeAttribute('inert');
                                 window._wizardState.currentStep = 6;
-                                // Destruir instancia anterior para evitar conflicto Bootstrap
                                 const oldInst = bootstrap.Modal.getInstance(wizardModalEl);
                                 if (oldInst) oldInst.dispose();
                                 const newInstance = new bootstrap.Modal(wizardModalEl, { backdrop: 'static', keyboard: false });

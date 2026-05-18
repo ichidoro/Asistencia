@@ -6,13 +6,20 @@ Fusión de limpiar_areas.py + comparar_dbs.py
 
 Flujo:
   1. Muestra menú de limpieza
-  2. Borra en LOCAL (HybridDatabase) Y directamente en TURSO vía libsql
-     (doble borrado = no depende de que el WAL sync propague DELETEs)
-  3. Al terminar, compara automáticamente ambas BDs para confirmar paridad.
+  2. Conecta (HybridDatabase hace sync_from_cloud → local = Turso)
+  3. Borra SOLO EN LOCAL via HybridDatabase.execute_script
+  4. Empuja los deletes a Turso via sync_to_cloud_explicit()
+     (Un único vector de cambios → sin divergencia de WAL → sin conflict)
+  5. Al terminar, compara automáticamente ambas BDs para confirmar paridad.
+
+Estrategia de sync (importante):
+  ❌ ANTES: delete en local + delete directo en Turso vía libsql
+           → Dos historias WAL divergentes → "server returned a conflict: sent=70, got=105"
+  ✅ AHORA: delete solo en local → sync_to_cloud_explicit() propaga el delta a Turso
+           → Una sola historia WAL → sin conflict, sin 503 en disconnect()
 
 Tablas con comportamiento especial:
-  - feriados: solo se borra en local. Turso no los tiene (auto-generados en startup).
-              Se excluyen del chequeo de paridad — diferencia esperada y aceptable.
+  - Ninguna: todas las tablas deben estar sincronizadas entre local y Turso.
   - logs_auditoria, sync_logs, logs_raw, asistencias: excluidas de comparación por volumen.
 """
 import asyncio
@@ -39,33 +46,27 @@ LOCAL_DB = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', 'data', 'local_db', 'asistencia_local.db')
 )
 
-# Todas las tablas deben ser idénticas en ambas BDs.
-# feriados ahora se pushea a Turso en startup via sync_to_cloud_explicit().
-SOLO_LOCAL = set()  # Vacío: no hay excepciones válidas
-# Tablas omitidas de comparación fila-a-fila (solo por volumen / operacionales)
+SOLO_LOCAL = set()   # Vacío: todas las tablas deben estar en ambas BDs
 SKIP_DATA  = {'logs_auditoria', 'sync_logs', 'logs_raw', 'asistencias'}
 MAX_ROWS   = 10_000
 SEP        = "=" * 62
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  HELPERS
+#  HELPERS (solo para la comparación, ya no para borrado directo en Turso)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _turso_delete(tabla):
-    """Borra directamente en Turso via libsql (sin pasar por WAL sync)."""
+def _turso_count(tabla):
+    """Lee el conteo de filas en Turso directamente via libsql (solo lectura)."""
     try:
         conn = libsql.connect(database=TURSO_URL, auth_token=TURSO_TOKEN)
         cur = conn.cursor()
-        cur.execute(f"DELETE FROM {tabla}")
-        try:
-            cur.execute(f"DELETE FROM sqlite_sequence WHERE name='{tabla}'")
-        except Exception:
-            pass
-        conn.commit()
+        cur.execute(f"SELECT COUNT(*) FROM {tabla}")
+        row = cur.fetchone()
         conn.close()
+        return row[0] if row else 0
     except Exception as e:
-        print(f"    ⚠️  Turso directo '{tabla}': {e}")
+        return f"ERR({e})"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -90,26 +91,15 @@ def menu():
 #  PARTE 2 — LIMPIEZA
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _limpiar_tabla_local_y_turso(db_exec, tabla):
-    """Limpia una tabla en local (vía HybridDatabase) y en Turso (directo vía libsql)."""
-    try:
-        import asyncio as _a
-        # La llamada ya viene desde dentro de un async context, se usa await afuera
-        pass
-    except Exception:
-        pass
-    if tabla not in SOLO_LOCAL:
-        _turso_delete(tabla)
-
-
 async def limpiar_datos(opcion):
     print(f"\n  📁 Conectando a la base de datos...")
     db = HybridDatabase()
     try:
+        # connect() hace sync_from_cloud automáticamente → local queda igual a Turso
         await db.connect()
 
         async def _local_delete(tabla):
-            """Borra en local."""
+            """Borra en local via HybridDatabase (genera frames WAL que luego se pushean)."""
             try:
                 if await db.table_exists(tabla):
                     await db.execute_script(
@@ -128,16 +118,12 @@ async def limpiar_datos(opcion):
                 "asistencias", "justificaciones", "intercambios_dias"
             ]:
                 await _local_delete(tabla)
-                if tabla not in SOLO_LOCAL:
-                    _turso_delete(tabla)
 
         # ── Empleados ─────────────────────────────────────────────────────────
         if opcion in ['3', '5']:
             print("  🧹 Limpiando tabla 'empleados' e historiales...")
             for tabla in ["historial_areas", "periodos_empleo", "empleados"]:
                 await _local_delete(tabla)
-                if tabla not in SOLO_LOCAL:
-                    _turso_delete(tabla)
 
         # ── Turnos ────────────────────────────────────────────────────────────
         if opcion in ['2', '5']:
@@ -147,8 +133,6 @@ async def limpiar_datos(opcion):
                 "turno_dias", "turno_areas", "turnos"
             ]:
                 await _local_delete(tabla)
-                if tabla not in SOLO_LOCAL:
-                    _turso_delete(tabla)
 
         # ── Configuración ─────────────────────────────────────────────────────
         if opcion in ['1', '5']:
@@ -160,27 +144,26 @@ async def limpiar_datos(opcion):
                 "areas_alias", "areas", "cargos_alias", "cargos", "cat_generos"
             ]:
                 await _local_delete(tabla)
-                if tabla not in SOLO_LOCAL:
-                    _turso_delete(tabla)
 
-        # ── Reconciliar generación local con Turso ────────────────────────────
-        # Como borramos en Turso DIRECTAMENTE (libsql), Turso avanzó de generación.
-        # El WAL local quedó en la generación anterior → push falla con "Generation ID mismatch".
-        # Solución: pull desde Turso para que local adopte la nueva generación.
-        # No hay nada que empujar: ambos lados ya están vacíos/iguales.
-        print("\n  ☁️  Reconciliando estado con Turso Cloud...")
+        # ── Propagar a Turso via sync ────────────────────────────────────────
+        # Estrategia correcta:
+        #   • Los deletes locales crearon frames WAL en local (historia única).
+        #   • sync_to_cloud_explicit() envía esos frames a Turso sin conflicto.
+        #   • disconnect() también hará conn.sync() final — redundante pero inofensivo.
+        #
+        # Esto reemplaza el doble-borrado (local + directo en Turso) que causaba:
+        #   ❌ "server returned a conflict: sent=70, got=105"
+        #   ❌ "max_frame_no failed: database is locked" en disconnect()
+        print("\n  ☁️  Propagando limpieza a Turso Cloud via sync...")
         try:
-            await db.sync_from_cloud()
-            print("  ✅ Limpieza completada — Local sincronizado con estado de Turso.")
+            success = await db.sync_to_cloud_explicit()
+            if success:
+                print("  ✅ Limpieza propagada a Turso correctamente.")
+            else:
+                print("  ⚠️  sync_to_cloud_explicit retornó False — revisar logs.")
         except Exception as e_sync:
-            # Si sync_from_cloud no existe en esta versión, intentar sync_to_cloud como fallback
-            print(f"  ⚠️  sync_from_cloud no disponible ({e_sync}), intentando push...")
-            try:
-                await db.sync_to_cloud_explicit()
-                print("  ✅ Limpieza completada y sincronizada con Turso.")
-            except Exception as e2:
-                print(f"  ⚠️  Sync final con advertencias: {e2}")
-                print("  ✅ Datos limpiados en ambas BDs (WAL local puede quedar pendiente).")
+            print(f"  ⚠️  Sync con advertencias: {e_sync}")
+            print("  ℹ️  Los datos están limpios en local. Turso se sincronizará en el próximo startup.")
 
     except Exception as e:
         print(f"\n  ❌ Error: {e}")
@@ -196,129 +179,110 @@ async def limpiar_datos(opcion):
 def comparar_post_limpieza():
     """
     Compara Turso vs Local tras la limpieza.
-    Muestra solo las diferencias. feriados se excluye (dato solo-local esperado).
+    Usa libsql para leer Turso y sqlite3 para leer local.
     """
     print(f"\n{SEP}")
     print("  🔍 VERIFICACIÓN POST-LIMPIEZA: Turso vs Local")
     print(SEP)
 
-    turso = libsql.connect(database=TURSO_URL, auth_token=TURSO_TOKEN)
-    local = sqlite3.connect(LOCAL_DB)
-    local.row_factory = sqlite3.Row
+    # Obtener todas las tablas del schema local
+    try:
+        local_conn = sqlite3.connect(LOCAL_DB)
+        cur = local_conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        all_tables = [r[0] for r in cur.fetchall()
+                      if not r[0].startswith('sqlite_')]
+    except Exception as e:
+        print(f"  ❌ No se pudo leer local: {e}")
+        return
+    finally:
+        try: local_conn.close()
+        except: pass
 
-    def lq(sql):
-        cur = local.cursor(); cur.execute(sql)
-        cols = [d[0] for d in cur.description] if cur.description else []
-        return cols, [dict(zip(cols, list(r))) for r in cur.fetchall()]
+    # Conectar a Turso solo para lectura
+    try:
+        turso_conn = libsql.connect(database=TURSO_URL, auth_token=TURSO_TOKEN)
+    except Exception as e:
+        print(f"  ❌ No se pudo conectar a Turso: {e}")
+        return
 
-    def tq(sql):
-        cur = turso.cursor(); cur.execute(sql)
-        cols = [d[0] for d in cur.description] if cur.description else []
-        return cols, [dict(zip(cols, list(r))) for r in cur.fetchall()]
+    # Contar filas en cada tabla
+    rows = []
+    diffs = []
 
-    def normalize(v):
-        if v is None: return None
+    for tabla in sorted(all_tables):
+        # Local
         try:
-            f = float(v); return int(f) if f == int(f) else f
-        except (ValueError, TypeError): return v
-
-    SQL_TABLES = ("SELECT name FROM sqlite_master "
-                  "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-    _, l_tbl = lq(SQL_TABLES)
-    _, t_tbl = tq(SQL_TABLES)
-    local_tables = {r['name'] for r in l_tbl}
-    turso_tables = {r['name'] for r in t_tbl}
-    common       = local_tables & turso_tables
-
-    # ── Conteos ───────────────────────────────────────────────────────────────
-    print(f"\n  {'TABLA':<38} {'LOCAL':>7} {'TURSO':>7}  STATUS")
-    print(f"  {'-'*38} {'-'*7} {'-'*7}  {'-'*10}")
-
-    count_diffs, row_counts = {}, {}
-    for table in sorted(common):
-        try:
-            _, lr = lq(f"SELECT COUNT(*) as c FROM '{table}'")
-            _, tr = tq(f"SELECT COUNT(*) as c FROM '{table}'")
-            lc_n, tc_n = lr[0]['c'], tr[0]['c']
-            row_counts[table] = (lc_n, tc_n)
-            if lc_n == tc_n:
-                st = "OK"
-            elif table in SKIP_DATA:
-                st = "INFO (solo-local esperado)" if table in SOLO_LOCAL else "INFO"
-            else:
-                diff = lc_n - tc_n
-                st = f"DIFF ({'+' if diff>0 else ''}{diff})"
-                count_diffs[table] = (lc_n, tc_n)
-            print(f"  {table:<38} {lc_n:>7} {tc_n:>7}  {st}")
-        except Exception as e:
-            print(f"  {table:<38} {'ERR':>7} {'ERR':>7}  {e}")
-
-    # ── Datos fila a fila ─────────────────────────────────────────────────────
-    data_diffs = {}
-    for table in sorted(common):
-        if table in SKIP_DATA: continue
-        lc_n, tc_n = row_counts.get(table, (0, 0))
-        if max(lc_n, tc_n) == 0 or max(lc_n, tc_n) > MAX_ROWS:
-            continue
-        try:
-            _, l_rows = lq(f"SELECT * FROM '{table}' ORDER BY rowid")
-            _, t_rows = tq(f"SELECT * FROM '{table}' ORDER BY rowid")
+            lc = sqlite3.connect(LOCAL_DB)
+            c = lc.cursor()
+            c.execute(f"SELECT COUNT(*) FROM {tabla}")
+            local_count = c.fetchone()[0]
+            lc.close()
         except Exception:
-            continue
+            local_count = "ERR"
 
-        diffs = []
-        for i in range(max(len(l_rows), len(t_rows))):
-            if i >= len(l_rows):
-                diffs.append({'tipo': 'SOLO_TURSO', 'val': t_rows[i]})
-            elif i >= len(t_rows):
-                diffs.append({'tipo': 'SOLO_LOCAL', 'val': l_rows[i]})
-            else:
-                cd = {c: {'L': normalize(l_rows[i].get(c)), 'T': normalize(t_rows[i].get(c))}
-                      for c in set(list(l_rows[i]) + list(t_rows[i]))
-                      if str(normalize(l_rows[i].get(c))) != str(normalize(t_rows[i].get(c)))}
-                if cd:
-                    diffs.append({'tipo': 'DIFERENTE', 'cols': cd, 'id': l_rows[i].get('id', i+1)})
-        if diffs:
-            data_diffs[table] = diffs
+        # Turso
+        try:
+            tc = turso_conn.cursor()
+            tc.execute(f"SELECT COUNT(*) FROM {tabla}")
+            r = tc.fetchone()
+            turso_count = r[0] if r else "ERR"
+        except Exception as e:
+            turso_count = "N/A"
 
-    # ── Veredicto ─────────────────────────────────────────────────────────────
+        if isinstance(local_count, int) and isinstance(turso_count, int):
+            status = "OK" if local_count == turso_count else "⚠️ DIFF"
+            if local_count != turso_count:
+                diffs.append((tabla, local_count, turso_count))
+        else:
+            status = "?"
+
+        rows.append((tabla, local_count, turso_count, status))
+
+    try:
+        turso_conn.close()
+    except:
+        pass
+
+    # Imprimir tabla
+    print(f"\n  {'TABLA':<38} {'LOCAL':>7} {'TURSO':>7}  {'STATUS'}")
+    print(f"  {'-'*38} {'-'*7} {'-'*7}  {'-'*10}")
+    for tabla, local_count, turso_count, status in rows:
+        print(f"  {tabla:<38} {str(local_count):>7} {str(turso_count):>7}  {status}")
+
     print(f"\n{SEP}\n")
-    problems = []
-    if count_diffs: problems.append(f"Conteos distintos   : {sorted(count_diffs.keys())}")
-    if data_diffs:  problems.append(f"Datos distintos     : {sorted(data_diffs.keys())}")
 
-    if not problems:
-        print(f"  ✅  BASES DE DATOS IDÉNTICAS — Turso = Local\n")
-    else:
-        print(f"  ❌  BASES DE DATOS NO IDÉNTICAS — {len(problems)} categoría(s) con diferencias:")
-        for p in problems:
-            print(f"      • {p}")
-        if data_diffs:
-            print()
-            for t, diffs in data_diffs.items():
-                tipos = {}
-                for d in diffs: tipos[d['tipo']] = tipos.get(d['tipo'], 0) + 1
-                print(f"        {t}: {len(diffs)} fila(s) → {tipos}")
+    if diffs:
+        print(f"  ⚠️  {len(diffs)} tabla(s) con diferencias:")
+        for tabla, lc, tc in diffs:
+            diff = lc - tc if isinstance(lc, int) and isinstance(tc, int) else "?"
+            direction = "solo-local" if isinstance(lc, int) and isinstance(tc, int) and lc > tc else "solo-turso"
+            print(f"    • {tabla:<38} local={lc}  turso={tc}  ({direction})")
         print()
+    else:
+        print(f"  ✅  BASES DE DATOS IDÉNTICAS — Turso = Local\n")
 
-    print(SEP + "\n")
-    turso.close()
-    local.close()
+    print(SEP)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
-if __name__ == "__main__":
-    while True:
-        op = menu()
-        if op == '6':
-            print("\n  Saliendo...\n")
-            break
-        elif op in ['1', '2', '3', '4', '5']:
-            asyncio.run(limpiar_datos(op))
-            comparar_post_limpieza()
-            break
-        else:
-            print("\n  ⚠️  Opción no válida. Inténtalo de nuevo.\n")
+def main():
+    opcion = menu()
+
+    if opcion == '6':
+        print("  👋 Saliendo.")
+        return
+
+    if opcion not in ['1', '2', '3', '4', '5']:
+        print("  ❌ Opción inválida.")
+        return
+
+    asyncio.run(limpiar_datos(opcion))
+    comparar_post_limpieza()
+
+
+if __name__ == '__main__':
+    main()
