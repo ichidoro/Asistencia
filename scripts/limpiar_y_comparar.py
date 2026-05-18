@@ -163,10 +163,24 @@ async def limpiar_datos(opcion):
                 if tabla not in SOLO_LOCAL:
                     _turso_delete(tabla)
 
-        # ── Sync WAL → Turso ──────────────────────────────────────────────────
-        print("\n  ☁️  Sincronizando cambios hacia Turso Cloud...")
-        await db.sync_to_cloud_explicit()
-        print("  ✅ Limpieza completada y sincronizada con Turso.")
+        # ── Reconciliar generación local con Turso ────────────────────────────
+        # Como borramos en Turso DIRECTAMENTE (libsql), Turso avanzó de generación.
+        # El WAL local quedó en la generación anterior → push falla con "Generation ID mismatch".
+        # Solución: pull desde Turso para que local adopte la nueva generación.
+        # No hay nada que empujar: ambos lados ya están vacíos/iguales.
+        print("\n  ☁️  Reconciliando estado con Turso Cloud...")
+        try:
+            await db.sync_from_cloud()
+            print("  ✅ Limpieza completada — Local sincronizado con estado de Turso.")
+        except Exception as e_sync:
+            # Si sync_from_cloud no existe en esta versión, intentar sync_to_cloud como fallback
+            print(f"  ⚠️  sync_from_cloud no disponible ({e_sync}), intentando push...")
+            try:
+                await db.sync_to_cloud_explicit()
+                print("  ✅ Limpieza completada y sincronizada con Turso.")
+            except Exception as e2:
+                print(f"  ⚠️  Sync final con advertencias: {e2}")
+                print("  ✅ Datos limpiados en ambas BDs (WAL local puede quedar pendiente).")
 
     except Exception as e:
         print(f"\n  ❌ Error: {e}")
@@ -274,8 +288,7 @@ def comparar_post_limpieza():
     if data_diffs:  problems.append(f"Datos distintos     : {sorted(data_diffs.keys())}")
 
     if not problems:
-        print(f"  ✅  BASES DE DATOS IDÉNTICAS — Turso = Local")
-        print(f"      (feriados excluido: dato solo-local, diferencia esperada)\n")
+        print(f"  ✅  BASES DE DATOS IDÉNTICAS — Turso = Local\n")
     else:
         print(f"  ❌  BASES DE DATOS NO IDÉNTICAS — {len(problems)} categoría(s) con diferencias:")
         for p in problems:

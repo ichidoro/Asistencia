@@ -638,7 +638,7 @@ function addBonoReglaRow(regla = null) {
                 </div>
             </div>
             <div class="col-md-3">
-                <label class="small text-muted">Cargo Req.</label>
+                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req.</label>
                 <div class="input-group input-group-sm cargo-req-wrapper">
                     <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm"
                         placeholder="Todos"
@@ -651,10 +651,11 @@ function addBonoReglaRow(regla = null) {
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0 cargo-req-ul" style="max-height: 300px; overflow-y: auto; width: 220px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..."
+                            <input type="text" id="search-cargo-req-${rowIdx}" name="search-cargo-req-${rowIdx}" class="form-control form-control-sm" placeholder="Buscar cargo..."
                                 onkeyup="filterCargosDropdown(this)"
                                 onkeydown="event.stopPropagation()"
-                                onclick="event.stopPropagation()">
+                                onclick="event.stopPropagation()"
+                                autocomplete="off">
                         </li>
                         <li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="selectCargoRequerido(this, ''); return false;"><em class="text-muted">Todos (sin filtro)</em></a></li>
                     </ul>
@@ -671,10 +672,11 @@ function addBonoReglaRow(regla = null) {
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0 cargo-dropdown-ul" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..."
+                            <input type="text" id="search-cargo-excl-${rowIdx}" name="search-cargo-excl-${rowIdx}" class="form-control form-control-sm" placeholder="Buscar cargo..."
                                 onkeyup="filterCargosDropdown(this)"
                                 onkeydown="event.stopPropagation()"
-                                onclick="event.stopPropagation()">
+                                onclick="event.stopPropagation()"
+                                autocomplete="off">
                         </li>
                     </ul>
                 </div>
