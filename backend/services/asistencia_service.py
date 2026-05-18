@@ -2912,7 +2912,7 @@ class AsistenciaService:
             t_info = turno_ids_emp.get(eid, {})
             if t_info:
                 emp['meta_horas_semanales'] = t_info.get('meta_horas_semanales') or 44.0
-                emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'FIJO'
+                emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'DINAMICO_FLEXIBLE'
                 emp['turno'] = t_info.get('turno_nombre')
                 t_id = t_info.get('turno_id')
                 emp['primer_dia_semana_turno'] = primer_dia_por_turno.get(t_id, 1)  # default Lunes

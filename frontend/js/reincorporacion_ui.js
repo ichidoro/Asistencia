@@ -228,19 +228,12 @@ async function reincLoadTurnos(area) {
         
         select.innerHTML = '<option value="">-- Seleccionar Turno --</option>' + 
             turnos.map(t => {
-                let horario = '';
-                let tipoPlanificacion = 'Fijo';
-                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-                    tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
-                    horario = '(Múltiples opciones)';
-                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-                    tipoPlanificacion = 'Flexible (Bolsa de Horas)';
-                } else if (t.dias && t.dias.length > 0) {
-                    const diaLaboral = t.dias.find(d => !d.es_libre) || t.dias[0];
-                    const he = diaLaboral.hora_entrada ? diaLaboral.hora_entrada.substring(0,5) : '--:--';
-                    const hs = diaLaboral.hora_salida ? diaLaboral.hora_salida.substring(0,5) : '--:--';
-                    horario = `(${he} - ${hs})`;
-                }
+                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                    ? 'Flexible (Bolsa de Horas)'
+                    : 'Ciclo Inteligente (Smart Match)';
+                const horario = t.tipo_programacion === 'DINAMICO_FLEXIBLE'
+                    ? '(Múltiples opciones)'
+                    : '';
                 return `<option value="${t.id}" data-tipo="${tipoPlanificacion}" data-horario="${horario}">${t.nombre}</option>`;
             }).join('');
             

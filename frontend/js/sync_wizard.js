@@ -1132,39 +1132,55 @@ async function fetchAndRenderWizardStep3() {
             return;
         }
 
-        // Crear options HTML
-        const turnosOptionsHTML = window._wizardState.turnosDisponibles.map(t => {
-            const isDef = t.es_default ? ' (Por Defecto)' : '';
-            return `<option value="${t.id}">${t.nombre}${isDef}</option>`;
-        }).join('');
-
+        // Generar radio cards por área
         areasList.forEach((area, idx) => {
-            // Ver si ya lo teníamos guardado en memoria en esta sesión, si no usar la pre-asignación de DB
-            let selectedTurnoId = window._wizardState.resoluciones.turnos[area] || window._wizardState.preAsignacionesTurnos[area] || "";
-            
-            // Si sigue vacío y hay turno por defecto, seleccionarlo
-            if (!selectedTurnoId) {
-                const defTurno = window._wizardState.turnosDisponibles.find(t => t.es_default);
-                if (defTurno) selectedTurnoId = defTurno.id;
-            }
+            const selectedTurnoId = String(
+                window._wizardState.resoluciones.turnos[area] ||
+                window._wizardState.preAsignacionesTurnos[area] ||
+                (window._wizardState.turnosDisponibles.find(t => t.es_default)?.id) ||
+                (window._wizardState.turnosDisponibles[0]?.id) || ''
+            );
+
+            const cardsHTML = window._wizardState.turnosDisponibles.map(t => {
+                const isChecked = String(t.id) === selectedTurnoId ? 'checked' : '';
+                const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                    ? '<span class="badge bg-warning text-dark">Bolsa de Horas</span>'
+                    : '<span class="badge bg-primary">Ciclo Inteligente</span>';
+                const semLabel = (t.num_semanas || 1) > 1
+                    ? `${t.num_semanas} opciones`
+                    : '1 opción';
+                const hrsLabel = t.meta_horas_semanales
+                    ? `${t.meta_horas_semanales} hrs/sem`
+                    : '';
+
+                return `
+                <label class="wiz-turno-card${isChecked ? ' selected' : ''}"
+                       for="wiz-radio-${idx}-${t.id}">
+                    <input type="radio"
+                           name="wiz-turno-area-${idx}"
+                           id="wiz-radio-${idx}-${t.id}"
+                           class="wiz-radio-turno"
+                           data-area="${area}"
+                           value="${t.id}"
+                           ${isChecked}
+                           onchange="this.closest('.wiz-turno-cards').querySelectorAll('.wiz-turno-card').forEach(c=>c.classList.remove('selected')); this.closest('.wiz-turno-card').classList.add('selected')">
+                    <div class="wiz-turno-card-body">
+                        <div class="wiz-turno-card-name">${t.nombre}</div>
+                        <div class="wiz-turno-card-meta">
+                            ${tipoBadge}
+                            ${hrsLabel ? `<span class="text-muted small">${hrsLabel}</span>` : ''}
+                            <span class="text-muted small">${semLabel}</span>
+                        </div>
+                    </div>
+                </label>`;
+            }).join('');
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="fw-bold align-middle">${area}</td>
-                <td class="align-middle">
-                    <select class="form-select form-select-sm wiz-sel-turno" data-area="${area}" id="wiz-sel-turno-${idx}">
-                        <option value="">-- Sin Turno Fijo (Rotativo) --</option>
-                        ${turnosOptionsHTML}
-                    </select>
-                </td>
+                <td><div class="wiz-turno-cards">${cardsHTML}</div></td>
             `;
             tbody.appendChild(tr);
-
-            // Asignar valor seleccionado
-            if (selectedTurnoId) {
-                const sel = tr.querySelector(`#wiz-sel-turno-${idx}`);
-                sel.value = selectedTurnoId;
-            }
         });
 
     } catch (e) {
@@ -1178,10 +1194,11 @@ async function fetchAndRenderWizardStep3() {
 function guardarSeleccionesPaso3() {
     const areasList = getConsolidatedAreas();
     areasList.forEach((area, idx) => {
-        const sel = document.getElementById(`wiz-sel-turno-${idx}`);
-        if (sel) {
-            window._wizardState.resoluciones.turnos[area] = sel.value ? parseInt(sel.value) : null;
-        }
+        const radioChecked = document.querySelector(
+            `input[name="wiz-turno-area-${idx}"]:checked`
+        );
+        window._wizardState.resoluciones.turnos[area] =
+            radioChecked ? parseInt(radioChecked.value) : null;
     });
     return true;
 }

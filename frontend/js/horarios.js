@@ -606,12 +606,9 @@ async function loadBulkData() {
 
         select.innerHTML = '<option value="">Seleccione un turno...</option>' +
             (lista || []).map(t => {
-                let tipoPlanificacion = 'Fijo';
-                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-                    tipoPlanificacion = 'Ciclo Inteligente';
-                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-                    tipoPlanificacion = 'Bolsa de Horas';
-                }
+                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                    ? 'Bolsa de Horas'
+                    : 'Ciclo Inteligente';
                 return `<option value="${t.id}">${t.nombre} (${tipoPlanificacion})</option>`;
             }).join('');
     }
@@ -1072,10 +1069,8 @@ function renderModalHtml() {
                             <div class="col-md-3">
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
-                                    <option value="FIJO">Horario Fijo</option>
-                                    <option value="DINAMICO_FLEXIBLE">Ciclo Inteligente (Smart Match)</option>
-                                    <option value="ROTATIVO_INTELIGENTE">Rotativo Inteligente</option>
-                                    <option value="FLEXIBLE_BOLSA">Flexible (Bolsa de Horas)</option>
+                                    <option value="DINAMICO_FLEXIBLE">Ciclo Inteligente</option>
+                                    <option value="FLEXIBLE_BOLSA">Bolsa de Horas (Art. 25 BIS)</option>
                                 </select>
                             </div>
                             <div class="col-md-3" id="div-meta-jornada">

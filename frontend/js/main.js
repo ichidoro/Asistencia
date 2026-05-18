@@ -2457,21 +2457,14 @@ window.loadTurnosForNewArea = async function(areaName) {
             turnos.forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t.id;
-                
-                let tipoPlanificacion = 'Fijo';
-                let horario = '';
-                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-                    tipoPlanificacion = 'Ciclo Inteligente (Smart Match)';
-                    horario = '(Múltiples opciones)';
-                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-                    tipoPlanificacion = 'Flexible (Bolsa de Horas)';
-                } else if (t.dias && t.dias.length > 0) {
-                    const diaLaboral = t.dias.find(d => !d.es_libre) || t.dias[0];
-                    const he = diaLaboral.hora_entrada ? diaLaboral.hora_entrada.substring(0,5) : '--:--';
-                    const hs = diaLaboral.hora_salida ? diaLaboral.hora_salida.substring(0,5) : '--:--';
-                    horario = `(${he} - ${hs})`;
-                }
-                
+
+                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                    ? 'Flexible (Bolsa de Horas)'
+                    : 'Ciclo Inteligente (Smart Match)';
+                const horario = t.tipo_programacion === 'DINAMICO_FLEXIBLE'
+                    ? '(Múltiples opciones)'
+                    : '';
+
                 opt.setAttribute('data-tipo', tipoPlanificacion);
                 opt.setAttribute('data-horario', horario);
                 opt.textContent = t.nombre;

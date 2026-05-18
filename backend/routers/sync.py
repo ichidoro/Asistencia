@@ -99,9 +99,26 @@ async def wizard_provider_turnos(
 ) -> Dict[str, Any]:
     await db.connect()
     
-    # 1. Obtener todos los turnos
-    turnos_records = await db.fetch_all("SELECT id, nombre FROM turnos ORDER BY nombre ASC")
-    turnos = [{"id": t["id"], "nombre": t["nombre"], "es_default": False} for t in turnos_records]
+    # 1. Obtener todos los turnos con campos necesarios para las radio cards del wizard
+    turnos_records = await db.fetch_all("""
+        SELECT t.id, t.nombre, t.tipo_programacion, t.meta_horas_semanales,
+               MAX(td.num_semana) as num_semanas
+        FROM turnos t
+        LEFT JOIN turno_dias td ON td.turno_id = t.id
+        GROUP BY t.id
+        ORDER BY t.nombre ASC
+    """)
+    turnos = [
+        {
+            "id": t["id"],
+            "nombre": t["nombre"],
+            "es_default": False,
+            "tipo_programacion": t["tipo_programacion"] or "DINAMICO_FLEXIBLE",
+            "meta_horas_semanales": t["meta_horas_semanales"] or 0,
+            "num_semanas": t["num_semanas"] or 1
+        }
+        for t in turnos_records
+    ]
     
     # 2. Buscar asignaciones existentes para las áreas (ya sean áreas nuevas o existentes)
     from backend.repositories.area import AreaRepository
