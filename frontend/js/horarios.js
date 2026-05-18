@@ -877,12 +877,9 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
 
         select.innerHTML = '<option value="">Seleccione un turno...</option>' +
             (lista || []).map(t => {
-                let tipoPlanificacion = 'Fijo';
-                if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-                    tipoPlanificacion = 'Ciclo Inteligente';
-                } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-                    tipoPlanificacion = 'Bolsa de Horas';
-                }
+                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                    ? 'Bolsa de Horas'
+                    : 'Ciclo Inteligente';
                 return `<option value="${t.id}">${t.nombre} (${tipoPlanificacion})</option>`;
             }).join('');
 
@@ -1020,14 +1017,9 @@ function renderTurnosTable() {
     }
 
     tbody.innerHTML = turnosList.map(t => {
-        let tipoBadge = 'Fijo';
-        if (t.tipo_programacion === 'DINAMICO_FLEXIBLE' || t.tipo_programacion === 'ROTATIVO_INTELIGENTE') {
-            tipoBadge = 'Ciclo Inteligente (Smart Match)';
-        } else if (t.tipo_programacion === 'FLEXIBLE_BOLSA') {
-            tipoBadge = 'Flexible (Bolsa de Horas)';
-        } else if (t.tipo_programacion === 'FIJO') {
-            tipoBadge = 'Horario Fijo';
-        }
+        const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+            ? 'Bolsa de Horas (Art. 25 BIS)'
+            : 'Ciclo Inteligente';
 
         return `
         <tr>

@@ -1294,13 +1294,20 @@ async function fetchAndRenderWizardStep4() {
             // Recuperar seleccionados previamente
             let selectedBonosIds = window._wizardState.resoluciones.bonos[area] || window._wizardState.preAsignacionesBonos[area] || [];
 
-            // Construir checkboxes de bonos
+            // Construir chips de bonos con checkbox + botón editar
             const bonosCheckboxes = window._wizardState.bonosDisponibles.map(b => {
                 const checked = selectedBonosIds.includes(b.id) ? 'checked' : '';
                 return `
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input wiz-chk-bono" type="checkbox" id="wiz-bono-${idx}-${b.id}" data-area="${area}" value="${b.id}" ${checked}>
-                        <label class="form-check-label small" for="wiz-bono-${idx}-${b.id}">${b.nombre}</label>
+                    <div class="wiz-bono-chip ${checked ? 'selected' : ''}">
+                        <input class="wiz-chk-bono" type="checkbox" id="wiz-bono-${idx}-${b.id}" 
+                               data-area="${area}" value="${b.id}" ${checked}
+                               onchange="this.closest('.wiz-bono-chip').classList.toggle('selected', this.checked)">
+                        <label class="wiz-bono-chip-label" for="wiz-bono-${idx}-${b.id}">${b.nombre}</label>
+                        <button type="button" class="wiz-bono-edit-btn" 
+                                onclick="window._wizardEditarBono(${b.id})"
+                                title="Editar reglas de este bono">
+                            <i class="bi bi-pencil-fill"></i>
+                        </button>
                     </div>
                 `;
             }).join('');
@@ -1761,6 +1768,72 @@ window._wizardCrearBono = async function() {
 
     openModalBono();
 };
+
+/**
+ * Abre el modal de Edición de Bono directamente sobre el wizard.
+ * Reutiliza el mismo modal-bono y el patrón de _wizardCrearBono,
+ * pero hace un fetch del bono completo (con reglas) para pre-poblar.
+ */
+window._wizardEditarBono = async function(bonoId) {
+    if (typeof openModalBono !== 'function') {
+        Swal.fire('Módulo no cargado', 'El módulo de bonos no está inicializado.', 'info');
+        return;
+    }
+
+    // Inicializar configuración si no se ha hecho
+    if (typeof initConfiguracionUI === 'function' && !window._config_initialized) {
+        initConfiguracionUI();
+    }
+    if (typeof loadMetadata === 'function' && typeof globalCargosList !== 'undefined' && globalCargosList.length === 0) {
+        await loadMetadata();
+    }
+
+    // Obtener el bono completo (con reglas) desde la API
+    let bono = null;
+    try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch(`/api/configuracion/bonos/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const bonos = await resp.json();
+        bono = bonos.find(b => b.id === bonoId);
+        if (!bono) throw new Error('Bono no encontrado');
+    } catch (e) {
+        Swal.fire('Error', 'No se pudo cargar el bono: ' + e.message, 'error');
+        return;
+    }
+
+    // Mover modal-bono dentro del wizard (mismo patrón que _wizardCrearBono)
+    const modalBonoEl = document.getElementById('modal-bono');
+    if (!modalBonoEl) { openModalBono(bono); return; }
+
+    const wizardEl = document.getElementById('modal-sync-wizard');
+    const _bonoHost = wizardEl || document.body;
+    const _bonoOriginalParent = modalBonoEl.parentElement;
+    const _bonoOriginalNext = modalBonoEl.nextSibling;
+    _bonoHost.appendChild(modalBonoEl);
+
+    modalBonoEl.style.zIndex = '2200';
+    modalBonoEl.removeAttribute('aria-hidden');
+    modalBonoEl.removeAttribute('inert');
+
+    window._wizardBonoCloseCallback = function() {
+        modalBonoEl.style.zIndex = '';
+        if (_bonoOriginalParent) {
+            if (_bonoOriginalNext) {
+                _bonoOriginalParent.insertBefore(modalBonoEl, _bonoOriginalNext);
+            } else {
+                _bonoOriginalParent.appendChild(modalBonoEl);
+            }
+        }
+        window._wizardBonoCloseCallback = null;
+        window._wizardRefrescarBonos();
+    };
+
+    openModalBono(bono);
+};
+
 
 /**
  * Recarga el Paso 4 (Bonos) sin cerrar el wizard.

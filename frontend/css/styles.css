@@ -3465,3 +3465,98 @@ tr:hover .emp-name-cell {
     gap: 5px;
     align-items: center;
 }
+/* -------------------------------------------------
+   WIZARD PASO 5: CHIPS DE BONO CON BOTÓN EDITAR
+   ------------------------------------------------- */
+.wiz-bono-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    border: 2px solid #dee2e6;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #ffffff;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    cursor: pointer;
+    user-select: none;
+}
+
+.wiz-bono-chip.selected {
+    border-color: #6c63ff;
+    background: #f0eeff;
+}
+
+.wiz-bono-chip input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    opacity: 0;
+    position: absolute;
+}
+
+.wiz-bono-chip-label {
+    padding: 5px 12px 5px 14px;
+    font-size: 0.83rem;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.wiz-bono-chip.selected .wiz-bono-chip-label {
+    color: #4b46b0;
+    font-weight: 600;
+}
+
+.wiz-bono-chip-label::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #adb5bd;
+    border-radius: 3px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background: #fff;
+    transition: background 0.12s, border-color 0.12s;
+    position: relative;
+    top: -1px;
+}
+
+.wiz-bono-chip.selected .wiz-bono-chip-label::before {
+    background: #6c63ff;
+    border-color: #6c63ff;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4l2.5 2.5L9 1' stroke='%23fff' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 70%;
+}
+
+.wiz-bono-edit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-left: 1px solid #dee2e6;
+    background: transparent;
+    color: #6c757d;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    font-size: 0.78rem;
+    line-height: 1;
+}
+
+.wiz-bono-edit-btn:hover {
+    background: #6c63ff;
+    color: #ffffff;
+}
+
+.wiz-bono-chip.selected .wiz-bono-edit-btn {
+    border-left-color: #c5c0f5;
+}
