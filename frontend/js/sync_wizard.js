@@ -720,12 +720,25 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
             };
             childEl.addEventListener('hidden.bs.modal', _onHidden);
         } else {
-            // Modal custom (display: flex/none): polling
+            // Modal custom (display: flex/none): primero esperar a que APAREZCA,
+            // luego detectar cuando DESAPAREZCA.
+            let appeared = false;
             const checkClose = setInterval(() => {
-                if (childEl.style.display === 'none' || childEl.style.display === '') {
-                    clearInterval(checkClose);
-                    observer.disconnect(); // Limpiar observer
-                    _wizardRestoreAfterChild(wizardEl, onCloseFn);
+                const d = childEl.style.display;
+                if (!appeared) {
+                    // Esperar a que el modal se muestre (flex o block)
+                    if (d === 'flex' || d === 'block') {
+                        appeared = true;
+                        console.log('[Wizard] Modal hijo apareció:', childModalId);
+                    }
+                } else {
+                    // Ya apareció — detectar cuando se cierre
+                    if (d === 'none' || d === '') {
+                        clearInterval(checkClose);
+                        observer.disconnect(); // Limpiar observer
+                        console.log('[Wizard] Modal hijo cerrado:', childModalId);
+                        _wizardRestoreAfterChild(wizardEl, onCloseFn);
+                    }
                 }
             }, 300);
         }
