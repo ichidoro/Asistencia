@@ -60,16 +60,29 @@ window.startSyncWizard = function(data) {
 function updateWizardUI() {
     const step = window._wizardState.currentStep;
     
-    // Actualizar Stepper Visual
+    // Actualizar Stepper Visual — controla clases Bootstrap directamente
     document.querySelectorAll('.step-indicator').forEach((el, idx) => {
-        if (idx + 1 === step) {
-            el.classList.add('active');
-            el.classList.remove('completed');
-        } else if (idx + 1 < step) {
-            el.classList.add('completed');
-            el.classList.remove('active');
+        const stepNum = idx + 1;
+        // Limpiar todas las variantes posibles
+        el.classList.remove(
+            'active', 'completed',
+            'bg-primary', 'bg-light', 'bg-success',
+            'text-white', 'text-muted', 'text-success',
+            'border', 'border-primary', 'fw-bold'
+        );
+
+        if (stepNum < step) {
+            // Paso completado: ✓ verde/azul
+            el.classList.add('completed', 'bg-primary', 'text-white', 'fw-bold');
+            el.innerHTML = '<i class="bi bi-check-lg"></i>';
+        } else if (stepNum === step) {
+            // Paso actual: círculo azul sólido
+            el.classList.add('active', 'bg-primary', 'text-white', 'fw-bold');
+            el.textContent = stepNum;
         } else {
-            el.classList.remove('active', 'completed');
+            // Paso futuro: círculo gris
+            el.classList.add('bg-light', 'text-muted', 'border');
+            el.textContent = stepNum;
         }
     });
 
@@ -825,14 +838,45 @@ window.confirmWizardSync = async function() {
 // ==========================================
 
 /**
+ * Extrae las áreas consolidadas del estado del wizard:
+ * - Áreas NUEVAS que el usuario eligió importar (no ignoradas)
+ * - Áreas ya conocidas en el sistema
+ */
+function _getWizardPendingAreas() {
+    if (!window._wizardState || !window._wizardState.data) return [];
+    const areas = new Set();
+
+    // Áreas ya conocidas
+    (window._wizardState.data.areas_conocidas || []).forEach(a => areas.add(a));
+
+    // Áreas nuevas seleccionadas por el usuario (no ignoradas)
+    (window._wizardState.data.nuevas_areas || []).forEach(a => {
+        const res = window._wizardState.resoluciones.areas[a];
+        if (res && res !== '_IGNORE_') {
+            areas.add(res === '_NEW_' ? a : res);
+        }
+    });
+
+    return Array.from(areas).sort();
+}
+
+/**
  * Cierra el wizard y navega directamente a Configuración → pestaña Turnos,
  * luego abre el modal de Nuevo Turno automáticamente.
+ * Inyecta las áreas pendientes del wizard en el formulario de turno.
  */
 window._wizardIrACrearTurno = function() {
-    // 1. Cerrar el wizard
+    // 1. Capturar áreas pendientes ANTES de cerrar (el state se destruye al cerrar)
+    const pendingAreas = _getWizardPendingAreas();
+    console.log('[WizardHelper] Áreas pendientes para turno:', pendingAreas);
+
+    // 2. Exponer al módulo horarios (populateAreaSelect lo leerá automáticamente)
+    window._wizardPendingAreas = pendingAreas;
+
+    // 3. Cerrar el wizard
     closeSyncWizard();
 
-    // 2. Navegar al módulo Configuración
+    // 4. Navegar al módulo Configuración
     if (typeof switchPage === 'function') {
         switchPage('configuracion');
     } else {
@@ -841,7 +885,7 @@ window._wizardIrACrearTurno = function() {
         if (pageConf) pageConf.classList.add('active');
     }
 
-    // 3. Activar la pestaña de Turnos y abrir modal Nuevo Turno
+    // 5. Activar la pestaña de Turnos y abrir modal Nuevo Turno
     setTimeout(() => {
         const tabHorarios = document.getElementById('horarios-tab');
         if (tabHorarios) {

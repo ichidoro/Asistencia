@@ -394,6 +394,17 @@ async function populateAreaSelect(selectedAreas = []) {
             }
         }
         
+        // ➔ WIZARD BRIDGE: Si el usuario viene del Sync Wizard, inyectar las áreas
+        //   pendientes de sincronización (aún no en BD) para que pueda crear el turno
+        if (window._wizardPendingAreas && window._wizardPendingAreas.length > 0) {
+            console.log('[Horarios] Inyectando áreas del wizard:', window._wizardPendingAreas);
+            window._wizardPendingAreas.forEach(a => {
+                if (!areas.includes(a)) areas.push(a);
+            });
+            // Limpiar el bridge después de usarlo (una sola vez)
+            window._wizardPendingAreas = null;
+        }
+
         areas.sort();
     } catch (e) { 
         console.error("Error cargando áreas para turno desde API, intentando fallback", e);
