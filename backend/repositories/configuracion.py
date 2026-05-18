@@ -405,6 +405,11 @@ class ConfiguracionRepository:
                 query_reglas = "SELECT * FROM bono_reglas WHERE bono_id = ?"
                 reglas = await self.db.fetch_all(query_reglas, (b['id'],))
                 
+                # Obtener áreas asignadas
+                query_areas = "SELECT area_id FROM area_bonos WHERE bono_id = ?"
+                areas = await self.db.fetch_all(query_areas, (b['id'],))
+                bono_dict['area_ids'] = [a['area_id'] for a in areas]
+                
                 # Formatear reglas
                 reglas_fmt = []
                 for r in reglas:

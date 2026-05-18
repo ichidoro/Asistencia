@@ -22,17 +22,20 @@ window.appendCargoToInput = function (element, cargo) {
 };
 
 window.filterCargosDropdown = function(inputElement) {
-    const filter = inputElement.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (!inputElement) return;
+    const filter = (inputElement.value || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const ul = inputElement.closest('ul');
+    if (!ul) return;
+    
     const items = ul.querySelectorAll('.cargo-item');
     
     items.forEach(item => {
-        const text = item.textContent || item.innerText;
+        const text = item.textContent || item.innerText || '';
         const normalizedText = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (normalizedText.indexOf(filter) > -1) {
-            item.parentElement.style.display = "";
+            if (item.parentElement) item.parentElement.style.display = "";
         } else {
-            item.parentElement.style.display = "none";
+            if (item.parentElement) item.parentElement.style.display = "none";
         }
     });
 };
@@ -466,23 +469,7 @@ async function openModalBono(bono = null) {
         const areasData = areasRes.ok ? await areasRes.json() : [];
         
         // Obtener area_ids ya asignadas (si estamos editando)
-        let assignedAreaIds = new Set();
-        if (bono && bono.id) {
-            try {
-                const abRes = await fetch(`${API_BASE_URL}/sync/wizard/bonos/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                    body: JSON.stringify({ areas: areasData.map(a => a.nombre || a.name) })
-                });
-                if (abRes.ok) {
-                    const abData = await abRes.json();
-                    const preAsigs = abData.pre_asignaciones || {};
-                    for (const [areaId, bonoIds] of Object.entries(preAsigs)) {
-                        if (bonoIds.includes(bono.id)) assignedAreaIds.add(parseInt(areaId));
-                    }
-                }
-            } catch(e) { /* silenciar - no crítico */ }
-        }
+        let assignedAreaIds = new Set(bono && bono.area_ids ? bono.area_ids : []);
         
         if (areasData.length > 0) {
             areasContainer.innerHTML = areasData.map(a => {
@@ -597,7 +584,7 @@ function addBonoReglaRow(regla = null) {
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="event.stopPropagation()" onclick="event.stopPropagation()">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="if(typeof event !== 'undefined') event.stopPropagation()" onclick="if(typeof event !== 'undefined') event.stopPropagation()">
                         </li>
                         ${globalCargosList.map(c =>
         `<li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`
