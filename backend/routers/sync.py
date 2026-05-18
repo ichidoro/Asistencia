@@ -238,35 +238,9 @@ async def wizard_rollback(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class WizardFinalizeRequest(BaseModel):
-    areas_resoluciones: Dict[str, str]
-    cargos_resoluciones: Dict[str, str]
-    generos_nuevos: List[str]
-    turnos_asignaciones: Dict[str, Optional[int]]
-    bonos_asignaciones: Dict[str, List[int]]
-
-@router.post(
-    "/wizard/finalize/",
-    summary="Finalizar Sincronización (Mega-Payload)",
-    description="Aplica todas las decisiones del Wizard en una sola transacción."
-)
-async def wizard_finalize(
-    request: WizardFinalizeRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
-) -> Dict[str, Any]:
-    service = SyncService()
-    try:
-        await service.finalize_wizard_sync(
-            areas_resoluciones=request.areas_resoluciones,
-            cargos_resoluciones=request.cargos_resoluciones,
-            generos_nuevos=request.generos_nuevos,
-            turnos_asignaciones=request.turnos_asignaciones,
-            bonos_asignaciones=request.bonos_asignaciones
-        )
-        return {"status": "ok", "message": "Catálogos y asignaciones sincronizados correctamente. Listo para descargar empleados."}
-    except Exception as e:
-        logger.error(f"Error en finalize_wizard_sync: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# ELIMINADO: WizardFinalizeRequest y POST /wizard/finalize/ (código muerto)
+# Las áreas, cargos y turnos se commitean progresivamente vía /wizard/commit/*
+# Los bonos son globales y se gestionan desde configuración.
 
 
 @router.post(

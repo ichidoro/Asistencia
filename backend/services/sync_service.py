@@ -368,86 +368,10 @@ class SyncService:
         logger.info(f"♻️ [WizardRollback] {eliminados} {tipo} eliminados (rollback de sesión)")
         return {"eliminados": eliminados}
 
-    async def finalize_wizard_sync(
-        self,
-        areas_resoluciones: Dict[str, str],
-        cargos_resoluciones: Dict[str, str],
-        generos_nuevos: List[str],
-        turnos_asignaciones: Dict[str, Optional[int]],
-        bonos_asignaciones: Dict[str, List[int]]
-    ) -> None:
-        """
-        Aplica todas las decisiones del Wizard en una sola transacción atómica.
-        Crea áreas, cargos, géneros y asigna turnos y bonos.
-        """
-        logger.info("⚡ Iniciando finalize_wizard_sync (Mega-Payload)...")
-        from backend.repositories.area import AreaRepository
-        from backend.repositories.cargo import CargoRepository
-        
-        await db.connect()
-        async with db.transaction():
-            area_repo = AreaRepository(db)
-            cargo_repo = CargoRepository(db)
-            
-            # 1. Resolver Áreas
-            for area_bioalba, resolucion in areas_resoluciones.items():
-                if resolucion == "_IGNORE_":
-                    continue
-                if area_bioalba == resolucion:
-                    existing = await area_repo.get_area_by_name(resolucion)
-                    if not existing:
-                        await area_repo.create_area(resolucion)
-                else:
-                    area_real = await area_repo.get_area_by_name(resolucion)
-                    if not area_real:
-                        area_id = await area_repo.create_area(resolucion)
-                    else:
-                        area_id = area_real['id']
-                    await area_repo.create_alias(area_bioalba, area_id)
-                    
-            # 2. Resolver Cargos
-            for cargo_bioalba, resolucion in cargos_resoluciones.items():
-                if resolucion == "_IGNORE_":
-                    continue
-                if cargo_bioalba == resolucion:
-                    existing = await cargo_repo.get_cargo_by_name(resolucion)
-                    if not existing:
-                        await cargo_repo.create_cargo(resolucion)
-                else:
-                    cargo_real = await cargo_repo.get_cargo_by_name(resolucion)
-                    if not cargo_real:
-                        cargo_id = await cargo_repo.create_cargo(resolucion)
-                    else:
-                        cargo_id = cargo_real['id']
-                    await cargo_repo.create_alias(cargo_bioalba, cargo_id)
-                    
-            # 3. Resolver Géneros
-            for genero in generos_nuevos:
-                existente = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero,))
-                if not existente:
-                    await db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (genero,))
-                    
-            # 4. Asignaciones de Turnos (sobre áreas resueltas o existentes)
-            for area_name, turno_id in turnos_asignaciones.items():
-                area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
-                if area_id:
-                    # Limpiar vieja asignacion
-                    await db.execute("DELETE FROM turno_areas WHERE area_id = ?", (area_id,))
-                    # Insertar nueva
-                    if turno_id:
-                        await db.execute("INSERT INTO turno_areas (area_id, turno_id) VALUES (?, ?)", (area_id, turno_id))
-                        
-            # 5. Asignaciones de Bonos
-            for area_name, bonos_ids in bonos_asignaciones.items():
-                area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
-                if area_id:
-                    # Limpiar bonos viejos
-                    await db.execute("DELETE FROM area_bonos WHERE area_id = ?", (area_id,))
-                    # Insertar nuevos
-                    for bono_id in bonos_ids:
-                        await db.execute("INSERT INTO area_bonos (area_id, bono_id) VALUES (?, ?)", (area_id, bono_id))
-                        
-        logger.info("✅ finalize_wizard_sync completado con éxito (Todo o Nada).")
+    # ELIMINADO: finalize_wizard_sync() — código muerto (80 líneas)
+    # Reemplazado por commits progresivos:
+    #   commit_wizard_areas(), commit_wizard_cargos(), commit_wizard_turnos()
+    # Los bonos son globales y se gestionan desde configuración.
 
     async def preview_empleados(self, areas: List[str] = None, ignored_cargos: List[str] = None) -> List[Dict[str, Any]]:
         """

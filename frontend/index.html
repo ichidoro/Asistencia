@@ -2331,23 +2331,29 @@
                             <button type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
                         </div>
                         <div class="modal-body p-4">
-                            <!-- Stepper UI -->
+                            <!-- Stepper UI (8 pasos) -->
                             <div class="d-flex justify-content-between mb-4 position-relative">
                                 <div class="progress position-absolute top-50 start-0 w-100 translate-middle-y" style="height: 2px; z-index: 0;">
                                     <div id="sync-wizard-progress" class="progress-bar bg-primary" role="progressbar" style="width: 0%;"></div>
                                 </div>
-                                <div class="step-indicator active bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-1">1</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-2">2</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-3">3</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-4">4</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; z-index: 1;" id="indicator-step-5">5</div>
+                                <div class="step-indicator active bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-1">1</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-2">2</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-3">3</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-4">4</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-5">5</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-6">6</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-7">7</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-8">8</div>
                             </div>
-                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold">
+                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold" style="font-size: 0.7rem;">
                                 <span>Áreas</span>
-                                <span>Cargos & Géneros</span>
-                                <span>Turnos</span>
+                                <span>Cargos</span>
+                                <span>Pagadores</span>
+                                <span>Justific.</span>
                                 <span>Bonos</span>
-                                <span>Empleados</span>
+                                <span>Turnos</span>
+                                <span>Preview</span>
+                                <span>Confirmar</span>
                             </div>
 
                             <!-- PASO 1: Áreas -->
@@ -2413,29 +2419,30 @@
                                 </div>
                             </div>
 
-                            <!-- PASO 3: Turnos -->
+                            <!-- PASO 3: Pagadores (NUEVO) -->
                             <div id="wizard-step-3" class="wizard-step d-none">
-                                <h6 class="text-primary mb-3">Asignación de Turnos (Requisito Crítico)</h6>
-                                <div class="alert alert-danger border-0 shadow-sm mb-3">
-                                    <i class="bi bi-shield-lock-fill me-2"></i> IMPORTANTE: Los empleados no se sincronizarán y quedarán excluidos si su Área no tiene un turno asignado.
+                                <h6 class="text-primary mb-3"><i class="bi bi-bank me-2"></i>Categorías de Pagadores</h6>
+                                <div class="alert alert-info border-0 shadow-sm mb-3">
+                                    <i class="bi bi-info-circle-fill me-2"></i> Configura los pagadores del sistema (ej: Empresa, AFP, Isapre). Necesarios para justificaciones de licencias.
                                 </div>
-                                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
-                                    <table class="table table-bordered align-middle table-sm">
-                                        <thead class="table-light sticky-top">
-                                            <tr>
-                                                <th>Área a sincronizar</th>
-                                                <th>Turno Recomendado / Seleccionado</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="tbody-wizard-turnos">
-                                            <!-- Inyectado -->
-                                        </tbody>
-                                    </table>
+                                <div id="wizard-pagadores-content">
+                                    <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
                                 </div>
                             </div>
 
-                            <!-- PASO 4: Bonos -->
+                            <!-- PASO 4: Tipos de Justificación (NUEVO) -->
                             <div id="wizard-step-4" class="wizard-step d-none">
+                                <h6 class="text-primary mb-3"><i class="bi bi-file-earmark-check me-2"></i>Tipos de Justificación</h6>
+                                <div class="alert alert-info border-0 shadow-sm mb-3">
+                                    <i class="bi bi-info-circle-fill me-2"></i> Define los tipos de justificación que pueden aplicar los empleados (ej: Vacaciones, Licencia Médica, Permiso).
+                                </div>
+                                <div id="wizard-tiposj-content">
+                                    <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+                                </div>
+                            </div>
+
+                            <!-- PASO 5: Bonos (ex-Paso 4) -->
+                            <div id="wizard-step-5" class="wizard-step d-none">
                                 <h6 class="text-primary mb-3">Asignación de Bonos y Reglas</h6>
                                 <div class="alert alert-info border-0 shadow-sm mb-3">
                                     <i class="bi bi-cash-coin me-2"></i> Opcional: Revisa o define reglas financieras para las áreas. (Esto se puede configurar más adelante).
@@ -2458,8 +2465,29 @@
                                 </div>
                             </div>
 
-                            <!-- PASO 5: Empleados (Preview) -->
-                            <div id="wizard-step-5" class="wizard-step d-none">
+                            <!-- PASO 6: Turnos (ex-Paso 3) -->
+                            <div id="wizard-step-6" class="wizard-step d-none">
+                                <h6 class="text-primary mb-3">Asignación de Turnos (Requisito Crítico)</h6>
+                                <div class="alert alert-danger border-0 shadow-sm mb-3">
+                                    <i class="bi bi-shield-lock-fill me-2"></i> IMPORTANTE: Los empleados no se sincronizarán y quedarán excluidos si su Área no tiene un turno asignado.
+                                </div>
+                                <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+                                    <table class="table table-bordered align-middle table-sm">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Área a sincronizar</th>
+                                                <th>Turno Recomendado / Seleccionado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-wizard-turnos">
+                                            <!-- Inyectado -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PASO 7: Empleados (Preview) (ex-Paso 5) -->
+                            <div id="wizard-step-7" class="wizard-step d-none">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="text-primary mb-0">Previsualización de Empleados</h6>
                                     <span id="wizard-emp-counter" class="badge bg-secondary">0 listos</span>
@@ -2486,6 +2514,23 @@
                                     <span><span class="badge bg-warning text-dark">CAMBIO</span></span>
                                     <span><span class="badge bg-secondary">EXISTENTE</span></span>
                                     <span><span class="badge bg-danger">OMITIDO (Sin Turno)</span></span>
+                                </div>
+                            </div>
+
+                            <!-- PASO 8: Confirmar (nuevo paso final visual) -->
+                            <div id="wizard-step-8" class="wizard-step d-none">
+                                <div class="text-center py-4">
+                                    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                                    <h5 class="mt-3 fw-bold">Todo listo para sincronizar</h5>
+                                    <p class="text-muted">Se abrirá el panel de sincronización de empleados donde podrás confirmar la importación.</p>
+                                    <div class="alert alert-light border shadow-sm d-inline-block text-start mt-3" style="max-width: 500px;">
+                                        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i><strong>Áreas:</strong> Configuradas y persistidas</p>
+                                        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i><strong>Cargos:</strong> Configurados y persistidos</p>
+                                        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i><strong>Pagadores:</strong> Verificados</p>
+                                        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i><strong>Justificaciones:</strong> Verificadas</p>
+                                        <p class="mb-1"><i class="bi bi-check2 text-success me-2"></i><strong>Turnos:</strong> Asignados a áreas</p>
+                                        <p class="mb-0"><i class="bi bi-check2 text-success me-2"></i><strong>Bonos:</strong> Configurados (opcionales)</p>
+                                    </div>
                                 </div>
                             </div>
 

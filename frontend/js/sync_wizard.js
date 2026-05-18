@@ -70,12 +70,12 @@ window.startSyncWizard = function(data) {
 };
 
 function updateWizardUI() {
+    const TOTAL_STEPS = 8;
     const step = window._wizardState.currentStep;
     
     // Actualizar Stepper Visual — controla clases Bootstrap directamente
-    document.querySelectorAll('.step-indicator').forEach((el, idx) => {
+    document.querySelectorAll('#modal-sync-wizard .step-indicator').forEach((el, idx) => {
         const stepNum = idx + 1;
-        // Limpiar todas las variantes posibles
         el.classList.remove(
             'active', 'completed',
             'bg-primary', 'bg-light', 'bg-success',
@@ -84,22 +84,25 @@ function updateWizardUI() {
         );
 
         if (stepNum < step) {
-            // Paso completado: ✓ verde/azul
             el.classList.add('completed', 'bg-primary', 'text-white', 'fw-bold');
             el.innerHTML = '<i class="bi bi-check-lg"></i>';
         } else if (stepNum === step) {
-            // Paso actual: círculo azul sólido
             el.classList.add('active', 'bg-primary', 'text-white', 'fw-bold');
             el.textContent = stepNum;
         } else {
-            // Paso futuro: círculo gris
             el.classList.add('bg-light', 'text-muted', 'border');
             el.textContent = stepNum;
         }
     });
 
+    // Progress bar
+    const progressBar = document.getElementById('sync-wizard-progress');
+    if (progressBar) {
+        progressBar.style.width = `${((step - 1) / (TOTAL_STEPS - 1)) * 100}%`;
+    }
+
     // Ocultar/Mostrar Paneles
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= TOTAL_STEPS; i++) {
         const pane = document.getElementById(`wizard-step-${i}`);
         if (pane) {
             if (i === step) pane.classList.remove('d-none');
@@ -113,7 +116,7 @@ function updateWizardUI() {
     const btnNext = document.getElementById('btn-wizard-next');
     const btnFinish = document.getElementById('btn-wizard-finish');
     
-    if (step === 5) {
+    if (step === TOTAL_STEPS) {
         btnNext.classList.add('d-none');
         btnFinish.classList.remove('d-none');
     } else {
@@ -124,9 +127,12 @@ function updateWizardUI() {
     // Renderizar Contenido Específico
     if (step === 1) renderWizardStep1();
     if (step === 2) renderWizardStep2();
-    if (step === 3) fetchAndRenderWizardStep3();
-    if (step === 4) fetchAndRenderWizardStep4();
-    if (step === 5) fetchAndRenderWizardStep5();
+    if (step === 3) fetchAndRenderWizardStep3_Pagadores();
+    if (step === 4) fetchAndRenderWizardStep4_TiposJ();
+    if (step === 5) fetchAndRenderWizardStep5_Bonos();
+    if (step === 6) fetchAndRenderWizardStep6_Turnos();
+    if (step === 7) fetchAndRenderWizardStep7_Preview();
+    // Step 8 is static HTML, no render needed
 }
 
 window.wizardNextStep = async function() {
@@ -226,11 +232,9 @@ window.wizardNextStep = async function() {
         }
     }
 
-    // --- PASO 4 → 5: Bonos + preview empleados (flujo original) ---
+    // --- PASO 4 → 5: Bonos (solo guardar selecciones y avanzar) ---
     if (step === 4) {
         if (!guardarSeleccionesPaso4()) return;
-        finalizeWizardAndPreview();
-        return;
     }
 
     if (step < 5) {
@@ -889,124 +893,44 @@ async function fetchAndRenderWizardStep5() {
     }
 }
 
-// ==========================================
-// FINALIZAR CONFIGURACIÓN Y PREVIEW (Paso 4 -> 5)
-// ==========================================
-async function finalizeWizardAndPreview() {
-    // Las áreas, cargos y turnos ya fueron persistidos paso a paso.
-    // Este paso solo persiste los bonos (Paso 4) y avanza al Step 5.
-    const payload = {
-        areas_resoluciones: {},       // Ya en BD
-        cargos_resoluciones: {},      // Ya en BD
-        generos_nuevos: [],           // Ya en BD
-        turnos_asignaciones: {},      // Ya en BD
-        bonos_asignaciones: window._wizardState.resoluciones.bonos
-    };
-
-    console.log('[Wizard] Persistiendo bonos:', payload.bonos_asignaciones);
-    
-    const btnNext = document.getElementById('btn-wizard-next');
-    const originalText = btnNext.innerHTML;
-    btnNext.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando bonos…`;
-    btnNext.disabled = true;
-
-    try {
-        // Solo llamamos finalize si hay bonos que guardar
-        const hayBonos = Object.values(payload.bonos_asignaciones).some(arr => arr && arr.length > 0);
-        if (hayBonos) {
-            const response = await fetch(`${API_BASE_URL}/sync/wizard/finalize/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || `Error HTTP: ${response.status}`);
-            }
-        }
-
-        // Éxito → avanzar a Step 5 (Empleados)
-        localStorage.setItem('wizard_completed', 'true');
-        window._wizardState.currentStep = 5;
-        updateWizardUI();
-    } catch (e) {
-        console.error('[Wizard] Error guardando bonos:', e);
-        Swal.fire('Error', 'No se pudieron guardar los bonos: ' + e.message, 'error');
-    } finally {
-        btnNext.innerHTML = originalText;
-        btnNext.disabled = false;
-    }
-}
+// finalizeWizardAndPreview() ELIMINADA — código muerto.
+// Áreas/cargos/turnos se commitean progresivamente.
+// Bonos se guardan en memoria y se usan en procesarColaOnboarding (Fase C).
 
 // ==========================================
-// CONFIRMAR IMPORTACIÓN (Paso 5)
+// CONFIRMAR IMPORTACIÓN (Paso final del Wizard)
+// Restaura el puente al flujo SSE existente:
+// openSyncModalPreview → confirmSync → SSE → onboardingQueue → Fase C
 // ==========================================
 window.confirmWizardSync = async function() {
-    // Aquí disparamos el POST a /sync/empleados/ REAL
-    const areasList = getConsolidatedAreas();
+    // 1. Preparar filtros para el flujo SSE existente en main.js
+    window._syncSelectedAreas = getConsolidatedAreas();
+
     const ignoredCargos = [];
     for (const [cargo, resolucion] of Object.entries(window._wizardState.resoluciones.cargos)) {
         if (resolucion === "_IGNORE_") {
             ignoredCargos.push(cargo);
         }
     }
+    window._ignoredCargos = ignoredCargos;
 
-    const payload = {
-        areas: areasList,
-        ignored_cargos: ignoredCargos
-    };
+    // 2. Marcar wizard como completado
+    localStorage.setItem('wizard_completed', 'true');
 
-    const btn = document.getElementById('btn-wizard-finish');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sincronizando...`;
-    btn.disabled = true;
+    // 3. Cerrar wizard
+    const modalEl = document.getElementById('modal-sync-wizard');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/sync/empleados/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.detail || `Error HTTP: ${response.status}`);
+    // 4. Puente al flujo existente: modal-sync-areas → confirmSync → SSE → onboarding
+    setTimeout(() => {
+        if (typeof openSyncModalPreview === 'function') {
+            openSyncModalPreview();
+        } else {
+            console.error('[Wizard] openSyncModalPreview no disponible');
+            Swal.fire('Error', 'No se pudo abrir el panel de sincronización de empleados.', 'error');
         }
-
-        const data = await response.json();
-        
-        // Exito!
-        const modalEl = document.getElementById('modal-sync-wizard');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        if (modal) modal.hide();
-        
-        Swal.fire({
-            title: "Sincronización Iniciada",
-            text: "La descarga de empleados está en progreso en segundo plano.",
-            icon: "success"
-        });
-
-        // Mostrar UI de Progreso (si existe la función en main.js)
-        if (typeof showBatchLoadingOverlay === 'function') {
-            showBatchLoadingOverlay();
-            if (typeof startProgressPolling === 'function') {
-                startProgressPolling();
-            }
-        }
-    } catch (e) {
-        console.error("Error iniciando sync empleados:", e);
-        Swal.fire('Error', 'No se pudo iniciar la sincronización: ' + e.message, 'error');
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
+    }, 500);
 };
 
 // ==========================================
