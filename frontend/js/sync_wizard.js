@@ -1470,6 +1470,32 @@ window.confirmWizardSync = async function() {
         ? `${selectedRuts.length} empleado(s) seleccionado(s)`
         : `Todos los ${allBoxes.length} empleado(s)`;
 
+    // ── IMPORTANTE: Cerrar el wizard ANTES de mostrar el SweetAlert2 ──────────
+    // Si mostramos Swal mientras el wizard está abierto, el backdrop del wizard
+    // queda sobre el Swal (visualmente oculto) hasta que el usuario cierra el wizard.
+    // Cerrando primero el wizard, el Swal aparece limpiamente sobre fondo gris.
+    // Usamos el patrón seguro dispose+blur+manual-hide (NO hide() con animación).
+    const modalEl = document.getElementById('modal-sync-wizard');
+    const modalInstance = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+    if (modalInstance) modalInstance.dispose();
+    if (modalEl) {
+        modalEl.querySelectorAll('input, button, select, textarea, a, [tabindex]')
+            .forEach(el => el.blur());
+        modalEl.blur();
+        document.body.setAttribute('tabindex', '-1');
+        document.body.focus();
+        document.body.removeAttribute('tabindex');
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+    }
+    // Limpiar artefactos Bootstrap (backdrop, body classes)
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Ahora mostrar confirmación (wizard ya está cerrado, Swal aparece limpio)
     const confirmResult = await Swal.fire({
         title: '¿Iniciar sincronización?',
         text: filterMsg,
@@ -1495,20 +1521,14 @@ window.confirmWizardSync = async function() {
     // 3. Marcar wizard como completado
     localStorage.setItem('wizard_completed', 'true');
 
-    // 4. Cerrar wizard
-    const modalEl = document.getElementById('modal-sync-wizard');
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    if (modal) modal.hide();
-
-    // 5. Construir payload y llamar función puente en main.js
-    //    _executeSyncFromWizard tiene acceso a onboardingQueue, _batch, procesarColaOnboarding
+    // 4. Construir payload y llamar función puente en main.js
     const payload = {
         areas: window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
         ruts: selectedRuts,
         ignored_cargos: ignoredCargos.length > 0 ? ignoredCargos : null
     };
 
-    // Esperar a que el wizard termine de cerrarse, luego disparar
+    // Disparar sincronización (pequeño delay para que Swal cierre primero)
     setTimeout(() => {
         if (typeof window._executeSyncFromWizard === 'function') {
             window._executeSyncFromWizard(payload);
@@ -1516,7 +1536,7 @@ window.confirmWizardSync = async function() {
             console.error('[Wizard] _executeSyncFromWizard no disponible');
             Swal.fire('Error', 'Función de sincronización no disponible.', 'error');
         }
-    }, 500);
+    }, 300);
 };
 
 // ==========================================
