@@ -3404,3 +3404,64 @@ tr:hover .emp-name-cell {
 .modal-backdrop {
     z-index: 2040 !important;
 }
+/* -------------------------------------------------
+   WIZARD PASO 6: RADIO CARDS DE TURNO
+   ------------------------------------------------- */
+.wiz-turno-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.wiz-turno-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    min-width: 200px;
+    background: #ffffff;
+    user-select: none;
+}
+
+.wiz-turno-card:hover {
+    border-color: #6c63ff;
+    background: #f8f7ff;
+}
+
+.wiz-turno-card.selected {
+    border-color: #6c63ff;
+    background: #f0eeff;
+}
+
+.wiz-turno-card input[type="radio"] {
+    accent-color: #6c63ff;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.wiz-turno-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wiz-turno-card-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #212529;
+    line-height: 1.2;
+}
+
+.wiz-turno-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+}
