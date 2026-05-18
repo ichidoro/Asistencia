@@ -652,14 +652,17 @@ async function fetchAndRenderWizardStep3_Pagadores() {
  */
 function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
     const wizardEl = document.getElementById('modal-sync-wizard');
-    const wizardModal = wizardEl ? bootstrap.Modal.getInstance(wizardEl) : null;
 
-    // 1. Ocultar el wizard temporalmente (preserva _wizardState)
-    if (wizardModal) {
-        wizardModal.hide();
+    // 1. Ocultar el wizard SIN usar Bootstrap .hide() para evitar que
+    //    Bootstrap agregue 'inert' a elementos hermanos (bloquea clics en modales custom).
+    if (wizardEl) {
+        wizardEl.style.visibility = 'hidden';
+        wizardEl.style.pointerEvents = 'none';
+        // Remover backdrops de Bootstrap que bloquean la interacción
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.style.display = 'none');
     }
 
-    // 2. Esperar a que Bootstrap termine la animación de ocultar, luego abrir hijo
+    // 2. Esperar un frame para que se apliquen los estilos, luego abrir hijo
     setTimeout(() => {
         openFn();
 
@@ -686,7 +689,7 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
                 }
             }, 300);
         }
-    }, 350);
+    }, 150);
 }
 
 /**
@@ -694,18 +697,23 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
  */
 function _wizardRestoreAfterChild(wizardEl, onCloseFn) {
     if (!wizardEl) return;
-    // Destruir instancia anterior para evitar conflictos Bootstrap
-    const oldInst = bootstrap.Modal.getInstance(wizardEl);
-    if (oldInst) oldInst.dispose();
 
-    const newInstance = new bootstrap.Modal(wizardEl, { backdrop: 'static', keyboard: false });
-    newInstance.show();
+    // Restaurar visibilidad del wizard
+    wizardEl.style.visibility = '';
+    wizardEl.style.pointerEvents = '';
+    // Restaurar backdrops de Bootstrap
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.style.display = '');
+
+    // Asegurar que la instancia Bootstrap siga activa
+    if (!bootstrap.Modal.getInstance(wizardEl)) {
+        new bootstrap.Modal(wizardEl, { backdrop: 'static', keyboard: false }).show();
+    }
 
     // Refrescar el contenido del paso actual
     setTimeout(() => {
         updateWizardUI();
         if (onCloseFn) onCloseFn();
-    }, 350);
+    }, 200);
 }
 
 window._wizardAbrirPagadores = function() {
