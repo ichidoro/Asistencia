@@ -2460,8 +2460,11 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="mt-2 text-end">
-                                    <button class="btn btn-sm btn-outline-success" onclick="window.open('/bonos', '_blank')"><i class="bi bi-box-arrow-up-right"></i> Gestionar Bonos en nueva pestaña</button>
+                                <div class="mt-2 d-flex justify-content-between align-items-center">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-primary fw-bold" onclick="window._wizardCrearBono()"><i class="bi bi-plus-circle me-1"></i> Crear Bono</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="window._wizardRefrescarBonos()"><i class="bi bi-arrow-clockwise me-1"></i> Actualizar</button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2483,6 +2486,12 @@
                                             <!-- Inyectado -->
                                         </tbody>
                                     </table>
+                                </div>
+                                <div class="mt-2 d-flex justify-content-between align-items-center">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-primary fw-bold" onclick="window._wizardIrACrearTurno()"><i class="bi bi-plus-circle me-1"></i> Crear Turno</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="window._wizardRefrescarTurnos()"><i class="bi bi-arrow-clockwise me-1"></i> Actualizar</button>
+                                    </div>
                                 </div>
                             </div>
 

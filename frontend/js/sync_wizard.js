@@ -663,13 +663,25 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
     setTimeout(() => {
         openFn();
 
-        // 3. Observar cierre del modal-hijo
+        // 3. Observar cierre del modal-hijo (soporta AMBOS tipos de modal)
         const childEl = document.getElementById(childModalId);
-        if (childEl) {
+        if (!childEl) return;
+
+        // Detectar si es un modal Bootstrap (tiene clase 'fade' o instancia Bootstrap)
+        const isBsModal = childEl.classList.contains('fade') || bootstrap.Modal.getInstance(childEl);
+
+        if (isBsModal) {
+            // Modal Bootstrap: escuchar evento hidden.bs.modal (una sola vez)
+            const _onHidden = () => {
+                childEl.removeEventListener('hidden.bs.modal', _onHidden);
+                _wizardRestoreAfterChild(wizardEl, onCloseFn);
+            };
+            childEl.addEventListener('hidden.bs.modal', _onHidden);
+        } else {
+            // Modal custom (display: flex/none): polling
             const checkClose = setInterval(() => {
                 if (childEl.style.display === 'none' || childEl.style.display === '') {
                     clearInterval(checkClose);
-                    // 4. Restaurar el wizard
                     _wizardRestoreAfterChild(wizardEl, onCloseFn);
                 }
             }, 300);
@@ -1228,17 +1240,12 @@ window._wizardIrACrearTurno = function() {
         return;
     }
 
-    // El formulario ya está en el DOM → abrir modal directamente sobre el wizard
-    openModalHorario();
-    const modalTurnoEl = document.getElementById('modalTurno');
-    if (modalTurnoEl) {
-        const _onClose = () => {
-            modalTurnoEl.removeEventListener('hidden.bs.modal', _onClose);
-            // Refrescar el paso 6 (Turnos) para mostrar el turno recién creado
-            window._wizardRefrescarTurnos();
-        };
-        modalTurnoEl.addEventListener('hidden.bs.modal', _onClose);
-    }
+    // El formulario ya está en el DOM → abrir modal directamente usando helper
+    _wizardOpenChildModal(
+        'modalTurno',
+        () => openModalHorario(),
+        () => window._wizardRefrescarTurnos()
+    );
 };
 
 /**
