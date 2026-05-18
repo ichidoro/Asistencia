@@ -56,7 +56,7 @@ window.loadEstadosConfig = async function() {
     </div>`;
 
     try {
-        const res = await fetch('/api/configuracion/estados/?solo_activos=false', { headers: { \'Authorization\': Bearer  } });
+        const res = await fetch('/api/configuracion/estados/?solo_activos=false', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
         if (!res.ok) throw new Error('Error cargando estados');
         _estadosConfigList = await res.json();
         renderEstadosConfig();
@@ -224,7 +224,7 @@ window.saveEstado = async function(codigo) {
     try {
         const res = await fetch(`/api/configuracion/estados/${codigo}/`, {
             method: 'PUT',
-            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre_display: nombre, short_label: shortLabel, descripcion: desc, color_clase: color, icono_bi: icono, activo })
         });
         if (!res.ok) throw new Error((await res.json()).detail || 'Error guardando');
@@ -304,7 +304,7 @@ function initConfiguracionUI() {
 
 async function loadMetadata() {
     try {
-        const response = await fetch('/api/empleados/metadata/', { headers: { \'Authorization\': Bearer  } });
+        const response = await fetch('/api/empleados/metadata/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
         if (!response.ok) return;
 
         const data = await response.json();
@@ -315,7 +315,7 @@ async function loadMetadata() {
         let allCargos = new Set(data.cargos || []);
         
         try {
-            const cargosRes = await fetch('/api/configuracion/cargos/', { headers: { \'Authorization\': Bearer  } });
+            const cargosRes = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (cargosRes.ok) {
                 const catalogCargos = await cargosRes.json();
                 catalogCargos.forEach(c => allCargos.add(c.nombre || c.cargo_nombre));
@@ -694,7 +694,7 @@ function confirmDeleteBono(id) {
 
 async function deleteBono(id) {
     try {
-        const response = await fetch(`${API_CONFIG}bonos/${id}/`, { headers: { \'Authorization\': Bearer  },  method: 'DELETE' });
+        const response = await fetch(`${API_CONFIG}bonos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },  method: 'DELETE' });
         if (!response.ok) throw new Error("Error al eliminar");
         showToast("Bono eliminado", "success");
         loadBonos();
@@ -984,7 +984,7 @@ function confirmDeleteTipoJ(id) {
 
 async function deleteTipoJ(id) {
     try {
-        const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { headers: { \'Authorization\': Bearer  },  method: 'DELETE' });
+        const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },  method: 'DELETE' });
         if (!response.ok) throw new Error("No se puede eliminar (posiblemente en uso)");
         showToast("Tipo eliminado", "success");
         loadTiposJustificacion();
@@ -1073,7 +1073,7 @@ window.addPagadorFromConfig = async function () {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/`, {
             method: 'POST',
-            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre, activo: true })
         });
         if (!response.ok) throw new Error("Error al añadir");
@@ -1095,7 +1095,7 @@ window.addPagador = async function () {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/`, {
             method: 'POST',
-            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre, activo: true })
         });
         if (!response.ok) throw new Error("Error al añadir");
@@ -1116,7 +1116,7 @@ window.togglePagador = async function (id, nuevoEstado) {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/${id}/`, {
             method: 'PUT',
-            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre: p.nombre, activo: nuevoEstado })
         });
         if (!response.ok) throw new Error("Error al actualizar");
@@ -1223,7 +1223,7 @@ window.saveAreaNotificaciones = async function () {
     try {
         const res = await fetch(`${API_CONFIG}notificaciones_areas/`, {
             method: 'POST',
-            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ area, emails })
         });
         
@@ -1253,7 +1253,7 @@ window.deleteAreaNotificaciones = async function (area) {
     if (!confirm(`¿Eliminar notificaciones para el área ${area}?`)) return;
     
     try {
-        const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { \'Authorization\': Bearer  }, 
+        const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 
             method: 'DELETE'
         });
         
@@ -1290,7 +1290,7 @@ window.loadRobotSyncLogs = async function() {
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
     try {
-        const response = await fetch('/api/sync/logs/', { headers: { \'Authorization\': Bearer  },  signal: controller.signal });
+        const response = await fetch('/api/sync/logs/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },  signal: controller.signal });
         clearTimeout(timeoutId);
         
         if (!response.ok) throw new Error("Error obteniendo logs de sincronización");
@@ -1412,7 +1412,7 @@ window.cargarCatalogoAreas = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/areas/', { headers: { \'Authorization\': Bearer  } });
+        const response = await fetch('/api/configuracion/areas/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de áreas");
         const areas = await response.json();
 
@@ -1481,7 +1481,7 @@ window.confirmDeleteAlias = function(aliasId, aliasNombre) {
 
 window.deleteAlias = async function(aliasId) {
     try {
-        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, { headers: { \'Authorization\': Bearer  }, 
+        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 
             method: 'DELETE'
         });
         
@@ -1528,7 +1528,7 @@ window.cargarCatalogoCargos = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/cargos/', { headers: { \'Authorization\': Bearer  } });
+        const response = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de cargos");
         const cargos = await response.json();
 
@@ -1597,7 +1597,7 @@ window.confirmDeleteCargoAlias = function(aliasId, aliasNombre) {
 
 window.deleteCargoAlias = async function(aliasId) {
     try {
-        const response = await fetch(`/api/configuracion/cargos/alias/${aliasId}`, { headers: { \'Authorization\': Bearer  }, 
+        const response = await fetch(`/api/configuracion/cargos/alias/${aliasId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 
             method: 'DELETE'
         });
         
@@ -1643,7 +1643,7 @@ window.cargarCatalogoGeneros = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/generos/', { headers: { \'Authorization\': Bearer  } });
+        const response = await fetch('/api/configuracion/generos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de géneros");
         const generos = await response.json();
 
