@@ -1372,32 +1372,53 @@ async function fetchAndRenderWizardStep5() {
             return;
         }
 
-        const tbodyHtml = empList.map((e, idx) => `
-            <tr data-estado="${e.activo ? 'activo' : 'inactivo'}">
+        const tbodyHtml = empList.map((e, idx) => {
+            // Tipo: badge según si es nuevo, tiene cambio de área, o ya existe
+            let tipoBadge = '';
+            if (e.es_nuevo) {
+                tipoBadge = '<span class="badge bg-success">NUEVO</span>';
+            } else if (e.cambio_area) {
+                tipoBadge = '<span class="badge bg-warning text-dark">CAMBIO ÁREA</span>';
+            } else {
+                tipoBadge = '<span class="badge bg-secondary">EXISTENTE</span>';
+            }
+
+            // Estado activo en sistema local (null = no existe localmente)
+            let estadoBadge = '';
+            if (e.activo_local === null) {
+                estadoBadge = '<span class="badge bg-info text-dark">Sin registro</span>';
+            } else if (e.activo_local) {
+                estadoBadge = '<span class="badge bg-success">Activo</span>';
+            } else {
+                estadoBadge = '<span class="badge bg-secondary">Inactivo</span>';
+            }
+
+            return `
+            <tr data-estado="${e.activo_local ? 'activo' : 'inactivo'}">
                 <td class="text-center align-middle">
                     <input type="checkbox" class="form-check-input wiz-chk-emp" data-rut="${e.rut}" checked>
                 </td>
-                <td>${e.rut}</td>
-                <td>${e.nombre} ${e.apellido_paterno}</td>
+                <td class="text-nowrap">${e.rut}</td>
+                <td>${e.nombre || ''}</td>
+                <td class="text-muted small">${e.cargo || '-'}</td>
                 <td>${e.area || '<span class="text-danger">Sin Área</span>'}</td>
-                <td>
-                    ${e.activo 
-                        ? '<span class="badge bg-success">Activo</span>' 
-                        : '<span class="badge bg-secondary">Inactivo</span>'}
-                </td>
-            </tr>
-        `).join('');
+                <td>${tipoBadge}</td>
+                <td>${estadoBadge}</td>
+            </tr>`;
+        }).join('');
 
         listContainer.innerHTML = `
             <div class="table-responsive" style="max-height: 300px;">
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.85rem;">
                     <thead class="table-light sticky-top">
                         <tr>
                             <th class="text-center"><input type="checkbox" class="form-check-input" id="wiz-chk-emp-all" checked onchange="document.querySelectorAll('.wiz-chk-emp').forEach(chk => chk.checked = this.checked)"></th>
                             <th>RUT</th>
                             <th>Nombre</th>
+                            <th>Cargo</th>
                             <th>Área</th>
-                            <th>Estado</th>
+                            <th>Tipo</th>
+                            <th>Estado Local</th>
                         </tr>
                     </thead>
                     <tbody>${tbodyHtml}</tbody>
