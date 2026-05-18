@@ -1739,12 +1739,13 @@ window._wizardCrearBono = async function() {
         console.log(`[Wizard-Bono] Cargos listos: ${globalCargosList.length}`);
     }
 
-    // Mover DENTRO del wizard para que el FocusTrap de Bootstrap permita focus
+    // Mover modal-bono a document.body para evitar que el transform CSS del wizard
+    // rompa position:fixed en los dropdowns de cargos (Bootstrap modal usa transform
+    // en su animación, lo que hace que fixed children se posicionen relativos al modal).
     const modalBonoEl = document.getElementById('modal-bono');
     if (!modalBonoEl) { openModalBono(); return; }
 
-    const wizardEl = document.getElementById('modal-sync-wizard');
-    const _bonoHost = wizardEl || document.body;
+    const _bonoHost = document.body;
     const _bonoOriginalParent = modalBonoEl.parentElement;
     const _bonoOriginalNext = modalBonoEl.nextSibling;
     _bonoHost.appendChild(modalBonoEl);
@@ -1804,12 +1805,12 @@ window._wizardEditarBono = async function(bonoId) {
         return;
     }
 
-    // Mover modal-bono dentro del wizard (mismo patrón que _wizardCrearBono)
+    // Mover modal-bono a document.body para evitar que el transform CSS del wizard
+    // rompa position:fixed en los dropdowns de cargos.
     const modalBonoEl = document.getElementById('modal-bono');
     if (!modalBonoEl) { openModalBono(bono); return; }
 
-    const wizardEl = document.getElementById('modal-sync-wizard');
-    const _bonoHost = wizardEl || document.body;
+    const _bonoHost = document.body;
     const _bonoOriginalParent = modalBonoEl.parentElement;
     const _bonoOriginalNext = modalBonoEl.nextSibling;
     _bonoHost.appendChild(modalBonoEl);
