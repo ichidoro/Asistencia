@@ -136,6 +136,7 @@ function updateWizardUI() {
 }
 
 window.wizardNextStep = async function() {
+    const TOTAL_STEPS = 8;
     const step = window._wizardState.currentStep;
     const btnNext = document.getElementById('btn-wizard-next');
     const originalText = btnNext ? btnNext.innerHTML : '';
@@ -160,7 +161,6 @@ window.wizardNextStep = async function() {
             });
             if (!resp.ok) throw new Error(await resp.text());
             const result = await resp.json();
-            // Registrar qué áreas se crearon en ESTA sesión
             if (result.creadas && result.creadas.length > 0) {
                 window._wizardState.sessionCreated.areas = result.creadas;
                 console.log('[Wizard] Áreas persistidas en BD:', result.creadas);
@@ -207,9 +207,20 @@ window.wizardNextStep = async function() {
         }
     }
 
-    // --- PASO 3 → 4: Persistir asignaciones de turno ---
-    if (step === 3) {
-        if (!guardarSeleccionesPaso3()) return;
+    // --- PASO 3 → 4: Pagadores (datos globales, solo avanzar) ---
+    // No requiere commit, los pagadores se crean inline vía POST directo
+
+    // --- PASO 4 → 5: Tipos Justificación (datos globales, solo avanzar) ---
+    // No requiere commit, los tipos J se crean vía modal existente
+
+    // --- PASO 5 → 6: Bonos (guardar selecciones en memoria) ---
+    if (step === 5) {
+        guardarSeleccionesPaso5_Bonos();
+    }
+
+    // --- PASO 6 → 7: Persistir asignaciones de turno ---
+    if (step === 6) {
+        if (!guardarSeleccionesPaso6_Turnos()) return;
 
         const asignaciones = window._wizardState.resoluciones.turnos;
         if (Object.keys(asignaciones).length > 0) {
@@ -232,12 +243,8 @@ window.wizardNextStep = async function() {
         }
     }
 
-    // --- PASO 4 → 5: Bonos (solo guardar selecciones y avanzar) ---
-    if (step === 4) {
-        if (!guardarSeleccionesPaso4()) return;
-    }
-
-    if (step < 5) {
+    // --- Avanzar ---
+    if (step < TOTAL_STEPS) {
         window._wizardState.currentStep++;
         updateWizardUI();
     }
@@ -569,7 +576,199 @@ function getConsolidatedAreas() {
 }
 
 // ==========================================
-// PASO 3: TURNOS
+// PASO 3: PAGADORES (NUEVO)
+// ==========================================
+async function fetchAndRenderWizardStep3_Pagadores() {
+    const container = document.getElementById('wizard-pagadores-content');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+    try {
+        const resp = await fetch('/api/configuracion/pagadores/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!resp.ok) throw new Error('Error cargando pagadores');
+        const pagadores = await resp.json();
+
+        if (pagadores.length > 0) {
+            let html = '<div class="list-group mb-3">';
+            pagadores.forEach(p => {
+                html += `<div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-bank me-2 text-primary"></i>${p.nombre}</span>
+                    <span class="badge bg-success"><i class="bi bi-check-lg"></i></span>
+                </div>`;
+            });
+            html += '</div>';
+            html += `<div class="alert alert-success border-0 py-2 mb-3">
+                <i class="bi bi-check-circle-fill me-2"></i> ${pagadores.length} pagador(es) configurado(s). Puedes continuar o agregar más.
+            </div>`;
+            html += `<div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="window._wizardAbrirPagadores()">
+                    <i class="bi bi-plus-circle me-1"></i> Agregar Pagador
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="fetchAndRenderWizardStep3_Pagadores()">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                </button>
+            </div>`;
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `
+                <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3">
+                    <i class="bi bi-exclamation-triangle-fill fs-3 text-warning flex-shrink-0 mt-1"></i>
+                    <div>
+                        <h6 class="fw-bold mb-1">No hay pagadores configurados</h6>
+                        <p class="mb-2 small text-muted">
+                            Los pagadores son necesarios para gestionar justificaciones de licencias médicas y similares.
+                            Se recomienda crear al menos uno (ej: "Empresa").
+                        </p>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button class="btn btn-primary btn-sm fw-bold" onclick="window._wizardAbrirPagadores()">
+                                <i class="bi bi-plus-circle me-1"></i> Crear Pagador
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="fetchAndRenderWizardStep3_Pagadores()">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                            </button>
+                        </div>
+                        <div class="mt-3 p-2 bg-light rounded border small text-muted">
+                            <i class="bi bi-info-circle me-1 text-primary"></i>
+                            Puedes omitir este paso y configurar pagadores más adelante desde <strong>Configuración</strong>.
+                        </div>
+                    </div>
+                </div>`;
+        }
+    } catch (e) {
+        console.error('[Wizard] Error cargando pagadores:', e);
+        container.innerHTML = `<div class="alert alert-danger">Error al cargar pagadores: ${e.message}</div>`;
+    }
+}
+
+window._wizardAbrirPagadores = function() {
+    if (typeof window.openModalGestionPagadores === 'function') {
+        window.openModalGestionPagadores();
+        // Observar cierre para refrescar
+        const modal = document.getElementById('modal-gestion-pagadores');
+        if (modal) {
+            const observer = new MutationObserver(() => {
+                if (modal.style.display === 'none' || modal.style.display === '') {
+                    observer.disconnect();
+                    fetchAndRenderWizardStep3_Pagadores();
+                }
+            });
+            observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
+        }
+    } else {
+        Swal.fire('Info', 'El módulo de pagadores aún no está cargado. Inicializa Configuración primero.', 'info');
+    }
+};
+
+// ==========================================
+// PASO 4: TIPOS DE JUSTIFICACIÓN (NUEVO)
+// ==========================================
+async function fetchAndRenderWizardStep4_TiposJ() {
+    const container = document.getElementById('wizard-tiposj-content');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+    try {
+        const resp = await fetch('/api/configuracion/justificaciones/tipos/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!resp.ok) throw new Error('Error cargando tipos de justificación');
+        const tipos = await resp.json();
+
+        if (tipos.length > 0) {
+            let html = '<div class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">';
+            tipos.forEach(t => {
+                const badge = t.requiere_documento 
+                    ? '<span class="badge bg-warning text-dark ms-2">📎 Req. Doc.</span>' 
+                    : '';
+                html += `<div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-file-earmark-check me-2 text-primary"></i>${t.nombre}${badge}</span>
+                    <span class="badge bg-success"><i class="bi bi-check-lg"></i></span>
+                </div>`;
+            });
+            html += '</div>';
+            html += `<div class="alert alert-success border-0 py-2 mb-3">
+                <i class="bi bi-check-circle-fill me-2"></i> ${tipos.length} tipo(s) de justificación configurado(s).
+            </div>`;
+            html += `<div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="window._wizardAbrirTipoJ()">
+                    <i class="bi bi-plus-circle me-1"></i> Agregar Tipo
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="fetchAndRenderWizardStep4_TiposJ()">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                </button>
+            </div>`;
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `
+                <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3">
+                    <i class="bi bi-exclamation-triangle-fill fs-3 text-warning flex-shrink-0 mt-1"></i>
+                    <div>
+                        <h6 class="fw-bold mb-1">No hay tipos de justificación configurados</h6>
+                        <p class="mb-2 small text-muted">
+                            Los tipos de justificación permiten categorizar ausencias (Vacaciones, Licencia Médica, Permiso, etc.).
+                        </p>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button class="btn btn-primary btn-sm fw-bold" onclick="window._wizardAbrirTipoJ()">
+                                <i class="bi bi-plus-circle me-1"></i> Crear Tipo de Justificación
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="fetchAndRenderWizardStep4_TiposJ()">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                            </button>
+                        </div>
+                        <div class="mt-3 p-2 bg-light rounded border small text-muted">
+                            <i class="bi bi-info-circle me-1 text-primary"></i>
+                            Puedes omitir este paso y configurar tipos más adelante desde <strong>Configuración</strong>.
+                        </div>
+                    </div>
+                </div>`;
+        }
+    } catch (e) {
+        console.error('[Wizard] Error cargando tipos J:', e);
+        container.innerHTML = `<div class="alert alert-danger">Error al cargar tipos de justificación: ${e.message}</div>`;
+    }
+}
+
+window._wizardAbrirTipoJ = function() {
+    if (typeof window.openModalTipoJ === 'function') {
+        window.openModalTipoJ();
+        const modal = document.getElementById('modal-tipo-justificacion');
+        if (modal) {
+            const observer = new MutationObserver(() => {
+                if (modal.style.display === 'none' || modal.style.display === '') {
+                    observer.disconnect();
+                    fetchAndRenderWizardStep4_TiposJ();
+                }
+            });
+            observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
+        }
+    } else {
+        Swal.fire('Info', 'El módulo de justificaciones aún no está cargado. Inicializa Configuración primero.', 'info');
+    }
+};
+
+// ==========================================
+// PASO 5: BONOS (ex-Paso 4) — Alias
+// ==========================================
+async function fetchAndRenderWizardStep5_Bonos() { return fetchAndRenderWizardStep4(); }
+function guardarSeleccionesPaso5_Bonos() { return guardarSeleccionesPaso4(); }
+
+// ==========================================
+// PASO 6: TURNOS (ex-Paso 3) — Alias
+// ==========================================
+async function fetchAndRenderWizardStep6_Turnos() { return fetchAndRenderWizardStep3(); }
+function guardarSeleccionesPaso6_Turnos() { return guardarSeleccionesPaso3(); }
+
+// ==========================================
+// PASO 7: PREVIEW EMPLEADOS (ex-Paso 5) — Alias
+// ==========================================
+async function fetchAndRenderWizardStep7_Preview() { return fetchAndRenderWizardStep5(); }
+
+// ==========================================
+// PASO 3 (original): TURNOS (función original preservada para alias)
 // ==========================================
 async function fetchAndRenderWizardStep3() {
     const tbody = document.getElementById('tbody-wizard-turnos');
