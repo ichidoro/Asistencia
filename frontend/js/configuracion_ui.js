@@ -8,39 +8,52 @@ let tiposJustificacionList = [];
 let globalCargosList = []; // [NEW] Cache cargos for dropdowns
 let pagadoresList = []; // [NEW] Cache pagadores
 
+// appendCargoToInput: agrega un cargo al input de EXCLUIR (multi-valor, coma separado)
 window.appendCargoToInput = function (element, cargo) {
-    // Find the input in the same input-group
     const input = element.closest('.input-group').querySelector('input');
     if (!input) return;
-
     let current = input.value.trim();
-    if (current.length > 0 && !current.endsWith(',')) {
-        current += ', ';
-    }
+    if (current.length > 0 && !current.endsWith(',')) current += ', ';
     input.value = current + cargo;
-    // Keep dropdown open? No, default bootstrap behavior closes it, which feels right.
 };
 
-// Rellena dinámicamente el <ul> del dropdown de cargos con globalCargosList.
-// Se llama DESPUÉS de appendChild para capturar el estado real del array.
-function _populateCargoDropdown(ulElement) {
-    if (!ulElement) return;
+// selectCargoRequerido: SELECCIONA UN ÚNICO cargo para el campo "Cargo Req."
+// A diferencia de appendCargoToInput, reemplaza el valor (no acumula).
+window.selectCargoRequerido = function(element, cargo) {
+    const inputGroup = element.closest('.cargo-req-wrapper');
+    if (!inputGroup) return;
+    const input = inputGroup.querySelector('.rule-cargo');
+    if (input) input.value = cargo;
+    // Cerrar el dropdown bootstrap
+    const dropdownBtn = inputGroup.querySelector('[data-bs-toggle="dropdown"]');
+    if (dropdownBtn) {
+        const bsDrop = bootstrap.Dropdown.getInstance(dropdownBtn);
+        if (bsDrop) bsDrop.hide();
+    }
+};
 
-    // Remover items anteriores (excepto el <li> con el input de búsqueda, el primero)
+// _populateCargoDropdown: puebla un <ul> con la lista de cargos
+// Usado tanto para "Excluir Cargos" como para "Cargo Req."
+function _populateCargoDropdown(ulElement, singleSelect = false) {
+    if (!ulElement) return;
     const existingItems = ulElement.querySelectorAll('li:not(:first-child)');
     existingItems.forEach(li => li.remove());
 
-    if (globalCargosList.length === 0) {
+    const list = globalCargosList;
+    if (list.length === 0) {
         const li = document.createElement('li');
-        li.innerHTML = '<span class="dropdown-item text-muted small">No hay cargos disponibles aún</span>';
+        li.innerHTML = '<span class="dropdown-item text-muted small">No hay cargos disponibles</span>';
         ulElement.appendChild(li);
         return;
     }
 
-    globalCargosList.forEach(cargo => {
+    list.forEach(cargo => {
         const li = document.createElement('li');
         const safeC = cargo.replace(/'/g, "\\'");
-        li.innerHTML = `<a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${safeC}'); return false;">${cargo}</a>`;
+        const fn = singleSelect
+            ? `selectCargoRequerido(this, '${safeC}')`
+            : `appendCargoToInput(this, '${safeC}')`;
+        li.innerHTML = `<a class="dropdown-item small py-2 cargo-item" href="#" onclick="${fn}; return false;">${cargo}</a>`;
         ulElement.appendChild(li);
     });
 }
@@ -49,16 +62,14 @@ window.filterCargosDropdown = function(inputElement) {
     if (!inputElement) return;
     const ul = inputElement.closest('ul');
     if (!ul) return;
-
-    // FIX: Si el dropdown está vacío (no se pobló aún), intentar poblarlo ahora.
+    const isSingle = ul.closest('.cargo-req-wrapper') !== null;
     const existingItems = ul.querySelectorAll('.cargo-item');
     if (existingItems.length === 0 && globalCargosList.length > 0) {
-        _populateCargoDropdown(ul);
+        _populateCargoDropdown(ul, isSingle);
     }
-
-    const filter = (inputElement.value || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const filter = (inputElement.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     ul.querySelectorAll('.cargo-item').forEach(item => {
-        const text = (item.textContent || item.innerText || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const text = (item.textContent || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         item.parentElement.style.display = text.includes(filter) ? '' : 'none';
     });
 };
@@ -326,6 +337,20 @@ function initConfiguracionUI() {
 }
 
 async function loadMetadata() {
+    // RACE CONDITION FIX: si ya hay una carga en curso, retornar la misma Promise
+    // Esto previene que _wizardCrearBono + initConfiguracionUI lancen dos cargas paralelas.
+    if (window._metadataPromise) {
+        return window._metadataPromise;
+    }
+    window._metadataPromise = _doLoadMetadata();
+    try {
+        await window._metadataPromise;
+    } finally {
+        window._metadataPromise = null; // Limpiar para permitir recargas futuras
+    }
+}
+
+async function _doLoadMetadata() {
     // FIX DEFINITIVO: cargar cargos del catálogo SIEMPRE, independiente de si
     // /api/empleados/metadata/ falla (sin empleados aún, o token diferente).
     // Antes: si metadata fallaba (L308 return), nunca se cargaba el catálogo.
@@ -613,24 +638,44 @@ function addBonoReglaRow(regla = null) {
                 </div>
             </div>
             <div class="col-md-3">
-                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req.</label>
-                <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm" placeholder="Todos" value="${regla && regla.cargo_requerido ? regla.cargo_requerido : ''}" list="list-cargos" autocomplete="off">
+                <label class="small text-muted">Cargo Req.</label>
+                <div class="input-group input-group-sm cargo-req-wrapper">
+                    <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm"
+                        placeholder="Todos"
+                        value="${regla && regla.cargo_requerido ? regla.cargo_requerido : ''}"
+                        autocomplete="off" readonly
+                        onclick="this.closest('.cargo-req-wrapper').querySelector('[data-bs-toggle=dropdown]').click()">
+                    <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                        onclick="_populateCargoDropdown(this.closest('.input-group').querySelector('.cargo-req-ul'), true)">
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-req-ul" style="max-height: 300px; overflow-y: auto; width: 220px;">
+                        <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..."
+                                onkeyup="filterCargosDropdown(this)"
+                                onkeydown="event.stopPropagation()"
+                                onclick="event.stopPropagation()">
+                        </li>
+                        <li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="selectCargoRequerido(this, ''); return false;"><em class="text-muted">Todos (sin filtro)</em></a></li>
+                    </ul>
+                </div>
             </div>
             <div class="col-md-5">
                 <label for="rule-excluidos-${rowIdx}" class="small text-muted text-danger">Excluir Cargos</label>
                 <div class="input-group input-group-sm">
-                    <input type="text" id="rule-excluidos-${rowIdx}" class="rule-excluidos form-control" 
-                        placeholder="Ej: Gerente, Director" 
+                    <input type="text" id="rule-excluidos-${rowIdx}" class="rule-excluidos form-control"
+                        placeholder="Ej: Gerente, Director"
                         value="${regla && regla.cargos_excluidos ? regla.cargos_excluidos : ''}">
-                    
                     <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-plus-circle"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0 cargo-dropdown-ul" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="event.stopPropagation()" onclick="event.stopPropagation()">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..."
+                                onkeyup="filterCargosDropdown(this)"
+                                onkeydown="event.stopPropagation()"
+                                onclick="event.stopPropagation()">
                         </li>
-                        <!-- Items se inyectan dinámicamente por _populateCargoDropdown() -->
                     </ul>
                 </div>
             </div>
@@ -643,8 +688,11 @@ function addBonoReglaRow(regla = null) {
     `;
     container.appendChild(div);
 
-    // FIX: Poblar el dropdown DESPUÉS de estar en el DOM para capturar globalCargosList real
-    _populateCargoDropdown(div.querySelector('.cargo-dropdown-ul'));
+    // Poblar AMBOS dropdowns después de estar en el DOM
+    // cargo-req-ul: singleSelect=true (un solo cargo)
+    // cargo-dropdown-ul: singleSelect=false (multi, coma separado)
+    _populateCargoDropdown(div.querySelector('.cargo-req-ul'), true);
+    _populateCargoDropdown(div.querySelector('.cargo-dropdown-ul'), false);
 }
 
 async function saveBono() {
@@ -905,6 +953,12 @@ window.openModalTipoJ = function(tipo = null) {
 function closeModalTipoJ(fromSave = false) {
     document.getElementById('modal-tipo-justificacion').style.display = 'none';
 
+    // BUG-03 FIX: Si se abrió desde el wizard vía _wizardAbrirTipoJ, ejecutar callback de cierre
+    if (typeof window._wizardTipoJCloseCallback === 'function') {
+        setTimeout(window._wizardTipoJCloseCallback, 100);
+        return; // El callback maneja el flujo del wizard
+    }
+
     if (!fromSave && window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {
         Swal.fire({
             title: "¿Finalizar Configuración?",
@@ -1065,9 +1119,13 @@ window.openModalGestionPagadores = function () {
 
 window.closeModalGestionPagadores = async function () {
     document.getElementById('modal-gestion-pagadores').style.display = 'none';
-    await loadPagadores(); // Recargar select al cerrar por si hubo cambios
-    
-    // Retomar el Wizard si corresponde
+    await loadPagadores();
+
+    // BUG-03 FIX: Si se abrió desde el wizard vía _wizardAbrirPagadores, ejecutar callback de cierre
+    if (typeof window._wizardPagadoresCloseCallback === 'function') {
+        setTimeout(window._wizardPagadoresCloseCallback, 100);
+        return; // El callback maneja el flujo del wizard
+    }
     if (window.isWizardFlow && window.wizardCurrentStep === 'justificaciones') {
         if (typeof pagadoresList !== 'undefined' && pagadoresList.length > 0) {
             if (typeof window.openModalTipoJ === 'function') {
@@ -1321,6 +1379,7 @@ function showToast(msg, type = "success") {
         else alert(msg);
     }
 }
+
 
 // ==========================================
 // ROBOT BIOALBA LOGS [NEW]

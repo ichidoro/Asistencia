@@ -157,7 +157,7 @@ window.wizardNextStep = async function() {
         try {
             const resp = await fetch('/api/sync/wizard/commit/areas/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ resoluciones })
             });
             if (!resp.ok) throw new Error(await resp.text());
@@ -187,7 +187,7 @@ window.wizardNextStep = async function() {
         try {
             const resp = await fetch('/api/sync/wizard/commit/cargos/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ resoluciones, generos })
             });
             if (!resp.ok) throw new Error(await resp.text());
@@ -229,7 +229,7 @@ window.wizardNextStep = async function() {
             try {
                 const resp = await fetch('/api/sync/wizard/commit/turnos/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: JSON.stringify({ asignaciones })
                 });
                 if (!resp.ok) throw new Error(await resp.text());
@@ -263,7 +263,7 @@ window.wizardPrevStep = async function() {
             try {
                 const resp = await fetch('/api/sync/wizard/rollback/', {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: JSON.stringify({ tipo: 'areas', ids: idsParaRollback })
                 });
                 if (resp.ok) {
@@ -284,7 +284,7 @@ window.wizardPrevStep = async function() {
             try {
                 const resp = await fetch('/api/sync/wizard/rollback/', {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: JSON.stringify({ tipo: 'cargos', ids: idsParaRollback })
                 });
                 if (resp.ok) {
@@ -806,15 +806,40 @@ function _wizardRestoreAfterChild(wizardEl, onCloseFn) {
 }
 
 window._wizardAbrirPagadores = function() {
-    if (typeof window.openModalGestionPagadores === 'function') {
-        _wizardOpenChildModal(
-            'modal-gestion-pagadores',
-            () => window.openModalGestionPagadores(),
-            () => fetchAndRenderWizardStep3_Pagadores()
-        );
-    } else {
+    if (typeof window.openModalGestionPagadores !== 'function') {
         Swal.fire('Info', 'El módulo de pagadores aún no está cargado. Inicializa Configuración primero.', 'info');
+        return;
     }
+    const modalPagEl = document.getElementById('modal-gestion-pagadores');
+    if (!modalPagEl) return;
+
+    // CAUSA REAL: Bootstrap FocusTrap redirige cualquier foco fuera del wizard.
+    // SOLUCIÓN: Mover el modal DENTRO del wizard. Con position:fixed sigue
+    // visual correcto; el FocusTrap permite focus porque está 'dentro' del modal activo.
+    const _originalParent = modalPagEl.parentElement;
+    const _originalNextSibling = modalPagEl.nextSibling;
+    const wizardEl = document.getElementById('modal-sync-wizard');
+    const _host = wizardEl || document.body;
+    _host.appendChild(modalPagEl);
+
+    modalPagEl.style.zIndex = '2200';
+    modalPagEl.removeAttribute('aria-hidden');
+    modalPagEl.removeAttribute('inert');
+
+    window._wizardPagadoresCloseCallback = function() {
+        modalPagEl.style.zIndex = '';
+        if (_originalParent) {
+            if (_originalNextSibling) {
+                _originalParent.insertBefore(modalPagEl, _originalNextSibling);
+            } else {
+                _originalParent.appendChild(modalPagEl);
+            }
+        }
+        window._wizardPagadoresCloseCallback = null;
+        fetchAndRenderWizardStep3_Pagadores();
+    };
+
+    window.openModalGestionPagadores();
 };
 
 // ==========================================
@@ -888,15 +913,38 @@ async function fetchAndRenderWizardStep4_TiposJ() {
 }
 
 window._wizardAbrirTipoJ = function() {
-    if (typeof window.openModalTipoJ === 'function') {
-        _wizardOpenChildModal(
-            'modal-tipo-justificacion',
-            () => window.openModalTipoJ(),
-            () => fetchAndRenderWizardStep4_TiposJ()
-        );
-    } else {
+    if (typeof window.openModalTipoJ !== 'function') {
         Swal.fire('Info', 'El módulo de justificaciones aún no está cargado. Inicializa Configuración primero.', 'info');
+        return;
     }
+    const modalTipoJEl = document.getElementById('modal-tipo-justificacion');
+    if (!modalTipoJEl) return;
+
+    // Mover DENTRO del wizard para que el FocusTrap de Bootstrap permita focus
+    const _originalParent = modalTipoJEl.parentElement;
+    const _originalNextSibling = modalTipoJEl.nextSibling;
+    const wizardEl = document.getElementById('modal-sync-wizard');
+    const _host = wizardEl || document.body;
+    _host.appendChild(modalTipoJEl);
+
+    modalTipoJEl.style.zIndex = '2200';
+    modalTipoJEl.removeAttribute('aria-hidden');
+    modalTipoJEl.removeAttribute('inert');
+
+    window._wizardTipoJCloseCallback = function() {
+        modalTipoJEl.style.zIndex = '';
+        if (_originalParent) {
+            if (_originalNextSibling) {
+                _originalParent.insertBefore(modalTipoJEl, _originalNextSibling);
+            } else {
+                _originalParent.appendChild(modalTipoJEl);
+            }
+        }
+        window._wizardTipoJCloseCallback = null;
+        fetchAndRenderWizardStep4_TiposJ();
+    };
+
+    window.openModalTipoJ();
 };
 
 // ==========================================
@@ -1202,7 +1250,7 @@ async function fetchAndRenderWizardStep5() {
         }
 
         const tbodyHtml = empList.map((e, idx) => `
-            <tr>
+            <tr data-estado="${e.activo ? 'activo' : 'inactivo'}">
                 <td class="text-center align-middle">
                     <input type="checkbox" class="form-check-input wiz-chk-emp" data-rut="${e.rut}" checked>
                 </td>
@@ -1242,6 +1290,39 @@ async function fetchAndRenderWizardStep5() {
         if (listContainer) listContainer.innerHTML = `<div class="alert alert-danger m-3">Error al generar la previsualización de empleados.</div>`;
     }
 }
+
+// ==========================================
+// BUG-01 FIX: Funciones fantasma del Paso 7 (Preview)
+// Declaradas en el HTML pero nunca implementadas
+// ==========================================
+window.filterWizardEmpleados = function() {
+    const searchInput = document.getElementById('wizard-emp-search');
+    const typeFilter  = document.getElementById('wizard-emp-filter-type');
+    const search = searchInput ? searchInput.value.toLowerCase() : '';
+    const type   = typeFilter  ? typeFilter.value : '';
+
+    document.querySelectorAll('#wizard-empleados-list tbody tr').forEach(tr => {
+        const text = tr.textContent.toLowerCase();
+        const matchText = text.includes(search);
+        const matchType = !type || tr.dataset.estado === type;
+        tr.style.display = (matchText && matchType) ? '' : 'none';
+    });
+
+    // Actualizar contador visible
+    const visible = document.querySelectorAll('#wizard-empleados-list tbody tr:not([style*="none"])').length;
+    const counter = document.getElementById('wizard-emp-counter');
+    if (counter) counter.textContent = `${visible} visibles`;
+};
+
+window.toggleAllWizardEmps = function(checked) {
+    document.querySelectorAll('.wiz-chk-emp').forEach(chk => {
+        // Solo marcar los visibles (no los filtrados)
+        const tr = chk.closest('tr');
+        if (!tr || tr.style.display !== 'none') {
+            chk.checked = checked;
+        }
+    });
+};
 
 // ==========================================
 // CONFIRMAR IMPORTACIÓN (Paso final del Wizard)
@@ -1418,7 +1499,7 @@ window._wizardRefrescarTurnos = function() {
  * siempre está disponible en el DOM sin necesidad de navegar.
  * Al cerrarse, refresca el Paso 4.
  */
-window._wizardCrearBono = function() {
+window._wizardCrearBono = async function() {
     if (typeof openModalBono !== 'function') {
         Swal.fire({
             title: 'Módulo no cargado',
@@ -1430,23 +1511,44 @@ window._wizardCrearBono = function() {
         return;
     }
 
-    // Inicializar la UI de configuración si aún no se ha hecho
+    // 1. Inicializar la UI de configuración si aún no se ha hecho
+    //    (registra form-bono.onsubmit, loadBonos, loadPagadores, etc.)
     if (typeof initConfiguracionUI === 'function' && !window._config_initialized) {
-        initConfiguracionUI();
+        initConfiguracionUI(); // dispara loadMetadata() internamente (sin await)
     }
 
-    // ── FIX DEFINITIVO: z-index elevation (no dispose, no setInterval, no aria-hidden) ──
-    // El wizard tiene z-index: 2050 !important (CSS). El modal-bono tiene z-index: 1060.
-    // Solución: elevamos modal-bono sobre el wizard mientras está abierto.
-    // Al cerrarse, restauramos y refrescamos la lista de bonos.
+    // 2. RACE CONDITION FIX: esperar explícitamente a que los cargos estén listos.
+    //    initConfiguracionUI dispara loadMetadata() sin await; gracias al patrón singleton
+    //    en loadMetadata(), este await reutiliza la misma Promise (sin doble petición HTTP).
+    if (typeof loadMetadata === 'function' && typeof globalCargosList !== 'undefined' && globalCargosList.length === 0) {
+        console.log('[Wizard-Bono] Esperando catálogo de cargos...');
+        await loadMetadata();
+        console.log(`[Wizard-Bono] Cargos listos: ${globalCargosList.length}`);
+    }
+
+    // Mover DENTRO del wizard para que el FocusTrap de Bootstrap permita focus
     const modalBonoEl = document.getElementById('modal-bono');
-    if (modalBonoEl) {
-        modalBonoEl.style.zIndex = '2200'; // Por encima del wizard (2050)
-    }
+    if (!modalBonoEl) { openModalBono(); return; }
 
-    // Registrar callback de cierre para restaurar z-index y refrescar
+    const wizardEl = document.getElementById('modal-sync-wizard');
+    const _bonoHost = wizardEl || document.body;
+    const _bonoOriginalParent = modalBonoEl.parentElement;
+    const _bonoOriginalNext = modalBonoEl.nextSibling;
+    _bonoHost.appendChild(modalBonoEl);
+
+    modalBonoEl.style.zIndex = '2200';
+    modalBonoEl.removeAttribute('aria-hidden');
+    modalBonoEl.removeAttribute('inert');
+
     window._wizardBonoCloseCallback = function() {
-        if (modalBonoEl) modalBonoEl.style.zIndex = ''; // Restaurar z-index original
+        modalBonoEl.style.zIndex = '';
+        if (_bonoOriginalParent) {
+            if (_bonoOriginalNext) {
+                _bonoOriginalParent.insertBefore(modalBonoEl, _bonoOriginalNext);
+            } else {
+                _bonoOriginalParent.appendChild(modalBonoEl);
+            }
+        }
         window._wizardBonoCloseCallback = null;
         window._wizardRefrescarBonos();
     };

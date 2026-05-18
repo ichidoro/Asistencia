@@ -1074,6 +1074,7 @@ function renderModalHtml() {
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
                                     <option value="FIJO">Horario Fijo</option>
                                     <option value="DINAMICO_FLEXIBLE">Ciclo Inteligente (Smart Match)</option>
+                                    <option value="ROTATIVO_INTELIGENTE">Rotativo Inteligente</option>
                                     <option value="FLEXIBLE_BOLSA">Flexible (Bolsa de Horas)</option>
                                 </select>
                             </div>

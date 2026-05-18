@@ -286,22 +286,39 @@ function setupEventListeners() {
   btnSync.addEventListener('click', async () => {
     try {
       showBatchLoadingOverlay("Analizando integridad de áreas con BioAlba...");
-      const res = await fetch(`${API_BASE_URL}/sync/guardian/check/`);
+      const res = await fetch(`${API_BASE_URL}/sync/guardian/check/`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       
       const data = await res.json();
       hideBatchLoadingOverlay();
       
       if (data.status === "requires_confirmation") {
-        // Inicializar Wizard Universal si hay configuración pendiente
-        if (typeof startSyncWizard === 'function') {
-            startSyncWizard(data);
+        // BUG-02 FIX: El guardian SIEMPRE retorna requires_confirmation (comportamiento del backend).
+        // Verificar si realmente hay elementos desconocidos que requieren configuración del wizard,
+        // o si es una sincronización de rutina donde todo ya está configurado.
+        const hayNuevosElementos = (
+            (data.nuevas_areas && data.nuevas_areas.length > 0) ||
+            (data.nuevos_cargos && data.nuevos_cargos.length > 0) ||
+            (data.nuevos_generos && data.nuevos_generos.length > 0)
+        );
+        const wizardYaCompletado = localStorage.getItem('wizard_completed') === 'true';
+
+        if (!hayNuevosElementos && wizardYaCompletado) {
+            // Todo conocido + wizard ya configurado → ir directo a preview sin wizard
+            console.log('[Guardian] Sin elementos nuevos y wizard completado → abriendo preview directo.');
+            openSyncModalPreview();
         } else {
-            alert('El Wizard Universal no está cargado. Verifique los scripts.');
+            // Hay elementos nuevos o es primera configuración → abrir wizard
+            if (typeof startSyncWizard === 'function') {
+                startSyncWizard(data);
+            } else {
+                alert('El Wizard Universal no está cargado. Verifique los scripts.');
+            }
         }
       } else {
         // No requiere configuración, ir directo al selector / preview de empleados
-        // Se asume que todo está configurado y sincronizado.
         openSyncModalPreview();
       }
     } catch (error) {

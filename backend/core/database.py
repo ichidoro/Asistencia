@@ -171,25 +171,23 @@ class HybridDatabase:
             except Exception as pragma_err:
                 logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 
-            # Sync post-conexión en BACKGROUND: no bloqueamos el arranque.
-            # La réplica local ya tiene datos válidos (libsql los mantiene).
-            # El sync trae cambios de Turso Cloud desde la última vez, pero
-            # no es urgente — el scheduler lo repetirá cada 90s de todas formas.
+            # Sync post-conexión BLOQUEANTE: esperar a que la réplica local
+            # tenga todos los datos de Turso Cloud ANTES de servir requests.
+            # Con offline=True la replica arranca vacía; sin este sync los
+            # endpoints devuelven listas vacías hasta el scheduler (hasta 90s).
             if hasattr(self.conn, 'sync') and self.use_turso and not self._force_turso_only:
-                async def _bg_initial_sync():
-                    try:
-                        await asyncio.wait_for(
-                            asyncio.to_thread(self.conn.sync),
-                            timeout=30.0
-                        )
-                        self._last_sync = datetime.now()
-                        logger.info("☁️ Sync inicial completado en background (réplica actualizada)")
-                    except asyncio.TimeoutError:
-                        logger.warning("⚠️ Sync inicial timeout (>30s) — continuando con datos locales")
-                    except Exception as sync_err:
-                        logger.warning(f"⚠️ Sync inicial falló (no crítico): {sync_err}")
-                # Guardar referencia: evita que el GC destruya la tarea antes de completarse
-                self._bg_sync_task = asyncio.create_task(_bg_initial_sync())
+                try:
+                    logger.info("🔄 Sync inicial con Turso Cloud (bloqueante, máx 45s)...")
+                    await asyncio.wait_for(
+                        asyncio.to_thread(self.conn.sync),
+                        timeout=45.0
+                    )
+                    self._last_sync = datetime.now()
+                    logger.info("☁️ Sync inicial completado — réplica local actualizada con datos de Turso")
+                except asyncio.TimeoutError:
+                    logger.warning("⚠️ Sync inicial timeout (>45s) — scheduler sincronizará luego")
+                except Exception as sync_err:
+                    logger.warning(f"⚠️ Sync inicial falló (scheduler reintentará): {sync_err}")
 
             logger.success(f"✅ Motor LibSQL conectado (Modo: {'Cloud' if self._force_turso_only else 'Hybrid'})")
 

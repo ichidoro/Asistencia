@@ -185,6 +185,15 @@ async def lifespan(app: FastAPI):
                 # Sincronizar feriados del año actual automáticamente en cada arranque
                 from datetime import date
                 await cal_service.sync_chile_holidays(date.today().year)
+
+                # ⬆️ Push feriados a Turso: sync_chile_holidays escribe solo en local.
+                # Sin este push, Turso quedaría sin feriados y las BDs no serían gemelas.
+                try:
+                    await db.sync_to_cloud_explicit()
+                    logger.info("☁️ [Startup] Feriados sincronizados a Turso Cloud")
+                except Exception as _fs_err:
+                    logger.warning(f"⚠️ [Startup] No se pudo pushear feriados a Turso: {_fs_err}")
+
                 logger.info(f"⏱️ config+turno+calendario init_tables: {(datetime.now()-_t).total_seconds():.2f}s")
 
                 await db.clear_schema_cache()
