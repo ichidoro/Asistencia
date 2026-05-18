@@ -70,7 +70,7 @@ window.startSyncWizard = function(data) {
 };
 
 function updateWizardUI() {
-    const TOTAL_STEPS = 8;
+    const TOTAL_STEPS = 7;
     const step = window._wizardState.currentStep;
     
     // Actualizar Stepper Visual — controla clases Bootstrap directamente
@@ -132,11 +132,10 @@ function updateWizardUI() {
     if (step === 5) fetchAndRenderWizardStep5_Bonos();
     if (step === 6) fetchAndRenderWizardStep6_Turnos();
     if (step === 7) fetchAndRenderWizardStep7_Preview();
-    // Step 8 is static HTML, no render needed
 }
 
 window.wizardNextStep = async function() {
-    const TOTAL_STEPS = 8;
+    const TOTAL_STEPS = 7;
     const step = window._wizardState.currentStep;
     const btnNext = document.getElementById('btn-wizard-next');
     const originalText = btnNext ? btnNext.innerHTML : '';
