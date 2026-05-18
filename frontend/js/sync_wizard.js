@@ -653,49 +653,56 @@ function _wizardOpenChildModal(childModalId, openFn, onCloseFn) {
     const wizardEl = document.getElementById('modal-sync-wizard');
     const wizardModal = wizardEl ? bootstrap.Modal.getInstance(wizardEl) : null;
 
-    // 1. Ocultar el wizard via Bootstrap API
+    // 1. DESTRUIR completamente el wizard (no solo hide) para eliminar backdrop + inert
     if (wizardModal) {
-        wizardModal.hide();
+        wizardModal.dispose();
+    }
+    // Ocultar el DOM del wizard manualmente
+    if (wizardEl) {
+        wizardEl.classList.remove('show');
+        wizardEl.style.display = 'none';
     }
 
-    // 2. Esperar a que Bootstrap termine de ocultar, luego abrir hijo
+    // 2. Limpiar TODOS los artefactos que Bootstrap deja:
+    //    - Backdrops residuales
+    //    - Body classes/styles
+    //    - Atributos inert/aria-hidden en TODO el DOM
     setTimeout(() => {
-        openFn();
+        // Remover backdrops de Bootstrap
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
 
-        // 3. Bootstrap 5.3+ agrega 'inert' a todos los hermanos del modal activo.
-        //    Necesitamos un MutationObserver para PERSISTENTEMENTE remover 'inert'
-        //    del modal hijo, porque Bootstrap lo re-aplica dinámicamente.
-        const childEl = document.getElementById(childModalId);
-        if (!childEl) return;
+        // Restaurar body
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
 
-        // Función helper para limpiar inert del child y sus ancestros
-        function _cleanInert() {
-            let el = childEl;
-            while (el && el !== document.body) {
-                if (el.hasAttribute('inert')) el.removeAttribute('inert');
-                if (el.hasAttribute('aria-hidden')) el.removeAttribute('aria-hidden');
-                el = el.parentElement;
-            }
-            if (childEl.hasAttribute('inert')) childEl.removeAttribute('inert');
-            if (childEl.hasAttribute('aria-hidden')) childEl.removeAttribute('aria-hidden');
-            // También limpiar todos los inputs/checkboxes dentro del modal
-            childEl.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
-        }
-
-        // Limpiar inmediatamente
-        _cleanInert();
-
-        // Crear MutationObserver para detectar cuando Bootstrap re-agrega inert
-        const observer = new MutationObserver((mutations) => {
-            for (const mut of mutations) {
-                if (mut.type === 'attributes' && 
-                    (mut.attributeName === 'inert' || mut.attributeName === 'aria-hidden')) {
-                    _cleanInert();
-                }
+        // Remover inert de TODOS los elementos del DOM
+        document.querySelectorAll('[inert]').forEach(el => el.removeAttribute('inert'));
+        document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+            // No quitar aria-hidden de scripts o elements que legítimamente lo tienen
+            if (!el.matches('script, link, style, [data-permanent-aria-hidden]')) {
+                el.removeAttribute('aria-hidden');
             }
         });
 
-        // Observar cambios en atributos de TODOS los nodos del DOM
+        // 3. Ahora abrir el modal hijo en un DOM completamente limpio
+        openFn();
+
+        const childEl = document.getElementById(childModalId);
+        if (!childEl) return;
+
+        // Guard: MutationObserver para prevenir que cualquier cosa re-agregue inert
+        const observer = new MutationObserver(() => {
+            if (childEl.hasAttribute('inert')) childEl.removeAttribute('inert');
+            childEl.querySelectorAll('[inert]').forEach(e => e.removeAttribute('inert'));
+            // Limpiar ancestros también
+            let p = childEl.parentElement;
+            while (p && p !== document.body) {
+                if (p.hasAttribute('inert')) p.removeAttribute('inert');
+                p = p.parentElement;
+            }
+        });
+
         observer.observe(document.body, { 
             attributes: true, 
             attributeFilter: ['inert', 'aria-hidden'],
