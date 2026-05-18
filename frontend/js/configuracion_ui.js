@@ -21,22 +21,45 @@ window.appendCargoToInput = function (element, cargo) {
     // Keep dropdown open? No, default bootstrap behavior closes it, which feels right.
 };
 
+// Rellena dinámicamente el <ul> del dropdown de cargos con globalCargosList.
+// Se llama DESPUÉS de appendChild para capturar el estado real del array.
+function _populateCargoDropdown(ulElement) {
+    if (!ulElement) return;
+
+    // Remover items anteriores (excepto el <li> con el input de búsqueda, el primero)
+    const existingItems = ulElement.querySelectorAll('li:not(:first-child)');
+    existingItems.forEach(li => li.remove());
+
+    if (globalCargosList.length === 0) {
+        const li = document.createElement('li');
+        li.innerHTML = '<span class="dropdown-item text-muted small">No hay cargos disponibles aún</span>';
+        ulElement.appendChild(li);
+        return;
+    }
+
+    globalCargosList.forEach(cargo => {
+        const li = document.createElement('li');
+        const safeC = cargo.replace(/'/g, "\\'");
+        li.innerHTML = `<a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${safeC}'); return false;">${cargo}</a>`;
+        ulElement.appendChild(li);
+    });
+}
+
 window.filterCargosDropdown = function(inputElement) {
     if (!inputElement) return;
-    const filter = (inputElement.value || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const ul = inputElement.closest('ul');
     if (!ul) return;
-    
-    const items = ul.querySelectorAll('.cargo-item');
-    
-    items.forEach(item => {
-        const text = item.textContent || item.innerText || '';
-        const normalizedText = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        if (normalizedText.indexOf(filter) > -1) {
-            if (item.parentElement) item.parentElement.style.display = "";
-        } else {
-            if (item.parentElement) item.parentElement.style.display = "none";
-        }
+
+    // FIX: Si el dropdown está vacío (no se pobló aún), intentar poblarlo ahora.
+    const existingItems = ul.querySelectorAll('.cargo-item');
+    if (existingItems.length === 0 && globalCargosList.length > 0) {
+        _populateCargoDropdown(ul);
+    }
+
+    const filter = (inputElement.value || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    ul.querySelectorAll('.cargo-item').forEach(item => {
+        const text = (item.textContent || item.innerText || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        item.parentElement.style.display = text.includes(filter) ? '' : 'none';
     });
 };
 
@@ -303,55 +326,66 @@ function initConfiguracionUI() {
 }
 
 async function loadMetadata() {
+    // FIX DEFINITIVO: cargar cargos del catálogo SIEMPRE, independiente de si
+    // /api/empleados/metadata/ falla (sin empleados aún, o token diferente).
+    // Antes: si metadata fallaba (L308 return), nunca se cargaba el catálogo.
+    let allCargos = new Set();
+
+    // 1. Intentar metadata de empleados (puede estar vacío en instalación nueva)
     try {
-        const response = await fetch('/api/empleados/metadata/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-        if (!response.ok) return;
+        const response = await fetch('/api/empleados/metadata/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            (data.cargos || []).forEach(c => allCargos.add(c));
 
-        const data = await response.json();
-
-        const listCargos = document.getElementById('list-cargos');
-
-        // Populate Cargos
-        let allCargos = new Set(data.cargos || []);
-        
-        try {
-            const cargosRes = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-            if (cargosRes.ok) {
-                const catalogCargos = await cargosRes.json();
-                catalogCargos.forEach(c => allCargos.add(c.nombre || c.cargo_nombre));
+            // Populate Areas en Notificaciones
+            if (data.areas) {
+                const selectAreas = document.getElementById('notif-area-nombre');
+                if (selectAreas) {
+                    selectAreas.innerHTML =
+                        '<option value="" selected disabled>Seleccione un Área...</option>' +
+                        data.areas.map(a => `<option value="${a}">${a}</option>`).join('');
+                }
             }
-        } catch(e) {
-            console.warn("Could not load catalog cargos", e);
+        } else {
+            console.warn('[loadMetadata] /api/empleados/metadata/ respondió:', response.status, '— continuando con catálogo.');
         }
-
-        const cargosArray = Array.from(allCargos).sort();
-        
-        if (cargosArray.length > 0) {
-            globalCargosList = cargosArray; // Save to global
-            
-            let listCargos = document.getElementById('list-cargos');
-            if (!listCargos) {
-                listCargos = document.createElement('datalist');
-                listCargos.id = 'list-cargos';
-                document.body.appendChild(listCargos);
-            }
-            
-            if (listCargos) {
-                listCargos.innerHTML = cargosArray.map(c => `<option value="${c}">`).join('');
-            }
-        }
-
-        // Populate Areas in Notificaciones
-        if (data.areas) {
-            const selectAreas = document.getElementById('notif-area-nombre');
-            if (selectAreas) {
-                const defaultOption = '<option value="" selected disabled>Seleccione un Área...</option>';
-                selectAreas.innerHTML = defaultOption + data.areas.map(a => `<option value="${a}">${a}</option>`).join('');
-            }
-        }
-
     } catch (e) {
-        console.warn("Could not load metadata for dropdowns", e);
+        console.warn('[loadMetadata] Error en /api/empleados/metadata/:', e.message);
+    }
+
+    // 2. SIEMPRE cargar catálogo de cargos (tabla `cargos`, no depende de empleados)
+    try {
+        const cargosRes = await fetch('/api/configuracion/cargos/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (cargosRes.ok) {
+            const catalogCargos = await cargosRes.json();
+            catalogCargos.forEach(c => allCargos.add(c.nombre || c.cargo_nombre || ''));
+            console.log(`[loadMetadata] Catálogo de cargos cargado: ${catalogCargos.length} registros.`);
+        } else {
+            console.warn('[loadMetadata] /api/configuracion/cargos/ respondió:', cargosRes.status);
+        }
+    } catch (e) {
+        console.warn('[loadMetadata] Error en /api/configuracion/cargos/:', e.message);
+    }
+
+    // 3. Actualizar globalCargosList y datalist
+    allCargos.delete(''); // limpiar vacíos
+    const cargosArray = Array.from(allCargos).sort();
+    globalCargosList = cargosArray;
+    console.log(`[loadMetadata] globalCargosList actualizado con ${globalCargosList.length} cargos.`);
+
+    let listCargos = document.getElementById('list-cargos');
+    if (!listCargos) {
+        listCargos = document.createElement('datalist');
+        listCargos.id = 'list-cargos';
+        document.body.appendChild(listCargos);
+    }
+    if (listCargos && cargosArray.length > 0) {
+        listCargos.innerHTML = cargosArray.map(c => `<option value="${c}">`).join('');
     }
 }
 
@@ -592,13 +626,11 @@ function addBonoReglaRow(regla = null) {
                     <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-plus-circle"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto; width: 250px;">
+                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-dropdown-ul" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
                             <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="event.stopPropagation()" onclick="event.stopPropagation()">
                         </li>
-                        ${globalCargosList.map(c =>
-        `<li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`
-    ).join('') || '<li><span class="dropdown-item text-muted">Cargando...</span></li>'}
+                        <!-- Items se inyectan dinámicamente por _populateCargoDropdown() -->
                     </ul>
                 </div>
             </div>
@@ -610,6 +642,9 @@ function addBonoReglaRow(regla = null) {
         </div>
     `;
     container.appendChild(div);
+
+    // FIX: Poblar el dropdown DESPUÉS de estar en el DOM para capturar globalCargosList real
+    _populateCargoDropdown(div.querySelector('.cargo-dropdown-ul'));
 }
 
 async function saveBono() {
