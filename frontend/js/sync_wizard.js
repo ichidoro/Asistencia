@@ -719,7 +719,35 @@ async function fetchAndRenderWizardStep4() {
         }
 
         if (window._wizardState.bonosDisponibles.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">No hay bonos creados en el catálogo.</td></tr>`;
+            // Sin bonos creados: ofrecer crear uno directamente
+            const tableSection = document.querySelector('#wizard-step-4 .table-responsive');
+            if (tableSection) {
+                tableSection.innerHTML = `
+                    <div class="alert alert-info border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3">
+                        <i class="bi bi-cash-coin fs-3 text-primary flex-shrink-0 mt-1"></i>
+                        <div class="w-100">
+                            <h6 class="fw-bold mb-1">No hay bonos configurados todavía</h6>
+                            <p class="mb-2 small text-muted">
+                                Los bonos son opcionales pero recomendados. Puedes crear uno ahora o continuar y configurarlos después.
+                            </p>
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <button class="btn btn-primary btn-sm fw-bold" onclick="window._wizardCrearBono()">
+                                    <i class="bi bi-plus-circle me-1"></i>
+                                    Crear Bono ahora
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="window._wizardRefrescarBonos()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>
+                                    Ya creé un bono, actualizar
+                                </button>
+                            </div>
+                            <div class="mt-3 p-2 bg-light rounded border small text-muted">
+                                <i class="bi bi-info-circle me-1 text-primary"></i>
+                                También puedes omitir y presionar <strong>Siguiente Paso</strong> para configurar bonos después.
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
             return;
         }
 
@@ -986,35 +1014,68 @@ window.confirmWizardSync = async function() {
 // ==========================================
 
 /**
- * Cierra el wizard y navega directamente a Configuración → pestaña Turnos,
- * luego abre el modal de Nuevo Turno automáticamente.
- * Las áreas ya están en BD (persistidas en Paso 1), no se necesita ningún bridge.
+ * Abre el modal de Nuevo Turno DIRECTAMENTE sobre el wizard (sin cerrarlo).
+ * Bootstrap soporta modales apilados. Al guardar el turno, el wizard
+ * recarga el Paso 3 automáticamente vía _wizardRefrescarTurnos.
  */
 window._wizardIrACrearTurno = function() {
-    // 1. Cerrar el wizard
-    closeSyncWizard();
+    const form = document.getElementById('formTurno');
 
-    // 2. Navegar al módulo Configuración
-    if (typeof switchPage === 'function') {
-        switchPage('configuracion');
-    } else {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        const pageConf = document.getElementById('page-configuracion');
-        if (pageConf) pageConf.classList.add('active');
-    }
+    if (!form) {
+        // El formulario del modal de Turno no está en el DOM todavía.
+        // Necesitamos navegar a Configuración → Turnos para que el HTML se renderice.
 
-    // 3. Activar la pestaña de Turnos y abrir modal Nuevo Turno
-    setTimeout(() => {
-        const tabHorarios = document.getElementById('horarios-tab');
-        if (tabHorarios) {
-            tabHorarios.click();
+        // 1. Ocultar el wizard SIN destruirlo (el estado se preserva en window._wizardState)
+        const wizardModalEl = document.getElementById('modal-sync-wizard');
+        const wizardInstance = wizardModalEl ? bootstrap.Modal.getInstance(wizardModalEl) : null;
+        if (wizardInstance) wizardInstance.hide();
+
+        // 2. Navegar a Configuración para cargar el DOM del modal de turno
+        if (typeof switchPage === 'function') {
+            switchPage('configuracion');
+        }
+
+        // 3. Activar pestaña Turnos y abrir el modal
+        setTimeout(() => {
+            const tabHorarios = document.getElementById('horarios-tab');
+            if (tabHorarios) tabHorarios.click();
+
             setTimeout(() => {
                 if (typeof openModalHorario === 'function') {
                     openModalHorario();
+                    const modalTurnoEl = document.getElementById('modalTurno');
+                    if (modalTurnoEl) {
+                        modalTurnoEl.addEventListener('hidden.bs.modal', function _onClose() {
+                            modalTurnoEl.removeEventListener('hidden.bs.modal', _onClose);
+                            // 4. Volver al wizard en el Paso 3 y refrescar la lista de turnos
+                            if (wizardModalEl) {
+                                window._wizardState.currentStep = 3;
+                                // Destruir instancia anterior para evitar conflicto Bootstrap
+                                const oldInst = bootstrap.Modal.getInstance(wizardModalEl);
+                                if (oldInst) oldInst.dispose();
+                                const newInstance = new bootstrap.Modal(wizardModalEl, { backdrop: 'static', keyboard: false });
+                                newInstance.show();
+                                setTimeout(() => window._wizardRefrescarTurnos(), 350);
+                            }
+                        });
+                    }
                 }
             }, 400);
-        }
-    }, 200);
+        }, 200);
+        return;
+    }
+
+    // El formulario ya está en el DOM → abrir modal directamente sobre el wizard
+    openModalHorario();
+    const modalTurnoEl = document.getElementById('modalTurno');
+    if (modalTurnoEl) {
+        const _onClose = () => {
+            modalTurnoEl.removeEventListener('hidden.bs.modal', _onClose);
+            // Refrescar el paso 3 para mostrar el turno recién creado
+            window._wizardRefrescarTurnos();
+        };
+        modalTurnoEl.addEventListener('hidden.bs.modal', _onClose);
+    }
 };
 
 /**
@@ -1044,4 +1105,73 @@ window._wizardRefrescarTurnos = function() {
     } else {
         fetchAndRenderWizardStep3();
     }
+};
+
+// ==========================================
+// HELPERS: Acciones desde el panel "Sin Bonos" (Paso 4)
+// ==========================================
+
+/**
+ * Abre el modal de Nuevo Bono directamente sobre el wizard.
+ * El modal `modal-bono` usa display:flex (no Bootstrap), por lo que
+ * siempre está disponible en el DOM sin necesidad de navegar.
+ * Al cerrarse, refresca el Paso 4.
+ */
+window._wizardCrearBono = function() {
+    if (typeof openModalBono !== 'function') {
+        Swal.fire({
+            title: 'Módulo no cargado',
+            html: `<p>El módulo de bonos aún no está inicializado.</p>
+                   <p class="text-muted small">Ve a <strong>Configuración → Bonos</strong>, crea el bono y usa <em>"Ya creé un bono, actualizar"</em>.</p>`,
+            icon: 'info',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+
+    // Inicializar la UI de configuración si aún no se ha hecho (carga los datos necesarios)
+    if (typeof initConfiguracionUI === 'function' && !window._config_initialized) {
+        initConfiguracionUI();
+    }
+
+    openModalBono();
+
+    // Observar ciérre del modal de bono para refrescar el Paso 4
+    // modal-bono usa display:flex, no dispara hidden.bs.modal
+    // Usar MutationObserver para detectar cuando se oculta
+    const modalBono = document.getElementById('modal-bono');
+    if (modalBono) {
+        const observer = new MutationObserver(() => {
+            if (modalBono.style.display === 'none' || modalBono.style.display === '') {
+                observer.disconnect();
+                window._wizardRefrescarBonos();
+            }
+        });
+        observer.observe(modalBono, { attributes: true, attributeFilter: ['style'] });
+    }
+};
+
+/**
+ * Recarga el Paso 4 (Bonos) sin cerrar el wizard.
+ */
+window._wizardRefrescarBonos = function() {
+    const step4 = document.getElementById('wizard-step-4');
+    // Restaurar la tabla original antes de llamar a fetchAndRenderWizardStep4
+    const tableSection = step4 && step4.querySelector('.table-responsive');
+    if (tableSection) {
+        tableSection.innerHTML = `
+            <table class="table table-bordered align-middle table-sm">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>Área</th>
+                        <th>Bonos Asignados</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-wizard-bonos">
+                    <tr><td colspan="2" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>
+                </tbody>
+            </table>
+        `;
+    }
+    fetchAndRenderWizardStep4();
 };
