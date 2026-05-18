@@ -146,7 +146,8 @@ window.wizardNextStep = async function() {
         if (!guardarSeleccionesPaso1()) return;
 
         const resoluciones = window._wizardState.resoluciones.areas;
-        const tieneSeleccion = Object.values(resoluciones).some(v => v !== '_IGNORE_');
+        const areasConocidas = window._wizardState.resoluciones.areas_conocidas || {};
+        const tieneSeleccion = Object.values(resoluciones).some(v => v !== '_IGNORE_') || Object.values(areasConocidas).some(v => v === true);
         if (!tieneSeleccion) {
             Swal.fire('Atención', 'Debes seleccionar al menos un área para importar.', 'warning');
             return;

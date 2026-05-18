@@ -460,15 +460,35 @@ async function openModalBono(bono = null) {
     form.reset();
     container.innerHTML = '';
 
-    // Cargar áreas para el selector de asignación
+    // --- FIX: Mostrar modal INMEDIATAMENTE antes del fetch async ---
+    // Esto evita la condición de carrera con _wizardOpenChildModal:
+    // el setInterval detecta 'display:flex' y marca el modal como 'appeared'
+    // antes de que el fetch termine. Sin esto, el wizard se restauraba solo.
+    if (bono) {
+        title.innerText = 'Editar Bono';
+        document.getElementById('bono-id').value = bono.id;
+        document.getElementById('bono-nombre').value = bono.nombre;
+        document.getElementById('bono-descripcion').value = bono.descripcion || '';
+        document.getElementById('bono-activo').value = bono.activo ? 'true' : 'false';
+        if (bono.reglas) {
+            bono.reglas.forEach(r => addBonoReglaRow(r));
+        }
+    } else {
+        title.innerText = 'Crear Nuevo Bono';
+        document.getElementById('bono-id').value = '';
+        addBonoReglaRow(); // Iniciar con una fila vacía
+    }
+    modal.style.display = 'flex'; // <-- CRÍTICO: mostrar ANTES del fetch
+
+    // Cargar áreas para el selector de asignación (ahora en segundo plano)
     const areasContainer = document.getElementById('bono-areas-container');
+    areasContainer.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Cargando áreas...</span>';
     try {
-        const areasRes = await fetch(`${API_BASE_URL}/configuracion/areas/`, {
+        const areasRes = await fetch(`/api/configuracion/areas/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         const areasData = areasRes.ok ? await areasRes.json() : [];
         
-        // Obtener area_ids ya asignadas (si estamos editando)
         let assignedAreaIds = new Set(bono && bono.area_ids ? bono.area_ids : []);
         
         if (areasData.length > 0) {
@@ -482,29 +502,12 @@ async function openModalBono(bono = null) {
                 </div>`;
             }).join('');
         } else {
-            areasContainer.innerHTML = '<span class="text-muted small">No hay áreas configuradas</span>';
+            areasContainer.innerHTML = '<span class="text-muted small">No hay áreas configuradas aún</span>';
         }
     } catch(e) {
-        areasContainer.innerHTML = '<span class="text-muted small">Error cargando áreas</span>';
+        console.error('[openModalBono] Error cargando áreas:', e);
+        areasContainer.innerHTML = '<span class="text-muted small text-danger">Error cargando áreas</span>';
     }
-
-    if (bono) {
-        title.innerText = 'Editar Bono';
-        document.getElementById('bono-id').value = bono.id;
-        document.getElementById('bono-nombre').value = bono.nombre;
-        document.getElementById('bono-descripcion').value = bono.descripcion || '';
-        document.getElementById('bono-activo').value = bono.activo ? 'true' : 'false';
-
-        if (bono.reglas) {
-            bono.reglas.forEach(r => addBonoReglaRow(r));
-        }
-    } else {
-        title.innerText = 'Crear Nuevo Bono';
-        document.getElementById('bono-id').value = '';
-        addBonoReglaRow(); // Iniciar con una fila vacía
-    }
-
-    modal.style.display = 'flex';
 }
 
 function closeModalBono(fromSave = false) {
@@ -584,7 +587,7 @@ function addBonoReglaRow(regla = null) {
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="arguments[0] && arguments[0].stopPropagation()" onclick="arguments[0] && arguments[0].stopPropagation()">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="event.stopPropagation()" onclick="event.stopPropagation()">
                         </li>
                         ${globalCargosList.map(c =>
         `<li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`
