@@ -46,12 +46,9 @@ window.startSyncWizard = function(data) {
         bonos: {}
     };
 
-    // Pre-poblar áreas con _NEW_ por defecto (para áreas nuevas detectadas)
-    if (data.nuevas_areas) {
-        data.nuevas_areas.forEach(area => {
-            window._wizardState.resoluciones.areas[area] = "_NEW_";
-        });
-    }
+    // FIX: NO pre-poblar áreas. Los checkboxes deben arrancar desmarcados
+    // para que el usuario elija explícitamente qué áreas importar.
+    // (Antes se pre-poblaba con "_NEW_" haciendo que todos aparecieran marcados)
 
     // Ocultar todos los steps y mostrar el 1
     updateWizardUI();
@@ -166,7 +163,8 @@ function renderWizardStep1() {
             
             // Ver si ya tiene resolución guardada
             const resolucion = window._wizardState.resoluciones.areas[area];
-            const isImport = resolucion !== "_IGNORE_";
+            // FIX: solo marcado si el usuario ya eligió explícitamente (resolucion truthy y no _IGNORE_)
+            const isImport = resolucion && resolucion !== "_IGNORE_";
             const customName = (resolucion && resolucion !== "_NEW_" && resolucion !== "_IGNORE_") ? resolucion : "";
 
             tr.innerHTML = `
@@ -243,31 +241,75 @@ function renderWizardStep2() {
     
     const data = window._wizardState.data;
     const nuevosCargos = data.nuevos_cargos || [];
+    const cargosPorArea = data.nuevos_cargos_por_area || {};
     const cargosConocidos = data.cargos_conocidos || [];
-    
-    if (nuevosCargos.length === 0 && cargosConocidos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No se detectaron cargos nuevos para mapear.</td></tr>`;
+    const cargosConocidosPorArea = data.cargos_conocidos_por_area || {};
+
+    // ── Construir set de áreas seleccionadas en Paso 1 ──
+    // Incluye: (a) nuevas áreas que el usuario marcó, (b) áreas ya conocidas (siempre activas)
+    const areasSeleccionadas = new Set();
+
+    // (a) Áreas nuevas marcadas por el usuario en Paso 1
+    const resolAreas = window._wizardState.resoluciones.areas;
+    Object.entries(resolAreas).forEach(([area, res]) => {
+        if (res && res !== "_IGNORE_") {
+            // La resolución puede ser el nombre original (area) o un alias personalizado
+            areasSeleccionadas.add(area);
+        }
+    });
+
+    // (b) Áreas ya conocidas (siempre se incluyen, el usuario no las puede ignorar)
+    (data.areas_conocidas || []).forEach(a => areasSeleccionadas.add(a));
+
+    // ── Filtrar nuevos cargos: solo los que pertenecen a las áreas seleccionadas ──
+    const cargosFiltrados = nuevosCargos.filter(cargo => {
+        const areasDelCargo = cargosPorArea[cargo] || [];
+        return areasDelCargo.some(a => areasSeleccionadas.has(a));
+    });
+
+    // ── Filtrar cargos conocidos también por área seleccionada ──
+    const cargosConocidosFiltrados = cargosConocidos.filter(cargo => {
+        const areasDelCargo = cargosConocidosPorArea[cargo] || [];
+        // Si no tiene info de áreas, lo incluimos para no perderlo
+        if (areasDelCargo.length === 0) return true;
+        return areasDelCargo.some(a => areasSeleccionadas.has(a));
+    });
+
+    if (cargosFiltrados.length === 0 && cargosConocidosFiltrados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">
+            No se detectaron cargos para las áreas seleccionadas.
+            ${areasSeleccionadas.size === 0 ? '<br><small class="text-warning">⚠️ No seleccionaste ningún área en el paso anterior.</small>' : ''}
+        </td></tr>`;
         return;
     }
 
-    // Nuevos Cargos
-    if (nuevosCargos.length > 0) {
+    // Nuevos Cargos (filtrados por área)
+    if (cargosFiltrados.length > 0) {
         const trTitle = document.createElement('tr');
         trTitle.innerHTML = `<td colspan="4" class="bg-light text-warning fw-bold"><i class="bi bi-briefcase me-2"></i>Cargos Desconocidos</td>`;
         tbody.appendChild(trTitle);
 
-        nuevosCargos.forEach((cargo, idx) => {
+        cargosFiltrados.forEach((cargo, idx) => {
             const resolucion = window._wizardState.resoluciones.cargos[cargo];
-            // Por defecto, marcamos para importar (a menos que ya esté explícitamente en _IGNORE_)
-            const isImport = resolucion !== "_IGNORE_";
+            // FIX: checkboxes desmarcados por defecto (solo marcado si hubo decisión previa explícita)
+            const isImport = resolucion && resolucion !== "_IGNORE_";
             const customName = (resolucion && resolucion !== "_NEW_" && resolucion !== "_IGNORE_") ? resolucion : "";
+
+            // Mostrar a qué área(s) pertenece este cargo como ayuda visual
+            const areasTag = (cargosPorArea[cargo] || [])
+                .filter(a => areasSeleccionadas.has(a))
+                .map(a => `<span class="badge bg-secondary me-1" style="font-size:0.7rem;">${a}</span>`)
+                .join('');
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="text-center align-middle">
                     <input type="checkbox" class="form-check-input check-cargo" id="wiz-chk-cargo-${idx}" data-cargo="${cargo}" ${isImport ? 'checked' : ''}>
                 </td>
-                <td class="fw-bold align-middle">${cargo}</td>
+                <td class="fw-bold align-middle">
+                    ${cargo}
+                    <div class="mt-1">${areasTag}</div>
+                </td>
                 <td class="align-middle">
                     <input type="text" class="form-control form-control-sm input-cargo-name" id="wiz-inp-cargo-${idx}" 
                            placeholder="Nombre final (dejar vacío para usar el mismo)" 
@@ -285,13 +327,13 @@ function renderWizardStep2() {
         });
     }
 
-    // Cargos Conocidos
-    if (cargosConocidos.length > 0) {
+    // Cargos Conocidos (filtrados por área)
+    if (cargosConocidosFiltrados.length > 0) {
         const trTitle = document.createElement('tr');
         trTitle.innerHTML = `<td colspan="4" class="bg-light text-success fw-bold"><i class="bi bi-check-circle me-2"></i>Cargos Ya Conocidos</td>`;
         tbody.appendChild(trTitle);
 
-        cargosConocidos.forEach((cargo) => {
+        cargosConocidosFiltrados.forEach((cargo) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="text-center align-middle"><i class="bi bi-check2 text-success"></i></td>
@@ -304,19 +346,20 @@ function renderWizardStep2() {
 }
 
 function guardarSeleccionesPaso2() {
-    const data = window._wizardState.data;
-    const nuevosCargos = data.nuevos_cargos || [];
+    // FIX: Usar data-cargo para no depender del índice posicional (ahora la lista está filtrada por área)
+    const checkboxes = document.querySelectorAll('.check-cargo[data-cargo]');
     
-    nuevosCargos.forEach((cargo, idx) => {
-        const chk = document.getElementById(`wiz-chk-cargo-${idx}`);
+    checkboxes.forEach(chk => {
+        const cargo = chk.dataset.cargo;
+        const idx = chk.id.replace('wiz-chk-cargo-', '');
         const inp = document.getElementById(`wiz-inp-cargo-${idx}`);
         
-        if (chk && chk.checked) {
-            let finalName = inp.value.trim();
-            if (finalName === "") finalName = cargo;
+        if (chk.checked) {
+            let finalName = inp ? inp.value.trim() : '';
+            if (finalName === '') finalName = cargo;
             window._wizardState.resoluciones.cargos[cargo] = finalName;
-        } else if (chk) {
-            window._wizardState.resoluciones.cargos[cargo] = "_IGNORE_";
+        } else {
+            window._wizardState.resoluciones.cargos[cargo] = '_IGNORE_';
         }
     });
     return true;
@@ -395,6 +438,44 @@ async function fetchAndRenderWizardStep3() {
         
         if (areasList.length === 0) {
             tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted">No hay áreas seleccionadas.</td></tr>`;
+            return;
+        }
+
+        // ── CASO CRÍTICO: No hay turnos creados en el sistema ────────────────
+        if (window._wizardState.turnosDisponibles.length === 0) {
+            const container = document.getElementById('wizard-step-3');
+            // Reemplazar toda la tabla por un panel de acción guía
+            const tableSection = container.querySelector('.table-responsive');
+            if (tableSection) {
+                tableSection.innerHTML = `
+                    <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3">
+                        <i class="bi bi-exclamation-triangle-fill fs-3 text-warning flex-shrink-0 mt-1"></i>
+                        <div>
+                            <h6 class="fw-bold mb-1">No existe ningún turno configurado</h6>
+                            <p class="mb-2 small text-muted">
+                                Para sincronizar empleados necesitas al menos un turno de trabajo. 
+                                Debes ir a <strong>Configuración → Turnos</strong> y crear uno antes de continuar.
+                            </p>
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <button class="btn btn-primary btn-sm fw-bold"
+                                        onclick="window._wizardIrACrearTurno()">
+                                    <i class="bi bi-plus-circle me-1"></i>
+                                    Ir a Configuración → Crear Turno ahora
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm"
+                                        onclick="window._wizardRefrescarTurnos()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>
+                                    Ya creé un turno, actualizar
+                                </button>
+                            </div>
+                            <div class="mt-3 p-2 bg-light rounded border small text-muted">
+                                <i class="bi bi-info-circle me-1 text-primary"></i>
+                                <strong>Ruta:</strong> Módulo <em>Configuración</em> → pestaña <em>🕒 Turnos</em> → botón <em>Nuevo Turno</em>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
             return;
         }
 
