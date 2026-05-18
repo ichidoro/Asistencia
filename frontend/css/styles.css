@@ -764,6 +764,20 @@ body {
     box-shadow: 0 40px 80px -12px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* FIX: Allow Bootstrap dropdowns to overflow .modal-content */
+/* Without this, dropdown-menus get clipped by overflow-y:auto above */
+#modal-bono .modal-content {
+    overflow: visible !important;
+}
+#modal-bono .modal-body {
+    max-height: 75vh;
+    overflow-y: auto;
+}
+/* Ensure dropdown menus inside bono modal render above all layers */
+#modal-bono .dropdown-menu.show {
+    z-index: 2300 !important;
+}
+
 .modal:not(.fade) .modal-header {
     padding: 32px 48px !important;
     border-bottom: 1px solid var(--border-color);

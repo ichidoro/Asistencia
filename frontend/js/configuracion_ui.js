@@ -693,6 +693,18 @@ function addBonoReglaRow(regla = null) {
     // cargo-dropdown-ul: singleSelect=false (multi, coma separado)
     _populateCargoDropdown(div.querySelector('.cargo-req-ul'), true);
     _populateCargoDropdown(div.querySelector('.cargo-dropdown-ul'), false);
+
+    // FIX CRÍTICO: Inicializar Bootstrap Dropdown con strategy:'fixed'
+    // Sin esto, los dropdown-menu se recortan por overflow-y:auto del
+    // .modal-content cuando el modal-bono está dentro del wizard modal.
+    div.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(btn => {
+        // Destruir instancia previa si existe
+        const existing = bootstrap.Dropdown.getInstance(btn);
+        if (existing) existing.dispose();
+        new bootstrap.Dropdown(btn, {
+            popperConfig: { strategy: 'fixed' }
+        });
+    });
 }
 
 async function saveBono() {
