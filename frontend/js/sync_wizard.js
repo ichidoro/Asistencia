@@ -841,7 +841,7 @@ async function fetchAndRenderWizardStep3() {
 
         // ── CASO CRÍTICO: No hay turnos creados en el sistema ────────────────
         if (window._wizardState.turnosDisponibles.length === 0) {
-            const container = document.getElementById('wizard-step-3');
+            const container = document.getElementById('wizard-step-6');
             // Reemplazar toda la tabla por un panel de acción guía
             const tableSection = container.querySelector('.table-responsive');
             if (tableSection) {
@@ -963,7 +963,7 @@ async function fetchAndRenderWizardStep4() {
 
         if (window._wizardState.bonosDisponibles.length === 0) {
             // Sin bonos creados: ofrecer crear uno directamente
-            const tableSection = document.querySelector('#wizard-step-4 .table-responsive');
+            const tableSection = document.querySelector('#wizard-step-5 .table-responsive');
             if (tableSection) {
                 tableSection.innerHTML = `
                     <div class="alert alert-info border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3">
@@ -1123,7 +1123,7 @@ async function fetchAndRenderWizardStep5() {
             </div>
         `;
 
-        const searchInputs = document.querySelectorAll('#wizard-step-5 .d-flex.gap-2.mb-2, #wizard-step-5 .mb-2');
+        const searchInputs = document.querySelectorAll('#wizard-step-7 .d-flex.gap-2.mb-2, #wizard-step-7 .mb-2');
         searchInputs.forEach(el => el.classList.remove('d-none'));
 
     } catch (e) {
@@ -1292,33 +1292,24 @@ window._wizardCrearBono = function() {
         return;
     }
 
-    // Inicializar la UI de configuración si aún no se ha hecho (carga los datos necesarios)
+    // Inicializar la UI de configuración si aún no se ha hecho
     if (typeof initConfiguracionUI === 'function' && !window._config_initialized) {
         initConfiguracionUI();
     }
 
-    openModalBono();
-
-    // Observar ciérre del modal de bono para refrescar el Paso 4
-    // modal-bono usa display:flex, no dispara hidden.bs.modal
-    // Usar MutationObserver para detectar cuando se oculta
-    const modalBono = document.getElementById('modal-bono');
-    if (modalBono) {
-        const observer = new MutationObserver(() => {
-            if (modalBono.style.display === 'none' || modalBono.style.display === '') {
-                observer.disconnect();
-                window._wizardRefrescarBonos();
-            }
-        });
-        observer.observe(modalBono, { attributes: true, attributeFilter: ['style'] });
-    }
+    // Usar el helper centralizado para esconder wizard → abrir modal-bono → restaurar
+    _wizardOpenChildModal(
+        'modal-bono',
+        () => openModalBono(),
+        () => window._wizardRefrescarBonos()
+    );
 };
 
 /**
  * Recarga el Paso 4 (Bonos) sin cerrar el wizard.
  */
 window._wizardRefrescarBonos = function() {
-    const step4 = document.getElementById('wizard-step-4');
+    const step4 = document.getElementById('wizard-step-5');
     // Restaurar la tabla original antes de llamar a fetchAndRenderWizardStep4
     const tableSection = step4 && step4.querySelector('.table-responsive');
     if (tableSection) {
