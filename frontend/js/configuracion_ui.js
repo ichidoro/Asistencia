@@ -56,7 +56,7 @@ window.loadEstadosConfig = async function() {
     </div>`;
 
     try {
-        const res = await fetch('/api/configuracion/estados/?solo_activos=false');
+        const res = await fetch('/api/configuracion/estados/?solo_activos=false', { headers: { \'Authorization\': Bearer  } });
         if (!res.ok) throw new Error('Error cargando estados');
         _estadosConfigList = await res.json();
         renderEstadosConfig();
@@ -224,7 +224,7 @@ window.saveEstado = async function(codigo) {
     try {
         const res = await fetch(`/api/configuracion/estados/${codigo}/`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre_display: nombre, short_label: shortLabel, descripcion: desc, color_clase: color, icono_bi: icono, activo })
         });
         if (!res.ok) throw new Error((await res.json()).detail || 'Error guardando');
@@ -304,7 +304,7 @@ function initConfiguracionUI() {
 
 async function loadMetadata() {
     try {
-        const response = await fetch('/api/empleados/metadata/');
+        const response = await fetch('/api/empleados/metadata/', { headers: { \'Authorization\': Bearer  } });
         if (!response.ok) return;
 
         const data = await response.json();
@@ -315,7 +315,7 @@ async function loadMetadata() {
         let allCargos = new Set(data.cargos || []);
         
         try {
-            const cargosRes = await fetch('/api/configuracion/cargos/');
+            const cargosRes = await fetch('/api/configuracion/cargos/', { headers: { \'Authorization\': Bearer  } });
             if (cargosRes.ok) {
                 const catalogCargos = await cargosRes.json();
                 catalogCargos.forEach(c => allCargos.add(c.nombre || c.cargo_nombre));
@@ -584,7 +584,7 @@ function addBonoReglaRow(regla = null) {
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end p-0" style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
-                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="if(typeof event !== 'undefined') event.stopPropagation()" onclick="if(typeof event !== 'undefined') event.stopPropagation()">
+                            <input type="text" class="form-control form-control-sm" placeholder="Buscar cargo..." aria-label="Buscar cargo" onkeyup="filterCargosDropdown(this)" onkeydown="arguments[0] && arguments[0].stopPropagation()" onclick="arguments[0] && arguments[0].stopPropagation()">
                         </li>
                         ${globalCargosList.map(c =>
         `<li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="appendCargoToInput(this, '${c}'); return false;">${c}</a></li>`
@@ -636,7 +636,10 @@ async function saveBono() {
     try {
         const response = await fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
             body: JSON.stringify(body)
         });
 
@@ -691,7 +694,7 @@ function confirmDeleteBono(id) {
 
 async function deleteBono(id) {
     try {
-        const response = await fetch(`${API_CONFIG}bonos/${id}/`, { method: 'DELETE' });
+        const response = await fetch(`${API_CONFIG}bonos/${id}/`, { headers: { \'Authorization\': Bearer  },  method: 'DELETE' });
         if (!response.ok) throw new Error("Error al eliminar");
         showToast("Bono eliminado", "success");
         loadBonos();
@@ -981,7 +984,7 @@ function confirmDeleteTipoJ(id) {
 
 async function deleteTipoJ(id) {
     try {
-        const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { method: 'DELETE' });
+        const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { headers: { \'Authorization\': Bearer  },  method: 'DELETE' });
         if (!response.ok) throw new Error("No se puede eliminar (posiblemente en uso)");
         showToast("Tipo eliminado", "success");
         loadTiposJustificacion();
@@ -1070,7 +1073,7 @@ window.addPagadorFromConfig = async function () {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre, activo: true })
         });
         if (!response.ok) throw new Error("Error al añadir");
@@ -1092,7 +1095,7 @@ window.addPagador = async function () {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre, activo: true })
         });
         if (!response.ok) throw new Error("Error al añadir");
@@ -1113,7 +1116,7 @@ window.togglePagador = async function (id, nuevoEstado) {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/${id}/`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre: p.nombre, activo: nuevoEstado })
         });
         if (!response.ok) throw new Error("Error al actualizar");
@@ -1220,7 +1223,7 @@ window.saveAreaNotificaciones = async function () {
     try {
         const res = await fetch(`${API_CONFIG}notificaciones_areas/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { \'Authorization\': Bearer ,  'Content-Type': 'application/json' },
             body: JSON.stringify({ area, emails })
         });
         
@@ -1250,7 +1253,7 @@ window.deleteAreaNotificaciones = async function (area) {
     if (!confirm(`¿Eliminar notificaciones para el área ${area}?`)) return;
     
     try {
-        const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, {
+        const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { \'Authorization\': Bearer  }, 
             method: 'DELETE'
         });
         
@@ -1287,7 +1290,7 @@ window.loadRobotSyncLogs = async function() {
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
     try {
-        const response = await fetch('/api/sync/logs/', { signal: controller.signal });
+        const response = await fetch('/api/sync/logs/', { headers: { \'Authorization\': Bearer  },  signal: controller.signal });
         clearTimeout(timeoutId);
         
         if (!response.ok) throw new Error("Error obteniendo logs de sincronización");
@@ -1409,7 +1412,7 @@ window.cargarCatalogoAreas = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/areas/');
+        const response = await fetch('/api/configuracion/areas/', { headers: { \'Authorization\': Bearer  } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de áreas");
         const areas = await response.json();
 
@@ -1478,7 +1481,7 @@ window.confirmDeleteAlias = function(aliasId, aliasNombre) {
 
 window.deleteAlias = async function(aliasId) {
     try {
-        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, {
+        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, { headers: { \'Authorization\': Bearer  }, 
             method: 'DELETE'
         });
         
@@ -1525,7 +1528,7 @@ window.cargarCatalogoCargos = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/cargos/');
+        const response = await fetch('/api/configuracion/cargos/', { headers: { \'Authorization\': Bearer  } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de cargos");
         const cargos = await response.json();
 
@@ -1594,7 +1597,7 @@ window.confirmDeleteCargoAlias = function(aliasId, aliasNombre) {
 
 window.deleteCargoAlias = async function(aliasId) {
     try {
-        const response = await fetch(`/api/configuracion/cargos/alias/${aliasId}`, {
+        const response = await fetch(`/api/configuracion/cargos/alias/${aliasId}`, { headers: { \'Authorization\': Bearer  }, 
             method: 'DELETE'
         });
         
@@ -1640,7 +1643,7 @@ window.cargarCatalogoGeneros = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/generos/');
+        const response = await fetch('/api/configuracion/generos/', { headers: { \'Authorization\': Bearer  } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de géneros");
         const generos = await response.json();
 

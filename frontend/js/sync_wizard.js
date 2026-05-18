@@ -46,6 +46,7 @@ window.startSyncWizard = function(data) {
     window._wizardState.currentStep = 1;
     window._wizardState.resoluciones = {
         areas: {},
+        areas_conocidas: {},
         cargos: {},
         generos: data.nuevos_generos || [],
         turnos: {},
@@ -363,13 +364,17 @@ function renderWizardStep1() {
         trTitle.innerHTML = `<td colspan="4" class="bg-light text-success fw-bold"><i class="bi bi-check-circle me-2"></i>Áreas Ya Conocidas</td>`;
         tbody.appendChild(trTitle);
 
-        areasConocidas.forEach((area) => {
+        areasConocidas.forEach((area, idx) => {
+            if (!window._wizardState.resoluciones.areas_conocidas) window._wizardState.resoluciones.areas_conocidas = {};
+            const isImport = window._wizardState.resoluciones.areas_conocidas[area] !== false; // checked by default
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="text-center align-middle"><i class="bi bi-check2 text-success"></i></td>
-                <td class="fw-bold align-middle">${area}</td>
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input check-area-conocida" id="wiz-chk-area-conocida-${idx}" data-area="${area}" ${isImport ? 'checked' : ''}>
+                </td>
+                <td class="fw-bold align-middle text-success">${area}</td>
                 <td class="text-center align-middle">-</td>
-                <td class="align-middle text-muted small">Mapeo Automático</td>
+                <td class="align-middle text-muted small">Área Existente (Seleccionar para importar emp.)</td>
             `;
             tbody.appendChild(tr);
         });
@@ -393,6 +398,17 @@ function guardarSeleccionesPaso1() {
             window._wizardState.resoluciones.areas[area] = "_IGNORE_";
         }
     });
+
+    // Recorrer áreas conocidas
+    const areasConocidas = data.areas_conocidas || [];
+    if (!window._wizardState.resoluciones.areas_conocidas) window._wizardState.resoluciones.areas_conocidas = {};
+    areasConocidas.forEach((area, idx) => {
+        const chk = document.getElementById(`wiz-chk-area-conocida-${idx}`);
+        if (chk) {
+            window._wizardState.resoluciones.areas_conocidas[area] = chk.checked;
+        }
+    });
+    
     return true;
 }
 
@@ -423,8 +439,12 @@ function renderWizardStep2() {
         }
     });
 
-    // (b) Áreas ya conocidas (siempre se incluyen, el usuario no las puede ignorar)
-    (data.areas_conocidas || []).forEach(a => areasSeleccionadas.add(a));
+    // (b) Áreas ya conocidas (solo si el usuario las dejó seleccionadas)
+    (data.areas_conocidas || []).forEach(a => {
+        if (window._wizardState.resoluciones.areas_conocidas && window._wizardState.resoluciones.areas_conocidas[a] !== false) {
+            areasSeleccionadas.add(a);
+        }
+    });
 
     // ── Filtrar nuevos cargos: solo los que pertenecen a las áreas seleccionadas ──
     const cargosFiltrados = nuevosCargos.filter(cargo => {
@@ -560,7 +580,11 @@ function getConsolidatedAreas() {
     
     // Areas Conocidas
     const conocidas = window._wizardState.data.areas_conocidas || [];
-    conocidas.forEach(a => areasLocalNames.add(a));
+    conocidas.forEach(a => {
+        if (window._wizardState.resoluciones.areas_conocidas && window._wizardState.resoluciones.areas_conocidas[a] !== false) {
+            areasLocalNames.add(a);
+        }
+    });
     
     // Areas Nuevas Resueltas (que no sean _IGNORE_)
     const nuevas = window._wizardState.data.nuevas_areas || [];
@@ -1047,34 +1071,35 @@ async function fetchAndRenderWizardStep4() {
 
         if (window._wizardState.bonosDisponibles.length === 0) {
             // Sin bonos creados: ofrecer crear uno directamente
-            const tableSection = document.querySelector('#wizard-step-5 .table-responsive');
-            if (tableSection) {
-                tableSection.innerHTML = `
-                    <div class="alert alert-info border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3">
-                        <i class="bi bi-cash-coin fs-3 text-primary flex-shrink-0 mt-1"></i>
-                        <div class="w-100">
-                            <h6 class="fw-bold mb-1">No hay bonos configurados todavía</h6>
-                            <p class="mb-2 small text-muted">
-                                Los bonos son opcionales pero recomendados. Puedes crear uno ahora o continuar y configurarlos después.
-                            </p>
-                            <div class="d-flex flex-wrap gap-2 mt-3">
-                                <button class="btn btn-primary btn-sm fw-bold" onclick="window._wizardCrearBono()">
-                                    <i class="bi bi-plus-circle me-1"></i>
-                                    Crear Bono ahora
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" onclick="window._wizardRefrescarBonos()">
-                                    <i class="bi bi-arrow-clockwise me-1"></i>
-                                    Ya creé un bono, actualizar
-                                </button>
-                            </div>
-                            <div class="mt-3 p-2 bg-light rounded border small text-muted">
-                                <i class="bi bi-info-circle me-1 text-primary"></i>
-                                También puedes omitir y presionar <strong>Siguiente Paso</strong> para configurar bonos después.
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="2" class="p-0 border-0">
+                        <div class="alert alert-info border-0 shadow-sm d-flex align-items-start gap-3 p-4 rounded-3 m-0">
+                            <i class="bi bi-cash-coin fs-3 text-primary flex-shrink-0 mt-1"></i>
+                            <div class="w-100">
+                                <h6 class="fw-bold mb-1">No hay bonos configurados todavía</h6>
+                                <p class="mb-2 small text-muted">
+                                    Los bonos son opcionales pero recomendados. Puedes crear uno ahora o continuar y configurarlos después.
+                                </p>
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <button class="btn btn-primary btn-sm fw-bold" onclick="window._wizardCrearBono()">
+                                        <i class="bi bi-plus-circle me-1"></i>
+                                        Crear Bono ahora
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="window._wizardRefrescarBonos()">
+                                        <i class="bi bi-arrow-clockwise me-1"></i>
+                                        Ya creé un bono, actualizar
+                                    </button>
+                                </div>
+                                <div class="mt-3 p-2 bg-light rounded border small text-muted">
+                                    <i class="bi bi-info-circle me-1 text-primary"></i>
+                                    También puedes omitir y presionar <strong>Siguiente Paso</strong> para configurar bonos después.
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `;
-            }
+                    </td>
+                </tr>
+            `;
             return;
         }
 
