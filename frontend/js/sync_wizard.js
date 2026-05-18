@@ -819,3 +819,67 @@ window.confirmWizardSync = async function() {
         btn.disabled = false;
     }
 };
+
+// ==========================================
+// HELPERS: Acciones desde el panel "Sin Turnos"
+// ==========================================
+
+/**
+ * Cierra el wizard y navega directamente a Configuración → pestaña Turnos,
+ * luego abre el modal de Nuevo Turno automáticamente.
+ */
+window._wizardIrACrearTurno = function() {
+    // 1. Cerrar el wizard
+    closeSyncWizard();
+
+    // 2. Navegar al módulo Configuración
+    if (typeof switchPage === 'function') {
+        switchPage('configuracion');
+    } else {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        const pageConf = document.getElementById('page-configuracion');
+        if (pageConf) pageConf.classList.add('active');
+    }
+
+    // 3. Activar la pestaña de Turnos y abrir modal Nuevo Turno
+    setTimeout(() => {
+        const tabHorarios = document.getElementById('horarios-tab');
+        if (tabHorarios) {
+            tabHorarios.click();
+            setTimeout(() => {
+                if (typeof openModalHorario === 'function') {
+                    openModalHorario();
+                }
+            }, 400);
+        }
+    }, 200);
+};
+
+/**
+ * Recarga el Paso 3 sin cerrar el wizard.
+ * Útil si el usuario ya creó un turno en otra pestaña.
+ */
+window._wizardRefrescarTurnos = function() {
+    const step3 = document.getElementById('wizard-step-3');
+    const tableSection = step3 && step3.querySelector('.table-responsive');
+    if (tableSection) {
+        tableSection.innerHTML = `
+            <table class="table table-bordered align-middle table-sm">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>Área a sincronizar</th>
+                        <th>Turno Recomendado / Seleccionado</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-wizard-turnos">
+                    <tr><td colspan="2" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>
+                </tbody>
+            </table>
+        `;
+    }
+    if (typeof checkTurnosExist === 'function') {
+        checkTurnosExist().then(() => fetchAndRenderWizardStep3());
+    } else {
+        fetchAndRenderWizardStep3();
+    }
+};
