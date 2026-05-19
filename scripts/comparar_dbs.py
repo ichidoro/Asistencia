@@ -17,13 +17,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import libsql
 
-TURSO_URL   = "libsql://asistenciaaguacol-ichidoro.aws-us-east-1.turso.io"
+TURSO_URL   = "libsql://asistencialocal-ichidoro.aws-us-east-1.turso.io"
 TURSO_TOKEN = (
     "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9."
-    "eyJhIjoicnciLCJpYXQiOjE3Nzg0NjQ2MjEsImlkIjoiMDE5ZTE0YzAt"
-    "NjYwMS03YzUyLWFhZjMtMzk5ZTFlNjM5ZWEyIiwicmlkIjoiODZmMjky"
-    "YTUtMjMzZC00ZmYyLThmN2ItMmJkNTQ2MmY1MDYwIn0."
-    "HyHa_-uEPS_2YswqpWrSvX3CyqwkB5bj-uGOA549ug68cPgVK5TXBSMMjo1e0NJWwMQa8deBHL5UREuJKKyACA"
+    "eyJhIjoicnciLCJpYXQiOjE3NzkxNTU5MTgsImlkIjoiMDE5ZTNkZjQt"
+    "YmMwMS03ZTExLTgyMzYtNDYyNGM3OWI2ZWQ4IiwicmlkIjoiZTRkYzYz"
+    "M2EtNmJlYy00MTc4LTlkYTEtZTIzNmQ4NzVmZmY0In0."
+    "1QaSIvlMbGP096yGa_NpbITgGwT2tJAbUA-be9NUq31_8cWBFHGSYdXBnS1SwFJU54EcxUgNJpjC_fdnVsQHBg"
 )
 LOCAL_DB = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', 'data', 'local_db', 'asistencia_local.db')

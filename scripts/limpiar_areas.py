@@ -20,13 +20,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from backend.core.database import HybridDatabase
 import libsql
 
-TURSO_URL   = "libsql://asistenciaaguacol-ichidoro.aws-us-east-1.turso.io"
+TURSO_URL   = "libsql://asistencialocal-ichidoro.aws-us-east-1.turso.io"
 TURSO_TOKEN = (
     "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9."
-    "eyJhIjoicnciLCJpYXQiOjE3Nzg0NjQ2MjEsImlkIjoiMDE5ZTE0YzAt"
-    "NjYwMS03YzUyLWFhZjMtMzk5ZTFlNjM5ZWEyIiwicmlkIjoiODZmMjky"
-    "YTUtMjMzZC00ZmYyLThmN2ItMmJkNTQ2MmY1MDYwIn0."
-    "HyHa_-uEPS_2YswqpWrSvX3CyqwkB5bj-uGOA549ug68cPgVK5TXBSMMjo1e0NJWwMQa8deBHL5UREuJKKyACA"
+    "eyJhIjoicnciLCJpYXQiOjE3NzkxNTU5MTgsImlkIjoiMDE5ZTNkZjQt"
+    "YmMwMS03ZTExLTgyMzYtNDYyNGM3OWI2ZWQ4IiwicmlkIjoiZTRkYzYz"
+    "M2EtNmJlYy00MTc4LTlkYTEtZTIzNmQ4NzVmZmY0In0."
+    "1QaSIvlMbGP096yGa_NpbITgGwT2tJAbUA-be9NUq31_8cWBFHGSYdXBnS1SwFJU54EcxUgNJpjC_fdnVsQHBg"
 )
 
 # Sin excepciones: todas las tablas se borran en LOCAL y en TURSO.
