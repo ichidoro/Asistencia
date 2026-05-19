@@ -582,6 +582,14 @@ class SyncService:
                     if emp_rut not in ruts_seleccionados:
                         self.stats['filtrados'] += 1
                         continue
+
+                # Filtrar cargos ignorados
+                if ignored_cargos and len(ignored_cargos) > 0:
+                    emp_cargo = str(emp_data.get('cargo', '')).strip()
+                    if emp_cargo in ignored_cargos:
+                        self.stats['filtrados'] += 1
+                        continue
+
                 emp_filtrados.append(emp_data)
 
             # --- AUDITORÍA DE SEGURIDAD (GUARDIÁN DE TURNOS) ---
