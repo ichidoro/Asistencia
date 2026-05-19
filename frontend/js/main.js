@@ -1442,6 +1442,12 @@ function mostrarModalBonos(empleado, bonos) {
 
 /** Cierra el modal de bonos y dispara el siguiente paso del flujo */
 window.cerrarModalBonos = function() {
+  // FIX ARIA: Mover foco fuera del modal ANTES de ocultarlo.
+  // Bootstrap agrega aria-hidden="true" al ocultar, pero si un hijo
+  // retiene el foco en ese instante, Chrome emite un warning de accesibilidad.
+  if (document.activeElement && document.getElementById('modal-bonos-asignados')?.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
   const modalEl = document.getElementById('modal-bonos-asignados');
   if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
   // Dar tiempo para que la animación de cierre termine antes de abrir el siguiente modal

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Repository - Asistencia
 Capa de acceso a datos para Marcaciones y Procesamiento de Asistencia
 """
@@ -16,7 +16,7 @@ class AsistenciaRepository:
     async def get_raw_logs(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
         """
         Obtiene todas las marcaciones crudas de un empleado.
-        Ventana segura: Ayer 00:00 → Mañana 23:59:59.
+        Ventana segura: Ayer 00:00 â†’ MaÃ±ana 23:59:59.
         El filtrado fino se realiza en el Service Layer (Paradigma de Consumo).
         """
         from datetime import timedelta
@@ -61,7 +61,7 @@ class AsistenciaRepository:
 
     async def get_asignacion_vigente(self, empleado_id: Any, fecha: str) -> Optional[Dict[str, Any]]:
         """
-        Obtiene el turno asignado a un empleado en una fecha específica.
+        Obtiene el turno asignado a un empleado en una fecha especÃ­fica.
         """
         # Robustez: Extraer ID si se pasa el objeto completo
         eid = empleado_id['id'] if isinstance(empleado_id, dict) else empleado_id
@@ -80,21 +80,21 @@ class AsistenciaRepository:
 
     async def delete_asistencia(self, empleado_id: int, fecha: str) -> None:
         """
-        Elimina un registro de asistencia (ej. si se borra una justificación futura sin marcas reales).
+        Elimina un registro de asistencia (ej. si se borra una justificaciÃ³n futura sin marcas reales).
         """
         query = "DELETE FROM asistencias WHERE empleado_id = ? AND fecha = ?"
         await self.db.execute(query, (empleado_id, fecha))
 
     async def get_turno_detalle_dia(self, turno_id: int, dia_semana: int) -> Optional[Dict[str, Any]]:
         """
-        Obtiene la configuración de entrada/salida para un día específico (0-6).
+        Obtiene la configuraciÃ³n de entrada/salida para un dÃ­a especÃ­fico (0-6).
         """
         query = "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?"
         return await self.db.fetch_one(query, (turno_id, dia_semana))
 
     async def update_asistencia(self, empleado_id: int, fecha: str, update_data: Dict[str, Any]) -> None:
         """
-        Actualiza campos específicos de una asistencia existente.
+        Actualiza campos especÃ­ficos de una asistencia existente.
         """
         if not update_data:
             return
@@ -119,8 +119,8 @@ class AsistenciaRepository:
 
     async def toggle_condonacion_deuda(self, empleado_id: int, fecha: str, tipo_condonacion: int) -> None:
         """
-        Cambia el estado de condonación de deuda para un registro de asistencia.
-        Condonar deuda anula los minutos de deuda a 0 en el cálculo, sin alterar las marcas.
+        Cambia el estado de condonaciÃ³n de deuda para un registro de asistencia.
+        Condonar deuda anula los minutos de deuda a 0 en el cÃ¡lculo, sin alterar las marcas.
         Tipos: 0=Ninguno, 1=Salida Adelantada, 2=Atraso, 3=Ambos
         """
         query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
@@ -129,16 +129,16 @@ class AsistenciaRepository:
 
     async def batch_upsert_asistencia(self, data_list: List[Dict[str, Any]], bypass_cierre_check: bool = False, suppress_auto_sync: bool = False) -> None:
         """
-        Guarda o actualiza múltiples registros de asistencia procesada.
-        Incluye validación de periodos cerrados para integridad histórica.
+        Guarda o actualiza mÃºltiples registros de asistencia procesada.
+        Incluye validaciÃ³n de periodos cerrados para integridad histÃ³rica.
 
         suppress_auto_sync=True: No dispara conn.sync() al terminar (WAL local).
-        Usar cuando el caller hará sync_to_cloud_explicit() al final del batch masivo.
+        Usar cuando el caller harÃ¡ sync_to_cloud_explicit() al final del batch masivo.
         """
         if not data_list:
             return
 
-        # Validación de periodos cerrados movida al Servicio para evitar N+1 Queries.
+        # ValidaciÃ³n de periodos cerrados movida al Servicio para evitar N+1 Queries.
         # Si bypass_cierre_check es False, el repositorio asume que la data ya fue filtrada o validada.
         pass
 
@@ -273,10 +273,10 @@ class AsistenciaRepository:
     async def get_asistencias_periodo(self, fecha_inicio: str, fecha_fin: str, area: str = None, empleado_id: int = None, turno_id: int = None, areas_permitidas: Optional[List[str]] = None, empleado_ids: Optional[List[int]] = None) -> List[Dict[str, Any]]:
         """
         Obtiene listado de asistencias procesadas para reportes, matriz o calendario.
-        Visibilidad controlada por historial de áreas y vigencia legal del contrato.
+        Visibilidad controlada por historial de Ã¡reas y vigencia legal del contrato.
         
-        [REGLA INVIOLABLE]: Solo se muestran registros cuya fecha esté contenida
-        dentro de la vigencia de la ficha maestra (fecha_ingreso → fecha_salida).
+        [REGLA INVIOLABLE]: Solo se muestran registros cuya fecha estÃ© contenida
+        dentro de la vigencia de la ficha maestra (fecha_ingreso â†’ fecha_salida).
         Esto impide que la grilla muestre asistencias de empleados fuera de contrato.
         """
         query = """
@@ -305,7 +305,7 @@ class AsistenciaRepository:
         """
         params = [fecha_inicio, fecha_fin]
         
-        # Security Data Scoping (RLS) - Según Historial
+        # Security Data Scoping (RLS) - SegÃºn Historial
         if areas_permitidas is not None:
             if not areas_permitidas:
                 return []
@@ -338,8 +338,8 @@ class AsistenciaRepository:
 
     async def get_period_stats(self, fecha_inicio: str, fecha_fin: str, areas_permitidas: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-        Obtiene estadísticas diarias agrupadas por fecha para el periodo (Charts).
-        Usa historial de áreas para el filtrado RLS.
+        Obtiene estadÃ­sticas diarias agrupadas por fecha para el periodo (Charts).
+        Usa historial de Ã¡reas para el filtrado RLS.
         """
         query = """
             SELECT 
@@ -389,19 +389,19 @@ class AsistenciaRepository:
         return cursor.lastrowid
 
     async def get_ultimo_cierre_periodo(self, tipo: str = 'RRHH') -> Optional[Dict[str, Any]]:
-        """Obtiene el último periodo cerrado para sugerir el siguiente"""
+        """Obtiene el Ãºltimo periodo cerrado para sugerir el siguiente"""
         query = "SELECT * FROM cierres_periodos WHERE tipo_cierre = ? ORDER BY fecha_fin DESC LIMIT 1"
         return await self.db.fetch_one(query, (tipo,))
 
     async def get_cierres_historial(self, limit: int = 12) -> List[Dict[str, Any]]:
-        """Obtiene al historial de cierres para la tabla de administración"""
+        """Obtiene al historial de cierres para la tabla de administraciÃ³n"""
         query = "SELECT * FROM cierres_periodos ORDER BY fecha_fin DESC LIMIT ?"
         return await self.db.fetch_all(query, (limit,))
 
     async def get_cierres_bulk(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """
         Obtiene todos los cierres que intersectan un rango de fechas.
-        Optimización para evitar consultas N+1 en procesamiento masivo.
+        OptimizaciÃ³n para evitar consultas N+1 en procesamiento masivo.
         """
         query = "SELECT * FROM cierres_periodos WHERE fecha_inicio <= ? AND fecha_fin >= ?"
         return await self.db.fetch_all(query, (fecha_fin, fecha_inicio))
@@ -409,14 +409,14 @@ class AsistenciaRepository:
     async def check_fecha_cerrada(self, fecha: str, empleado_id: int = None) -> bool:
         """
         Verifica si una fecha pertenece a un periodo cerrado.
-        Si se provee empleado_id, valida específicamente si SU segmento está cerrado.
+        Si se provee empleado_id, valida especÃ­ficamente si SU segmento estÃ¡ cerrado.
         """
         if not empleado_id:
             query = "SELECT COUNT(*) as count FROM cierres_periodos WHERE ? BETWEEN fecha_inicio AND fecha_fin"
             res = await self.db.fetch_one(query, (fecha,))
             return res['count'] > 0 if res else False
 
-        # Caso Específico por Empleado (Verifica Área y Turno en esa fecha)
+        # Caso EspecÃ­fico por Empleado (Verifica Ãrea y Turno en esa fecha)
         query = """
             SELECT COUNT(*) as count 
             FROM cierres_periodos cp
@@ -446,14 +446,14 @@ class AsistenciaRepository:
     async def check_rango_cerrado(self, fecha_inicio: str, fecha_fin: str, empleado_id: int = None) -> bool:
         """
         Verifica si un rango de fechas se superpone con un periodo cerrado.
-        Si se provee empleado_id, valida específicamente si SU segmento está cerrado.
+        Si se provee empleado_id, valida especÃ­ficamente si SU segmento estÃ¡ cerrado.
         """
         if not empleado_id:
             query = "SELECT COUNT(*) as count FROM cierres_periodos WHERE fecha_inicio <= ? AND fecha_fin >= ?"
             res = await self.db.fetch_one(query, (fecha_fin, fecha_inicio))
             return res['count'] > 0 if res else False
 
-        # Caso Específico por Empleado (Verifica Área y Turno)
+        # Caso EspecÃ­fico por Empleado (Verifica Ãrea y Turno)
         query = """
             SELECT COUNT(*) as count 
             FROM cierres_periodos cp
@@ -481,49 +481,55 @@ class AsistenciaRepository:
         return res['count'] > 0 if res else False
 
     async def delete_before_date(self, empleado_id: int, start_date: date) -> int:
-        """Elimina todos los registros de asistencia de un empleado anteriores a una fecha específica"""
+        """Elimina todos los registros de asistencia de un empleado anteriores a una fecha especÃ­fica"""
         query = "DELETE FROM asistencias WHERE empleado_id = ? AND fecha < ?"
         cursor = await self.db.execute(query, [empleado_id, start_date.isoformat()])
         return cursor.rowcount
 
     async def get_intercambio_por_fecha(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
-        """Busca si una fecha pertenece a un intercambio (como origen o destino) para un empleado."""
+        """Busca si una fecha pertenece a un intercambio aprobado para un empleado (como solicitante o receptor)."""
         query = """
             SELECT * FROM intercambios_dias 
-            WHERE empleado_id = ? AND (fecha_origen = ? OR fecha_destino = ?)
+            WHERE (empleado_solicitante_id = ? OR empleado_receptor_id = ?)
+              AND (fecha_origen = ? OR fecha_destino = ?)
+              AND estado = 'APROBADO'
         """
-        return await self.db.fetch_one(query, (empleado_id, fecha, fecha))
+        return await self.db.fetch_one(query, (empleado_id, empleado_id, fecha, fecha))
 
     async def get_intercambios(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """Obtiene la lista de intercambios en un rango de fechas (considerando fecha_origen o fecha_destino)."""
         query = """
-            SELECT id.id, id.empleado_id, id.fecha_origen, id.fecha_destino, id.observaciones, id.created_at,
-                   e.nombre, e.apellido_paterno, e.rut
-            FROM intercambios_dias id
-            JOIN empleados e ON id.empleado_id = e.id
-            WHERE (id.fecha_origen BETWEEN ? AND ?) OR (id.fecha_destino BETWEEN ? AND ?)
-            ORDER BY id.created_at DESC
+            SELECT i.id, i.empleado_solicitante_id, i.empleado_receptor_id,
+                   i.fecha_origen, i.fecha_destino, i.motivo, i.estado, i.created_at,
+                   es.nombre AS nombre_solicitante, es.apellido_paterno AS apellido_solicitante, es.rut AS rut_solicitante,
+                   er.nombre AS nombre_receptor, er.apellido_paterno AS apellido_receptor, er.rut AS rut_receptor
+            FROM intercambios_dias i
+            JOIN empleados es ON i.empleado_solicitante_id = es.id
+            JOIN empleados er ON i.empleado_receptor_id = er.id
+            WHERE (i.fecha_origen BETWEEN ? AND ?) OR (i.fecha_destino BETWEEN ? AND ?)
+            ORDER BY i.created_at DESC
         """
         return await self.db.fetch_all(query, (fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
 
     async def create_intercambio(self, data: Dict[str, Any]) -> int:
-        """Crea un nuevo intercambio de días."""
+        """Crea un nuevo intercambio de dias."""
         query = """
-            INSERT INTO intercambios_dias (empleado_id, fecha_origen, fecha_destino, usuario_id, observaciones)
+            INSERT INTO intercambios_dias
+                (empleado_solicitante_id, empleado_receptor_id, fecha_origen, fecha_destino, motivo)
             VALUES (?, ?, ?, ?, ?)
         """
         params = (
-            data['empleado_id'],
+            data['empleado_solicitante_id'],
+            data['empleado_receptor_id'],
             data['fecha_origen'],
             data['fecha_destino'],
-            data.get('usuario_id'),
-            data.get('observaciones')
+            data.get('motivo')
         )
         cursor = await self.db.execute(query, params)
         return cursor.lastrowid
 
     async def delete_intercambio(self, intercambio_id: int) -> None:
-        """Elimina un intercambio de días."""
+        """Elimina un intercambio de dÃ­as."""
         query = "DELETE FROM intercambios_dias WHERE id = ?"
         await self.db.execute(query, (intercambio_id,))
 

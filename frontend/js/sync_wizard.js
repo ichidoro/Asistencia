@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Universal Synchronization Wizard
  * Centraliza la validación de Áreas, Cargos, Géneros, Turnos y Bonos.
  */
@@ -94,6 +94,7 @@ window.startSyncWizard = function(data) {
         areas: {},
         areas_conocidas: {},
         cargos: {},
+        cargos_conocidos: {},
         generos: data.nuevos_generos || [],
         turnos: {},
         bonos: {}
@@ -565,12 +566,23 @@ function renderWizardStep2() {
         trTitle.innerHTML = `<td colspan="4" class="bg-light text-success fw-bold"><i class="bi bi-check-circle me-2"></i>Cargos Ya Conocidos</td>`;
         tbody.appendChild(trTitle);
 
-        cargosConocidosFiltrados.forEach((cargo) => {
+        if (!window._wizardState.resoluciones.cargos_conocidos) window._wizardState.resoluciones.cargos_conocidos = {};
+        cargosConocidosFiltrados.forEach((cargo, idx) => {
+            const isImport = window._wizardState.resoluciones.cargos_conocidos[cargo] !== false;
+            const areasTag = (cargosConocidosPorArea[cargo] || [])
+                .filter(a => areasSeleccionadas.has(a))
+                .map(a => `<span class="badge bg-secondary me-1" style="font-size:0.7rem;">${a}</span>`)
+                .join('');
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="text-center align-middle"><i class="bi bi-check2 text-success"></i></td>
-                <td class="fw-bold align-middle">${cargo}</td>
-                <td class="align-middle text-muted small">Mapeo Automático</td>
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input check-cargo-conocido" id="wiz-chk-cargo-conocido-${idx}" data-cargo="${cargo}" ${isImport ? 'checked' : ''}>
+                </td>
+                <td class="fw-bold align-middle text-success">
+                    ${cargo}
+                    <div class="mt-1">${areasTag}</div>
+                </td>
+                <td class="align-middle text-muted small">Cargo Existente (Seleccionar para importar emp.)</td>
             `;
             tbody.appendChild(tr);
         });
@@ -593,6 +605,12 @@ function guardarSeleccionesPaso2() {
         } else {
             window._wizardState.resoluciones.cargos[cargo] = '_IGNORE_';
         }
+    });
+
+    // Guardar cargos conocidos (marcados = incluir empleados, desmarcados = ignorar)
+    if (!window._wizardState.resoluciones.cargos_conocidos) window._wizardState.resoluciones.cargos_conocidos = {};
+    document.querySelectorAll('.check-cargo-conocido[data-cargo]').forEach(chk => {
+        window._wizardState.resoluciones.cargos_conocidos[chk.dataset.cargo] = chk.checked;
     });
     return true;
 }
@@ -1369,6 +1387,13 @@ async function fetchAndRenderWizardStep5() {
                 ignoredCargos.push(cargo);
             }
         }
+        // Incluir cargos conocidos desmarcados en el paso 2 como ignorados
+        const cargosConocidosResol = window._wizardState.resoluciones.cargos_conocidos || {};
+        for (const [cargo, activo] of Object.entries(cargosConocidosResol)) {
+            if (activo === false && !ignoredCargos.includes(cargo)) {
+                ignoredCargos.push(cargo);
+            }
+        }
 
         const requestBody = {
             areas: areasList,
@@ -1768,6 +1793,18 @@ window._wizardCrearBono = async function() {
     };
 
     openModalBono();
+
+    // Re-inicializar dropdowns DESPUÉS de que el modal esté visible.
+    // Popper.js usa getBoundingClientRect() para calcular posición: si se inicializa
+    // con el modal oculto (display:none), todos los coords son 0 y el dropdown
+    // aparece en la esquina del viewport.
+    setTimeout(() => {
+        document.querySelectorAll('#modal-bono [data-bs-toggle="dropdown"]').forEach(btn => {
+            const inst = bootstrap.Dropdown.getInstance(btn);
+            if (inst) inst.dispose();
+            new bootstrap.Dropdown(btn, { popperConfig: { strategy: 'fixed' } });
+        });
+    }, 50);
 };
 
 /**
@@ -1833,6 +1870,15 @@ window._wizardEditarBono = async function(bonoId) {
     };
 
     openModalBono(bono);
+
+    // Re-inicializar dropdowns DESPUÉS de que el modal esté visible.
+    setTimeout(() => {
+        document.querySelectorAll('#modal-bono [data-bs-toggle="dropdown"]').forEach(btn => {
+            const inst = bootstrap.Dropdown.getInstance(btn);
+            if (inst) inst.dispose();
+            new bootstrap.Dropdown(btn, { popperConfig: { strategy: 'fixed' } });
+        });
+    }, 50);
 };
 
 

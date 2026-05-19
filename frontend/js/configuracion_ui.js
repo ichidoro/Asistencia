@@ -1,4 +1,4 @@
-// configuracion_ui.js - Interfaz Completa de Configuración (Bonos y Justificaciones)
+﻿// configuracion_ui.js - Interfaz Completa de Configuración (Bonos y Justificaciones)
 
 const API_CONFIG = '/api/configuracion/';
 
@@ -515,14 +515,11 @@ async function openModalBono(bono = null) {
     const title = document.getElementById('modal-bono-title');
     const form = document.getElementById('form-bono');
     const container = document.getElementById('reglas-container');
+    const areasContainer = document.getElementById('bono-areas-container');
 
     form.reset();
     container.innerHTML = '';
 
-    // --- FIX: Mostrar modal INMEDIATAMENTE antes del fetch async ---
-    // Esto evita la condición de carrera con _wizardOpenChildModal:
-    // el setInterval detecta 'display:flex' y marca el modal como 'appeared'
-    // antes de que el fetch termine. Sin esto, el wizard se restauraba solo.
     if (bono) {
         title.innerText = 'Editar Bono';
         document.getElementById('bono-id').value = bono.id;
@@ -535,13 +532,14 @@ async function openModalBono(bono = null) {
     } else {
         title.innerText = 'Crear Nuevo Bono';
         document.getElementById('bono-id').value = '';
-        addBonoReglaRow(); // Iniciar con una fila vacía
+        addBonoReglaRow();
     }
-    modal.style.display = 'flex'; // <-- CRÍTICO: mostrar ANTES del fetch
 
-    // Cargar áreas para el selector de asignación (ahora en segundo plano)
-    const areasContainer = document.getElementById('bono-areas-container');
-    areasContainer.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Cargando áreas...</span>';
+    // FIX RACE CONDITION: cargar areas ANTES de mostrar el modal.
+    // Si mostramos el modal primero y el fetch es async, el usuario puede
+    // marcar checkboxes que luego son destruidos cuando el fetch termina
+    // y reemplaza el innerHTML. Cargamos primero, luego mostramos el modal.
+    areasContainer.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Cargando areas...</span>';
     try {
         const areasRes = await fetch(`/api/configuracion/areas/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
@@ -561,12 +559,15 @@ async function openModalBono(bono = null) {
                 </div>`;
             }).join('');
         } else {
-            areasContainer.innerHTML = '<span class="text-muted small">No hay áreas configuradas aún</span>';
+            areasContainer.innerHTML = '<span class="text-muted small">No hay areas configuradas aun</span>';
         }
     } catch(e) {
-        console.error('[openModalBono] Error cargando áreas:', e);
-        areasContainer.innerHTML = '<span class="text-muted small text-danger">Error cargando áreas</span>';
+        console.error('[openModalBono] Error cargando areas:', e);
+        areasContainer.innerHTML = '<span class="text-muted small text-danger">Error cargando areas</span>';
     }
+
+    // Mostrar modal DESPUES de que las areas esten listas (evita race condition)
+    modal.style.display = 'flex';
 }
 
 function closeModalBono(fromSave = false) {
