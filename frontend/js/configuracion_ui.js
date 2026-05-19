@@ -336,12 +336,17 @@ function initConfiguracionUI() {
     window._config_initialized = true;
 }
 
-async function loadMetadata() {
+async function loadMetadata(forceReload = false) {
     // RACE CONDITION FIX: si ya hay una carga en curso, retornar la misma Promise
     // Esto previene que _wizardCrearBono + initConfiguracionUI lancen dos cargas paralelas.
-    if (window._metadataPromise) {
+    if (window._metadataPromise && !forceReload) {
         return window._metadataPromise;
     }
+
+    if (forceReload) {
+        globalCargosList = [];
+    }
+
     window._metadataPromise = _doLoadMetadata();
     try {
         await window._metadataPromise;

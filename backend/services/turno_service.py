@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 from backend.schemas.turno import TurnoCreate, TurnoResponse, AsignacionCreate, AsignacionBulk
 from backend.repositories.turno import TurnoRepository
@@ -231,16 +231,20 @@ class TurnoService:
 
         return result
 
-    async def update_assignment_date(self, empleado_id: int, nueva_fecha_str: str):
+    async def update_assignment_date(self, empleado_id: int, nueva_fecha_str: str | date):
         """
         Coordina la actualización de la fecha de inicio de un turno, 
         la limpieza de registros de asistencia basura y el reprocesamiento.
         """
         # 1. Parsear fecha
-        try:
-            nueva_fecha = datetime.strptime(nueva_fecha_str, "%Y-%m-%d").date()
-        except ValueError:
-            raise ValueError("Formato de fecha inválido. Use YYYY-MM-DD")
+        if isinstance(nueva_fecha_str, date):
+            nueva_fecha = nueva_fecha_str
+            nueva_fecha_str = nueva_fecha.isoformat()
+        else:
+            try:
+                nueva_fecha = datetime.strptime(nueva_fecha_str, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError("Formato de fecha inválido. Use YYYY-MM-DD")
             
         # 2. Actualizar fecha en el repositorio raíz
         success = await self.repository.update_assignment_start_date(empleado_id, nueva_fecha)
@@ -255,10 +259,8 @@ class TurnoService:
         # 4. Gatillar Reprocesamiento 'Mágico'
         # Importación local para evitar circulares
         from backend.services.asistencia_service import AsistenciaService
-        from backend.repositories.asistencia import AsistenciaRepository
         from datetime import timedelta
         
-        asis_repo = AsistenciaRepository(self.repository.db)
         asis_service = AsistenciaService(asis_repo)
         
         # Reprocesar día a día desde la nueva fecha hasta hoy 

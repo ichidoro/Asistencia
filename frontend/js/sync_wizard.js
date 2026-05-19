@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Universal Synchronization Wizard
  * Centraliza la validación de Áreas, Cargos, Géneros, Turnos y Bonos.
  */
@@ -400,6 +400,16 @@ function renderWizardStep1() {
             const inp = tr.querySelector('.input-area-name');
             chk.addEventListener('change', (e) => {
                 inp.disabled = !e.target.checked;
+                if (e.target.checked) {
+                    let changed = false;
+                    document.querySelectorAll('.check-area-conocida').forEach(el => {
+                        if (el.checked) { el.checked = false; changed = true; }
+                    });
+                    if (changed) {
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        Toast.fire({ icon: 'info', title: 'Áreas Conocidas desmarcadas para priorizar Nuevas' });
+                    }
+                }
             });
 
             tbody.appendChild(tr);
@@ -424,6 +434,25 @@ function renderWizardStep1() {
                 <td class="text-center align-middle">-</td>
                 <td class="align-middle text-muted small">Área Existente (Seleccionar para importar emp.)</td>
             `;
+            const chk = tr.querySelector('.check-area-conocida');
+            chk.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    let changed = false;
+                    document.querySelectorAll('.check-area').forEach(el => {
+                        if (el.checked) {
+                            el.checked = false;
+                            changed = true;
+                            const inputId = el.id.replace('wiz-chk-area-', 'wiz-inp-area-');
+                            const inpObj = document.getElementById(inputId);
+                            if (inpObj) inpObj.disabled = true;
+                        }
+                    });
+                    if (changed) {
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        Toast.fire({ icon: 'info', title: 'Áreas Nuevas desmarcadas para priorizar Conocidas' });
+                    }
+                }
+            });
             tbody.appendChild(tr);
         });
     }
@@ -554,6 +583,16 @@ function renderWizardStep2() {
             const inp = tr.querySelector('.input-cargo-name');
             chk.addEventListener('change', (e) => {
                 inp.disabled = !e.target.checked;
+                if (e.target.checked) {
+                    let changed = false;
+                    document.querySelectorAll('.check-cargo-conocido').forEach(el => {
+                        if (el.checked) { el.checked = false; changed = true; }
+                    });
+                    if (changed) {
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        Toast.fire({ icon: 'info', title: 'Cargos Conocidos desmarcados para priorizar Nuevos' });
+                    }
+                }
             });
 
             tbody.appendChild(tr);
@@ -584,6 +623,25 @@ function renderWizardStep2() {
                 </td>
                 <td class="align-middle text-muted small">Cargo Existente (Seleccionar para importar emp.)</td>
             `;
+            const chk = tr.querySelector('.check-cargo-conocido');
+            chk.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    let changed = false;
+                    document.querySelectorAll('.check-cargo').forEach(el => {
+                        if (el.checked) {
+                            el.checked = false;
+                            changed = true;
+                            const inputId = el.id.replace('wiz-chk-cargo-', 'wiz-inp-cargo-');
+                            const inpObj = document.getElementById(inputId);
+                            if (inpObj) inpObj.disabled = true;
+                        }
+                    });
+                    if (changed) {
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        Toast.fire({ icon: 'info', title: 'Cargos Nuevos desmarcados para priorizar Conocidos' });
+                    }
+                }
+            });
             tbody.appendChild(tr);
         });
     }
@@ -1779,11 +1837,11 @@ window._wizardCrearBono = async function() {
     }
 
     // 2. RACE CONDITION FIX: esperar explícitamente a que los cargos estén listos.
-    //    initConfiguracionUI dispara loadMetadata() sin await; gracias al patrón singleton
-    //    en loadMetadata(), este await reutiliza la misma Promise (sin doble petición HTTP).
-    if (typeof loadMetadata === 'function' && typeof globalCargosList !== 'undefined' && globalCargosList.length === 0) {
-        console.log('[Wizard-Bono] Esperando catálogo de cargos...');
-        await loadMetadata();
+    //    Forzamos la recarga (true) para asegurar que los cargos recién creados 
+    //    en el Wizard (Paso 2) estén disponibles en los selectores del bono.
+    if (typeof loadMetadata === 'function' && typeof globalCargosList !== 'undefined') {
+        console.log('[Wizard-Bono] Forzando actualización del catálogo de cargos...');
+        await loadMetadata(true);
         console.log(`[Wizard-Bono] Cargos listos: ${globalCargosList.length}`);
     }
 
@@ -1855,8 +1913,8 @@ window._wizardEditarBono = async function(bonoId) {
     if (typeof initConfiguracionUI === 'function' && !window._config_initialized) {
         initConfiguracionUI();
     }
-    if (typeof loadMetadata === 'function' && typeof globalCargosList !== 'undefined' && globalCargosList.length === 0) {
-        await loadMetadata();
+    if (typeof loadMetadata === 'function' && typeof globalCargosList !== 'undefined') {
+        await loadMetadata(true);
     }
 
     // Obtener el bono completo (con reglas) desde la API
