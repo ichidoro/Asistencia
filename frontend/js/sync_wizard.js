@@ -245,6 +245,13 @@ window.wizardNextStep = async function() {
             if (result.generos_creados && result.generos_creados.length > 0) {
                 window._wizardState.sessionCreated.generos = result.generos_creados;
             }
+
+            // [FIX] Forzar recarga de metadatos (globalCargosList) para que los nuevos cargos
+            // estén disponibles en el dropdown de "Cargo Req." y "Excluir Cargos" del paso Bonos.
+            if (typeof window.loadMetadata === 'function') {
+                await window.loadMetadata(true);
+            }
+
         } catch (e) {
             console.error('[Wizard] Error commit cargos:', e);
             Swal.fire('Error', 'No se pudieron guardar los cargos: ' + e.message, 'error');
