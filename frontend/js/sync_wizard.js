@@ -1770,17 +1770,20 @@ window._wizardCrearBono = async function() {
     const modalBonoEl = document.getElementById('modal-bono');
     if (!modalBonoEl) { openModalBono(); return; }
 
-    const _bonoHost = document.body;
-    const _bonoOriginalParent = modalBonoEl.parentElement;
-    const _bonoOriginalNext = modalBonoEl.nextSibling;
-    _bonoHost.appendChild(modalBonoEl);
+    // Mover modal-bono a document.body para que z-index:2200 lo ponga encima del wizard.
+    // Tambien ponemos 'inert' en el wizard-dialog para deshabilitar su FocusTrap
+    // mientras el modal-bono esta abierto (sin inert, Bootstrap captura focus/clicks).
+    const wizardDialog = document.querySelector('#modal-sync-wizard .modal-dialog');
+    if (wizardDialog) wizardDialog.setAttribute('inert', '');
 
-    modalBonoEl.style.zIndex = '2200';
+    modalBonoEl.classList.add('bono-wizard-mode');
     modalBonoEl.removeAttribute('aria-hidden');
     modalBonoEl.removeAttribute('inert');
 
     window._wizardBonoCloseCallback = function() {
-        modalBonoEl.style.zIndex = '';
+        // Restaurar wizard-dialog (quitar inert para que vuelva a ser interactivo)
+        if (wizardDialog) wizardDialog.removeAttribute('inert');
+        modalBonoEl.classList.remove('bono-wizard-mode');
         if (_bonoOriginalParent) {
             if (_bonoOriginalNext) {
                 _bonoOriginalParent.insertBefore(modalBonoEl, _bonoOriginalNext);
@@ -1792,12 +1795,11 @@ window._wizardCrearBono = async function() {
         window._wizardRefrescarBonos();
     };
 
-    openModalBono();
+    // await: esperar a que openModalBono cargue areas Y muestre el modal
+    // (el nuevo fix en openModalBono hace el fetch ANTES de display:flex)
+    await openModalBono();
 
-    // Re-inicializar dropdowns DESPUÉS de que el modal esté visible.
-    // Popper.js usa getBoundingClientRect() para calcular posición: si se inicializa
-    // con el modal oculto (display:none), todos los coords son 0 y el dropdown
-    // aparece en la esquina del viewport.
+    // Re-inicializar dropdowns despues de que el modal este visible.
     setTimeout(() => {
         document.querySelectorAll('#modal-bono [data-bs-toggle="dropdown"]').forEach(btn => {
             const inst = bootstrap.Dropdown.getInstance(btn);
@@ -1842,22 +1844,26 @@ window._wizardEditarBono = async function(bonoId) {
         return;
     }
 
-    // Mover modal-bono a document.body para evitar que el transform CSS del wizard
-    // rompa position:fixed en los dropdowns de cargos.
+    // Mover modal-bono a document.body + inert en wizard-dialog para deshabilitar
+    // el FocusTrap de Bootstrap mientras el modal-bono esta abierto.
     const modalBonoEl = document.getElementById('modal-bono');
-    if (!modalBonoEl) { openModalBono(bono); return; }
+    if (!modalBonoEl) { await openModalBono(bono); return; }
+
+    const wizardDialog = document.querySelector('#modal-sync-wizard .modal-dialog');
+    if (wizardDialog) wizardDialog.setAttribute('inert', '');
 
     const _bonoHost = document.body;
     const _bonoOriginalParent = modalBonoEl.parentElement;
     const _bonoOriginalNext = modalBonoEl.nextSibling;
     _bonoHost.appendChild(modalBonoEl);
 
-    modalBonoEl.style.zIndex = '2200';
+    modalBonoEl.classList.add('bono-wizard-mode');
     modalBonoEl.removeAttribute('aria-hidden');
     modalBonoEl.removeAttribute('inert');
 
     window._wizardBonoCloseCallback = function() {
-        modalBonoEl.style.zIndex = '';
+        if (wizardDialog) wizardDialog.removeAttribute('inert');
+        modalBonoEl.classList.remove('bono-wizard-mode');
         if (_bonoOriginalParent) {
             if (_bonoOriginalNext) {
                 _bonoOriginalParent.insertBefore(modalBonoEl, _bonoOriginalNext);
@@ -1869,9 +1875,8 @@ window._wizardEditarBono = async function(bonoId) {
         window._wizardRefrescarBonos();
     };
 
-    openModalBono(bono);
+    await openModalBono(bono);
 
-    // Re-inicializar dropdowns DESPUÉS de que el modal esté visible.
     setTimeout(() => {
         document.querySelectorAll('#modal-bono [data-bs-toggle="dropdown"]').forEach(btn => {
             const inst = bootstrap.Dropdown.getInstance(btn);

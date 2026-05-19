@@ -328,6 +328,16 @@ class ConfiguracionRepository:
                     logger.debug(f"Insertando regla para bono {bono_id}: {regla}")
                     await self.create_regla_bono(bono_id, regla)
                 logger.info(f"Reglas insertadas correctamente para bono {bono_id}")
+
+                # Guardar áreas asignadas al bono
+                if bono.area_ids:
+                    for area_id in bono.area_ids:
+                        await self.db.execute(
+                            "INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)",
+                            (area_id, bono_id)
+                        )
+                    logger.info(f"Áreas {bono.area_ids} asignadas al bono {bono_id}")
+
                 return bono_id
             except Exception as e_rules:
                 # Rollback manual: Eliminar el bono huérfano si fallan las reglas
@@ -382,7 +392,17 @@ class ConfiguracionRepository:
             await self.db.execute("DELETE FROM bono_reglas WHERE bono_id = ?", (bono_id,))
             for regla in bono.reglas:
                 await self.create_regla_bono(bono_id, regla)
-                
+
+            # 3. Reemplazar áreas asignadas
+            await self.db.execute("DELETE FROM area_bonos WHERE bono_id = ?", (bono_id,))
+            if bono.area_ids:
+                for area_id in bono.area_ids:
+                    await self.db.execute(
+                        "INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)",
+                        (area_id, bono_id)
+                    )
+                logger.info(f"Áreas {bono.area_ids} actualizadas para bono {bono_id}")
+
             return True
         except Exception as e:
             logger.error(f"Error actualizando bono: {e}")
