@@ -1210,11 +1210,9 @@ async function fetchAndRenderWizardStep3() {
 
         // Generar radio cards por área
         areasList.forEach((area, idx) => {
-            // Filtrar turnos: solo los asignados al área actual.
-            // Un turno sin áreas asignadas (areas=[]) es "universal" — aplica a todas.
+            // Filtrar turnos: solo los asignados explícitamente al área actual.
             const turnosParaArea = window._wizardState.turnosDisponibles.filter(t => {
-                if (!t.areas || t.areas.length === 0) return true;  // universal
-                return t.areas.some(a => a.toUpperCase() === area.toUpperCase());
+                return t.areas && t.areas.some(a => a.toUpperCase() === area.toUpperCase());
             });
 
             // Selección default: resolución previa > pre-asignación existente > primer turno del área
@@ -1239,7 +1237,7 @@ async function fetchAndRenderWizardStep3() {
             // Badge de área(s) del turno
             const areasBadges = (t.areas && t.areas.length > 0)
                 ? t.areas.map(a => `<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25 small">${a}</span>`).join(' ')
-                : '<span class="badge bg-light text-muted border small">Universal</span>';
+                : '';
 
             return `
             <label class="wiz-turno-card${isChecked ? ' selected' : ''}"
@@ -1667,6 +1665,15 @@ window.confirmWizardSync = async function() {
             ignoredCargos.push(cargo);
         }
     }
+    
+    // Incluir cargos conocidos desmarcados en el paso 2 como ignorados (igual que en previsualización)
+    const cargosConocidosResol = window._wizardState.resoluciones.cargos_conocidos || {};
+    for (const [cargo, activo] of Object.entries(cargosConocidosResol)) {
+        if (activo === false && !ignoredCargos.includes(cargo)) {
+            ignoredCargos.push(cargo);
+        }
+    }
+
     window._ignoredCargos = ignoredCargos;
 
     // 3. Marcar wizard como completado

@@ -293,7 +293,8 @@ async def sincronizar_empleados(
     """
     # Ejecutar en background
     areas = request.areas if request else None
-    background_tasks.add_task(ejecutar_sync_empleados, areas)
+    ignored_cargos = request.ignored_cargos if request else None
+    background_tasks.add_task(ejecutar_sync_empleados, areas, ignored_cargos)
     
     return {
         "message": "Sincronización de empleados iniciada en segundo plano",
@@ -319,6 +320,7 @@ async def sincronizar_empleados_sync(
     service = SyncService()
     areas = request.areas if request else None
     ruts  = request.ruts  if request else None
+    ignored_cargos = request.ignored_cargos if request else None
 
     if ruts and len(ruts) > MAX_BATCH:
         raise HTTPException(
@@ -326,7 +328,7 @@ async def sincronizar_empleados_sync(
             detail=f"Máximo {MAX_BATCH} empleados por sincronización masiva. Seleccionaste {len(ruts)}."
         )
 
-    stats = await service.sync_empleados(areas=areas, ruts=ruts)
+    stats = await service.sync_empleados(areas=areas, ruts=ruts, ignored_cargos=ignored_cargos)
     return {
         "message": "Sincronización completada",
         "stats": stats
@@ -656,10 +658,10 @@ async def reset_turso_replica(
 
 
 
-async def ejecutar_sync_empleados(areas: List[str] = None):
+async def ejecutar_sync_empleados(areas: List[str] = None, ignored_cargos: List[str] = None):
     """Función helper para ejecutar sync en background"""
     service = SyncService()
-    await service.sync_empleados(areas=areas)
+    await service.sync_empleados(areas=areas, ignored_cargos=ignored_cargos)
 
 
 async def ejecutar_sync_asistencia(fecha_inicio: str = None, fecha_fin: str = None):
