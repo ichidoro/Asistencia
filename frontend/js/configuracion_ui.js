@@ -1,4 +1,4 @@
-﻿// configuracion_ui.js - Interfaz Completa de Configuración (Bonos y Justificaciones)
+// configuracion_ui.js - Interfaz Completa de Configuración (Bonos y Justificaciones)
 
 const API_CONFIG = '/api/configuracion/';
 
@@ -729,11 +729,21 @@ async function saveBono() {
             es_proporcional: row.querySelector('.rule-proporcional').checked
         });
     });
-    // Recolectar áreas asignadas
-    const areaChecks = document.querySelectorAll('.bono-area-chk:checked');
+    // Recolectar áreas asignadas — buscar dentro del modal (no en todo el doc)
+    const modalBonoEl = document.getElementById('modal-bono');
+    const areaChecks = modalBonoEl
+        ? modalBonoEl.querySelectorAll('.bono-area-chk:checked')
+        : document.querySelectorAll('.bono-area-chk:checked');
     const area_ids = Array.from(areaChecks).map(chk => parseInt(chk.value));
+    
+    // Diagnóstico: solo visible en consola del dev, no en producción
+    const totalAreas = modalBonoEl ? modalBonoEl.querySelectorAll('.bono-area-chk').length : 0;
+    console.log(`[saveBono] id=${id || 'nuevo'} | checks marcados=${areaChecks.length}/${totalAreas} | area_ids=${JSON.stringify(area_ids)}`);
+    // Enviar null solo si NO hay checkboxes renderizados (modal no cargó áreas)
+    // Si hay checkboxes pero ninguno marcado, area_ids=[] es válido (desmarcar todo)
+    const area_ids_payload = totalAreas === 0 ? null : area_ids;
 
-    const body = { nombre, descripcion, activo, reglas, area_ids };
+    const body = { nombre, descripcion, activo, reglas, area_ids: area_ids_payload };
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_CONFIG}bonos/${id}/` : `${API_CONFIG}bonos/`;
 

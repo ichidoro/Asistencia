@@ -329,14 +329,8 @@ class ConfiguracionRepository:
                     await self.create_regla_bono(bono_id, regla)
                 logger.info(f"Reglas insertadas correctamente para bono {bono_id}")
 
-                # Guardar áreas asignadas al bono
-                if bono.area_ids:
-                    for area_id in bono.area_ids:
-                        await self.db.execute(
-                            "INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)",
-                            (area_id, bono_id)
-                        )
-                    logger.info(f"Áreas {bono.area_ids} asignadas al bono {bono_id}")
+                # Nota: la inserción en area_bonos la maneja ConfiguracionService.create_bono
+                # para evitar doble escritura que genere duplicados o condiciones de carrera.
 
                 return bono_id
             except Exception as e_rules:
@@ -393,9 +387,11 @@ class ConfiguracionRepository:
             for regla in bono.reglas:
                 await self.create_regla_bono(bono_id, regla)
 
-            # 3. Reemplazar áreas asignadas
-            await self.db.execute("DELETE FROM area_bonos WHERE bono_id = ?", (bono_id,))
-            if bono.area_ids:
+            # 3. Reemplazar áreas asignadas — SOLO si area_ids fue enviado explícitamente
+            # Si area_ids is None → no tocar area_bonos (preservar las existentes)
+            # Si area_ids == [] → borrar todas (intención explícita de desmarcar todo)
+            if bono.area_ids is not None:
+                await self.db.execute("DELETE FROM area_bonos WHERE bono_id = ?", (bono_id,))
                 for area_id in bono.area_ids:
                     await self.db.execute(
                         "INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)",
