@@ -1152,51 +1152,74 @@ async function fetchAndRenderWizardStep3() {
 
         // Generar radio cards por área
         areasList.forEach((area, idx) => {
+            // Filtrar turnos: solo los asignados al área actual.
+            // Un turno sin áreas asignadas (areas=[]) es "universal" — aplica a todas.
+            const turnosParaArea = window._wizardState.turnosDisponibles.filter(t => {
+                if (!t.areas || t.areas.length === 0) return true;  // universal
+                return t.areas.some(a => a.toUpperCase() === area.toUpperCase());
+            });
+
+            // Selección default: resolución previa > pre-asignación existente > primer turno del área
             const selectedTurnoId = String(
                 window._wizardState.resoluciones.turnos[area] ||
                 window._wizardState.preAsignacionesTurnos[area] ||
-                (window._wizardState.turnosDisponibles.find(t => t.es_default)?.id) ||
-                (window._wizardState.turnosDisponibles[0]?.id) || ''
+                (turnosParaArea.find(t => t.es_default)?.id) ||
+                (turnosParaArea[0]?.id) || ''
             );
 
-            const cardsHTML = window._wizardState.turnosDisponibles.map(t => {
-                const isChecked = String(t.id) === selectedTurnoId ? 'checked' : '';
-                const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                    ? '<span class="badge bg-warning text-dark">Bolsa de Horas</span>'
-                    : '<span class="badge bg-primary">Ciclo Inteligente</span>';
-                const semLabel = (t.num_semanas || 1) > 1
-                    ? `${t.num_semanas} opciones`
-                    : '1 opción';
-                const hrsLabel = t.meta_horas_semanales
-                    ? `${t.meta_horas_semanales} hrs/sem`
-                    : '';
+        const cardsHTML = turnosParaArea.map(t => {
+            const isChecked = String(t.id) === selectedTurnoId ? 'checked' : '';
+            const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                ? '<span class="badge bg-warning text-dark">Bolsa de Horas</span>'
+                : '<span class="badge bg-primary">Ciclo Inteligente</span>';
+            const semLabel = (t.num_semanas || 1) > 1
+                ? `${t.num_semanas} opciones`
+                : '1 opción';
+            const hrsLabel = t.meta_horas_semanales
+                ? `${t.meta_horas_semanales} hrs/sem`
+                : '';
+            // Badge de área(s) del turno
+            const areasBadges = (t.areas && t.areas.length > 0)
+                ? t.areas.map(a => `<span class="badge bg-secondary bg-opacity-25 text-secondary border border-secondary border-opacity-25 small">${a}</span>`).join(' ')
+                : '<span class="badge bg-light text-muted border small">Universal</span>';
 
-                return `
-                <label class="wiz-turno-card${isChecked ? ' selected' : ''}"
-                       for="wiz-radio-${idx}-${t.id}">
-                    <input type="radio"
-                           name="wiz-turno-area-${idx}"
-                           id="wiz-radio-${idx}-${t.id}"
-                           class="wiz-radio-turno"
-                           data-area="${area}"
-                           value="${t.id}"
-                           ${isChecked}
-                           onchange="this.closest('.wiz-turno-cards').querySelectorAll('.wiz-turno-card').forEach(c=>c.classList.remove('selected')); this.closest('.wiz-turno-card').classList.add('selected')">
-                    <div class="wiz-turno-card-body">
-                        <div class="wiz-turno-card-name">${t.nombre}</div>
-                        <div class="wiz-turno-card-meta">
-                            ${tipoBadge}
-                            ${hrsLabel ? `<span class="text-muted small">${hrsLabel}</span>` : ''}
-                            <span class="text-muted small">${semLabel}</span>
-                        </div>
+            return `
+            <label class="wiz-turno-card${isChecked ? ' selected' : ''}"
+                   for="wiz-radio-${idx}-${t.id}">
+                <input type="radio"
+                       name="wiz-turno-area-${idx}"
+                       id="wiz-radio-${idx}-${t.id}"
+                       class="wiz-radio-turno"
+                       data-area="${area}"
+                       value="${t.id}"
+                       ${isChecked}
+                       onchange="this.closest('.wiz-turno-cards').querySelectorAll('.wiz-turno-card').forEach(c=>c.classList.remove('selected')); this.closest('.wiz-turno-card').classList.add('selected')">
+                <div class="wiz-turno-card-body">
+                    <div class="wiz-turno-card-name">${t.nombre}</div>
+                    <div class="wiz-turno-card-meta">
+                        ${tipoBadge}
+                        ${hrsLabel ? `<span class="text-muted small">${hrsLabel}</span>` : ''}
+                        <span class="text-muted small">${semLabel}</span>
                     </div>
-                </label>`;
-            }).join('');
+                    <div class="wiz-turno-card-areas mt-1">${areasBadges}</div>
+                </div>
+            </label>`;
+        }).join('');
+
+        // Si no hay turnos para esta área, mostrar aviso con opción de crear
+        const cardsContent = turnosParaArea.length > 0 ? cardsHTML : `
+            <div class="alert alert-warning py-2 px-3 mb-0 small d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                No hay turnos asignados a <strong>${area}</strong>.
+                <button class="btn btn-sm btn-outline-primary ms-2" onclick="window._wizardIrACrearTurno()">
+                    <i class="bi bi-plus-circle me-1"></i>Crear Turno
+                </button>
+            </div>`;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="fw-bold align-middle">${area}</td>
-                <td><div class="wiz-turno-cards">${cardsHTML}</div></td>
+                <td><div class="wiz-turno-cards">${cardsContent}</div></td>
             `;
             tbody.appendChild(tr);
         });
@@ -1776,6 +1799,13 @@ window._wizardCrearBono = async function() {
     const wizardDialog = document.querySelector('#modal-sync-wizard .modal-dialog');
     if (wizardDialog) wizardDialog.setAttribute('inert', '');
 
+    // GUARDAR posición original en variables LOCALES (no globales no definidas)
+    const _bonoOriginalParent = modalBonoEl.parentElement;
+    const _bonoOriginalNext   = modalBonoEl.nextSibling;
+
+    // Mover al body ANTES de que openModalBono lo muestre
+    document.body.appendChild(modalBonoEl);
+
     modalBonoEl.classList.add('bono-wizard-mode');
     modalBonoEl.removeAttribute('aria-hidden');
     modalBonoEl.removeAttribute('inert');
@@ -1784,6 +1814,7 @@ window._wizardCrearBono = async function() {
         // Restaurar wizard-dialog (quitar inert para que vuelva a ser interactivo)
         if (wizardDialog) wizardDialog.removeAttribute('inert');
         modalBonoEl.classList.remove('bono-wizard-mode');
+        // Restaurar posición original en el DOM
         if (_bonoOriginalParent) {
             if (_bonoOriginalNext) {
                 _bonoOriginalParent.insertBefore(modalBonoEl, _bonoOriginalNext);

@@ -3483,6 +3483,12 @@ tr:hover .emp-name-cell {
     gap: 5px;
     align-items: center;
 }
+.wiz-turno-card-areas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
 /* -------------------------------------------------
    WIZARD PASO 5: CHIPS DE BONO CON BOT�N EDITAR
    ------------------------------------------------- */

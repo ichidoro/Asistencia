@@ -108,6 +108,21 @@ async def wizard_provider_turnos(
         GROUP BY t.id
         ORDER BY t.nombre ASC
     """)
+
+    # 1b. Obtener las áreas asignadas a cada turno (para poder filtrar en el frontend)
+    turno_areas_records = await db.fetch_all("""
+        SELECT ta.turno_id, a.nombre as area_nombre
+        FROM turno_areas ta
+        JOIN areas a ON a.id = ta.area_id
+    """)
+    # Construir dict turno_id -> [area_nombres]
+    turno_areas_map = {}
+    for row in turno_areas_records:
+        tid = row["turno_id"]
+        if tid not in turno_areas_map:
+            turno_areas_map[tid] = []
+        turno_areas_map[tid].append(row["area_nombre"])
+
     turnos = [
         {
             "id": t["id"],
@@ -115,7 +130,8 @@ async def wizard_provider_turnos(
             "es_default": False,
             "tipo_programacion": t["tipo_programacion"] or "DINAMICO_FLEXIBLE",
             "meta_horas_semanales": t["meta_horas_semanales"] or 0,
-            "num_semanas": t["num_semanas"] or 1
+            "num_semanas": t["num_semanas"] or 1,
+            "areas": turno_areas_map.get(t["id"], [])  # lista de nombres de área
         }
         for t in turnos_records
     ]

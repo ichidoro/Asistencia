@@ -42,6 +42,7 @@ class BonoCreate(BonoBase):
 class BonoResponse(BonoBase):
     id: int
     reglas: List[BonoReglaResponse] = []
+    area_ids: List[int] = []   # IDs de áreas asignadas — necesario para el frontend
     created_at: datetime
 
     class Config:
