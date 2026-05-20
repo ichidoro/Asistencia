@@ -1,14 +1,14 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 class SyncEmpleadosRequest(BaseModel):
     areas: Optional[List[str]] = None
     ruts: Optional[List[str]] = None  # Filtro granular por RUTs seleccionados
-    ignored_cargos: Optional[List[str]] = None
+    selected_cargos: Optional[List[str]] = None
 
 class SyncPreviewRequest(BaseModel):
-    areas: Optional[List[str]] = None
-    ignored_cargos: Optional[List[str]] = None
+    resoluciones_areas: Optional[Dict[str, str]] = None
+    selected_cargos: Optional[List[str]] = None
 
 class SyncAsistenciaRequest(BaseModel):
     fecha_inicio: Optional[str] = None

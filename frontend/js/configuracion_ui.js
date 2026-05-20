@@ -402,6 +402,15 @@ async function _doLoadMetadata() {
         console.warn('[loadMetadata] Error en /api/configuracion/cargos/:', e.message);
     }
 
+    // 2.5 Inyectar cargos en memoria del Wizard (si existe)
+    if (window._wizardState && window._wizardState.resoluciones && window._wizardState.resoluciones.cargos) {
+        Object.values(window._wizardState.resoluciones.cargos).forEach(c => {
+            if (c && c !== "_IGNORE_") {
+                allCargos.add(c);
+            }
+        });
+    }
+
     // 3. Actualizar globalCargosList y datalist
     allCargos.delete(''); // limpiar vacíos
     const cargosArray = Array.from(allCargos).sort();

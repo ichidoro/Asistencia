@@ -185,10 +185,8 @@ function updateWizardUI() {
 window.wizardNextStep = async function() {
     const TOTAL_STEPS = 7;
     const step = window._wizardState.currentStep;
-    const btnNext = document.getElementById('btn-wizard-next');
-    const originalText = btnNext ? btnNext.innerHTML : '';
 
-    // --- PASO 1 → 2: Persistir áreas inmediatamente ---
+    // --- PASO 1: Áreas ---
     if (step === 1) {
         if (!guardarSeleccionesPaso1()) return;
 
@@ -199,103 +197,29 @@ window.wizardNextStep = async function() {
             Swal.fire('Atención', 'Debes seleccionar al menos un área para importar.', 'warning');
             return;
         }
-
-        if (btnNext) { btnNext.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando…'; btnNext.disabled = true; }
-        try {
-            const resp = await fetch('/api/sync/wizard/commit/areas/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ resoluciones })
-            });
-            if (!resp.ok) throw new Error(await resp.text());
-            const result = await resp.json();
-            if (result.creadas && result.creadas.length > 0) {
-                window._wizardState.sessionCreated.areas = result.creadas;
-                console.log('[Wizard] Áreas persistidas en BD:', result.creadas);
-            }
-        } catch (e) {
-            console.error('[Wizard] Error commit areas:', e);
-            Swal.fire('Error', 'No se pudieron guardar las áreas: ' + e.message, 'error');
-            if (btnNext) { btnNext.innerHTML = originalText; btnNext.disabled = false; }
-            return;
-        } finally {
-            if (btnNext) { btnNext.innerHTML = originalText; btnNext.disabled = false; }
-        }
+        // Commit deferido al paso final
     }
 
-    // --- PASO 2 → 3: Persistir cargos inmediatamente ---
+    // --- PASO 2: Cargos ---
     if (step === 2) {
         if (!guardarSeleccionesPaso2()) return;
-
-        const resoluciones = window._wizardState.resoluciones.cargos;
-        const generos = window._wizardState.resoluciones.generos || [];
-
-        if (btnNext) { btnNext.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando…'; btnNext.disabled = true; }
-        try {
-            const resp = await fetch('/api/sync/wizard/commit/cargos/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ resoluciones, generos })
-            });
-            if (!resp.ok) throw new Error(await resp.text());
-            const result = await resp.json();
-            if (result.creados && result.creados.length > 0) {
-                window._wizardState.sessionCreated.cargos = result.creados;
-            }
-            if (result.generos_creados && result.generos_creados.length > 0) {
-                window._wizardState.sessionCreated.generos = result.generos_creados;
-            }
-
-            // [FIX] Forzar recarga de metadatos (globalCargosList) para que los nuevos cargos
-            // estén disponibles en el dropdown de "Cargo Req." y "Excluir Cargos" del paso Bonos.
-            if (typeof window.loadMetadata === 'function') {
-                await window.loadMetadata(true);
-            }
-
-        } catch (e) {
-            console.error('[Wizard] Error commit cargos:', e);
-            Swal.fire('Error', 'No se pudieron guardar los cargos: ' + e.message, 'error');
-            if (btnNext) { btnNext.innerHTML = originalText; btnNext.disabled = false; }
-            return;
-        } finally {
-            if (btnNext) { btnNext.innerHTML = originalText; btnNext.disabled = false; }
+        // Refrescar metadatos en memoria (globalCargosList) para que el paso 5 (Bonos)
+        // vea los nuevos cargos en el dropdown, aunque aún no estén en BD
+        if (typeof window.loadMetadata === 'function') {
+            await window.loadMetadata(true);
         }
+        // Commit deferido al paso final
     }
 
-    // --- PASO 3 → 4: Pagadores (datos globales, solo avanzar) ---
-    // No requiere commit, los pagadores se crean inline vía POST directo
-
-    // --- PASO 4 → 5: Tipos Justificación (datos globales, solo avanzar) ---
-    // No requiere commit, los tipos J se crean vía modal existente
-
-    // --- PASO 5 → 6: Bonos (guardar selecciones en memoria) ---
+    // --- PASO 5: Bonos ---
     if (step === 5) {
         guardarSeleccionesPaso5_Bonos();
     }
 
-    // --- PASO 6 → 7: Persistir asignaciones de turno ---
+    // --- PASO 6: Turnos ---
     if (step === 6) {
         if (!guardarSeleccionesPaso6_Turnos()) return;
-
-        const asignaciones = window._wizardState.resoluciones.turnos;
-        if (Object.keys(asignaciones).length > 0) {
-            if (btnNext) { btnNext.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando…'; btnNext.disabled = true; }
-            try {
-                const resp = await fetch('/api/sync/wizard/commit/turnos/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                    body: JSON.stringify({ asignaciones })
-                });
-                if (!resp.ok) throw new Error(await resp.text());
-            } catch (e) {
-                console.error('[Wizard] Error commit turnos:', e);
-                Swal.fire('Error', 'No se pudieron guardar las asignaciones de turno: ' + e.message, 'error');
-                if (btnNext) { btnNext.innerHTML = originalText; btnNext.disabled = false; }
-                return;
-            } finally {
-                if (btnNext) { btnNext.innerHTML = originalText; btnNext.disabled = false; }
-            }
-        }
+        // Commit deferido al paso final
     }
 
     // --- Avanzar ---
@@ -309,48 +233,7 @@ window.wizardPrevStep = async function() {
     const step = window._wizardState.currentStep;
     if (step <= 1) return;
 
-    // --- RETROCESO PASO 2 → 1: Rollback de áreas de esta sesión ---
-    if (step === 2) {
-        const creadas = window._wizardState.sessionCreated.areas;
-        if (creadas && creadas.length > 0) {
-            const idsParaRollback = creadas.map(a => a.id);
-            try {
-                const resp = await fetch('/api/sync/wizard/rollback/', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                    body: JSON.stringify({ tipo: 'areas', ids: idsParaRollback })
-                });
-                if (resp.ok) {
-                    console.log('[Wizard] Rollback de áreas completado:', idsParaRollback);
-                    window._wizardState.sessionCreated.areas = [];
-                }
-            } catch (e) {
-                console.warn('[Wizard] No se pudo hacer rollback de áreas (continuar de todas formas):', e);
-            }
-        }
-    }
-
-    // --- RETROCESO PASO 3 → 2: Rollback de cargos de esta sesión ---
-    if (step === 3) {
-        const creados = window._wizardState.sessionCreated.cargos;
-        if (creados && creados.length > 0) {
-            const idsParaRollback = creados.map(c => c.id);
-            try {
-                const resp = await fetch('/api/sync/wizard/rollback/', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                    body: JSON.stringify({ tipo: 'cargos', ids: idsParaRollback })
-                });
-                if (resp.ok) {
-                    console.log('[Wizard] Rollback de cargos completado:', idsParaRollback);
-                    window._wizardState.sessionCreated.cargos = [];
-                }
-            } catch (e) {
-                console.warn('[Wizard] No se pudo hacer rollback de cargos:', e);
-            }
-        }
-    }
-
+    // Rollback ya no es necesario porque los cambios no han sido guardados en BD aún
     window._wizardState.currentStep--;
     updateWizardUI();
 };
@@ -1467,23 +1350,40 @@ async function fetchAndRenderWizardStep5() {
 
     try {
         const areasList = getConsolidatedAreas();
-        const ignoredCargos = [];
+        const selectedCargos = [];
+        // Cargos nuevos seleccionados
         for (const [cargo, resolucion] of Object.entries(window._wizardState.resoluciones.cargos)) {
-            if (resolucion === "_IGNORE_") {
-                ignoredCargos.push(cargo);
+            if (resolucion !== "_IGNORE_") {
+                selectedCargos.push(cargo);
             }
         }
-        // Incluir cargos conocidos desmarcados en el paso 2 como ignorados
+        // Cargos conocidos activos
         const cargosConocidosResol = window._wizardState.resoluciones.cargos_conocidos || {};
-        for (const [cargo, activo] of Object.entries(cargosConocidosResol)) {
-            if (activo === false && !ignoredCargos.includes(cargo)) {
-                ignoredCargos.push(cargo);
+        const cargosConocidosData = (window._wizardState.data && window._wizardState.data.cargos_conocidos) || [];
+        cargosConocidosData.forEach(cargo => {
+            if (cargosConocidosResol[cargo] !== false && !selectedCargos.includes(cargo)) {
+                selectedCargos.push(cargo);
             }
-        }
+        });
+
+        // Construir el mapa de resoluciones COMPLETO para el backend:
+        // incluye tanto las áreas nuevas (resoluciones.areas) como las áreas CONOCIDAS activas.
+        // Sin esto, las áreas conocidas no llegan al backend y todos sus empleados quedan filtrados fuera.
+        const resolucionesCompletas = { ...window._wizardState.resoluciones.areas };
+
+        // Inyectar áreas conocidas activas con su propio nombre como valor (identidad)
+        const areasConocidas = (window._wizardState.data && window._wizardState.data.areas_conocidas) || [];
+        const areasConocidosResol = window._wizardState.resoluciones.areas_conocidas || {};
+        areasConocidas.forEach(area => {
+            // Solo incluir si no fue explícitamente desmarcada por el usuario
+            if (areasConocidosResol[area] !== false) {
+                resolucionesCompletas[area] = area; // el área ya existe localmente, mapea a sí misma
+            }
+        });
 
         const requestBody = {
-            areas: areasList,
-            ignored_cargos: ignoredCargos
+            resoluciones_areas: resolucionesCompletas,
+            selected_cargos: selectedCargos
         };
 
         const response = await fetch(`${API_BASE_URL}/sync/empleados/preview/`, {
@@ -1666,22 +1566,23 @@ window.confirmWizardSync = async function() {
     // 2. Preparar filtros globales
     window._syncSelectedAreas = getConsolidatedAreas();
 
-    const ignoredCargos = [];
+    const selectedCargos = [];
     for (const [cargo, resolucion] of Object.entries(window._wizardState.resoluciones.cargos)) {
-        if (resolucion === "_IGNORE_") {
-            ignoredCargos.push(cargo);
+        if (resolucion !== "_IGNORE_") {
+            selectedCargos.push(cargo);
         }
     }
     
-    // Incluir cargos conocidos desmarcados en el paso 2 como ignorados (igual que en previsualización)
+    // Incluir cargos conocidos activos
     const cargosConocidosResol = window._wizardState.resoluciones.cargos_conocidos || {};
-    for (const [cargo, activo] of Object.entries(cargosConocidosResol)) {
-        if (activo === false && !ignoredCargos.includes(cargo)) {
-            ignoredCargos.push(cargo);
+    const cargosConocidosData = (window._wizardState.data && window._wizardState.data.cargos_conocidos) || [];
+    cargosConocidosData.forEach(cargo => {
+        if (cargosConocidosResol[cargo] !== false && !selectedCargos.includes(cargo)) {
+            selectedCargos.push(cargo);
         }
-    }
+    });
 
-    window._ignoredCargos = ignoredCargos;
+    window._selectedCargos = selectedCargos;
 
     // 3. Marcar wizard como completado
     localStorage.setItem('wizard_completed', 'true');
@@ -1690,8 +1591,46 @@ window.confirmWizardSync = async function() {
     const payload = {
         areas: window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
         ruts: selectedRuts,
-        ignored_cargos: ignoredCargos.length > 0 ? ignoredCargos : null
+        selected_cargos: selectedCargos.length > 0 ? selectedCargos : null
     };
+
+    // MEGA-COMMIT DE WIZARD ANTES DE INICIAR SINCRONIZACIÓN DE EMPLEADOS
+    Swal.fire({
+        title: 'Guardando configuración...',
+        html: 'Por favor espere mientras se aplican las configuraciones (Áreas, Cargos, Turnos).',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    try {
+        const commitPayload = {
+            areas: window._wizardState.resoluciones.areas,
+            cargos: window._wizardState.resoluciones.cargos,
+            generos: window._wizardState.resoluciones.generos || [],
+            turnos: window._wizardState.resoluciones.turnos || {}
+        };
+
+        const resp = await fetch('/api/sync/wizard/commit-all/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify(commitPayload)
+        });
+
+        if (!resp.ok) throw new Error(await resp.text());
+        
+        // Refrescar metadatos en caso de que se hayan creado áreas o cargos
+        if (typeof window.loadMetadata === 'function') {
+            await window.loadMetadata(true);
+        }
+        
+        Swal.close();
+    } catch (e) {
+        console.error('[Wizard] Error en Mega-Commit:', e);
+        Swal.fire('Error', 'No se pudieron guardar las configuraciones previas: ' + e.message, 'error');
+        return;
+    }
 
     // Disparar sincronización (pequeño delay para que Swal cierre primero)
     setTimeout(() => {

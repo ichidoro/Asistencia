@@ -1862,7 +1862,7 @@ async function fetchSyncPreviewData() {
   try {
     const payload = {
       areas: window._syncSelectedAreas && window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
-      ignored_cargos: window._ignoredCargos && window._ignoredCargos.length > 0 ? window._ignoredCargos : null
+      selected_cargos: window._selectedCargos && window._selectedCargos.length > 0 ? window._selectedCargos : null
     };
     const response = await fetch(`${API_BASE_URL}/sync/empleados/preview/`, {
       method: 'POST',
@@ -1878,7 +1878,7 @@ async function fetchSyncPreviewData() {
     if (window._syncSelectedCargos && window._syncSelectedCargos.length > 0 && window._syncSelectedAreas && window._syncSelectedAreas.length > 0) {
        _syncPreviewData = _syncPreviewData.filter(emp => {
            // Si el cargo (antes o después del mapeo) está ignorado, se quita.
-           // O si el backend ya lo filtra, mejor. El backend debería filtrarlo con ignored_cargos.
+           // O si el backend ya lo filtra, mejor. El backend debería filtrarlo con selected_cargos.
            // Por si acaso, si no está en _syncSelectedCargos y tiene un área que pedimos.
            return true; 
        });
@@ -2041,7 +2041,7 @@ window.confirmSync = async function () {
   const payload = {
     areas: _syncSelectedAreas.length > 0 ? _syncSelectedAreas : null,
     ruts: selectedRuts,
-    ignored_cargos: window._ignoredCargos && window._ignoredCargos.length > 0 ? window._ignoredCargos : null
+    selected_cargos: window._selectedCargos && window._selectedCargos.length > 0 ? window._selectedCargos : null
   };
 
   const btnSync = document.getElementById('btn-sync');

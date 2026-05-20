@@ -80,9 +80,9 @@ async def preview_empleados(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
 ) -> List[Dict[str, Any]]:
     service = SyncService()
-    areas = request.areas if request else None
-    ignored_cargos = request.ignored_cargos if request else None
-    return await service.preview_empleados(areas=areas, ignored_cargos=ignored_cargos)
+    resoluciones_areas = request.resoluciones_areas if request else None
+    selected_cargos = request.selected_cargos if request else None
+    return await service.preview_empleados(resoluciones_areas=resoluciones_areas, selected_cargos=selected_cargos)
 
 
 class WizardProviderRequest(BaseModel):
@@ -185,89 +185,32 @@ async def wizard_provider_bonos(
         "pre_asignaciones": pre_asignaciones
     }
 
-class WizardCommitAreasRequest(BaseModel):
-    resoluciones: Dict[str, str]  # bioalba_name -> local_name | _NEW_ | _IGNORE_
-
-@router.post(
-    "/wizard/commit/areas/",
-    summary="Wizard Paso 1: Persistir áreas",
-    description="Crea áreas y alias inmediatamente. Retorna IDs para rollback si el usuario retrocede."
-)
-async def wizard_commit_areas(
-    request: WizardCommitAreasRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
-) -> Dict[str, Any]:
-    service = SyncService()
-    try:
-        result = await service.commit_wizard_areas(request.resoluciones)
-        return {"status": "ok", **result}
-    except Exception as e:
-        logger.error(f"Error en commit_wizard_areas: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class WizardCommitCargosRequest(BaseModel):
-    resoluciones: Dict[str, str]  # bioalba_name -> local_name | _NEW_ | _IGNORE_
+class WizardCommitAllRequest(BaseModel):
+    areas: Dict[str, str]
+    cargos: Dict[str, str]
     generos: List[str]
+    turnos: Dict[str, Optional[int]]
 
 @router.post(
-    "/wizard/commit/cargos/",
-    summary="Wizard Paso 2: Persistir cargos y géneros",
-    description="Crea cargos y géneros inmediatamente. Retorna IDs para rollback."
+    "/wizard/commit-all/",
+    summary="Wizard Mega-Commit: Persistir todo",
+    description="Crea áreas, cargos, géneros y asignaciones de turnos en una sola transacción ACID."
 )
-async def wizard_commit_cargos(
-    request: WizardCommitCargosRequest,
+async def wizard_commit_all(
+    request: WizardCommitAllRequest,
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
 ) -> Dict[str, Any]:
     service = SyncService()
     try:
-        result = await service.commit_wizard_cargos(request.resoluciones, request.generos)
-        return {"status": "ok", **result}
+        result = await service.commit_wizard_all(
+            areas=request.areas,
+            cargos=request.cargos,
+            generos=request.generos,
+            turnos=request.turnos
+        )
+        return result
     except Exception as e:
-        logger.error(f"Error en commit_wizard_cargos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class WizardCommitTurnosRequest(BaseModel):
-    asignaciones: Dict[str, Optional[int]]  # area_name -> turno_id | null
-
-@router.post(
-    "/wizard/commit/turnos/",
-    summary="Wizard Paso 3: Persistir asignaciones de turno",
-    description="UPSERT de turno_areas para las áreas del wizard."
-)
-async def wizard_commit_turnos(
-    request: WizardCommitTurnosRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
-) -> Dict[str, Any]:
-    service = SyncService()
-    try:
-        result = await service.commit_wizard_turnos(request.asignaciones)
-        return {"status": "ok", **result}
-    except Exception as e:
-        logger.error(f"Error en commit_wizard_turnos: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class WizardRollbackRequest(BaseModel):
-    tipo: str   # 'areas' | 'cargos'
-    ids: List[int]
-
-@router.delete(
-    "/wizard/rollback/",
-    summary="Wizard: Rollback de sesión",
-    description="Elimina registros creados en el wizard actual (solo los de esta sesión, por ID)."
-)
-async def wizard_rollback(
-    request: WizardRollbackRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
-) -> Dict[str, Any]:
-    service = SyncService()
-    try:
-        result = await service.rollback_wizard_items(request.tipo, request.ids)
-        return {"status": "ok", **result}
-    except Exception as e:
-        logger.error(f"Error en wizard_rollback: {e}")
+        logger.error(f"Error en commit_wizard_all: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -293,8 +236,8 @@ async def sincronizar_empleados(
     """
     # Ejecutar en background
     areas = request.areas if request else None
-    ignored_cargos = request.ignored_cargos if request else None
-    background_tasks.add_task(ejecutar_sync_empleados, areas, ignored_cargos)
+    selected_cargos = request.selected_cargos if request else None
+    background_tasks.add_task(ejecutar_sync_empleados, areas, selected_cargos)
     
     return {
         "message": "Sincronización de empleados iniciada en segundo plano",
@@ -320,7 +263,7 @@ async def sincronizar_empleados_sync(
     service = SyncService()
     areas = request.areas if request else None
     ruts  = request.ruts  if request else None
-    ignored_cargos = request.ignored_cargos if request else None
+    selected_cargos = request.selected_cargos if request else None
 
     if ruts and len(ruts) > MAX_BATCH:
         raise HTTPException(
@@ -328,7 +271,7 @@ async def sincronizar_empleados_sync(
             detail=f"Máximo {MAX_BATCH} empleados por sincronización masiva. Seleccionaste {len(ruts)}."
         )
 
-    stats = await service.sync_empleados(areas=areas, ruts=ruts, ignored_cargos=ignored_cargos)
+    stats = await service.sync_empleados(areas=areas, ruts=ruts, selected_cargos=selected_cargos)
     return {
         "message": "Sincronización completada",
         "stats": stats
@@ -355,7 +298,7 @@ async def sincronizar_empleados_stream(
     """
     areas = request.areas if request else None
     ruts  = request.ruts  if request else None
-    ignored_cargos = request.ignored_cargos if request else None
+    selected_cargos = request.selected_cargos if request else None
     MAX_BATCH = 10
 
     if ruts and len(ruts) > MAX_BATCH:
@@ -382,7 +325,7 @@ async def sincronizar_empleados_stream(
 
             service._progress_callback = _on_progress
 
-            stats = await service.sync_empleados(areas=areas, ruts=ruts, ignored_cargos=ignored_cargos)
+            stats = await service.sync_empleados(areas=areas, ruts=ruts, selected_cargos=selected_cargos)
             if stats and stats.get("status") == "requires_confirmation":
                 await progress_q.put(('requires_confirmation', stats))
             else:
@@ -658,10 +601,9 @@ async def reset_turso_replica(
 
 
 
-async def ejecutar_sync_empleados(areas: List[str] = None, ignored_cargos: List[str] = None):
-    """Función helper para ejecutar sync en background"""
+async def ejecutar_sync_empleados(areas: List[str] = None, selected_cargos: List[str] = None):
     service = SyncService()
-    await service.sync_empleados(areas=areas, ignored_cargos=ignored_cargos)
+    await service.sync_empleados(areas=areas, selected_cargos=selected_cargos)
 
 
 async def ejecutar_sync_asistencia(fecha_inicio: str = None, fecha_fin: str = None):
