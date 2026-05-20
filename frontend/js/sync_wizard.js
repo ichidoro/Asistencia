@@ -214,6 +214,7 @@ window.wizardNextStep = async function() {
             Swal.fire('Error', 'No se pudieron guardar las áreas.', 'error');
             return;
         }
+    }
 
     // --- PASO 2: Cargos ---
     if (step === 2) {
