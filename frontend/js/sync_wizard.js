@@ -197,8 +197,23 @@ window.wizardNextStep = async function() {
             Swal.fire('Atención', 'Debes seleccionar al menos un área para importar.', 'warning');
             return;
         }
-        // Commit deferido al paso final
-    }
+        // Realizar commit parcial para que las áreas existan en BD (necesario para paso 3: Bonos y paso 4: Turnos)
+        try {
+            const resp = await fetch('/api/sync/wizard/commit/areas/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ areas: resoluciones })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                window._wizardState.sessionCreated.areas = data.creadas || [];
+                console.log('[Wizard] Áreas persistidas:', data.creadas);
+            }
+        } catch (e) {
+            console.error('[Wizard] Error commiteando áreas:', e);
+            Swal.fire('Error', 'No se pudieron guardar las áreas.', 'error');
+            return;
+        }
 
     // --- PASO 2: Cargos ---
     if (step === 2) {
@@ -208,7 +223,23 @@ window.wizardNextStep = async function() {
         if (typeof window.loadMetadata === 'function') {
             await window.loadMetadata(true);
         }
-        // Commit deferido al paso final
+        // Realizar commit parcial de cargos (necesario para Bonos y Turnos)
+        try {
+            const resp = await fetch('/api/sync/wizard/commit/cargos/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ cargos: window._wizardState.resoluciones.cargos })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                window._wizardState.sessionCreated.cargos = data.creados || [];
+                console.log('[Wizard] Cargos persistidos:', data.creados);
+            }
+        } catch (e) {
+            console.error('[Wizard] Error commiteando cargos:', e);
+            Swal.fire('Error', 'No se pudieron guardar los cargos.', 'error');
+            return;
+        }
     }
 
     // --- PASO 5: Bonos ---

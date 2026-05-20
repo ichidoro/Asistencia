@@ -14,3 +14,9 @@ class SyncAsistenciaRequest(BaseModel):
     fecha_inicio: Optional[str] = None
     fecha_fin: Optional[str] = None
     areas: Optional[List[str]] = None
+
+class WizardCommitAreasRequest(BaseModel):
+    areas: Dict[str, str]
+
+class WizardCommitCargosRequest(BaseModel):
+    cargos: Dict[str, str]

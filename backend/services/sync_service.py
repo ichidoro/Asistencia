@@ -218,6 +218,50 @@ class SyncService:
             logger.error(f"❌ Error en check_guardian_areas: {e}")
             return {"status": "error", "message": str(e)}
 
+    async def commit_wizard_areas(self, areas: Dict[str, str]) -> Dict[str, Any]:
+        from backend.repositories.area import AreaRepository
+        await db.connect()
+        creadas = []
+        async with db.transaction():
+            area_repo = AreaRepository(db)
+            for area_bioalba, resolucion in areas.items():
+                if resolucion == "_IGNORE_":
+                    continue
+                nombre_local = area_bioalba if resolucion == "_NEW_" else resolucion
+                existing = await area_repo.get_area_by_name(nombre_local)
+                if existing:
+                    area_id = existing['id']
+                else:
+                    area_id = await area_repo.create_area({"nombre": nombre_local})
+                    creadas.append({"id": area_id, "nombre": nombre_local, "bioalba": area_bioalba})
+                
+                alias_list = await area_repo.get_area_aliases(area_id)
+                if area_bioalba not in alias_list and area_bioalba != nombre_local:
+                    await area_repo.add_area_alias(area_id, area_bioalba)
+        return {"creadas": creadas}
+
+    async def commit_wizard_cargos(self, cargos: Dict[str, str]) -> Dict[str, Any]:
+        from backend.repositories.cargo import CargoRepository
+        await db.connect()
+        creados = []
+        async with db.transaction():
+            cargo_repo = CargoRepository(db)
+            for cargo_bioalba, resolucion in cargos.items():
+                if resolucion == "_IGNORE_":
+                    continue
+                nombre_local = cargo_bioalba if resolucion == "_NEW_" else resolucion
+                existing = await cargo_repo.get_cargo_by_name(nombre_local)
+                if existing:
+                    cargo_id = existing['id']
+                else:
+                    cargo_id = await cargo_repo.create_cargo({"nombre": nombre_local})
+                    creados.append({"id": cargo_id, "nombre": nombre_local, "bioalba": cargo_bioalba})
+                
+                alias_list = await cargo_repo.get_cargo_aliases(cargo_id)
+                if cargo_bioalba not in alias_list and cargo_bioalba != nombre_local:
+                    await cargo_repo.add_cargo_alias(cargo_id, cargo_bioalba)
+        return {"creados": creados}
+
     async def commit_wizard_all(
         self,
         areas: Dict[str, str],

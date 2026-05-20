@@ -8,7 +8,7 @@ from datetime import datetime as _dt
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Query, Depends
 from typing import Dict, Any, Optional, List
 from loguru import logger
-from backend.schemas.sync import SyncEmpleadosRequest, SyncAsistenciaRequest, SyncPreviewRequest
+from backend.schemas.sync import SyncEmpleadosRequest, SyncAsistenciaRequest, SyncPreviewRequest, WizardCommitAreasRequest, WizardCommitCargosRequest
 from fastapi.responses import StreamingResponse
 import asyncio
 from pydantic import BaseModel
@@ -211,6 +211,40 @@ async def wizard_commit_all(
         return result
     except Exception as e:
         logger.error(f"Error en commit_wizard_all: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post(
+    "/wizard/commit/areas/",
+    summary="Wizard Commit: Áreas",
+    description="Confirma las áreas en la base de datos (Paso 1 del Wizard) para que puedan ser referenciadas por Bonos y Turnos."
+)
+async def wizard_commit_areas(
+    request: WizardCommitAreasRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    try:
+        result = await service.commit_wizard_areas(request.areas)
+        return result
+    except Exception as e:
+        logger.error(f"Error en commit_wizard_areas: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post(
+    "/wizard/commit/cargos/",
+    summary="Wizard Commit: Cargos",
+    description="Confirma los cargos en la base de datos (Paso 2 del Wizard) para que puedan ser referenciados por Bonos y Turnos."
+)
+async def wizard_commit_cargos(
+    request: WizardCommitCargosRequest,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+) -> Dict[str, Any]:
+    service = SyncService()
+    try:
+        result = await service.commit_wizard_cargos(request.cargos)
+        return result
+    except Exception as e:
+        logger.error(f"Error en commit_wizard_cargos: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
