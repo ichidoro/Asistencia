@@ -232,12 +232,13 @@ class SyncService:
                 if existing:
                     area_id = existing['id']
                 else:
-                    area_id = await area_repo.create_area({"nombre": nombre_local})
+                    area_id = await area_repo.create_area(nombre_local)
                     creadas.append({"id": area_id, "nombre": nombre_local, "bioalba": area_bioalba})
                 
-                alias_list = await area_repo.get_area_aliases(area_id)
-                if area_bioalba not in alias_list and area_bioalba != nombre_local:
-                    await area_repo.add_area_alias(area_id, area_bioalba)
+                if area_bioalba != nombre_local:
+                    existing_alias_id = await area_repo.find_area_id_by_name_or_alias(area_bioalba)
+                    if not existing_alias_id:
+                        await area_repo.create_alias(area_bioalba, area_id)
         return {"creadas": creadas}
 
     async def commit_wizard_cargos(self, cargos: Dict[str, str]) -> Dict[str, Any]:
@@ -254,12 +255,13 @@ class SyncService:
                 if existing:
                     cargo_id = existing['id']
                 else:
-                    cargo_id = await cargo_repo.create_cargo({"nombre": nombre_local})
+                    cargo_id = await cargo_repo.create_cargo(nombre_local)
                     creados.append({"id": cargo_id, "nombre": nombre_local, "bioalba": cargo_bioalba})
                 
-                alias_list = await cargo_repo.get_cargo_aliases(cargo_id)
-                if cargo_bioalba not in alias_list and cargo_bioalba != nombre_local:
-                    await cargo_repo.add_cargo_alias(cargo_id, cargo_bioalba)
+                if cargo_bioalba != nombre_local:
+                    existing_alias_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_bioalba)
+                    if not existing_alias_id:
+                        await cargo_repo.create_alias(cargo_bioalba, cargo_id)
         return {"creados": creados}
 
     async def commit_wizard_all(
@@ -296,7 +298,9 @@ class SyncService:
                     area_id = await area_repo.create_area(nombre_local)
                     creados["areas"] += 1
                 if area_bioalba != nombre_local:
-                    await area_repo.create_alias(area_bioalba, area_id)
+                    existing_alias_id = await area_repo.find_area_id_by_name_or_alias(area_bioalba)
+                    if not existing_alias_id:
+                        await area_repo.create_alias(area_bioalba, area_id)
 
             # 2. CARGOS
             for cargo_bioalba, resolucion in cargos.items():
@@ -310,7 +314,9 @@ class SyncService:
                     cargo_id = await cargo_repo.create_cargo(nombre_local)
                     creados["cargos"] += 1
                 if cargo_bioalba != nombre_local:
-                    await cargo_repo.create_alias(cargo_bioalba, cargo_id)
+                    existing_alias_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_bioalba)
+                    if not existing_alias_id:
+                        await cargo_repo.create_alias(cargo_bioalba, cargo_id)
 
             # 3. GENEROS
             for genero in generos:
@@ -554,12 +560,6 @@ class SyncService:
                         self.stats['filtrados'] += 1
                         continue
 
-                # Filtrar cargos ignorados
-                if ignored_cargos and len(ignored_cargos) > 0:
-                    emp_cargo = str(emp_data.get('cargo', '')).strip()
-                    if emp_cargo in ignored_cargos:
-                        self.stats['filtrados'] += 1
-                        continue
 
                 emp_filtrados.append(emp_data)
 
