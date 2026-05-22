@@ -1471,22 +1471,34 @@ class AsistenciaService:
                             bulk_ctx['rotativo_last_sem_dict'] = {}
                         bulk_ctx['rotativo_last_sem_dict'][empleado_id] = winner_sem
                     else:
-                        # Si no hay logs, usamos la última alternativa conocida SÓLO para evaluar inasistencias en el PASADO.
-                        # [BUSINESS_RULE: PREDICCIÓN DE DÍAS FUTUROS]
-                        # Solo se omite la predicción para días estrictamente mayores a hoy (>).
-                        # El día "hoy" (==) DEBE evaluarse para que los descansos y rotativas se marquen (ej. LIB).
-                        is_future = dt.date() > datetime.now().date()
-                        if is_future:
-                            # No adivinar el futuro: sin marcas no hay turno asignado aún
-                            semana_ganadora = None
-                            config_dia = None
+                        # Si no hay logs, resolvemos qué semana del turno corresponde de forma configurable:
+                        total_sems = bulk_ctx['turnos_weeks'].get(tid, 1)
+                        
+                        if total_sems == 1:
+                            semana_ganadora = 1
                         else:
-                            # [FIX] Si es DINAMICO_FLEXIBLE y NO HAY MARCAS en un día pasado/presente,
-                            # NO asumimos ciegamente que fue su día libre. Respetamos la semana activa.
-                            last_sem_dict = bulk_ctx.get('rotativo_last_sem_dict', {})
-                            num_sem_activa = last_sem_dict.get(empleado_id, 1) if isinstance(last_sem_dict, dict) else 1
-                            semana_ganadora = num_sem_activa
+                            # Obtener configuración del turno padre (vía cualquier día de la semana 1)
+                            ejemplo_dia = next(iter(bulk_ctx['turnos'].get(tid, {}).get(1, {}).values()), {})
+                            es_secuencial = bool(ejemplo_dia.get('rotacion_secuencial', True))
+                            fallback_sem = int(ejemplo_dia.get('semana_fallback_sin_marcas', 1))
+                            
+                            if es_secuencial and f_asig_ini:
+                                # Proyección matemática de rotación fija
+                                monday_dt = dt - timedelta(days=dt.weekday())
+                                monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
+                                semanas_diff = (monday_dt - monday_ini).days // 7
+                                semana_ganadora = (semanas_diff % total_sems) + 1
+                            else:
+                                # Fallback configurable (si es 0, queda None)
+                                semana_ganadora = fallback_sem if fallback_sem > 0 else None
+
+                        if semana_ganadora is not None:
                             config_dia = bulk_ctx['turnos'].get(tid, {}).get(semana_ganadora, {}).get(dia_semana)
+                            if 'rotativo_last_sem_dict' not in bulk_ctx:
+                                bulk_ctx['rotativo_last_sem_dict'] = {}
+                            bulk_ctx['rotativo_last_sem_dict'][empleado_id] = semana_ganadora
+                        else:
+                            config_dia = None
                 else:
                     # Turnos Fijos o normales
                     if f_asig_ini and total_sems > 1:
@@ -1556,23 +1568,31 @@ class AsistenciaService:
                             (tid, dia_semana, winner_sem)
                         )
                     else:
-                        # [FIX] Mismo fallback para consultas individuales: buscar día libre
-                        semana_libre = None
-                        for num_semana_eval in range(1, total_sems + 1):
-                            sem_rows = await db.fetch_all(
+                        # Si no hay logs, resolvemos de forma de rotación o fallback configurable:
+                        if total_sems == 1:
+                            semana_ganadora = 1
+                        else:
+                            padre_row = await db.fetch_one("SELECT * FROM turnos WHERE id = ?", (tid,))
+                            padre = dict(padre_row) if padre_row else {}
+                            es_secuencial = bool(padre.get('rotacion_secuencial', True))
+                            fallback_sem = int(padre.get('semana_fallback_sin_marcas', 1))
+                            
+                            if es_secuencial and f_asig_ini:
+                                # Proyección matemática
+                                monday_dt = dt - timedelta(days=dt.weekday())
+                                monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
+                                semanas_diff = (monday_dt - monday_ini).days // 7
+                                semana_ganadora = (semanas_diff % total_sems) + 1
+                            else:
+                                semana_ganadora = fallback_sem if fallback_sem > 0 else None
+
+                        if semana_ganadora is not None:
+                            rows = await db.fetch_all(
                                 "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
-                                (tid, dia_semana, num_semana_eval)
+                                (tid, dia_semana, semana_ganadora)
                             )
-                            if sem_rows and sem_rows[0]['es_libre']:
-                                semana_libre = num_semana_eval
-                                break
-                                
-                        num_sem_activa = semana_libre if semana_libre else 1
-                        semana_ganadora = num_sem_activa
-                        rows = await db.fetch_all(
-                            "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ? AND num_semana = ?",
-                            (tid, dia_semana, num_sem_activa)
-                        )
+                        else:
+                            rows = []
                 else:
                     rows = await db.fetch_all(
                         "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
@@ -1592,7 +1612,8 @@ class AsistenciaService:
                             'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
                             'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
                             'tipo_programacion', 'nombre',
-                            'ventana_en_curso_minutos', 'tolerancia_exceso_colacion_minutos'
+                            'ventana_en_curso_minutos', 'tolerancia_exceso_colacion_minutos',
+                            'rotacion_secuencial', 'semana_fallback_sin_marcas'
                         ):
                             if campo in padre:
                                 config_dia[campo] = padre[campo]
@@ -2265,21 +2286,34 @@ class AsistenciaService:
                 )
                 return res
             if config_dia:
-                # Si el turno aún no ha comenzado (la hora teórica de entrada todavía
-                # no llegó + margen del anclaje configurado), no registrar nada.
-                # Evita marcar INASISTENCIA prematura en turnos nocturnos.
-                if h_ent_teorica:
-                    hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                    
-                    if turno.get('tipo_programacion') == 'DINAMICO_FLEXIBLE' and fecha == datetime.now().strftime("%Y-%m-%d"):
-                        # Para evitar Inasistencia prematura en Rotativos Inteligentes, 
-                        # simplemente no la marcamos el mismo día si no hay marcas,
-                        # ya que no sabemos a ciencia cierta qué ciclo les tocaba.
-                        # Se evaluará como Inasistencia real al día siguiente si siguen sin marcas.
-                        return None
+                # Determinar la hora de entrada teórica más tardía de entre las alternativas para evitar inasistencias prematuras:
+                horas_entrada_candidatas = []
+                if config_dia.get('hora_entrada'):
+                    horas_entrada_candidatas.append(config_dia.get('hora_entrada'))
+                if config_dia.get('hora_entrada_2'):
+                    horas_entrada_candidatas.append(config_dia.get('hora_entrada_2'))
 
+                if horas_entrada_candidatas:
+                    entrada_mas_tardio_str = max(horas_entrada_candidatas)
+                    if len(entrada_mas_tardio_str) > 5:
+                        entrada_mas_tardio_str = entrada_mas_tardio_str[:5]
+                    try:
+                        limite_dt = datetime.strptime(f"{fecha} {entrada_mas_tardio_str}", "%Y-%m-%d %H:%M")
+                        hora_limite_alerta = limite_dt + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
+                        
+                        if datetime.now() < hora_limite_alerta:
+                            return None
+                    except Exception as e:
+                        logger.error(f"Error parseando hora_entrada límite '{entrada_mas_tardio_str}': {e}")
+                        if h_ent_teorica:
+                            hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
+                            if datetime.now() < hora_limite_alerta:
+                                return None
+                elif h_ent_teorica:
+                    hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
                     if datetime.now() < hora_limite_alerta:
                         return None
+
                 res['estado'] = 'INASISTENCIA'
                 res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
                 logger.info(
