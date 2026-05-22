@@ -64,6 +64,8 @@ class TurnoBase(BaseModel):
     areas: List[str] = [] # Nuevo: Lista de nombres de áreas
     turno_padre_id: Optional[int] = None # Para versionamiento: ID del turno original
     fecha_vigencia: Optional[str] = None # YYYY-MM-DD: Desde cuándo aplica esta versión
+    rotacion_secuencial: bool = True
+    semana_fallback_sin_marcas: int = 1
 
 class TurnoCreate(TurnoBase):
     dias: List[TurnoDiaCreate]

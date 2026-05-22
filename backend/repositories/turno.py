@@ -74,6 +74,14 @@ class TurnoRepository:
             try: await self.db.execute("ALTER TABLE turnos ADD COLUMN umbral_horas_colacion REAL DEFAULT 0.0")
             except Exception as e: logger.debug(f"[Migration] umbral_horas_colacion ya existe o error benigno: {e}")
 
+        if not await self.db.column_exists("turnos", "rotacion_secuencial"):
+            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN rotacion_secuencial BOOLEAN DEFAULT 1")
+            except Exception as e: logger.debug(f"[Migration] rotacion_secuencial ya existe o error benigno: {e}")
+
+        if not await self.db.column_exists("turnos", "semana_fallback_sin_marcas"):
+            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN semana_fallback_sin_marcas INTEGER DEFAULT 1")
+            except Exception as e: logger.debug(f"[Migration] semana_fallback_sin_marcas ya existe o error benigno: {e}")
+
         # 2. Tabla Turno Dias (Detalle Semanal)
         if not await self.db.table_exists("turno_dias"):
             await self.db.execute("""
@@ -409,8 +417,8 @@ class TurnoRepository:
                     redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion, es_turno_cortado,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
-                    turno_padre_id, fecha_vigencia
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
@@ -418,7 +426,8 @@ class TurnoRepository:
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion, turno.es_turno_cortado,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
-                turno.turno_padre_id, turno.fecha_vigencia
+                turno.turno_padre_id, turno.fecha_vigencia,
+                1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas
             )
             
             cursor = await self.db.execute(sql_turno, params_turno)

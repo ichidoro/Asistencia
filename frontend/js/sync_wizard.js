@@ -1474,12 +1474,18 @@ async function fetchAndRenderWizardStep5() {
             </tr>`;
         }).join('');
 
+        const MAX_WIZ_SYNC = 10;
+
         listContainer.innerHTML = `
-            <div class="table-responsive" style="max-height: 300px;">
+            <div class="d-flex align-items-center justify-content-between mb-2 px-1">
+                <span class="text-muted small">Selecciona los empleados a sincronizar</span>
+                <span id="wiz-emp-limit-badge" class="badge bg-primary">0 / ${MAX_WIZ_SYNC} seleccionados</span>
+            </div>
+            <div class="table-responsive" style="max-height: 280px;">
                 <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.85rem;">
                     <thead class="table-light sticky-top">
                         <tr>
-                            <th class="text-center"><input type="checkbox" class="form-check-input" id="wiz-chk-emp-all" checked onchange="document.querySelectorAll('.wiz-chk-emp').forEach(chk => chk.checked = this.checked)"></th>
+                            <th class="text-center"><input type="checkbox" class="form-check-input" id="wiz-chk-emp-all" checked onchange="window.toggleAllWizardEmps(this.checked)"></th>
                             <th>RUT</th>
                             <th>Nombre</th>
                             <th>Cargo</th>
@@ -1492,6 +1498,13 @@ async function fetchAndRenderWizardStep5() {
                 </table>
             </div>
         `;
+
+        // Aplicar límite en tiempo real: cada checkbox llama a wizEnforceSyncLimit
+        listContainer.querySelectorAll('.wiz-chk-emp').forEach(chk => {
+            chk.addEventListener('change', () => window.wizEnforceSyncLimit());
+        });
+        // Estado inicial del badge (todos checked al renderizar)
+        window.wizEnforceSyncLimit();
 
         const searchInputs = document.querySelectorAll('#wizard-step-7 .d-flex.gap-2.mb-2, #wizard-step-7 .mb-2');
         searchInputs.forEach(el => el.classList.remove('d-none'));
@@ -1525,6 +1538,49 @@ window.filterWizardEmpleados = function() {
     if (counter) counter.textContent = `${visible} visibles`;
 };
 
+window.wizEnforceSyncLimit = function() {
+    const MAX = 10;
+    const allChks = document.querySelectorAll('.wiz-chk-emp');
+    const checkedChks = document.querySelectorAll('.wiz-chk-emp:checked');
+    const badge = document.getElementById('wiz-emp-limit-badge');
+
+    // Actualizar badge contador
+    if (badge) {
+        badge.textContent = `${checkedChks.length} / ${MAX} seleccionados`;
+        badge.className = checkedChks.length >= MAX
+            ? 'badge bg-warning text-dark'
+            : 'badge bg-primary';
+    }
+
+    // Si superaron el límite, desmarcar el último que se marcó (el que acaba de cambiar)
+    if (checkedChks.length > MAX) {
+        // Desmarcar el checkbox que acaba de activarse (el evento change ya corrió)
+        // Buscamos el último checked que no tenga el atributo data-wiz-locked (temporal)
+        const last = Array.from(checkedChks).at(-1);
+        if (last) {
+            last.checked = false;
+            // Mostrar mensaje no-intrusivo en el badge
+            if (badge) {
+                badge.textContent = `Máx. ${MAX} — deselecciona uno para continuar`;
+                badge.className = 'badge bg-danger';
+                setTimeout(() => window.wizEnforceSyncLimit(), 2500);
+            }
+        }
+    }
+
+    // Deshabilitar checkboxes sin marcar si ya se alcanzó el límite
+    const currentChecked = document.querySelectorAll('.wiz-chk-emp:checked').length;
+    allChks.forEach(chk => {
+        if (!chk.checked) {
+            chk.disabled = currentChecked >= MAX;
+            chk.title = currentChecked >= MAX ? `Límite de ${MAX} alcanzado` : '';
+        } else {
+            chk.disabled = false;
+            chk.title = '';
+        }
+    });
+};
+
 window.toggleAllWizardEmps = function(checked) {
     document.querySelectorAll('.wiz-chk-emp').forEach(chk => {
         // Solo marcar los visibles (no los filtrados)
@@ -1533,6 +1589,8 @@ window.toggleAllWizardEmps = function(checked) {
             chk.checked = checked;
         }
     });
+    // Re-aplicar límite tras toggle masivo
+    window.wizEnforceSyncLimit();
 };
 
 // ==========================================
@@ -1548,6 +1606,19 @@ window.confirmWizardSync = async function() {
     if (checkedBoxes.length === 0) {
         Swal.fire('Sin selección', 'Seleccione al menos un empleado para sincronizar.', 'warning');
         return;
+    }
+
+    // ── GUARDIA: límite de 10 ANTES de cerrar el wizard ───────────────────────────
+    // Nunca debe llegar aquí con más de 10 (wizEnforceSyncLimit lo bloquea),
+    // pero por doble seguridad lo validamos aquí también sin cerrar el wizard.
+    if (checkedBoxes.length > 10) {
+        Swal.fire({
+            title: 'Límite superado',
+            html: `Máximo <strong>10 empleados</strong> por sincronización.<br>Tienes <strong>${checkedBoxes.length}</strong> seleccionados. Desmarca algunos.`,
+            icon: 'warning',
+            confirmButtonText: 'Volver a seleccionar'
+        });
+        return; // wizard sigue abierto
     }
 
     const selectedRuts = checkedBoxes.length < allBoxes.length

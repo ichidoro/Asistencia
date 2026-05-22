@@ -764,10 +764,11 @@ body {
     box-shadow: 0 40px 80px -12px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* FIX DEFINITIVO: Dropdowns dentro del modal de bono.
-   Problema: .modal-body tiene overflow-y:auto que clipa los dropdowns
-   aunque .modal-content sea visible.
-   Solución: overflow:visible en toda la cadena + scroll en #reglas-container */
+/* FIX DEFINITIVO v2: Dropdowns dentro del modal de bono.
+   - overflow:visible en la cadena modal-content → modal-body para no clipear.
+   - El scroll queda solo en #reglas-container (no en todo el body).
+   - Bootstrap Dropdown con strategy:'fixed' calcula posicion correcta.
+   - Solo necesitamos z-index alto (>1060 del modal) para aparecer encima. */
 #modal-bono .modal-content {
     overflow: visible !important;
 }
@@ -775,16 +776,14 @@ body {
     overflow: visible !important;
     max-height: none !important;
 }
-/* El scroll se hace en el contenedor de reglas, no en el body */
+/* El scroll del listado de reglas queda acotado aquí */
 #modal-bono #reglas-container {
     max-height: 45vh;
     overflow-y: auto;
     overflow-x: visible;
     padding-right: 4px;
 }
-/* Los dropdowns salen del scroll-container via position:fixed (Popper.js) */
 #modal-bono .dropdown-menu {
-    position: fixed !important;
     z-index: 2300 !important;
 }
 #modal-bono .dropdown-menu.show {

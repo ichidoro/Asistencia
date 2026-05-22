@@ -215,6 +215,7 @@ class AsistenciaService:
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
                 'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
+                'rotacion_secuencial', 'semana_fallback_sin_marcas',
             ]
 
             # Construir dict {turno_id: {campo: valor}} desde los datos de asig_rows
@@ -490,6 +491,7 @@ class AsistenciaService:
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
                 'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
+                'rotacion_secuencial', 'semana_fallback_sin_marcas',
             ]
             for td in td_rows:
                 tid = td['turno_id']
@@ -1310,7 +1312,45 @@ class AsistenciaService:
                 tipo_ancla = str(ancla.get('tipo', '') or '').strip().lower()
 
                 if tipo_ancla in _TIPOS_S:
-                    # [D9] Ancla es Salida Huérfana
+                    # [ITS] Inferencia de Tipo Secuencial:
+                    # Antes de declarar "Salida Huérfana", verificamos si el día
+                    # anterior terminó con balance 0 (empleado ya estaba "afuera").
+                    # Si balance_ayer == 0 → la Salida de BioAlba es un error del
+                    # sensor (dedo en función equivocada) → corregir a Entrada.
+                    # Si balance_ayer > 0 → el empleado cruzó medianoche y esta
+                    # Salida es legítima (cierre de turno nocturno).
+                    ayer_str = (datetime.strptime(fecha, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                    balance_ayer = 0
+                    for log_ayer in raw_logs:
+                        if log_ayer.get('fecha_hora', '').startswith(ayer_str):
+                            t_ayer = str(log_ayer.get('tipo', '') or '').strip().lower()
+                            if t_ayer in _TIPOS_E:
+                                balance_ayer += 1
+                            elif t_ayer in _TIPOS_S:
+                                balance_ayer -= 1
+
+                    if balance_ayer <= 0:
+                        # El empleado ya había salido ayer → la Salida es error del
+                        # sensor. Corregir tipo en memoria (no persiste en BD).
+                        ancla_corregida = dict(ancla)
+                        ancla_corregida['tipo'] = 'Entrada'
+                        ancla_corregida['_tipo_inferido'] = True  # trazabilidad
+                        idx_en_raw = next(
+                            (i for i, l in enumerate(marcas_disponibles) if l.get('id') == ancla.get('id')),
+                            None
+                        )
+                        if idx_en_raw is not None:
+                            marcas_disponibles[idx_en_raw] = ancla_corregida
+                        ancla = ancla_corregida
+                        tipo_ancla = 'entrada'
+                        logger.info(
+                            f"[ITS] emp={empleado_id} fecha={fecha} | "
+                            f"Marca {ancla.get('id')} corregida Salida→Entrada "
+                            f"(balance_ayer={balance_ayer}, sensor erróneo)"
+                        )
+
+                if tipo_ancla in _TIPOS_S:
+                    # [D9] Salida legítima: el empleado cruzó medianoche
                     block_inteligente = [ancla]
                     consumidas_emp.add(ancla.get('id'))
                 else:
@@ -1720,7 +1760,40 @@ class AsistenciaService:
                 if ancla:
                     idx = marcas_disponibles.index(ancla)
                     t_ancla = str(ancla.get('tipo', '') or '').strip().lower()
-                    if t_ancla in {'salida', 'exit', 's', 'out', '2'}:
+                    _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+                    _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+
+                    if t_ancla in _TIPOS_S:
+                        # [ITS] Inferencia de Tipo Secuencial en turno nocturno fijo
+                        balance_ayer = 0
+                        for log_ayer in raw_logs:
+                            if log_ayer.get('fecha_hora', '').startswith(ayer_str):
+                                t_ayer = str(log_ayer.get('tipo', '') or '').strip().lower()
+                                if t_ayer in _TIPOS_E:
+                                    balance_ayer += 1
+                                elif t_ayer in _TIPOS_S:
+                                    balance_ayer -= 1
+
+                        if balance_ayer <= 0:
+                            # Corregir tipo en memoria
+                            ancla_corregida = dict(ancla)
+                            ancla_corregida['tipo'] = 'Entrada'
+                            ancla_corregida['_tipo_inferido'] = True
+                            idx_en_raw = next(
+                                (i for i, l in enumerate(marcas_disponibles) if l.get('id') == ancla.get('id')),
+                                None
+                            )
+                            if idx_en_raw is not None:
+                                marcas_disponibles[idx_en_raw] = ancla_corregida
+                            ancla = ancla_corregida
+                            t_ancla = 'entrada'
+                            logger.info(
+                                f"[ITS-NOCTURNO] emp={empleado_id} fecha={fecha} | "
+                                f"Marca {ancla.get('id')} corregida Salida→Entrada "
+                                f"(balance_ayer={balance_ayer}, sensor erróneo)"
+                            )
+
+                    if t_ancla in _TIPOS_S:
                         # [D9] Ancla es Salida Huérfana
                         logs = [ancla]
                     else:
@@ -1728,9 +1801,9 @@ class AsistenciaService:
                         for i in range(idx, len(marcas_disponibles)):
                             l = marcas_disponibles[i]
                             t = str(l.get('tipo', '') or '').strip().lower()
-                            if t in {'entrada', 'entry', 'e', 'in', '1'}:
+                            if t in _TIPOS_E:
                                 balance += 1
-                            elif t in {'salida', 'exit', 's', 'out', '2'}:
+                            elif t in _TIPOS_S:
                                 balance -= 1
                             
                             logs.append(l)
@@ -2233,27 +2306,77 @@ class AsistenciaService:
 
             if entradas:
                 dt_entrada = entradas[0][0]
-                # ÚLTIMA salida después de la entrada — regla de negocio:
-                # primera marca = entrada, última marca = salida.
-                salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
-                if salidas_post:
-                    dt_salida_fin = salidas_post[-1][0]
-                elif len(entradas) > 1:
-                    dt_salida_fin = entradas[-1][0]
-                    entradas = entradas[:-1]
-                    res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Última marca tratada como Salida. "
-                else:
-                    dt_salida_fin = None
 
-                # ── COLACIÓN Y PERMISOS REALES (marcas intermedias nocturno) ───────────
-                if len(salidas_post) >= 2 and len(entradas) >= 2:
-                    salidas_intermedias = [s[0] for s in salidas_post[:-1]]
-                    entradas_intermedias = [e[0] for e in entradas[1:]]
-                    _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
+                # ── FALLBACK POSICIONAL: tipos invertidos (nocturno) ──────────
+                primera_salida_noc = salidas[0][0] if salidas else None
+                if primera_salida_noc and dt_entrada > primera_salida_noc:
+                    todos_noc2 = sorted(
+                        [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
+                         for l in logs_sorted],
+                        key=lambda x: x[0]
+                    )
+                    if len(todos_noc2) >= 2:
+                        dt_entrada    = todos_noc2[0][0]
+                        dt_salida_fin = todos_noc2[-1][0]
+                        entrada_real  = dt_entrada.strftime("%H:%M:%S")
+                        salida_real   = dt_salida_fin.strftime("%H:%M:%S")
+                        res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
+                        if len(todos_noc2) >= 4:
+                            sal_int = [t[0] for t in todos_noc2[1:-1:2]]
+                            ent_int = [t[0] for t in todos_noc2[2:-1:2]]
+                            _procesar_pares_intermedios(sal_int, ent_int)
+                        dt_entrada_calculo = dt_entrada
+                        tiempos_proc = [
+                            self._apply_rounding(dt_entrada_calculo, redondeo),
+                            self._apply_rounding(dt_salida_fin, redondeo)
+                        ]
+                        dt_entrada = None  # evita re-entrar al bloque if dt_entrada is not None
+                else:
+                    # flujo normal nocturno
+                    salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
+                    if salidas_post:
+                        dt_salida_fin = salidas_post[-1][0]
+                    elif len(entradas) > 1:
+                        dt_salida_fin = entradas[-1][0]
+                        entradas = entradas[:-1]
+                        res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Ultima marca tratada como Salida. "
+                    else:
+                        dt_salida_fin = None
+
+                    # COLACION Y PERMISOS (marcas intermedias nocturno)
+                    if len(salidas_post) >= 2 and len(entradas) >= 2:
+                        salidas_intermedias = [s[0] for s in salidas_post[:-1]]
+                        entradas_intermedias = [e[0] for e in entradas[1:]]
+                        _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
 
             elif salidas:
-                # Solo hay salidas, sin entrada → borde frío (entrada antes del sync)
-                dt_salida_fin = salidas[0][0]
+                # Sin entradas tipificadas: fallback posicional si hay >= 2 marcas.
+                # Cubre el caso de "error de dedo" (marco Salida como primera marca).
+                todos_noc = sorted(
+                    [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
+                     for l in logs_sorted],
+                    key=lambda x: x[0]
+                )
+                if len(todos_noc) >= 2:
+                    dt_entrada    = todos_noc[0][0]
+                    dt_salida_fin = todos_noc[-1][0]
+                    entrada_real  = dt_entrada.strftime("%H:%M:%S")
+                    salida_real   = dt_salida_fin.strftime("%H:%M:%S")
+                    res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
+                    # Extraer intermedias para colacion
+                    if len(todos_noc) >= 4:
+                        sal_int = [t[0] for t in todos_noc[1:-1:2]]
+                        ent_int = [t[0] for t in todos_noc[2:-1:2]]
+                        _procesar_pares_intermedios(sal_int, ent_int)
+                    dt_entrada_calculo = dt_entrada
+                    tiempos_proc = [
+                        self._apply_rounding(dt_entrada_calculo, redondeo),
+                        self._apply_rounding(dt_salida_fin, redondeo)
+                    ]
+                else:
+                    # Solo 1 marca: borde frio (entrada antes del sync)
+                    dt_salida_fin = salidas[0][0]
+
 
             if dt_entrada is not None:
                 # ── ANCLAJE DE ENTRADA ────────────────────────────────────────
@@ -2319,26 +2442,82 @@ class AsistenciaService:
 
             if entradas:
                 dt_entrada = entradas[0][0]
-                # ÚLTIMA salida después de la entrada — regla de negocio:
-                # primera marca = entrada, última marca = salida.
-                # Las marcas intermedias (colación) se ignoran.
-                salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
-                if salidas_post:
-                    dt_salida_fin = salidas_post[-1][0]
-                elif len(entradas) > 1:
-                    dt_salida_fin = entradas[-1][0]
-                    entradas = entradas[:-1]
-                    res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Última marca tratada como Salida. "
-                else:
-                    dt_salida_fin = None
 
-                # ── COLACIÓN Y PERMISOS REALES (marcas intermedias diurno) ─────────────
-                if len(salidas_post) >= 2 and len(entradas) >= 2:
-                    salidas_intermedias = [s[0] for s in salidas_post[:-1]]
-                    entradas_intermedias = [e[0] for e in entradas[1:]]
-                    _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
+                # ── FALLBACK POSICIONAL: tipos invertidos ──────────────────────
+                # Si la primera entrada es POSTERIOR a la primera salida, significa
+                # que el empleado marco Salida al llegar (error de dedo).
+                # En ese caso ignoramos los tipos y usamos posicion cronologica:
+                # primera marca = entrada, ultima marca = salida.
+                primera_salida = salidas[0][0] if salidas else None
+                if primera_salida and dt_entrada > primera_salida:
+                    todos_diu = sorted(
+                        [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
+                         for l in logs_sorted],
+                        key=lambda x: x[0]
+                    )
+                    if len(todos_diu) >= 2:
+                        dt_entrada    = todos_diu[0][0]
+                        dt_salida_fin = todos_diu[-1][0]
+                        entrada_real  = dt_entrada.strftime("%H:%M:%S")
+                        salida_real   = dt_salida_fin.strftime("%H:%M:%S")
+                        res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
+                        if len(todos_diu) >= 4:
+                            sal_int = [t[0] for t in todos_diu[1:-1:2]]
+                            ent_int = [t[0] for t in todos_diu[2:-1:2]]
+                            _procesar_pares_intermedios(sal_int, ent_int)
+                        dt_entrada_calculo = dt_entrada
+                        tiempos_proc = [
+                            self._apply_rounding(dt_entrada_calculo, redondeo),
+                            self._apply_rounding(dt_salida_fin, redondeo)
+                        ]
+                        # Saltar el procesamiento normal (ya esta listo)
+                        dt_entrada = None  # evita re-entrar al bloque if dt_entrada is not None
+                else:
+                    # ── FLUJO NORMAL ──────────────────────────────────────────
+                    # ULTIMA salida despues de la entrada
+                    salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
+                    if salidas_post:
+                        dt_salida_fin = salidas_post[-1][0]
+                    elif len(entradas) > 1:
+                        dt_salida_fin = entradas[-1][0]
+                        entradas = entradas[:-1]
+                        res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Ultima marca tratada como Salida. "
+                    else:
+                        dt_salida_fin = None
+
+                    # ── COLACION Y PERMISOS REALES (marcas intermedias diurno) ────
+                    if len(salidas_post) >= 2 and len(entradas) >= 2:
+                        salidas_intermedias = [s[0] for s in salidas_post[:-1]]
+                        entradas_intermedias = [e[0] for e in entradas[1:]]
+                        _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
             elif salidas:
-                dt_salida_fin = salidas[0][0]
+                # Sin entradas tipificadas: fallback posicional si hay >= 2 marcas.
+                # Cubre el caso de "error de dedo" (marco Salida como primera marca).
+                todos_diu = sorted(
+                    [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
+                     for l in logs_sorted],
+                    key=lambda x: x[0]
+                )
+                if len(todos_diu) >= 2:
+                    dt_entrada    = todos_diu[0][0]
+                    dt_salida_fin = todos_diu[-1][0]
+                    entrada_real  = dt_entrada.strftime("%H:%M:%S")
+                    salida_real   = dt_salida_fin.strftime("%H:%M:%S")
+                    res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
+                    # Extraer intermedias para colacion
+                    if len(todos_diu) >= 4:
+                        sal_int = [t[0] for t in todos_diu[1:-1:2]]
+                        ent_int = [t[0] for t in todos_diu[2:-1:2]]
+                        _procesar_pares_intermedios(sal_int, ent_int)
+                    dt_entrada_calculo = dt_entrada
+                    tiempos_proc = [
+                        self._apply_rounding(dt_entrada_calculo, redondeo),
+                        self._apply_rounding(dt_salida_fin, redondeo)
+                    ]
+                else:
+                    # Solo 1 marca: borde frio
+                    dt_salida_fin = salidas[0][0]
+
 
             if dt_entrada is not None:
                 # Anclaje entrada diurno: mismo principio que nocturno.

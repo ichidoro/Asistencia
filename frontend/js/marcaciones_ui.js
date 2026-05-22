@@ -3429,7 +3429,7 @@ function renderVistaAnalitica(respData, container) {
             return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
                         onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                         ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
-                        data-bs-toggle="popover" data-bs-trigger="hover" data-bs-html="true"
+                        data-grid-tooltip data-bs-html="true"
                         data-bs-content="${tooltipData}">
                         ${cellContent}
                     </td>`;
@@ -3638,33 +3638,96 @@ function renderVistaAnalitica(respData, container) {
         <span class="ms-auto text-muted" style="font-size:0.68rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
     </div>`;
 
-    // Activar popovers si los hay (Sanitizer off + Glassmorphism class + Smart boundary + Offset)
-    // FIX: trigger solo 'hover' (sin 'focus') para evitar que el popover quede pegado al hacer click.
-    // delay.hide de 150ms evita el parpadeo cuando el mouse se mueve de celda a popover.
+    // ── TOOLTIP VOLANTE (reemplaza Bootstrap Popover) ─────────────────────────
+    // Un solo div en el body, pointer-events:none para no interceptar eventos del mouse.
+    // Event delegation sobre la tabla: mouseover muestra, mouseout oculta.
+    // Garantia: imposible que quede pegado porque nunca hay instancias huerfanas.
     setTimeout(() => {
-        document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
-            new bootstrap.Popover(el, { 
-                trigger: 'hover', 
-                html: true,
-                sanitize: false,
-                placement: 'auto',
-                container: 'body',
-                boundary: 'window',
-                offset: [0, 8],
-                delay: { show: 80, hide: 150 },
-                customClass: 'glass-popover-light shadow-sm'
-            });
-        });
-
-        // FIX: Limpiar popovers huérfanos al hacer scroll en la tabla.
-        // Bootstrap no los cierra automáticamente cuando container='body' y la celda se desplaza.
-        const tableScroller = container.querySelector('[style*="overflow:auto"]');
-        if (tableScroller && !tableScroller._popoverScrollFixed) {
-            tableScroller._popoverScrollFixed = true;
-            tableScroller.addEventListener('scroll', () => {
-                document.querySelectorAll('.popover').forEach(p => p.remove());
-            }, { passive: true });
+        // Limpiar tooltip anterior si existe (por re-render)
+        let flyTip = document.getElementById('grid-fly-tooltip');
+        if (!flyTip) {
+            flyTip = document.createElement('div');
+            flyTip.id = 'grid-fly-tooltip';
+            flyTip.style.cssText = [
+                'position:fixed',
+                'z-index:9999',
+                'display:none',
+                'pointer-events:none',
+                'max-width:440px',
+                'min-width:280px',
+                'border-radius:10px',
+                'box-shadow:0 8px 32px rgba(0,0,0,0.18)',
+                'background:rgba(255,255,255,0.97)',
+                'border:1px solid #e2e8f0',
+                'padding:0',
+                'overflow:hidden',
+                'backdrop-filter:blur(8px)',
+                'transition:opacity 0.08s ease'
+            ].join(';');
+            document.body.appendChild(flyTip);
         }
+
+        function _positionFlyTip(e) {
+            const PAD = 14;
+            const tipW = flyTip.offsetWidth  || 340;
+            const tipH = flyTip.offsetHeight || 200;
+            let x = e.clientX + PAD;
+            let y = e.clientY + PAD;
+            if (x + tipW > window.innerWidth  - 8) x = e.clientX - tipW - PAD;
+            if (y + tipH > window.innerHeight - 8) y = e.clientY - tipH - PAD;
+            flyTip.style.left = Math.max(4, x) + 'px';
+            flyTip.style.top  = Math.max(4, y) + 'px';
+        }
+
+        function _showFlyTip(td, e) {
+            const html = td.getAttribute('data-bs-content');
+            if (!html) return;
+            flyTip.innerHTML = `<div class="popover-body p-0">${html}</div>`;
+            flyTip.style.display = 'block';
+            flyTip.style.opacity = '1';
+            _positionFlyTip(e);
+        }
+
+        function _hideFlyTip() {
+            flyTip.style.display = 'none';
+        }
+
+        const tableEl = container.querySelector('table.matrix-table');
+        if (tableEl) {
+            // Eliminar listeners previos clonando el nodo (evita duplicados en re-render)
+            const newTable = tableEl; // ya es nuevo por innerHTML
+
+            newTable.addEventListener('mouseover', (e) => {
+                const td = e.target.closest('td[data-grid-tooltip]');
+                if (!td) { _hideFlyTip(); return; }
+                _showFlyTip(td, e);
+            });
+
+            newTable.addEventListener('mousemove', (e) => {
+                if (flyTip.style.display !== 'none') _positionFlyTip(e);
+            });
+
+            newTable.addEventListener('mouseout', (e) => {
+                const td = e.target.closest('td[data-grid-tooltip]');
+                if (!td) return;
+                // Solo ocultar si el mouse sale hacia algo que no es otra celda con tooltip
+                const to = e.relatedTarget ? e.relatedTarget.closest('td[data-grid-tooltip]') : null;
+                if (!to) _hideFlyTip();
+            });
+
+            newTable.addEventListener('mouseleave', _hideFlyTip);
+        }
+
+        // Seguridad extra: al hacer scroll en el contenedor ocultar el tooltip
+        const tableScroller = container.querySelector('[style*="overflow:auto"]');
+        if (tableScroller && !tableScroller._flyTipFixed) {
+            tableScroller._flyTipFixed = true;
+            tableScroller.addEventListener('scroll', _hideFlyTip, { passive: true });
+        }
+
+        // Seguridad extra: click en cualquier lado lo cierra
+        document.addEventListener('click', _hideFlyTip, { passive: true, once: false });
+
     }, 100);
 }
 

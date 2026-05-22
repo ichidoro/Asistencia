@@ -8,32 +8,76 @@ let tiposJustificacionList = [];
 let globalCargosList = []; // [NEW] Cache cargos for dropdowns
 let pagadoresList = []; // [NEW] Cache pagadores
 
-// appendCargoToInput: agrega un cargo al input de EXCLUIR (multi-valor, coma separado)
+// appendCargoToInput: agrega un cargo al input (multi-valor, coma separado)
+// Funciona tanto si el <ul> está en su posición original como si fue movido al body.
+// Usa data-target-input en el <ul> para localizar el input por ID.
 window.appendCargoToInput = function (element, cargo) {
-    const input = element.closest('.input-group').querySelector('input');
+    // Primero: buscar via data-target-input (funciona aunque el menu esté en body)
+    const ul = element.closest('ul[data-target-input]');
+    if (ul) {
+        const input = document.getElementById(ul.dataset.targetInput);
+        if (input) {
+            let current = input.value.trim();
+            if (current.length > 0 && !current.endsWith(',')) current += ', ';
+            input.value = current + cargo;
+            _refreshDropdownChecks(ul); // actualizar checkmarks inmediatamente
+            return;
+        }
+    }
+    // Fallback: traversal DOM original (cuando el menu no fue movido)
+    const input = element.closest('.input-group')?.querySelector('input');
     if (!input) return;
     let current = input.value.trim();
     if (current.length > 0 && !current.endsWith(',')) current += ', ';
     input.value = current + cargo;
 };
 
-// selectCargoRequerido: SELECCIONA UN ÚNICO cargo para el campo "Cargo Req."
-// A diferencia de appendCargoToInput, reemplaza el valor (no acumula).
+// selectCargoRequerido: limpia el campo "Cargo Req." (usado por el ítem 'Limpiar selección').
+// También usa data-target-input para funcionar cuando el menu está en body.
 window.selectCargoRequerido = function(element, cargo) {
+    const ul = element.closest('ul[data-target-input]');
+    if (ul) {
+        const input = document.getElementById(ul.dataset.targetInput);
+        if (input) { input.value = cargo; return; }
+    }
+    // Fallback
     const inputGroup = element.closest('.cargo-req-wrapper');
     if (!inputGroup) return;
     const input = inputGroup.querySelector('.rule-cargo');
     if (input) input.value = cargo;
-    // Cerrar el dropdown bootstrap
-    const dropdownBtn = inputGroup.querySelector('[data-bs-toggle="dropdown"]');
-    if (dropdownBtn) {
-        const bsDrop = bootstrap.Dropdown.getInstance(dropdownBtn);
-        if (bsDrop) bsDrop.hide();
-    }
 };
 
-// _populateCargoDropdown: puebla un <ul> con la lista de cargos
-// Usado tanto para "Excluir Cargos" como para "Cargo Req."
+// _refreshDropdownChecks: actualiza checkmarks verdes según el valor actual del input.
+// Funciona aunque la <ul> esté en document.body (usa data-target-input).
+function _refreshDropdownChecks(ulElement) {
+    if (!ulElement) return;
+    const targetId = ulElement.dataset?.targetInput;
+    const targetInput = targetId ? document.getElementById(targetId) : null;
+    const currentVal = targetInput ? targetInput.value : '';
+    const selected = currentVal.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
+
+    ulElement.querySelectorAll('.cargo-item[data-cargo]').forEach(a => {
+        const cargo = (a.dataset.cargo || '').trim().toUpperCase();
+        const li = a.closest('li');
+        const isSelected = selected.includes(cargo);
+        let chk = a.querySelector('.cargo-check');
+        if (isSelected) {
+            if (!chk) {
+                chk = document.createElement('i');
+                chk.className = 'bi bi-check2 cargo-check text-success fw-bold ms-auto';
+                a.appendChild(chk);
+            }
+            if (li) li.style.background = '#f0fdf4';
+        } else {
+            chk?.remove();
+            if (li) li.style.background = '';
+        }
+    });
+}
+
+// _populateCargoDropdown: puebla un <ul> con la lista de cargos.
+// Tanto cargo-req-ul como cargo-dropdown-ul usan appendCargoToInput
+// (acumula coma-separado). Solo el ítem 'Limpiar' llama a selectCargoRequerido('').
 function _populateCargoDropdown(ulElement, singleSelect = false) {
     if (!ulElement) return;
     const existingItems = ulElement.querySelectorAll('li:not(:first-child)');
@@ -47,13 +91,23 @@ function _populateCargoDropdown(ulElement, singleSelect = false) {
         return;
     }
 
+    // Leer valor actual del input para marcar ya seleccionados
+    const targetId = ulElement.dataset?.targetInput;
+    const targetInput = targetId ? document.getElementById(targetId) : null;
+    const currentVal = targetInput ? targetInput.value : '';
+    const selected = currentVal.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
+
     list.forEach(cargo => {
         const li = document.createElement('li');
         const safeC = cargo.replace(/'/g, "\\'");
-        const fn = singleSelect
-            ? `selectCargoRequerido(this, '${safeC}')`
-            : `appendCargoToInput(this, '${safeC}')`;
-        li.innerHTML = `<a class="dropdown-item small py-2 cargo-item" href="#" onclick="${fn}; return false;">${cargo}</a>`;
+        const isSelected = selected.includes(cargo.trim().toUpperCase());
+        li.innerHTML = `<a class="dropdown-item small py-2 cargo-item d-flex align-items-center justify-content-between"
+            href="#" data-cargo="${cargo}"
+            onclick="appendCargoToInput(this, '${safeC}'); return false;">
+            <span>${cargo}</span>
+            ${isSelected ? '<i class="bi bi-check2 cargo-check text-success fw-bold"></i>' : ''}
+        </a>`;
+        if (isSelected) li.style.background = '#f0fdf4';
         ulElement.appendChild(li);
     });
 }
@@ -653,18 +707,21 @@ function addBonoReglaRow(regla = null) {
                 </div>
             </div>
             <div class="col-md-3">
-                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req.</label>
+                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req. <span class="text-muted" style="font-size:0.65rem">(multi)</span></label>
                 <div class="input-group input-group-sm cargo-req-wrapper">
                     <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm"
-                        placeholder="Todos"
+                        placeholder="Todos (o varios)"
                         value="${regla && regla.cargo_requerido ? regla.cargo_requerido : ''}"
-                        autocomplete="off" readonly
+                        autocomplete="off"
+                        title="Puede ingresar uno o varios cargos separados por coma. Use el botón ▾ para seleccionar de la lista."
                         onclick="this.closest('.cargo-req-wrapper').querySelector('[data-bs-toggle=dropdown]').click()">
                     <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false"
                         onclick="_populateCargoDropdown(this.closest('.input-group').querySelector('.cargo-req-ul'), true)">
                         <i class="bi bi-chevron-down"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-req-ul" style="max-height: 300px; overflow-y: auto; width: 220px;">
+                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-req-ul"
+                        data-target-input="rule-cargo-${rowIdx}"
+                        style="max-height: 300px; overflow-y: auto; width: 240px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
                             <input type="text" id="search-cargo-req-${rowIdx}" name="search-cargo-req-${rowIdx}" class="form-control form-control-sm" placeholder="Buscar cargo..."
                                 onkeyup="filterCargosDropdown(this)"
@@ -672,7 +729,7 @@ function addBonoReglaRow(regla = null) {
                                 onclick="event.stopPropagation()"
                                 autocomplete="off">
                         </li>
-                        <li><a class="dropdown-item small py-2 cargo-item" href="#" onclick="selectCargoRequerido(this, ''); return false;"><em class="text-muted">Todos (sin filtro)</em></a></li>
+                        <li><a class="dropdown-item small py-2 cargo-item text-muted fst-italic" href="#" onclick="selectCargoRequerido(this, ''); return false;">✕ Limpiar selección</a></li>
                     </ul>
                 </div>
             </div>
@@ -685,7 +742,9 @@ function addBonoReglaRow(regla = null) {
                     <button class="btn btn-outline-secondary dropdown-toggle px-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-plus-circle"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-dropdown-ul" style="max-height: 300px; overflow-y: auto; width: 250px;">
+                    <ul class="dropdown-menu dropdown-menu-end p-0 cargo-dropdown-ul"
+                        data-target-input="rule-excluidos-${rowIdx}"
+                        style="max-height: 300px; overflow-y: auto; width: 250px;">
                         <li class="p-2 position-sticky top-0 bg-white border-bottom z-1">
                             <input type="text" id="search-cargo-excl-${rowIdx}" name="search-cargo-excl-${rowIdx}" class="form-control form-control-sm" placeholder="Buscar cargo..."
                                 onkeyup="filterCargosDropdown(this)"
@@ -711,16 +770,46 @@ function addBonoReglaRow(regla = null) {
     _populateCargoDropdown(div.querySelector('.cargo-req-ul'), true);
     _populateCargoDropdown(div.querySelector('.cargo-dropdown-ul'), false);
 
-    // FIX CRÍTICO: Inicializar Bootstrap Dropdown con strategy:'fixed'
-    // Sin esto, los dropdown-menu se recortan por overflow-y:auto del
-    // .modal-content cuando el modal-bono está dentro del wizard modal.
+    // Bootstrap Dropdown con strategy:'fixed': Popper.js calcula top/left relativos al viewport.
+    // El CSS ya tiene #modal-bono .modal-content { overflow: visible !important } y
+    // #modal-bono .dropdown-menu { z-index: 2300 !important } — suficiente para que el menu
+    // escape el clip de #reglas-container y aparezca sobre el modal.
+    // NO movemos el menu al body: eso rompía closest('.input-group') en los onclick.
     div.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(btn => {
-        // Destruir instancia previa si existe
         const existing = bootstrap.Dropdown.getInstance(btn);
         if (existing) existing.dispose();
+
         new bootstrap.Dropdown(btn, {
-            popperConfig: { strategy: 'fixed' }
+            popperConfig(defaultConfig) {
+                return { ...defaultConfig, strategy: 'fixed' };
+            }
         });
+
+        // Mover el menu al body al abrirlo: escapa overflow-y:auto de #reglas-container
+        // sin depender de Popper coordinate fix (que falla dentro de modales fixed).
+        // El input se localiza via data-target-input en la <ul>, no via closest().
+        const menu = btn.closest('.input-group')?.querySelector('.dropdown-menu')
+                  || btn.nextElementSibling;
+        if (menu) {
+            const originalParent = menu.parentElement;
+            const originalNextSibling = menu.nextSibling;
+
+            btn.addEventListener('show.bs.dropdown', () => {
+                menu.style.zIndex = '9999';
+                document.body.appendChild(menu);
+                // Refrescar checkmarks: el usuario ve qué cargos ya están seleccionados
+                _refreshDropdownChecks(menu);
+            }, { passive: true });
+
+            btn.addEventListener('hide.bs.dropdown', () => {
+                menu.style.zIndex = '';
+                if (originalNextSibling && originalNextSibling.parentElement === originalParent) {
+                    originalParent.insertBefore(menu, originalNextSibling);
+                } else {
+                    originalParent.appendChild(menu);
+                }
+            }, { passive: true });
+        }
     });
 }
 
