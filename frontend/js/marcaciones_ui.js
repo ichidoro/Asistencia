@@ -3429,7 +3429,7 @@ function renderVistaAnalitica(respData, container) {
             return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
                         onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                         ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
-                        data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-html="true"
+                        data-bs-toggle="popover" data-bs-trigger="hover" data-bs-html="true"
                         data-bs-content="${tooltipData}">
                         ${cellContent}
                     </td>`;
@@ -3639,19 +3639,32 @@ function renderVistaAnalitica(respData, container) {
     </div>`;
 
     // Activar popovers si los hay (Sanitizer off + Glassmorphism class + Smart boundary + Offset)
+    // FIX: trigger solo 'hover' (sin 'focus') para evitar que el popover quede pegado al hacer click.
+    // delay.hide de 150ms evita el parpadeo cuando el mouse se mueve de celda a popover.
     setTimeout(() => {
         document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
             new bootstrap.Popover(el, { 
-                trigger: 'hover focus', 
+                trigger: 'hover', 
                 html: true,
                 sanitize: false,
                 placement: 'auto',
                 container: 'body',
                 boundary: 'window',
                 offset: [0, 8],
+                delay: { show: 80, hide: 150 },
                 customClass: 'glass-popover-light shadow-sm'
             });
         });
+
+        // FIX: Limpiar popovers huérfanos al hacer scroll en la tabla.
+        // Bootstrap no los cierra automáticamente cuando container='body' y la celda se desplaza.
+        const tableScroller = container.querySelector('[style*="overflow:auto"]');
+        if (tableScroller && !tableScroller._popoverScrollFixed) {
+            tableScroller._popoverScrollFixed = true;
+            tableScroller.addEventListener('scroll', () => {
+                document.querySelectorAll('.popover').forEach(p => p.remove());
+            }, { passive: true });
+        }
     }, 100);
 }
 
