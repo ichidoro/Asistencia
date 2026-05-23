@@ -1,4 +1,4 @@
-﻿"""
+"""
 Repository - Asistencia
 Capa de acceso a datos para Marcaciones y Procesamiento de Asistencia
 """
@@ -499,13 +499,16 @@ class AsistenciaRepository:
     async def get_intercambios(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """Obtiene la lista de intercambios en un rango de fechas (considerando fecha_origen o fecha_destino)."""
         query = """
-            SELECT i.id, i.empleado_solicitante_id, i.empleado_receptor_id,
-                   i.fecha_origen, i.fecha_destino, i.motivo, i.estado, i.created_at,
+            SELECT i.id, i.empleado_solicitante_id AS empleado_id, i.empleado_solicitante_id, i.empleado_receptor_id,
+                   i.fecha_origen, i.fecha_destino, i.motivo AS observaciones, i.estado, i.created_at,
                    es.nombre AS nombre_solicitante, es.apellido_paterno AS apellido_solicitante, es.rut AS rut_solicitante,
-                   er.nombre AS nombre_receptor, er.apellido_paterno AS apellido_receptor, er.rut AS rut_receptor
+                   er.nombre AS nombre_receptor, er.apellido_paterno AS apellido_receptor, er.rut AS rut_receptor,
+                   a.nombre AS area_nombre
             FROM intercambios_dias i
             JOIN empleados es ON i.empleado_solicitante_id = es.id
             JOIN empleados er ON i.empleado_receptor_id = er.id
+            LEFT JOIN historial_areas ha ON es.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas a ON ha.area_id = a.id
             WHERE (i.fecha_origen BETWEEN ? AND ?) OR (i.fecha_destino BETWEEN ? AND ?)
             ORDER BY i.created_at DESC
         """

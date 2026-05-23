@@ -146,13 +146,13 @@ class SeguridadRepository:
             if count_p and count_p['c'] == 0:
                 permisos_base = [
                     # ── Empleados (7 permisos) ──
-                    ('empleados.ver',                'Empleados',      'Ver la lista y ficha personal de los empleados'),
-                    ('empleados.crear',              'Empleados',      'Botón "+ Nuevo Empleado" encima de la lista'),
-                    ('empleados.editar',             'Empleados',      'Icono lápiz en la fila → editar ficha, renovar contrato, cambio de área'),
-                    ('empleados.eliminar',           'Empleados',      'Icono papelera roja → dar de baja (soft-delete)'),
-                    ('empleados.reincorporar',       'Empleados',      'Reactivar un empleado que estaba en estado inactivo'),
-                    ('empleados.bonos',              'Empleados',      'Tab Matrix de bonos → asignar bonos a empleados'),
-                    ('empleados.horarios',           'Empleados',      'Tab Asignación Masiva → cambiar turno individual y masivo'),
+                    ('empleados.ver',                'Empleados',      'Ver la lista general de empleados, cumpleaños y turnos asignados (Lectura)'),
+                    ('empleados.crear',              'Empleados',      'Crear nuevos empleados (Botón "+ Nuevo Empleado")'),
+                    ('empleados.editar',             'Empleados',      'Editar ficha personal, renovar/gestionar contratos y registrar bajas (desactivaciones)'),
+                    ('empleados.eliminar',           'Empleados',      'Eliminar de forma permanente empleados y su historial (Icono papelera roja)'),
+                    ('empleados.reincorporar',       'Empleados',      'Reincorporar y reactivar empleados inactivos (Asistente con BioAlba)'),
+                    ('empleados.bonos',              'Empleados',      'Ver matriz informativa de bonos asignados (Lectura)'),
+                    ('empleados.horarios',           'Empleados',      'Asignación masiva/individual de turnos y corrección de fecha inicial'),
 
                     # ── Marcaciones (7 permisos) ──
                     ('marcaciones.ver',              'Marcaciones',    'Ver la grilla de asistencia, calendarios y filtros'),

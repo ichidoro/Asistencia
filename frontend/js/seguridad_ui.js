@@ -35,13 +35,13 @@ let cacheSeguridad = {
 
 const MAPA_UI_PERMISOS = {
     // ── MÓDULO EMPLEADOS (7) ──
-    'empleados.ver':           { module: 'EMPLEADOS', action: 'Ver',           description: 'Ver fichas y listas de empleados',                permissions: ['empleados.ver'] },
-    'empleados.crear':         { module: 'EMPLEADOS', action: 'Crear',         description: 'Botón "+ Nuevo Empleado"',                        permissions: ['empleados.crear'] },
-    'empleados.editar':        { module: 'EMPLEADOS', action: 'Editar',        description: 'Editar ficha, renovar contrato, cambio de área',  permissions: ['empleados.editar'] },
-    'empleados.eliminar':      { module: 'EMPLEADOS', action: 'Eliminar',      description: 'Dar de baja empleados (soft-delete)',              permissions: ['empleados.eliminar'] },
-    'empleados.reincorporar':  { module: 'EMPLEADOS', action: 'Reincorporar',  description: 'Reactivar empleados inactivos',                   permissions: ['empleados.reincorporar'] },
-    'empleados.bonos':         { module: 'EMPLEADOS', action: 'Bonos',         description: 'Asignar bonos a empleados (Tab Matrix)',           permissions: ['empleados.bonos'] },
-    'empleados.horarios':      { module: 'EMPLEADOS', action: 'Horarios',      description: 'Asignar turnos individual y masivamente',         permissions: ['empleados.horarios'] },
+    'empleados.ver':           { module: 'EMPLEADOS', action: 'Ver',           description: 'Ver lista general de empleados, cumpleaños y turnos asignados (Lectura)', permissions: ['empleados.ver'] },
+    'empleados.crear':         { module: 'EMPLEADOS', action: 'Crear',         description: 'Crear nuevos empleados (Botón "+ Nuevo Empleado")',                       permissions: ['empleados.crear'] },
+    'empleados.editar':        { module: 'EMPLEADOS', action: 'Editar',        description: 'Editar ficha personal, renovar/gestionar contratos y registrar bajas',     permissions: ['empleados.editar'] },
+    'empleados.eliminar':      { module: 'EMPLEADOS', action: 'Eliminar',      description: 'Eliminar de forma permanente empleados y su historial del sistema',        permissions: ['empleados.eliminar'] },
+    'empleados.reincorporar':  { module: 'EMPLEADOS', action: 'Reincorporar',  description: 'Reincorporar y reactivar empleados inactivos (Asistente con BioAlba)',      permissions: ['empleados.reincorporar'] },
+    'empleados.bonos':         { module: 'EMPLEADOS', action: 'Bonos',         description: 'Ver matriz informativa de bonos asignados (Lectura)',                      permissions: ['empleados.bonos'] },
+    'empleados.horarios':      { module: 'EMPLEADOS', action: 'Horarios',      description: 'Asignación masiva/individual de turnos y corrección de fecha inicial',     permissions: ['empleados.horarios'] },
 
     // ── MÓDULO MARCACIONES (7) ──
     'marcaciones.ver':           { module: 'MARCACIONES', action: 'Ver',           description: 'Ver grilla, calendarios e historial',           permissions: ['marcaciones.ver'] },
@@ -414,10 +414,13 @@ async function loadRoles() {
 function getPermissionDetails(permId) {
     const details = {
         // Empleados
-        'empleados.crear':        { alert: 'Acción Irreversible',      flow: 'Abre el modal de creación de empleado nuevo' },
-        'empleados.eliminar':     { alert: 'Acción Destructiva',       flow: 'Activa el botón rojo de papelera en la tabla' },
-        'empleados.bonos':        { alert: 'Riesgo Financiero',        flow: 'Permite decidir quién recibe bonos' },
-        'empleados.reincorporar': { alert: 'Rehire',                   flow: 'Reactiva a un empleado dado de baja previamente' },
+        'empleados.ver':           { alert: 'Ubicación: Menú lateral y pestañas',   flow: 'Visualizar lista general, visor de turnos y cumpleaños (Lectura).' },
+        'empleados.crear':         { alert: 'Ubicación: Botón "+ Nuevo Empleado"',  flow: 'Habilitar el botón de cabecera para abrir la modal de creación.' },
+        'empleados.editar':        { alert: 'Ubicación: Lista, Ficha y Contratos',  flow: 'Editar datos personales, dar de baja, renovar o pasar contratos a indefinido.' },
+        'empleados.eliminar':      { alert: 'Ubicación: Lista (Papelera roja)',     flow: 'Borrado físico definitivo e irreversible del empleado y su historial (Destructiva).' },
+        'empleados.reincorporar':  { alert: 'Ubicación: Lista (Fila de inactivos)',  flow: 'Iniciar asistente con BioAlba para reactivar y recontratar empleado.' },
+        'empleados.bonos':         { alert: 'Ubicación: Pestaña Bonos Asignados',   flow: 'Visualización de la matriz de bonos activos. Nota: Es de sólo lectura.' },
+        'empleados.horarios':      { alert: 'Ubicación: Lista y Asignación Masiva', flow: 'Asignar turnos masivo/individual y corregir fecha inicial (doble-clic).' },
         // Marcaciones
         'marcaciones.justificar':    { alert: 'Impacto en Remuneración',  flow: 'Justificaciones que cambian el estado de asistencia' },
         'marcaciones.bypass_cierre': { alert: 'Alerta Contable',          flow: 'Editar asistencia incluso si el mes ya está bloqueado' },
