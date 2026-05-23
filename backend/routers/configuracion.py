@@ -11,7 +11,7 @@ from typing import Optional
 from loguru import logger
 from backend.services.notification_service import NotificationService
 from backend.core.events import scheduler
-from backend.core.security import SecurityContext, RequirePermission, get_current_user
+from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission, get_current_user
 
 router = APIRouter(
     prefix="/configuracion",
@@ -32,7 +32,7 @@ async def get_config_service(db: Database = Depends(get_db)) -> ConfiguracionSer
 async def create_bono(
     bono: BonoCreate, 
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.bonos"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Crear un nuevo Bono con sus reglas"""
     new_id = await service.create_bono(bono)
@@ -102,7 +102,7 @@ async def calcular_fin_justificacion(
 async def create_tipo_justificacion(
     tipo: JustificacionTipoCreate,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.justificaciones"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.justificaciones", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Crear un nuevo tipo de justificación/inasistencia"""
     new_id = await service.create_tipo_justificacion(tipo)
@@ -138,7 +138,7 @@ async def create_justificacion(
     j: JustificacionCreate,
     background_tasks: BackgroundTasks,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.justificar", "marcaciones.editar"]))
 ):
     """Registrar una justificación para un empleado con RLS"""
     # RLS: Verificar pertenencia
@@ -210,7 +210,7 @@ async def update_justificacion(
     j: JustificacionCreate,
     background_tasks: BackgroundTasks,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.justificar", "marcaciones.editar"]))
 ):
     """Editar una justificación existente (corregir fechas, tipo, etc.) con RLS y recalculo en fondo"""
     # RLS: Verificar pertenencia del empleado
@@ -273,7 +273,7 @@ async def delete_justificacion(
     justificacion_id: int,
     background_tasks: BackgroundTasks,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.justificar", "marcaciones.editar"]))
 ):
     """Eliminar una justificación con RLS y auto-recálculo en segundo plano"""
     # Obtener justificación para verificar RLS
@@ -347,7 +347,7 @@ async def get_justificaciones(
 async def cerrar_permiso(
     payload: Dict[str, Any] = Body(...),
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.justificar", "marcaciones.editar"]))
 ):
     """Cierra un permiso abierto (sin hora de fin) con RLS"""
     emp_id = payload.get('empleado_id')
@@ -387,7 +387,7 @@ async def get_pagadores(
 async def create_pagador(
     pagador: PagadorCreate,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.bonos"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Crear un nuevo pagador"""
     try:
@@ -403,7 +403,7 @@ async def update_pagador(
     pagador_id: int,
     pagador: PagadorCreate,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.bonos"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Actualizar un pagador"""
     try:
