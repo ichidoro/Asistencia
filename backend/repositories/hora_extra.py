@@ -93,7 +93,7 @@ class HoraExtraRepository:
 
     async def aprobar_batch(self, items: List[Dict[str, Any]]) -> int:
         """
-        Aprueba/rechaza múltiples registros HE.
+        Aprueba/rechaza múltiples registros HE usando un UPSERT seguro.
         
         Cada item debe tener:
         - empleado_id: int
@@ -102,23 +102,44 @@ class HoraExtraRepository:
         - minutos_autorizados: float (minutos aprobados por RRHH)
         """
         query = """
-            UPDATE horas_extras 
-            SET estado = ?, minutos_autorizados = ?, updated_at = datetime('now')
-            WHERE empleado_id = ? AND fecha = ?
+            INSERT INTO horas_extras (empleado_id, fecha, minutos_bruto, minutos_autorizados, estado, updated_at)
+            VALUES (
+                ?, 
+                ?, 
+                COALESCE((SELECT minutos_extra_bruto FROM asistencias WHERE empleado_id = ? AND fecha = ?), 0),
+                ?, 
+                ?, 
+                datetime('now')
+            )
+            ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                estado = excluded.estado,
+                minutos_autorizados = excluded.minutos_autorizados,
+                updated_at = datetime('now')
         """
-        count = 0
+        params_list = []
         for item in items:
-            result = await self.db.execute(query, (
-                item['estado'],
-                item.get('minutos_autorizados', 0),
-                item['empleado_id'],
-                item['fecha']
-            ))
-            if result and hasattr(result, 'rowcount') and result.rowcount > 0:
-                count += 1
-            else:
-                count += 1  # SQLite no siempre reporta rowcount
-        return count
+            emp_id = item['empleado_id']
+            fecha = item['fecha']
+            minutos = item.get('minutos_autorizados', 0)
+            estado = item['estado']
+            params_list.append((emp_id, fecha, emp_id, fecha, minutos, estado))
+            
+        await self.db.executemany(query, params_list)
+        return len(items)
+
+    async def run_backfill(self) -> None:
+        """
+        Sincroniza registros históricos al inicio del servidor.
+        Inserta registros pendientes en horas_extras para asistencias con HE brutas.
+        """
+        query = """
+            INSERT OR IGNORE INTO horas_extras (empleado_id, fecha, minutos_bruto, minutos_autorizados, estado, origen, updated_at)
+            SELECT empleado_id, fecha, minutos_extra_bruto, 0, 'PENDIENTE', 'SISTEMA', datetime('now')
+            FROM asistencias
+            WHERE minutos_extra_bruto > 0
+        """
+        await self.db.execute(query)
+
 
     async def delete_by_empleado_fecha(self, empleado_id: int, fecha: str) -> None:
         """Elimina un registro HE (usado para JE interceptadas)."""

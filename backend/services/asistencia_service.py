@@ -3426,6 +3426,47 @@ class AsistenciaService:
             "resumen": resumen_empleados.get("resumen", [])
         }
 
+    async def aprobar_horas_extras_batch(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Aprueba o rechaza múltiples registros de horas extra a la vez.
+        Encapsula el blindaje de cierre y la lógica de negocio.
+        """
+        params_list = []
+        for item in items:
+            emp_id = item.get('empleado_id')
+            fecha = item.get('fecha')
+            
+            # Blindaje de Cierre
+            if await self.repository.check_fecha_cerrada(fecha, emp_id):
+                 raise ValueError(f"El periodo para la fecha {fecha} se encuentra cerrado.")
+                 
+            estado = item.get('estado')
+            minutos = item.get('minutos_autorizados', 0)
+            
+            # Blindaje: Si es RECHAZADO, forzar 0
+            if estado == 'RECHAZADO':
+                minutos = 0
+                
+            if emp_id and fecha and estado:
+                params_list.append({
+                    'empleado_id': emp_id,
+                    'fecha': fecha,
+                    'estado': estado,
+                    'minutos_autorizados': minutos
+                })
+                
+        if not params_list:
+            return {"success": True, "mensaje": "Nada que procesar", "count": 0}
+            
+        count = await self.he_repo.aprobar_batch(params_list)
+        await self.repository.db.sync_to_cloud_explicit()
+        
+        return {
+            "success": True,
+            "mensaje": f"Se procesaron {count} registros de horas extra",
+            "count": count
+        }
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER MODULE-LEVEL

@@ -1204,7 +1204,7 @@ async def validar_jornada_endpoint(
     
     # Blindaje de Cierre
     if await service.repository.check_fecha_cerrada(fecha, empleado_id):
-         raise HTTPException(status_code=403, detail="El periodo de esta fecha se encuentra cerrado y no admite modificaciones.")
+        raise HTTPException(status_code=403, detail="El periodo de esta fecha se encuentra cerrado y no admite modificaciones.")
 
     try:
         # Control de Concurrencia Optimista
@@ -1226,8 +1226,8 @@ async def validar_jornada_endpoint(
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        # logger.error(f"Error validando jornada: {e}") # logger not imported
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 @router.post("/aprobar-he/")
 async def aprobar_horas_extra(
@@ -1236,7 +1236,7 @@ async def aprobar_horas_extra(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.horas_extras"))
 ):
     """
-    Aprueba horas extras para un empleado y día.
+    Aprueba horas extras para un empleado y día (delegando al método batch).
     """
     # RLS: Verificar pertenencia de área
     emp_repo = EmpleadoRepository(service.repository.db)
@@ -1245,66 +1245,47 @@ async def aprobar_horas_extra(
     if emp and not current_user.alcance_global and emp.area not in (current_user.areas or []):
         raise HTTPException(status_code=403, detail="No tiene permisos para aprobar HE de este empleado")
 
-    # Blindaje de Cierre
-    if await service.repository.check_fecha_cerrada(request.fecha, request.empleado_id):
-         raise HTTPException(status_code=403, detail="El periodo de esta fecha se encuentra cerrado y no admite modificaciones.")
+    try:
+        # Convertir a formato de lote de un solo elemento
+        items = [{
+            "empleado_id": request.empleado_id,
+            "fecha": request.fecha,
+            "estado": "APROBADO" if request.horas > 0 else "RECHAZADO",
+            "minutos_autorizados": request.horas * 60.0
+        }]
+        return await service.aprobar_horas_extras_batch(items)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return await service.aprobar_horas_extras(
-        request.empleado_id,
-        request.fecha,
-        request.horas,
-        request.comentario
-    )
 
 @router.post("/aprobar-he-batch/")
 async def aprobar_horas_extra_batch(
     items: List[Dict[str, Any]] = Body(...),
-    service: AsistenciaService = Depends(get_asistencia_service)
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.horas_extras"))
 ):
     """
-    Aprueba o rechaza múltiples registros de horas extra a la vez.
+    Aprueba o rechaza múltiples registros de horas extra a la vez (delegando al servicio).
     Cada item debe tener {empleado_id, fecha, estado, minutos_autorizados}.
     """
     try:
-        db = service.repository.db
-        
-        # Preparar datos para executemany
-        params_list = []
-        for item in items:
-            emp_id = item.get('empleado_id')
-            fecha = item.get('fecha')
-            
-            # Blindaje de Cierre
-            if await service.repository.check_fecha_cerrada(fecha, emp_id):
-                 raise HTTPException(status_code=403, detail=f"El periodo para la fecha {fecha} se encuentra cerrado.")
-            estado = item.get('estado')
-            minutos = item.get('minutos_autorizados', 0)
-            
-            # Blindaje: Si es RECHAZADO, forzar 0
-            if estado == 'RECHAZADO':
-                minutos = 0
-                
-            if emp_id and fecha and estado:
-                params_list.append((estado, minutos, emp_id, fecha))
-        
-        if not params_list:
-            return {"success": True, "mensaje": "Nada que procesar", "count": 0}
-            
-        # FASE 5 Completada: Escritura ÚNICA a la nueva tabla horas_extras
-        query_new = """
-            UPDATE horas_extras 
-            SET estado = ?, minutos_autorizados = ?, updated_at = datetime('now')
-            WHERE empleado_id = ? AND fecha = ?
-        """
-        await db.executemany(query_new, params_list)
-        
-        return {
-            "success": True,
-            "mensaje": f"Se procesaron {len(params_list)} registros de horas extra",
-            "count": len(params_list)
-        }
+        # RLS: Validar pertenencia de área para cada elemento del lote antes de procesar
+        emp_repo = EmpleadoRepository(service.repository.db)
+        if not current_user.alcance_global:
+            for item in items:
+                emp_id = item.get('empleado_id')
+                emp = await emp_repo.get_by_id(emp_id)
+                if emp and emp.area not in (current_user.areas or []):
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para aprobar HE del empleado ID {emp_id}")
+
+        return await service.aprobar_horas_extras_batch(items)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        # logger.error(f"Error en aprobación batch HE: {e}") # logger not imported
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/marcaciones/manual/")
