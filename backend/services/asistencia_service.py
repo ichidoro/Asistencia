@@ -1313,25 +1313,24 @@ class AsistenciaService:
 
                 if tipo_ancla in _TIPOS_S:
                     # [ITS] Inferencia de Tipo Secuencial:
-                    # Antes de declarar "Salida Huérfana", verificamos si el día
-                    # anterior terminó con balance 0 (empleado ya estaba "afuera").
-                    # Si balance_ayer == 0 → la Salida de BioAlba es un error del
-                    # sensor (dedo en función equivocada) → corregir a Entrada.
-                    # Si balance_ayer > 0 → el empleado cruzó medianoche y esta
-                    # Salida es legítima (cierre de turno nocturno).
-                    ayer_str = (datetime.strptime(fecha, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-                    balance_ayer = 0
-                    for log_ayer in raw_logs:
-                        if log_ayer.get('fecha_hora', '').startswith(ayer_str):
-                            t_ayer = str(log_ayer.get('tipo', '') or '').strip().lower()
-                            if t_ayer in _TIPOS_E:
-                                balance_ayer += 1
-                            elif t_ayer in _TIPOS_S:
-                                balance_ayer -= 1
+                    # Antes de declarar "Salida Huérfana", verificamos si el log
+                    # inmediatamente anterior fue una Entrada dentro de las últimas 20 horas.
+                    # Si no es así, la Salida es un error de dedo y se corrige a Entrada.
+                    es_entrada_vigente = False
+                    if idx > 0:
+                        prior_log = marcas_disponibles[idx - 1]
+                        prior_tipo = str(prior_log.get('tipo', '') or '').strip().lower()
+                        try:
+                            prior_dt = datetime.strptime(prior_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                            ancla_dt = datetime.strptime(ancla['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                            delta_hours = (ancla_dt - prior_dt).total_seconds() / 3600.0
+                            if prior_tipo in _TIPOS_E and delta_hours <= 20.0:
+                                es_entrada_vigente = True
+                        except Exception as ex:
+                            logger.error(f"Error calculando delta de tiempo para ITS: {ex}")
 
-                    if balance_ayer <= 0:
-                        # El empleado ya había salido ayer → la Salida es error del
-                        # sensor. Corregir tipo en memoria (no persiste en BD).
+                    if not es_entrada_vigente:
+                        # Corregir tipo en memoria (no persiste en BD)
                         ancla_corregida = dict(ancla)
                         ancla_corregida['tipo'] = 'Entrada'
                         ancla_corregida['_tipo_inferido'] = True  # trazabilidad
@@ -1345,8 +1344,7 @@ class AsistenciaService:
                         tipo_ancla = 'entrada'
                         logger.info(
                             f"[ITS] emp={empleado_id} fecha={fecha} | "
-                            f"Marca {ancla.get('id')} corregida Salida→Entrada "
-                            f"(balance_ayer={balance_ayer}, sensor erróneo)"
+                            f"Marca {ancla.get('id')} corregida Salida→Entrada (Validación Cronológica anterior)"
                         )
 
                 if tipo_ancla in _TIPOS_S:
@@ -1786,16 +1784,20 @@ class AsistenciaService:
 
                     if t_ancla in _TIPOS_S:
                         # [ITS] Inferencia de Tipo Secuencial en turno nocturno fijo
-                        balance_ayer = 0
-                        for log_ayer in raw_logs:
-                            if log_ayer.get('fecha_hora', '').startswith(ayer_str):
-                                t_ayer = str(log_ayer.get('tipo', '') or '').strip().lower()
-                                if t_ayer in _TIPOS_E:
-                                    balance_ayer += 1
-                                elif t_ayer in _TIPOS_S:
-                                    balance_ayer -= 1
+                        es_entrada_vigente = False
+                        if idx > 0:
+                            prior_log = marcas_disponibles[idx - 1]
+                            prior_tipo = str(prior_log.get('tipo', '') or '').strip().lower()
+                            try:
+                                prior_dt = datetime.strptime(prior_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                ancla_dt = datetime.strptime(ancla['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                delta_hours = (ancla_dt - prior_dt).total_seconds() / 3600.0
+                                if prior_tipo in _TIPOS_E and delta_hours <= 20.0:
+                                    es_entrada_vigente = True
+                            except Exception as ex:
+                                logger.error(f"Error calculando delta de tiempo para ITS nocturno: {ex}")
 
-                        if balance_ayer <= 0:
+                        if not es_entrada_vigente:
                             # Corregir tipo en memoria
                             ancla_corregida = dict(ancla)
                             ancla_corregida['tipo'] = 'Entrada'
@@ -1810,8 +1812,7 @@ class AsistenciaService:
                             t_ancla = 'entrada'
                             logger.info(
                                 f"[ITS-NOCTURNO] emp={empleado_id} fecha={fecha} | "
-                                f"Marca {ancla.get('id')} corregida Salida→Entrada "
-                                f"(balance_ayer={balance_ayer}, sensor erróneo)"
+                                f"Marca {ancla.get('id')} corregida Salida→Entrada (Validación Cronológica anterior)"
                             )
 
                     if t_ancla in _TIPOS_S:
