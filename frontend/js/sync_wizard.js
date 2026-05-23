@@ -22,18 +22,37 @@ window._wizardState = {
         areas: [],    // [{id, bioalba_name, local_name}]
         cargos: [],   // [{id, bioalba_name, local_name}]
         generos: []   // [{id, nombre}]
-    }
+    },
+    // Nuevas propiedades para Onboarding integrado (Pasos 8-10)
+    newEmployeesDetalles: null,
+    onboardingCompletados: {},
+    selectedOnboardingEmpId: null,
+    employeesFullData: null,
+    turnosIndividualesAsignados: {},
+    syncPayload: null
 };
 
-window.closeSyncWizard = function() {
+window.closeSyncWizard = async function(force = false) {
+    const step = window._wizardState.currentStep;
+    
+    if (!force && (step === 9 || step === 10)) {
+        const confirm = await Swal.fire({
+            title: '¿Cerrar asistente?',
+            text: 'Si cierras el asistente perderás el progreso no guardado de las fichas y asignaciones.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, cerrar',
+            cancelButtonText: 'No, continuar'
+        });
+        if (!confirm.isConfirmed) return;
+    }
+
+    // Limpiar estado para evitar que F5 lo vuelva a abrir
+    window.clearWizardStateFromLocalStorage();
+
     const modalEl = document.getElementById('modal-sync-wizard');
     if (!modalEl) return;
     const modalInstance = bootstrap.Modal.getInstance(modalEl);
-    // Usar dispose() + blur + inert en lugar de hide() para evitar el warning
-    // "Blocked aria-hidden on element with focused descendant".
-    // hide() pone aria-hidden al FINAL de la animación CSS, cuando FocusTrap ya restauró
-    // el foco → el elemento puede tener foco en ese momento → warning.
-    // Con dispose() el FocusTrap se destruye inmediatamente → podemos blur con seguridad.
     if (modalInstance) modalInstance.dispose();
     modalEl.querySelectorAll('input, button, select, textarea, a, [tabindex]')
         .forEach(el => el.blur());
@@ -118,7 +137,7 @@ window.startSyncWizard = function(data) {
 };
 
 function updateWizardUI() {
-    const TOTAL_STEPS = 7;
+    const TOTAL_STEPS = 10;
     const step = window._wizardState.currentStep;
     
     // Actualizar Stepper Visual — controla clases Bootstrap directamente
@@ -159,16 +178,32 @@ function updateWizardUI() {
     }
 
     // Botones
-    document.getElementById('btn-wizard-prev').disabled = (step === 1);
-    
+    const btnPrev = document.getElementById('btn-wizard-prev');
     const btnNext = document.getElementById('btn-wizard-next');
     const btnFinish = document.getElementById('btn-wizard-finish');
+
+    // Deshabilitar "Anterior" en pasos 8 y 9 (sync hecho, no se puede volver)
+    btnPrev.disabled = (step === 1 || step === 8 || step === 9);
     
-    if (step === TOTAL_STEPS) {
+    if (step === 7) {
+        // En preview de empleados, el botón siguiente es para "Sincronizar"
         btnNext.classList.add('d-none');
         btnFinish.classList.remove('d-none');
+        btnFinish.onclick = window.confirmWizardSync;
+        btnFinish.innerHTML = '<i class="bi bi-play-circle"></i> Sincronizar Empleados';
+    } else if (step === 8) {
+        // En streaming, los botones se controlan por el estado de la sync
+        btnNext.classList.add('d-none');
+        btnFinish.classList.add('d-none');
+    } else if (step === 10) {
+        // En paso final
+        btnNext.classList.add('d-none');
+        btnFinish.classList.remove('d-none');
+        btnFinish.onclick = window.finishWizardOnboarding;
+        btnFinish.innerHTML = '<i class="bi bi-gear-wide-connected"></i> Finalizar y Recalcular';
     } else {
         btnNext.classList.remove('d-none');
+        btnNext.disabled = false;
         btnFinish.classList.add('d-none');
     }
 
@@ -180,10 +215,19 @@ function updateWizardUI() {
     if (step === 5) fetchAndRenderWizardStep5_Bonos();
     if (step === 6) fetchAndRenderWizardStep6_Turnos();
     if (step === 7) fetchAndRenderWizardStep7_Preview();
+    if (step === 8) {
+        if (!window._wizardState.newEmployeesDetalles) {
+            window.startWizardSSESync(window._wizardState.syncPayload);
+        } else {
+            window.renderWizardStep8Completed();
+        }
+    }
+    if (step === 9) renderWizardStep9();
+    if (step === 10) renderWizardStep10();
 }
 
 window.wizardNextStep = async function() {
-    const TOTAL_STEPS = 7;
+    const TOTAL_STEPS = 10;
     const step = window._wizardState.currentStep;
 
     // --- PASO 1: Áreas ---
@@ -219,12 +263,10 @@ window.wizardNextStep = async function() {
     // --- PASO 2: Cargos ---
     if (step === 2) {
         if (!guardarSeleccionesPaso2()) return;
-        // Refrescar metadatos en memoria (globalCargosList) para que el paso 5 (Bonos)
-        // vea los nuevos cargos en el dropdown, aunque aún no estén en BD
         if (typeof window.loadMetadata === 'function') {
             await window.loadMetadata(true);
         }
-        // Realizar commit parcial de cargos (necesario para Bonos y Turnos)
+        // Realizar commit parcial de cargos
         try {
             const resp = await fetch('/api/sync/wizard/commit/cargos/', {
                 method: 'POST',
@@ -251,22 +293,22 @@ window.wizardNextStep = async function() {
     // --- PASO 6: Turnos ---
     if (step === 6) {
         if (!guardarSeleccionesPaso6_Turnos()) return;
-        // Commit deferido al paso final
     }
 
     // --- Avanzar ---
     if (step < TOTAL_STEPS) {
         window._wizardState.currentStep++;
+        saveWizardStateToLocalStorage();
         updateWizardUI();
     }
 };
 
 window.wizardPrevStep = async function() {
     const step = window._wizardState.currentStep;
-    if (step <= 1) return;
+    if (step <= 1 || step === 8 || step === 9) return;
 
-    // Rollback ya no es necesario porque los cambios no han sido guardados en BD aún
     window._wizardState.currentStep--;
+    saveWizardStateToLocalStorage();
     updateWizardUI();
 };
 
@@ -1608,9 +1650,7 @@ window.confirmWizardSync = async function() {
         return;
     }
 
-    // ── GUARDIA: límite de 10 ANTES de cerrar el wizard ───────────────────────────
-    // Nunca debe llegar aquí con más de 10 (wizEnforceSyncLimit lo bloquea),
-    // pero por doble seguridad lo validamos aquí también sin cerrar el wizard.
+    // ── GUARDIA: límite de 10 ───────────────────────────
     if (checkedBoxes.length > 10) {
         Swal.fire({
             title: 'Límite superado',
@@ -1629,32 +1669,7 @@ window.confirmWizardSync = async function() {
         ? `${selectedRuts.length} empleado(s) seleccionado(s)`
         : `Todos los ${allBoxes.length} empleado(s)`;
 
-    // ── IMPORTANTE: Cerrar el wizard ANTES de mostrar el SweetAlert2 ──────────
-    // Si mostramos Swal mientras el wizard está abierto, el backdrop del wizard
-    // queda sobre el Swal (visualmente oculto) hasta que el usuario cierra el wizard.
-    // Cerrando primero el wizard, el Swal aparece limpiamente sobre fondo gris.
-    // Usamos el patrón seguro dispose+blur+manual-hide (NO hide() con animación).
-    const modalEl = document.getElementById('modal-sync-wizard');
-    const modalInstance = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
-    if (modalInstance) modalInstance.dispose();
-    if (modalEl) {
-        modalEl.querySelectorAll('input, button, select, textarea, a, [tabindex]')
-            .forEach(el => el.blur());
-        modalEl.blur();
-        document.body.setAttribute('tabindex', '-1');
-        document.body.focus();
-        document.body.removeAttribute('tabindex');
-        modalEl.classList.remove('show');
-        modalEl.style.display = 'none';
-    }
-    // Limpiar artefactos Bootstrap (backdrop, body classes)
-    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('overflow');
-    document.body.style.removeProperty('padding-right');
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Ahora mostrar confirmación (wizard ya está cerrado, Swal aparece limpio)
+    // Confirmación del inicio de la sincronización
     const confirmResult = await Swal.fire({
         title: '¿Iniciar sincronización?',
         text: filterMsg,
@@ -1687,17 +1702,16 @@ window.confirmWizardSync = async function() {
 
     window._selectedCargos = selectedCargos;
 
-    // 3. Marcar wizard como completado
-    localStorage.setItem('wizard_completed', 'true');
-
-    // 4. Construir payload y llamar función puente en main.js
     const payload = {
         areas: window._syncSelectedAreas.length > 0 ? window._syncSelectedAreas : null,
         ruts: selectedRuts,
         selected_cargos: selectedCargos.length > 0 ? selectedCargos : null
     };
 
-    // MEGA-COMMIT DE WIZARD ANTES DE INICIAR SINCRONIZACIÓN DE EMPLEADOS
+    // Guardar el payload en el estado para posibles reintentos
+    window._wizardState.syncPayload = payload;
+
+    // MEGA-COMMIT DE WIZARD ANTES DE INICIAR SINCRONIZACIÓN
     Swal.fire({
         title: 'Guardando configuración...',
         html: 'Por favor espere mientras se aplican las configuraciones (Áreas, Cargos, Turnos).',
@@ -1723,27 +1737,22 @@ window.confirmWizardSync = async function() {
 
         if (!resp.ok) throw new Error(await resp.text());
         
-        // Refrescar metadatos en caso de que se hayan creado áreas o cargos
+        // Refrescar metadatos
         if (typeof window.loadMetadata === 'function') {
             await window.loadMetadata(true);
         }
         
         Swal.close();
+
+        // Guardar progreso y avanzar a Paso 8 (Progreso streaming SSE)
+        window._wizardState.currentStep = 8;
+        saveWizardStateToLocalStorage();
+        updateWizardUI();
+
     } catch (e) {
         console.error('[Wizard] Error en Mega-Commit:', e);
         Swal.fire('Error', 'No se pudieron guardar las configuraciones previas: ' + e.message, 'error');
-        return;
     }
-
-    // Disparar sincronización (pequeño delay para que Swal cierre primero)
-    setTimeout(() => {
-        if (typeof window._executeSyncFromWizard === 'function') {
-            window._executeSyncFromWizard(payload);
-        } else {
-            console.error('[Wizard] _executeSyncFromWizard no disponible');
-            Swal.fire('Error', 'Función de sincronización no disponible.', 'error');
-        }
-    }, 300);
 };
 
 // ==========================================
@@ -2032,9 +2041,6 @@ window._wizardEditarBono = async function(bonoId) {
 };
 
 
-/**
- * Recarga el Paso 4 (Bonos) sin cerrar el wizard.
- */
 window._wizardRefrescarBonos = function() {
     const step4 = document.getElementById('wizard-step-5');
     // Restaurar la tabla original antes de llamar a fetchAndRenderWizardStep4
@@ -2056,3 +2062,756 @@ window._wizardRefrescarBonos = function() {
     }
     fetchAndRenderWizardStep4();
 };
+
+// =============================================================================
+// LÓGICA PASOS 8, 9 Y 10: SINCRONIZACIÓN SSE, COMPLETAR FICHAS Y TURNOS IND.
+// =============================================================================
+
+function saveWizardStateToLocalStorage() {
+    localStorage.setItem('wizard_state', JSON.stringify(window._wizardState));
+}
+
+window.loadWizardStateFromLocalStorage = function() {
+    const raw = localStorage.getItem('wizard_state');
+    if (!raw) return null;
+    try {
+        const state = JSON.parse(raw);
+        if (state && typeof state === 'object' && state.currentStep) {
+            return state;
+        }
+    } catch (e) {
+        console.error('Error parsing wizard state from localStorage:', e);
+    }
+    return null;
+};
+
+window.clearWizardStateFromLocalStorage = function() {
+    localStorage.removeItem('wizard_state');
+    localStorage.removeItem('wizard_completed');
+};
+
+window.startWizardSSESync = async function(payload) {
+    const logEl = document.getElementById('wizard-sync-log');
+    const progressBar = document.getElementById('wizard-sync-progress-bar');
+    const percentEl = document.getElementById('wizard-sync-percent');
+    const statusTextEl = document.getElementById('wizard-sync-status-text');
+    const errorContainer = document.getElementById('wizard-sync-error-container');
+    const btnPrev = document.getElementById('btn-wizard-prev');
+    const btnNext = document.getElementById('btn-wizard-next');
+    const btnCancel = document.querySelector('#modal-sync-wizard button[onclick="closeSyncWizard()"]');
+    const btnCloseHeader = document.querySelector('#modal-sync-wizard .btn-close');
+
+    if (logEl) logEl.innerHTML = '[INFO] Iniciando conexión con servidor...<br>';
+    if (progressBar) {
+        progressBar.style.width = '0%';
+        progressBar.classList.remove('bg-danger');
+        progressBar.classList.add('progress-bar-animated', 'progress-bar-striped');
+    }
+    if (percentEl) percentEl.textContent = '0%';
+    if (statusTextEl) statusTextEl.textContent = 'Conectando a BioAlba...';
+    if (errorContainer) errorContainer.classList.add('d-none');
+
+    if (btnPrev) btnPrev.disabled = true;
+    if (btnNext) btnNext.disabled = true;
+    if (btnCancel) btnCancel.disabled = true;
+    if (btnCloseHeader) btnCloseHeader.disabled = true;
+
+    try {
+        const response = await fetch('/api/sync/empleados/now/stream/', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || `Error HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalStats = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            let eventType = null;
+            let eventData = null;
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    eventType = line.slice(7).trim();
+                } else if (line.startsWith('data: ')) {
+                    try { eventData = JSON.parse(line.slice(6)); } catch { eventData = null; }
+                } else if (line === '' && eventType && eventData !== null) {
+                    if (eventType === 'start') {
+                        statusTextEl.textContent = `Sincronizando ${eventData.total || '?'} empleado(s)...`;
+                        logEl.innerHTML += `[INFO] Sincronización iniciada: Total ${eventData.total || '?'} empleados.<br>`;
+                    } else if (eventType === 'progress') {
+                        const pct = Math.round((eventData.idx / eventData.total) * 100);
+                        if (progressBar) progressBar.style.width = `${pct}%`;
+                        if (percentEl) percentEl.textContent = `${pct}%`;
+                        statusTextEl.textContent = `Procesando: ${eventData.nombre}`;
+                        logEl.innerHTML += `[SYNC] (${eventData.idx}/${eventData.total}) Sincronizado: ${eventData.nombre} (${eventData.rut})<br>`;
+                        logEl.scrollTop = logEl.scrollHeight;
+                    } else if (eventType === 'done') {
+                        finalStats = eventData;
+                    } else if (eventType === 'error') {
+                        throw new Error(eventData.message || 'Error en streaming de datos');
+                    }
+                    eventType = null;
+                    eventData = null;
+                }
+            }
+        }
+
+        if (finalStats) {
+            logEl.innerHTML += `[OK] Sincronización completada con éxito.<br>`;
+            logEl.innerHTML += `[STATS] Nuevos: ${finalStats.empleados_nuevos}, Actualizados: ${finalStats.empleados_actualizados}, Sin Cambios: ${finalStats.empleados_sin_cambios || 0}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+
+            if (progressBar) {
+                progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                progressBar.style.width = '100%';
+            }
+            if (percentEl) percentEl.textContent = '100%';
+            statusTextEl.textContent = 'Sincronización finalizada.';
+
+            if (typeof window.loadEmpleados === 'function') await window.loadEmpleados();
+            if (typeof window.loadStats === 'function') await window.loadStats();
+
+            window._wizardState.newEmployeesDetalles = finalStats.nuevos_detalles || [];
+            window._wizardState.onboardingCompletados = {}; 
+            saveWizardStateToLocalStorage();
+
+            if (btnCancel) btnCancel.disabled = false;
+            if (btnCloseHeader) btnCloseHeader.disabled = false;
+
+            if (window._wizardState.newEmployeesDetalles.length > 0) {
+                logEl.innerHTML += `[INFO] Se detectaron ${window._wizardState.newEmployeesDetalles.length} empleados nuevos. Procediendo a completar fichas.<br>`;
+                logEl.scrollTop = logEl.scrollHeight;
+                if (btnNext) {
+                    btnNext.disabled = false;
+                    btnNext.classList.remove('d-none');
+                }
+            } else {
+                logEl.innerHTML += `[INFO] No hay empleados nuevos que requieran Onboarding.<br>`;
+                logEl.scrollTop = logEl.scrollHeight;
+                const btnFinish = document.getElementById('btn-wizard-finish');
+                if (btnFinish) {
+                    btnFinish.textContent = 'Finalizar Asistente';
+                    btnFinish.classList.remove('d-none');
+                    btnFinish.onclick = window.closeSyncWizard;
+                }
+            }
+        }
+    } catch (err) {
+        console.error('[Wizard Sync Error]:', err);
+        if (progressBar) {
+            progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+            progressBar.classList.add('bg-danger');
+        }
+        if (statusTextEl) statusTextEl.textContent = 'Error de Sincronización';
+        if (logEl) logEl.innerHTML += `<span class="text-danger">[ERROR] ${err.message || err}</span><br>`;
+        if (errorContainer) {
+            errorContainer.classList.remove('d-none');
+            const errTextEl = document.getElementById('wizard-sync-error-text');
+            if (errTextEl) errTextEl.textContent = err.message || 'Error al conectar con BioAlba.';
+        }
+        if (btnCancel) btnCancel.disabled = false;
+        if (btnCloseHeader) btnCloseHeader.disabled = false;
+    }
+};
+
+window.wizardRetrySync = function() {
+    if (window._wizardState.syncPayload) {
+        window.startWizardSSESync(window._wizardState.syncPayload);
+    } else {
+        Swal.fire('Error', 'No hay datos de payload para reintentar.', 'error');
+    }
+};
+
+window.renderWizardStep8Completed = function() {
+    const logEl = document.getElementById('wizard-sync-log');
+    const progressBar = document.getElementById('wizard-sync-progress-bar');
+    const percentEl = document.getElementById('wizard-sync-percent');
+    const statusTextEl = document.getElementById('wizard-sync-status-text');
+    const btnNext = document.getElementById('btn-wizard-next');
+
+    if (logEl) {
+        logEl.innerHTML = `[INFO] Estado de sincronización restaurado de la sesión anterior.<br>`;
+        logEl.innerHTML += `[OK] Sincronización completada.<br>`;
+    }
+    if (progressBar) {
+        progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        progressBar.style.width = '100%';
+    }
+    if (percentEl) percentEl.textContent = '100%';
+    if (statusTextEl) statusTextEl.textContent = 'Sincronización finalizada (Cargada desde caché)';
+
+    if (window._wizardState.newEmployeesDetalles && window._wizardState.newEmployeesDetalles.length > 0) {
+        if (btnNext) {
+            btnNext.disabled = false;
+            btnNext.classList.remove('d-none');
+        }
+    } else {
+        const btnFinish = document.getElementById('btn-wizard-finish');
+        if (btnFinish) {
+            btnFinish.textContent = 'Finalizar Asistente';
+            btnFinish.classList.remove('d-none');
+            btnFinish.onclick = window.closeSyncWizard;
+        }
+    }
+};
+
+window.renderWizardStep9 = function() {
+    const listEl = document.getElementById('wizard-onboarding-emp-list');
+    const formPlaceholder = document.getElementById('wizard-onboarding-form-placeholder');
+    const formEl = document.getElementById('form-wizard-empleado');
+    const btnNext = document.getElementById('btn-wizard-next');
+    const btnPrev = document.getElementById('btn-wizard-prev');
+
+    if (btnPrev) btnPrev.disabled = true; 
+    if (btnNext) {
+        btnNext.classList.remove('d-none');
+        btnNext.disabled = true; 
+    }
+
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const employees = window._wizardState.newEmployeesDetalles || [];
+    if (employees.length === 0) {
+        listEl.innerHTML = '<div class="text-muted p-3">Ningún empleado pendiente.</div>';
+        return;
+    }
+
+    let allCompleted = true;
+
+    employees.forEach(emp => {
+        const isCompleted = !!window._wizardState.onboardingCompletados[emp.id];
+        if (!isCompleted) allCompleted = false;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `list-group-item list-group-item-action d-flex justify-content-between align-items-center ${window._wizardState.selectedOnboardingEmpId === emp.id ? 'active' : ''}`;
+        
+        let statusBadge = `<span class="badge bg-danger rounded-pill">Falta Ficha</span>`;
+        if (isCompleted) {
+            statusBadge = `<span class="badge bg-success rounded-pill"><i class="bi bi-check-lg"></i> Listo</span>`;
+        }
+
+        btn.innerHTML = `
+            <div>
+                <div class="fw-bold">${emp.nombre}</div>
+                <div class="small ${window._wizardState.selectedOnboardingEmpId === emp.id ? 'text-white-50' : 'text-muted'}">${emp.rut}</div>
+            </div>
+            ${statusBadge}
+        `;
+        
+        btn.onclick = () => {
+            window.selectOnboardingEmployee(emp.id);
+        };
+        listEl.appendChild(btn);
+    });
+
+    if (allCompleted) {
+        btnNext.disabled = false;
+    } else {
+        btnNext.disabled = true;
+    }
+
+    if (window._wizardState.selectedOnboardingEmpId) {
+        formPlaceholder.classList.add('d-none');
+        formEl.classList.remove('d-none');
+        loadOnboardingEmployeeForm(window._wizardState.selectedOnboardingEmpId);
+    } else {
+        formPlaceholder.classList.remove('d-none');
+        formEl.classList.add('d-none');
+    }
+};
+
+window.selectOnboardingEmployee = function(empId) {
+    window._wizardState.selectedOnboardingEmpId = empId;
+    saveWizardStateToLocalStorage();
+    renderWizardStep9();
+};
+
+async function loadOnboardingEmployeeForm(empId) {
+    const formEl = document.getElementById('form-wizard-empleado');
+    if (!formEl) return;
+
+    formEl.style.opacity = '0.5';
+
+    try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch(`/api/empleados/${empId}/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const empleado = await resp.json();
+
+        document.getElementById('input-wizard-id').value = empleado.id;
+
+        // Recuperar y mostrar Datos de Origen BioAlba
+        const empDetails = window._wizardState.newEmployeesDetalles ? window._wizardState.newEmployeesDetalles.find(e => e.id === parseInt(empId)) : null;
+        const bio = empDetails ? empDetails.bioalba_data : null;
+
+        if (bio) {
+            const formatName = `${bio.apellido_paterno || ''} ${bio.apellido_materno || ''} ${bio.nombre || ''}`.trim().replace(/\s+/g, ' ');
+            document.getElementById('text-wizard-rut-bioalba').textContent = bio.rut || '-';
+            document.getElementById('text-wizard-nombre-bioalba').textContent = formatName || '-';
+            document.getElementById('text-wizard-area-bioalba').textContent = bio.area || 'Sin Asignar';
+            document.getElementById('text-wizard-cargo-bioalba').textContent = bio.cargo || '-';
+            document.getElementById('text-wizard-compania-bioalba').textContent = bio.compania || '-';
+            document.getElementById('text-wizard-email-bioalba').textContent = bio.email || '-';
+            document.getElementById('text-wizard-telefono-bioalba').textContent = bio.telefono || '-';
+            document.getElementById('text-wizard-genero-bioalba').textContent = bio.genero || 'No Especificado';
+            document.getElementById('text-wizard-fecha-ingreso-bioalba').textContent = bio.fecha_ingreso || '-';
+        } else {
+            // Fallback usando el registro local si no está en la cola actual
+            document.getElementById('text-wizard-rut-bioalba').textContent = empleado.rut_formateado || empleado.rut || '-';
+            document.getElementById('text-wizard-nombre-bioalba').textContent = empleado.nombre_completo || '-';
+            document.getElementById('text-wizard-area-bioalba').textContent = empleado.area || 'Sin Asignar';
+            document.getElementById('text-wizard-cargo-bioalba').textContent = empleado.cargo || '-';
+            document.getElementById('text-wizard-compania-bioalba').textContent = empleado.compania || '-';
+            document.getElementById('text-wizard-email-bioalba').textContent = empleado.email || '-';
+            document.getElementById('text-wizard-telefono-bioalba').textContent = empleado.telefono || '-';
+            document.getElementById('text-wizard-genero-bioalba').textContent = empleado.genero || 'No Especificado';
+            document.getElementById('text-wizard-fecha-ingreso-bioalba').textContent = empleado.fecha_ingreso || '-';
+        }
+
+        // Configurar Género Local (Si viene vacío de BioAlba, es editable; si no, queda fijo)
+        const containerGenero = document.getElementById('container-wizard-genero');
+        if (empleado.genero) {
+            containerGenero.innerHTML = `<input type="text" id="input-wizard-genero" value="${empleado.genero}" readonly class="form-control form-control-sm bg-white" style="cursor: not-allowed;">`;
+        } else {
+            containerGenero.innerHTML = `
+                <select id="input-wizard-genero" class="form-select form-select-sm">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Femenino">Femenino</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            `;
+        }
+
+        // Rellenar Inputs Editables locales con sus valores vigentes
+        document.getElementById('input-wizard-nombre').value = empleado.nombre || '';
+        document.getElementById('input-wizard-apellido-paterno').value = empleado.apellido_paterno || '';
+        document.getElementById('input-wizard-apellido-materno').value = empleado.apellido_materno || '';
+        document.getElementById('input-wizard-activo').value = empleado.activo.toString();
+        document.getElementById('input-wizard-cargo').value = empleado.cargo || '';
+        document.getElementById('input-wizard-compania').value = empleado.compania || '';
+        
+        const inputTipoContrato = document.getElementById('input-wizard-tipo-contrato');
+        inputTipoContrato.value = empleado.tipo_contrato || 'Temporal';
+        
+        document.getElementById('input-wizard-cant-contratos').value = empleado.cant_contratos || 1;
+        document.getElementById('input-wizard-fecha-ingreso').value = empleado.fecha_ingreso || '';
+        document.getElementById('input-wizard-fecha-nacimiento').value = empleado.fecha_nacimiento || '';
+        document.getElementById('input-wizard-fecha-salida').value = empleado.fecha_salida || '';
+        document.getElementById('input-wizard-email').value = empleado.email || '';
+        document.getElementById('input-wizard-telefono').value = empleado.telefono || '';
+
+        window.handleWizardTipoContratoChange();
+    } catch (e) {
+        console.error('[Wizard Onboarding] Error cargando empleado:', e);
+        Swal.fire('Error', 'No se pudo obtener la información del empleado: ' + e.message, 'error');
+    } finally {
+        formEl.style.opacity = '1';
+    }
+}
+
+window.handleWizardTipoContratoChange = function() {
+    const selectTipo = document.getElementById('input-wizard-tipo-contrato');
+    const inputSalida = document.getElementById('input-wizard-fecha-salida');
+    if (!selectTipo || !inputSalida) return;
+
+    if (selectTipo.value === 'Indefinido') {
+        inputSalida.disabled = true;
+        inputSalida.value = '';
+        inputSalida.removeAttribute('required');
+    } else {
+        inputSalida.disabled = false;
+        inputSalida.setAttribute('required', 'required');
+    }
+};
+
+window.saveWizardEmpleadoFicha = async function() {
+    const id = document.getElementById('input-wizard-id').value;
+    if (!id) return;
+
+    const nombre = document.getElementById('input-wizard-nombre').value.trim();
+    const apellidoPaterno = document.getElementById('input-wizard-apellido-paterno').value.trim();
+    const apellidoMaterno = document.getElementById('input-wizard-apellido-materno').value.trim();
+    const cargo = document.getElementById('input-wizard-cargo').value.trim();
+    const compania = document.getElementById('input-wizard-compania').value.trim();
+    const genero = document.getElementById('input-wizard-genero').value || null;
+    const tipoContrato = document.getElementById('input-wizard-tipo-contrato').value;
+    const fechaSalida = document.getElementById('input-wizard-fecha-salida').value || null;
+    const fechaIngreso = document.getElementById('input-wizard-fecha-ingreso').value || null;
+    const fechaNacimiento = document.getElementById('input-wizard-fecha-nacimiento').value || null;
+    const activo = document.getElementById('input-wizard-activo').value === 'true';
+
+    if (!nombre || !apellidoPaterno || !apellidoMaterno) {
+        Swal.fire('Atención', 'Nombre, Apellido Paterno y Apellido Materno son obligatorios.', 'warning');
+        return;
+    }
+
+    if (!cargo) {
+        Swal.fire('Atención', 'El Cargo es obligatorio.', 'warning');
+        return;
+    }
+
+    if (!compania) {
+        Swal.fire('Atención', 'La Compañía es obligatoria.', 'warning');
+        return;
+    }
+
+    if (activo) {
+        if (!fechaIngreso) {
+            Swal.fire('Atención', 'La Fecha de Ingreso es obligatoria para empleados activos.', 'warning');
+            return;
+        }
+        if (!fechaNacimiento) {
+            Swal.fire('Atención', 'La Fecha de Nacimiento es obligatoria para empleados activos.', 'warning');
+            return;
+        }
+        if (!genero) {
+            Swal.fire('Atención', 'El GÉNERO es obligatorio para empleados activos.', 'warning');
+            return;
+        }
+        if (tipoContrato === 'Temporal' && !fechaSalida) {
+            Swal.fire('Atención', 'La FECHA DE TÉRMINO es obligatoria para contratos Temporales.', 'warning');
+            return;
+        }
+    }
+
+    if (fechaIngreso && fechaSalida && new Date(fechaSalida) < new Date(fechaIngreso)) {
+        Swal.fire('Atención', 'La fecha de término no puede ser anterior a la de ingreso.', 'warning');
+        return;
+    }
+    if (fechaNacimiento && fechaIngreso && new Date(fechaIngreso) < new Date(fechaNacimiento)) {
+        Swal.fire('Atención', 'La fecha de ingreso no puede ser anterior a la de nacimiento.', 'warning');
+        return;
+    }
+
+    const payload = {
+        nombre: nombre,
+        apellido_paterno: apellidoPaterno,
+        apellido_materno: apellidoMaterno,
+        genero: genero,
+        cargo: document.getElementById('input-wizard-cargo').value.trim() || null,
+        compania: document.getElementById('input-wizard-compania').value.trim() || null,
+        tipo_contrato: tipoContrato,
+        cant_contratos: parseInt(document.getElementById('input-wizard-cant-contratos').value) || 1,
+        fecha_ingreso: fechaIngreso,
+        fecha_nacimiento: fechaNacimiento,
+        fecha_salida: fechaSalida,
+        email: document.getElementById('input-wizard-email').value.trim() || null,
+        telefono: document.getElementById('input-wizard-telefono').value.trim() || null,
+        activo: activo
+    };
+
+    Swal.fire({
+        title: 'Guardando ficha...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch(`/api/empleados/${id}/`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(errText);
+        }
+
+        Swal.close();
+        
+        window._wizardState.onboardingCompletados[id] = true;
+        
+        if (window._wizardState.employeesFullData) {
+            window._wizardState.employeesFullData = window._wizardState.employeesFullData.filter(e => e.id !== parseInt(id));
+        }
+        
+        saveWizardStateToLocalStorage();
+        renderWizardStep9();
+        showToast('Ficha guardada con éxito', 'success');
+    } catch (e) {
+        console.error('[Wizard Onboarding] Error guardando empleado:', e);
+        Swal.fire('Error', 'No se pudo guardar la ficha: ' + e.message, 'error');
+    }
+};
+
+async function loadStep10EmployeesData() {
+    const employees = window._wizardState.newEmployeesDetalles || [];
+    const token = localStorage.getItem('token');
+    
+    window._wizardState.employeesFullData = [];
+    
+    await Promise.all(employees.map(async (emp) => {
+        try {
+            const resp = await fetch(`/api/empleados/${emp.id}/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resp.ok) {
+                const fullEmp = await resp.json();
+                window._wizardState.employeesFullData.push(fullEmp);
+            }
+        } catch (e) {
+            console.error('Error fetching employee details for step 10:', e);
+        }
+    }));
+}
+
+window.renderWizardStep10 = async function() {
+    const tbody = document.getElementById('tbody-wizard-turnos-individuales');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando datos de asignación...</td></tr>';
+
+    const btnPrev = document.getElementById('btn-wizard-prev');
+    const btnNext = document.getElementById('btn-wizard-next');
+    const btnFinish = document.getElementById('btn-wizard-finish');
+
+    if (btnPrev) btnPrev.disabled = false; 
+    if (btnNext) btnNext.classList.add('d-none');
+    if (btnFinish) {
+        btnFinish.textContent = 'Finalizar y Recalcular';
+        btnFinish.classList.remove('d-none');
+        btnFinish.onclick = window.finishWizardOnboarding;
+    }
+
+    if (!window._wizardState.employeesFullData || window._wizardState.employeesFullData.length === 0) {
+        await loadStep10EmployeesData();
+    }
+
+    const employees = window._wizardState.employeesFullData || [];
+    const activeEmployees = employees.filter(e => e.activo);
+
+    if (activeEmployees.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Ninguno de los nuevos empleados está activo. No se requieren asignaciones de turno.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = '';
+    
+    if (!window._wizardState.turnosDisponibles || window._wizardState.turnosDisponibles.length === 0) {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/turnos/?activo=true', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const res = await response.json();
+                window._wizardState.turnosDisponibles = res.turnos || [];
+            }
+        } catch (e) {
+            console.error('Error fetching turnos:', e);
+        }
+    }
+
+    activeEmployees.forEach(emp => {
+        const tr = document.createElement('tr');
+        
+        const areaName = emp.area || '';
+        const turnosFiltrados = window._wizardState.turnosDisponibles.filter(t => {
+            return t.areas && t.areas.some(a => a.toUpperCase() === areaName.toUpperCase());
+        });
+
+        const turnosList = turnosFiltrados.length > 0 ? turnosFiltrados : window._wizardState.turnosDisponibles;
+
+        const defaultTurnoId = window._wizardState.turnosIndividualesAsignados?.[emp.id] || 
+                               window._wizardState.resoluciones.turnos[areaName] ||
+                               (turnosList.find(t => t.es_default)?.id) ||
+                               (turnosList[0]?.id) || '';
+
+        let selectOptions = `<option value="">-- Seleccionar Turno --</option>`;
+        turnosList.forEach(t => {
+            selectOptions += `<option value="${t.id}" ${String(t.id) === String(defaultTurnoId) ? 'selected' : ''}>${t.nombre}</option>`;
+        });
+
+        tr.innerHTML = `
+            <td class="fw-bold align-middle">${emp.nombre_completo}</td>
+            <td class="align-middle"><span class="badge bg-secondary">${areaName || 'Sin Área'}</span></td>
+            <td class="align-middle">${emp.fecha_ingreso || '-'}</td>
+            <td class="align-middle">
+                <select class="form-select form-select-sm select-emp-turno" id="select-turno-emp-${emp.id}" data-empid="${emp.id}" onchange="window.saveTempIndividualTurno(${emp.id}, this.value)">
+                    ${selectOptions}
+                </select>
+            </td>
+        `;
+        tbody.appendChild(tr);
+
+        if (defaultTurnoId && (!window._wizardState.turnosIndividualesAsignados || !window._wizardState.turnosIndividualesAsignados[emp.id])) {
+            if (!window._wizardState.turnosIndividualesAsignados) window._wizardState.turnosIndividualesAsignados = {};
+            window._wizardState.turnosIndividualesAsignados[emp.id] = defaultTurnoId;
+        }
+    });
+};
+
+window.saveTempIndividualTurno = function(empId, turnoId) {
+    if (!window._wizardState.turnosIndividualesAsignados) {
+        window._wizardState.turnosIndividualesAsignados = {};
+    }
+    window._wizardState.turnosIndividualesAsignados[empId] = turnoId;
+    saveWizardStateToLocalStorage();
+};
+
+window.finishWizardOnboarding = async function() {
+    const employees = window._wizardState.employeesFullData || [];
+    const activeEmployees = employees.filter(e => e.activo);
+    
+    for (const emp of activeEmployees) {
+        const turnoId = window._wizardState.turnosIndividualesAsignados?.[emp.id];
+        if (!turnoId) {
+            Swal.fire('Atención', `Debes asignar un turno para el empleado activo: ${emp.nombre_completo}`, 'warning');
+            return;
+        }
+    }
+
+    Swal.fire({
+        title: 'Aplicando asignaciones...',
+        html: 'Por favor espere mientras se configuran los turnos individuales.',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+        const token = localStorage.getItem('token');
+        
+        await Promise.all(activeEmployees.map(async (emp) => {
+            const turnoId = window._wizardState.turnosIndividualesAsignados[emp.id];
+            const resp = await fetch('/api/asistencia/asignaciones/individual/', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    empleado_id: emp.id,
+                    fecha: emp.fecha_ingreso || new Date().toISOString().split('T')[0],
+                    turno_id: parseInt(turnoId),
+                    sync_bioalba: false,
+                    skip_reproceso: true
+                })
+            });
+            if (!resp.ok) {
+                throw new Error(`No se pudo asignar turno a ${emp.nombre_completo}: ${await resp.text()}`);
+            }
+        }));
+
+        Swal.close();
+
+        const recalcChecked = document.getElementById('wizard-recalc-history')?.checked;
+        
+        if (recalcChecked && activeEmployees.length > 0) {
+            const batchItems = activeEmployees.map(emp => ({
+                empleado_id: emp.id,
+                fecha_inicio: emp.fecha_ingreso || new Date().toISOString().split('T')[0]
+            }));
+
+            Swal.fire({
+                title: 'Iniciando recálculo...',
+                html: 'Preparando recalibración de asistencia histórica.',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            const resp = await fetch('/api/asistencia/asignaciones/batch-sync/', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ items: batchItems })
+            });
+
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || 'Error en batch-sync');
+            }
+
+            const batchData = await resp.json();
+            const jobIds = batchData.job_ids || {};
+            const total = batchData.empleados || 0;
+
+            Swal.close();
+
+            window.closeSyncWizard(true);
+            window.clearWizardStateFromLocalStorage();
+
+            const primerEmpId = Object.keys(jobIds)[0];
+            const primerJobId = primerEmpId ? jobIds[primerEmpId] : null;
+            const primerFecha = batchItems[0]?.fecha_inicio || new Date().toISOString().split('T')[0];
+
+            if (primerJobId && typeof window.abrirModalProgresoJob === 'function') {
+                setTimeout(() => {
+                    window.abrirModalProgresoJob(primerJobId, `Batch (${total} emp.)`, primerFecha, {
+                        syncBioAlba: true,
+                        allJobIds: Object.values(jobIds),
+                        onComplete: () => {
+                            if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+                            if (typeof window.loadMarcacionesFilters === 'function') window.loadMarcacionesFilters();
+                        }
+                    });
+                }, 400);
+            }
+        } else {
+            window.closeSyncWizard(true);
+            window.clearWizardStateFromLocalStorage();
+            Swal.fire('Onboarding Completado', 'Fichas y turnos asignados correctamente.', 'success');
+            if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+            if (typeof window.loadMarcacionesFilters === 'function') window.loadMarcacionesFilters();
+        }
+
+    } catch (e) {
+        console.error('[Wizard Onboarding Finish Error]:', e);
+        Swal.fire('Error', 'Error al finalizar onboarding: ' + e.message, 'error');
+    }
+};
+
+// =============================================================================
+// INICIALIZACIÓN AUTOMÁTICA Y RESTAURACIÓN (F5 RESILIENCE)
+// =============================================================================
+(function _installWizardF5Restore() {
+    const restore = () => {
+        const savedState = window.loadWizardStateFromLocalStorage();
+        if (savedState && savedState.currentStep >= 8) {
+            window._wizardState = savedState;
+            console.log('🔄 [Wizard F5 Restore] Restaurando asistente en Paso', savedState.currentStep);
+            
+            setTimeout(() => {
+                const modalEl = document.getElementById('modal-sync-wizard');
+                if (modalEl) {
+                    updateWizardUI();
+                    const wizardModal = new bootstrap.Modal(modalEl);
+                    wizardModal.show();
+                }
+            }, 1000); 
+        }
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', restore);
+    } else {
+        setTimeout(restore, 100);
+    }
+})();
+

@@ -294,32 +294,11 @@ function setupEventListeners() {
       const data = await res.json();
       hideBatchLoadingOverlay();
       
-      if (data.status === "requires_confirmation") {
-        // BUG-02 FIX: El guardian SIEMPRE retorna requires_confirmation (comportamiento del backend).
-        // Verificar si realmente hay elementos desconocidos que requieren configuración del wizard,
-        // o si es una sincronización de rutina donde todo ya está configurado.
-        const hayNuevosElementos = (
-            (data.nuevas_areas && data.nuevas_areas.length > 0) ||
-            (data.nuevos_cargos && data.nuevos_cargos.length > 0) ||
-            (data.nuevos_generos && data.nuevos_generos.length > 0)
-        );
-        const wizardYaCompletado = localStorage.getItem('wizard_completed') === 'true';
-
-        if (!hayNuevosElementos && wizardYaCompletado) {
-            // Todo conocido + wizard ya configurado → ir directo a preview sin wizard
-            console.log('[Guardian] Sin elementos nuevos y wizard completado → abriendo preview directo.');
-            openSyncModalPreview();
-        } else {
-            // Hay elementos nuevos o es primera configuración → abrir wizard
-            if (typeof startSyncWizard === 'function') {
-                startSyncWizard(data);
-            } else {
-                alert('El Wizard Universal no está cargado. Verifique los scripts.');
-            }
-        }
+      // Siempre abrimos el Wizard Universal de Sincronización para guiar el flujo completo
+      if (typeof startSyncWizard === 'function') {
+          startSyncWizard(data);
       } else {
-        // No requiere configuración, ir directo al selector / preview de empleados
-        openSyncModalPreview();
+          alert('El Wizard Universal no está cargado. Verifique los scripts.');
       }
     } catch (error) {
       hideBatchLoadingOverlay();

@@ -2334,33 +2334,33 @@
             <div id="modal-sync-wizard" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-xl modal-dialog-centered">
                     <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-magic me-2"></i>Asistente de Sincronización BioAlba</h5>
-                            <button type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <!-- Stepper UI (8 pasos) -->
+                                      <!-- Stepper UI (10 pasos) -->
                             <div class="d-flex justify-content-between mb-4 position-relative">
                                 <div class="progress position-absolute top-50 start-0 w-100 translate-middle-y" style="height: 2px; z-index: 0;">
                                     <div id="sync-wizard-progress" class="progress-bar bg-primary" role="progressbar" style="width: 0%;"></div>
                                 </div>
-                                <div class="step-indicator active bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-1">1</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-2">2</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-3">3</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-4">4</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-5">5</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-6">6</div>
-                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; z-index: 1; font-size: 0.85rem;" id="indicator-step-7">7</div>
-
+                                <div class="step-indicator active bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-1">1</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-2">2</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-3">3</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-4">4</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-5">5</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-6">6</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-7">7</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-8">8</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-9">9</div>
+                                <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-10">10</div>
                             </div>
-                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold" style="font-size: 0.7rem;">
-                                <span>Áreas</span>
-                                <span>Cargos</span>
-                                <span>Pagadores</span>
-                                <span>Justific.</span>
-                                <span>Bonos</span>
-                                <span>Turnos</span>
-                                <span>Preview</span>
+                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold text-center" style="font-size: 0.65rem;">
+                                <span style="width: 10%;">Áreas</span>
+                                <span style="width: 10%;">Cargos</span>
+                                <span style="width: 10%;">Pagadores</span>
+                                <span style="width: 10%;">Justific.</span>
+                                <span style="width: 10%;">Bonos</span>
+                                <span style="width: 10%;">Turnos</span>
+                                <span style="width: 10%;">Preview</span>
+                                <span style="width: 10%;">Sync SSE</span>
+                                <span style="width: 10%;">Fichas</span>
+                                <span style="width: 10%;">Turnos Ind.</span>
                             </div>
 
                             <!-- PASO 1: Áreas -->
@@ -2533,8 +2533,234 @@
                                 </div>
                             </div>
 
+                            <!-- PASO 8: Progreso SSE de Sincronización -->
+                            <div id="wizard-step-8" class="wizard-step d-none">
+                                <h6 class="text-primary mb-3"><i class="bi bi-arrow-repeat me-2"></i>Sincronizando con BioAlba</h6>
+                                <div id="wizard-sync-progress-container" class="my-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span id="wizard-sync-status-text" class="fw-bold text-secondary">Conectando...</span>
+                                        <span id="wizard-sync-percent" class="badge bg-primary">0%</span>
+                                    </div>
+                                    <div class="progress" style="height: 20px;">
+                                        <div id="wizard-sync-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="text-center mt-3 d-none" id="wizard-sync-error-container">
+                                        <div class="alert alert-danger border-0 mb-3">
+                                            <i class="bi bi-exclamation-octagon-fill me-2"></i><span id="wizard-sync-error-text">Ocurrió un error en la sincronización.</span>
+                                        </div>
+                                        <button type="button" class="btn btn-primary fw-bold" onclick="window.wizardRetrySync()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar Sincronización</button>
+                                    </div>
+                                </div>
+                                <div id="wizard-sync-log" class="border rounded p-3 bg-dark text-white font-monospace small" style="height: 150px; overflow-y: auto; font-family: monospace; line-height: 1.4;">
+                                    [INFO] Esperando inicio de sincronización...<br>
+                                </div>
+                            </div>
 
+                            <!-- PASO 9: Completar Fichas (Onboarding) -->
+                            <div id="wizard-step-9" class="wizard-step d-none">
+                                <div class="row">
+                                    <!-- Lista Lateral de Empleados -->
+                                    <div class="col-md-3 border-end">
+                                        <h6 class="text-primary mb-3">Empleados Sincronizados</h6>
+                                        <div class="list-group" id="wizard-onboarding-emp-list" style="max-height: 500px; overflow-y: auto; font-size: 0.8rem;">
+                                            <!-- Inyectado dinámicamente -->
+                                        </div>
+                                    </div>
+                                    <!-- Formulario de Ficha Completa -->
+                                    <div class="col-md-9 px-4">
+                                        <div id="wizard-onboarding-form-placeholder" class="text-center py-5 text-muted">
+                                            <i class="bi bi-person-bounding-box display-1 mb-3"></i>
+                                            <p>Selecciona un empleado de la lista para completar su ficha de ingreso.</p>
+                                        </div>
+                                        <form id="form-wizard-empleado" class="d-none" onsubmit="event.preventDefault();">
+                                            <input type="hidden" id="input-wizard-id">
+                                            
+                                            <div class="row">
+                                                <!-- COLUMNA IZQUIERDA: DATOS DE ORIGEN BIOALBA (LECTURA DE DATOS COMPLETOS) -->
+                                                <div class="col-lg-5 col-md-12 pe-3 border-end">
+                                                    <div class="card bg-light border-0 shadow-sm mb-3">
+                                                        <div class="card-header bg-secondary bg-opacity-10 border-bottom-0 py-2">
+                                                            <h6 class="fw-bold text-secondary mb-0" style="font-size: 0.8rem;">
+                                                                <i class="bi bi-globe me-2"></i>Ficha de Origen BioAlba
+                                                            </h6>
+                                                        </div>
+                                                        <div class="card-body p-3 text-secondary" style="font-size: 0.78rem; line-height: 1.5; max-height: 480px; overflow-y: auto;">
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">RUT Sincronizado</span>
+                                                                <span id="text-wizard-rut-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Nombre Completo</span>
+                                                                <span id="text-wizard-nombre-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Área BioAlba</span>
+                                                                <span id="text-wizard-area-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Cargo BioAlba</span>
+                                                                <span id="text-wizard-cargo-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Compañía BioAlba</span>
+                                                                <span id="text-wizard-compania-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Email</span>
+                                                                <span id="text-wizard-email-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Teléfono</span>
+                                                                <span id="text-wizard-telefono-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 border-bottom pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Género BioAlba</span>
+                                                                <span id="text-wizard-genero-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                            <div class="mb-2 pb-1">
+                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Fecha Ingreso Origen</span>
+                                                                <span id="text-wizard-fecha-ingreso-bioalba" class="fw-bold text-dark">-</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
 
+                                                <!-- COLUMNA DERECHA: ENTRADAS REQUERIDAS / EDICIÓN LOCAL -->
+                                                <div class="col-lg-7 col-md-12 ps-3">
+                                                    <h6 class="fw-bold text-primary mb-3" style="font-size: 0.8rem;">
+                                                        <i class="bi bi-pencil-square me-2"></i>Edición de Ficha Local
+                                                    </h6>
+                                                    
+                                                    <!-- Identificación Básica -->
+                                                    <div class="mb-3">
+                                                        <h6 class="fw-bold text-secondary mb-2" style="font-size: 0.75rem;">Identificación Personal</h6>
+                                                        <div class="row g-2">
+                                                            <div class="col-md-4">
+                                                                <label for="input-wizard-nombre" class="form-label small mb-1">Nombre *</label>
+                                                                <input type="text" id="input-wizard-nombre" required class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                <label for="input-wizard-apellido-paterno" class="form-label small mb-1">Ap. Paterno *</label>
+                                                                <input type="text" id="input-wizard-apellido-paterno" required class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                <label for="input-wizard-apellido-materno" class="form-label small mb-1">Ap. Materno *</label>
+                                                                <input type="text" id="input-wizard-apellido-materno" required class="form-control form-control-sm">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Parámetros Laborales y Contrato -->
+                                                    <div class="mb-3">
+                                                        <h6 class="fw-bold text-secondary mb-2" style="font-size: 0.75rem;">Contrato y Parámetros Laborales</h6>
+                                                        <div class="row g-2">
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-cargo" class="form-label small mb-1">Cargo *</label>
+                                                                <input type="text" id="input-wizard-cargo" required class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-compania" class="form-label small mb-1">Compañía *</label>
+                                                                <input type="text" id="input-wizard-compania" required class="form-control form-control-sm">
+                                                            </div>
+                                                        </div>
+                                                        <div class="row g-2 mt-1">
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-activo" class="form-label small mb-1">Estado</label>
+                                                                <select id="input-wizard-activo" class="form-select form-select-sm">
+                                                                    <option value="true">Activo</option>
+                                                                    <option value="false">Inactivo</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-tipo-contrato" class="form-label small mb-1">Tipo Contrato *</label>
+                                                                <select id="input-wizard-tipo-contrato" class="form-select form-select-sm" onchange="window.handleWizardTipoContratoChange()">
+                                                                    <option value="Indefinido">Indefinido</option>
+                                                                    <option value="Temporal">Temporal</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div class="row g-2 mt-1">
+                                                            <div class="col-md-4">
+                                                                <label for="input-wizard-cant-contratos" class="form-label small mb-1">N° Contrato</label>
+                                                                <input type="number" id="input-wizard-cant-contratos" min="1" value="1" class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                <label for="input-wizard-fecha-ingreso" class="form-label small mb-1">F. Ingreso *</label>
+                                                                <input type="date" id="input-wizard-fecha-ingreso" required class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                <label for="input-wizard-fecha-nacimiento" class="form-label small mb-1">F. Nacimiento *</label>
+                                                                <input type="date" id="input-wizard-fecha-nacimiento" required class="form-control form-control-sm">
+                                                            </div>
+                                                        </div>
+                                                        <div class="row g-2 mt-1">
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-fecha-salida" class="form-label small mb-1 text-danger">F. Término *</label>
+                                                                <input type="date" id="input-wizard-fecha-salida" class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-genero" class="form-label small mb-1">Género *</label>
+                                                                <div id="container-wizard-genero">
+                                                                    <!-- Select inyectado o input readonly -->
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Información de Contacto -->
+                                                    <div class="mb-3">
+                                                        <h6 class="fw-bold text-secondary mb-2" style="font-size: 0.75rem;">Información de Contacto</h6>
+                                                        <div class="row g-2">
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-email" class="form-label small mb-1">Email</label>
+                                                                <input type="email" id="input-wizard-email" class="form-control form-control-sm">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label for="input-wizard-telefono" class="form-label small mb-1">Teléfono</label>
+                                                                <input type="tel" id="input-wizard-telefono" class="form-control form-control-sm">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-end gap-2 mt-3 pt-2 border-top">
+                                                <button type="button" class="btn btn-primary btn-sm fw-bold" onclick="window.saveWizardEmpleadoFicha()"><i class="bi bi-save me-1"></i> Guardar Ficha</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PASO 10: Asignación de Turnos Individuales y Recálculo -->
+                            <div id="wizard-step-10" class="wizard-step d-none">
+                                <h6 class="text-primary mb-3"><i class="bi bi-calendar-check me-2"></i>Asignación de Turnos Individuales</h6>
+                                <div class="alert alert-info border-0 shadow-sm mb-3" style="font-size: 0.85rem;">
+                                    <i class="bi bi-info-circle-fill me-2"></i> Asigne el turno individual de ingreso para cada uno de los nuevos empleados. Se iniciará el cálculo de su malla de asistencia en base a este turno y la fecha de ingreso.
+                                </div>
+                                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                    <table class="table table-bordered align-middle table-sm" style="font-size: 0.85rem;">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Empleado</th>
+                                                <th>Área Local</th>
+                                                <th>Fecha de Ingreso</th>
+                                                <th>Turno a Asignar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-wizard-turnos-individuales">
+                                            <!-- Inyectado dinámicamente -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-4 p-3 bg-light rounded border">
+                                    <h6 class="fw-bold text-secondary mb-2" style="font-size: 0.85rem;"><i class="bi bi-gear-wide-connected me-2"></i>Proceso Final de Recalibración</h6>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="wizard-recalc-history" checked>
+                                        <label class="form-check-label fw-bold text-dark" for="wizard-recalc-history" style="font-size: 0.85rem;">Recalbrar automáticamente asistencia histórica</label>
+                                    </div>
+                                    <p class="text-muted small mb-0 mt-1" style="font-size: 0.75rem;">Busca y recalcula marcaciones en BioAlba desde la fecha de ingreso del empleado hasta hoy para generar su malla de asistencia inicial.</p>
+                                </div>
+                            </div>
                         </div>
                         <div class="modal-footer bg-light justify-content-between">
                             <button type="button" class="btn btn-secondary" id="btn-wizard-prev" onclick="wizardPrevStep()" disabled>Anterior</button>

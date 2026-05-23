@@ -1308,7 +1308,20 @@ class SyncService:
                     self.stats['nuevos_detalles'].append({
                         'id': nuevo_emp.id,
                         'nombre': nuevo_emp.nombre_completo,
-                        'rut': nuevo_emp.rut
+                        'rut': nuevo_emp.rut,
+                        'bioalba_data': {
+                            'rut': emp_data.get('rut'),
+                            'nombre': emp_data.get('nombre'),
+                            'apellido_paterno': emp_data.get('apellido_paterno'),
+                            'apellido_materno': emp_data.get('apellido_materno'),
+                            'cargo': emp_data.get('cargo'),
+                            'area': emp_data.get('area'),
+                            'compania': emp_data.get('compania'),
+                            'email': emp_data.get('email'),
+                            'telefono': emp_data.get('telefono'),
+                            'genero': emp_data.get('genero'),
+                            'fecha_ingreso': emp_data.get('fecha_ingreso')
+                        }
                     })
                 elif nuevo_emp and not nuevo_emp.activo:
                     logger.info(
