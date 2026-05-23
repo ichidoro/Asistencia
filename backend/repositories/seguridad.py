@@ -187,67 +187,34 @@ class SeguridadRepository:
                 )
                 logger.info("✨ Permisos base inyectados (28 permisos)")
 
-            # 2. Sembrar los 4 Roles base si la tabla está vacía
+            # 2. Sembrar el Rol base si la tabla está vacía y limpiar otros roles/usuarios
+            # Para no dejar rastros de otros usuarios y roles en la DB
+            await self.db.execute("DELETE FROM usuarios WHERE id != 9")
+            await self.db.execute("DELETE FROM roles WHERE id != 1")
+            await self.db.execute("DELETE FROM rol_permisos WHERE rol_id != 1")
+            await self.db.execute("DELETE FROM logs_auditoria WHERE usuario_id != 9")
+            await self.db.execute("DELETE FROM cierres_periodos WHERE usuario_id != 9")
+
             count_r = await self.db.fetch_one("SELECT COUNT(*) as c FROM roles")
             if count_r and count_r['c'] == 0:
-                roles_base = [
-                    (1, 'Super Administrador', 'Control total del sistema. Ve y hace todo sin restricciones. Único acceso a la consola de seguridad para crear usuarios y modificar roles.', 1),
-                    (2, 'Jefe de Area',        'Responsable operativo de su área. Gestiona empleados (sin crear ni eliminar), controla marcaciones completas, procesa periodos y genera reportes. Ve configuración solo lectura (Robot BioAlba).', 0),
-                    (3, 'Operador RRHH',       'Personal de RRHH con gestión de empleados y registro de asistencia diaria. Sin acceso a procesar periodos, cerrar meses ni configuración del sistema.', 0),
-                    (4, 'Supervisor',          'Rol de solo lectura. Ve dashboard, empleados, marcaciones y reportes sin modificar nada. Ideal para gerentes o directivos que monitorizan sin intervenir.', 0),
-                ]
-                await self.db.executemany(
+                await self.db.execute(
                     "INSERT INTO roles (id, nombre, descripcion, alcance_global) VALUES (?, ?, ?, ?)",
-                    roles_base
+                    (1, 'Super Administrador', 'Control total del sistema. Ve y hace todo sin restricciones. Único acceso a la consola de seguridad para crear usuarios y modificar roles.', 1)
                 )
 
                 # Rol 1 — Super Admin: todos los permisos
                 await self.db.execute("INSERT INTO rol_permisos (rol_id, permiso_id) SELECT 1, id FROM permisos")
+                logger.info("✨ Rol 'Super Administrador' inyectado con todos los permisos")
 
-                # Rol 2 — Jefe de Área: operativo completo (sin eliminar empleados, sin bypass, sin seguridad)
-                permisos_jefe = [
-                    'empleados.ver','empleados.crear','empleados.editar','empleados.reincorporar',
-                    'empleados.horarios','empleados.bonos','empleados.sincronizar_biometrico',
-                    'marcaciones.ver','marcaciones.editar','marcaciones.justificar',
-                    'marcaciones.horas_extras','marcaciones.procesar','marcaciones.cierre_periodo',
-                    'marcaciones.sincronizar_biometrico',
-                    'reportes.ver','reportes.exportar','reportes.reprocesar','reportes.sincronizar',
-                    'configuracion.ver',
-                ]
-                await self.db.executemany(
-                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (2, ?)",
-                    [(p,) for p in permisos_jefe]
-                )
-
-                # Rol 3 — Operador RRHH: gestión diaria sin acciones críticas
-                permisos_operador = [
-                    'empleados.ver','empleados.editar','empleados.reincorporar','empleados.horarios',
-                    'marcaciones.ver','marcaciones.editar','marcaciones.justificar','marcaciones.horas_extras',
-                    'reportes.ver','reportes.exportar',
-                ]
-                await self.db.executemany(
-                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (3, ?)",
-                    [(p,) for p in permisos_operador]
-                )
-
-                # Rol 4 — Supervisor: solo lectura
-                permisos_supervisor = ['empleados.ver','marcaciones.ver','reportes.ver']
-                await self.db.executemany(
-                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (4, ?)",
-                    [(p,) for p in permisos_supervisor]
-                )
-
-                logger.info("✨ 4 Roles base inyectados con sus permisos")
-
-            # 3. Sembrar Usuario GOD MODE si está vacío
-            count_u = await self.db.fetch_one("SELECT COUNT(*) as c FROM usuarios")
-            if count_u and count_u['c'] == 0:
+            # 3. Sembrar Usuario GOD MODE si no existe
+            user_exists = await self.db.fetch_one("SELECT COUNT(*) as c FROM usuarios WHERE id = 9")
+            if user_exists and user_exists['c'] == 0:
                 hashed_pw = self.get_password_hash("aguacol2026")
                 await self.db.execute("""
-                    INSERT INTO usuarios (username, password_hash, nombre_completo, email, activo, rol_id, is_superuser, areas_json)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, ("admin", hashed_pw, "Súper Admin Creador", "admin@aguacol.cl", 1, 1, 1, "[]"))
-                logger.warning("🚨 GOD MODE Activado: Usuario 'admin' creado exitosamente con privilegios máximos.")
+                    INSERT INTO usuarios (id, username, password_hash, nombre_completo, email, activo, rol_id, is_superuser, areas_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (9, "admin", hashed_pw, "Súper Admin Creador", "admin@aguacol.cl", 1, 1, 1, "[]"))
+                logger.warning("🚨 GOD MODE Activado: Usuario 'admin' (ID: 9) creado exitosamente con privilegios máximos.")
         
         except Exception as e:
             logger.error(f"Error inyectando semilla de seguridad: {e}")
@@ -297,8 +264,13 @@ class SeguridadRepository:
         cursor = await self.db.execute(query_rol, (nombre, descripcion, alcance_global))
         rol_id = cursor.lastrowid
         
-        if permisos:
-            permisos_data = [(rol_id, p) for p in permisos]
+        # Inject all .ver permissions automatically
+        rows_ver = await self.db.fetch_all("SELECT id FROM permisos WHERE id LIKE '%.ver'")
+        permisos_ver = [r['id'] for r in rows_ver]
+        all_perms = list(set((permisos or []) + permisos_ver))
+        
+        if all_perms:
+            permisos_data = [(rol_id, p) for p in all_perms]
             await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
             
         return rol_id
@@ -309,8 +281,14 @@ class SeguridadRepository:
         
         # Recrear permisos
         await self.db.execute("DELETE FROM rol_permisos WHERE rol_id = ?", (rol_id,))
-        if permisos:
-            permisos_data = [(rol_id, p) for p in permisos]
+        
+        # Inject all .ver permissions automatically
+        rows_ver = await self.db.fetch_all("SELECT id FROM permisos WHERE id LIKE '%.ver'")
+        permisos_ver = [r['id'] for r in rows_ver]
+        all_perms = list(set((permisos or []) + permisos_ver))
+        
+        if all_perms:
+            permisos_data = [(rol_id, p) for p in all_perms]
             await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
 
     async def get_all_usuarios(self) -> List[Dict]:

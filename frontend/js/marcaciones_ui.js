@@ -141,6 +141,7 @@ function renderMarcacionesToolbar(container) {
                     </div>
                 </div>
 
+                ${AuthService.hasPermission("marcaciones.editar") ? `
                 <div class="d-flex align-items-center border rounded-3 px-3 py-1 shadow-sm" 
                      id="perdonazo-switch-wrapper"
                      style="height:38px; background: ${_perdonazoState.activo ? '#f0fdf4' : '#fff'}; border-color:${_perdonazoState.activo ? '#86efac' : '#e2e8f0'} !important; transition: background 0.3s;">
@@ -159,6 +160,7 @@ function renderMarcacionesToolbar(container) {
                 <button class="btn btn-sm btn-outline-primary shadow-sm ms-2" onclick="window.abrirModalIntercambio ? window.abrirModalIntercambio() : console.warn('Intercambios panel not loaded')" title="Registrar Día Compensatorio" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
                     <i class="bi bi-arrow-left-right"></i> <span class="fw-bold">Días Compensatorios</span>
                 </button>
+                ` : ''}
 
             </div>
         </div>
@@ -3277,7 +3279,7 @@ function renderVistaAnalitica(respData, container) {
             }
 
 
-            if (!isEsp && !esBolsa) {
+            if (!isEsp) {
                 // Turnos normales: HE se toman directamente del backend
                 if (di.estado_he === 'APROBADO') {
                     const apr = di.minutos_extra_autorizados || 0;
@@ -3435,7 +3437,7 @@ function renderVistaAnalitica(respData, container) {
                     </td>`;
         }).join('');
 
-        const hasHE = r.he_bruto > 0;
+        const hasHE = r.he_pend > 0;
         const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
         return `<tr>
             <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="white-space:nowrap;cursor:pointer;font-size:0.75rem;"

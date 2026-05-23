@@ -58,8 +58,11 @@ async function openJustifyModal(empId, empNombre, fecha, existingJust = null) {
     // Cargar tipos de justificación (FORZAR RECARGA para ver cambios recientes)
     await loadJustifyTypes(true);
 
+    const canJustify = typeof AuthService !== 'undefined' && 
+        (AuthService.hasPermission('marcaciones.justificar') || AuthService.hasPermission('marcaciones.editar'));
+
     if (select) {
-        select.disabled = false;
+        select.disabled = !canJustify;
     }
 
     // Pre-llenar según modo
@@ -77,6 +80,11 @@ async function openJustifyModal(empId, empNombre, fecha, existingJust = null) {
         document.getElementById('just-observaciones').value = '';
     }
 
+    // Habilitar/Deshabilitar otros inputs según permisos
+    document.getElementById('just-fecha-inicio-input').disabled = !canJustify;
+    document.getElementById('just-fecha-fin-input').disabled = !canJustify;
+    document.getElementById('just-observaciones').disabled = !canJustify;
+
     // Actualizar título y footer según modo
     const titleEl = document.querySelector('#modal-justificacion-individual .modal-header h3');
     if (titleEl) {
@@ -86,7 +94,11 @@ async function openJustifyModal(empId, empNombre, fecha, existingJust = null) {
     // Actualizar footer: agregar botón Eliminar en modo edición
     const footerEl = document.querySelector('#modal-justificacion-individual .modal-footer');
     if (footerEl) {
-        if (existingJust) {
+        if (!canJustify) {
+            footerEl.innerHTML = `
+                <button type="button" class="btn btn-secondary" onclick="closeModalJustify()">Cerrar</button>
+            `;
+        } else if (existingJust) {
             footerEl.innerHTML = `
                 <button type="button" class="btn btn-danger me-auto" onclick="deleteJustificacionFromModal()">
                     <i class="bi bi-trash"></i> Eliminar

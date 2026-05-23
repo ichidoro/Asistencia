@@ -33,6 +33,94 @@ let cacheSeguridad = {
     areas: []
 };
 
+const MAPA_UI_PERMISOS = {
+    'asistencia.editar': {
+        module: 'ASISTENCIA',
+        action: 'Editar',
+        description: 'Justificar y editar asistencia',
+        permissions: ['marcaciones.editar', 'marcaciones.justificar', 'marcaciones.horas_extras', 'marcaciones.bypass_cierre']
+    },
+    'asistencia.procesar': {
+        module: 'ASISTENCIA',
+        action: 'Procesar',
+        description: 'Disparar cálculos manuales',
+        permissions: ['marcaciones.procesar', 'marcaciones.cierre_periodo', 'marcaciones.sincronizar_biometrico']
+    },
+    'asistencia.ver': {
+        module: 'ASISTENCIA',
+        action: 'Ver',
+        description: 'Ver marcaciones y registros',
+        permissions: ['marcaciones.ver'],
+        forced: true
+    },
+    'bonos.editar': {
+        module: 'BONOS',
+        action: 'Editar',
+        description: 'Crear y modificar bonos',
+        permissions: ['configuracion.bonos']
+    },
+    'bonos.ver': {
+        module: 'BONOS',
+        action: 'Ver',
+        description: 'Ver estructura de bonos',
+        permissions: ['empleados.bonos'],
+        forced: true
+    },
+    'configuracion.editar': {
+        module: 'CONFIGURACIÓN',
+        action: 'Editar',
+        description: 'Modificar reglas de asistencia',
+        permissions: ['configuracion.horarios', 'configuracion.justificaciones', 'configuracion.calendario', 'configuracion.correo', 'configuracion.estados']
+    },
+    'configuracion.ver': {
+        module: 'CONFIGURACIÓN',
+        action: 'Ver',
+        description: 'Ver reglas y ajustes globales',
+        permissions: ['configuracion.ver'],
+        forced: true,
+        alert: `Acceso al módulo de configuración y al<br>↳ panel Robot BioAlba sin poder modificar nada`
+    },
+    'empleados.editar': {
+        module: 'EMPLEADOS',
+        action: 'Editar',
+        description: 'Crear, editar y dar de baja empleados',
+        permissions: ['empleados.crear', 'empleados.editar', 'empleados.eliminar', 'empleados.reincorporar', 'empleados.horarios', 'empleados.sincronizar_biometrico']
+    },
+    'empleados.ver': {
+        module: 'EMPLEADOS',
+        action: 'Ver',
+        description: 'Ver empleados',
+        permissions: ['empleados.ver'],
+        forced: true
+    },
+    'reportes.editar': {
+        module: 'REPORTES',
+        action: 'Editar',
+        description: 'Exportar y reprocesar reportes',
+        permissions: ['reportes.exportar', 'reportes.reprocesar', 'reportes.sincronizar']
+    },
+    'reportes.ver': {
+        module: 'REPORTES',
+        action: 'Ver',
+        description: 'Ver reportes',
+        permissions: ['reportes.ver'],
+        forced: true
+    },
+    'seguridad.editar': {
+        module: 'SEGURIDAD',
+        action: 'Editar',
+        description: 'Gestionar usuarios y roles',
+        permissions: ['configuracion.seguridad']
+    },
+    'seguridad.ver': {
+        module: 'SEGURIDAD',
+        action: 'Ver',
+        description: 'Ver bitácora y auditoría',
+        permissions: ['configuracion.seguridad'],
+        forced: true
+    }
+};
+
 // Modales persistentes (instancias Bootstrap)
 let modalUserInstance = null;
 let modalRolInstance = null;
@@ -176,7 +264,7 @@ async function loadUsuarios() {
                 ? '<span class="badge bg-primary">Global (Ve Todo)</span>'
                 : user.areas?.map(a => `<span class="badge bg-info text-dark me-1">${a}</span>`).join('') || '<span class="badge bg-secondary">Sin Áreas Acceso</span>';
 
-            const selfAdminBlock = (user.id === 1) ? `disabled title="El usuario raíz es inmutable"` : '';
+            const selfAdminBlock = (user.id === 9) ? `disabled title="El usuario raíz es inmutable"` : '';
 
             return `
                 <tr>
@@ -460,62 +548,68 @@ function renderMatrizPermisos() {
     const container = document.getElementById('roles-permissions-matrix');
     if (!container) return;
 
-    if (cacheSeguridad.permisos.length === 0) {
-        container.innerHTML = '<div class="col-12 text-center text-muted">Cargando catálogo de permisos...</div>';
-        return;
-    }
-
-    // Agrupar por prefijo (modulo)
-    const groups = {};
-    cacheSeguridad.permisos.forEach(p => {
-        const groupName = p.modulo || 'Otros';
-        if (!groups[groupName]) groups[groupName] = [];
-        groups[groupName].push(p);
+    // Group by module
+    const modules = {};
+    Object.keys(MAPA_UI_PERMISOS).forEach(key => {
+        const item = MAPA_UI_PERMISOS[key];
+        if (!modules[item.module]) {
+            modules[item.module] = [];
+        }
+        modules[item.module].push({ key, ...item });
     });
 
-    // Diseño Horizontal/Responsivo
-    container.innerHTML = Object.entries(groups).map(([group, perms]) => `
-        <div class="col-12 mb-4">
-            <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; overflow: hidden;">
-                <div class="card-header bg-light pt-3 pb-2 px-4 border-bottom">
-                    <h6 class="fw-bold text-uppercase mb-0 text-primary" style="letter-spacing: 0.5px; font-size: 0.9rem;">
-                        <i class="bi bi-shield-lock-fill me-2 opacity-75"></i>Módulo ${group}
-                    </h6>
-                </div>
-                <div class="card-body px-4 pt-3 pb-4">
-                    <div class="row g-3">
-                    ${perms.map(p => {
-                        const simpleId = p.id.split('.')[1] || p.id;
-                        const idSafe = p.id.replace(/\\./g, '-');
-                        const extra = getPermissionDetails(p.id);
-                        
-                        const extraHtml = extra ? `
-                            <div class="mt-2 p-2 rounded" style="background: #fffbeb; border-left: 3px solid #f59e0b;">
-                                <div class="text-danger fw-bold mb-1" style="font-size:0.7rem;"><i class="bi bi-exclamation-triangle-fill me-1"></i>${extra.alert}</div>
-                                <div class="text-secondary font-monospace d-flex align-items-center" style="font-size:0.65rem; line-height: 1.2;">
-                                    <i class="bi bi-arrow-return-right text-primary me-1"></i> ${extra.flow}
-                                </div>
-                            </div>
-                        ` : '';
+    // Render HTML
+    container.innerHTML = Object.entries(modules).map(([moduleName, items]) => {
+        const cardsHtml = items.map(item => {
+            const idSafe = item.key.replace('.', '-');
+            const checkedAttr = item.forced ? 'checked disabled' : '';
+            const isForcedClass = item.forced ? 'bg-light text-muted' : '';
+            
+            let alertHtml = '';
+            if (item.alert) {
+                alertHtml = `
+                    <div class="alert alert-warning p-2 mt-2 mb-0 border-0 rounded" style="font-size: 0.75rem; background-color: #fffbeb; color: #b58105; border-left: 3px solid #f59e0b !important;">
+                        <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Solo Lectura</strong><br>
+                        ${item.alert}
+                    </div>
+                `;
+            }
 
-                        return `
-                            <div class="col-md-6 col-lg-4">
-                                <label class="d-flex gap-2 p-3 border rounded shadow-sm cell-clickable h-100 m-0" for="perm-${idSafe}" style="background: #f8fafc; cursor: pointer; transition: all 0.2s;">
-                                    <input class="form-check-input perm-check flex-shrink-0 mt-1 shadow-none" type="checkbox" value="${p.id}" id="perm-${idSafe}" style="width: 1.25rem; height: 1.25rem; cursor: pointer;">
-                                    <div class="w-100">
-                                        <div class="fw-bold text-dark mb-1" style="text-transform: capitalize; font-size: 0.9rem;">${simpleId.replace(/_/g, ' ')}</div>
-                                        <div class="text-muted" style="font-size:0.8rem; line-height: 1.3;">${p.descripcion}</div>
-                                        ${extraHtml}
-                                    </div>
-                                </label>
+            return `
+                <div class="col-md-4">
+                    <div class="d-flex align-items-start gap-2 p-3 border rounded shadow-sm h-100 ${isForcedClass}" style="background: #f8fafc; transition: all 0.2s;">
+                        <input class="form-check-input perm-ui-check flex-shrink-0 mt-1" type="checkbox" value="${item.key}" id="perm-ui-${idSafe}" ${checkedAttr} style="width: 1.15rem; height: 1.15rem; cursor: pointer;">
+                        <div class="w-100">
+                            <label class="form-check-label fw-bold text-dark mb-1" for="perm-ui-${idSafe}" style="font-size: 0.9rem; cursor: pointer;">
+                                ${item.action}
+                            </label>
+                            <div class="text-muted" style="font-size: 0.8rem; line-height: 1.3;">
+                                ${item.description}
                             </div>
-                        `;
-                    }).join('')}
+                            ${alertHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="col-12 mb-4">
+                <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0 !important;">
+                    <div class="card-header bg-white pt-3 pb-2 px-4 border-bottom-0">
+                        <h6 class="fw-bold mb-0 text-primary d-flex align-items-center" style="font-size: 0.95rem; color: #0d6efd !important;">
+                            <i class="bi bi-shield-fill me-2"></i>MÓDULO ${moduleName}
+                        </h6>
+                    </div>
+                    <div class="card-body px-4 pt-2 pb-4">
+                        <div class="row g-3">
+                            ${cardsHtml}
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 window.openRolModal = function () {
@@ -550,11 +644,20 @@ window.editRol = function (id) {
     // Pequeño delay para asegurar que el DOM de la matriz se renderizó antes de marcar
     setTimeout(() => {
         const activePerms = rol.permisos || [];
-        const checks = document.querySelectorAll('.perm-check');
-        console.log(`Marcando ${activePerms.length} permisos en ${checks.length} checkboxes`);
+        console.log(`Marcando permisos en UI checkboxes para activePerms:`, activePerms);
 
-        checks.forEach(ck => {
-            ck.checked = activePerms.includes(ck.value);
+        Object.keys(MAPA_UI_PERMISOS).forEach(key => {
+            const item = MAPA_UI_PERMISOS[key];
+            const idSafe = key.replace('.', '-');
+            const ck = document.getElementById(`perm-ui-${idSafe}`);
+            if (ck) {
+                if (item.forced) {
+                    ck.checked = true;
+                } else {
+                    const hasAll = item.permissions.every(p => activePerms.includes(p));
+                    ck.checked = hasAll;
+                }
+            }
         });
     }, 50);
 
@@ -563,13 +666,27 @@ window.editRol = function (id) {
 
 window.saveRol = async function () {
     const rolId = document.getElementById('rol-id').value;
-    const selectedPerms = Array.from(document.querySelectorAll('.perm-check:checked')).map(ck => ck.value);
+    
+    // Collect all permissions from checked checkboxes
+    const selectedPerms = [];
+    Object.keys(MAPA_UI_PERMISOS).forEach(key => {
+        const item = MAPA_UI_PERMISOS[key];
+        const idSafe = key.replace('.', '-');
+        const ck = document.getElementById(`perm-ui-${idSafe}`);
+        
+        if (item.forced || (ck && ck.checked)) {
+            selectedPerms.push(...item.permissions);
+        }
+    });
+
+    // Remove duplicates
+    const uniquePerms = [...new Set(selectedPerms)];
 
     const payload = {
         nombre: document.getElementById('rol-nombre').value,
         descripcion: document.getElementById('rol-descripcion').value,
         alcance_global: document.getElementById('rol-global').value === "1",
-        permisos: selectedPerms
+        permisos: uniquePerms
     };
 
     try {

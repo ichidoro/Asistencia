@@ -69,7 +69,8 @@ const AuthService = {
     hasPermission: function (permisoReq) {
         const user = this.getUser();
         if (!user) return false;
-        if (user.alcance_global) return true; // El Súper Admin o Rol Global ve todo
+        if (user.is_superuser) return true;
+        if (permisoReq && permisoReq.endsWith('.ver')) return true;
 
         const permisosStr = localStorage.getItem('user_permissions');
         if (!permisosStr) return false;

@@ -146,7 +146,7 @@ async def update_usuario(
                 if area not in (current_user.areas or []):
                     raise HTTPException(status_code=403, detail=f"No tiene permisos para asignar el área: {area}")
 
-    if user_id == 1 and current_user.user_id != 1:
+    if user_id == 9 and current_user.user_id != 9:
         raise HTTPException(status_code=403, detail="Solo el admin original puede auto-modificarse")
         
     await repo.update_user(user_id, user)
