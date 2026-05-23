@@ -98,7 +98,7 @@ async def get_stats_periodo(
     fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
     fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
     db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("reportes.exportar"))
+    current_user: SecurityContext = Depends(RequirePermission("reportes.ver"))
 ):
     """
     Retorna dataset para gráficos:

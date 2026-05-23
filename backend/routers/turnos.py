@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from backend.core.security import SecurityContext, RequirePermission
+from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.services.turno_service import TurnoService
 from backend.repositories.turno import TurnoRepository
 from backend.services.asistencia_service import AsistenciaService
@@ -28,7 +28,7 @@ async def get_assignments_matrix(
     year: int = Query(...),
     area: Optional[str] = None,
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+    current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
 ):
     """
     Obtiene la matriz de asignaciones de turnos para un periodo.
@@ -63,7 +63,7 @@ async def bulk_assign_turnos(
 async def create_turno(
     turno: TurnoCreate, 
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Crear un nuevo Turno con sus días configurados"""
     new_id = await service.create_turno(turno)
@@ -73,7 +73,7 @@ async def create_turno(
 async def get_turnos(
     area: Optional[str] = None,
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+    current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
 ):
     """Listar todos los turnos disponibles, opcionalmente filtrados por área"""
     return await service.get_all_turnos(area=area)
@@ -81,7 +81,7 @@ async def get_turnos(
 @router.get("/stats/por-area")
 async def get_turnos_stats_por_area(
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+    current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
 ):
     """
     Devuelve un diccionario { "Nombre Area": cantidad_turnos }
@@ -118,7 +118,7 @@ async def asignar_turno(
 async def delete_turno(
     turno_id: int,
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Eliminar un turno"""
     deleted = await service.delete_turno(turno_id)
@@ -131,7 +131,7 @@ async def update_turno(
     turno_id: int,
     turno: TurnoCreate,
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.horarios"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """Actualizar configuración de un turno"""
     updated = await service.update_turno(turno_id, turno)
