@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, Query, status, Response
+from fastapi import APIRouter, Depends, Query, status, Response, HTTPException
 from loguru import logger
 from backend.core.security import SecurityContext, RequirePermission
-from typing import Optional
+from typing import Optional, List
 from backend.services.report_service import ReportService
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.services.asistencia_service import AsistenciaService
@@ -26,7 +26,17 @@ async def export_asistencia_excel(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("reportes.exportar"))
 ):
-    from typing import Optional
+    # RLS Check
+    if not current_user.alcance_global:
+        if area:
+            if area not in (current_user.areas or []):
+                raise HTTPException(status_code=403, detail="No tiene permisos para el área solicitada")
+        else:
+            if current_user.areas:
+                area = current_user.areas[0]
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
+
     asistencia_repo = AsistenciaRepository(db)
     asistencia_service = AsistenciaService(asistencia_repo)
     service = ReportService(asistencia_service)
@@ -64,7 +74,17 @@ async def export_asistencia_excel_range(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("reportes.exportar"))
 ):
-    from typing import Optional
+    # RLS Check
+    if not current_user.alcance_global:
+        if area:
+            if area not in (current_user.areas or []):
+                raise HTTPException(status_code=403, detail="No tiene permisos para el área solicitada")
+        else:
+            if current_user.areas:
+                area = current_user.areas[0]
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
+
     asistencia_repo = AsistenciaRepository(db)
     asistencia_service = AsistenciaService(asistencia_repo)
     service = ReportService(asistencia_service)
@@ -100,22 +120,9 @@ async def get_stats_periodo(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("reportes.ver"))
 ):
-    """
-    Retorna dataset para gráficos:
-    [
-        {
-            "fecha": "2023-10-01",
-            "total": 10,
-            "presentes": 8,
-            "atrasos": 1,
-            "inasistencias": 1,
-            "anomalias": 0
-        },
-        ...
-    ]
-    """
     repo = AsistenciaRepository(db)
-    stats = await repo.get_period_stats(fecha_inicio, fecha_fin)
+    areas_permitidas = None if current_user.alcance_global else (current_user.areas or [])
+    stats = await repo.get_period_stats(fecha_inicio, fecha_fin, areas_permitidas=areas_permitidas)
     return stats
 
 @router.post(
@@ -130,15 +137,27 @@ async def reprocesar_desde_reportes(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("reportes.reprocesar"))
 ):
+    # RLS Check
+    if not current_user.alcance_global:
+        if area:
+            if area not in (current_user.areas or []):
+                raise HTTPException(status_code=403, detail="No tiene permisos para el área solicitada")
+        else:
+            if current_user.areas:
+                area = current_user.areas
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
+
     try:
         asistencia_repo = AsistenciaRepository(db)
         asistencia_service = AsistenciaService(asistencia_repo)
         resultado = await asistencia_service.procesar_periodo(fecha_inicio, fecha_fin, area)
         logger.info(f"[REPORTES] Reproceso ejecutado por {current_user.username}: {fecha_inicio} → {fecha_fin}")
         return {"ok": True, "resultado": resultado}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[REPORTES] Error en reproceso: {e}")
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -154,12 +173,20 @@ async def sincronizar_desde_reportes(
     current_user: SecurityContext = Depends(RequirePermission("reportes.sincronizar"))
 ):
     try:
-        asistencia_repo = AsistenciaRepository(db)
-        asistencia_service = AsistenciaService(asistencia_repo)
-        resultado = await asistencia_service.sincronizar_bioalba(fecha_inicio, fecha_fin)
+        from backend.services.sync_service import SyncService
+        service = SyncService()
+        
+        areas_permitidas = None
+        if not current_user.alcance_global:
+            areas_permitidas = current_user.areas or []
+            if not areas_permitidas:
+                raise HTTPException(status_code=403, detail="No tiene áreas asignadas.")
+        
+        resultado = await service.sync_marcaciones(fecha_inicio, fecha_fin, areas_permitidas, force_recalculate=True)
         logger.info(f"[REPORTES] Sincronización ejecutada por {current_user.username}: {fecha_inicio} → {fecha_fin}")
         return {"ok": True, "resultado": resultado}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[REPORTES] Error en sincronización: {e}")
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=str(e))

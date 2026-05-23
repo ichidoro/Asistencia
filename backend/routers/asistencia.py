@@ -1843,6 +1843,9 @@ async def get_intercambios(
 ):
     """Obtiene los intercambios de días en un rango de fechas."""
     intercambios = await service.repository.get_intercambios(fecha_inicio, fecha_fin)
+    if not current_user.alcance_global:
+        areas_permitidas = current_user.areas or []
+        intercambios = [i for i in intercambios if i.get('area_nombre') in areas_permitidas]
     return {"success": True, "data": intercambios}
 
 
@@ -1853,8 +1856,29 @@ async def create_intercambio(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
     """Crea un nuevo intercambio de días y reprocesa ambas fechas."""
-    payload = data.dict()
-    payload['usuario_id'] = current_user.user_id
+    # RLS Check
+    emp_repo = EmpleadoRepository(service.repository.db)
+    emp = await emp_repo.get_by_id(data.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail=f"Empleado con ID {data.empleado_id} no encontrado")
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    # Cierre Check
+    if await service.repository.check_rango_cerrado(data.fecha_origen, data.fecha_origen, data.empleado_id):
+        raise HTTPException(status_code=403, detail="La fecha de origen se encuentra en un período cerrado.")
+    if await service.repository.check_rango_cerrado(data.fecha_destino, data.fecha_destino, data.empleado_id):
+        raise HTTPException(status_code=403, detail="La fecha de destino se encuentra en un período cerrado.")
+
+    # Mapear parámetros correctamente para la BD
+    payload = {
+        'empleado_solicitante_id': data.empleado_id,
+        'empleado_receptor_id': data.empleado_id,
+        'fecha_origen': data.fecha_origen,
+        'fecha_destino': data.fecha_destino,
+        'motivo': data.observaciones,
+        'usuario_id': current_user.user_id
+    }
     
     intercambio_id = await service.repository.create_intercambio(payload)
     
@@ -1888,17 +1912,33 @@ async def delete_intercambio(
     if not intercambio:
         raise HTTPException(status_code=404, detail="Intercambio no encontrado")
         
+    emp_id = intercambio['empleado_solicitante_id']
+    
+    # RLS Check
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(emp_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado asociado al intercambio no encontrado")
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    # Cierre Check
+    if await service.repository.check_rango_cerrado(intercambio['fecha_origen'], intercambio['fecha_origen'], emp_id):
+        raise HTTPException(status_code=403, detail="La fecha de origen se encuentra en un período cerrado.")
+    if await service.repository.check_rango_cerrado(intercambio['fecha_destino'], intercambio['fecha_destino'], emp_id):
+        raise HTTPException(status_code=403, detail="La fecha de destino se encuentra en un período cerrado.")
+
     await service.repository.delete_intercambio(intercambio_id)
     
     # Reprocesar sin el intercambio para volver al estado natural
     await service.reprocesar_periodo_empleado(
-        empleado_id=intercambio['empleado_id'],
+        empleado_id=emp_id,
         fecha_inicio=intercambio['fecha_origen'],
         fecha_fin=intercambio['fecha_origen'],
         force=True
     )
     await service.reprocesar_periodo_empleado(
-        empleado_id=intercambio['empleado_id'],
+        empleado_id=emp_id,
         fecha_inicio=intercambio['fecha_destino'],
         fecha_fin=intercambio['fecha_destino'],
         force=True

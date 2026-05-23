@@ -82,6 +82,17 @@ async def preview_empleados(
     service = SyncService()
     resoluciones_areas = request.resoluciones_areas if request else None
     selected_cargos = request.selected_cargos if request else None
+
+    # RLS Check
+    if not current_user.alcance_global:
+        areas_permitidas = set(current_user.areas or [])
+        if resoluciones_areas:
+            for k, v in list(resoluciones_areas.items()):
+                if v != "_IGNORE_" and v not in areas_permitidas:
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para mapear al área '{v}'")
+        else:
+            raise HTTPException(status_code=403, detail="Un usuario zonal debe especificar resoluciones_areas para su scope.")
+
     return await service.preview_empleados(resoluciones_areas=resoluciones_areas, selected_cargos=selected_cargos)
 
 
