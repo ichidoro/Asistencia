@@ -1705,25 +1705,32 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         return;
     }
 
+    const canApproveHE = typeof AuthService !== 'undefined' && AuthService.hasPermission("marcaciones.horas_extras");
+
     // 3. Construir filas de la tabla
     const heRows = diasHE.map(d => {
         const estadoBadge = d.estado === 'APROBADO' ? '<span class="badge bg-success">✅ Aprobado</span>' :
                            d.estado === 'RECHAZADO' ? '<span class="badge bg-danger">❌ Rechazado</span>' :
                            '<span class="badge bg-warning text-dark">⏳ Pendiente</span>';
         const checked = d.estado === 'PENDIENTE' ? 'checked' : '';
+        const checkboxHtml = canApproveHE 
+            ? `<input class="form-check-input check-item-he" type="checkbox" data-fecha="${d.fecha}" data-minutos="${d.bruto}" ${checked}>`
+            : `<input class="form-check-input check-item-he" type="checkbox" disabled>`;
+        const actionsHtml = canApproveHE
+            ? `
+                ${d.estado !== 'APROBADO' ? `<button class="btn btn-sm btn-outline-success py-0 px-2" onclick="submitSingleHE(${empleadoId},'${d.fecha}','APROBADO',${d.bruto})" title="Aprobar"><i class="bi bi-check-lg"></i></button>` : ''}
+                ${d.estado !== 'RECHAZADO' ? `<button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" onclick="submitSingleHE(${empleadoId},'${d.fecha}','RECHAZADO',0)" title="Rechazar"><i class="bi bi-x-lg"></i></button>` : ''}
+              `
+            : `—`;
         return `<tr class="he-approval-row ${d.estado === 'PENDIENTE' ? 'table-warning-subtle' : ''}">
-            <td class="text-center"><input class="form-check-input check-item-he" type="checkbox" 
-                data-fecha="${d.fecha}" data-minutos="${d.bruto}" ${checked}></td>
+            <td class="text-center">${checkboxHtml}</td>
             <td class="fw-semibold">${d.fechaLabel}</td>
             <td class="font-monospace text-center">${d.hora_entrada}</td>
             <td class="font-monospace text-center">${d.hora_salida}</td>
             <td class="fw-bold text-center" style="color:#1e40af">${formatMinutesToHHMM(d.bruto)}</td>
             <td style="font-size: 0.75rem; line-height: 1.2;" class="align-middle">${d.contexto}</td>
             <td class="text-center">${estadoBadge}</td>
-            <td class="text-center">
-                ${d.estado !== 'APROBADO' ? `<button class="btn btn-sm btn-outline-success py-0 px-2" onclick="submitSingleHE(${empleadoId},'${d.fecha}','APROBADO',${d.bruto})" title="Aprobar"><i class="bi bi-check-lg"></i></button>` : ''}
-                ${d.estado !== 'RECHAZADO' ? `<button class="btn btn-sm btn-outline-danger py-0 px-2 ms-1" onclick="submitSingleHE(${empleadoId},'${d.fecha}','RECHAZADO',0)" title="Rechazar"><i class="bi bi-x-lg"></i></button>` : ''}
-            </td>
+            <td class="text-center">${actionsHtml}</td>
         </tr>`;
     }).join('');
 
@@ -1754,9 +1761,10 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                     <div class="modal-body p-0">
                         <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="font-size:0.8rem">
                             <div class="d-flex align-items-center gap-2">
-                                <input type="checkbox" class="form-check-input" id="check-all-he" checked onchange="toggleAllHECells(this)">
+                                <input type="checkbox" class="form-check-input" id="check-all-he" checked ${canApproveHE ? '' : 'disabled'} onchange="toggleAllHECells(this)">
                                 <label for="check-all-he" class="form-check-label fw-semibold">Seleccionar todos</label>
                             </div>
+                            ${canApproveHE ? `
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-approve-all" onclick="submitBatchHE(event, ${empleadoId}, 'APROBADO')">
                                     <i class="bi bi-check-all me-1"></i>Aprobar Seleccionados
@@ -1765,6 +1773,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                     <i class="bi bi-x-circle me-1"></i>Rechazar Seleccionados
                                 </button>
                             </div>
+                            ` : ''}
                         </div>
                         <div class="table-responsive" style="max-height:420px;overflow-y:auto">
                             <table class="table table-sm table-hover align-middle mb-0 he-approval-table">

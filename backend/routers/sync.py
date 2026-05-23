@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 import asyncio
 from pydantic import BaseModel
 
-from backend.core.security import SecurityContext, RequirePermission
+from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.core.database import db
 from backend.services.sync_service import SyncService
 
@@ -32,7 +32,7 @@ router = APIRouter(
 )
 async def search_bioalba_empleado(
     rut: str = Query(..., description="RUT del empleado (con o sin formato)"),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar", "empleados.reincorporar"]))
 ) -> List[Dict[str, Any]]:
     """
     Buscar empleado en BioAlba por RUT.
@@ -47,7 +47,7 @@ async def search_bioalba_empleado(
     description="Descarga datos de BioAlba y verifica si hay áreas no mapeadas antes de abrir el modal."
 )
 async def check_guardian_areas(
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     service = SyncService()
     return await service.check_guardian_areas()
@@ -59,7 +59,7 @@ async def check_guardian_areas(
 )
 async def preview_areas(
     refresh: bool = Query(False, description="Si es true, descarga el Excel completo de BioAlba para detectar nuevas áreas"),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> List[str]:
     """
     Obtener listado de áreas desde BioAlba para el selector.
@@ -77,7 +77,7 @@ async def preview_areas(
 )
 async def preview_empleados(
     request: SyncPreviewRequest = None,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> List[Dict[str, Any]]:
     service = SyncService()
     resoluciones_areas = request.resoluciones_areas if request else None
@@ -95,7 +95,7 @@ class WizardProviderRequest(BaseModel):
 )
 async def wizard_provider_turnos(
     request: WizardProviderRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     await db.connect()
     
@@ -161,7 +161,7 @@ async def wizard_provider_turnos(
 )
 async def wizard_provider_bonos(
     request: WizardProviderRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     await db.connect()
     
@@ -198,7 +198,7 @@ class WizardCommitAllRequest(BaseModel):
 )
 async def wizard_commit_all(
     request: WizardCommitAllRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     service = SyncService()
     try:
@@ -220,7 +220,7 @@ async def wizard_commit_all(
 )
 async def wizard_commit_areas(
     request: WizardCommitAreasRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     service = SyncService()
     try:
@@ -237,7 +237,7 @@ async def wizard_commit_areas(
 )
 async def wizard_commit_cargos(
     request: WizardCommitCargosRequest,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     service = SyncService()
     try:
@@ -261,7 +261,7 @@ async def wizard_commit_cargos(
 async def sincronizar_empleados(
     background_tasks: BackgroundTasks,
     request: SyncEmpleadosRequest = None,
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.sincronizar_biometrico"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     """
     Sincronizar empleados desde BioAlba.
@@ -286,7 +286,8 @@ async def sincronizar_empleados(
     description="Sincroniza empleados de forma síncrona y retorna estadísticas. Máximo 10 empleados."
 )
 async def sincronizar_empleados_sync(
-    request: SyncEmpleadosRequest = None
+    request: SyncEmpleadosRequest = None,
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     """
     Sincronizar empleados de forma síncrona.
@@ -318,7 +319,8 @@ async def sincronizar_empleados_sync(
     description="Sincroniza empleados emitiendo Server-Sent Events con el nombre y progreso de cada empleado. Máx. 10."
 )
 async def sincronizar_empleados_stream(
-    request: SyncEmpleadosRequest = None
+    request: SyncEmpleadosRequest = None,
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ):
     """
     Sincroniza empleados y emite SSE con:
@@ -498,7 +500,8 @@ async def test_connection() -> Dict[str, Any]:
 async def sincronizar_asistencia(
     background_tasks: BackgroundTasks,
     fecha_inicio: Optional[str] = Query(None, description="AAAA-MM-DD"),
-    fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD")
+    fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD"),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     background_tasks.add_task(ejecutar_sync_asistencia, fecha_inicio, fecha_fin)
     return {
@@ -515,7 +518,8 @@ async def sincronizar_asistencia(
 async def sincronizar_asistencia_sync(
     fecha_inicio: Optional[str] = Query(None, description="AAAA-MM-DD"),
     fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD"),
-    request: SyncAsistenciaRequest = None
+    request: SyncAsistenciaRequest = None,
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     service = SyncService()
 
@@ -542,6 +546,7 @@ async def sincronizar_asistencia_sync(
 async def sincronizar_asistencia_empleado(
     empleado_id: int,
     fecha_inicio: Optional[str] = Query(None, description="AAAA-MM-DD. Si no se indica, usa el mes actual."),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
     """
     Sync de marcaciones individual: descarga BioAlba y persiste solo las marcas

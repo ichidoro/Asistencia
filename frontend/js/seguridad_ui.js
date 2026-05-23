@@ -50,8 +50,7 @@ const MAPA_UI_PERMISOS = {
         module: 'ASISTENCIA',
         action: 'Ver',
         description: 'Ver marcaciones y registros',
-        permissions: ['marcaciones.ver'],
-        forced: true
+        permissions: ['marcaciones.ver']
     },
     'bonos.editar': {
         module: 'BONOS',
@@ -63,8 +62,7 @@ const MAPA_UI_PERMISOS = {
         module: 'BONOS',
         action: 'Ver',
         description: 'Ver estructura de bonos',
-        permissions: ['empleados.bonos'],
-        forced: true
+        permissions: ['empleados.bonos']
     },
     'configuracion.editar': {
         module: 'CONFIGURACIÓN',
@@ -77,7 +75,6 @@ const MAPA_UI_PERMISOS = {
         action: 'Ver',
         description: 'Ver reglas y ajustes globales',
         permissions: ['configuracion.ver'],
-        forced: true,
         alert: `Acceso al módulo de configuración y al<br>↳ panel Robot BioAlba sin poder modificar nada`
     },
     'empleados.editar': {
@@ -90,8 +87,7 @@ const MAPA_UI_PERMISOS = {
         module: 'EMPLEADOS',
         action: 'Ver',
         description: 'Ver empleados',
-        permissions: ['empleados.ver'],
-        forced: true
+        permissions: ['empleados.ver']
     },
     'reportes.editar': {
         module: 'REPORTES',
@@ -103,8 +99,7 @@ const MAPA_UI_PERMISOS = {
         module: 'REPORTES',
         action: 'Ver',
         description: 'Ver reportes',
-        permissions: ['reportes.ver'],
-        forced: true
+        permissions: ['reportes.ver']
     },
     'seguridad.editar': {
         module: 'SEGURIDAD',
@@ -116,8 +111,7 @@ const MAPA_UI_PERMISOS = {
         module: 'SEGURIDAD',
         action: 'Ver',
         description: 'Ver bitácora y auditoría',
-        permissions: ['configuracion.seguridad'],
-        forced: true
+        permissions: ['configuracion.seguridad']
     }
 };
 
@@ -568,9 +562,13 @@ function renderMatrizPermisos() {
             let alertHtml = '';
             if (item.alert) {
                 alertHtml = `
-                    <div class="alert alert-warning p-2 mt-2 mb-0 border-0 rounded" style="font-size: 0.75rem; background-color: #fffbeb; color: #b58105; border-left: 3px solid #f59e0b !important;">
-                        <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Solo Lectura</strong><br>
-                        ${item.alert}
+                    <div class="alert alert-warning p-2 mt-2 mb-0 border-0 rounded" style="font-size: 0.75rem; background-color: #fffbeb; border-left: 3px solid #ef4444 !important; text-align: left;">
+                        <strong style="color: #ef4444 !important; font-size: 0.8rem; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
+                            <span style="font-size: 0.85rem;">⚠️</span> Solo Lectura
+                        </strong>
+                        <span style="color: #475569 !important; font-size: 0.73rem; line-height: 1.35; display: inline-block;">
+                            ${item.alert}
+                        </span>
                     </div>
                 `;
             }

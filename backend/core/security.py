@@ -145,3 +145,23 @@ def RequirePermission(required_permission: str):
             )
         return context
     return permission_checker
+
+def RequireAnyPermission(required_permissions: List[str]):
+    """Dependencia inyectable para proteger Endpoints que requieren al menos uno de los permisos"""
+    async def permission_checker(context: SecurityContext = Depends(get_current_user)):
+        has_any = any(context.check_permission(p) for p in required_permissions)
+        if not has_any:
+            perms_str = ", ".join(required_permissions)
+            logger.warning(f"Bloqueo de Seguridad: {context.username} intentó acceder a recurso que requiere uno de: {perms_str}")
+            try:
+                repo = SeguridadRepository(db)
+                await repo.log_auditoria(context.user_id, context.username, "INTENTO_ACCESO_DENEGADO", "SEGURIDAD", f"Requería alguno de: {perms_str}")
+            except Exception as audit_err:
+                logger.warning(f"⚠️ [Security] Auditoría de acceso denegado no registrada (no crítico): {audit_err}")
+            
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"No tiene permisos para realizar esta acción. Requerido uno de: {perms_str}"
+            )
+        return context
+    return permission_checker

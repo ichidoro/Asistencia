@@ -187,14 +187,7 @@ class SeguridadRepository:
                 )
                 logger.info("✨ Permisos base inyectados (28 permisos)")
 
-            # 2. Sembrar el Rol base si la tabla está vacía y limpiar otros roles/usuarios
-            # Para no dejar rastros de otros usuarios y roles en la DB
-            await self.db.execute("DELETE FROM usuarios WHERE id != 9")
-            await self.db.execute("DELETE FROM roles WHERE id != 1")
-            await self.db.execute("DELETE FROM rol_permisos WHERE rol_id != 1")
-            await self.db.execute("DELETE FROM logs_auditoria WHERE usuario_id != 9")
-            await self.db.execute("DELETE FROM cierres_periodos WHERE usuario_id != 9")
-
+            # 2. Sembrar el Rol base si la tabla está vacía
             count_r = await self.db.fetch_one("SELECT COUNT(*) as c FROM roles")
             if count_r and count_r['c'] == 0:
                 await self.db.execute(
@@ -264,13 +257,8 @@ class SeguridadRepository:
         cursor = await self.db.execute(query_rol, (nombre, descripcion, alcance_global))
         rol_id = cursor.lastrowid
         
-        # Inject all .ver permissions automatically
-        rows_ver = await self.db.fetch_all("SELECT id FROM permisos WHERE id LIKE '%.ver'")
-        permisos_ver = [r['id'] for r in rows_ver]
-        all_perms = list(set((permisos or []) + permisos_ver))
-        
-        if all_perms:
-            permisos_data = [(rol_id, p) for p in all_perms]
+        if permisos:
+            permisos_data = [(rol_id, p) for p in permisos]
             await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
             
         return rol_id
@@ -282,13 +270,8 @@ class SeguridadRepository:
         # Recrear permisos
         await self.db.execute("DELETE FROM rol_permisos WHERE rol_id = ?", (rol_id,))
         
-        # Inject all .ver permissions automatically
-        rows_ver = await self.db.fetch_all("SELECT id FROM permisos WHERE id LIKE '%.ver'")
-        permisos_ver = [r['id'] for r in rows_ver]
-        all_perms = list(set((permisos or []) + permisos_ver))
-        
-        if all_perms:
-            permisos_data = [(rol_id, p) for p in all_perms]
+        if permisos:
+            permisos_data = [(rol_id, p) for p in permisos]
             await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
 
     async def get_all_usuarios(self) -> List[Dict]:

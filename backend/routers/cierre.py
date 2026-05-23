@@ -29,7 +29,7 @@ async def evaluar_cierre(
 ):
     try:
         service = CierreService(db)
-        if current_user.rol_global != 1 and area not in current_user.areas:
+        if not current_user.check_area_access(area):
             raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
         resultado = await service.evaluar_cierre(fecha_inicio, fecha_fin, area)
         return resultado
@@ -49,14 +49,19 @@ async def ejecutar_cierre(
 ):
     try:
         service = CierreService(db)
-        if current_user.rol_global != 1 and req.area not in current_user.areas:
+        if not current_user.check_area_access(req.area):
             raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
+        user_dict = {
+            "id": current_user.user_id,
+            "username": current_user.username,
+            "rol_global": 1 if current_user.alcance_global else 0
+        }
         res = await service.ejecutar_cierre(
             fecha_inicio=req.fecha_inicio,
             fecha_fin=req.fecha_fin,
             area=req.area,
             aceptar_inasistencias=req.aceptar_inasistencias,
-            user=current_user.usuario
+            user=user_dict
         )
         return res
     except ValueError as e:
@@ -192,7 +197,7 @@ async def acta_resumen(
         return {
             "periodo": {"inicio": fecha_inicio, "fin": fecha_fin},
             "area": area,
-            "generado_por": current_user.usuario.get("username", "sistema"),
+            "generado_por": current_user.username,
             "fecha_generacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "cierre_info": cierre_info,
             # Datos del acta
