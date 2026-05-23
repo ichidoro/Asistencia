@@ -182,6 +182,12 @@ async def lifespan(app: FastAPI):
                 await config_repo.init_tables()
                 await turno_repo.init_tables()
                 
+                # Sincronizar/poblar tabla horas_extras con registros pendientes
+                from backend.repositories.hora_extra import HoraExtraRepository
+                he_repo = HoraExtraRepository(db)
+                await he_repo.run_backfill()
+                logger.info("✅ [Startup] Backfill de horas extras completado")
+                
                 # Sincronizar feriados del año actual automáticamente en cada arranque
                 from datetime import date
                 await cal_service.sync_chile_holidays(date.today().year)
