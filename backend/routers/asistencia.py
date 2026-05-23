@@ -729,6 +729,22 @@ async def condonar_deuda(
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="La fecha de inicio no puede ser mayor a la fecha de fin.")
 
+    # RLS & Cierre Check
+    emp_repo = EmpleadoRepository(service.repository.db)
+    for emp_id in request.empleados_ids:
+        emp = await emp_repo.get_by_id(emp_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail=f"Empleado con ID {emp_id} no encontrado")
+        if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+            raise HTTPException(status_code=403, detail=f"No tiene permisos para el empleado con ID {emp_id}")
+        
+        # Validar si el rango está cerrado para este empleado
+        if await service.repository.check_rango_cerrado(request.fecha_inicio, request.fecha_fin, emp_id):
+            raise HTTPException(
+                status_code=403, 
+                detail=f"El rango solicitado para el empleado {emp.nombre_completo} se encuentra cerrado o intersecta un periodo sellado."
+            )
+
     dias_totales = (end_date - start_date).days + 1
     fechas = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(dias_totales)]
 
