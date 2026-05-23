@@ -501,12 +501,15 @@ function renderBonos() {
     const container = document.getElementById('tab-bonos');
     if (!container) return;
 
+    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.bonos') : true;
     let h5Title = `
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h5 class="mb-0 fw-bold">Listado de Bonos e Incentivos</h5>
+            ${canEdit ? `
             <button class="btn btn-primary btn-sm" onclick="openModalBono()">
                 <i class="bi bi-plus-circle"></i> Nuevo Bono
             </button>
+            ` : ''}
         </div>
     `;
 
@@ -553,6 +556,7 @@ function renderBonos() {
                             `).join('') : '<p class="text-muted small italic">Sin reglas definidas</p>'}
                         </div>
 
+                        ${canEdit ? `
                         <div class="d-flex gap-2">
                             <button class="btn btn-outline-primary btn-sm flex-grow-1" onclick="editBono(${bono.id})">
                                 <i class="bi bi-pencil"></i> Editar
@@ -561,6 +565,7 @@ function renderBonos() {
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -948,12 +953,15 @@ window.renderTiposJustificacion = function () {
     const container = document.getElementById('tab-justificaciones');
     if (!container) return;
 
+    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.justificaciones') : true;
     let h5Title = `
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h5 class="mb-0 fw-bold">Configuración de Justificaciones e Inasistencias</h5>
+            ${canEdit ? `
             <button class="btn btn-primary btn-sm" onclick="openModalTipoJ()">
                 <i class="bi bi-plus-circle"></i> Nuevo Tipo
             </button>
+            ` : ''}
         </div>
     `;
 
@@ -1005,10 +1013,12 @@ window.renderTiposJustificacion = function () {
                     </span>
                 </td>
                 <td>
+                    ${canEdit ? `
                     <div class="btn-group">
                         <button class="btn btn-sm btn-light" onclick="editTipoJ(${tipo.id})"><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-sm btn-light text-danger" onclick="confirmDeleteTipoJ(${tipo.id})"><i class="bi bi-trash"></i></button>
                     </div>
+                    ` : '<span class="text-muted small">Sólo Lectura</span>'}
                 </td>
             </tr>
         `;

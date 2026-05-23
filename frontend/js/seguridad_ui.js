@@ -53,14 +53,14 @@ const MAPA_UI_PERMISOS = {
         permissions: ['marcaciones.ver']
     },
     'bonos.editar': {
-        module: 'BONOS',
-        action: 'Editar',
+        module: 'CONFIGURACIÓN',
+        action: 'Editar Bonos',
         description: 'Crear y modificar bonos',
         permissions: ['configuracion.bonos']
     },
     'bonos.ver': {
-        module: 'BONOS',
-        action: 'Ver',
+        module: 'CONFIGURACIÓN',
+        action: 'Ver Bonos',
         description: 'Ver estructura de bonos',
         permissions: ['empleados.bonos']
     },
@@ -102,14 +102,14 @@ const MAPA_UI_PERMISOS = {
         permissions: ['reportes.ver']
     },
     'seguridad.editar': {
-        module: 'SEGURIDAD',
-        action: 'Editar',
+        module: 'CONFIGURACIÓN',
+        action: 'Editar Seguridad',
         description: 'Gestionar usuarios y roles',
         permissions: ['configuracion.seguridad']
     },
     'seguridad.ver': {
-        module: 'SEGURIDAD',
-        action: 'Ver',
+        module: 'CONFIGURACIÓN',
+        action: 'Ver Seguridad',
         description: 'Ver bitácora y auditoría',
         permissions: ['configuracion.seguridad']
     }

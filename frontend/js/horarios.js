@@ -448,13 +448,16 @@ function renderHorariosUI() {
 
     // Solo inyectar HTML si no existe la sección (evita destruir el modal abierto)
     if (!document.getElementById('horarios-view')) {
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
         const html = `
             <div id="horarios-view" class="fade-in">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2>📅 Configuración de Turnos</h2>
+                    ${canEdit ? `
                     <button class="btn btn-primary" onclick="openModalHorario()">
                         <i class="bi bi-plus-lg"></i> Nuevo Turno
                     </button>
+                    ` : ''}
                 </div>
 
                 <!-- Tabs Navigation -->
@@ -1016,6 +1019,8 @@ function renderTurnosTable() {
         return;
     }
 
+    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
+
     tbody.innerHTML = turnosList.map(t => {
         const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
             ? 'Bolsa de Horas (Art. 25 BIS)'
@@ -1028,6 +1033,7 @@ function renderTurnosTable() {
             <td>${t.meta_horas_semanales} hrs</td>
             <td>${t.tolerancia_retraso_alerta} min / ${t.tolerancia_retraso_descuento} min</td>
             <td>
+                ${canEdit ? `
                 <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-primary" onclick="openModalHorario(${t.id})" title="Editar">
                         <i class="bi bi-pencil"></i>
@@ -1036,6 +1042,7 @@ function renderTurnosTable() {
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
+                ` : '<span class="text-muted small">Sólo Lectura</span>'}
             </td>
         </tr>
     `}).join('');
