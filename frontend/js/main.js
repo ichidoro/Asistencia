@@ -284,6 +284,11 @@ function setupEventListeners() {
 
   // Sync button (Two-Step workflow + Guardian Pre-Check + Wizard)
   btnSync.addEventListener('click', async () => {
+    if (btnSync.disabled) return;
+    btnSync.disabled = true;
+    const originalHTML = btnSync.innerHTML;
+    btnSync.innerHTML = '<span>🔄</span><span>Analizando...</span>';
+    
     try {
       showBatchLoadingOverlay("Analizando integridad de áreas con BioAlba...");
       const res = await fetch(`${API_BASE_URL}/sync/guardian/check/`, {
@@ -304,6 +309,9 @@ function setupEventListeners() {
       hideBatchLoadingOverlay();
       console.error("Error validando guardián:", error);
       alert("Error al verificar la integridad con BioAlba: " + error.message);
+    } finally {
+      btnSync.innerHTML = originalHTML;
+      btnSync.disabled = false;
     }
   });
 

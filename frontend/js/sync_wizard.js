@@ -159,6 +159,25 @@ window.startSyncWizard = function(data) {
         generos: []
     };
 
+    // Limpiar onboarding y detalles de empleados de sesiones anteriores
+    window._wizardState.turnosDisponibles = [];
+    window._wizardState.bonosDisponibles = [];
+    window._wizardState.preAsignacionesTurnos = {};
+    window._wizardState.preAsignacionesBonos = {};
+    window._wizardState.newEmployeesDetalles = null;
+    window._wizardState.onboardingCompletados = {};
+    window._wizardState.selectedOnboardingEmpId = null;
+    window._wizardState.employeesFullData = null;
+    window._wizardState.turnosIndividualesAsignados = {};
+    window._wizardState.syncPayload = null;
+    window._wizardState.synchronizedEmployees = [];
+
+    // Limpiar localStorage de sesiones anteriores del wizard
+    window.clearWizardStateFromLocalStorage();
+
+    // Guardar estado inicial limpio en localStorage
+    saveWizardStateToLocalStorage();
+
     // FIX: NO pre-poblar áreas. Los checkboxes deben arrancar desmarcados
     // para que el usuario elija explícitamente qué áreas importar.
     // (Antes se pre-poblaba con "_NEW_" haciendo que todos aparecieran marcados)
@@ -261,79 +280,93 @@ function updateWizardUI() {
 }
 
 window.wizardNextStep = async function() {
-    const TOTAL_STEPS = 10;
-    const step = window._wizardState.currentStep;
+    const btnNext = document.getElementById('btn-wizard-next');
+    if (btnNext) {
+        if (btnNext.getAttribute('data-loading') === 'true') return;
+        btnNext.setAttribute('data-loading', 'true');
+        btnNext.disabled = true;
+    }
 
-    // --- PASO 1: Áreas ---
-    if (step === 1) {
-        if (!guardarSeleccionesPaso1()) return;
+    try {
+        const TOTAL_STEPS = 10;
+        const step = window._wizardState.currentStep;
 
-        const resoluciones = window._wizardState.resoluciones.areas;
-        const areasConocidas = window._wizardState.resoluciones.areas_conocidas || {};
-        const tieneSeleccion = Object.values(resoluciones).some(v => v !== '_IGNORE_') || Object.values(areasConocidas).some(v => v === true);
-        if (!tieneSeleccion) {
-            Swal.fire('Atención', 'Debes seleccionar al menos un área para importar.', 'warning');
-            return;
-        }
-        // Realizar commit parcial para que las áreas existan en BD (necesario para paso 3: Bonos y paso 4: Turnos)
-        try {
-            const resp = await fetch('/api/sync/wizard/commit/areas/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ areas: resoluciones })
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                window._wizardState.sessionCreated.areas = data.creadas || [];
-                console.log('[Wizard] Áreas persistidas:', data.creadas);
+        // --- PASO 1: Áreas ---
+        if (step === 1) {
+            if (!guardarSeleccionesPaso1()) return;
+
+            const resoluciones = window._wizardState.resoluciones.areas;
+            const areasConocidas = window._wizardState.resoluciones.areas_conocidas || {};
+            const tieneSeleccion = Object.values(resoluciones).some(v => v !== '_IGNORE_') || Object.values(areasConocidas).some(v => v === true);
+            if (!tieneSeleccion) {
+                Swal.fire('Atención', 'Debes seleccionar al menos un área para importar.', 'warning');
+                return;
             }
-        } catch (e) {
-            console.error('[Wizard] Error commiteando áreas:', e);
-            Swal.fire('Error', 'No se pudieron guardar las áreas.', 'error');
-            return;
-        }
-    }
-
-    // --- PASO 2: Cargos ---
-    if (step === 2) {
-        if (!guardarSeleccionesPaso2()) return;
-        if (typeof window.loadMetadata === 'function') {
-            await window.loadMetadata(true);
-        }
-        // Realizar commit parcial de cargos
-        try {
-            const resp = await fetch('/api/sync/wizard/commit/cargos/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ cargos: window._wizardState.resoluciones.cargos })
-            });
-            if (resp.ok) {
-                const data = await resp.json();
-                window._wizardState.sessionCreated.cargos = data.creados || [];
-                console.log('[Wizard] Cargos persistidos:', data.creados);
+            // Realizar commit parcial para que las áreas existan en BD (necesario para paso 3: Bonos y paso 4: Turnos)
+            try {
+                const resp = await fetch('/api/sync/wizard/commit/areas/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ areas: resoluciones })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    window._wizardState.sessionCreated.areas = data.creadas || [];
+                    console.log('[Wizard] Áreas persistidas:', data.creadas);
+                }
+            } catch (e) {
+                console.error('[Wizard] Error commiteando áreas:', e);
+                Swal.fire('Error', 'No se pudieron guardar las áreas.', 'error');
+                return;
             }
-        } catch (e) {
-            console.error('[Wizard] Error commiteando cargos:', e);
-            Swal.fire('Error', 'No se pudieron guardar los cargos.', 'error');
-            return;
         }
-    }
 
-    // --- PASO 5: Bonos ---
-    if (step === 5) {
-        guardarSeleccionesPaso5_Bonos();
-    }
+        // --- PASO 2: Cargos ---
+        if (step === 2) {
+            if (!guardarSeleccionesPaso2()) return;
+            if (typeof window.loadMetadata === 'function') {
+                await window.loadMetadata(true);
+            }
+            // Realizar commit parcial de cargos
+            try {
+                const resp = await fetch('/api/sync/wizard/commit/cargos/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ cargos: window._wizardState.resoluciones.cargos })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    window._wizardState.sessionCreated.cargos = data.creados || [];
+                    console.log('[Wizard] Cargos persistidos:', data.creados);
+                }
+            } catch (e) {
+                console.error('[Wizard] Error commiteando cargos:', e);
+                Swal.fire('Error', 'No se pudieron guardar los cargos.', 'error');
+                return;
+            }
+        }
 
-    // --- PASO 6: Turnos ---
-    if (step === 6) {
-        if (!guardarSeleccionesPaso6_Turnos()) return;
-    }
+        // --- PASO 5: Bonos ---
+        if (step === 5) {
+            guardarSeleccionesPaso5_Bonos();
+        }
 
-    // --- Avanzar ---
-    if (step < TOTAL_STEPS) {
-        window._wizardState.currentStep++;
-        saveWizardStateToLocalStorage();
-        updateWizardUI();
+        // --- PASO 6: Turnos ---
+        if (step === 6) {
+            if (!guardarSeleccionesPaso6_Turnos()) return;
+        }
+
+        // --- Avanzar ---
+        if (step < TOTAL_STEPS) {
+            window._wizardState.currentStep++;
+            saveWizardStateToLocalStorage();
+            updateWizardUI();
+        }
+    } finally {
+        if (btnNext) {
+            btnNext.removeAttribute('data-loading');
+            btnNext.disabled = false;
+        }
     }
 };
 
@@ -1699,6 +1732,16 @@ window.confirmWizardSync = async function() {
         ? Array.from(checkedBoxes).map(cb => cb.dataset.rut)
         : null;
 
+    // Registrar todos los empleados seleccionados (nuevos y existentes) para el flujo de onboarding/turnos
+    window._wizardState.synchronizedEmployees = Array.from(checkedBoxes).map(cb => {
+        const tr = cb.closest('tr');
+        const isNuevo = tr ? tr.innerHTML.includes('NUEVO') : false;
+        return {
+            rut: cb.dataset.rut,
+            es_nuevo: isNuevo
+        };
+    });
+
     const filterMsg = selectedRuts
         ? `${selectedRuts.length} empleado(s) seleccionado(s)`
         : `Todos los ${allBoxes.length} empleado(s)`;
@@ -2238,22 +2281,69 @@ window.startWizardSSESync = async function(payload) {
             if (typeof window.loadEmpleados === 'function') await window.loadEmpleados();
             if (typeof window.loadStats === 'function') await window.loadStats();
 
-            window._wizardState.newEmployeesDetalles = finalStats.nuevos_detalles || [];
-            window._wizardState.onboardingCompletados = {}; 
+            // Resolver todos los empleados sincronizados (tanto nuevos como existentes) para onboarding/turnos
+            statusTextEl.textContent = 'Preparando fichas de empleados...';
+            window._wizardState.onboardingCompletados = {};
+            
+            const token = localStorage.getItem('token');
+            const syncList = window._wizardState.synchronizedEmployees || [];
+            const resolvedEmployees = [];
+            
+            await Promise.all(syncList.map(async (item) => {
+                try {
+                    const resp = await fetch(`/api/empleados/rut/${item.rut}/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (resp.ok) {
+                        const emp = await resp.json();
+                        resolvedEmployees.push({
+                            id: emp.id,
+                            nombre: emp.nombre_completo || `${emp.nombre} ${emp.apellido_paterno}`,
+                            rut: emp.rut,
+                            es_nuevo: item.es_nuevo,
+                            area: emp.area,
+                            activo: emp.activo,
+                            bioalba_data: {
+                                rut: emp.rut,
+                                nombre: emp.nombre,
+                                apellido_paterno: emp.apellido_paterno,
+                                apellido_materno: emp.apellido_materno,
+                                cargo: emp.cargo,
+                                area: emp.area,
+                                compania: emp.compania,
+                                email: emp.email,
+                                telefono: emp.telefono,
+                                genero: emp.genero,
+                                fecha_ingreso: emp.fecha_ingreso
+                            }
+                        });
+                        
+                        // Para existentes, marcar onboarding completado por defecto (pueden revisarse o avanzar a turnos)
+                        if (!item.es_nuevo) {
+                            window._wizardState.onboardingCompletados[emp.id] = true;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error al resolver empleado:', e);
+                }
+            }));
+
+            window._wizardState.newEmployeesDetalles = resolvedEmployees;
+            statusTextEl.textContent = 'Sincronización finalizada.';
             saveWizardStateToLocalStorage();
 
             if (btnCancel) btnCancel.disabled = false;
             if (btnCloseHeader) btnCloseHeader.disabled = false;
 
             if (window._wizardState.newEmployeesDetalles.length > 0) {
-                logEl.innerHTML += `[INFO] Se detectaron ${window._wizardState.newEmployeesDetalles.length} empleados nuevos. Procediendo a completar fichas.<br>`;
+                logEl.innerHTML += `[INFO] Se sincronizaron ${window._wizardState.newEmployeesDetalles.length} empleado(s). Procediendo a completar fichas/turnos.<br>`;
                 logEl.scrollTop = logEl.scrollHeight;
                 if (btnNext) {
                     btnNext.disabled = false;
                     btnNext.classList.remove('d-none');
                 }
             } else {
-                logEl.innerHTML += `[INFO] No hay empleados nuevos que requieran Onboarding.<br>`;
+                logEl.innerHTML += `[INFO] No hay empleados sincronizados que procesar.<br>`;
                 logEl.scrollTop = logEl.scrollHeight;
                 const btnFinish = document.getElementById('btn-wizard-finish');
                 if (btnFinish) {

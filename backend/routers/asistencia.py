@@ -464,6 +464,8 @@ async def post_batch_sync(
     # Agrupar: mes_key → set(ruts) para minimizar descargas de BioAlba
     meses_ruts: dict = {}
     for item in data.items:
+        if not getattr(item, 'sync_bioalba', True):
+            continue
         rut = emp_info.get(item.empleado_id, {}).get("rut")
         if not rut:
             continue

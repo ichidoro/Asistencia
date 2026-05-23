@@ -24,6 +24,17 @@ window.refreshAlerts = () => { if (typeof checkContractAlerts === 'function') ch
 async function initAlertsUI() {
     console.log("🔔 Inicializando Sistema de Alertas Globales...");
 
+    // Evitar colisión de backdrops: Si el wizard se abre, ocultar el modal de bloqueo mandatorio
+    const wizardEl = document.getElementById('modal-sync-wizard');
+    if (wizardEl) {
+        wizardEl.addEventListener('show.bs.modal', () => {
+            window.hideMandatoryLock();
+        });
+        wizardEl.addEventListener('hidden.bs.modal', () => {
+            checkContractAlerts();
+        });
+    }
+
     // Ejecutar inmediatamente
     await checkContractAlerts();
 
@@ -54,7 +65,11 @@ async function checkContractAlerts() {
         const urgentAlerts = data.filter(emp => emp.bloqueante && !emp.es_procesado);
         const processedAlerts = data.filter(emp => emp.es_procesado);
         
-        const wizardActive = window._wizardState && (window._wizardState.currentStep >= 8 || document.getElementById('modal-sync-wizard')?.classList.contains('show'));
+        const wizardEl = document.getElementById('modal-sync-wizard');
+        const wizardActive = window._wizardState && (
+            window._wizardState.currentStep >= 8 || 
+            (wizardEl && (wizardEl.classList.contains('show') || wizardEl.style.display === 'block'))
+        );
         
         if (urgentAlerts.length > 0 && !wizardActive) {
             showMandatoryLock(urgentAlerts, processedAlerts);

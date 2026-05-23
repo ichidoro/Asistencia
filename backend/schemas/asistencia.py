@@ -38,6 +38,7 @@ class BatchSyncItem(BaseModel):
     """Un empleado dentro de un job de sincronización batch."""
     empleado_id: int
     fecha_inicio: str  # YYYY-MM-DD — desde cuándo se sincroniza
+    sync_bioalba: bool = True
 
 class BatchSyncRequest(BaseModel):
     """Request para sincronizar N empleados en una sola llamada optimizada."""

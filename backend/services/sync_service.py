@@ -484,7 +484,21 @@ class SyncService:
             cargos_conocidos = set()
             cargos_conocidos_por_area = {}
             generos_desconocidos = set()
+
+            # Preparar set de RUTs seleccionados para el guardián
+            ruts_seleccionados = None
+            if ruts and len(ruts) > 0:
+                ruts_seleccionados = set(
+                    r.replace('.', '').replace('-', '').strip().upper() for r in ruts
+                )
+
             for emp_data in empleados_bioalba:
+                # Si el usuario seleccionó RUTs específicos, ignorar los demás en el Guardián
+                if ruts_seleccionados:
+                    emp_rut = str(emp_data.get('rut', '')).replace('.', '').replace('-', '').strip().upper()
+                    if emp_rut not in ruts_seleccionados:
+                        continue
+
                 area_raw = str(emp_data.get('area', '')).strip()
                 
                 # Si el usuario seleccionó áreas específicas, el Guardián ignora las demás
@@ -538,12 +552,7 @@ class SyncService:
                 return res
             # --------------------------------
             
-            # Preparar set de RUTs seleccionados (si existe filtro granular)
-            ruts_seleccionados = None
-            if ruts and len(ruts) > 0:
-                ruts_seleccionados = set(
-                    r.replace('.', '').replace('-', '').strip().upper() for r in ruts
-                )
+            if ruts_seleccionados:
                 logger.info(f"🎯 Filtro granular activo: {len(ruts_seleccionados)} RUTs seleccionados")
 
             # Pre-calcular lista filtrada para saber el total ANTES del loop
