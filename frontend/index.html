@@ -2732,11 +2732,11 @@
                                 </div>
                             </div>
 
-                            <!-- PASO 10: Asignación de Turnos Individuales y Recálculo -->
+                            <!-- PASO 10: Asignación de Turnos Individuales -->
                             <div id="wizard-step-10" class="wizard-step d-none">
                                 <h6 class="text-primary mb-3"><i class="bi bi-calendar-check me-2"></i>Asignación de Turnos Individuales</h6>
                                 <div class="alert alert-info border-0 shadow-sm mb-3" style="font-size: 0.85rem;">
-                                    <i class="bi bi-info-circle-fill me-2"></i> Asigne el turno individual de ingreso para cada uno de los nuevos empleados. Se iniciará el cálculo de su malla de asistencia en base a este turno y la fecha de ingreso.
+                                    <i class="bi bi-info-circle-fill me-2"></i> Asigne el turno individual de ingreso y la fecha de inicio de asignación para cada empleado. Las marcaciones se sincronizarán y se calculará la asistencia a partir de dicha fecha.
                                 </div>
                                 <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                                     <table class="table table-bordered align-middle table-sm" style="font-size: 0.85rem;">
@@ -2744,22 +2744,15 @@
                                             <tr>
                                                 <th>Empleado</th>
                                                 <th>Área Local</th>
-                                                <th>Fecha de Ingreso</th>
+                                                <th>Fecha de Inicio de Asignación</th>
                                                 <th>Turno a Asignar</th>
+                                                <th class="text-center">Sincronizar Marcaciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="tbody-wizard-turnos-individuales">
                                             <!-- Inyectado dinámicamente -->
                                         </tbody>
                                     </table>
-                                </div>
-                                <div class="mt-4 p-3 bg-light rounded border">
-                                    <h6 class="fw-bold text-secondary mb-2" style="font-size: 0.85rem;"><i class="bi bi-gear-wide-connected me-2"></i>Proceso Final de Recalibración</h6>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" role="switch" id="wizard-recalc-history" checked>
-                                        <label class="form-check-label fw-bold text-dark" for="wizard-recalc-history" style="font-size: 0.85rem;">Recalbrar automáticamente asistencia histórica</label>
-                                    </div>
-                                    <p class="text-muted small mb-0 mt-1" style="font-size: 0.75rem;">Busca y recalcula marcaciones en BioAlba desde la fecha de ingreso del empleado hasta hoy para generar su malla de asistencia inicial.</p>
                                 </div>
                             </div>
                         </div>

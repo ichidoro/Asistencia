@@ -63,7 +63,10 @@ window._wizardState = {
     selectedOnboardingEmpId: null,
     employeesFullData: null,
     turnosIndividualesAsignados: {},
-    syncPayload: null
+    fechasIndividualesAsignadas: {},
+    syncBioalbaIndividuales: {},
+    syncPayload: null,
+    synchronizedEmployees: []
 };
 
 window.closeSyncWizard = async function(force = false) {
@@ -169,6 +172,8 @@ window.startSyncWizard = function(data) {
     window._wizardState.selectedOnboardingEmpId = null;
     window._wizardState.employeesFullData = null;
     window._wizardState.turnosIndividualesAsignados = {};
+    window._wizardState.fechasIndividualesAsignadas = {};
+    window._wizardState.syncBioalbaIndividuales = {};
     window._wizardState.syncPayload = null;
     window._wizardState.synchronizedEmployees = [];
 
@@ -2168,6 +2173,8 @@ window.loadWizardStateFromLocalStorage = function() {
                 selectedOnboardingEmpId: null,
                 employeesFullData: null,
                 turnosIndividualesAsignados: {},
+                fechasIndividualesAsignadas: {},
+                syncBioalbaIndividuales: {},
                 syncPayload: null,
                 ...state
             };
@@ -2791,7 +2798,7 @@ async function loadStep10EmployeesData() {
 window.renderWizardStep10 = async function() {
     const tbody = document.getElementById('tbody-wizard-turnos-individuales');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando datos de asignación...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Cargando datos de asignación...</td></tr>';
 
     const btnPrev = document.getElementById('btn-wizard-prev');
     const btnNext = document.getElementById('btn-wizard-next');
@@ -2813,7 +2820,7 @@ window.renderWizardStep10 = async function() {
     const activeEmployees = employees.filter(e => e.activo);
 
     if (activeEmployees.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Ninguno de los nuevos empleados está activo. No se requieren asignaciones de turno.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Ninguno de los nuevos empleados está activo. No se requieren asignaciones de turno.</td></tr>`;
         return;
     }
 
@@ -2849,28 +2856,68 @@ window.renderWizardStep10 = async function() {
                                (turnosList.find(t => t.es_default)?.id) ||
                                (turnosList[0]?.id) || '';
 
+        const defaultFecha = window._wizardState.fechasIndividualesAsignadas?.[emp.id] || 
+                             emp.fecha_ingreso || 
+                             new Date().toISOString().split('T')[0];
+
+        const defaultSync = window._wizardState.syncBioalbaIndividuales?.[emp.id] !== false;
+
         let selectOptions = `<option value="">-- Seleccionar Turno --</option>`;
         turnosList.forEach(t => {
             selectOptions += `<option value="${t.id}" ${String(t.id) === String(defaultTurnoId) ? 'selected' : ''}>${t.nombre}</option>`;
         });
 
+        // Asegurar que las variables queden inicializadas en el estado
+        if (!window._wizardState.turnosIndividualesAsignados) window._wizardState.turnosIndividualesAsignados = {};
+        window._wizardState.turnosIndividualesAsignados[emp.id] = defaultTurnoId;
+
+        if (!window._wizardState.fechasIndividualesAsignadas) window._wizardState.fechasIndividualesAsignadas = {};
+        window._wizardState.fechasIndividualesAsignadas[emp.id] = defaultFecha;
+
+        if (!window._wizardState.syncBioalbaIndividuales) window._wizardState.syncBioalbaIndividuales = {};
+        window._wizardState.syncBioalbaIndividuales[emp.id] = defaultSync;
+
         tr.innerHTML = `
             <td class="fw-bold align-middle">${emp.nombre_completo}</td>
             <td class="align-middle"><span class="badge bg-secondary">${areaName || 'Sin Área'}</span></td>
-            <td class="align-middle">${emp.fecha_ingreso || '-'}</td>
+            <td class="align-middle text-nowrap">
+                <div class="d-flex align-items-center gap-1 mb-1">
+                    <input type="date" class="form-control form-control-sm input-emp-fecha-asig" 
+                           id="input-fecha-emp-${emp.id}" 
+                           value="${defaultFecha}" 
+                           style="width: 120px;"
+                           onchange="window.saveTempIndividualFecha(${emp.id}, this.value)">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" 
+                            onclick="window.setFechaAsigHoy(${emp.id})" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;">
+                        Hoy
+                    </button>
+                </div>
+                <div class="d-flex flex-column gap-1">
+                    <a href="javascript:void(0)" class="small text-info text-decoration-none" 
+                       id="link-primera-marca-${emp.id}"
+                       onclick="window.wizardBuscarPrimeraMarca(${emp.id})">
+                        <i class="bi bi-search me-1"></i>Buscar 1ª marca
+                    </a>
+                    <span class="x-small text-muted d-none" id="txt-primera-marca-${emp.id}"></span>
+                </div>
+            </td>
             <td class="align-middle">
                 <select class="form-select form-select-sm select-emp-turno" id="select-turno-emp-${emp.id}" data-empid="${emp.id}" onchange="window.saveTempIndividualTurno(${emp.id}, this.value)">
                     ${selectOptions}
                 </select>
             </td>
+            <td class="align-middle text-center">
+                <div class="form-check form-switch d-inline-block">
+                    <input class="form-check-input chk-emp-sync-bioalba" type="checkbox" role="switch" 
+                           id="chk-sync-emp-${emp.id}" ${defaultSync ? 'checked' : ''}
+                           onchange="window.saveTempIndividualSyncBioalba(${emp.id}, this.checked)">
+                </div>
+            </td>
         `;
         tbody.appendChild(tr);
-
-        if (defaultTurnoId && (!window._wizardState.turnosIndividualesAsignados || !window._wizardState.turnosIndividualesAsignados[emp.id])) {
-            if (!window._wizardState.turnosIndividualesAsignados) window._wizardState.turnosIndividualesAsignados = {};
-            window._wizardState.turnosIndividualesAsignados[emp.id] = defaultTurnoId;
-        }
     });
+
+    saveWizardStateToLocalStorage();
 };
 
 window.saveTempIndividualTurno = function(empId, turnoId) {
@@ -2881,6 +2928,82 @@ window.saveTempIndividualTurno = function(empId, turnoId) {
     saveWizardStateToLocalStorage();
 };
 
+window.saveTempIndividualFecha = function(empId, fecha) {
+    if (!window._wizardState.fechasIndividualesAsignadas) {
+        window._wizardState.fechasIndividualesAsignadas = {};
+    }
+    window._wizardState.fechasIndividualesAsignadas[empId] = fecha;
+    saveWizardStateToLocalStorage();
+};
+
+window.saveTempIndividualSyncBioalba = function(empId, sync) {
+    if (!window._wizardState.syncBioalbaIndividuales) {
+        window._wizardState.syncBioalbaIndividuales = {};
+    }
+    window._wizardState.syncBioalbaIndividuales[empId] = sync;
+    saveWizardStateToLocalStorage();
+};
+
+window.setFechaAsigHoy = function(empId) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const input = document.getElementById(`input-fecha-emp-${empId}`);
+    if (input) {
+        input.value = todayStr;
+        window.saveTempIndividualFecha(empId, todayStr);
+    }
+};
+
+window.wizardBuscarPrimeraMarca = async function(empId) {
+    const link = document.getElementById(`link-primera-marca-${empId}`);
+    const txt = document.getElementById(`txt-primera-marca-${empId}`);
+    const input = document.getElementById(`input-fecha-emp-${empId}`);
+
+    if (link) {
+        link.classList.add('pe-none', 'text-muted');
+        link.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:10px;height:10px;"></span>Buscando...';
+    }
+    if (txt) {
+        txt.classList.remove('d-none');
+        txt.textContent = 'Consultando BioAlba (desde ene 2026)...';
+    }
+
+    try {
+        const resp = await fetch(`/api/asistencia/empleados/${empId}/primera-marcacion/`);
+        const data = resp.ok ? await resp.json() : null;
+        const primeraMarca = data?.primera_marcacion || null;
+
+        if (primeraMarca) {
+            if (input) {
+                input.value = primeraMarca;
+                window.saveTempIndividualFecha(empId, primeraMarca);
+            }
+            if (txt) {
+                txt.textContent = `1ª Marca: ${primeraMarca}`;
+                txt.className = 'x-small text-success fw-bold';
+            }
+            if (link) link.classList.add('d-none');
+        } else {
+            if (txt) {
+                txt.textContent = data?.motivo || 'Sin marcas desde ene 2026';
+                txt.className = 'x-small text-warning';
+            }
+            if (link) {
+                link.classList.remove('pe-none', 'text-muted');
+                link.innerHTML = '<i class="bi bi-search me-1"></i>Buscar 1ª marca';
+            }
+        }
+    } catch (e) {
+        if (txt) {
+            txt.textContent = 'Error consultando BioAlba';
+            txt.className = 'x-small text-danger';
+        }
+        if (link) {
+            link.classList.remove('pe-none', 'text-muted');
+            link.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Reintentar';
+        }
+    }
+};
+
 window.finishWizardOnboarding = async function() {
     const employees = window._wizardState.employeesFullData || [];
     const activeEmployees = employees.filter(e => e.activo);
@@ -2889,6 +3012,11 @@ window.finishWizardOnboarding = async function() {
         const turnoId = window._wizardState.turnosIndividualesAsignados?.[emp.id];
         if (!turnoId) {
             Swal.fire('Atención', `Debes asignar un turno para el empleado activo: ${emp.nombre_completo}`, 'warning');
+            return;
+        }
+        const fechaAsig = window._wizardState.fechasIndividualesAsignadas?.[emp.id];
+        if (!fechaAsig) {
+            Swal.fire('Atención', `Debes seleccionar una fecha de inicio de asignación para: ${emp.nombre_completo}`, 'warning');
             return;
         }
     }
@@ -2905,6 +3033,7 @@ window.finishWizardOnboarding = async function() {
         
         await Promise.all(activeEmployees.map(async (emp) => {
             const turnoId = window._wizardState.turnosIndividualesAsignados[emp.id];
+            const fechaAsig = window._wizardState.fechasIndividualesAsignadas[emp.id] || emp.fecha_ingreso || new Date().toISOString().split('T')[0];
             const resp = await fetch('/api/asistencia/asignaciones/individual/', {
                 method: 'POST',
                 headers: { 
@@ -2913,7 +3042,7 @@ window.finishWizardOnboarding = async function() {
                 },
                 body: JSON.stringify({
                     empleado_id: emp.id,
-                    fecha: emp.fecha_ingreso || new Date().toISOString().split('T')[0],
+                    fecha: fechaAsig,
                     turno_id: parseInt(turnoId),
                     sync_bioalba: false,
                     skip_reproceso: true
@@ -2926,12 +3055,11 @@ window.finishWizardOnboarding = async function() {
 
         Swal.close();
 
-        const recalcChecked = document.getElementById('wizard-recalc-history')?.checked;
-        
-        if (recalcChecked && activeEmployees.length > 0) {
+        if (activeEmployees.length > 0) {
             const batchItems = activeEmployees.map(emp => ({
                 empleado_id: emp.id,
-                fecha_inicio: emp.fecha_ingreso || new Date().toISOString().split('T')[0]
+                fecha_inicio: window._wizardState.fechasIndividualesAsignadas[emp.id] || emp.fecha_ingreso || new Date().toISOString().split('T')[0],
+                sync_bioalba: window._wizardState.syncBioalbaIndividuales?.[emp.id] !== false
             }));
 
             Swal.fire({
@@ -2971,7 +3099,7 @@ window.finishWizardOnboarding = async function() {
             if (primerJobId && typeof window.abrirModalProgresoJob === 'function') {
                 setTimeout(() => {
                     window.abrirModalProgresoJob(primerJobId, `Batch (${total} emp.)`, primerFecha, {
-                        syncBioAlba: true,
+                        syncBioAlba: batchItems.some(i => i.sync_bioalba),
                         allJobIds: Object.values(jobIds),
                         onComplete: () => {
                             if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
