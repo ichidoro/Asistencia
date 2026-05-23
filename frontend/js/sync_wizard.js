@@ -2451,16 +2451,20 @@ async function loadOnboardingEmployeeForm(empId) {
         }
 
         // Configurar Género Local (Si viene vacío de BioAlba, es editable; si no, queda fijo)
-        const containerGenero = document.getElementById('container-wizard-genero');
-        if (containerGenero) {
+        const wrapperGenero = document.getElementById('wrapper-wizard-genero');
+        if (wrapperGenero) {
             const rawGen = empleado.genero || '';
             const normalizedGen = rawGen.trim();
             const hasValidGenero = normalizedGen && normalizedGen !== 'No Especificado' && normalizedGen !== 'Sin Especificar' && normalizedGen !== '-';
 
             if (hasValidGenero) {
-                containerGenero.innerHTML = `<input type="text" id="input-wizard-genero" value="${normalizedGen}" readonly class="form-control form-control-sm bg-white" style="cursor: not-allowed;">`;
+                wrapperGenero.innerHTML = `
+                    <label for="input-wizard-genero" class="form-label small mb-1">Género *</label>
+                    <input type="text" id="input-wizard-genero" value="${normalizedGen}" readonly class="form-control form-control-sm bg-white" style="cursor: not-allowed;">
+                `;
             } else {
-                containerGenero.innerHTML = `
+                wrapperGenero.innerHTML = `
+                    <label for="input-wizard-genero" class="form-label small mb-1">Género *</label>
                     <select id="input-wizard-genero" class="form-select form-select-sm">
                         <option value="">-- Seleccionar --</option>
                         <option value="Masculino">Masculino</option>
