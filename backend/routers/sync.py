@@ -279,9 +279,22 @@ async def sincronizar_empleados(
     
     La sincronización se ejecuta en segundo plano.
     """
-    # Ejecutar en background
     areas = request.areas if request else None
     selected_cargos = request.selected_cargos if request else None
+
+    # RLS Check
+    if not current_user.alcance_global:
+        if areas:
+            for a in areas:
+                if a not in (current_user.areas or []):
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para sincronizar el área '{a}'")
+        else:
+            if current_user.areas:
+                areas = current_user.areas
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
+
+    # Ejecutar en background
     background_tasks.add_task(ejecutar_sync_empleados, areas, selected_cargos)
     
     return {
@@ -310,6 +323,18 @@ async def sincronizar_empleados_sync(
     areas = request.areas if request else None
     ruts  = request.ruts  if request else None
     selected_cargos = request.selected_cargos if request else None
+
+    # RLS Check
+    if not current_user.alcance_global:
+        if areas:
+            for a in areas:
+                if a not in (current_user.areas or []):
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para sincronizar el área '{a}'")
+        else:
+            if current_user.areas:
+                areas = current_user.areas
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
 
     if ruts and len(ruts) > MAX_BATCH:
         raise HTTPException(
@@ -347,6 +372,18 @@ async def sincronizar_empleados_stream(
     ruts  = request.ruts  if request else None
     selected_cargos = request.selected_cargos if request else None
     MAX_BATCH = 10
+
+    # RLS Check
+    if not current_user.alcance_global:
+        if areas:
+            for a in areas:
+                if a not in (current_user.areas or []):
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para sincronizar el área '{a}'")
+        else:
+            if current_user.areas:
+                areas = current_user.areas
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
 
     if ruts and len(ruts) > MAX_BATCH:
         raise HTTPException(
@@ -514,7 +551,13 @@ async def sincronizar_asistencia(
     fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD"),
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.wizard", "marcaciones.sincronizar", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
-    background_tasks.add_task(ejecutar_sync_asistencia, fecha_inicio, fecha_fin)
+    areas = None
+    if not current_user.alcance_global:
+        areas = current_user.areas or []
+        if not areas:
+            raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
+
+    background_tasks.add_task(ejecutar_sync_asistencia, fecha_inicio, fecha_fin, areas)
     return {
         "message": "Sincronización de asistencia iniciada en segundo plano",
         "status": "iniciada"
@@ -538,6 +581,18 @@ async def sincronizar_asistencia_sync(
     _inicio = (request.fecha_inicio if request and request.fecha_inicio else None) or fecha_inicio
     _fin    = (request.fecha_fin    if request and request.fecha_fin    else None) or fecha_fin
     areas   = request.areas if request else None
+
+    # RLS Check
+    if not current_user.alcance_global:
+        if areas:
+            for a in areas:
+                if a not in (current_user.areas or []):
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para el área '{a}'")
+        else:
+            if current_user.areas:
+                areas = current_user.areas
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
 
     logger.info(f"📅 Sync marcaciones: {_inicio} → {_fin} | áreas: {areas or 'todas'}")
 
@@ -563,11 +618,18 @@ async def sincronizar_asistencia_empleado(
     Sync de marcaciones individual: descarga BioAlba y persiste solo las marcas
     del RUT del empleado dado, respetando el BioAlba Gate (solo fechas con turno asignado).
     """
-    emp_row = await db.fetch_one("SELECT rut FROM empleados WHERE id = ?", (empleado_id,))
-    if not emp_row:
+    from backend.repositories.empleado import EmpleadoRepository
+    await db.connect()
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(empleado_id)
+    if not emp:
         raise HTTPException(status_code=404, detail=f"Empleado {empleado_id} no encontrado")
 
-    rut = str(emp_row["rut"])
+    # RLS Check
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    rut = str(emp.rut)
     service = SyncService()
     stats = await service.sync_marcaciones(
         fecha_inicio=fecha_inicio,
@@ -656,7 +718,7 @@ async def ejecutar_sync_empleados(areas: List[str] = None, selected_cargos: List
     await service.sync_empleados(areas=areas, selected_cargos=selected_cargos)
 
 
-async def ejecutar_sync_asistencia(fecha_inicio: str = None, fecha_fin: str = None):
+async def ejecutar_sync_asistencia(fecha_inicio: str = None, fecha_fin: str = None, areas: List[str] = None):
     """Función helper para ejecutar sync de asistencia en background"""
     service = SyncService()
-    await service.sync_marcaciones(fecha_inicio, fecha_fin, force_recalculate=True)
+    await service.sync_marcaciones(fecha_inicio, fecha_fin, areas=areas, force_recalculate=True)

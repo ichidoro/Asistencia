@@ -342,3 +342,13 @@ class SeguridadRepository:
     async def count_auditoria(self) -> int:
         row = await self.db.fetch_one("SELECT COUNT(*) as c FROM logs_auditoria")
         return row['c'] if row else 0
+
+    async def check_role_in_use(self, rol_id: int) -> bool:
+        """Verifica si algún usuario tiene asignado este rol"""
+        row = await self.db.fetch_one("SELECT COUNT(*) as c FROM usuarios WHERE rol_id = ?", (rol_id,))
+        return row and row['c'] > 0
+
+    async def delete_rol(self, rol_id: int):
+        """Elimina un rol y sus asociaciones de permisos de forma definitiva"""
+        await self.db.execute("DELETE FROM rol_permisos WHERE rol_id = ?", (rol_id,))
+        await self.db.execute("DELETE FROM roles WHERE id = ?", (rol_id,))

@@ -70,7 +70,6 @@ const AuthService = {
         const user = this.getUser();
         if (!user) return false;
         if (user.is_superuser) return true;
-        if (permisoReq && permisoReq.endsWith('.ver')) return true;
 
         const permisosStr = localStorage.getItem('user_permissions');
         if (!permisosStr) return false;

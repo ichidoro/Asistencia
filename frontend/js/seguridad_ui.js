@@ -397,8 +397,9 @@ async function loadRoles() {
                                 ${rol.permisos.map(p => `<span class="badge bg-light text-dark border" style="font-size:0.7rem">${p}</span>`).join('')}
                             </div>
                         </div>
-                        <div class="card-footer bg-white border-top">
-                            <button class="btn btn-sm btn-outline-success w-100" ${disableEdit} onclick="editRol(${rol.id})"><i class="bi bi-shield-check me-1"></i>Editar Matriz</button>
+                        <div class="card-footer bg-white border-top d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-success flex-grow-1" ${disableEdit} onclick="editRol(${rol.id})"><i class="bi bi-shield-check me-1"></i>Editar Matriz</button>
+                            <button class="btn btn-sm btn-outline-danger" ${rol.id === 1 ? 'disabled title="El Rol Maestro es inmutable"' : ''} onclick="deleteRol(${rol.id})"><i class="bi bi-trash"></i></button>
                         </div>
                     </div>
                 </div>
@@ -610,3 +611,38 @@ window.saveRol = async function () {
         Swal.fire('Error', 'Fallo de red', 'error');
     }
 }
+
+window.deleteRol = async function (id) {
+    const rol = cacheSeguridad.roles.find(r => r.id === id);
+    if (!rol) return;
+
+    const result = await Swal.fire({
+        title: '¿Confirmar eliminación?',
+        text: `¿Está seguro de que desea eliminar el rol "${rol.nombre}"? Esta acción no se puede deshacer y fallará si hay usuarios asociados.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            const res = await fetch(`/api/seguridad/roles/${id}/`, {
+                method: 'DELETE'
+            });
+
+            if (res.ok) {
+                Swal.fire('Eliminado', 'El rol ha sido eliminado exitosamente.', 'success');
+                loadRoles();
+            } else {
+                const err = await res.json();
+                Swal.fire('Error', err.detail || 'No se pudo eliminar el rol.', 'error');
+            }
+        } catch (e) {
+            Swal.fire('Error', 'Fallo de red al intentar eliminar el rol.', 'error');
+        }
+    }
+}
+

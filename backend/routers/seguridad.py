@@ -76,6 +76,35 @@ async def update_rol(
     )
     return {"message": "Rol modificado exitosamente"}
 
+@router.delete("/roles/{rol_id}/")
+async def delete_rol(
+    rol_id: int,
+    repo: SeguridadRepository = Depends(get_repo),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.seguridad"))
+):
+    """Eliminar un rol de seguridad (si no está en uso y no es Súper Admin)"""
+    if rol_id == 1:
+        raise HTTPException(status_code=403, detail="El Rol Maestro (Súper Administrador) es inmutable y no puede ser eliminado")
+        
+    role_to_delete = await repo.get_rol_by_id(rol_id)
+    if not role_to_delete:
+        raise HTTPException(status_code=404, detail="Rol no encontrado")
+        
+    if not current_user.alcance_global and role_to_delete.get("alcance_global"):
+        raise HTTPException(status_code=403, detail="No tiene permisos para eliminar un rol global")
+        
+    in_use = await repo.check_role_in_use(rol_id)
+    if in_use:
+        raise HTTPException(status_code=400, detail="No se puede eliminar el rol porque está asignado a uno o más usuarios")
+        
+    await repo.delete_rol(rol_id)
+    await repo.log_auditoria(
+        current_user.user_id, current_user.username, "DELETE", "SEGURIDAD", 
+        f"Rol eliminado: {role_to_delete.get('nombre')} (ID: {rol_id})"
+    )
+    return {"message": "Rol eliminado exitosamente"}
+
+
 @router.get("/usuarios/")
 async def get_usuarios(
     repo: SeguridadRepository = Depends(get_repo),
