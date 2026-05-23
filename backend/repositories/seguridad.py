@@ -145,41 +145,41 @@ class SeguridadRepository:
             count_p = await self.db.fetch_one("SELECT COUNT(*) as c FROM permisos")
             if count_p and count_p['c'] == 0:
                 permisos_base = [
-                    # Configuración (permisos granulares por pestaña)
-                    ('configuracion.ver',            'Configuración', 'Acceso de solo lectura al módulo de configuración (Robot BioAlba y vista general)'),
-                    ('configuracion.seguridad',      'Configuración', 'Gestionar roles, permisos y usuarios del sistema (pestaña Seguridad)'),
-                    ('configuracion.horarios',       'Configuración', 'Ver, crear, editar y eliminar turnos y horarios de trabajo'),
-                    ('configuracion.bonos',          'Configuración', 'Ver, crear, editar y eliminar bonos, reglas de bonos y pagadores'),
-                    ('configuracion.justificaciones','Configuración', 'Ver, crear, editar y eliminar tipos de justificación e inasistencia'),
-                    ('configuracion.calendario',     'Configuración', 'Ver feriados, agregar feriados manuales y sincronizar calendario oficial'),
-                    ('configuracion.correo',         'Configuración', 'Ver ajustes de correo, guardar configuración y gestionar notificaciones por área'),
-                    ('configuracion.estados',        'Configuración', 'Ver, activar/desactivar y editar los estados de asistencia del sistema'),
+                    # ── Empleados (7 permisos) ──
+                    ('empleados.ver',                'Empleados',      'Ver la lista y ficha personal de los empleados'),
+                    ('empleados.crear',              'Empleados',      'Botón "+ Nuevo Empleado" encima de la lista'),
+                    ('empleados.editar',             'Empleados',      'Icono lápiz en la fila → editar ficha, renovar contrato, cambio de área'),
+                    ('empleados.eliminar',           'Empleados',      'Icono papelera roja → dar de baja (soft-delete)'),
+                    ('empleados.reincorporar',       'Empleados',      'Reactivar un empleado que estaba en estado inactivo'),
+                    ('empleados.bonos',              'Empleados',      'Tab Matrix de bonos → asignar bonos a empleados'),
+                    ('empleados.horarios',           'Empleados',      'Tab Asignación Masiva → cambiar turno individual y masivo'),
 
-                    # Empleados
-                    ('empleados.ver',                'Empleados', 'Ver la lista y ficha personal de los empleados'),
-                    ('empleados.crear',              'Empleados', 'Botón Nuevo Empleado (encima de la lista de empleados)'),
-                    ('empleados.editar',             'Empleados', 'Botón editar en la fila del empleado → abre y guarda la ficha personal'),
-                    ('empleados.eliminar',           'Empleados', 'Botón rojo para eliminar a un empleado definitivamente del sistema'),
-                    ('empleados.reincorporar',       'Empleados', 'Reactivar un empleado que estaba en estado inactivo'),
-                    ('empleados.horarios',           'Empleados', 'Cambiar turno individual + pestaña Asignación Masiva'),
-                    ('empleados.bonos',              'Empleados', 'Ver y gestionar bonos asignados a empleados'),
-                    ('empleados.sincronizar_biometrico', 'Empleados', 'Botón sincronizar empleados desde el Reloj Biométrico BioAlba (header)'),
+                    # ── Marcaciones (7 permisos) ──
+                    ('marcaciones.ver',              'Marcaciones',    'Ver la grilla de asistencia, calendarios y filtros'),
+                    ('marcaciones.editar',           'Marcaciones',    'Editar horas de entrada/salida, relleno masivo, tramos, perdonazo'),
+                    ('marcaciones.justificar',       'Marcaciones',    'Doble-clic en celda de estado → crear/editar justificación'),
+                    ('marcaciones.horas_extras',     'Marcaciones',    'Modal de aprobación masiva → aprobar/rechazar horas extras'),
+                    ('marcaciones.cierre_periodo',   'Marcaciones',    'Botón "Cerrar Período" → sellar mes para liquidación'),
+                    ('marcaciones.bypass_cierre',    'Marcaciones',    'Desbloquear edición de meses ya cerrados (alto riesgo)'),
+                    ('marcaciones.sincronizar',      'Marcaciones',    'Botón "Sincronizar" en toolbar → descargar marcaciones y reprocesar'),
 
-                    # Marcaciones
-                    ('marcaciones.ver',              'Marcaciones', 'Ver la grilla de asistencia, filtros y reporte individual'),
-                    ('marcaciones.editar',           'Marcaciones', 'Click en celda → agregar o modificar hora de entrada/salida manualmente'),
-                    ('marcaciones.justificar',       'Marcaciones', 'Asignar tipo de justificación a una celda (licencia, permiso, etc.)'),
-                    ('marcaciones.horas_extras',     'Marcaciones', 'Sugerir y aprobar horas extras desde la grilla'),
-                    ('marcaciones.procesar',         'Marcaciones', 'Botón procesar/reprocesar periodo desde el toolbar de Marcaciones'),
-                    ('marcaciones.cierre_periodo',   'Marcaciones', 'Crear y revertir cierres mensuales de asistencia'),
-                    ('marcaciones.sincronizar_biometrico', 'Marcaciones', 'Botón sincronizar marcaciones BioAlba desde el toolbar de Marcaciones'),
-                    ('marcaciones.bypass_cierre',    'Marcaciones', 'Modal de desbloqueo para editar datos en un periodo ya cerrado'),
+                    # ── Reportes (4 permisos) ──
+                    ('reportes.ver',                 'Reportes',       'Ver tablas de reporte, gráficos de línea y filtros de período'),
+                    ('reportes.exportar',            'Reportes',       'Botón "Descargar Excel" → exportar reporte consolidado'),
+                    ('reportes.reprocesar',          'Reportes',       'Botón "Reprocesar" → disparar motor de cálculo desde reportes'),
+                    ('reportes.sincronizar',         'Reportes',       'Botón "Sincronizar" → descargar marcaciones desde reportes'),
 
-                    # Reportes
-                    ('reportes.ver',                 'Reportes', 'Acceder al módulo de reportes, filtros y tabla de resultados'),
-                    ('reportes.exportar',            'Reportes', 'Descargar el reporte consolidado en Excel'),
-                    ('reportes.reprocesar',          'Reportes', 'Botón reprocesar desde la pantalla de Reportes (independiente de Marcaciones)'),
-                    ('reportes.sincronizar',         'Reportes', 'Botón sincronizar BioAlba desde la pantalla de Reportes (independiente de Marcaciones)'),
+                    # ── Configuración (10 permisos) ──
+                    ('configuracion.ver',            'Configuración',  'Acceso de solo lectura a todas las pestañas de configuración'),
+                    ('configuracion.horarios',       'Configuración',  'Pestaña Horarios → crear, editar y eliminar turnos'),
+                    ('configuracion.bonos',          'Configuración',  'Pestaña Bonos → crear, editar y eliminar bonos y pagadores'),
+                    ('configuracion.justificaciones','Configuración',  'Pestaña Justificaciones → crear, editar y eliminar tipos'),
+                    ('configuracion.calendario',     'Configuración',  'Pestaña Calendario → gestionar feriados'),
+                    ('configuracion.correo',         'Configuración',  'Pestaña Correo → configurar SMTP y notificaciones por área'),
+                    ('configuracion.estados',        'Configuración',  'Pestaña Estados → editar estados de asistencia'),
+                    ('configuracion.seguridad',      'Configuración',  'Pestaña Seguridad → gestionar usuarios, roles y ver auditoría'),
+                    ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header → Wizard de inicialización BioAlba'),
+                    ('configuracion.sistema',        'Configuración',  'Pestaña Sistema → diagnóstico de BD y modo de conexión'),
                 ]
                 await self.db.executemany(
                     "INSERT INTO permisos (id, modulo, descripcion) VALUES (?, ?, ?)",

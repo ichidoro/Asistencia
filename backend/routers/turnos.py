@@ -63,7 +63,7 @@ async def bulk_assign_turnos(
 async def create_turno(
     turno: TurnoCreate, 
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
 ):
     """Crear un nuevo Turno con sus días configurados"""
     new_id = await service.create_turno(turno)
@@ -118,7 +118,7 @@ async def asignar_turno(
 async def delete_turno(
     turno_id: int,
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
 ):
     """Eliminar un turno"""
     deleted = await service.delete_turno(turno_id)
@@ -131,7 +131,7 @@ async def update_turno(
     turno_id: int,
     turno: TurnoCreate,
     service: TurnoService = Depends(get_turno_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
 ):
     """Actualizar configuración de un turno"""
     updated = await service.update_turno(turno_id, turno)

@@ -32,7 +32,7 @@ async def get_config_service(db: Database = Depends(get_db)) -> ConfiguracionSer
 async def create_bono(
     bono: BonoCreate, 
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "configuracion.wizard"]))
 ):
     """Crear un nuevo Bono con sus reglas"""
     new_id = await service.create_bono(bono)
@@ -102,7 +102,7 @@ async def calcular_fin_justificacion(
 async def create_tipo_justificacion(
     tipo: JustificacionTipoCreate,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.justificaciones", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.justificaciones", "configuracion.wizard"]))
 ):
     """Crear un nuevo tipo de justificación/inasistencia"""
     new_id = await service.create_tipo_justificacion(tipo)
@@ -387,7 +387,7 @@ async def get_pagadores(
 async def create_pagador(
     pagador: PagadorCreate,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "configuracion.wizard"]))
 ):
     """Crear un nuevo pagador"""
     try:
@@ -403,7 +403,7 @@ async def update_pagador(
     pagador_id: int,
     pagador: PagadorCreate,
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "marcaciones.sincronizar_biometrico", "empleados.sincronizar_biometrico", "reportes.sincronizar"]))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.bonos", "configuracion.wizard"]))
 ):
     """Actualizar un pagador"""
     try:

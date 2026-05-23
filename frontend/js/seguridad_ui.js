@@ -34,85 +34,41 @@ let cacheSeguridad = {
 };
 
 const MAPA_UI_PERMISOS = {
-    'asistencia.editar': {
-        module: 'ASISTENCIA',
-        action: 'Editar',
-        description: 'Justificar y editar asistencia',
-        permissions: ['marcaciones.editar', 'marcaciones.justificar', 'marcaciones.horas_extras', 'marcaciones.bypass_cierre']
-    },
-    'asistencia.procesar': {
-        module: 'ASISTENCIA',
-        action: 'Procesar',
-        description: 'Disparar cálculos manuales',
-        permissions: ['marcaciones.procesar', 'marcaciones.cierre_periodo', 'marcaciones.sincronizar_biometrico']
-    },
-    'asistencia.ver': {
-        module: 'ASISTENCIA',
-        action: 'Ver',
-        description: 'Ver marcaciones y registros',
-        permissions: ['marcaciones.ver']
-    },
-    'bonos.editar': {
-        module: 'CONFIGURACIÓN',
-        action: 'Editar Bonos',
-        description: 'Crear y modificar bonos',
-        permissions: ['configuracion.bonos']
-    },
-    'bonos.ver': {
-        module: 'CONFIGURACIÓN',
-        action: 'Ver Bonos',
-        description: 'Ver estructura de bonos',
-        permissions: ['empleados.bonos']
-    },
-    'configuracion.editar': {
-        module: 'CONFIGURACIÓN',
-        action: 'Editar',
-        description: 'Modificar reglas de asistencia',
-        permissions: ['configuracion.horarios', 'configuracion.justificaciones', 'configuracion.calendario', 'configuracion.correo', 'configuracion.estados']
-    },
-    'configuracion.ver': {
-        module: 'CONFIGURACIÓN',
-        action: 'Ver',
-        description: 'Ver reglas y ajustes globales',
-        permissions: ['configuracion.ver'],
-        alert: `Acceso al módulo de configuración y al<br>↳ panel Robot BioAlba sin poder modificar nada`
-    },
-    'empleados.editar': {
-        module: 'EMPLEADOS',
-        action: 'Editar',
-        description: 'Crear, editar y dar de baja empleados',
-        permissions: ['empleados.crear', 'empleados.editar', 'empleados.eliminar', 'empleados.reincorporar', 'empleados.horarios', 'empleados.sincronizar_biometrico']
-    },
-    'empleados.ver': {
-        module: 'EMPLEADOS',
-        action: 'Ver',
-        description: 'Ver empleados',
-        permissions: ['empleados.ver']
-    },
-    'reportes.editar': {
-        module: 'REPORTES',
-        action: 'Editar',
-        description: 'Exportar y reprocesar reportes',
-        permissions: ['reportes.exportar', 'reportes.reprocesar', 'reportes.sincronizar']
-    },
-    'reportes.ver': {
-        module: 'REPORTES',
-        action: 'Ver',
-        description: 'Ver reportes',
-        permissions: ['reportes.ver']
-    },
-    'seguridad.editar': {
-        module: 'CONFIGURACIÓN',
-        action: 'Editar Seguridad',
-        description: 'Gestionar usuarios y roles',
-        permissions: ['configuracion.seguridad']
-    },
-    'seguridad.ver': {
-        module: 'CONFIGURACIÓN',
-        action: 'Ver Seguridad',
-        description: 'Ver bitácora y auditoría',
-        permissions: ['configuracion.seguridad']
-    }
+    // ── MÓDULO EMPLEADOS (7) ──
+    'empleados.ver':           { module: 'EMPLEADOS', action: 'Ver',           description: 'Ver fichas y listas de empleados',                permissions: ['empleados.ver'] },
+    'empleados.crear':         { module: 'EMPLEADOS', action: 'Crear',         description: 'Botón "+ Nuevo Empleado"',                        permissions: ['empleados.crear'] },
+    'empleados.editar':        { module: 'EMPLEADOS', action: 'Editar',        description: 'Editar ficha, renovar contrato, cambio de área',  permissions: ['empleados.editar'] },
+    'empleados.eliminar':      { module: 'EMPLEADOS', action: 'Eliminar',      description: 'Dar de baja empleados (soft-delete)',              permissions: ['empleados.eliminar'] },
+    'empleados.reincorporar':  { module: 'EMPLEADOS', action: 'Reincorporar',  description: 'Reactivar empleados inactivos',                   permissions: ['empleados.reincorporar'] },
+    'empleados.bonos':         { module: 'EMPLEADOS', action: 'Bonos',         description: 'Asignar bonos a empleados (Tab Matrix)',           permissions: ['empleados.bonos'] },
+    'empleados.horarios':      { module: 'EMPLEADOS', action: 'Horarios',      description: 'Asignar turnos individual y masivamente',         permissions: ['empleados.horarios'] },
+
+    // ── MÓDULO MARCACIONES (7) ──
+    'marcaciones.ver':           { module: 'MARCACIONES', action: 'Ver',           description: 'Ver grilla, calendarios e historial',           permissions: ['marcaciones.ver'] },
+    'marcaciones.editar':        { module: 'MARCACIONES', action: 'Editar',        description: 'Editar horas, relleno masivo, tramos, perdonazo', permissions: ['marcaciones.editar'] },
+    'marcaciones.justificar':    { module: 'MARCACIONES', action: 'Justificar',    description: 'Crear y editar justificaciones de asistencia',  permissions: ['marcaciones.justificar'] },
+    'marcaciones.horas_extras':  { module: 'MARCACIONES', action: 'Horas Extras',  description: 'Aprobar/rechazar horas extras',                 permissions: ['marcaciones.horas_extras'] },
+    'marcaciones.cierre_periodo':{ module: 'MARCACIONES', action: 'Cierre',        description: 'Cerrar y sellar período ⚠️ Contable',           permissions: ['marcaciones.cierre_periodo'] },
+    'marcaciones.bypass_cierre': { module: 'MARCACIONES', action: 'Bypass Cierre', description: 'Editar meses ya cerrados ⚠️ Alto Riesgo',       permissions: ['marcaciones.bypass_cierre'] },
+    'marcaciones.sincronizar':   { module: 'MARCACIONES', action: 'Sincronizar',   description: 'Sincronizar y reprocesar desde toolbar',        permissions: ['marcaciones.sincronizar'] },
+
+    // ── MÓDULO REPORTES (4) ──
+    'reportes.ver':         { module: 'REPORTES', action: 'Ver',         description: 'Ver tablas y gráficos de reportes',    permissions: ['reportes.ver'] },
+    'reportes.exportar':    { module: 'REPORTES', action: 'Exportar',    description: 'Descargar Excel',                      permissions: ['reportes.exportar'] },
+    'reportes.reprocesar':  { module: 'REPORTES', action: 'Reprocesar',  description: 'Disparar motor de cálculo',            permissions: ['reportes.reprocesar'] },
+    'reportes.sincronizar': { module: 'REPORTES', action: 'Sincronizar', description: 'Sincronizar BioAlba desde reportes',   permissions: ['reportes.sincronizar'] },
+
+    // ── MÓDULO CONFIGURACIÓN (10) ──
+    'configuracion.ver':            { module: 'CONFIGURACIÓN', action: 'Ver',            description: 'Ver todas las pestañas de configuración',       permissions: ['configuracion.ver'] },
+    'configuracion.horarios':       { module: 'CONFIGURACIÓN', action: 'Horarios',       description: 'Crear/editar/eliminar turnos',                  permissions: ['configuracion.horarios'] },
+    'configuracion.bonos':          { module: 'CONFIGURACIÓN', action: 'Bonos',          description: 'Crear/editar/eliminar bonos y pagadores',       permissions: ['configuracion.bonos'] },
+    'configuracion.justificaciones':{ module: 'CONFIGURACIÓN', action: 'Justificaciones',description: 'Crear/editar/eliminar tipos de justificación',  permissions: ['configuracion.justificaciones'] },
+    'configuracion.calendario':     { module: 'CONFIGURACIÓN', action: 'Calendario',     description: 'Gestionar feriados',                            permissions: ['configuracion.calendario'] },
+    'configuracion.correo':         { module: 'CONFIGURACIÓN', action: 'Correo',         description: 'Configurar SMTP y alertas por área',            permissions: ['configuracion.correo'] },
+    'configuracion.estados':        { module: 'CONFIGURACIÓN', action: 'Estados',        description: 'Editar estados de asistencia',                  permissions: ['configuracion.estados'] },
+    'configuracion.seguridad':      { module: 'CONFIGURACIÓN', action: 'Seguridad',      description: 'Gestionar usuarios y roles ⚠️ Riesgo Máximo',   permissions: ['configuracion.seguridad'] },
+    'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
+    'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
@@ -457,83 +413,31 @@ async function loadRoles() {
 
 function getPermissionDetails(permId) {
     const details = {
-        // Permisos destructivos o de alto impacto
-        'empleados.crear': {
-            alert: 'Accion Irreversible',
-            flow: 'Abre el modal de creacion de empleado nuevo (boton sobre la lista)'
-        },
-        'empleados.eliminar': {
-            alert: 'Accion Destructiva',
-            flow: 'Activa el boton rojo de papelera en la tabla de Empleados'
-        },
-        'empleados.bonos': {
-            alert: 'Riesgo Financiero',
-            flow: 'Permite decidir quien recibe bonos y de cuanto dinero'
-        },
-        'empleados.sincronizar_biometrico': {
-            alert: 'Integracion Externa',
-            flow: 'Trae empleados desde el reloj BioAlba (boton en el header)'
-        },
-        'marcaciones.justificar': {
-            alert: 'Impacto en Remuneracion',
-            flow: 'Permite asignar justificaciones que cambian el estado de asistencia del empleado'
-        },
-        'marcaciones.bypass_cierre': {
-            alert: 'Alerta Contable',
-            flow: 'Permite editar asistencia incluso si el mes ya esta bloqueado y cerrado'
-        },
-        'marcaciones.procesar': {
-            alert: 'Calculo Masivo',
-            flow: 'Dispara el recalculo de asistencia del periodo desde el modulo Marcaciones'
-        },
-        'marcaciones.cierre_periodo': {
-            alert: 'Cierre Contable',
-            flow: 'Bloquea el mes y congela los datos de asistencia para liquidacion'
-        },
-        'reportes.reprocesar': {
-            alert: 'Calculo Masivo',
-            flow: 'Dispara el recalculo de asistencia del periodo desde el modulo Reportes'
-        },
-        'reportes.sincronizar': {
-            alert: 'Integracion Externa',
-            flow: 'Sincroniza marcaciones BioAlba desde la pantalla de Reportes'
-        },
-        'configuracion.ver': {
-            alert: 'Solo Lectura',
-            flow: 'Acceso al módulo de configuración y al panel Robot BioAlba sin poder modificar nada'
-        },
-        'configuracion.seguridad': {
-            alert: 'Riesgo Máximo',
-            flow: 'Permite a esta persona crear otros usuarios con cualquier nivel de acceso'
-        },
-        'configuracion.horarios': {
-            alert: 'Impacto Operativo',
-            flow: 'Permite crear, editar y eliminar turnos y horarios que afectan a todos los empleados'
-        },
-        'configuracion.bonos': {
-            alert: 'Riesgo Financiero',
-            flow: 'Permite crear, editar y eliminar bonos, reglas de cálculo y pagadores'
-        },
-        'configuracion.justificaciones': {
-            alert: 'Impacto en Remuneración',
-            flow: 'Permite crear tipos de justificación que determinan si una ausencia es pagada o no'
-        },
-        'configuracion.calendario': {
-            alert: 'Impacto Masivo',
-            flow: 'Permite agregar feriados que afectan el cálculo de asistencia de todos los empleados'
-        },
-        'configuracion.correo': {
-            alert: 'Comunicaciones del Sistema',
-            flow: 'Permite cambiar servidor SMTP y los destinatarios de notificaciones automáticas'
-        },
-        'configuracion.estados': {
-            alert: 'Lógica de Negocio',
-            flow: 'Permite editar los estados de asistencia que clasifican cada marcación del sistema'
-        },
-        'marcaciones.horas_extras': {
-            alert: 'Autorizacion Financiera',
-            flow: 'Activa el boton para aprobar que las horas extras se paguen en sueldo'
-        }
+        // Empleados
+        'empleados.crear':        { alert: 'Acción Irreversible',      flow: 'Abre el modal de creación de empleado nuevo' },
+        'empleados.eliminar':     { alert: 'Acción Destructiva',       flow: 'Activa el botón rojo de papelera en la tabla' },
+        'empleados.bonos':        { alert: 'Riesgo Financiero',        flow: 'Permite decidir quién recibe bonos' },
+        'empleados.reincorporar': { alert: 'Rehire',                   flow: 'Reactiva a un empleado dado de baja previamente' },
+        // Marcaciones
+        'marcaciones.justificar':    { alert: 'Impacto en Remuneración',  flow: 'Justificaciones que cambian el estado de asistencia' },
+        'marcaciones.bypass_cierre': { alert: 'Alerta Contable',          flow: 'Editar asistencia incluso si el mes ya está bloqueado' },
+        'marcaciones.cierre_periodo':{ alert: 'Cierre Contable',          flow: 'Congela datos de asistencia para liquidación' },
+        'marcaciones.horas_extras':  { alert: 'Autorización Financiera',  flow: 'Aprobar que las horas extras se paguen en sueldo' },
+        'marcaciones.sincronizar':   { alert: 'Integración BioAlba',     flow: 'Descarga marcaciones y reprocesa asistencia masivamente' },
+        // Reportes
+        'reportes.reprocesar':  { alert: 'Cálculo Masivo',        flow: 'Dispara recálculo de asistencia desde Reportes' },
+        'reportes.sincronizar': { alert: 'Integración Externa',   flow: 'Sincroniza marcaciones BioAlba desde Reportes' },
+        // Configuración
+        'configuracion.ver':            { alert: 'Solo Lectura',          flow: 'Acceso al módulo sin poder modificar nada' },
+        'configuracion.seguridad':      { alert: 'Riesgo Máximo',         flow: 'Puede crear usuarios con cualquier nivel de acceso' },
+        'configuracion.horarios':       { alert: 'Impacto Operativo',     flow: 'Turnos y horarios afectan a todos los empleados' },
+        'configuracion.bonos':          { alert: 'Riesgo Financiero',     flow: 'Crear/editar bonos, reglas de cálculo y pagadores' },
+        'configuracion.justificaciones':{ alert: 'Impacto en Remuneración', flow: 'Tipos que determinan si una ausencia es pagada' },
+        'configuracion.calendario':     { alert: 'Impacto Masivo',        flow: 'Feriados afectan el cálculo de todos los empleados' },
+        'configuracion.correo':         { alert: 'Comunicaciones',        flow: 'Cambiar servidor SMTP y destinatarios de alertas' },
+        'configuracion.estados':        { alert: 'Lógica de Negocio',     flow: 'Estados que clasifican cada marcación del sistema' },
+        'configuracion.wizard':         { alert: 'Setup del Sistema',     flow: 'Wizard de inicialización que conecta BioAlba' },
+        'configuracion.sistema':        { alert: 'Solo Admin',            flow: 'Diagnóstico de BD, modo de conexión y velocidad' },
     };
     return details[permId] || null;
 }
@@ -552,36 +456,39 @@ function renderMatrizPermisos() {
         modules[item.module].push({ key, ...item });
     });
 
+    // Module icons
+    const moduleIcons = {
+        'EMPLEADOS': '👥',
+        'MARCACIONES': '🕐',
+        'REPORTES': '📊',
+        'CONFIGURACIÓN': '⚙️'
+    };
+
     // Render HTML
     container.innerHTML = Object.entries(modules).map(([moduleName, items]) => {
         const cardsHtml = items.map(item => {
             const idSafe = item.key.replace('.', '-');
-            const checkedAttr = item.forced ? 'checked disabled' : '';
-            const isForcedClass = item.forced ? 'bg-light text-muted' : '';
+            const details = getPermissionDetails(item.key);
             
             let alertHtml = '';
-            if (item.alert) {
+            if (details && details.alert) {
                 alertHtml = `
-                    <div class="alert alert-warning p-2 mt-2 mb-0 border-0 rounded" style="font-size: 0.75rem; background-color: #fffbeb; border-left: 3px solid #ef4444 !important; text-align: left;">
-                        <strong style="color: #ef4444 !important; font-size: 0.8rem; display: flex; align-items: center; gap: 4px; margin-bottom: 2px;">
-                            <span style="font-size: 0.85rem;">⚠️</span> Solo Lectura
-                        </strong>
-                        <span style="color: #475569 !important; font-size: 0.73rem; line-height: 1.35; display: inline-block;">
-                            ${item.alert}
-                        </span>
+                    <div class="mt-2 px-2 py-1 rounded" style="font-size: 0.72rem; background-color: #fef3c7; border-left: 3px solid #f59e0b;">
+                        <strong style="color: #b45309;">⚠️ ${details.alert}</strong>
+                        <div class="text-muted" style="font-size: 0.7rem; line-height: 1.3;">${details.flow}</div>
                     </div>
                 `;
             }
 
             return `
-                <div class="col-md-4">
-                    <div class="d-flex align-items-start gap-2 p-3 border rounded shadow-sm h-100 ${isForcedClass}" style="background: #f8fafc; transition: all 0.2s;">
-                        <input class="form-check-input perm-ui-check flex-shrink-0 mt-1" type="checkbox" value="${item.key}" id="perm-ui-${idSafe}" ${checkedAttr} style="width: 1.15rem; height: 1.15rem; cursor: pointer;">
+                <div class="col-md-4 col-lg-3">
+                    <div class="d-flex align-items-start gap-2 p-3 border rounded shadow-sm h-100" style="background: #f8fafc; transition: all 0.2s;">
+                        <input class="form-check-input perm-ui-check flex-shrink-0 mt-1" type="checkbox" value="${item.key}" id="perm-ui-${idSafe}" style="width: 1.15rem; height: 1.15rem; cursor: pointer;">
                         <div class="w-100">
                             <label class="form-check-label fw-bold text-dark mb-1" for="perm-ui-${idSafe}" style="font-size: 0.9rem; cursor: pointer;">
                                 ${item.action}
                             </label>
-                            <div class="text-muted" style="font-size: 0.8rem; line-height: 1.3;">
+                            <div class="text-muted" style="font-size: 0.78rem; line-height: 1.3;">
                                 ${item.description}
                             </div>
                             ${alertHtml}
@@ -596,7 +503,8 @@ function renderMatrizPermisos() {
                 <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0 !important;">
                     <div class="card-header bg-white pt-3 pb-2 px-4 border-bottom-0">
                         <h6 class="fw-bold mb-0 text-primary d-flex align-items-center" style="font-size: 0.95rem; color: #0d6efd !important;">
-                            <i class="bi bi-shield-fill me-2"></i>MÓDULO ${moduleName}
+                            <span class="me-2">${moduleIcons[moduleName] || '🛡️'}</span>MÓDULO ${moduleName}
+                            <span class="badge bg-light text-secondary ms-2" style="font-size: 0.7rem;">${items.length} permisos</span>
                         </h6>
                     </div>
                     <div class="card-body px-4 pt-2 pb-4">
@@ -645,16 +553,11 @@ window.editRol = function (id) {
         console.log(`Marcando permisos en UI checkboxes para activePerms:`, activePerms);
 
         Object.keys(MAPA_UI_PERMISOS).forEach(key => {
-            const item = MAPA_UI_PERMISOS[key];
             const idSafe = key.replace('.', '-');
             const ck = document.getElementById(`perm-ui-${idSafe}`);
             if (ck) {
-                if (item.forced) {
-                    ck.checked = true;
-                } else {
-                    const hasAll = item.permissions.every(p => activePerms.includes(p));
-                    ck.checked = hasAll;
-                }
+                // 1:1 mapping: el key del checkbox ES el permiso
+                ck.checked = activePerms.includes(key);
             }
         });
     }, 50);
@@ -665,26 +568,21 @@ window.editRol = function (id) {
 window.saveRol = async function () {
     const rolId = document.getElementById('rol-id').value;
     
-    // Collect all permissions from checked checkboxes
+    // 1:1 mapping: cada checkbox checked = 1 permiso exacto
     const selectedPerms = [];
     Object.keys(MAPA_UI_PERMISOS).forEach(key => {
-        const item = MAPA_UI_PERMISOS[key];
         const idSafe = key.replace('.', '-');
         const ck = document.getElementById(`perm-ui-${idSafe}`);
-        
-        if (item.forced || (ck && ck.checked)) {
-            selectedPerms.push(...item.permissions);
+        if (ck && ck.checked) {
+            selectedPerms.push(key); // key = permiso backend
         }
     });
-
-    // Remove duplicates
-    const uniquePerms = [...new Set(selectedPerms)];
 
     const payload = {
         nombre: document.getElementById('rol-nombre').value,
         descripcion: document.getElementById('rol-descripcion').value,
         alcance_global: document.getElementById('rol-global').value === "1",
-        permisos: uniquePerms
+        permisos: selectedPerms
     };
 
     try {

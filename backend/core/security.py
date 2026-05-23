@@ -29,8 +29,6 @@ class SecurityContext:
     def check_permission(self, required_permission: str) -> bool:
         if self.is_superuser:
             return True
-        if required_permission and required_permission.endswith(".ver"):
-            return True
         return required_permission in self.permisos
 
     def check_area_access(self, area: str) -> bool:
