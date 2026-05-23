@@ -905,7 +905,9 @@ async def get_asistencia_matrix(
         asistencias = data.get("data", [])
         justificaciones = data.get("justificaciones", [])
         matrix_data = data.get("matrix", {})
-        bonos_eval = await bono_service.evaluar_bonos_directo(empleados, asistencias, justificaciones, matrix_data)
+        bonos_eval = await bono_service.evaluar_bonos_directo(
+            empleados, asistencias, justificaciones, matrix_data, mes, anio
+        )
         data["bonos_evaluacion"] = bonos_eval
 
     return data
@@ -958,7 +960,20 @@ async def get_matriz_asistencia(
         justificaciones = data.get("justificaciones", [])
         matrix_data = data.get("matrix", {})
         
-        bonos_eval = await bono_service.evaluar_bonos_directo(empleados, asistencias, justificaciones, matrix_data)
+        mes_eval = None
+        anio_eval = None
+        if fecha_inicio:
+            try:
+                from datetime import datetime as _dt
+                dt_start = _dt.strptime(fecha_inicio, "%Y-%m-%d")
+                mes_eval = dt_start.month
+                anio_eval = dt_start.year
+            except Exception:
+                pass
+
+        bonos_eval = await bono_service.evaluar_bonos_directo(
+            empleados, asistencias, justificaciones, matrix_data, mes_eval, anio_eval
+        )
         data["bonos_evaluacion"] = bonos_eval
 
     return data
