@@ -3,6 +3,40 @@
  * Centraliza la validación de Áreas, Cargos, Géneros, Turnos y Bonos.
  */
 
+// ── INTERCEPTOR SWAL GLOBAL PARA WIZARD ──────────────────────────────────────
+// Si el wizard está abierto, redirige las alertas de SweetAlert2 al interior del 
+// modal del wizard. Esto evita que queden ocultas por la colisión de z-index y backdrops.
+(function _installSwalWizardInterceptor() {
+    if (typeof Swal !== 'undefined' && Swal.fire) {
+        const originalSwalFire = Swal.fire;
+        Swal.fire = function(...args) {
+            const wizardEl = document.getElementById('modal-sync-wizard');
+            const wizardIsShow = wizardEl && (wizardEl.classList.contains('show') || wizardEl.style.display === 'block');
+            
+            if (wizardIsShow) {
+                if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+                    if (!args[0].target) {
+                        args[0].target = '#modal-sync-wizard';
+                    }
+                } else if (args.length > 0 && typeof args[0] === 'string') {
+                    const obj = {
+                        title: args[0],
+                        target: '#modal-sync-wizard'
+                    };
+                    if (args.length > 1) {
+                        obj.html = args[1];
+                    }
+                    if (args.length > 2) {
+                        obj.icon = args[2];
+                    }
+                    args = [obj];
+                }
+            }
+            return originalSwalFire.apply(this, args);
+        };
+    }
+})();
+
 window._wizardState = {
     currentStep: 1,
     data: null, 
@@ -2077,7 +2111,23 @@ window.loadWizardStateFromLocalStorage = function() {
     try {
         const state = JSON.parse(raw);
         if (state && typeof state === 'object' && state.currentStep) {
-            return state;
+            return {
+                currentStep: 1,
+                data: null,
+                turnosDisponibles: [],
+                bonosDisponibles: [],
+                preAsignacionesTurnos: {},
+                preAsignacionesBonos: {},
+                resoluciones: { areas: {}, cargos: {}, generos: [], turnos: {}, bonos: {} },
+                sessionCreated: { areas: [], cargos: [], generos: [] },
+                newEmployeesDetalles: null,
+                onboardingCompletados: {},
+                selectedOnboardingEmpId: null,
+                employeesFullData: null,
+                turnosIndividualesAsignados: {},
+                syncPayload: null,
+                ...state
+            };
         }
     } catch (e) {
         console.error('Error parsing wizard state from localStorage:', e);
@@ -2359,68 +2409,107 @@ async function loadOnboardingEmployeeForm(empId) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const empleado = await resp.json();
 
-        document.getElementById('input-wizard-id').value = empleado.id;
+        const inputId = document.getElementById('input-wizard-id');
+        if (inputId) inputId.value = empleado.id;
 
         // Recuperar y mostrar Datos de Origen BioAlba
         const empDetails = window._wizardState.newEmployeesDetalles ? window._wizardState.newEmployeesDetalles.find(e => e.id === parseInt(empId)) : null;
         const bio = empDetails ? empDetails.bioalba_data : null;
 
+        const rutBio = document.getElementById('text-wizard-rut-bioalba');
+        const nombreBio = document.getElementById('text-wizard-nombre-bioalba');
+        const areaBio = document.getElementById('text-wizard-area-bioalba');
+        const cargoBio = document.getElementById('text-wizard-cargo-bioalba');
+        const companiaBio = document.getElementById('text-wizard-compania-bioalba');
+        const emailBio = document.getElementById('text-wizard-email-bioalba');
+        const telefonoBio = document.getElementById('text-wizard-telefono-bioalba');
+        const generoBio = document.getElementById('text-wizard-genero-bioalba');
+        const fechaIngresoBio = document.getElementById('text-wizard-fecha-ingreso-bioalba');
+
         if (bio) {
             const formatName = `${bio.apellido_paterno || ''} ${bio.apellido_materno || ''} ${bio.nombre || ''}`.trim().replace(/\s+/g, ' ');
-            document.getElementById('text-wizard-rut-bioalba').textContent = bio.rut || '-';
-            document.getElementById('text-wizard-nombre-bioalba').textContent = formatName || '-';
-            document.getElementById('text-wizard-area-bioalba').textContent = bio.area || 'Sin Asignar';
-            document.getElementById('text-wizard-cargo-bioalba').textContent = bio.cargo || '-';
-            document.getElementById('text-wizard-compania-bioalba').textContent = bio.compania || '-';
-            document.getElementById('text-wizard-email-bioalba').textContent = bio.email || '-';
-            document.getElementById('text-wizard-telefono-bioalba').textContent = bio.telefono || '-';
-            document.getElementById('text-wizard-genero-bioalba').textContent = bio.genero || 'No Especificado';
-            document.getElementById('text-wizard-fecha-ingreso-bioalba').textContent = bio.fecha_ingreso || '-';
+            if (rutBio) rutBio.textContent = bio.rut || '-';
+            if (nombreBio) nombreBio.textContent = formatName || '-';
+            if (areaBio) areaBio.textContent = bio.area || 'Sin Asignar';
+            if (cargoBio) cargoBio.textContent = bio.cargo || '-';
+            if (companiaBio) companiaBio.textContent = bio.compania || '-';
+            if (emailBio) emailBio.textContent = bio.email || '-';
+            if (telefonoBio) telefonoBio.textContent = bio.telefono || '-';
+            if (generoBio) generoBio.textContent = bio.genero || 'No Especificado';
+            if (fechaIngresoBio) fechaIngresoBio.textContent = bio.fecha_ingreso || '-';
         } else {
             // Fallback usando el registro local si no está en la cola actual
-            document.getElementById('text-wizard-rut-bioalba').textContent = empleado.rut_formateado || empleado.rut || '-';
-            document.getElementById('text-wizard-nombre-bioalba').textContent = empleado.nombre_completo || '-';
-            document.getElementById('text-wizard-area-bioalba').textContent = empleado.area || 'Sin Asignar';
-            document.getElementById('text-wizard-cargo-bioalba').textContent = empleado.cargo || '-';
-            document.getElementById('text-wizard-compania-bioalba').textContent = empleado.compania || '-';
-            document.getElementById('text-wizard-email-bioalba').textContent = empleado.email || '-';
-            document.getElementById('text-wizard-telefono-bioalba').textContent = empleado.telefono || '-';
-            document.getElementById('text-wizard-genero-bioalba').textContent = empleado.genero || 'No Especificado';
-            document.getElementById('text-wizard-fecha-ingreso-bioalba').textContent = empleado.fecha_ingreso || '-';
+            if (rutBio) rutBio.textContent = empleado.rut_formateado || empleado.rut || '-';
+            if (nombreBio) nombreBio.textContent = empleado.nombre_completo || '-';
+            if (areaBio) areaBio.textContent = empleado.area || 'Sin Asignar';
+            if (cargoBio) cargoBio.textContent = empleado.cargo || '-';
+            if (companiaBio) companiaBio.textContent = empleado.compania || '-';
+            if (emailBio) emailBio.textContent = empleado.email || '-';
+            if (telefonoBio) telefonoBio.textContent = empleado.telefono || '-';
+            if (generoBio) generoBio.textContent = empleado.genero || 'No Especificado';
+            if (fechaIngresoBio) fechaIngresoBio.textContent = empleado.fecha_ingreso || '-';
         }
 
         // Configurar Género Local (Si viene vacío de BioAlba, es editable; si no, queda fijo)
         const containerGenero = document.getElementById('container-wizard-genero');
-        if (empleado.genero) {
-            containerGenero.innerHTML = `<input type="text" id="input-wizard-genero" value="${empleado.genero}" readonly class="form-control form-control-sm bg-white" style="cursor: not-allowed;">`;
-        } else {
-            containerGenero.innerHTML = `
-                <select id="input-wizard-genero" class="form-select form-select-sm">
-                    <option value="">-- Seleccionar --</option>
-                    <option value="Masculino">Masculino</option>
-                    <option value="Femenino">Femenino</option>
-                    <option value="Otro">Otro</option>
-                </select>
-            `;
+        if (containerGenero) {
+            const rawGen = empleado.genero || '';
+            const normalizedGen = rawGen.trim();
+            const hasValidGenero = normalizedGen && normalizedGen !== 'No Especificado' && normalizedGen !== 'Sin Especificar' && normalizedGen !== '-';
+
+            if (hasValidGenero) {
+                containerGenero.innerHTML = `<input type="text" id="input-wizard-genero" value="${normalizedGen}" readonly class="form-control form-control-sm bg-white" style="cursor: not-allowed;">`;
+            } else {
+                containerGenero.innerHTML = `
+                    <select id="input-wizard-genero" class="form-select form-select-sm">
+                        <option value="">-- Seleccionar --</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Femenino">Femenino</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                `;
+            }
         }
 
         // Rellenar Inputs Editables locales con sus valores vigentes
-        document.getElementById('input-wizard-nombre').value = empleado.nombre || '';
-        document.getElementById('input-wizard-apellido-paterno').value = empleado.apellido_paterno || '';
-        document.getElementById('input-wizard-apellido-materno').value = empleado.apellido_materno || '';
-        document.getElementById('input-wizard-activo').value = empleado.activo.toString();
-        document.getElementById('input-wizard-cargo').value = empleado.cargo || '';
-        document.getElementById('input-wizard-compania').value = empleado.compania || '';
+        const nombreEl = document.getElementById('input-wizard-nombre');
+        if (nombreEl) nombreEl.value = empleado.nombre || '';
+
+        const apePatEl = document.getElementById('input-wizard-apellido-paterno');
+        if (apePatEl) apePatEl.value = empleado.apellido_paterno || '';
+
+        const apeMatEl = document.getElementById('input-wizard-apellido-materno');
+        if (apeMatEl) apeMatEl.value = empleado.apellido_materno || '';
+
+        const activoEl = document.getElementById('input-wizard-activo');
+        if (activoEl) activoEl.value = empleado.activo !== undefined ? empleado.activo.toString() : 'true';
+
+        const cargoEl = document.getElementById('input-wizard-cargo');
+        if (cargoEl) cargoEl.value = empleado.cargo || '';
+
+        const companiaEl = document.getElementById('input-wizard-compania');
+        if (companiaEl) companiaEl.value = empleado.compania || '';
         
         const inputTipoContrato = document.getElementById('input-wizard-tipo-contrato');
-        inputTipoContrato.value = empleado.tipo_contrato || 'Temporal';
+        if (inputTipoContrato) inputTipoContrato.value = empleado.tipo_contrato || 'Temporal';
         
-        document.getElementById('input-wizard-cant-contratos').value = empleado.cant_contratos || 1;
-        document.getElementById('input-wizard-fecha-ingreso').value = empleado.fecha_ingreso || '';
-        document.getElementById('input-wizard-fecha-nacimiento').value = empleado.fecha_nacimiento || '';
-        document.getElementById('input-wizard-fecha-salida').value = empleado.fecha_salida || '';
-        document.getElementById('input-wizard-email').value = empleado.email || '';
-        document.getElementById('input-wizard-telefono').value = empleado.telefono || '';
+        const cantContratosEl = document.getElementById('input-wizard-cant-contratos');
+        if (cantContratosEl) cantContratosEl.value = empleado.cant_contratos || 1;
+
+        const fechaIngresoEl = document.getElementById('input-wizard-fecha-ingreso');
+        if (fechaIngresoEl) fechaIngresoEl.value = empleado.fecha_ingreso || '';
+
+        const fechaNacimientoEl = document.getElementById('input-wizard-fecha-nacimiento');
+        if (fechaNacimientoEl) fechaNacimientoEl.value = empleado.fecha_nacimiento || '';
+
+        const fechaSalidaEl = document.getElementById('input-wizard-fecha-salida');
+        if (fechaSalidaEl) fechaSalidaEl.value = empleado.fecha_salida || '';
+
+        const emailEl = document.getElementById('input-wizard-email');
+        if (emailEl) emailEl.value = empleado.email || '';
+
+        const telefonoEl = document.getElementById('input-wizard-telefono');
+        if (telefonoEl) telefonoEl.value = empleado.telefono || '';
 
         window.handleWizardTipoContratoChange();
     } catch (e) {
@@ -2447,20 +2536,43 @@ window.handleWizardTipoContratoChange = function() {
 };
 
 window.saveWizardEmpleadoFicha = async function() {
-    const id = document.getElementById('input-wizard-id').value;
+    const inputId = document.getElementById('input-wizard-id');
+    if (!inputId) return;
+    const id = inputId.value;
     if (!id) return;
 
-    const nombre = document.getElementById('input-wizard-nombre').value.trim();
-    const apellidoPaterno = document.getElementById('input-wizard-apellido-paterno').value.trim();
-    const apellidoMaterno = document.getElementById('input-wizard-apellido-materno').value.trim();
-    const cargo = document.getElementById('input-wizard-cargo').value.trim();
-    const compania = document.getElementById('input-wizard-compania').value.trim();
-    const genero = document.getElementById('input-wizard-genero').value || null;
-    const tipoContrato = document.getElementById('input-wizard-tipo-contrato').value;
-    const fechaSalida = document.getElementById('input-wizard-fecha-salida').value || null;
-    const fechaIngreso = document.getElementById('input-wizard-fecha-ingreso').value || null;
-    const fechaNacimiento = document.getElementById('input-wizard-fecha-nacimiento').value || null;
-    const activo = document.getElementById('input-wizard-activo').value === 'true';
+    const nombreEl = document.getElementById('input-wizard-nombre');
+    const nombre = nombreEl ? nombreEl.value.trim() : '';
+
+    const apellidoPaternoEl = document.getElementById('input-wizard-apellido-paterno');
+    const apellidoPaterno = apellidoPaternoEl ? apellidoPaternoEl.value.trim() : '';
+
+    const apellidoMaternoEl = document.getElementById('input-wizard-apellido-materno');
+    const apellidoMaterno = apellidoMaternoEl ? apellidoMaternoEl.value.trim() : '';
+
+    const cargoEl = document.getElementById('input-wizard-cargo');
+    const cargo = cargoEl ? cargoEl.value.trim() : '';
+
+    const companiaEl = document.getElementById('input-wizard-compania');
+    const compania = companiaEl ? companiaEl.value.trim() : '';
+
+    const generoEl = document.getElementById('input-wizard-genero');
+    const genero = generoEl ? (generoEl.value || null) : null;
+
+    const tipoContratoEl = document.getElementById('input-wizard-tipo-contrato');
+    const tipoContrato = tipoContratoEl ? tipoContratoEl.value : 'Temporal';
+
+    const fechaSalidaEl = document.getElementById('input-wizard-fecha-salida');
+    const fechaSalida = fechaSalidaEl ? (fechaSalidaEl.value || null) : null;
+
+    const fechaIngresoEl = document.getElementById('input-wizard-fecha-ingreso');
+    const fechaIngreso = fechaIngresoEl ? (fechaIngresoEl.value || null) : null;
+
+    const fechaNacimientoEl = document.getElementById('input-wizard-fecha-nacimiento');
+    const fechaNacimiento = fechaNacimientoEl ? (fechaNacimientoEl.value || null) : null;
+
+    const activoEl = document.getElementById('input-wizard-activo');
+    const activo = activoEl ? (activoEl.value === 'true') : true;
 
     if (!nombre || !apellidoPaterno || !apellidoMaterno) {
         Swal.fire('Atención', 'Nombre, Apellido Paterno y Apellido Materno son obligatorios.', 'warning');
@@ -2486,7 +2598,7 @@ window.saveWizardEmpleadoFicha = async function() {
             Swal.fire('Atención', 'La Fecha de Nacimiento es obligatoria para empleados activos.', 'warning');
             return;
         }
-        if (!genero) {
+        if (!genero || genero === 'No Especificado' || genero === 'Sin Especificar') {
             Swal.fire('Atención', 'El GÉNERO es obligatorio para empleados activos.', 'warning');
             return;
         }

@@ -50,11 +50,13 @@ async function checkContractAlerts() {
         updateAlertBadges(totalBlocking);
 
         // --- BLOQUEO MANDATORIO ---
-        // Se muestra si hay alertas críticas PENDIENTES
+        // Se muestra si hay alertas críticas PENDIENTES, a menos que el Wizard Universal esté activo para evitar colisiones de backdrops y bloqueo (velo gris)
         const urgentAlerts = data.filter(emp => emp.bloqueante && !emp.es_procesado);
         const processedAlerts = data.filter(emp => emp.es_procesado);
         
-        if (urgentAlerts.length > 0) {
+        const wizardActive = window._wizardState && (window._wizardState.currentStep >= 8 || document.getElementById('modal-sync-wizard')?.classList.contains('show'));
+        
+        if (urgentAlerts.length > 0 && !wizardActive) {
             showMandatoryLock(urgentAlerts, processedAlerts);
         } else {
             hideMandatoryLock();

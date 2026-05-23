@@ -3416,6 +3416,9 @@ tr:hover .emp-name-cell {
 .modal-backdrop {
     z-index: 2040 !important;
 }
+.swal2-container {
+    z-index: 3000 !important;
+}
 /* modal-bono abierto desde el wizard debe quedar por encima de él.
    La clase .bono-wizard-mode la añade/quita sync_wizard.js. */
 #modal-bono.bono-wizard-mode {
