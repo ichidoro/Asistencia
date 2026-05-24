@@ -1289,6 +1289,34 @@ class AsistenciaService:
         marcas_disponibles = [log for log in raw_logs if log.get('id') not in consumidas_emp]
         marcas_disponibles.sort(key=lambda x: x['fecha_hora'])
 
+        # ── AUTO-FIX GENERALIZADO: Normalización Cronológica Par por Desbalance ──
+        # Si el número de marcas del día es par y existe desbalance entre E y S, alternar cronológicamente
+        marcas_hoy = [m for m in marcas_disponibles if m.get('fecha_hora', '')[:10] == fecha]
+        if marcas_hoy and len(marcas_hoy) % 2 == 0 and len(marcas_hoy) >= 2:
+            _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+            _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+            num_entradas = sum(1 for l in marcas_hoy if str(l.get('tipo', '') or '').strip().lower() in _TIPOS_E)
+            num_salidas  = sum(1 for l in marcas_hoy if str(l.get('tipo', '') or '').strip().lower() in _TIPOS_S)
+            
+            if num_entradas != num_salidas:
+                marcas_hoy_sorted = sorted(marcas_hoy, key=lambda x: x['fecha_hora'])
+                corregidas_ids = {}
+                for idx, m in enumerate(marcas_hoy_sorted):
+                    tipo_nuevo = 'Entrada' if idx % 2 == 0 else 'Salida'
+                    corregidas_ids[m['id']] = tipo_nuevo
+                    
+                for idx, m in enumerate(marcas_disponibles):
+                    m_id = m.get('id')
+                    if m_id in corregidas_ids:
+                        m_corregida = dict(m)
+                        m_corregida['tipo'] = corregidas_ids[m_id]
+                        m_corregida['_tipo_inferido'] = True
+                        marcas_disponibles[idx] = m_corregida
+                logger.info(
+                    f"⚙️ [Auto-Fix Paridad] Emp {empleado_id} {fecha}: "
+                    f"Corregidas {len(corregidas_ids)} marcas a alternancia cronológica por desbalance (E:{num_entradas} vs S:{num_salidas})"
+                )
+
         # ── EXTRACCIÓN CRONOLÓGICA (Solo DINAMICO_FLEXIBLE) ─────────────────
         tipo_prog = None
         if asignacion:
