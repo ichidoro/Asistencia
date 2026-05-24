@@ -1469,26 +1469,31 @@ class AsistenciaService:
                             bulk_ctx['rotativo_last_sem_dict'] = {}
                         bulk_ctx['rotativo_last_sem_dict'][empleado_id] = winner_sem
                     else:
-                        # Si no hay logs, resolvemos qué semana del turno corresponde de forma configurable:
+                        # Si no hay logs, resolvemos qué semana del turno corresponde:
                         total_sems = bulk_ctx['turnos_weeks'].get(tid, 1)
                         
                         if total_sems == 1:
                             semana_ganadora = 1
                         else:
-                            # Obtener configuración del turno padre (vía cualquier día de la semana 1)
-                            ejemplo_dia = next(iter(bulk_ctx['turnos'].get(tid, {}).get(1, {}).values()), {})
-                            es_secuencial = bool(ejemplo_dia.get('rotacion_secuencial', True))
-                            fallback_sem = int(ejemplo_dia.get('semana_fallback_sin_marcas', 1))
-                            
-                            if es_secuencial and f_asig_ini:
-                                # Proyección matemática de rotación fija
-                                monday_dt = dt - timedelta(days=dt.weekday())
-                                monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
-                                semanas_diff = (monday_dt - monday_ini).days // 7
-                                semana_ganadora = (semanas_diff % total_sems) + 1
+                            # Intentar arrastrar la última configuración ganadora en memoria
+                            last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id)
+                            if last_matched_sem is not None:
+                                semana_ganadora = last_matched_sem
                             else:
-                                # Fallback configurable (si es 0, queda None)
-                                semana_ganadora = fallback_sem if fallback_sem > 0 else None
+                                # Obtener configuración del turno padre (vía cualquier día de la semana 1)
+                                ejemplo_dia = next(iter(bulk_ctx['turnos'].get(tid, {}).get(1, {}).values()), {})
+                                es_secuencial = bool(ejemplo_dia.get('rotacion_secuencial', True))
+                                fallback_sem = int(ejemplo_dia.get('semana_fallback_sin_marcas', 1))
+                                
+                                if es_secuencial and f_asig_ini:
+                                    # Proyección matemática de rotación fija
+                                    monday_dt = dt - timedelta(days=dt.weekday())
+                                    monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
+                                    semanas_diff = (monday_dt - monday_ini).days // 7
+                                    semana_ganadora = (semanas_diff % total_sems) + 1
+                                else:
+                                    # Fallback configurable (si es 0, queda None)
+                                    semana_ganadora = fallback_sem if fallback_sem > 0 else None
 
                         if semana_ganadora is not None:
                             config_dia = bulk_ctx['turnos'].get(tid, {}).get(semana_ganadora, {}).get(dia_semana)
@@ -1570,19 +1575,27 @@ class AsistenciaService:
                         if total_sems == 1:
                             semana_ganadora = 1
                         else:
-                            padre_row = await db.fetch_one("SELECT * FROM turnos WHERE id = ?", (tid,))
-                            padre = dict(padre_row) if padre_row else {}
-                            es_secuencial = bool(padre.get('rotacion_secuencial', True))
-                            fallback_sem = int(padre.get('semana_fallback_sin_marcas', 1))
-                            
-                            if es_secuencial and f_asig_ini:
-                                # Proyección matemática
-                                monday_dt = dt - timedelta(days=dt.weekday())
-                                monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
-                                semanas_diff = (monday_dt - monday_ini).days // 7
-                                semana_ganadora = (semanas_diff % total_sems) + 1
+                            # Intentar arrastrar la última configuración registrada en la DB
+                            last_asist = await db.fetch_one(
+                                "SELECT num_semana_ganadora FROM asistencias WHERE empleado_id = ? AND fecha < ? AND num_semana_ganadora IS NOT NULL ORDER BY fecha DESC LIMIT 1",
+                                (empleado_id, fecha)
+                            )
+                            if last_asist and last_asist['num_semana_ganadora']:
+                                semana_ganadora = last_asist['num_semana_ganadora']
                             else:
-                                semana_ganadora = fallback_sem if fallback_sem > 0 else None
+                                padre_row = await db.fetch_one("SELECT * FROM turnos WHERE id = ?", (tid,))
+                                padre = dict(padre_row) if padre_row else {}
+                                es_secuencial = bool(padre.get('rotacion_secuencial', True))
+                                fallback_sem = int(padre.get('semana_fallback_sin_marcas', 1))
+                                
+                                if es_secuencial and f_asig_ini:
+                                    # Proyección matemática
+                                    monday_dt = dt - timedelta(days=dt.weekday())
+                                    monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
+                                    semanas_diff = (monday_dt - monday_ini).days // 7
+                                    semana_ganadora = (semanas_diff % total_sems) + 1
+                                else:
+                                    semana_ganadora = fallback_sem if fallback_sem > 0 else None
 
                         if semana_ganadora is not None:
                             rows = await db.fetch_all(
