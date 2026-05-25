@@ -980,27 +980,53 @@ class SyncService:
                 if not success:
                     self.stats['errores'] += len(logs_to_save)
 
-            # B. Recalcular Asistencia (Independiente por día para liberar el motor)
+            # B. Recalcular Asistencia (Por empleado sobre todo el período para preservar coherencia de Dinámicos Flexibles)
             if fechas_afectadas and not skip_recalc:
-                n_emp = len(empleados_afectados_ids) if empleados_afectados_ids else 'todos'
-                logger.info(f"⚡ Recalculando {len(fechas_afectadas)} días × {n_emp} empleados afectados...")
+                if empleados_afectados_ids:
+                    emp_ids_to_recalc = empleados_afectados_ids
+                else:
+                    # Fallback: todos los empleados con asignación de turno activa en el período
+                    emp_ids_to_recalc = set(rut_to_emp_id.values())
+
+                n_emp = len(emp_ids_to_recalc)
+                logger.info(f"⚡ Recalculando período {fecha_inicio} → {fecha_fin} para {n_emp} empleados afectados...")
                 from backend.services.asistencia_service import AsistenciaService
                 from backend.repositories.asistencia import AsistenciaRepository
                 
                 asist_repo = AsistenciaRepository(db)
                 asist_service = AsistenciaService(asist_repo)
                 
-                for fecha in sorted(list(fechas_afectadas)):
+                # Pre-cargar feriados del período para el batch
+                feriados_batch = {}
+                try:
+                    from backend.services.calendario_service import CalendarioService
+                    cal_svc = CalendarioService()
+                    anio_ini = dt_ini.year
+                    anio_fin = dt_fin.year
+                    for _anio in range(anio_ini, anio_fin + 1):
+                        raw = await cal_svc.get_feriados(_anio)
+                        feriados_batch.update({f['fecha']: f['descripcion'] for f in raw})
+                except Exception as fer_err:
+                    logger.warning(f"⚠️ No se pudieron pre-cargar feriados: {fer_err}")
+                    feriados_batch = None
+
+                for emp_id in sorted(list(emp_ids_to_recalc)):
                     try:
-                        # Pasar empleados_afectados_ids para acotar el recálculo al batch.
-                        # Si es None (fallback), procesa todos como antes.
-                        await asist_service.procesar_dia(fecha, empleado_ids=empleados_afectados_ids)
-                        self.stats['dias_recalculados'] += 1
-                        # Pequeña pausa para permitir que el sync engine de LibSQL respire ante la red
-                        await asyncio.sleep(0.1)
+                        # Reprocesar el período completo para este empleado
+                        await asist_service.reprocesar_periodo_empleado(
+                            empleado_id=emp_id,
+                            fecha_inicio=fecha_inicio,
+                            fecha_fin=fecha_fin,
+                            force=force_recalculate,
+                            feriados_preloaded=feriados_batch
+                        )
+                        # Pequeña pausa para permitir que el sync engine de LibSQL respire
+                        await asyncio.sleep(0.05)
                     except Exception as calc_err:
-                        logger.error(f"❌ Error recalculando día {fecha}: {calc_err}")
+                        logger.error(f"❌ Error recalculando empleado {emp_id}: {calc_err}")
                         self.stats['errores'] += 1
+                
+                self.stats['dias_recalculados'] += len(fechas_afectadas)
             elif fechas_afectadas and skip_recalc:
                 logger.info(f"⏭️ skip_recalc=True → omitiendo recálculo de {len(fechas_afectadas)} días (el caller lo hará)")
 
