@@ -1872,7 +1872,30 @@ class AsistenciaService:
         if tipo_prog == 'DINAMICO_FLEXIBLE':
             logs = block_inteligente
         elif is_bolsa:
-            # Bolsa Flexible Inteligente: empareja Entradas con Salidas sin importar el día
+            # Bolsa Flexible Inteligente: empareja Entradas con Salidas sin importar el día, pero respetando cruce_medianoche dinámico
+            puede_cruzar = False
+            if asignacion:
+                tid = asignacion.get('turno_id') or asignacion['id']
+                if bulk_ctx:
+                    turnos_dict = bulk_ctx.get('turnos', {}).get(tid, {})
+                    for sem, sem_dict in turnos_dict.items():
+                        cfg = sem_dict.get(dia_semana)
+                        if cfg and (cfg.get('cruza_medianoche') or cfg.get('cruza_medianoche_2')):
+                            puede_cruzar = True
+                            break
+                else:
+                    rows = await db.fetch_all(
+                        "SELECT cruza_medianoche, cruza_medianoche_2 FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
+                        (tid, dia_semana)
+                    )
+                    for r in rows:
+                        if r['cruza_medianoche'] or r['cruza_medianoche_2']:
+                            puede_cruzar = True
+                            break
+
+            if not puede_cruzar:
+                marcas_disponibles = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
+
             marcas_hoy = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
             logs = []
             if marcas_hoy:
@@ -1894,13 +1917,24 @@ class AsistenciaService:
                     else:
                         break
                         
-                # Si quedó una Entrada sin Salida, seguir consumiendo hasta cerrar el bloque
-                if balance > 0 and ultimo_idx != -1:
+                # Si quedó una Entrada sin Salida, seguir consumiendo hasta cerrar el bloque (límite dinámico de calendario)
+                if balance > 0 and ultimo_idx != -1 and logs:
+                    fecha_limite = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
                     for i in range(ultimo_idx + 1, len(marcas_disponibles)):
                         log = marcas_disponibles[i]
-                        logs.append(log)
+                        log_fecha = log['fecha_hora'][:10]
+                        
+                        # Restricción 1: No cruzar más allá del día D+1
+                        if log_fecha > fecha_limite:
+                            break
+                            
                         t_m = str(log.get('tipo', '') or '').strip().lower()
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1'}:  # [DT-16b] '' removido — D8
+                        # Restricción 2: Si es el día siguiente y es una Entrada, detenerse (comienza una nueva jornada)
+                        if log_fecha == fecha_limite and t_m in {'entrada', 'entry', 'e', 'in', '1'}:
+                            break
+                            
+                        logs.append(log)
+                        if t_m in {'entrada', 'entry', 'e', 'in', '1'}:
                             balance += 1
                         elif t_m in {'salida', 'exit', 's', 'out', '2'}:
                             balance -= 1
@@ -2892,7 +2926,10 @@ class AsistenciaService:
         min_trabajados = float(horas_trabajadas * 60)
         
         # En el modelo de doble eje, las extras son estrictamente el excedente de las horas teóricas
-        minutos_extra_bruto = max(0, min_trabajados - min_teoricos)
+        if is_bolsa:
+            minutos_extra_bruto = 0.0
+        else:
+            minutos_extra_bruto = max(0, min_trabajados - min_teoricos)
         res['minutos_extra_bruto'] = minutos_extra_bruto
         
 
