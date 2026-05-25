@@ -3251,14 +3251,43 @@ function renderVistaAnalitica(respData, container) {
 
                 // ✅ Si el día tiene deuda condonada, NO acumular en las columnas de deuda
                 const tieneCondonacion = (di.deuda_condonada || 0) > 0;
+                const netDeuda = tieneCondonacion ? 0 : (di.minutos_deuda || 0);
 
-                if (!tieneCondonacion) {
-                    d_tot   += (di.minutos_deuda || 0);
-                    min_atr += (di.minutos_atraso || 0);
-                    min_sad += (di.minutos_salida_adelantada || 0);
+                // Distribución de la deuda neta diaria entre las categorías que la generaron
+                const rawCol = di.minutos_exceso_colacion || 0;
+                const rawPer = di.minutos_permiso_personal_deuda || 0;
+                const rawAtr = tieneCondonacion ? 0 : (di.minutos_atraso || 0);
+                const rawSad = tieneCondonacion ? 0 : (di.minutos_salida_adelantada || 0);
+
+                const rawTotal = rawCol + rawPer + rawAtr + rawSad;
+
+                let dayCol = 0;
+                let dayPer = 0;
+                let dayAtr = 0;
+                let daySad = 0;
+
+                if (netDeuda > 0 && rawTotal > 0) {
+                    if (netDeuda >= rawTotal) {
+                        dayCol = rawCol;
+                        dayPer = rawPer;
+                        dayAtr = rawAtr;
+                        daySad = rawSad;
+                    } else {
+                        // Distribuir proporcionalmente si parte de la deuda fue compensada
+                        const factor = netDeuda / rawTotal;
+                        dayCol = rawCol * factor;
+                        dayPer = rawPer * factor;
+                        dayAtr = rawAtr * factor;
+                        daySad = rawSad * factor;
+                    }
                 }
-                min_col += (di.minutos_exceso_colacion || 0);
-                min_per += (di.minutos_permiso_personal_deuda || 0);
+
+                d_tot   += netDeuda;
+                min_col += dayCol;
+                min_per += dayPer;
+                min_atr += dayAtr;
+                min_sad += daySad;
+
                 if ((di.minutos_atraso||0) > 0 && !tieneCondonacion)  cnt_atr++;
                 if ((di.minutos_salida_adelantada||0) > 0 && !tieneCondonacion) cnt_sad++;
                 if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
