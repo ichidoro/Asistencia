@@ -3214,7 +3214,9 @@ class AsistenciaService:
 
         ids_ph = ','.join('?' * len(emp_ids))
 
-        # Asistencias del período con nombre del turno y datos financieros de horas extras (Fachada)
+        cal_svc = CalendarioService()
+
+        # Definición de queries para carga masiva concurrente
         q_asist = f"""
             SELECT a.*, t.nombre as turno_nombre,
                    he.estado as estado_he,
@@ -3225,37 +3227,51 @@ class AsistenciaService:
             WHERE a.empleado_id IN ({ids_ph}) AND a.fecha BETWEEN ? AND ?
             ORDER BY a.empleado_id, a.fecha
         """
-        asist_rows = await db.fetch_all(q_asist, tuple(emp_ids) + (fecha_inicio, fecha_fin))
-        asistencias = [dict(a) for a in asist_rows]
-
-        if turno_id:
-            asistencias = [a for a in asistencias if a.get('turno_asignado_id') == turno_id]
-
-        # Obtener jornadas especiales
+        
         q_jornadas = f"""
             SELECT j.* 
             FROM jornadas_especiales j
             WHERE j.empleado_id IN ({ids_ph}) AND j.fecha BETWEEN ? AND ?
         """
-        jornadas_rows = await db.fetch_all(q_jornadas, tuple(emp_ids) + (fecha_inicio, fecha_fin))
-        jornadas_especiales = [dict(j) for j in jornadas_rows]
-
-        # Feriados
-        cal_svc = CalendarioService()
-        feriados_raw = await cal_svc.get_feriados(anio)
-        feriados_dict = {f['fecha']: f['descripcion'] for f in feriados_raw}
-        feriados_list = [{'fecha': k, 'descripcion': v} for k, v in feriados_dict.items()
-                         if fecha_inicio <= k <= fecha_fin]
-
-        # Precarga datos de turnos asignados para enriquecer emp['info']
-        turno_ids_emp = {}
-        asig_emp_rows = await db.fetch_all(f"""
+        
+        q_asig = f"""
             SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.nombre as turno_nombre
             FROM asignacion_turnos a
             JOIN turnos t ON a.turno_id = t.id
             WHERE a.empleado_id IN ({ids_ph})
               AND a.fecha_inicio <= ? AND (a.fecha_fin IS NULL OR a.fecha_fin >= ?)
-        """, tuple(emp_ids) + (fecha_fin, fecha_inicio))
+        """
+        
+        q_just = f"""
+            SELECT j.*, jt.nombre AS tipo_nombre, jt.con_goce_sueldo, jt.pagador, jt.nomenclatura AS tipo_nomenclatura
+            FROM justificaciones j
+            JOIN justificacion_tipos jt ON j.tipo_id = jt.id
+            WHERE j.empleado_id IN ({ids_ph})
+              AND date(j.fecha_inicio) <= date(?) AND date(j.fecha_fin) >= date(?)
+        """
+
+        # Cargar asistencias, jornadas, asignación de turnos, justificaciones y feriados en paralelo
+        tasks = [
+            db.fetch_all(q_asist, tuple(emp_ids) + (fecha_inicio, fecha_fin)),
+            db.fetch_all(q_jornadas, tuple(emp_ids) + (fecha_inicio, fecha_fin)),
+            db.fetch_all(q_asig, tuple(emp_ids) + (fecha_fin, fecha_inicio)),
+            db.fetch_all(q_just, tuple(emp_ids) + (fecha_fin, fecha_inicio)),
+            cal_svc.get_feriados(anio)
+        ]
+        
+        asist_rows, jornadas_rows, asig_emp_rows, just_rows, feriados_raw = await asyncio.gather(*tasks)
+
+        asistencias = [dict(a) for a in asist_rows]
+        if turno_id:
+            asistencias = [a for a in asistencias if a.get('turno_asignado_id') == turno_id]
+
+        jornadas_especiales = [dict(j) for j in jornadas_rows]
+
+        feriados_dict = {f['fecha']: f['descripcion'] for f in feriados_raw}
+        feriados_list = [{'fecha': k, 'descripcion': v} for k, v in feriados_dict.items()
+                         if fecha_inicio <= k <= fecha_fin]
+
+        turno_ids_emp = {}
         for row in asig_emp_rows:
             turno_ids_emp[row['empleado_id']] = dict(row)
 
@@ -3380,14 +3396,7 @@ class AsistenciaService:
                         }
             cur += _td(days=1)
 
-        # Justificaciones del período (necesarias para evaluación de bonos)
-        just_rows = await db.fetch_all(f"""
-            SELECT j.*, jt.nombre AS tipo_nombre, jt.con_goce_sueldo, jt.pagador, jt.nomenclatura AS tipo_nomenclatura
-            FROM justificaciones j
-            JOIN justificacion_tipos jt ON j.tipo_id = jt.id
-            WHERE j.empleado_id IN ({ids_ph})
-              AND date(j.fecha_inicio) <= date(?) AND date(j.fecha_fin) >= date(?)
-        """, tuple(emp_ids) + (fecha_fin, fecha_inicio))
+        # Justificaciones del período (precargadas concurrentemente arriba)
         justificaciones = [dict(j) for j in just_rows]
 
         # Inyectar nomenclaturas en la matriz a partir de justificaciones

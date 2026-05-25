@@ -6,6 +6,8 @@ from backend.schemas.justificacion import JustificacionTipoCreate, Justificacion
 import json
 
 class ConfiguracionRepository:
+    _bonos_cache = None
+
     def __init__(self, db: Database):
         self.db = db
 
@@ -310,6 +312,7 @@ class ConfiguracionRepository:
 
     # --- BONOS ---
     async def create_bono(self, bono: BonoCreate) -> int:
+        ConfiguracionRepository._bonos_cache = None
         try:
             logger.info("Iniciando creación de bono...")
             res = await self.db.execute(
@@ -344,6 +347,7 @@ class ConfiguracionRepository:
             raise
 
     async def create_regla_bono(self, bono_id: int, regla: BonoReglaCreate) -> int:
+        ConfiguracionRepository._bonos_cache = None
         query = """
             INSERT INTO bono_reglas (
                 bono_id, monto, asistencia_minima, tipo_contrato,
@@ -364,6 +368,7 @@ class ConfiguracionRepository:
             raise
 
     async def delete_bono(self, bono_id: int) -> bool:
+        ConfiguracionRepository._bonos_cache = None
         try:
             # Por ON DELETE CASCADE las reglas deberían borrarse solas si la DB lo soporta, 
             # pero lo hacemos explícito por seguridad en SQLite si PRAGMA foreign_keys no está activo
@@ -375,6 +380,7 @@ class ConfiguracionRepository:
             raise
 
     async def update_bono(self, bono_id: int, bono: BonoCreate) -> bool:
+        ConfiguracionRepository._bonos_cache = None
         try:
             # 1. Actualizar datos maestros
             await self.db.execute(
@@ -405,7 +411,10 @@ class ConfiguracionRepository:
             raise
 
     async def get_all_bonos(self) -> List[Dict]:
-        """Obtener todos los bonos con sus reglas"""
+        """Obtener todos los bonos con sus reglas (con caché en memoria)"""
+        if ConfiguracionRepository._bonos_cache is not None:
+            return ConfiguracionRepository._bonos_cache
+
         try:
             # 1. Obtener Bonos
             query = "SELECT * FROM bonos ORDER BY nombre"
@@ -436,6 +445,7 @@ class ConfiguracionRepository:
                 bono_dict['reglas'] = reglas_fmt
                 result.append(bono_dict)
                 
+            ConfiguracionRepository._bonos_cache = result
             return result
         except Exception as e:
             logger.error(f"Error getting all bonos: {e}")

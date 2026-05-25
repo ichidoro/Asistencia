@@ -178,16 +178,31 @@ class HybridDatabase:
             if hasattr(self.conn, 'sync') and self.use_turso and not self._force_turso_only:
                 try:
                     logger.info("🔄 Sync inicial con Turso Cloud (bloqueante, máx 45s)...")
-                    await asyncio.wait_for(
-                        asyncio.to_thread(self.conn.sync),
-                        timeout=45.0
-                    )
+                    # Sincronización protegida por lock inicial
+                    async with self._db_lock:
+                        await asyncio.wait_for(
+                            asyncio.to_thread(self.conn.sync),
+                            timeout=45.0
+                        )
+                        # Checkpoint del WAL después del sync inicial
+                        try:
+                            def _do_checkpoint():
+                                cursor = self.conn.cursor()
+                                cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                                cursor.execute("PRAGMA journal_size_limit = 4194304")
+                            await asyncio.to_thread(_do_checkpoint)
+                        except Exception:
+                            pass
                     self._last_sync = datetime.now()
                     logger.info("☁️ Sync inicial completado — réplica local actualizada con datos de Turso")
                 except asyncio.TimeoutError:
-                    logger.warning("⚠️ Sync inicial timeout (>45s) — scheduler sincronizará luego")
+                    logger.warning("⚠️ Sync inicial timeout (>45s) — Posible desincronización de réplica. Iniciando Auto-Healing preventivo...")
+                    asyncio.create_task(self._auto_heal_sync_conflict())
                 except Exception as sync_err:
-                    logger.warning(f"⚠️ Sync inicial falló (scheduler reintentará): {sync_err}")
+                    logger.warning(f"⚠️ Sync inicial falló: {sync_err}. Evaluando Auto-Healing...")
+                    err_msg = str(sync_err).lower()
+                    if "frame" in err_msg or "mismatch" in err_msg or "larger than" in err_msg or "durable" in err_msg:
+                        asyncio.create_task(self._auto_heal_sync_conflict())
 
             logger.success(f"✅ Motor LibSQL conectado (Modo: {'Cloud' if self._force_turso_only else 'Hybrid'})")
 
@@ -587,10 +602,20 @@ class HybridDatabase:
                             return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
                         raise panic_e
 
-                # Lecturas sin _db_lock: la réplica embebida lee del archivo local
-                # (no hace round-trip a la nube), es thread-safe para lecturas concurrentes.
-                # Solo escrituras y sync() necesitan serialización.
-                status, error_obj = await asyncio.to_thread(_do_fetch)
+                # Lecturas serializadas con _db_lock para evitar colisión con sync/escrituras concurrentes en self.conn
+                try:
+                    async with asyncio.timeout(10):
+                        await self._db_lock.acquire()
+                except asyncio.TimeoutError:
+                    logger.warning(f"⏳ _db_lock timeout en FETCH (intento {attempt}/{max_retries}): {query[:60]}...")
+                    last_error = asyncio.TimeoutError("db_lock timeout")
+                    await asyncio.sleep(0.2)
+                    continue
+
+                try:
+                    status, error_obj = await asyncio.to_thread(_do_fetch)
+                finally:
+                    self._db_lock.release()
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
@@ -888,10 +913,22 @@ class HybridDatabase:
 
         try:
             async with self._sync_lock:
-                _t0 = datetime.now()
-                await asyncio.to_thread(self.conn.sync)
-                _elapsed = (datetime.now() - _t0).total_seconds()
-                self._last_sync = datetime.now()
+                async with self._db_lock:
+                    _t0 = datetime.now()
+                    await asyncio.to_thread(self.conn.sync)
+                    _elapsed = (datetime.now() - _t0).total_seconds()
+                    self._last_sync = datetime.now()
+                    
+                    # Consolidación explícita del WAL (PRAGMA wal_checkpoint)
+                    try:
+                        def _do_checkpoint():
+                            cursor = self.conn.cursor()
+                            cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                            cursor.execute("PRAGMA journal_size_limit = 4194304")
+                        await asyncio.to_thread(_do_checkpoint)
+                    except Exception as cp_err:
+                        logger.warning(f"⚠️ Checkpoint post-sync falló: {cp_err}")
+                        
                 # Threshold en 35s: latencia Chile→USA con Turso Cloud es 30-60s esperado.
                 # Alertar solo cuando supera ese umbral indica un problema real de red.
                 if _elapsed > 35:
@@ -928,7 +965,19 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 t0 = asyncio.get_event_loop().time()
-                await asyncio.to_thread(self.conn.sync)
+                async with self._db_lock:
+                    await asyncio.to_thread(self.conn.sync)
+                    
+                    # Consolidación del WAL post-sync
+                    try:
+                        def _do_checkpoint():
+                            cursor = self.conn.cursor()
+                            cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                            cursor.execute("PRAGMA journal_size_limit = 4194304")
+                        await asyncio.to_thread(_do_checkpoint)
+                    except Exception as cp_err:
+                        logger.warning(f"⚠️ Checkpoint explícito falló: {cp_err}")
+
                 elapsed_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
                 self._last_sync = datetime.now()
                 logger.info(f"☁️ [Sync explícito] WAL -> Turso Cloud en {elapsed_ms}ms (intento {attempt})")
