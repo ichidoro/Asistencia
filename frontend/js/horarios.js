@@ -87,14 +87,11 @@ async function saveTurno() {
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
-        ventana_en_curso_minutos: parseInt(formData.get('ventana_en_curso_minutos') || 0),
-        tolerancia_exceso_colacion_minutos: parseInt(formData.get('tolerancia_exceso_colacion_minutos') || 0),
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
-        es_turno_cortado: !!document.getElementById('chkCortado').checked,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         dias: []
     };
@@ -129,10 +126,7 @@ async function saveTurno() {
                 horas_teoricas: horas,
                 hora_entrada: isLibre ? null : row.querySelector('.time-in').value,
                 hora_salida: isLibre ? null : row.querySelector('.time-out').value,
-                cruza_medianoche: row.querySelector('.chk-cruce').checked,
-                hora_entrada_2: isLibre || !turno.es_turno_cortado ? null : row.querySelector('.time-in-2').value,
-                hora_salida_2: isLibre || !turno.es_turno_cortado ? null : row.querySelector('.time-out-2').value,
-                cruza_medianoche_2: !turno.es_turno_cortado ? false : row.querySelector('.chk-cruce-2').checked
+                cruza_medianoche: row.querySelector('.chk-cruce').checked
             });
         });
     });
@@ -261,8 +255,6 @@ async function openModalHorario(id = null) {
             form.tolerancia_retraso_alerta.value = turno.tolerancia_retraso_alerta;
             form.tolerancia_retraso_descuento.value = turno.tolerancia_retraso_descuento;
             form.redondeo_minutos.value = String(turno.redondeo_minutos || 0);
-            if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = String(turno.ventana_en_curso_minutos || 0);
-            if (form.tolerancia_exceso_colacion_minutos) form.tolerancia_exceso_colacion_minutos.value = String(turno.tolerancia_exceso_colacion_minutos || 0);
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
             if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "";
@@ -315,27 +307,14 @@ async function openModalHorario(id = null) {
                         row.querySelector('.time-in').value = d.hora_entrada || "08:00";
                         row.querySelector('.time-out').value = d.hora_salida || "18:00";
                         row.querySelector('.chk-cruce').checked = d.cruza_medianoche;
-                        if (row.querySelector('.time-in-2')) {
-                            row.querySelector('.time-in-2').value = d.hora_entrada_2 || "14:00";
-                            row.querySelector('.time-out-2').value = d.hora_salida_2 || "18:00";
-                            row.querySelector('.chk-cruce-2').checked = d.cruza_medianoche_2;
-                        }
+
                         row.querySelector('.hours-calc').value = d.horas_teoricas;
                         toggleDiaRow(chkLibre);
                     }
                 });
             });
 
-            // [FIX] Setear chkCortado ANTES de llamar handleTipoProgramacionChange (una sola vez al final)
-            document.getElementById('chkCortado').checked = turno.es_turno_cortado;
-            // Aplicar visibilidad de bloques del turno cortado directamente (sin llamar toggleCortadoUI
-            // que volvería a llamar handleTipoProgramacionChange antes de tiempo)
-            const isCortado = turno.es_turno_cortado;
-            const cols = document.querySelectorAll('.col-bloque-2');
-            cols.forEach(c => {
-                c.style.display = isCortado ? '' : 'none';
-                c.style.visibility = 'visible';
-            });
+
             // [FIX] UNA SOLA llamada al final para aplicar toda la visibilidad de tipo programación
             handleTipoProgramacionChange();
         }
@@ -344,8 +323,7 @@ async function openModalHorario(id = null) {
         if (form.meta_horas_semanales) form.meta_horas_semanales.value = "";
         if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
         if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
-        if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = 0;
-        if (form.tolerancia_exceso_colacion_minutos) form.tolerancia_exceso_colacion_minutos.value = 0;
+
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = "";
         const umbralInput = document.getElementById('umbralColacion');
@@ -1166,27 +1144,6 @@ function renderModalHtml() {
                                 </div>
                                 <div class="form-text small">Resta estos minutos si NO hay marcas, siempre que las horas trabajadas superen el umbral.</div>
                             </div>
-
-                            <!-- Fila 3: Cierre y Excesos (Nuevos campos DT-4 y DT-14) -->
-                            <div class="col-md-6">
-                                <label for="input-ventana-curso" class="form-label small fw-bold">Límite de Espera para Cierre (min)</label>
-                                <input type="number" id="input-ventana-curso" class="form-control" name="ventana_en_curso_minutos" value="0">
-                                <div class="form-text small">¿Cuánto tiempo máximo se espera la marca de salida antes de dar la jornada por incompleta? (Ej: 180 min = 3 hrs). Usa 0 para infinito.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="input-exceso-col" class="form-label small fw-bold">Tolerancia para ser Permiso (min)</label>
-                                <input type="number" id="input-exceso-col" class="form-control" name="tolerancia_exceso_colacion_minutos" value="0">
-                                <div class="form-text small">Minutos extras de demora sobre una colación normal que convierten el exceso en un Permiso Personal.</div>
-                            </div>
-                        </div>
-
-                        <div class="row g-3 mb-4" id="rowTurnoCortado">
-                            <div class="col-md-6">
-                                <div class="form-check form-switch p-3 bg-white border rounded">
-                                    <input class="form-check-input ms-0 me-2" type="checkbox" id="chkCortado" name="es_turno_cortado" onchange="toggleCortadoUI()">
-                                    <label class="form-check-label fw-bold" for="chkCortado">Es Turno Cortado / Partido (Bloque Tarde)</label>
-                                </div>
-                            </div>
                         </div>
 
                         <div id="wrapper-semanas">
@@ -1289,9 +1246,6 @@ window.addWeekTab = function (triggerChange = true) {
                         <th>Entrada</th>
                         <th>Salida</th>
                         <th>Cruce</th>
-                        <th class="col-bloque-2" style="display:none; background-color: #f8f9fa;">Entrada 2</th>
-                        <th class="col-bloque-2" style="display:none; background-color: #f8f9fa;">Salida 2</th>
-                        <th class="col-bloque-2" style="display:none; background-color: #f8f9fa;">Cruce 2</th>
                         <th class="col-teoricas">Hrs. Teóricas</th>
                     </tr>
                 </thead>
@@ -1303,9 +1257,6 @@ window.addWeekTab = function (triggerChange = true) {
                             <td><input type="time" id="time-in-w${i}-d${index}" name="time-in-w${i}-d${index}" class="form-control form-control-sm time-in" value="08:00" oninput="updateAllCalculations()"></td>
                             <td><input type="time" id="time-out-w${i}-d${index}" name="time-out-w${i}-d${index}" class="form-control form-control-sm time-out" value="16:00" oninput="updateAllCalculations()"></td>
                             <td><input type="checkbox" id="chk-cruce-w${i}-d${index}" name="chk-cruce-w${i}-d${index}" class="form-check-input chk-cruce" onchange="updateAllCalculations()"></td>
-                            <td class="col-bloque-2" style="display:none; background-color: #f8f9fa;"><input type="time" id="time-in-2-w${i}-d${index}" name="time-in-2-w${i}-d${index}" class="form-control form-control-sm time-in-2" value="14:00" oninput="updateAllCalculations()"></td>
-                            <td class="col-bloque-2" style="display:none; background-color: #f8f9fa;"><input type="time" id="time-out-2-w${i}-d${index}" name="time-out-2-w${i}-d${index}" class="form-control form-control-sm time-out-2" value="18:00" oninput="updateAllCalculations()"></td>
-                            <td class="col-bloque-2" style="display:none; background-color: #f8f9fa;"><input type="checkbox" id="chk-cruce-2-w${i}-d${index}" name="chk-cruce-2-w${i}-d${index}" class="form-check-input chk-cruce-2" onchange="updateAllCalculations()"></td>
                             <td><input type="number" id="hours-calc-w${i}-d${index}" name="hours-calc-w${i}-d${index}" class="form-control form-control-sm hours-calc" value="8" step="0.5"></td>
                         </tr>
                     `).join('')}
@@ -1342,17 +1293,7 @@ function toggleDiaRow(chk) {
     updateAllCalculations();
 }
 
-function toggleCortadoUI() {
-    const isCortado = document.getElementById('chkCortado').checked;
-    const cols = document.querySelectorAll('.col-bloque-2');
-    cols.forEach(c => {
-        c.style.display = isCortado ? '' : 'none';
-        c.style.visibility = 'visible';
-    });
-    // [FIX] handleTipoProgramacionChange() es segura de llamar aquí porque
-    // ya no llama a setupModalListeners (el bucle fue eliminado)
-    handleTipoProgramacionChange();
-}
+
 
 function toggleColacionInput() {
     const chk = document.getElementById('chkColacion');
@@ -1420,19 +1361,7 @@ function handleTipoProgramacionChange() {
         col.style.display = isFlexible ? 'none' : 'block';
     });
 
-    // Ocultar switch de Turno Cortado si es Flexible
-    const rowTurnoCortado = document.getElementById('rowTurnoCortado');
-    if (rowTurnoCortado) {
-        rowTurnoCortado.style.display = isFlexible ? 'none' : 'flex';
-        // Si se oculta, asegurar que el checkbox se apague para no generar data corrupta
-        if (isFlexible) {
-            const chkCortado = document.getElementById('chkCortado');
-            if (chkCortado && chkCortado.checked) {
-                chkCortado.checked = false;
-                toggleCortadoUI(); // Asegura de ocultar las columnas col-bloque-2
-            }
-        }
-    }
+
 
     // Actualiza el texto de las pestañas de semanas según el tipo de programación activo
     document.querySelectorAll('#pills-tab-weeks .nav-link').forEach((tab, index) => {
@@ -1515,13 +1444,7 @@ function handleTipoProgramacionChange() {
                 }
             }
 
-            // Block 2 visibility
-            const isCortado = document.getElementById('chkCortado').checked;
-            const col2Cells = row.querySelectorAll('.col-bloque-2');
-            col2Cells.forEach(c => {
-                c.style.display = (isFlexible || !isCortado) ? 'none' : 'table-cell';
-                c.style.visibility = 'visible';
-            });
+
         });
     });
 
@@ -1538,7 +1461,6 @@ function updateAllCalculations() {
         return; // Flexible is manual
     }
 
-    const isCortado = document.getElementById('chkCortado').checked;
     const colacionAuto = document.getElementById('chkColacion').checked;
     const minutosColacion = colacionAuto ? (parseInt(document.getElementById('numColacion').value) || 0) : 0;
 
@@ -1558,16 +1480,7 @@ function updateAllCalculations() {
                 row.querySelector('.chk-cruce').checked
             );
 
-            let h2 = 0;
-            if (isCortado) {
-                h2 = calculateDiff(
-                    row.querySelector('.time-in-2').value,
-                    row.querySelector('.time-out-2').value,
-                    row.querySelector('.chk-cruce-2').checked
-                );
-            }
-
-            let total = h1 + h2;
+            let total = h1;
             if (total > 0) {
                 total -= (minutosColacion / 60);
             }

@@ -2211,7 +2211,7 @@ class AsistenciaService:
             return None
 
         # ── CONFIG DÍA ────────────────────────────────────────────────────────
-        redondeo = int(config_dia.get('redondeo_intervalo', 0) or 0) if config_dia else 0
+        redondeo = int(config_dia.get('redondeo_minutos', 0) or 0) if config_dia else 0
         anclaje_min     = int((config_dia or {}).get('anclaje_entrada_minutos') or
                               turno.get('anclaje_entrada_minutos', 0) or 0) if turno else 0  # [DT-12]
         anclaje_sal_min = int((config_dia or {}).get('anclaje_salida_minutos') or
@@ -2685,17 +2685,19 @@ class AsistenciaService:
             hoy_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             es_hoy = (fecha_dt >= hoy_dt)
             
-            # Determinar si aún está "en curso" (DT-4: usar ventana_en_curso_minutos)
+            # Determinar si aún está "en curso" (Automatizado: 3 horas de gracia tras la salida teórica)
             en_curso_por_hora = False
-            # ventana_en_curso_minutos no existe en la tabla turnos.
-            # Para turnos nocturnos: si la salida teórica cruzó medianoche (h_sal_teorica > fecha)
-            # y aún no ha llegado la hora de salida, el turno sigue activo → EN_CURSO.
-            if not es_hoy and es_nocturno and h_sal_teorica:
-                # h_sal_teorica ya tiene +1 día aplicado (línea en _calculate_attendance).
-                if datetime.now() < h_sal_teorica:
+            if h_sal_teorica:
+                # h_sal_teorica ya tiene +1 día aplicado si cruza medianoche
+                limite_ventana = h_sal_teorica + timedelta(hours=3)
+                if datetime.now() < limite_ventana:
+                    en_curso_por_hora = True
+            else:
+                # Fallback si no hay salida teórica (ej. Bolsa Flexible)
+                if es_hoy:
                     en_curso_por_hora = True
 
-            if es_hoy or en_curso_por_hora:
+            if en_curso_por_hora:
                 res['estado'] = 'EN_CURSO'
                 res['observaciones'] += 'Jornada en curso (falta salida).'
                 return res
