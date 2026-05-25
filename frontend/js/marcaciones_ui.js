@@ -2759,8 +2759,8 @@ async function openCierrePeriodoModal() {
     const diffTime = Math.abs(dFin - dIni);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    if (diffDays > 31) {
-        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (31 días).`, "error");
+    if (diffDays > 30) {
+        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (30 días).`, "error");
     }
 
     const html = `
@@ -2796,7 +2796,7 @@ async function openCierrePeriodoModal() {
                     </div>
                     <div class="modal-footer bg-white border-top">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
-                        <button type="button" class="btn btn-dark fw-bold px-4" id="btn-wizard-next" style="display:none;" onclick="nextWizardStep()">
+                        <button type="button" class="btn btn-dark fw-bold px-4" id="btn-cierre-wizard-next" style="display:none;" onclick="nextWizardStep()">
                             Siguiente Paso <i class="bi bi-arrow-right"></i>
                         </button>
                     </div>
@@ -2816,7 +2816,7 @@ async function openCierrePeriodoModal() {
 
     try {
         const url = `/api/cierre/pre-evaluacion?fecha_inicio=${fIni}&fecha_fin=${fFin}&area=${encodeURIComponent(area)}`;
-        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.token}` } });
+        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.getToken()}` } });
         const data = await resp.json();
         
         if (!resp.ok) throw new Error(data.detail || "Fallo en pre-evaluación");
@@ -2852,7 +2852,7 @@ function renderWizardStep(step) {
     window.cierreWizardState.currentStep = step;
     updateWizardTabs(step);
     const content = document.getElementById('wizard-content');
-    const btnNext = document.getElementById('btn-wizard-next');
+    const btnNext = document.getElementById('btn-cierre-wizard-next');
     const ev = window.cierreWizardState.evaluacion;
 
     if (step === 1) { // Anomalías
@@ -2899,11 +2899,46 @@ function renderWizardStep(step) {
         }
     } else if (step === 3) { // HE Pendientes
         if (ev.he_pendientes > 0) {
-            const list = ev.detalle_he.map(a => `<li>${a.fecha} - ${a.nombre_completo} (${a.minutos_autorizados} min)</li>`).join('');
+            const canApproveHE = typeof AuthService !== 'undefined' && AuthService.hasPermission("marcaciones.horas_extras");
+            const list = ev.detalle_he.map(a => `
+                <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom hover-bg-light">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-clock-fill text-primary me-2"></i>
+                        <div>
+                            <span class="fw-bold text-dark small">${a.fecha}</span>
+                            <span class="mx-2 text-muted">|</span>
+                            <span class="text-secondary small">${a.nombre_completo}</span>
+                            <span class="badge bg-light text-primary border border-primary-subtle ms-2">${a.minutos_bruto} min</span>
+                        </div>
+                    </div>
+                    ${canApproveHE ? `
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-sm btn-outline-success fw-bold py-0 px-2" onclick="cierreResolverHE(${a.empleado_id}, '${a.fecha}', ${a.minutos_bruto}, 'APROBADO')" title="Aprobar esta Hora Extra">
+                            <i class="bi bi-check-lg"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger fw-bold py-0 px-2" onclick="cierreResolverHE(${a.empleado_id}, '${a.fecha}', ${a.minutos_bruto}, 'RECHAZADO')" title="Rechazar esta Hora Extra">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    ` : ''}
+                </li>
+            `).join('');
+
             content.innerHTML = `
-                <h4 class="text-primary fw-bold"><i class="bi bi-exclamation-circle"></i> HARD STOP: Horas Extras Pendientes</h4>
-                <p>Existen <strong>${ev.he_pendientes} registros</strong> de Horas Extras pendientes de aprobación/rechazo.</p>
-                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+                <h4 class="text-primary fw-bold mb-3"><i class="bi bi-exclamation-circle-fill"></i> HARD STOP: Horas Extras Pendientes</h4>
+                <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-primary bg-opacity-10 border border-primary-subtle rounded-3">
+                    <div class="small text-primary-emphasis fw-semibold">
+                        <i class="bi bi-info-circle-fill me-1"></i> Existen <strong>${ev.he_pendientes} registros</strong> pendientes en el periodo seleccionado.
+                    </div>
+                    ${canApproveHE ? `
+                    <button class="btn btn-sm btn-primary fw-bold px-3 shadow-sm" onclick="cierreResolverTodasHE()">
+                        <i class="bi bi-check-all me-1"></i> Aprobar Todas
+                    </button>
+                    ` : ''}
+                </div>
+                <div class="border rounded-3 shadow-sm overflow-hidden" style="max-height:230px; overflow-y:auto; background:#ffffff;">
+                    <ul class="list-unstyled mb-0">${list}</ul>
+                </div>
             `;
             btnNext.style.display = 'none';
         } else {
@@ -2925,7 +2960,7 @@ function renderWizardStep(step) {
                 <p>Hay <strong>${ev.inasistencias_injustificadas} inasistencias</strong>. Si cierra ahora, se consolidarán como inasistencias definitivas sin goce de sueldo.</p>
                 <div class="border rounded p-3 bg-light mb-3" style="max-height:150px; overflow-y:auto;"><ul>${list}</ul></div>
                 <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="chk-aceptar-inasistencias" onchange="window.cierreWizardState.aceptarInasistencias = this.checked; document.getElementById('btn-wizard-next').disabled = !this.checked;">
+                    <input class="form-check-input" type="checkbox" id="chk-aceptar-inasistencias" onchange="window.cierreWizardState.aceptarInasistencias = this.checked; document.getElementById('btn-cierre-wizard-next').disabled = !this.checked;">
                     <label class="form-check-label fw-bold" for="chk-aceptar-inasistencias">
                         Acepto consolidar estas inasistencias.
                     </label>
@@ -2985,9 +3020,91 @@ function nextWizardStep() {
     if (s < 5) renderWizardStep(s + 1);
 }
 
+async function recargarPreEvaluacionCierre() {
+    const s = window.cierreWizardState;
+    const url = `/api/cierre/pre-evaluacion?fecha_inicio=${s.fIni}&fecha_fin=${s.fFin}&area=${encodeURIComponent(s.area)}`;
+    try {
+        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.getToken()}` } });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "Fallo en pre-evaluación");
+        
+        window.cierreWizardState.evaluacion = data;
+        renderWizardStep(s.currentStep);
+        
+        if (typeof loadMarcacionesData === 'function') {
+            loadMarcacionesData();
+        }
+    } catch (e) {
+        showToast("Error al actualizar estado: " + e.message, "error");
+    }
+}
+
+window.cierreResolverHE = async function(empId, fecha, minutos, estado) {
+    try {
+        const res = await fetch('/api/asistencia/aprobar-he-batch/', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AuthService.getToken()}`
+            },
+            body: JSON.stringify([{
+                empleado_id: empId,
+                fecha: fecha,
+                estado: estado,
+                minutos_autorizados: estado === 'APROBADO' ? minutos : 0
+            }])
+        });
+        const data = await res.json();
+        if (data.success || res.ok) {
+            showToast(estado === 'APROBADO' ? '✅ Hora Extra aprobada' : '❌ Hora Extra rechazada', 'success');
+            await recargarPreEvaluacionCierre();
+        } else {
+            showToast('Error: ' + (data.detail || 'Error al procesar'), 'danger');
+        }
+    } catch (e) {
+        showToast('Error de conexión: ' + e.message, 'danger');
+    }
+};
+
+window.cierreResolverTodasHE = async function() {
+    const s = window.cierreWizardState;
+    if (!s.evaluacion || !s.evaluacion.detalle_he || s.evaluacion.detalle_he.length === 0) return;
+    
+    if (!confirm(`¿Está seguro que desea APROBAR todas las horas extras pendientes (${s.evaluacion.detalle_he.length}) de este período?`)) {
+        return;
+    }
+
+    const items = s.evaluacion.detalle_he.map(a => ({
+        empleado_id: a.empleado_id,
+        fecha: a.fecha,
+        estado: 'APROBADO',
+        minutos_autorizados: a.minutos_bruto
+    }));
+
+    try {
+        const res = await fetch('/api/asistencia/aprobar-he-batch/', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AuthService.getToken()}`
+            },
+            body: JSON.stringify(items)
+        });
+        const data = await res.json();
+        if (data.success || res.ok) {
+            showToast(`✅ Aprobadas ${items.length} horas extras exitosamente.`, 'success');
+            await recargarPreEvaluacionCierre();
+        } else {
+            showToast('Error: ' + (data.detail || 'Error al procesar lote'), 'danger');
+        }
+    } catch (e) {
+        showToast('Error de conexión: ' + e.message, 'danger');
+    }
+};
+
 async function confirmarCierreRRHH() {
     const s = window.cierreWizardState;
-    const btn = document.getElementById('btn-wizard-next');
+    const btn = document.getElementById('btn-cierre-wizard-next');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sellando...';
 
@@ -2996,7 +3113,7 @@ async function confirmarCierreRRHH() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AuthService.token}`
+                'Authorization': `Bearer ${AuthService.getToken()}`
             },
             body: JSON.stringify({
                 fecha_inicio: s.fIni,
@@ -3107,7 +3224,7 @@ window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
         const resp = await fetch(`/api/cierre/${id}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${AuthService.token}`
+                'Authorization': `Bearer ${AuthService.getToken()}`
             }
         });
         

@@ -1479,8 +1479,26 @@ window.deleteEmpleado = async (id) => {
 
 // Notification Functions
 window.showToast = function (message, type = 'info') {
-  const toastEl = document.getElementById('liveToast');
-  const toastMessage = document.getElementById('toast-message');
+  let toastEl = document.getElementById('liveToast');
+  let toastMessage = document.getElementById('toast-message');
+  
+  if (!toastEl) {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    container.innerHTML = `
+      <div id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div id="toast-message" class="toast-body fw-semibold"></div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(container);
+    toastEl = document.getElementById('liveToast');
+    toastMessage = document.getElementById('toast-message');
+  }
+
   if (!toastEl || !toastMessage) return;
 
   toastMessage.textContent = message;

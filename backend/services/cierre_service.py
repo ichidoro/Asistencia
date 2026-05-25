@@ -21,9 +21,9 @@ class CierreService:
 
         # ── HARD STOP 1: Horas extras pendientes ──────────────────────────────
         query_he = f"""
-            SELECT he.id, he.fecha,
+            SELECT he.id, he.fecha, he.empleado_id,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   he.minutos_autorizados
+                   he.minutos_bruto, he.minutos_autorizados
             FROM horas_extras he
             JOIN empleados e ON he.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
