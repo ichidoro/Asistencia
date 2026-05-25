@@ -1339,6 +1339,27 @@ class AsistenciaService:
                 idx = marcas_disponibles.index(ancla)
                 tipo_ancla = str(ancla.get('tipo', '') or '').strip().lower()
 
+                # Determine if the current day's shift can cross midnight
+                puede_cruzar = False
+                if asignacion:
+                    tid = asignacion.get('turno_id') or asignacion['id']
+                    if bulk_ctx:
+                        turnos_dict = bulk_ctx.get('turnos', {}).get(tid, {})
+                        for sem, sem_dict in turnos_dict.items():
+                            cfg = sem_dict.get(dia_semana)
+                            if cfg and (cfg.get('cruza_medianoche') or cfg.get('cruza_medianoche_2')):
+                                puede_cruzar = True
+                                break
+                    else:
+                        rows = await db.fetch_all(
+                            "SELECT cruza_medianoche, cruza_medianoche_2 FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
+                            (tid, dia_semana)
+                        )
+                        for r in rows:
+                            if r['cruza_medianoche'] or r['cruza_medianoche_2']:
+                                puede_cruzar = True
+                                break
+
                 if tipo_ancla in _TIPOS_S:
                     # [ITS] Inferencia de Tipo Secuencial:
                     # Antes de declarar "Salida Huérfana", verificamos si el log
@@ -1402,8 +1423,8 @@ class AsistenciaService:
                         else:
                             break
                             
-                    # 2. Si balance > 0, seguir hasta cerrarlo (turno nocturno)
-                    if balance > 0 and ultimo_idx != -1:
+                    # 2. Si balance > 0 y puede cruzar medianoche, seguir hasta cerrarlo (turno nocturno)
+                    if puede_cruzar and balance > 0 and ultimo_idx != -1:
                         for i in range(ultimo_idx + 1, len(marcas_disponibles)):
                             l = marcas_disponibles[i]
                             l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
