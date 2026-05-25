@@ -3566,6 +3566,17 @@ function renderVistaAnalitica(respData, container) {
         return offset;
     };
 
+    const getStickyWidthStyle = (key) => {
+        let w = 0;
+        if (key === 'bonos') w = showBonos ? 65 : 50;
+        else if (key === 'incidencias') w = showIncidencias ? 65 : 50;
+        else if (key === 'he') w = showHE ? 65 : 50;
+        else if (key === 'deudas') w = showDeudas ? 65 : 50;
+        else if (key === 'saldo') w = 70;
+        else if (key === 'bolsa') w = showSaldoMeta ? 72 : 50;
+        return `width:${w}px; min-width:${w}px; max-width:${w}px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
+    };
+
     const tot = visibleRows.reduce((acc,r) => {
         acc.he_bruto+=r.he_bruto; acc.he_apr+=r.he_apr; acc.he_rec+=r.he_rec; acc.he_pend+=r.he_pend;
         acc.d_tot+=r.d_tot; acc.saldo+=r.saldo;
@@ -3580,13 +3591,14 @@ function renderVistaAnalitica(respData, container) {
     let bonosHeadersSub = '';
     if (hasBonos) {
         if (showBonos) {
-            bonosHeadersTop = `<th colspan="${bonosNombres.length}" class="text-start px-2 th-bento th-bento-success sticky-premium-col" style="left:${getStickyLeft('bonos')}px"><i class="bi bi-trophy-fill me-1" style="font-size:0.75rem;color:#10b981"></i><span class="fw-bold">Bonos</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleBonos()" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>`;
+            const bonosTopWidth = bonosNombres.length * 65;
+            bonosHeadersTop = `<th colspan="${bonosNombres.length}" class="text-start px-2 th-bento th-bento-success sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('bonos')}px; width:${bonosTopWidth}px; min-width:${bonosTopWidth}px; max-width:${bonosTopWidth}px;"><i class="bi bi-trophy-fill me-1" style="font-size:0.75rem;color:#10b981"></i><span class="fw-bold">Bonos</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleBonos()" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>`;
             bonosHeadersSub = bonosNombres.map((b, idx) => {
                 const bShort = b.length > 5 ? b.substring(0,4) + '.' : b;
-                return `<th class="text-center px-1 align-middle th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('bonos', idx)}px" title="${b}">${bShort}</th>`;
+                return `<th class="text-center px-1 align-middle th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; width:65px; min-width:65px; max-width:65px; left:${getStickyLeft('bonos', idx)}px" title="${b}">${bShort}</th>`;
             }).join('');
         } else {
-            bonosHeadersTop = `<th rowspan="2" class="align-middle text-center px-1 th-bento th-bento-success sticky-premium-col" style="min-width:50px;left:${getStickyLeft('bonos')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleBonos()" title="Expandir Bonos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-trophy-fill d-block mb-1" style="font-size:0.85rem;color:#10b981"></i><span style="font-size:0.65rem;letter-spacing:0.5px">BONOS</span></th>`;
+            bonosHeadersTop = `<th rowspan="2" class="align-middle text-center px-1 th-bento th-bento-success sticky-premium-col" style="position:sticky; z-index:120; width:50px; min-width:50px; max-width:50px; left:${getStickyLeft('bonos')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleBonos()" title="Expandir Bonos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-trophy-fill d-block mb-1" style="font-size:0.85rem;color:#10b981"></i><span style="font-size:0.65rem;letter-spacing:0.5px">BONOS</span></th>`;
         }
     }
 
@@ -3623,12 +3635,13 @@ function renderVistaAnalitica(respData, container) {
         const empEval = bonosEval[emp.id] || {};
         let bonoCells = '';
         if (hasBonos) {
+            const wStyle = getStickyWidthStyle('bonos');
             if (showBonos) {
                 bonoCells = bonosNombres.map((bName, idx) => {
                     const bRes = empEval[bName];
                     const borderStyle = idx === 0 ? 'border-left:3px solid #10b981' : 'border-left:1px solid #e2e8f0';
                     const cellLeft = getStickyLeft('bonos', idx);
-                    const inlineStyle = `${borderStyle}; left:${cellLeft}px;`;
+                    const inlineStyle = `position:sticky; z-index:40; ${borderStyle}; left:${cellLeft}px; ${wStyle}`;
                     if (!bRes || !bRes.aplica) return `<td class="text-center align-middle sticky-premium-col" style="background:#f8fafc;font-size:0.75rem;${inlineStyle}"></td>`;
                     if (bRes.califica) {
                         return `<td class="text-center align-middle text-success fw-bold sticky-premium-col" style="background:#f8fafc;font-size:1.1rem;${inlineStyle}" title="${bRes.motivo||''}"><i class="bi bi-check-circle-fill"></i></td>`;
@@ -3647,7 +3660,7 @@ function renderVistaAnalitica(respData, container) {
                     }
                 });
                 const cellLeft = getStickyLeft('bonos');
-                const inlineStyle = `left:${cellLeft}px;`;
+                const inlineStyle = `position:sticky; z-index:40; left:${cellLeft}px; ${wStyle}`;
                 if (cntAplica > 0) {
                     const color = cntCalifica === cntAplica ? 'text-success' : (cntCalifica > 0 ? 'text-warning' : 'text-danger');
                     bonoCells = `<td class="text-center align-middle fw-bold ${color} sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981;${inlineStyle}" title="${cntCalifica} cumplidos de ${cntAplica} aplicables">${cntCalifica}/${cntAplica}</td>`;
@@ -3681,7 +3694,7 @@ function renderVistaAnalitica(respData, container) {
         const hasHE = r.he_pend > 0;
         const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
         return `<tr>
-            <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="white-space:nowrap;cursor:pointer;font-size:0.75rem;"
+            <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
                 ondblclick="openBatchApprovalModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
                 title="${hasHE ? '⚡ Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
                 <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
@@ -3689,24 +3702,24 @@ function renderVistaAnalitica(respData, container) {
             </td>
             ${bonoCells}
             ${showIncidencias ? `
-            <td class="text-center align-middle sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;left:${getStickyLeft('incidencias', 0)}px">${r.cnt_per||''}</td>
-            <td class="text-center align-middle sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 1)}px">${r.cnt_atr||''}</td>
-            <td class="text-center align-middle sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 2)}px">${r.cnt_sad||''}</td>
-            <td class="text-center align-middle ${r.cnt_inas>0?'text-danger fw-bold':''} sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 3)}px">${r.cnt_inas||''}</td>
-            <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 4)}px">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
-            <td class="text-center align-middle fw-bold sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 5)}px">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b;left:${getStickyLeft('incidencias')}px">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
+            <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;left:${getStickyLeft('incidencias', 0)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_per||''}</td>
+            <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 1)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_atr||''}</td>
+            <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 2)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_sad||''}</td>
+            <td class="text-center align-middle ${r.cnt_inas>0?'text-danger fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 3)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_inas||''}</td>
+            <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 4)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
+            <td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 5)}px;${getStickyWidthStyle('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b;left:${getStickyLeft('incidencias')}px;${getStickyWidthStyle('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
             ${showHE ? `
-            <td class="text-center align-middle tabular-nums text-warning fw-bold sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeft('he', 0)}px">${r.he_pend>0?_fmtMin(r.he_pend):''}</td>
-            <td class="text-center align-middle tabular-nums text-success fw-bold sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 1)}px">${r.he_apr>0?_fmtMin(r.he_apr):''}</td>
-            <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 2)}px">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
-            <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 3)}px">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeft('he')}px">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
+            <td class="text-center align-middle tabular-nums text-warning fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeft('he', 0)}px;${getStickyWidthStyle('he')}">${r.he_pend>0?_fmtMin(r.he_pend):''}</td>
+            <td class="text-center align-middle tabular-nums text-success fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 1)}px;${getStickyWidthStyle('he')}">${r.he_apr>0?_fmtMin(r.he_apr):''}</td>
+            <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
+            <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 3)}px;${getStickyWidthStyle('he')}">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeft('he')}px;${getStickyWidthStyle('he')}">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
             ${showDeudas ? `
-            <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px">${r.min_col>0?_fmtMin(r.min_col):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 1)}px">${r.min_per>0?_fmtMin(r.min_per):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 2)}px">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 3)}px">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
-            <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 4)}px">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px">${r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
-            <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="background:#f9fafb;font-size:0.8rem;left:${getStickyLeft('saldo')}px">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}">${r.min_col>0?_fmtMin(r.min_col):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}">${r.min_per>0?_fmtMin(r.min_per):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
+            <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
+            <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px;${getStickyWidthStyle('deudas')}">${r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
+            <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#f9fafb;font-size:0.8rem;left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
             ${(hayBolsa) ? (
                 showSaldoMeta
                     ? (r.esBolsa
@@ -3719,15 +3732,15 @@ function renderVistaAnalitica(respData, container) {
                                 ? `Meta original: ${_fmtMin(r.emp._metaOriginalBolsa)} | Descuento por ${r.emp._diasJustificadosBolsa} día(s) justificado(s)`
                                 : `Meta mensual del ciclo`;
 
-                            return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeft('bolsa', 0)}px" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
-                                    <td class="text-center align-middle tabular-nums sticky-premium-col" style="background:#faf5ff;font-size:0.78rem;left:${getStickyLeft('bolsa', 1)}px" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
-                                    <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeft('bolsa', 2)}px" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>`;
+                            return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
+                                    <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
+                                    <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>`;
                         })()
-                        : `<td class="sticky-premium-col" style="background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px"></td>
-                           <td class="sticky-premium-col" style="background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px"></td>
-                           <td class="sticky-premium-col sticky-saldo-col" style="background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px"></td>`
+                        : `<td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}"></td>
+                           <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}"></td>
+                           <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}"></td>`
                       )
-                    : `<td class="sticky-premium-col sticky-saldo-col" style="background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px"></td>`
+                    : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>`
             ) : ''}
             ${dayCells}
         </tr>`;
@@ -3742,41 +3755,41 @@ function renderVistaAnalitica(respData, container) {
         if (showBonos) {
             bonosTotalsCell = bonosNombres.map((bName, idx) => {
                 const borderStyle = idx === 0 ? 'border-left:3px solid #10b981' : 'border-left:1px solid #e2e8f0';
-                return `<td class="sticky-premium-col" style="${borderStyle};left:${getStickyLeft('bonos', idx)}px"></td>`;
+                return `<td class="sticky-premium-col" style="position:sticky; z-index:60; ${borderStyle};left:${getStickyLeft('bonos', idx)}px;${getStickyWidthStyle('bonos')}"></td>`;
             }).join('');
         } else {
-            bonosTotalsCell = `<td class="sticky-premium-col" style="border-left:3px solid #10b981;left:${getStickyLeft('bonos')}px"></td>`;
+            bonosTotalsCell = `<td class="sticky-premium-col" style="position:sticky; z-index:60; border-left:3px solid #10b981;left:${getStickyLeft('bonos')}px;${getStickyWidthStyle('bonos')}"></td>`;
         }
     }
 
     const totalsRow = `<tr class="fw-bold text-center" style="font-size:0.78rem; border-top: 2px solid #e2e8f0; background: #f8fafc;">
-        <td class="sticky-col-analitica text-start ps-2" style="background: #f8fafc; color: #475569; font-weight: 800;">TOTALES</td>
+        <td class="sticky-col-analitica text-start ps-2" style="position:sticky; left:0; z-index:60; background: #f8fafc; color: #475569; font-weight: 800; width:260px; min-width:260px; max-width:260px;">TOTALES</td>
         ${bonosTotalsCell}
         ${showIncidencias ? `
-        <td class="sticky-premium-col" style="border-left:3px solid #f59e0b;left:${getStickyLeft('incidencias', 0)}px">${tot.cnt_per||''}</td>
-        <td class="sticky-premium-col" style="left:${getStickyLeft('incidencias', 1)}px">${tot.cnt_atr||''}</td>
-        <td class="sticky-premium-col" style="left:${getStickyLeft('incidencias', 2)}px">${tot.cnt_sad||''}</td>
-        <td class="sticky-premium-col ${tot.cnt_inas>0?'text-danger':''}" style="left:${getStickyLeft('incidencias', 3)}px">${tot.cnt_inas||''}</td>
-        <td class="sticky-premium-col ${tot.cnt_esp>0?'text-info':''}" style="left:${getStickyLeft('incidencias', 4)}px">${tot.cnt_esp||''}</td>
-        <td class="fw-bold sticky-premium-col" style="left:${getStickyLeft('incidencias', 5)}px">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))||''}</td>` : `<td style="border-left:3px solid #f59e0b; color:#f59e0b;left:${getStickyLeft('incidencias')}px" class="fw-bold sticky-premium-col">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0)) : ''}</td>`}
+        <td class="sticky-premium-col" style="position:sticky; z-index:60; border-left:3px solid #f59e0b;left:${getStickyLeft('incidencias', 0)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_per||''}</td>
+        <td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', 1)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_atr||''}</td>
+        <td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', 2)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_sad||''}</td>
+        <td class="sticky-premium-col ${tot.cnt_inas>0?'text-danger':''}" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', 3)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_inas||''}</td>
+        <td class="sticky-premium-col ${tot.cnt_esp>0?'text-info':''}" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', 4)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_esp||''}</td>
+        <td class="fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', 5)}px;${getStickyWidthStyle('incidencias')}">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))||''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #f59e0b; color:#f59e0b;left:${getStickyLeft('incidencias')}px;${getStickyWidthStyle('incidencias')}" class="fw-bold sticky-premium-col">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0)) : ''}</td>`}
         ${showHE ? `
-        <td style="border-left:3px solid #3b82f6;left:${getStickyLeft('he', 0)}px" class="tabular-nums text-warning sticky-premium-col">${tot.he_pend>0?_fmtMin(tot.he_pend):''}</td>
-        <td class="tabular-nums text-success sticky-premium-col" style="left:${getStickyLeft('he', 1)}px">${tot.he_apr>0?_fmtMin(tot.he_apr):''}</td>
-        <td class="tabular-nums text-danger sticky-premium-col" style="left:${getStickyLeft('he', 2)}px">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
-        <td class="tabular-nums fw-bold sticky-premium-col" style="left:${getStickyLeft('he', 3)}px">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="border-left:3px solid #3b82f6; color:#3b82f6;left:${getStickyLeft('he')}px" class="tabular-nums fw-bold sticky-premium-col">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
+        <td style="position:sticky; z-index:60; border-left:3px solid #3b82f6;left:${getStickyLeft('he', 0)}px;${getStickyWidthStyle('he')}" class="tabular-nums text-warning sticky-premium-col">${tot.he_pend>0?_fmtMin(tot.he_pend):''}</td>
+        <td class="tabular-nums text-success sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('he', 1)}px;${getStickyWidthStyle('he')}">${tot.he_apr>0?_fmtMin(tot.he_apr):''}</td>
+        <td class="tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
+        <td class="tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('he', 3)}px;${getStickyWidthStyle('he')}">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #3b82f6; color:#3b82f6;left:${getStickyLeft('he')}px;${getStickyWidthStyle('he')}" class="tabular-nums fw-bold sticky-premium-col">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
         ${showDeudas ? `
-        <td style="border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px" class="tabular-nums ${tot.min_col>0?'text-muted fw-bold':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
-        <td class="tabular-nums ${tot.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="left:${getStickyLeft('deudas', 1)}px">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
-        <td class="tabular-nums ${tot.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="left:${getStickyLeft('deudas', 2)}px">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
-        <td class="tabular-nums ${tot.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="left:${getStickyLeft('deudas', 3)}px">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
-        <td class="tabular-nums text-muted fw-bold sticky-premium-col" style="left:${getStickyLeft('deudas', 4)}px">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px" class="tabular-nums text-muted fw-bold sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
-        <td class="tabular-nums ${totSClass} sticky-premium-col sticky-saldo-col" style="left:${getStickyLeft('saldo')}px">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
+        <td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}" class="tabular-nums ${tot.min_col>0?'text-muted fw-bold':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
+        <td class="tabular-nums ${tot.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
+        <td class="tabular-nums ${tot.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
+        <td class="tabular-nums ${tot.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
+        <td class="tabular-nums text-muted fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px;${getStickyWidthStyle('deudas')}" class="tabular-nums text-muted fw-bold sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
+        <td class="tabular-nums ${totSClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
         ${(hayBolsa) ? (
             showSaldoMeta
-                ? `<td class="sticky-premium-col" style="background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px"></td>
-                   <td class="sticky-premium-col" style="background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
-                : `<td class="sticky-premium-col sticky-saldo-col" style="background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px"></td>`
+                ? `<td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}"></td>
+                   <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>`
         ) : ''}
         <td colspan="${dates.length}"></td>
     </tr>`;
@@ -3822,39 +3835,47 @@ function renderVistaAnalitica(respData, container) {
     // ── 9. HTML final ────────────────────────────────────────────────────────
     // (hayBolsa y showSaldoMeta ya están definidos arriba, antes de bodyRows)
 
-    const incHeadersTop = showIncidencias ? `<th colspan="6" class="text-start px-2 th-bento th-bento-warning sticky-premium-col" style="left:${getStickyLeft('incidencias')}px"><i class="bi bi-flag-fill me-1" style="font-size:0.75rem;color:#f59e0b"></i><span class="fw-bold">Incidencias</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showIncidencias')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning sticky-premium-col" style="min-width:50px;left:${getStickyLeft('incidencias')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">INCID</span></th>`;
-    const heHeadersTop = showHE ? `<th colspan="4" class="text-start px-2 th-bento th-bento-primary sticky-premium-col" style="left:${getStickyLeft('he')}px"><i class="bi bi-lightning-charge-fill me-1" style="font-size:0.75rem;color:#3b82f6"></i><span class="fw-bold">Horas Extra</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showHE')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-primary sticky-premium-col" style="min-width:50px;left:${getStickyLeft('he')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showHE')" title="Expandir HE"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-lightning-charge-fill d-block mb-1" style="font-size:0.85rem;color:#3b82f6"></i><span style="font-size:0.65rem;letter-spacing:0.5px">HR EX</span></th>`;
-    const deudasHeadersTop = showDeudas ? `<th colspan="5" class="text-start px-2 th-bento th-bento-secondary sticky-premium-col" style="border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px"><i class="bi bi-clock-history me-1" style="font-size:0.75rem;color:#64748b"></i><span class="fw-bold">Tiempo No Trabajado</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-secondary sticky-premium-col" style="border-left:3px solid #64748b;min-width:50px;left:${getStickyLeft('deudas')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Tiempos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-clock-history d-block mb-1" style="font-size:0.85rem;color:#64748b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">NO TRAB</span></th>`;
+    const incHeadersTop = showIncidencias 
+        ? `<th colspan="6" class="text-start px-2 th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:390px; min-width:390px; max-width:390px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-flag-fill me-1" style="font-size:0.75rem;color:#f59e0b"></i><span class="fw-bold">Incidencias</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showIncidencias')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
+        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">INCID</span></th>`;
+    
+    const heHeadersTop = showHE 
+        ? `<th colspan="4" class="text-start px-2 th-bento th-bento-primary sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he')}px; width:260px; min-width:260px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-lightning-charge-fill me-1" style="font-size:0.75rem;color:#3b82f6"></i><span class="fw-bold">Horas Extra</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showHE')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
+        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-primary sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showHE')" title="Expandir HE"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-lightning-charge-fill d-block mb-1" style="font-size:0.85rem;color:#3b82f6"></i><span style="font-size:0.65rem;letter-spacing:0.5px">HR EX</span></th>`;
+    
+    const deudasHeadersTop = showDeudas 
+        ? `<th colspan="5" class="text-start px-2 th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:325px; min-width:325px; max-width:325px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-clock-history me-1" style="font-size:0.75rem;color:#64748b"></i><span class="fw-bold">Tiempo No Trabajado</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
+        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Tiempos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-clock-history d-block mb-1" style="font-size:0.85rem;color:#64748b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">NO TRAB</span></th>`;
 
     // Columna SALDO META — solo visible si hay bolsa flexible en el área
     const saldoMetaHeaderTop = hayBolsa
         ? (showSaldoMeta
-            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.68rem;left:${getStickyLeft('bolsa')}px"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa Flexible</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
-            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="min-width:50px;background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#7c3aed">BOLSA</span></th>`)
+            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.68rem;left:${getStickyLeft('bolsa')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa Flexible</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
+            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#7c3aed">BOLSA</span></th>`)
         : '';
     const saldoMetaHeadersSub = (hayBolsa && showSaldoMeta) ? `
-            <th class="text-center px-1 sticky-premium-col" style="min-width:72px;background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 0)}px" title="Meta mensual del ciclo">META</th>
-            <th class="text-center px-1 sticky-premium-col" style="min-width:72px;background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 1)}px" title="Horas acumuladas en el ciclo">ACUM.</th>
-            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="min-width:72px;background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 2)}px" title="Balance: negativo = falta, positivo = excedió">BALANCE</th>` : '';
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="Meta mensual del ciclo">META</th>
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}" title="Horas acumuladas en el ciclo">ACUM.</th>
+            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}" title="Balance: negativo = falta, positivo = excedió">BALANCE</th>` : '';
 
     const incHeadersSub = showIncidencias ? `
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('incidencias', 0)}px" title="Días con permiso">PERM</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('incidencias', 1)}px" title="Días con atraso">ATR</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('incidencias', 2)}px" title="Días con salida adelantada">S.ADL</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('incidencias', 3)}px" title="Inasistencias">INA</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('incidencias', 4)}px" title="Jornadas especiales">J.ESP</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('incidencias', 5)}px" title="Total incidencias">TOT</th>` : '';
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 0)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PERM</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 1)}px;${getStickyWidthStyle('incidencias')}" title="Días con atraso">ATR</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 2)}px;${getStickyWidthStyle('incidencias')}" title="Días con salida adelantada">S.ADL</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 3)}px;${getStickyWidthStyle('incidencias')}" title="Inasistencias">INA</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 4)}px;${getStickyWidthStyle('incidencias')}" title="Jornadas especiales">J.ESP</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 5)}px;${getStickyWidthStyle('incidencias')}" title="Total incidencias">TOT</th>` : '';
     const heHeadersSub = showHE ? `
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('he', 0)}px" title="HE pendientes por revisar">PEND</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('he', 1)}px" title="HE aprobadas por jefe">APR ✅</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('he', 2)}px" title="HE rechazadas">RECH ❌</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('he', 3)}px" title="Total HE brutas calculadas">TOT</th>` : '';
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 0)}px;${getStickyWidthStyle('he')}" title="HE pendientes por revisar">PEND</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 1)}px;${getStickyWidthStyle('he')}" title="HE aprobadas por jefe">APR ✅</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}" title="HE rechazadas">RECH ❌</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 3)}px;${getStickyWidthStyle('he')}" title="Total HE brutas calculadas">TOT</th>` : '';
     const deudasHeadersSub = showDeudas ? `
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('deudas', 0)}px" title="Exceso colación (disponible tras nuevo motor)">COL</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('deudas', 1)}px" title="Permisos biométricos sin validar">PER</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('deudas', 2)}px" title="Minutos de atraso">ATR</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('deudas', 3)}px" title="Minutos salida adelantada">S.ADL</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="min-width:65px;left:${getStickyLeft('deudas', 4)}px" title="Total deuda acumulada">TOT</th>` : '';
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}" title="Exceso colación (disponible tras nuevo motor)">COL</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}" title="Permisos biométricos sin validar">PER</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}" title="Minutos de atraso">ATR</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}" title="Minutos salida adelantada">S.ADL</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}" title="Total deuda acumulada">TOT</th>` : '';
 
     container.innerHTML = `
     ${sw}
@@ -3862,12 +3883,12 @@ function renderVistaAnalitica(respData, container) {
     <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
         <tr class="text-center" style="background:#f8f9fa;font-size:0.68rem">
-            <th rowspan="2" class="sticky-col-analitica align-middle text-start ps-2" style="white-space:nowrap;z-index:110;background:#f8f9fa">Empleado</th>
+            <th rowspan="2" class="sticky-col-analitica align-middle text-start ps-2" style="position:sticky; left:0; z-index:120; white-space:nowrap; background:#f8f9fa; width:260px; min-width:260px; max-width:260px;">Empleado</th>
             ${bonosHeadersTop}
             ${incHeadersTop}
             ${heHeadersTop}
             ${deudasHeadersTop}
-            <th rowspan="2" class="align-middle text-start px-2 sticky-premium-col sticky-saldo-col" style="min-width:70px;background:#f0fdf4;left:${getStickyLeft('saldo')}px">Saldo<br>Neto</th>
+            <th rowspan="2" class="align-middle text-start px-2 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#f0fdf4;left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">Saldo<br>Neto</th>
             ${saldoMetaHeaderTop}
             <th colspan="${dates.length}" class="text-start px-2" style="background:#f0f7ff">Días del período</th>
         </tr>

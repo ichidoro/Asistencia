@@ -2866,6 +2866,11 @@ tfoot .sticky-col-analitica {
     font-size: 0.78rem;
     transition: color 0.15s ease;
     cursor: pointer;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
 }
 
 .matrix-table-premium .emp-name-link:hover {
@@ -2879,6 +2884,11 @@ tfoot .sticky-col-analitica {
     font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.4px;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
 }
 
 /* ── 9. TABLE ROWS ─────────────────────────────────────────── */
