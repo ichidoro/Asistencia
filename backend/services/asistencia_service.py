@@ -1336,9 +1336,6 @@ class AsistenciaService:
             )
 
             if ancla:
-                idx = marcas_disponibles.index(ancla)
-                tipo_ancla = str(ancla.get('tipo', '') or '').strip().lower()
-
                 # Determine if the current day's shift can cross midnight
                 puede_cruzar = False
                 if asignacion:
@@ -1359,6 +1356,12 @@ class AsistenciaService:
                             if r['cruza_medianoche'] or r['cruza_medianoche_2']:
                                 puede_cruzar = True
                                 break
+
+                if not puede_cruzar:
+                    marcas_disponibles = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
+
+                idx = marcas_disponibles.index(ancla)
+                tipo_ancla = str(ancla.get('tipo', '') or '').strip().lower()
 
                 if tipo_ancla in _TIPOS_S:
                     # [ITS] Inferencia de Tipo Secuencial:
