@@ -2826,6 +2826,38 @@ tfoot .sticky-col-analitica {
     background: #eef2ff !important;
 }
 
+/* New advanced sticky columns system */
+.sticky-premium-col {
+    position: sticky !important;
+    z-index: 40;
+    background-color: #ffffff;
+    transition: background-color 0.12s ease;
+}
+
+.matrix-table-premium tbody tr:nth-child(even) .sticky-premium-col {
+    background-color: #f8fafc !important;
+}
+
+.matrix-table-premium tbody tr:hover .sticky-premium-col {
+    background-color: #eef2ff !important;
+}
+
+.matrix-table-premium thead th.sticky-premium-col {
+    z-index: 120 !important;
+    background-color: #f8f9fa !important;
+}
+
+.matrix-table-premium tfoot td.sticky-premium-col {
+    z-index: 60 !important;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+}
+
+/* Separation border and shadow on the right-most sticky column (Saldo Neto) */
+.sticky-saldo-col {
+    box-shadow: 4px 0 8px rgba(0, 0, 0, 0.08);
+    border-right: 2px solid #cbd5e1 !important;
+}
+
 /* ── 8. EMPLOYEE NAME STYLING ──────────────────────────────── */
 .matrix-table-premium .emp-name-link {
     color: #1e293b;
