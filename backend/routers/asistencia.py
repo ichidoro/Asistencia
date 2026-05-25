@@ -823,6 +823,20 @@ async def reproceso_masivo_async(
             }
         )
     
+    # Si se especificó una área final, verificar si el rango completo está cerrado
+    if area_final:
+        db = service.repository.db
+        q_closed = """
+            SELECT id FROM cierres_periodos
+            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+        """
+        closed = await db.fetch_one(q_closed, (area_final, fecha_inicio, fecha_fin))
+        if closed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"No se puede iniciar el reproceso. El período solicitado ya se encuentra cerrado para el área '{area_final}'."
+            )
+
     # Adquirir el lock ANTES de lanzar el background task (se libera en el finally del Worker)
     await _reproceso_lock.acquire()
     
@@ -1520,9 +1534,41 @@ async def agregar_marcaciones_masivas(
     if not current_user.alcance_global and emp.area not in (current_user.areas or []):
         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
 
+    db = service.repository.db
+    # ── Blindaje de Cierre ──
+    q_areas = """
+        SELECT DISTINCT a.nombre as area_nombre
+        FROM historial_areas ha
+        JOIN areas a ON ha.area_id = a.id
+        WHERE ha.empleado_id = ? AND ha.validado = 1
+          AND ha.fecha_desde <= ? AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ha.fecha_hasta >= ?)
+    """
+    areas_rows = await db.fetch_all(q_areas, (empleado_id, fecha_fin, fecha_inicio))
+    emp_areas = [r['area_nombre'] for r in areas_rows]
+    
+    if emp.area and emp.area not in emp_areas:
+        emp_areas.append(emp.area)
+        
+    if emp_areas:
+        placeholders = ",".join(["?"] * len(emp_areas))
+        q_closure_check = f"""
+            SELECT area, fecha_inicio, fecha_fin 
+            FROM cierres_periodos
+            WHERE area IN ({placeholders})
+              AND fecha_inicio <= ?
+              AND fecha_fin >= ?
+            LIMIT 1
+        """
+        params = tuple(emp_areas) + (fecha_fin, fecha_inicio)
+        closed_overlap = await db.fetch_one(q_closure_check, params)
+        if closed_overlap:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Operación denegada. El rango solicitado contiene días cerrados para el área '{closed_overlap['area']}' (Periodo cerrado: {closed_overlap['fecha_inicio']} a {closed_overlap['fecha_fin']})."
+            )
+
     try:
         import hashlib
-        db = service.repository.db
         start_date = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         end_date   = datetime.strptime(fecha_fin,   "%Y-%m-%d")
 
@@ -1686,6 +1732,10 @@ async def actualizar_tramos(
     
     if not current_user.alcance_global and emp.area not in (current_user.areas or []):
          raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    # Blindaje de Cierre
+    if await service.is_fecha_cerrada_empleado(empleado_id, fecha):
+         raise HTTPException(status_code=403, detail="El periodo correspondiente a esta fecha se encuentra cerrado y no admite modificaciones.")
 
     try:
         db = service.repository.db

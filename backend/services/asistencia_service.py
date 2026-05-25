@@ -1146,6 +1146,17 @@ class AsistenciaService:
         """
         db = self.repository.db
 
+        # Validar si el día está cerrado
+        is_closed = False
+        if bulk_ctx and 'closed_dates' in bulk_ctx:
+            is_closed = fecha in bulk_ctx['closed_dates']
+        else:
+            is_closed = await self.is_fecha_cerrada_empleado(empleado_id, fecha)
+            
+        if is_closed:
+            logger.warning(f"🚫 Intento de procesar día cerrado: emp {empleado_id}, fecha {fecha}. Retornando registro existente.")
+            return await self.repository.get_asistencia(empleado_id, fecha)
+
         # Validar período legal de empleo
         if bulk_ctx:
             emp_info = bulk_ctx.get('empleados', {}).get(empleado_id)

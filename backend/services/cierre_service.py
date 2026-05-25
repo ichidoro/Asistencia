@@ -26,7 +26,9 @@ class CierreService:
                    he.minutos_autorizados
             FROM horas_extras he
             JOIN empleados e ON he.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND he.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'PENDIENTE'
@@ -45,7 +47,9 @@ class CierreService:
                    ar.nombre AS area
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'ANOMALIA'
@@ -73,7 +77,9 @@ class CierreService:
                    ar.nombre AS area
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'EN_CURSO'
@@ -99,7 +105,9 @@ class CierreService:
                    ar.nombre AS area
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'INASISTENCIA'
@@ -125,7 +133,9 @@ class CierreService:
                 SUM(CASE WHEN a.estado = 'ANOMALIA' THEN 1 ELSE 0 END)                             AS anomalias
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
             {filtro_area}
@@ -141,7 +151,9 @@ class CierreService:
                    COUNT(*) AS he_count
             FROM horas_extras he
             JOIN empleados e ON he.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND he.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'APROBADO'
@@ -216,11 +228,18 @@ class CierreService:
                 f"Debe aceptarlas explícitamente para continuar."
             )
 
-        # Validar que no exista ya un cierre para ese periodo y área
-        check_query = "SELECT id FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area = ?"
-        existe = await self.db.fetch_one(check_query, (fecha_inicio, fecha_fin, area))
-        if existe:
-            raise ValueError("El periodo seleccionado ya se encuentra cerrado para esta área.")
+        # Validar que no exista solapamiento de periodos cerrados para esta área
+        overlap_query = """
+            SELECT id, fecha_inicio, fecha_fin FROM cierres_periodos 
+            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+            LIMIT 1
+        """
+        solapamiento = await self.db.fetch_one(overlap_query, (area, fecha_fin, fecha_inicio))
+        if solapamiento:
+            raise ValueError(
+                f"El periodo seleccionado se solapa con un periodo ya cerrado para esta área "
+                f"({solapamiento['fecha_inicio']} al {solapamiento['fecha_fin']})."
+            )
 
         # Determinar tipo de cierre según rol
         tipo_cierre = "SUPER_ADMIN" if user.get("rol_global") == 1 else "JEFE_AREA"

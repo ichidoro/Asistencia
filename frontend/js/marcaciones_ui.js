@@ -3030,6 +3030,9 @@ async function openHistorialCierresModal() {
         const resp = await fetch('/api/asistencia/periodo-rrhh/historial/');
         const historial = await resp.json();
 
+        const user = AuthService.getUser();
+        const isSuperAdmin = user && (user.alcance_global === true || user.alcance_global === 1);
+
         const html = `
             <div class="modal fade" id="modal-historial-cierres" tabindex="-1">
                 <div class="modal-dialog modal-lg">
@@ -3044,19 +3047,29 @@ async function openHistorialCierresModal() {
                                     <thead class="table-light">
                                         <tr class="small text-uppercase">
                                             <th>Periodo</th>
+                                            <th>Área</th>
                                             <th>Fecha Registro</th>
                                             <th>Usuario</th>
                                             <th>Comentarios</th>
+                                            ${isSuperAdmin ? '<th>Acciones</th>' : ''}
                                         </tr>
                                     </thead>
                                     <tbody class="align-middle">
-                                        ${historial.length === 0 ? '<tr><td colspan="4" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>' : 
+                                        ${historial.length === 0 ? `<tr><td colspan="${isSuperAdmin ? '6' : '5'}" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>` : 
                                             historial.map(c => `
                                             <tr>
                                                 <td><span class="badge bg-info-subtle text-info border border-info-subtle">${c.fecha_inicio} al ${c.fecha_fin}</span></td>
-                                                <td class="small">${new Date(c.fecha_cierre).toLocaleString('es-ES')}</td>
-                                                <td><i class="bi bi-person-circle me-1"></i> ${c.usuario_cierre}</td>
-                                                <td class="small text-muted italic">${c.comentario || '--'}</td>
+                                                <td><span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">${c.area || 'Todas'}</span></td>
+                                                <td class="small">${new Date(c.created_at || c.fecha_cierre).toLocaleString('es-ES')}</td>
+                                                <td><i class="bi bi-person-circle me-1"></i> ${c.username || c.usuario_cierre || 'N/A'}</td>
+                                                <td class="small text-muted italic">${c.comentarios || c.comentario || '--'}</td>
+                                                ${isSuperAdmin ? `
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-danger fw-bold py-0" onclick="reabrirPeriodo(${c.id}, '${c.fecha_inicio}', '${c.fecha_fin}', '${c.area}')">
+                                                            <i class="bi bi-unlock-fill"></i> Reabrir
+                                                        </button>
+                                                    </td>
+                                                ` : ''}
                                             </tr>
                                             `).join('')
                                         }
@@ -3084,6 +3097,34 @@ async function openHistorialCierresModal() {
         showToast("Error al cargar historial", "error");
     }
 }
+
+window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
+    if (!confirm(`¿Está seguro que desea reabrir el período cerrado del ${fechaInicio} al ${fechaFin} para el área "${area}"?\n\nEsta acción eliminará el bloqueo y permitirá modificaciones/recálculos.`)) {
+        return;
+    }
+    
+    try {
+        const resp = await fetch(`/api/cierre/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${AuthService.token}`
+            }
+        });
+        
+        const res = await resp.json();
+        if (resp.ok) {
+            showToast("✅ Periodo reabierto con éxito", "success");
+            const m = bootstrap.Modal.getInstance(document.getElementById('modal-historial-cierres'));
+            if (m) m.hide();
+            loadMarcacionesData();
+        } else {
+            showToast("Error: " + (res.detail || "No se pudo reabrir el periodo"), "error");
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Error de conexión al reabrir periodo", "error");
+    }
+};
 
 
 /* ==========================================

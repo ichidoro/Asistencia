@@ -148,9 +148,21 @@ async def acta_resumen(
     try:
         params_area = []
         filtro_area = ""
-        joins_area = ""
+        joins_area_asis = ""
+        joins_area_he = ""
         if area and area != 'Todas':
-            joins_area = "LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1\\n            LEFT JOIN areas a ON ha.area_id = a.id"
+            joins_area_asis = """
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                    AND a.fecha >= ha.fecha_desde
+                    AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+                LEFT JOIN areas a ON ha.area_id = a.id
+            """
+            joins_area_he = """
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                    AND he.fecha >= ha.fecha_desde
+                    AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
+                LEFT JOIN areas a ON ha.area_id = a.id
+            """
             filtro_area = " AND a.nombre = ?"
             params_area = [area]
 
@@ -172,7 +184,7 @@ async def acta_resumen(
                 SUM(CASE WHEN a.estado = 'EN_CURSO' THEN 1 ELSE 0 END)                               AS en_curso
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            {joins_area}
+            {joins_area_asis}
             WHERE a.fecha BETWEEN ? AND ?
             {filtro_area}
         """
@@ -189,7 +201,7 @@ async def acta_resumen(
                 t.nombre AS turno_nombre
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            {joins_area}
+            {joins_area_asis}
             LEFT JOIN asignacion_turnos at2 ON at2.empleado_id = e.id
                 AND ? BETWEEN at2.fecha_inicio AND COALESCE(at2.fecha_fin, '2099-12-31')
             LEFT JOIN turnos t ON t.id = at2.turno_id
@@ -209,7 +221,7 @@ async def acta_resumen(
                 he.estado
             FROM horas_extras he
             JOIN empleados e ON he.empleado_id = e.id
-            {joins_area}
+            {joins_area_he}
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'APROBADO'
             {filtro_area}
@@ -236,7 +248,7 @@ async def acta_resumen(
                    a.estado
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
-            {joins_area}
+            {joins_area_asis}
             WHERE a.fecha BETWEEN ? AND ?
               AND a.estado = 'INASISTENCIA'
             {filtro_area}
