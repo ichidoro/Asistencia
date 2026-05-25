@@ -4356,7 +4356,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             };
             let hr_ent = e.hora_entrada_real;
             let ht_ent = e.hora_entrada_teorica;
-            if (hr_ent && ht_ent) {
+            const esAncladoEntrada = e.observaciones && e.observaciones.includes("dentro del anclaje");
+            if (hr_ent && ht_ent && !esAncladoEntrada) {
                 let diff = timeToMins(ht_ent) - timeToMins(hr_ent);
                 if (diff > 0) {
                     txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Ingreso Anticipado:</span> <span style="font-family:monospace;font-weight:700;">${valMins(diff, 'var(--success-color, #10b981)')}</span></div>`);
@@ -4364,7 +4365,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             }
             let hr_sal = e.hora_salida_real;
             let ht_sal = e.hora_salida_teorica;
-            if (hr_sal && ht_sal) {
+            const esAncladoSalida = e.observaciones && e.observaciones.includes("Salida dentro del anclaje");
+            if (hr_sal && ht_sal && !esAncladoSalida) {
                 let diff = timeToMins(hr_sal) - timeToMins(ht_sal);
                 if (diff > 0) {
                     txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Salida Posterior:</span> <span style="font-family:monospace;font-weight:700;">${valMins(diff, 'var(--success-color, #10b981)')}</span></div>`);
