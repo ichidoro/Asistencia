@@ -409,14 +409,14 @@ class AsistenciaRepository:
     async def check_fecha_cerrada(self, fecha: str, empleado_id: int = None) -> bool:
         """
         Verifica si una fecha pertenece a un periodo cerrado.
-        Si se provee empleado_id, valida especÃ­ficamente si SU segmento estÃ¡ cerrado.
+        Si se provee empleado_id, valida específicamente si SU área está cerrada.
         """
         if not empleado_id:
             query = "SELECT COUNT(*) as count FROM cierres_periodos WHERE ? BETWEEN fecha_inicio AND fecha_fin"
             res = await self.db.fetch_one(query, (fecha,))
             return res['count'] > 0 if res else False
 
-        # Caso EspecÃ­fico por Empleado (Verifica Ãrea y Turno en esa fecha)
+        # Caso Específico por Empleado (Verifica Área en esa fecha)
         query = """
             SELECT COUNT(*) as count 
             FROM cierres_periodos cp
@@ -431,29 +431,21 @@ class AsistenciaRepository:
                     LIMIT 1
                 )
             )
-            AND (
-                cp.turno_id IS NULL
-                OR cp.turno_id = (
-                    SELECT a.turno_asignado_id FROM asistencias a
-                    WHERE a.empleado_id = ? AND a.fecha = ?
-                    LIMIT 1
-                )
-            )
         """
-        res = await self.db.fetch_one(query, (fecha, empleado_id, fecha, empleado_id, fecha))
+        res = await self.db.fetch_one(query, (fecha, empleado_id, fecha))
         return res['count'] > 0 if res else False
 
     async def check_rango_cerrado(self, fecha_inicio: str, fecha_fin: str, empleado_id: int = None) -> bool:
         """
         Verifica si un rango de fechas se superpone con un periodo cerrado.
-        Si se provee empleado_id, valida especÃ­ficamente si SU segmento estÃ¡ cerrado.
+        Si se provee empleado_id, valida específicamente si SU área está cerrada.
         """
         if not empleado_id:
             query = "SELECT COUNT(*) as count FROM cierres_periodos WHERE fecha_inicio <= ? AND fecha_fin >= ?"
             res = await self.db.fetch_one(query, (fecha_fin, fecha_inicio))
             return res['count'] > 0 if res else False
 
-        # Caso EspecÃ­fico por Empleado (Verifica Ãrea y Turno)
+        # Caso Específico por Empleado (Verifica Área)
         query = """
             SELECT COUNT(*) as count 
             FROM cierres_periodos cp
@@ -468,16 +460,8 @@ class AsistenciaRepository:
                     LIMIT 1
                 )
             )
-            AND (
-                cp.turno_id IS NULL
-                OR cp.turno_id IN (
-                    SELECT DISTINCT a.turno_id FROM asignacion_turnos a
-                    WHERE a.empleado_id = ? 
-                    AND a.fecha_inicio <= ? AND (a.fecha_fin IS NULL OR a.fecha_fin >= ?)
-                )
-            )
         """
-        res = await self.db.fetch_one(query, (fecha_fin, fecha_inicio, empleado_id, empleado_id, fecha_fin, fecha_inicio))
+        res = await self.db.fetch_one(query, (fecha_fin, fecha_inicio, empleado_id))
         return res['count'] > 0 if res else False
 
     async def delete_before_date(self, empleado_id: int, start_date: date) -> int:

@@ -28,6 +28,15 @@ async def evaluar_cierre(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
 ):
     try:
+        if not area or area == 'Todas' or area.strip() == '':
+            raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
+            
+        d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
+        diff_days = (d_fin - d_ini).days + 1
+        if diff_days > 31:
+            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 31 días.")
+
         service = CierreService(db)
         if not current_user.check_area_access(area):
             raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
@@ -48,6 +57,15 @@ async def ejecutar_cierre(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
 ):
     try:
+        if not req.area or req.area == 'Todas' or req.area.strip() == '':
+            raise HTTPException(status_code=400, detail="Debe seleccionar un área específica.")
+            
+        d_ini = datetime.strptime(req.fecha_inicio, "%Y-%m-%d")
+        d_fin = datetime.strptime(req.fecha_fin, "%Y-%m-%d")
+        diff_days = (d_fin - d_ini).days + 1
+        if diff_days > 31:
+            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 31 días.")
+
         service = CierreService(db)
         if not current_user.check_area_access(req.area):
             raise HTTPException(status_code=403, detail="No tienes permisos sobre esta área.")
@@ -70,6 +88,47 @@ async def ejecutar_cierre(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete(
+    "/{cierre_id}",
+    summary="Reabrir un periodo cerrado (Solo Super Admin)"
+)
+async def reabrir_cierre(
+    cierre_id: int,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.cierre_periodo"))
+):
+    try:
+        if not current_user.alcance_global:
+            raise HTTPException(status_code=403, detail="Operación exclusiva para Administradores Generales (Super Admin).")
+            
+        service = CierreService(db)
+        # Verificar que el cierre exista
+        cierre = await db.fetch_one("SELECT * FROM cierres_periodos WHERE id = ?", (cierre_id,))
+        if not cierre:
+            raise HTTPException(status_code=404, detail="Registro de cierre no encontrado.")
+            
+        # Registrar en auditoría
+        await db.execute(
+            "INSERT INTO auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+            (
+                current_user.user_id,
+                current_user.username,
+                "REAPERTURA_PERIODO",
+                "Cierre",
+                f"Período reabierto (eliminado cierre id {cierre_id}): {cierre['fecha_inicio']} a {cierre['fecha_fin']} para área '{cierre['area']}'."
+            )
+        )
+        
+        # Eliminar el registro
+        await db.execute("DELETE FROM cierres_periodos WHERE id = ?", (cierre_id,))
+        return {"success": True, "message": "Periodo reabierto exitosamente."}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get(
     "/acta-resumen",

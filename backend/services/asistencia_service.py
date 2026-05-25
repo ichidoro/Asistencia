@@ -78,6 +78,12 @@ class AsistenciaService:
         from backend.repositories.hora_extra import HoraExtraRepository
         self.he_repo = HoraExtraRepository(repository.db)
 
+    async def is_fecha_cerrada_empleado(self, empleado_id: int, fecha: str) -> bool:
+        """
+        Verifica si la fecha dada está cerrada para el área del empleado.
+        """
+        return await self.repository.check_fecha_cerrada(fecha, empleado_id)
+
     # ─────────────────────────────────────────────────────────────────────────
     # HELPERS
     # ─────────────────────────────────────────────────────────────────────────
@@ -455,6 +461,51 @@ class AsistenciaService:
         if not emp_row:
             return {'error': 'Empleado no encontrado'}
 
+        # Pre-cargar periodos cerrados para el empleado
+        q_areas = """
+            SELECT ha.fecha_desde, ha.fecha_hasta, a.nombre as area_nombre
+            FROM historial_areas ha
+            JOIN areas a ON ha.area_id = a.id
+            WHERE ha.empleado_id = ? AND ha.validado = 1
+        """
+        areas_rows = await db.fetch_all(q_areas, (empleado_id,))
+        emp_areas_history = [dict(r) for r in areas_rows]
+
+        emp_area_actual_row = await db.fetch_one("""
+            SELECT a.nombre as area_nombre 
+            FROM empleados e 
+            LEFT JOIN areas a ON e.area_id = a.id 
+            WHERE e.id = ?
+        """, (empleado_id,))
+        emp_area_actual = emp_area_actual_row['area_nombre'] if emp_area_actual_row else None
+
+        closures_rows = await db.fetch_all("""
+            SELECT fecha_inicio, fecha_fin, area 
+            FROM cierres_periodos 
+            WHERE fecha_inicio <= ? AND fecha_fin >= ?
+        """, (fecha_fin, fecha_inicio))
+        closures = [dict(r) for r in closures_rows]
+
+        closed_dates = set()
+        curr_d = start
+        while curr_d <= end:
+            curr_str = curr_d.strftime("%Y-%m-%d")
+            emp_area = None
+            for ha in emp_areas_history:
+                desde = ha['fecha_desde']
+                hasta = ha['fecha_hasta']
+                if desde <= curr_str and (not hasta or curr_str <= hasta):
+                    emp_area = ha['area_nombre']
+                    break
+            if not emp_area:
+                emp_area = emp_area_actual
+            if emp_area:
+                for cl in closures:
+                    if cl['area'] == emp_area and cl['fecha_inicio'] <= curr_str <= cl['fecha_fin']:
+                        closed_dates.add(curr_str)
+                        break
+            curr_d += timedelta(days=1)
+
         q_asig = """
             SELECT t.*, a.empleado_id, a.fecha_inicio as asignacion_desde, a.fecha_fin as asig_fecha_fin
             FROM turnos t
@@ -701,6 +752,23 @@ class AsistenciaService:
             ayer_str = (current - timedelta(days=1)).strftime("%Y-%m-%d")
             day_index += 1
 
+            # Bloqueo: saltar días cerrados
+            if fecha_str in closed_dates:
+                existing_day = asistencias_map.get(fecha_str)
+                if existing_day and existing_day.get('num_semana_ganadora'):
+                    rotativo_last_sem_dict[empleado_id] = existing_day['num_semana_ganadora']
+                
+                if job_id:
+                    _update_job(job_id,
+                        current_day=fecha_str,
+                        day_index=day_index,
+                        pct=round(day_index / total_days * 100),
+                    )
+                stats['sin_cambio'] += 1
+                stats['procesados'] += 1
+                current += timedelta(days=1)
+                continue
+
             # Actualizar progreso en registry
             if job_id:
                 _update_job(job_id,
@@ -737,7 +805,8 @@ class AsistenciaService:
                 'feriados': feriados_dict,
                 'periodos_empleo': {empleado_id: periodos},
                 'first_assignments': {empleado_id: first_assignment},
-                'rotativo_last_sem_dict': rotativo_last_sem_dict
+                'rotativo_last_sem_dict': rotativo_last_sem_dict,
+                'closed_dates': closed_dates
             }
 
             try:
