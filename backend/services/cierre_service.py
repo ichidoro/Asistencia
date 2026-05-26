@@ -308,4 +308,47 @@ class CierreService:
         except Exception as e_close_rrhh:
             logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh: {e_close_rrhh}")
 
+        # Generar Excel oficial del periodo y área y enviar por email a RRHH
+        try:
+            from backend.repositories.asistencia import AsistenciaRepository
+            from backend.services.asistencia_service import AsistenciaService
+            from backend.services.report_service import ReportService
+            from backend.repositories.configuracion import ConfiguracionRepository
+            from backend.services.configuracion_service import ConfiguracionService
+            from backend.services.notification_service import NotificationService
+
+            logger.info(f"📬 Generando reporte Excel de cierre para área '{area}' en el rango {fecha_inicio} a {fecha_fin}...")
+            asistencia_repo = AsistenciaRepository(self.db)
+            asistencia_service = AsistenciaService(asistencia_repo)
+            report_service = ReportService(asistencia_service)
+            
+            excel_file = await report_service.generate_excel_report(fecha_inicio, fecha_fin, area)
+            if excel_file:
+                excel_bytes = excel_file.getvalue()
+                
+                config_repo = ConfiguracionRepository(self.db)
+                config_service = ConfiguracionService(config_repo)
+                recipients = await config_service.get_destinatarios_rrhh(area)
+                
+                if recipients:
+                    logger.info(f"📧 Enviando email de notificación de cierre a {recipients}...")
+                    notification_service = NotificationService()
+                    await notification_service.send_cierre_email(
+                        area=area,
+                        fecha_inicio=fecha_inicio,
+                        fecha_fin=fecha_fin,
+                        user_name=user.get("username", "sistema"),
+                        tipo_cierre=tipo_cierre,
+                        resumen=evaluacion.get("resumen", {}),
+                        excel_content=excel_bytes,
+                        recipients=recipients
+                    )
+                else:
+                    logger.warning(f"⚠️ No hay destinatarios configurados para recibir la notificación de cierre de área '{area}'.")
+            else:
+                logger.error("❌ No se pudo generar el reporte Excel de cierre (generate_excel_report retornó None).")
+        except Exception as e_email:
+            logger.error(f"❌ Error al generar o enviar el correo de cierre con Excel adjunto: {e_email}")
+
         return {"success": True, "message": "Periodo cerrado exitosamente.", "tipo_cierre": tipo_cierre}
+

@@ -478,10 +478,9 @@ async def simulate_full_generation():
         ws.row_dimensions[6].height = 25
         ws.row_dimensions[7].height = 25
         
-        # Congelar paneles
-        num_static_cols = 4 + len(lista_bonos) + 6 + 4 + 5 + 1 + (3 if hay_bolsa else 0)
-        freeze_cell = f"{get_column_letter(num_static_cols + 1)}8"
-        ws.freeze_panes = freeze_cell
+        # Congelar paneles: Inmovilizamos únicamente las primeras 4 columnas de identificación (A-D: Identificador, RUT, Empleado, Activo)
+        # Esto permite que todas las columnas de métricas, resumen y calendario diario se desplacen horizontalmente sin bloquear el scroll.
+        ws.freeze_panes = 'E8'
         
         # Escribir filas de datos
         current_row = 8

@@ -22,25 +22,30 @@ class NotificationService:
         self.email_from = email_from or settings.EMAIL_FROM
         self.enabled = settings.FEATURE_NOTIFICACIONES_EMAIL
 
-    async def _send_email(self, to_emails: List[str], subject: str, html_content: str, images: List[dict] = []):
+    async def _send_email(self, to_emails: List[str], subject: str, html_content: str, images: List[dict] = [], attachments: List[dict] = []):
         """
-        Método interno para envío de email vía SMTP con soporte para imágenes embebidas.
+        Método interno para envío de email vía SMTP con soporte para imágenes embebidas y archivos adjuntos.
         images: Lista de dicts {'cid': 'logo', 'path': 'path/to/img.jpg'}
+        attachments: Lista de dicts {'filename': 'file.xlsx', 'content': bytes}
         """
         if not self.enabled or not self.smtp_server:
             logger.warning("Notificaciones de email desactivadas o SMTP no configurado.")
             return False
 
         try:
-            # Usar 'related' para permitir imágenes embebidas
-            msg = MIMEMultipart('related')
+            # Usar 'mixed' como contenedor raíz cuando hay adjuntos
+            msg = MIMEMultipart('mixed')
             msg['From'] = self.email_from
             msg['To'] = ", ".join(to_emails)
             msg['Subject'] = subject
 
-            # Parte alternativa para HTML y Texto
+            # Contenedor 'related' para HTML e imágenes incrustadas (inline)
+            msg_related = MIMEMultipart('related')
+            msg.attach(msg_related)
+
+            # Contenedor 'alternative' para HTML y texto
             msg_alternative = MIMEMultipart('alternative')
-            msg.attach(msg_alternative)
+            msg_related.attach(msg_alternative)
 
             # Adjuntar HTML
             msg_alternative.attach(MIMEText(html_content, 'html'))
@@ -58,9 +63,18 @@ class NotificationService:
                         img = MIMEImage(f.read())
                         img.add_header('Content-ID', f'<{cid}>')
                         img.add_header('Content-Disposition', 'inline', filename=os.path.basename(path))
-                        msg.attach(img)
+                        msg_related.attach(img)
                 else:
                     logger.warning(f"Imagen no encontrada para email: {path}")
+
+            # Adjuntar Archivos
+            from email.mime.application import MIMEApplication
+            for att_data in attachments:
+                filename = att_data['filename']
+                content = att_data['content']
+                part = MIMEApplication(content, Name=filename)
+                part['Content-Disposition'] = f'attachment; filename="{filename}"'
+                msg.attach(part)
 
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.starttls()
@@ -431,3 +445,198 @@ class NotificationService:
             images.append({'cid': 'logo_aguacol', 'path': logo_path})
 
         return await self._send_email(recipients, subject, html, images)
+
+    async def send_cierre_email(self, 
+                                  area: str, 
+                                  fecha_inicio: str, 
+                                  fecha_fin: str, 
+                                  user_name: str, 
+                                  tipo_cierre: str,
+                                  resumen: dict,
+                                  excel_content: bytes,
+                                  recipients: List[str]):
+        """Notificar a RRHH sobre el cierre definitivo de un periodo de asistencia, con el reporte Excel adjunto."""
+        import re
+        from datetime import datetime
+        
+        safe_area = re.sub(r'[^a-zA-Z0-9_\-]', '_', area) if area else "Todas"
+        filename = f"Reporte_Asistencia_{safe_area}_{fecha_inicio}_{fecha_fin}.xlsx"
+        
+        subject = f"🔒 Cierre de Periodo Sellado Definitivamente: {area} ({fecha_inicio} al {fecha_fin})"
+        
+        # Mapear datos del resumen
+        total_emp = resumen.get("total_empleados", 0)
+        dias_ok = resumen.get("dias_ok", 0)
+        dias_con_novedad = resumen.get("dias_con_novedad", 0)
+        vacaciones = resumen.get("vacaciones", 0)
+        licencias = resumen.get("licencias", 0)
+        inasistencias = resumen.get("inasistencias", 0)
+        anomalias = resumen.get("anomalias", 0)
+        he_aprobadas_horas = resumen.get("he_aprobadas_horas", 0.0)
+        he_aprobadas_count = resumen.get("he_aprobadas_count", 0)
+
+        # Generar HTML corporativo Aguacol Premium
+        html = f"""
+        <html>
+            <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 0;">
+                    <tr>
+                        <td align="center">
+                            <table width="650" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
+                                <!-- Header Corporativo Aguacol (Dark Slate Blue) -->
+                                <tr>
+                                    <td align="left" style="background-color: #1e293b; padding: 25px 40px; border-bottom: 5px solid #3b82f6;">
+                                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td>
+                                                    {self._get_logo_html()}
+                                                </td>
+                                                <td align="right">
+                                                    <div style="background-color: rgba(59, 130, 246, 0.1); padding: 5px 15px; border-radius: 20px; color: #3b82f6; font-size: 11px; text-transform: uppercase; font-weight: 600; border: 1px solid rgba(59, 130, 246, 0.3);">
+                                                        Cierre de Periodo
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Banner de Título -->
+                                <tr>
+                                    <td style="padding: 35px 40px 10px 40px;">
+                                        <div style="display: inline-block; padding: 6px 14px; border-radius: 8px; background-color: #eff6ff; color: #1d4ed8; font-size: 13px; font-weight: 700; margin-bottom: 15px;">
+                                            NOTIFICACIÓN OFICIAL DE RECURSOS HUMANOS
+                                        </div>
+                                        <h1 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2;">
+                                            Periodo Sellado Definitivamente
+                                        </h1>
+                                        <p style="color: #64748b; font-size: 14px; margin-top: 8px; margin-bottom: 0;">
+                                            Se ha procedido al cierre definitivo del periodo de asistencia para el área y rango indicados a continuación.
+                                        </p>
+                                    </td>
+                                </tr>
+
+                                <!-- Detalles del Cierre (Bento Card) -->
+                                <tr>
+                                    <td style="padding: 20px 40px;">
+                                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
+                                            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 14px;">
+                                                <tr>
+                                                    <td width="40%" style="color: #64748b; padding-bottom: 10px;"><strong>Área Cerrada:</strong></td>
+                                                    <td style="color: #0f172a; font-weight: 700; padding-bottom: 10px;">{area}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="color: #64748b; padding-bottom: 10px;"><strong>Rango de Fechas:</strong></td>
+                                                    <td style="color: #0f172a; font-weight: 600; padding-bottom: 10px;">{fecha_inicio} al {fecha_fin}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="color: #64748b; padding-bottom: 10px;"><strong>Cerrado por:</strong></td>
+                                                    <td style="color: #0f172a; padding-bottom: 10px;">{user_name} <span style="background-color: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 5px;">{tipo_cierre}</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="color: #64748b;"><strong>Fecha Cierre:</strong></td>
+                                                    <td style="color: #0f172a;">{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Resumen Ejecutivo en Tablas/Métricas -->
+                                <tr>
+                                    <td style="padding: 10px 40px 20px 40px;">
+                                        <h3 style="color: #334155; font-size: 15px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Resumen Estadístico del Periodo</h3>
+                                        
+                                        <!-- Bento-Grid de métricas principales -->
+                                        <table width="100%" border="0" cellspacing="10" cellpadding="0" style="margin-left: -10px; margin-right: -10px;">
+                                            <tr>
+                                                <td width="50%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center;">
+                                                    <div style="color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600;">Total Colaboradores</div>
+                                                    <div style="color: #1e293b; font-size: 24px; font-weight: 700; margin-top: 5px;">{total_emp}</div>
+                                                </td>
+                                                <td width="50%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; text-align: center;">
+                                                    <div style="color: #1d4ed8; font-size: 12px; text-transform: uppercase; font-weight: 600;">Horas Extras Aprobadas</div>
+                                                    <div style="color: #1e3a8a; font-size: 24px; font-weight: 700; margin-top: 5px;">{he_aprobadas_horas} hrs</div>
+                                                    <div style="color: #64748b; font-size: 11px; margin-top: 2px;">({he_aprobadas_count} autorizaciones)</div>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <!-- Tabla de detalles adicionales -->
+                                        <table width="100%" border="0" cellspacing="0" cellpadding="8" style="font-size: 13px; margin-top: 15px; border-collapse: collapse; border: 1px solid #e2e8f0;">
+                                            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                                <th align="left" style="color: #475569; font-weight: 600;">Concepto / Incidencia</th>
+                                                <th align="center" style="color: #475569; font-weight: 600; width: 120px;">Cantidad / Días</th>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Días con asistencia normal (OK)</td>
+                                                <td align="center" style="color: #0f172a; font-weight: 600;">{dias_ok}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Días con novedades (Atrasos, salidas adelantadas)</td>
+                                                <td align="center" style="color: #0f172a; font-weight: 600;">{dias_con_novedad}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Vacaciones solicitadas en periodo</td>
+                                                <td align="center" style="color: #0f172a; font-weight: 600;">{vacaciones}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Licencias médicas</td>
+                                                <td align="center" style="color: #0f172a; font-weight: 600;">{licencias}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Inasistencias justificadas/aceptadas</td>
+                                                <td align="center" style="color: #ef4444; font-weight: 600;">{inasistencias}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Anomalías sin marcas u otras</td>
+                                                <td align="center" style="color: #0f172a; font-weight: 600;">{anomalias}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Aviso de Adjunto -->
+                                <tr>
+                                    <td style="padding: 10px 40px 30px 40px;">
+                                        <div style="background-color: #f0fdf4; border: 1px dashed #10b981; border-radius: 12px; padding: 18px; display: flex; align-items: center; gap: 12px;">
+                                            <div style="font-size: 24px; line-height: 1;">📎</div>
+                                            <div style="color: #166534; font-size: 13px; line-height: 1.5;">
+                                                <strong>Reporte Oficial Adjunto:</strong> Se adjunta el archivo Excel oficial <strong>{filename}</strong>, el cual contiene las 6 pestañas de visualización (Conceptos, Horas Reales, Colación, Permisos, Horas Extras y Acumulado), replicando fielmente el diseño y formato de la grilla analítica.
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Footer Corporativo -->
+                                <tr>
+                                    <td style="background-color: #f8fafc; padding: 30px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
+                                        <p style="color: #94a3b8; margin: 0; font-size: 13px; line-height: 1.5;">
+                                            Este es un documento electrónico generado automáticamente por el Sistema de Asistencia Aguacol.<br>
+                                            <strong>© 2026 Aguacol SPA | Departamento de Recursos Humanos</strong>
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+        </html>
+        """
+        
+        # Path al logo
+        import os
+        logo_path = os.path.join(settings.BASE_DIR, "frontend", "assets", "img", "logo.jpg")
+        
+        images = []
+        if os.path.exists(logo_path):
+            images.append({'cid': 'logo_aguacol', 'path': logo_path})
+
+        attachments = [{
+            'filename': filename,
+            'content': excel_content
+        }]
+
+        return await self._send_email(recipients, subject, html, images, attachments)
+
