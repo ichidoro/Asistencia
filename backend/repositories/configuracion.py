@@ -324,6 +324,18 @@ class ConfiguracionRepository:
             """)
             logger.info("✨ Tabla 'periodos_rrhh' creada exitosamente")
 
+            # Migrar periodos antiguos para añadir el año si les falta
+            try:
+                await self.db.execute("""
+                    UPDATE periodos_rrhh 
+                    SET mes_cierre = mes_cierre || ' ' || SUBSTR(fecha_fin, 1, 4)
+                    WHERE mes_cierre NOT LIKE '% 20%' 
+                      AND mes_cierre NOT LIKE '% 19%'
+                      AND INSTR(TRIM(mes_cierre), ' ') = 0
+                """)
+            except Exception as e_mig:
+                logger.warning(f"⚠️ Error migrando periodos antiguos: {e_mig}")
+
             # Sembrar periodo por defecto
             try:
                 from datetime import datetime, timedelta
@@ -342,7 +354,7 @@ class ConfiguracionRepository:
                     fin = hoy.replace(day=25)
 
                 meses_es = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-                mes_cierre = meses_es[hoy.month - 1]
+                mes_cierre = f"{meses_es[fin.month - 1]} {fin.year}"
 
                 await self.db.execute("""
                     INSERT INTO periodos_rrhh (mes_cierre, fecha_inicio, fecha_fin, activo, estado)

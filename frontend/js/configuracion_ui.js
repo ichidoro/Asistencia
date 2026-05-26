@@ -7,6 +7,7 @@ let bonosList = [];
 let tiposJustificacionList = [];
 let globalCargosList = []; // [NEW] Cache cargos for dropdowns
 let pagadoresList = []; // [NEW] Cache pagadores
+let periodosRRHHList = []; // [NEW] Cache periodos rrhh
 
 // appendCargoToInput: agrega un cargo al input (multi-valor, coma separado)
 // Funciona tanto si el <ul> está en su posición original como si fue movido al body.
@@ -1933,6 +1934,7 @@ window.loadPeriodosRRHH = async function() {
         });
         if (!response.ok) throw new Error("Error obteniendo los tramos de cierre");
         const periodos = await response.json();
+        periodosRRHHList = periodos; // Cache list
         renderPeriodosRRHH(periodos);
     } catch (error) {
         console.error(error);
@@ -1969,6 +1971,7 @@ window.renderPeriodosRRHH = function(periodos) {
             <thead class="table-light">
                 <tr>
                     <th>Mes Cierre</th>
+                    <th>Año</th>
                     <th>Fecha Inicial</th>
                     <th>Fecha Final</th>
                     <th class="text-center">Cantidad días</th>
@@ -2007,9 +2010,7 @@ window.renderPeriodosRRHH = function(periodos) {
                     ? `<button class="btn btn-sm btn-outline-success me-1" onclick="activarPeriodoRRHH(${p.id})" title="Marcar como Vigente"><i class="bi bi-star-fill"></i></button>`
                     : `<button class="btn btn-sm btn-success me-1" disabled title="Periodo Vigente Activo"><i class="bi bi-star-fill"></i></button>`;
                 
-                // Utilizar onclick con string escaped para pasar el objeto
-                const escapedObj = JSON.stringify(p).replace(/'/g, "\\'");
-                const editBtn = `<button class="btn btn-sm btn-outline-primary me-1" onclick="openModalPeriodo(JSON.parse('${escapedObj}'))" title="Editar"><i class="bi bi-pencil-fill"></i></button>`;
+                const editBtn = `<button class="btn btn-sm btn-outline-primary me-1" onclick="editPeriodoRRHH(${p.id})" title="Editar"><i class="bi bi-pencil-fill"></i></button>`;
                 
                 const deleteBtn = `<button class="btn btn-sm btn-outline-danger" onclick="deletePeriodoRRHH(${p.id})" title="Eliminar"><i class="bi bi-trash-fill"></i></button>`;
                 
@@ -2018,9 +2019,14 @@ window.renderPeriodosRRHH = function(periodos) {
                 actionButtons = '<span class="text-muted small">Sin permisos</span>';
             }
 
+            const parts = (p.mes_cierre || '').split(' ');
+            const mes = parts[0] || '';
+            const anio = parts[1] || (p.fecha_fin ? p.fecha_fin.split('-')[0] : new Date().getFullYear());
+
             html += `
                 <tr>
-                    <td class="fw-bold">${p.mes_cierre}</td>
+                    <td class="fw-bold">${mes}</td>
+                    <td class="fw-bold text-secondary">${anio}</td>
                     <td>${formatDateDMY(p.fecha_inicio)}</td>
                     <td>${formatDateDMY(p.fecha_fin)}</td>
                     <td class="text-center fw-bold">${diffDays} días</td>
@@ -2064,10 +2070,33 @@ window.openModalPeriodo = function(periodo = null) {
 
     form.reset();
 
+    // Populate Year dropdown dynamically
+    const yearSelect = document.getElementById('periodo-anio-cierre');
+    if (yearSelect) {
+        yearSelect.innerHTML = '';
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear - 2; y <= currentYear + 3; y++) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            yearSelect.appendChild(opt);
+        }
+    }
+
     if (periodo) {
         title.innerText = 'Editar Tramo de Cierre';
         document.getElementById('periodo-id').value = periodo.id;
-        document.getElementById('periodo-mes-cierre').value = periodo.mes_cierre;
+        
+        // Parse mes_cierre: e.g. "Mayo 2026" or "Mayo"
+        const parts = (periodo.mes_cierre || '').split(' ');
+        const mes = parts[0] || '';
+        const anio = parts[1] || (periodo.fecha_fin ? periodo.fecha_fin.split('-')[0] : new Date().getFullYear());
+        
+        document.getElementById('periodo-mes-cierre').value = mes;
+        if (yearSelect) {
+            yearSelect.value = anio;
+        }
+        
         document.getElementById('periodo-fecha-inicio').value = periodo.fecha_inicio;
         document.getElementById('periodo-fecha-fin').value = periodo.fecha_fin;
         document.getElementById('periodo-activo').value = periodo.activo;
@@ -2075,6 +2104,9 @@ window.openModalPeriodo = function(periodo = null) {
     } else {
         title.innerText = 'Crear Nuevo Tramo de Cierre';
         document.getElementById('periodo-id').value = '';
+        if (yearSelect) {
+            yearSelect.value = new Date().getFullYear();
+        }
         document.getElementById('periodo-activo').value = '0';
         document.getElementById('periodo-estado').value = 'abierto';
     }
@@ -2083,6 +2115,11 @@ window.openModalPeriodo = function(periodo = null) {
     calculatePeriodDays();
 
     modal.style.display = 'flex';
+};
+
+window.editPeriodoRRHH = function(id) {
+    const p = periodosRRHHList.find(item => item.id === id);
+    if (p) openModalPeriodo(p);
 };
 
 window.closeModalPeriodo = function() {
@@ -2111,7 +2148,9 @@ window.calculatePeriodDays = function() {
 
 window.savePeriodoRRHH = async function() {
     const id = document.getElementById('periodo-id').value;
-    const mes_cierre = document.getElementById('periodo-mes-cierre').value;
+    const mesVal = document.getElementById('periodo-mes-cierre').value;
+    const anioVal = document.getElementById('periodo-anio-cierre').value;
+    const mes_cierre = `${mesVal} ${anioVal}`.trim();
     const fecha_inicio = document.getElementById('periodo-fecha-inicio').value;
     const fecha_fin = document.getElementById('periodo-fecha-fin').value;
     const activo = parseInt(document.getElementById('periodo-activo').value, 10);
