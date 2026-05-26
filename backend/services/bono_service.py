@@ -83,6 +83,13 @@ class BonoService:
         bonos = await self.config_repo.get_all_bonos()
         bonos_activos = [b for b in bonos if b.get("activo")]
 
+        # Query feriados for the year to avoid counting holiday days as laborable during justifications
+        anio_real = anio or datetime.now().year
+        feriados_rows = await self.db.fetch_all(
+            "SELECT fecha FROM feriados WHERE fecha LIKE ?", (f"{anio_real}-%",)
+        )
+        feriados_set = {r['fecha'] for r in feriados_rows}
+
         # Índices por empleado_id para O(1) lookup
         asist_map: Dict[int, list] = {}
         for a in asistencias_list:
@@ -95,7 +102,6 @@ class BonoService:
         # Contexto temporal
         hoy_str   = datetime.now().strftime("%Y-%m-%d")
         mes_real  = mes  or datetime.now().month
-        anio_real = anio or datetime.now().year
         last_day  = calendar.monthrange(anio_real, mes_real)[1]
         mes_inicio = f"{anio_real}-{mes_real:02d}-01"
         mes_fin    = f"{anio_real}-{mes_real:02d}-{last_day:02d}"
@@ -113,6 +119,7 @@ class BonoService:
                     hoy_str,
                     mes_inicio,
                     mes_fin,
+                    feriados_set,
                 )
                 for bono in bonos_activos
             }
@@ -132,6 +139,7 @@ class BonoService:
         hoy_str:   str,
         mes_inicio: str,
         mes_fin:    str,
+        feriados_set: Optional[set] = None,
     ) -> Dict[str, Any]:
         """
         Nueva lógica:
@@ -215,6 +223,22 @@ class BonoService:
             es_bolsa      = (dia_data.get("tipo_programacion") == "FLEXIBLE_BOLSA")
 
             # ¿Es un día laborable según el turno?
+            j_dia = next(
+                (j for j in justificaciones
+                 if j["fecha_inicio"] <= fecha <= j["fecha_fin"]), None
+            )
+
+            info = emp_matrix_data.get('info', {})
+            turno_dias = info.get('turno_dias', {})
+            try:
+                dia_semana = datetime.strptime(fecha, "%Y-%m-%d").weekday()
+                dia_config = turno_dias.get(dia_semana) or turno_dias.get(str(dia_semana), {})
+                es_libre_turno = bool(dia_config.get('es_libre', False))
+            except Exception:
+                es_libre_turno = False
+
+            es_feriado = feriados_set is not None and fecha in feriados_set
+
             if es_bolsa:
                 es_laborable_turno = (
                     estado not in ESTADOS_NO_LABORABLES
@@ -223,8 +247,8 @@ class BonoService:
                 )
             else:
                 es_laborable_turno = (
-                    horas_teoricas > 0
-                    and estado not in ESTADOS_NO_LABORABLES
+                    (horas_teoricas > 0) or
+                    (j_dia is not None and not es_libre_turno and not es_feriado)
                 )
 
             if not es_laborable_turno:
