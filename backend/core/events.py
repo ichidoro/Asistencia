@@ -191,6 +191,35 @@ async def lifespan(app: FastAPI):
                 he_repo = HoraExtraRepository(db)
                 await he_repo.run_backfill()
                 logger.info("✅ [Startup] Backfill de horas extras completado")
+
+                # Migración: Auto-aprobar intercambios pendientes y reprocesar asistencia
+                try:
+                    pendientes = await db.fetch_all("SELECT * FROM intercambios_dias WHERE estado = 'PENDIENTE'")
+                    if pendientes:
+                        logger.info(f"🔄 [Startup Migration] Detectados {len(pendientes)} intercambios PENDIENTES. Actualizando a APROBADO...")
+                        await db.execute("UPDATE intercambios_dias SET estado = 'APROBADO' WHERE estado = 'PENDIENTE'")
+                        
+                        from backend.services.asistencia_service import AsistenciaService
+                        from backend.repositories.asistencia import AsistenciaRepository
+                        asist_service = AsistenciaService(AsistenciaRepository(db))
+                        
+                        for p in pendientes:
+                            emp_id = p['empleado_solicitante_id']
+                            asyncio.create_task(asist_service.reprocesar_periodo_empleado(
+                                empleado_id=emp_id,
+                                fecha_inicio=p['fecha_origen'],
+                                fecha_fin=p['fecha_origen'],
+                                force=True
+                            ))
+                            asyncio.create_task(asist_service.reprocesar_periodo_empleado(
+                                empleado_id=emp_id,
+                                fecha_inicio=p['fecha_destino'],
+                                fecha_fin=p['fecha_destino'],
+                                force=True
+                            ))
+                        logger.success("✅ [Startup Migration] Auto-aprobación de intercambios completada y reprocesamientos en cola")
+                except Exception as mig_err:
+                    logger.warning(f"⚠️ [Startup Migration] Error al migrar intercambios: {mig_err}")
                 
                 # Sincronizar feriados del año actual automáticamente en cada arranque
                 from datetime import date

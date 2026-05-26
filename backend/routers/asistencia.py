@@ -16,7 +16,7 @@ from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.empleado import EmpleadoRepository
 from backend.repositories.turno import TurnoRepository
 from backend.core.database import Database, get_db
-from backend.core.security import SecurityContext, RequirePermission
+from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.schemas.asistencia import (
     AsistenciaMatrizResponse,
     RecalcularRequest,
@@ -1891,7 +1891,7 @@ async def get_intercambios(
     fecha_inicio: str = Query(..., description="Fecha inicial AAAA-MM-DD"),
     fecha_fin: str = Query(..., description="Fecha final AAAA-MM-DD"),
     service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.ver", "marcaciones.intercambio"]))
 ):
     """Obtiene los intercambios de días en un rango de fechas."""
     intercambios = await service.repository.get_intercambios(fecha_inicio, fecha_fin)
@@ -1905,7 +1905,7 @@ async def get_intercambios(
 async def create_intercambio(
     data: IntercambioCreate,
     service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.intercambio"))
 ):
     """Crea un nuevo intercambio de días y reprocesa ambas fechas."""
     # RLS Check
@@ -1955,7 +1955,7 @@ async def create_intercambio(
 async def delete_intercambio(
     intercambio_id: int,
     service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.intercambio"))
 ):
     """Elimina un intercambio de días."""
     db = service.repository.db

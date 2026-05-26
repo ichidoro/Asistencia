@@ -502,15 +502,16 @@ class AsistenciaRepository:
         """Crea un nuevo intercambio de dias."""
         query = """
             INSERT INTO intercambios_dias
-                (empleado_solicitante_id, empleado_receptor_id, fecha_origen, fecha_destino, motivo)
-            VALUES (?, ?, ?, ?, ?)
+                (empleado_solicitante_id, empleado_receptor_id, fecha_origen, fecha_destino, motivo, estado, aprobado_por)
+            VALUES (?, ?, ?, ?, ?, 'APROBADO', ?)
         """
         params = (
             data['empleado_solicitante_id'],
             data['empleado_receptor_id'],
             data['fecha_origen'],
             data['fecha_destino'],
-            data.get('motivo')
+            data.get('motivo'),
+            data.get('usuario_id')
         )
         cursor = await self.db.execute(query, params)
         return cursor.lastrowid

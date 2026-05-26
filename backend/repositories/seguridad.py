@@ -159,6 +159,7 @@ class SeguridadRepository:
                 ('marcaciones.cierre_periodo',   'Marcaciones',    'Botón "Cerrar Período" -> sellar mes para liquidación'),
                 ('marcaciones.bypass_cierre',    'Marcaciones',    'Desbloquear edición de meses ya cerrados (alto riesgo)'),
                 ('marcaciones.sincronizar',      'Marcaciones',    'Botón "Sincronizar" en toolbar -> descargar marcaciones y reprocesar'),
+                ('marcaciones.intercambio',      'Marcaciones',    'Registrar y revertir intercambios de días (Días Compensatorios)'),
 
                 # ── Reportes (4 permisos) ──
                 ('reportes.ver',                 'Reportes',       'Ver tablas de reporte, gráficos de línea y filtros de período'),
