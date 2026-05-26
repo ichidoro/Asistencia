@@ -474,6 +474,12 @@ class NotificationService:
         anomalias = resumen.get("anomalias", 0)
         he_aprobadas_horas = resumen.get("he_aprobadas_horas", 0.0)
         he_aprobadas_count = resumen.get("he_aprobadas_count", 0)
+        
+        deuda_neta_horas = resumen.get("deuda_neta_horas", 0.0)
+        deuda_atrasos_horas = resumen.get("deuda_atrasos_horas", 0.0)
+        deuda_colacion_horas = resumen.get("deuda_colacion_horas", 0.0)
+        deuda_salidas_horas = resumen.get("deuda_salidas_horas", 0.0)
+        deuda_permisos_horas = resumen.get("deuda_permisos_horas", 0.0)
 
         # Generar HTML corporativo Aguacol Premium
         html = f"""
@@ -550,14 +556,18 @@ class NotificationService:
                                         <!-- Bento-Grid de métricas principales -->
                                         <table width="100%" border="0" cellspacing="10" cellpadding="0" style="margin-left: -10px; margin-right: -10px;">
                                             <tr>
-                                                <td width="50%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center;">
-                                                    <div style="color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600;">Total Colaboradores</div>
-                                                    <div style="color: #1e293b; font-size: 24px; font-weight: 700; margin-top: 5px;">{total_emp}</div>
+                                                <td width="33%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center;">
+                                                    <div style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600;">Colaboradores</div>
+                                                    <div style="color: #1e293b; font-size: 20px; font-weight: 700; margin-top: 5px;">{total_emp}</div>
                                                 </td>
-                                                <td width="50%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; text-align: center;">
-                                                    <div style="color: #1d4ed8; font-size: 12px; text-transform: uppercase; font-weight: 600;">Horas Extras Aprobadas</div>
-                                                    <div style="color: #1e3a8a; font-size: 24px; font-weight: 700; margin-top: 5px;">{he_aprobadas_horas} hrs</div>
-                                                    <div style="color: #64748b; font-size: 11px; margin-top: 2px;">({he_aprobadas_count} autorizaciones)</div>
+                                                <td width="33%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; text-align: center;">
+                                                    <div style="color: #1d4ed8; font-size: 11px; text-transform: uppercase; font-weight: 600;">HE Netas a Pago</div>
+                                                    <div style="color: #1e3a8a; font-size: 20px; font-weight: 700; margin-top: 5px;">{he_aprobadas_horas} hrs</div>
+                                                    <div style="color: #64748b; font-size: 10px; margin-top: 2px;">({he_aprobadas_count} reg.)</div>
+                                                </td>
+                                                <td width="33%" style="background-color: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; text-align: center;">
+                                                    <div style="color: #c53030; font-size: 11px; text-transform: uppercase; font-weight: 600;">Deuda Neta Restante</div>
+                                                    <div style="color: #9b2c2c; font-size: 20px; font-weight: 700; margin-top: 5px;">{deuda_neta_horas} hrs</div>
                                                 </td>
                                             </tr>
                                         </table>
@@ -591,6 +601,28 @@ class NotificationService:
                                             <tr style="border-bottom: 1px solid #f1f5f9;">
                                                 <td style="color: #334155;">Anomalías sin marcas u otras</td>
                                                 <td align="center" style="color: #0f172a; font-weight: 600;">{anomalias}</td>
+                                            </tr>
+                                            
+                                            <!-- Desglose de Deuda Neta -->
+                                            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; border-top: 2px solid #e2e8f0;">
+                                                <th align="left" style="color: #475569; font-weight: 600;">Detalle de la Deuda Neta Restante</th>
+                                                <th align="center" style="color: #475569; font-weight: 600;">Horas</th>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Atrasos Netos</td>
+                                                <td align="center" style="color: #0f172a;">{deuda_atrasos_horas} hrs</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Exceso de Colación</td>
+                                                <td align="center" style="color: #0f172a;">{deuda_colacion_horas} hrs</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Salidas Adelantadas</td>
+                                                <td align="center" style="color: #0f172a;">{deuda_salidas_horas} hrs</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155; padding-left: 15px;">• Deuda por Permisos Personales</td>
+                                                <td align="center" style="color: #0f172a;">{deuda_permisos_horas} hrs</td>
                                             </tr>
                                         </table>
                                     </td>

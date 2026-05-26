@@ -151,8 +151,10 @@ class CierreService:
         )
         resumen = dict(resumen_row) if resumen_row else {}
 
-        query_he_aprobadas = f"""
-            SELECT SUM(he.minutos_autorizados) AS he_minutos,
+        # 1. Obtener horas extras aprobadas agrupadas por empleado
+        query_he_emp = f"""
+            SELECT he.empleado_id, 
+                   SUM(he.minutos_autorizados) AS he_minutos, 
                    COUNT(*) AS he_count
             FROM horas_extras he INDEXED BY idx_he_fecha
             JOIN empleados e ON he.empleado_id = e.id
@@ -162,10 +164,33 @@ class CierreService:
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'APROBADO'
-            {filtro_area}
+              {filtro_area}
+            GROUP BY he.empleado_id
         """
-        query_comp = f"""
-            SELECT SUM(comp.minutos) AS total_comp
+
+        # 2. Obtener minutos de deuda total y componentes acumulados por empleado
+        query_deuda_emp = f"""
+            SELECT a.empleado_id, 
+                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN 0 ELSE a.minutos_deuda END) AS deuda_minutos,
+                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN 0 ELSE a.minutos_atraso END) AS minutos_atraso,
+                   SUM(a.minutos_exceso_colacion) AS minutos_exceso_colacion,
+                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN 0 ELSE a.minutos_salida_adelantada END) AS minutos_salida_adelantada,
+                   SUM(a.minutos_permiso_personal_deuda) AS minutos_permiso_personal_deuda
+            FROM asistencias a
+            JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE a.fecha BETWEEN ? AND ?
+              {filtro_area}
+            GROUP BY a.empleado_id
+        """
+
+        # 3. Obtener compensaciones realizadas por empleado
+        query_comp_emp = f"""
+            SELECT comp.empleado_id, 
+                   SUM(comp.minutos) AS total_comp
             FROM compensaciones_he_inasistencia comp
             JOIN empleados e ON comp.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
@@ -173,20 +198,75 @@ class CierreService:
                 AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR comp.fecha_inasistencia <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE comp.fecha_inasistencia BETWEEN ? AND ?
-            {filtro_area}
+              {filtro_area}
+            GROUP BY comp.empleado_id
         """
-        he_row = await self.db.fetch_one(
-            query_he_aprobadas, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-        comp_row = await self.db.fetch_one(
-            query_comp, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-        total_he = (he_row['he_minutos'] or 0.0) if he_row else 0.0
-        total_comp = (comp_row['total_comp'] or 0.0) if comp_row else 0.0
-        neto_he = max(0.0, total_he - total_comp)
 
-        resumen['he_aprobadas_horas'] = round(neto_he / 60.0, 2)
-        resumen['he_aprobadas_count'] = (he_row['he_count'] or 0) if he_row else 0
+        he_emp_rows = await self.db.fetch_all(query_he_emp, tuple([fecha_inicio, fecha_fin] + params_area))
+        deuda_emp_rows = await self.db.fetch_all(query_deuda_emp, tuple([fecha_inicio, fecha_fin] + params_area))
+        comp_emp_rows = await self.db.fetch_all(query_comp_emp, tuple([fecha_inicio, fecha_fin] + params_area))
+
+        he_map = {r['empleado_id']: (r['he_minutos'] or 0.0, r['he_count'] or 0) for r in he_emp_rows}
+        deuda_map = {
+            r['empleado_id']: {
+                'total': r['deuda_minutos'] or 0.0,
+                'atraso': r['minutos_atraso'] or 0.0,
+                'colacion': r['minutos_exceso_colacion'] or 0.0,
+                'salida': r['minutos_salida_adelantada'] or 0.0,
+                'permiso': r['minutos_permiso_personal_deuda'] or 0.0
+            } for r in deuda_emp_rows
+        }
+        comp_map = {r['empleado_id']: r['total_comp'] or 0.0 for r in comp_emp_rows}
+
+        todos_empleados = set(he_map.keys()) | set(deuda_map.keys()) | set(comp_map.keys())
+
+        total_neto_he = 0.0
+        total_he_count = 0
+        total_deuda_neta = 0.0
+
+        total_deuda_atrasos = 0.0
+        total_deuda_colacion = 0.0
+        total_deuda_salidas = 0.0
+        total_deuda_permisos = 0.0
+
+        for emp_id in todos_empleados:
+            emp_he, emp_cnt = he_map.get(emp_id, (0.0, 0))
+            d_info = deuda_map.get(emp_id, {'total': 0.0, 'atraso': 0.0, 'colacion': 0.0, 'salida': 0.0, 'permiso': 0.0})
+            emp_deuda_total = d_info['total']
+            emp_comp = comp_map.get(emp_id, 0.0)
+
+            saldo_neto_emp = emp_he - emp_deuda_total - emp_comp
+            total_he_count += emp_cnt
+
+            if saldo_neto_emp > 0:
+                total_neto_he += saldo_neto_emp
+            elif saldo_neto_emp < 0:
+                deuda_restante = abs(saldo_neto_emp)
+                total_deuda_neta += deuda_restante
+
+                # Prorratear la deuda restante entre sus componentes originales
+                raw_atr = d_info['atraso']
+                raw_col = d_info['colacion']
+                raw_sad = d_info['salida']
+                raw_per = d_info['permiso']
+                raw_total = raw_atr + raw_col + raw_sad + raw_per
+
+                if raw_total > 0:
+                    factor = deuda_restante / raw_total
+                    total_deuda_atrasos += raw_atr * factor
+                    total_deuda_colacion += raw_col * factor
+                    total_deuda_salidas += raw_sad * factor
+                    total_deuda_permisos += raw_per * factor
+                else:
+                    total_deuda_atrasos += deuda_restante
+
+        resumen['he_aprobadas_horas'] = round(total_neto_he / 60.0, 2)
+        resumen['he_aprobadas_count'] = total_he_count
+        resumen['deuda_neta_horas'] = round(total_deuda_neta / 60.0, 2)
+        resumen['deuda_atrasos_horas'] = round(total_deuda_atrasos / 60.0, 2)
+        resumen['deuda_colacion_horas'] = round(total_deuda_colacion / 60.0, 2)
+        resumen['deuda_salidas_horas'] = round(total_deuda_salidas / 60.0, 2)
+        resumen['deuda_permisos_horas'] = round(total_deuda_permisos / 60.0, 2)
 
         # Feriados del periodo
         query_feriados = """

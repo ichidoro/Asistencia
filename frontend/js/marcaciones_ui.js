@@ -3576,22 +3576,60 @@ function renderWizardStep(step) {
     } else if (step === 5) { // Reporte Final
         content.innerHTML = `
             <h4 class="fw-bold mb-4"><i class="bi bi-file-text"></i> Previsualización de Cierre</h4>
-            <div class="row">
-                <div class="col-6 mb-3">
-                    <div class="card bg-light border-0 shadow-sm h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Horas Extras Aprobadas</h6>
-                            <h3 class="text-primary mb-0">${ev.resumen.he_aprobadas_horas || 0} hrs <small class="fs-6 text-muted">(${ev.resumen.he_aprobadas_count || 0} reg.)</small></h3>
+            <div class="row mb-3">
+                <div class="col-4">
+                    <div class="card border-0 bg-light shadow-sm h-100">
+                        <div class="card-body py-3">
+                            <h6 class="text-muted text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">HE Netas a Pago</h6>
+                            <h3 class="text-success fw-bold mb-0">${ev.resumen.he_aprobadas_horas || 0} <span class="fs-6 text-muted">hrs</span></h3>
+                            <small class="text-muted d-block mt-1">(${ev.resumen.he_aprobadas_count || 0} autorizaciones)</small>
                         </div>
                     </div>
                 </div>
-                <div class="col-6 mb-3">
-                    <div class="card bg-light border-0 shadow-sm h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Inasistencias Selladas</h6>
-                            <h3 class="text-danger mb-0">${ev.inasistencias_injustificadas}</h3>
+                <div class="col-4">
+                    <div class="card border-0 bg-light shadow-sm h-100">
+                        <div class="card-body py-3">
+                            <h6 class="text-muted text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Deuda Neta Restante</h6>
+                            <h3 class="text-danger fw-bold mb-0">${ev.resumen.deuda_neta_horas || 0} <span class="fs-6 text-muted">hrs</span></h3>
+                            <small class="text-muted d-block mt-1">Suma de saldos negativos</small>
                         </div>
                     </div>
+                </div>
+                <div class="col-4">
+                    <div class="card border-0 bg-light shadow-sm h-100">
+                        <div class="card-body py-3">
+                            <h6 class="text-muted text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Inasistencias Selladas</h6>
+                            <h3 class="text-dark fw-bold mb-0">${ev.inasistencias_injustificadas}</h3>
+                            <small class="text-muted d-block mt-1">Aceptadas en paso 4</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Desglose de Deuda Neta -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light border-0 py-2">
+                    <h6 class="text-dark fw-bold mb-0 small"><i class="bi bi-pie-chart-fill me-1 text-danger"></i> Detalle de la Deuda Neta Restante del Área</h6>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush small">
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                            <span><i class="bi bi-clock-history me-2 text-warning"></i> Deuda por Atrasos Netos</span>
+                            <span class="fw-bold text-dark">${ev.resumen.deuda_atrasos_horas || 0} hrs</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                            <span><i class="bi bi-egg-fried me-2 text-info"></i> Deuda por Exceso de Colación</span>
+                            <span class="fw-bold text-dark">${ev.resumen.deuda_colacion_horas || 0} hrs</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                            <span><i class="bi bi-box-arrow-right me-2 text-secondary"></i> Deuda por Salidas Adelantadas</span>
+                            <span class="fw-bold text-dark">${ev.resumen.deuda_salidas_horas || 0} hrs</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                            <span><i class="bi bi-calendar-x me-2 text-danger"></i> Deuda por Permisos Personales</span>
+                            <span class="fw-bold text-dark">${ev.resumen.deuda_permisos_horas || 0} hrs</span>
+                        </li>
+                    </ul>
                 </div>
             </div>
             

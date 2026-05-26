@@ -3439,19 +3439,22 @@ class AsistenciaService:
                     logger.debug(f"[Matrix] Nomenclatura no inyectada para just_id={just.get('id')} emp={eid}: {_exc}")
 
         # Determinar si el periodo/rango actual está cerrado
-        q_cierre = "SELECT COUNT(*) as count FROM cierres_periodos WHERE fecha_inicio <= ? AND fecha_fin >= ?"
-        params_cierre = [fecha_fin, fecha_inicio]
-        
+        # Si es un cierre por área específica, se busca en cierres_periodos.
+        # Si es global ('Todas' las áreas), se considera cerrado solo si está marcado como cerrado en periodos_rrhh.
         if area and area != 'Todas':
+            q_cierre = "SELECT COUNT(*) as count FROM cierres_periodos WHERE fecha_inicio <= ? AND fecha_fin >= ?"
+            params_cierre = [fecha_fin, fecha_inicio]
             q_cierre += " AND (area IS NULL OR area = ?)"
             params_cierre.append(area)
-        
-        if turno_id:
-            q_cierre += " AND (turno_id IS NULL OR turno_id = ?)"
-            params_cierre.append(turno_id)
-            
-        res_cierre = await db.fetch_one(q_cierre, tuple(params_cierre))
-        periodo_cerrado = res_cierre['count'] > 0 if res_cierre else False
+            if turno_id:
+                q_cierre += " AND (turno_id IS NULL OR turno_id = ?)"
+                params_cierre.append(turno_id)
+            res_cierre = await db.fetch_one(q_cierre, tuple(params_cierre))
+            periodo_cerrado = res_cierre['count'] > 0 if res_cierre else False
+        else:
+            q_rrhh = "SELECT COUNT(*) as count FROM periodos_rrhh WHERE fecha_inicio <= ? AND fecha_fin >= ? AND estado = 'cerrado'"
+            res_rrhh = await db.fetch_one(q_rrhh, (fecha_fin, fecha_inicio))
+            periodo_cerrado = res_rrhh['count'] > 0 if res_rrhh else False
 
         return {
             'matrix': matrix,
