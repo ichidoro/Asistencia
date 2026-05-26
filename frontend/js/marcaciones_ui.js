@@ -2768,8 +2768,8 @@ async function openCierrePeriodoModal() {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    if (fFin >= today || fIni >= today) {
-        return showToast("Bloqueo de Seguridad: No se pueden cerrar periodos que incluyan el día de hoy o fechas futuras.", "error");
+    if (today >= fIni && today <= fFin) {
+        return showToast("Bloqueo de Seguridad: No se pueden cerrar periodos que incluyan el día de hoy.", "error");
     }
 
     const dIni = new Date(fIni);

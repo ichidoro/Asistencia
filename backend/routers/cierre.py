@@ -4,6 +4,7 @@ from backend.core.database import get_db, Database
 from backend.services.cierre_service import CierreService
 from pydantic import BaseModel
 from datetime import datetime
+from loguru import logger
 
 router = APIRouter(
     prefix="/cierre",
@@ -120,8 +121,19 @@ async def reabrir_cierre(
             )
         )
         
-        # Eliminar el registro
+        # Eliminar el registro de cierre
         await db.execute("DELETE FROM cierres_periodos WHERE id = ?", (cierre_id,))
+        
+        # También actualizar el estado en periodos_rrhh de vuelta a 'abierto'
+        try:
+            await db.execute(
+                "UPDATE periodos_rrhh SET estado = 'abierto' WHERE fecha_inicio = ? AND fecha_fin = ?",
+                (cierre['fecha_inicio'], cierre['fecha_fin'])
+            )
+            logger.info(f"✨ periodos_rrhh actualizado a 'abierto' para el rango {cierre['fecha_inicio']} a {cierre['fecha_fin']} (Reapertura)")
+        except Exception as e_open_rrhh:
+            logger.warning(f"⚠️ No se pudo actualizar el estado en periodos_rrhh tras reapertura: {e_open_rrhh}")
+
         return {"success": True, "message": "Periodo reabierto exitosamente."}
         
     except HTTPException:
