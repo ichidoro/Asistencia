@@ -416,27 +416,31 @@ class TurnoRepository:
             except Exception as mig_err:
                 logger.error(f"❌ Error migración de horas_extras (minutos_compensados): {mig_err}")
 
+        if await self.db.table_exists("compensaciones_he_inasistencia") and await self.db.column_exists("compensaciones_he_inasistencia", "fecha_he"):
+            try:
+                await self.db.execute("DROP TABLE compensaciones_he_inasistencia")
+                logger.info("🗑️ Tabla 'compensaciones_he_inasistencia' antigua eliminada para actualización de esquema")
+            except Exception as e:
+                logger.error(f"❌ Error eliminando tabla compensaciones_he_inasistencia: {e}")
+
         if not await self.db.table_exists("compensaciones_he_inasistencia"):
             await self.db.execute("""
                 CREATE TABLE IF NOT EXISTS compensaciones_he_inasistencia (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     empleado_id INTEGER NOT NULL,
                     fecha_inasistencia TEXT NOT NULL,
-                    fecha_he TEXT NOT NULL,
                     minutos REAL NOT NULL,
                     observaciones TEXT,
                     aprobado_por INTEGER,
                     created_at TEXT DEFAULT (datetime('now')),
                     FOREIGN KEY (empleado_id) REFERENCES empleados (id) ON DELETE CASCADE,
                     FOREIGN KEY (aprobado_por) REFERENCES usuarios (id) ON DELETE SET NULL,
-                    FOREIGN KEY (empleado_id, fecha_he) REFERENCES horas_extras (empleado_id, fecha) ON DELETE CASCADE,
-                    UNIQUE(empleado_id, fecha_inasistencia, fecha_he)
+                    UNIQUE(empleado_id, fecha_inasistencia)
                 )
             """)
             logger.info("✨ Tabla 'compensaciones_he_inasistencia' creada")
 
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_comp_he_inas_fecha ON compensaciones_he_inasistencia (empleado_id, fecha_inasistencia)")
-        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_comp_he_fecha_he ON compensaciones_he_inasistencia (empleado_id, fecha_he)")
 
 
     async def create_turno(self, turno: TurnoCreate) -> int:

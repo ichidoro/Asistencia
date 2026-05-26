@@ -3503,12 +3503,21 @@ class AsistenciaService:
 
     async def recalcular_bolsa_periodo(self, empleado_id: int, fecha_ini: str, fecha_fin: str) -> Dict:
         db = self.repository.db
-        # FASE 4: HE aprobadas desde horas_extras (nueva tabla)
-        rows_he = await db.fetch_all(
-            "SELECT minutos_autorizados, COALESCE(minutos_compensados, 0) as minutos_compensados FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ? AND estado = 'APROBADO'",
+        # Sumar todas las horas extras aprobadas en el periodo
+        row_he = await db.fetch_one(
+            "SELECT SUM(minutos_autorizados) as total_he FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ? AND estado = 'APROBADO'",
             (empleado_id, fecha_ini, fecha_fin)
         )
-        total_extra = sum(max(0, int((r.get('minutos_autorizados') or 0) - (r.get('minutos_compensados') or 0))) for r in rows_he)
+        total_extra_aprobado = (row_he['total_he'] or 0.0) if row_he else 0.0
+
+        # Sumar todas las compensaciones de inasistencia en el periodo
+        row_comp = await db.fetch_one(
+            "SELECT SUM(minutos) as total_comp FROM compensaciones_he_inasistencia WHERE empleado_id = ? AND fecha_inasistencia BETWEEN ? AND ?",
+            (empleado_id, fecha_ini, fecha_fin)
+        )
+        total_compensado = (row_comp['total_comp'] or 0.0) if row_comp else 0.0
+
+        total_extra = max(0.0, total_extra_aprobado - total_compensado)
 
         # Deuda sigue leyendo de asistencias (es disciplinaria, no financiera)
         rows_deuda = await db.fetch_all(
@@ -3628,41 +3637,60 @@ class AsistenciaService:
         self, fecha_inicio: str, fecha_fin: str, area: Optional[str] = None, turno_id: Optional[int] = None
     ) -> Dict:
         db = self.repository.db
-        # FASE 4: HE aprobadas desde horas_extras (nueva tabla)
-        q_sum = """
-            SELECT 
-                COALESCE((SELECT SUM(h.minutos_autorizados - COALESCE(h.minutos_compensados, 0)) FROM horas_extras h
-                          JOIN empleados e2 ON h.empleado_id = e2.id
-                          LEFT JOIN historial_areas ha2 ON e2.id = ha2.empleado_id AND ha2.es_actual = 1 AND ha2.validado = 1
-                          LEFT JOIN areas ar2 ON ha2.area_id = ar2.id
-                          WHERE h.fecha BETWEEN ? AND ? AND e2.activo = 1
-                          AND h.estado = 'APROBADO' {area_condition_sub}), 0) as total_he_aprobado,
-                SUM(CASE WHEN a.minutos_deuda > 0 THEN a.minutos_deuda ELSE 0 END) as total_deuda
+        
+        # 1. Calcular total HE aprobadas
+        params_he = [fecha_inicio, fecha_fin]
+        q_he = """
+            SELECT SUM(h.minutos_autorizados) as total_he
+            FROM horas_extras h
+            JOIN empleados e2 ON h.empleado_id = e2.id
+            LEFT JOIN historial_areas ha2 ON e2.id = ha2.empleado_id AND ha2.es_actual = 1 AND ha2.validado = 1
+            LEFT JOIN areas ar2 ON ha2.area_id = ar2.id
+            WHERE h.fecha BETWEEN ? AND ? AND e2.activo = 1 AND h.estado = 'APROBADO'
+        """
+        if area:
+            q_he += " AND ar2.nombre = ?"
+            params_he.append(area)
+            
+        # 2. Calcular total compensado
+        params_comp = [fecha_inicio, fecha_fin]
+        q_comp = """
+            SELECT SUM(c.minutos) as total_comp
+            FROM compensaciones_he_inasistencia c
+            JOIN empleados e3 ON c.empleado_id = e3.id
+            LEFT JOIN historial_areas ha3 ON e3.id = ha3.empleado_id AND ha3.es_actual = 1 AND ha3.validado = 1
+            LEFT JOIN areas ar3 ON ha3.area_id = ar3.id
+            WHERE c.fecha_inasistencia BETWEEN ? AND ? AND e3.activo = 1
+        """
+        if area:
+            q_comp += " AND ar3.nombre = ?"
+            params_comp.append(area)
+
+        # 3. Calcular total deuda
+        params_asis = [fecha_inicio, fecha_fin]
+        q_asis = """
+            SELECT SUM(CASE WHEN a.minutos_deuda > 0 THEN a.minutos_deuda ELSE 0 END) as total_deuda
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ?
-              AND e.activo = 1
+            WHERE a.fecha BETWEEN ? AND ? AND e.activo = 1
         """
-        params = [fecha_inicio, fecha_fin]
-        area_cond_sub = ""
         if area:
-            area_cond_sub = " AND ar2.nombre = ?"
-            params.append(area)
-        q_sum = q_sum.format(area_condition_sub=area_cond_sub)
-        params.extend([fecha_inicio, fecha_fin])
-        
-        if area:
-            q_sum += " AND ar.nombre = ?"
-            params.append(area)
+            q_asis += " AND ar.nombre = ?"
+            params_asis.append(area)
         if turno_id:
-            q_sum += " AND a.turno_asignado_id = ?"
-            params.append(turno_id)
-            
-        row = await db.fetch_one(q_sum, tuple(params))
-        total_he = int(row['total_he_aprobado'] or 0) if row else 0
-        total_deuda = int(row['total_deuda'] or 0) if row else 0
+            q_asis += " AND a.turno_asignado_id = ?"
+            params_asis.append(turno_id)
+
+        row_he = await db.fetch_one(q_he, tuple(params_he))
+        row_comp = await db.fetch_one(q_comp, tuple(params_comp))
+        row_asis = await db.fetch_one(q_asis, tuple(params_asis))
+
+        total_he_aprobado = (row_he['total_he'] or 0.0) if row_he else 0.0
+        total_compensado = (row_comp['total_comp'] or 0.0) if row_comp else 0.0
+        total_he = max(0.0, total_he_aprobado - total_compensado)
+        total_deuda = int((row_asis['total_deuda'] or 0) if row_asis else 0)
         total_balance = total_he - total_deuda
         
         # Obtener detalle por empleado para el array 'resumen'

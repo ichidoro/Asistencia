@@ -3742,6 +3742,14 @@
                                 <div class="fw-bold text-dark">Revertir Jornada a Especial</div>
                             </button>
 
+                            <button id="btn-compensar-he-action"
+                                class="btn btn-outline-success py-3 d-flex flex-column align-items-center d-none"
+                                onclick="proceedToCompensateHE()">
+                                <i class="bi bi-clock-history mb-1 fs-4 text-success"></i>
+                                <div class="fw-bold text-dark">Compensar con Horas Extras</div>
+                            </button>
+
+
                             <button id="btn-validar-jornada"
                                 class="btn btn-outline-dark py-3 d-flex flex-column align-items-center d-none"
                                 style="border-color: #8e44ad;"
@@ -3923,7 +3931,9 @@
             <script src="/static/js/marcaciones_ui.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/perdonazo_panel.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/intercambios_panel.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/compensaciones_he_panel.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/dashboard.js?v={{ startup_id }}" defer></script>
+
 
             <!-- Consola de Seguridad y Cierre -->
             <script src="/static/js/seguridad_ui.js?v={{ startup_id }}" defer></script>

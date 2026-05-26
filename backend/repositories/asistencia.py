@@ -525,18 +525,60 @@ class AsistenciaRepository:
     # COMPENSACIONES DE INASISTENCIA CON HORAS EXTRAS (HE)
     # ═══════════════════════════════════════════════════════════════════
 
-    async def get_horas_extras_disponibles(self, empleado_id: int) -> List[Dict[str, Any]]:
-        """Retorna las horas extras aprobadas de un empleado que tienen minutos disponibles para compensación."""
-        query = """
-            SELECT fecha, minutos_autorizados, COALESCE(minutos_compensados, 0) as minutos_compensados,
-                   (minutos_autorizados - COALESCE(minutos_compensados, 0)) AS minutos_disponibles
+    async def get_periodo_por_fecha(self, fecha: str) -> Dict[str, Any]:
+        """Encuentra el inicio y fin del periodo RRHH para la fecha dada."""
+        query = "SELECT * FROM periodos_rrhh WHERE ? BETWEEN fecha_inicio AND fecha_fin LIMIT 1"
+        row = await self.db.fetch_one(query, (fecha,))
+        if row:
+            return dict(row)
+        
+        # Fallback a mes calendario
+        try:
+            dt = datetime.strptime(fecha[:10], "%Y-%m-%d")
+            import calendar
+            last_day = calendar.monthrange(dt.year, dt.month)[1]
+            return {
+                "fecha_inicio": f"{dt.year:04d}-{dt.month:02d}-01",
+                "fecha_fin": f"{dt.year:04d}-{dt.month:02d}-{last_day:02d}",
+                "mes_cierre": f"{dt.year:04d}-{dt.month:02d}"
+            }
+        except Exception as e:
+            logger.error(f"Error parseando fecha para fallback de periodo: {e}")
+            # Fallback seguro
+            return {
+                "fecha_inicio": fecha[:8] + "01",
+                "fecha_fin": fecha[:8] + "28",
+                "mes_cierre": fecha[:7]
+            }
+
+    async def get_bolsa_he_disponible(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> Dict[str, Any]:
+        """Calcula el total de HE aprobadas y el acumulado de minutos ya compensados en el periodo."""
+        # 1. Total HE Aprobadas en el periodo
+        query_he = """
+            SELECT SUM(minutos_autorizados) as total_he
             FROM horas_extras
             WHERE empleado_id = ?
               AND estado = 'APROBADO'
-              AND (minutos_autorizados - COALESCE(minutos_compensados, 0)) > 0
-            ORDER BY fecha ASC
+              AND fecha BETWEEN ? AND ?
         """
-        return await self.db.fetch_all(query, (empleado_id,))
+        row_he = await self.db.fetch_one(query_he, (empleado_id, fecha_inicio, fecha_fin))
+        total_he = row_he['total_he'] if row_he and row_he['total_he'] else 0.0
+
+        # 2. Total de minutos ya compensados en el periodo (fecha_inasistencia en el periodo)
+        query_comp = """
+            SELECT SUM(minutos) as total_comp
+            FROM compensaciones_he_inasistencia
+            WHERE empleado_id = ?
+              AND fecha_inasistencia BETWEEN ? AND ?
+        """
+        row_comp = await self.db.fetch_one(query_comp, (empleado_id, fecha_inicio, fecha_fin))
+        total_comp = row_comp['total_comp'] if row_comp and row_comp['total_comp'] else 0.0
+
+        return {
+            "total_he_aprobadas": total_he,
+            "total_compensado": total_comp,
+            "minutos_disponibles": max(0.0, total_he - total_comp)
+        }
 
     async def get_compensacion_por_fecha(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
         """Retorna las compensaciones de inasistencia activas para un empleado en una fecha específica."""
@@ -564,13 +606,12 @@ class AsistenciaRepository:
         """Crea un registro de compensación."""
         query = """
             INSERT INTO compensaciones_he_inasistencia 
-                (empleado_id, fecha_inasistencia, fecha_he, minutos, observaciones, aprobado_por)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (empleado_id, fecha_inasistencia, minutos, observaciones, aprobado_por)
+            VALUES (?, ?, ?, ?, ?)
         """
         params = (
             data['empleado_id'],
             data['fecha_inasistencia'],
-            data['fecha_he'],
             data['minutos'],
             data.get('observaciones'),
             data.get('usuario_id')
@@ -582,19 +623,5 @@ class AsistenciaRepository:
         """Elimina una compensación por ID."""
         query = "DELETE FROM compensaciones_he_inasistencia WHERE id = ?"
         await self.db.execute(query, (compensacion_id,))
-
-    async def recalcular_minutos_compensados_he(self, empleado_id: int, fecha_he: str) -> None:
-        """Actualiza minutos_compensados en la tabla horas_extras basándose en las compensaciones activas."""
-        query = """
-            UPDATE horas_extras
-            SET minutos_compensados = COALESCE(
-                (SELECT SUM(minutos) 
-                 FROM compensaciones_he_inasistencia 
-                 WHERE empleado_id = ? AND fecha_he = ?), 
-                0
-            )
-            WHERE empleado_id = ? AND fecha = ?
-        """
-        await self.db.execute(query, (empleado_id, fecha_he, empleado_id, fecha_he))
 
 

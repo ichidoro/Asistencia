@@ -248,6 +248,12 @@ function renderMarcacionesToolbar(container) {
                 </button>
                 ` : ''}
 
+                ${AuthService.hasPermission("marcaciones.compensar") ? `
+                <button class="btn btn-sm btn-outline-success shadow-sm ms-2" onclick="window.abrirModalCompensacionHE ? window.abrirModalCompensacionHE() : console.warn('Compensaciones HE panel not loaded')" title="Compensar Inasistencia con Horas Extras" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
+                    <i class="bi bi-clock-history"></i> <span class="fw-bold">Compensar con H.E.</span>
+                </button>
+                ` : ''}
+
             </div>
         </div>
 

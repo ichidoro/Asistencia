@@ -133,6 +133,19 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
+    const btnCompensarHE = document.getElementById('btn-compensar-he-action');
+    if (btnCompensarHE) {
+        const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
+        const hasPerm = typeof AuthService !== 'undefined' ? AuthService.hasPermission("marcaciones.compensar") : true;
+        if (asistJ && (asistJ.estado === 'INASISTENCIA' || asistJ.estado === 'FALTA') && hasPerm) {
+            btnCompensarHE.classList.remove('d-none');
+        } else {
+            btnCompensarHE.classList.add('d-none');
+        }
+    }
+
+
     if (btnValidarJornada) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
@@ -183,6 +196,20 @@ function proceedToHoraExtra() {
         console.error("Función openHoraExtraModal no encontrada.");
     }
 }
+
+function proceedToCompensateHE() {
+    closeAsistenciaActionModal();
+    if (typeof abrirModalCompensacionHE === 'function') {
+        abrirModalCompensacionHE(
+            marcacionesManualesState.currentEmpId,
+            marcacionesManualesState.currentDate
+        );
+    } else {
+        console.error("Función abrirModalCompensacionHE no encontrada.");
+    }
+}
+window.proceedToCompensateHE = proceedToCompensateHE;
+
 
 function proceedToValidation() {
     closeAsistenciaActionModal();

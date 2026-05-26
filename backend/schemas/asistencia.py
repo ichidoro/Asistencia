@@ -56,7 +56,6 @@ class IntercambioCreate(BaseModel):
 class CompensacionCreate(BaseModel):
     empleado_id: int
     fecha_inasistencia: str  # YYYY-MM-DD
-    fecha_he: str            # YYYY-MM-DD
     minutos: float
     observaciones: Optional[str] = None
 

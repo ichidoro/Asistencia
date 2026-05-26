@@ -1999,13 +1999,14 @@ async def delete_intercambio(
     return {"success": True, "message": "Intercambio eliminado y fechas devueltas a estado natural"}
 
 
-@router.get("/compensaciones/disponibles/")
-async def get_he_disponibles(
+@router.get("/compensaciones/bolsa/")
+async def get_bolsa_he_disponible(
     empleado_id: int = Query(..., description="ID del empleado"),
+    fecha: str = Query(..., description="Fecha de la inasistencia YYYY-MM-DD"),
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
 ):
-    """Obtiene las horas extras aprobadas de un empleado con saldo disponible para compensación."""
+    """Obtiene el saldo de bolsa de horas extras disponible para el empleado en el periodo de la fecha dada."""
     # RLS Check
     emp_repo = EmpleadoRepository(service.repository.db)
     emp = await emp_repo.get_by_id(empleado_id)
@@ -2014,8 +2015,14 @@ async def get_he_disponibles(
     if not current_user.alcance_global and emp.area not in (current_user.areas or []):
         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
 
-    disponibles = await service.repository.get_horas_extras_disponibles(empleado_id)
-    return {"success": True, "data": disponibles}
+    periodo = await service.repository.get_periodo_por_fecha(fecha)
+    if not periodo:
+        raise HTTPException(status_code=404, detail="No se encontró un periodo para la fecha especificada.")
+
+    bolsa = await service.repository.get_bolsa_he_disponible(
+        empleado_id, periodo["fecha_inicio"], periodo["fecha_fin"]
+    )
+    return {"success": True, "data": bolsa, "periodo": periodo}
 
 
 @router.get("/compensaciones/")
@@ -2053,7 +2060,7 @@ async def create_compensacion(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
 ):
-    """Crea una nueva compensación de inasistencia con horas extras."""
+    """Crea una nueva compensación de inasistencia con la bolsa de horas extras del periodo."""
     db = service.repository.db
     # RLS Check
     emp_repo = EmpleadoRepository(db)
@@ -2066,26 +2073,26 @@ async def create_compensacion(
     # Cierre Check
     if await service.repository.check_rango_cerrado(data.fecha_inasistencia, data.fecha_inasistencia, data.empleado_id):
         raise HTTPException(status_code=403, detail="La fecha de inasistencia se encuentra en un período cerrado.")
-    if await service.repository.check_rango_cerrado(data.fecha_he, data.fecha_he, data.empleado_id):
-        raise HTTPException(status_code=403, detail="La fecha de horas extras se encuentra en un período cerrado.")
 
-    # Validar que exista la HE aprobada y que tenga saldo suficiente
-    he_registro = await db.fetch_one(
-        "SELECT minutos_autorizados, COALESCE(minutos_compensados, 0) as minutos_compensados FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND estado = 'APROBADO'",
-        (data.empleado_id, data.fecha_he)
+    # Obtener periodo para la fecha de inasistencia
+    periodo = await service.repository.get_periodo_por_fecha(data.fecha_inasistencia)
+    if not periodo:
+        raise HTTPException(status_code=400, detail="No se encontró un periodo para la fecha de inasistencia.")
+
+    # Validar que tenga saldo suficiente en la bolsa
+    bolsa = await service.repository.get_bolsa_he_disponible(
+        data.empleado_id, periodo["fecha_inicio"], periodo["fecha_fin"]
     )
-    if not he_registro:
-        raise HTTPException(status_code=400, detail="No existen horas extras aprobadas en la fecha seleccionada.")
-
-    saldo_he = he_registro['minutos_autorizados'] - he_registro['minutos_compensados']
-    if data.minutos > saldo_he:
-        raise HTTPException(status_code=400, detail=f"Saldo insuficiente de horas extras en la fecha {data.fecha_he} (Disponible: {saldo_he} min).")
+    if data.minutos > bolsa["minutos_disponibles"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Saldo insuficiente de horas extras en la bolsa del periodo (Disponible: {bolsa['minutos_disponibles']} min)."
+        )
 
     # Registrar la compensación
     payload = {
         'empleado_id': data.empleado_id,
         'fecha_inasistencia': data.fecha_inasistencia,
-        'fecha_he': data.fecha_he,
         'minutos': data.minutos,
         'observaciones': data.observaciones,
         'usuario_id': current_user.user_id
@@ -2093,20 +2100,11 @@ async def create_compensacion(
     
     compensacion_id = await service.repository.create_compensacion(payload)
     
-    # Actualizar minutos compensados en horas_extras
-    await service.repository.recalcular_minutos_compensados_he(data.empleado_id, data.fecha_he)
-    
-    # Reprocesar ambas fechas de asistencia
+    # Reprocesar fecha de inasistencia
     await service.reprocesar_periodo_empleado(
         empleado_id=data.empleado_id,
         fecha_inicio=data.fecha_inasistencia,
         fecha_fin=data.fecha_inasistencia,
-        force=True
-    )
-    await service.reprocesar_periodo_empleado(
-        empleado_id=data.empleado_id,
-        fecha_inicio=data.fecha_he,
-        fecha_fin=data.fecha_he,
         force=True
     )
     
@@ -2116,7 +2114,7 @@ async def create_compensacion(
             INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
             VALUES (?, ?, ?, ?, ?)
         """, (current_user.user_id, current_user.username, 'CREATE_COMPENSACION', 'Marcaciones', 
-              f"Compensación ID {compensacion_id}: Inasistencia del {data.fecha_inasistencia} cubierta con {data.minutos} min de HE del {data.fecha_he}"))
+              f"Compensación ID {compensacion_id}: Inasistencia del {data.fecha_inasistencia} cubierta con {data.minutos} min de la bolsa de HE"))
     except Exception as aud_err:
         logger.warning(f"No se pudo registrar auditoría de compensación: {aud_err}")
         
@@ -2129,7 +2127,7 @@ async def delete_compensacion(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
 ):
-    """Elimina una compensación y devuelve las fechas a su estado natural."""
+    """Elimina una compensación y devuelve la fecha a su estado natural."""
     db = service.repository.db
     # Obtener el registro para saber a qué empleado y fechas corresponde
     c = await db.fetch_one("SELECT * FROM compensaciones_he_inasistencia WHERE id = ?", (compensacion_id,))
@@ -2138,7 +2136,6 @@ async def delete_compensacion(
         
     empleado_id = c['empleado_id']
     fecha_inasistencia = c['fecha_inasistencia']
-    fecha_he = c['fecha_he']
     
     # RLS Check
     emp_repo = EmpleadoRepository(db)
@@ -2151,26 +2148,15 @@ async def delete_compensacion(
     # Cierre Check
     if await service.repository.check_rango_cerrado(fecha_inasistencia, fecha_inasistencia, empleado_id):
         raise HTTPException(status_code=403, detail="La fecha de inasistencia se encuentra en un período cerrado.")
-    if await service.repository.check_rango_cerrado(fecha_he, fecha_he, empleado_id):
-        raise HTTPException(status_code=403, detail="La fecha de horas extras se encuentra en un período cerrado.")
 
     # Eliminar
     await service.repository.delete_compensacion(compensacion_id)
     
-    # Recalcular minutos compensados en la HE de origen
-    await service.repository.recalcular_minutos_compensados_he(empleado_id, fecha_he)
-    
-    # Reprocesar ambas fechas de asistencia
+    # Reprocesar fecha de inasistencia
     await service.reprocesar_periodo_empleado(
         empleado_id=empleado_id,
         fecha_inicio=fecha_inasistencia,
         fecha_fin=fecha_inasistencia,
-        force=True
-    )
-    await service.reprocesar_periodo_empleado(
-        empleado_id=empleado_id,
-        fecha_inicio=fecha_he,
-        fecha_fin=fecha_he,
         force=True
     )
     
@@ -2180,7 +2166,7 @@ async def delete_compensacion(
             INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
             VALUES (?, ?, ?, ?, ?)
         """, (current_user.user_id, current_user.username, 'DELETE_COMPENSACION', 'Marcaciones', 
-              f"Eliminada compensación ID {compensacion_id}: Inasistencia del {fecha_inasistencia} cubierto por HE del {fecha_he}"))
+              f"Eliminada compensación ID {compensacion_id}: Inasistencia del {fecha_inasistencia} desmarcada de la bolsa de HE"))
     except Exception as aud_err:
         logger.warning(f"No se pudo registrar auditoría de eliminación de compensación: {aud_err}")
         

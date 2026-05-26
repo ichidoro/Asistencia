@@ -152,7 +152,7 @@ class CierreService:
         resumen = dict(resumen_row) if resumen_row else {}
 
         query_he_aprobadas = f"""
-            SELECT ROUND(SUM(he.minutos_autorizados - COALESCE(he.minutos_compensados, 0)) / 60.0, 2) AS he_horas,
+            SELECT SUM(he.minutos_autorizados) AS he_minutos,
                    COUNT(*) AS he_count
             FROM horas_extras he INDEXED BY idx_he_fecha
             JOIN empleados e ON he.empleado_id = e.id
@@ -164,10 +164,28 @@ class CierreService:
               AND he.estado = 'APROBADO'
             {filtro_area}
         """
+        query_comp = f"""
+            SELECT SUM(comp.minutos) AS total_comp
+            FROM compensaciones_he_inasistencia comp
+            JOIN empleados e ON comp.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND comp.fecha_inasistencia >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR comp.fecha_inasistencia <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE comp.fecha_inasistencia BETWEEN ? AND ?
+            {filtro_area}
+        """
         he_row = await self.db.fetch_one(
             query_he_aprobadas, tuple([fecha_inicio, fecha_fin] + params_area)
         )
-        resumen['he_aprobadas_horas'] = (he_row['he_horas'] or 0.0) if he_row else 0.0
+        comp_row = await self.db.fetch_one(
+            query_comp, tuple([fecha_inicio, fecha_fin] + params_area)
+        )
+        total_he = (he_row['he_minutos'] or 0.0) if he_row else 0.0
+        total_comp = (comp_row['total_comp'] or 0.0) if comp_row else 0.0
+        neto_he = max(0.0, total_he - total_comp)
+
+        resumen['he_aprobadas_horas'] = round(neto_he / 60.0, 2)
         resumen['he_aprobadas_count'] = (he_row['he_count'] or 0) if he_row else 0
 
         # Feriados del periodo
