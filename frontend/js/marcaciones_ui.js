@@ -1201,7 +1201,7 @@ window.updateVisorPDF = function(isDownload = false) {
         else if (estadoStr === 'SALIDA_ADELANTADA' || estadoStr === 'SAD') estadoBadge = 'Salida Adelantada';
         else if (estadoStr === 'ATR_SAD') estadoBadge = 'Atraso / Sal. Adelantada';
         else if (estadoStr === 'INASISTENCIA' || estadoStr === 'FALTA') estadoBadge = 'Inasistencia';
-        else if (estadoStr === 'INASISTENCIA_COMPENSADA') estadoBadge = 'Día Compensado';
+        else if (estadoStr === 'INASISTENCIA_COMPENSADA') estadoBadge = 'Compensado con H.E.';
         else if (estadoStr === 'JORNADA_COMPENSATORIA') estadoBadge = 'Jornada Compensatoria';
         else if (estadoStr === 'LIBRE') estadoBadge = 'Día Libre';
         else if (estadoStr === 'NO_ACTIVO') estadoBadge = 'No Activo';
@@ -4099,12 +4099,11 @@ function renderVistaAnalitica(respData, container) {
 
         // Limpiar errores de coma flotante redondeando a 5 decimales (suficiente precisión)
         he_bruto = Math.round(he_bruto * 10000) / 10000;
-        he_apr = Math.round((he_apr - he_compensado) * 10000) / 10000;
-        if (he_apr < 0) he_apr = 0;
+        he_apr = Math.round(he_apr * 10000) / 10000;
         he_rec = Math.round(he_rec * 10000) / 10000;
         he_pend = Math.round(he_pend * 10000) / 10000;
 
-        const saldo = he_apr - d_tot;
+        const saldo = he_apr - d_tot - he_compensado;
         const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null; // null = no bolsa
         return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
                  cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
@@ -4696,7 +4695,7 @@ function _analiticaCellBadge(di) {
             'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
             'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
             'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR'],
-            'INASISTENCIA_COMPENSADA': ['badge-inasistencia-compensada', '<i class="bi bi-x-circle me-1"></i>COMP'],
+            'INASISTENCIA_COMPENSADA': ['badge-inasistencia-compensada-he', '<i class="bi bi-clock-history me-1"></i>C.HE'],
             'JORNADA_COMPENSATORIA':   ['badge-compensatorio',           '<i class="bi bi-arrow-left-right me-1"></i>COMP']
         });
     }

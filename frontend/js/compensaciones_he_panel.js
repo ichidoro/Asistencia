@@ -13,9 +13,9 @@
             border: 1px solid #bbf7d0;
         }
         .badge-inasistencia-compensada-he {
-            background: #f1f5f9;
-            color: #475569;
-            border: 1px solid #cbd5e1;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
             text-decoration: line-through;
         }
     `;

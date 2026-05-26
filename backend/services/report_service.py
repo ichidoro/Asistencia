@@ -270,13 +270,12 @@ class ReportService:
                             he_pend += (di.get("minutos_extra_bruto") or 0)
                         he_compensado += (di.get("minutos_compensados_he") or 0)
                             
-                he_apr = max(0.0, he_apr - he_compensado)
                 he_bruto = round(he_bruto)
                 he_apr = round(he_apr)
                 he_rec = round(he_rec)
                 he_pend = round(he_pend)
                 
-                saldo = he_apr - d_tot
+                saldo = he_apr - d_tot - he_compensado
                 saldo_meta = (acum_bolsa - meta_min) if es_bolsa else None
                 
                 rows_calc.append({
