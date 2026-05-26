@@ -7,6 +7,7 @@ import libsql
 import asyncio
 import os
 import sys
+import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -68,6 +69,7 @@ class HybridDatabase:
         self.read_conn: Optional[libsql.Connection] = None
         self._read_db_lock = asyncio.Lock()
         self._bg_sync_task: Optional[asyncio.Task] = None
+        self.last_activity_time: float = 0.0
         
         
     async def connect(self, retry: bool = True) -> None:
@@ -236,6 +238,16 @@ class HybridDatabase:
                     
                     async def bg_initial_sync():
                         try:
+                            # Esperar un tiempo de gracia inicial de 15 segundos
+                            await asyncio.sleep(15)
+                            
+                            # Esperar a que el usuario esté inactivo por lo menos 15 segundos
+                            while True:
+                                time_since_activity = time.time() - self.last_activity_time
+                                if time_since_activity >= 15.0:
+                                    break
+                                await asyncio.sleep(5)
+                                
                             async with self._db_lock:
                                 await asyncio.to_thread(self.conn.sync)
                                 try:
@@ -508,6 +520,7 @@ class HybridDatabase:
 
     async def execute(self, query: str, params: Optional[Union[tuple, list]] = None) -> Any:
         """Ejecuta query serializado por _db_lock para escrituras (reads son libres)."""
+        self.last_activity_time = time.time()
         if not self._connected:
             await self.connect()
 
@@ -638,6 +651,7 @@ class HybridDatabase:
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
         """Fetch all con conexión de lectura dedicada no bloqueante (con fallback a la principal en transacción)"""
+        self.last_activity_time = time.time()
         if not self._connected:
             await self.connect()
 
@@ -765,6 +779,7 @@ class HybridDatabase:
             sync_to_cloud_explicit() al terminar la secuencia completa.
         ─────────────────────────────────────────────────────────────────────────
         """
+        self.last_activity_time = time.time()
         if not self._connected:
             await self.connect()
 
@@ -971,6 +986,13 @@ class HybridDatabase:
     async def sync_from_cloud(self) -> None:
         """Sincronización Nativa delegada a LibSQL (WAL concurrente, respeta _sync_lock)."""
         if not self.sync_supported:
+            return
+
+        # Evitar sincronizar si el usuario ha estado activo recientemente (últimos 20 segundos)
+        # Esto previene que el bloqueo del VFS de LibSQL congele la aplicación durante el uso activo.
+        time_since_activity = time.time() - self.last_activity_time
+        if time_since_activity < 20.0:
+            logger.debug(f"⏸️ sync_from_cloud: usuario activo hace {time_since_activity:.1f}s, posponiendo sync")
             return
 
         # Si hay un batch en progreso, ceder el turno para no saturar I/O

@@ -1245,7 +1245,7 @@ window.updateVisorPDF = function(isDownload = false) {
             estadoBadge = 'Jornada Especial';
         }
         
-        const tiempoColacion = a.minutos_colacion_real || a.minutos_colacion || 0;
+        const tiempoColacion = a.minutos_colacion || 0;
         
         return [
             fechaFormateada,
@@ -1717,9 +1717,9 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             let contextoTags = [];
             
             // 1. Trabajo en Colación (Tomó menos colación de la permitida)
-            if (di.minutos_colacion_real !== undefined && di.minutos_colacion_auto !== undefined) {
-                if (di.minutos_colacion_real > 0 && di.minutos_colacion_auto > di.minutos_colacion_real) {
-                    let extraMin = di.minutos_colacion_auto - di.minutos_colacion_real;
+            if (di.minutos_colacion !== undefined && di.minutos_colacion_auto !== undefined) {
+                if (di.minutos_colacion_real > 0 && di.minutos_colacion_auto > (di.minutos_colacion || 0)) {
+                    let extraMin = di.minutos_colacion_auto - (di.minutos_colacion || 0);
                     contextoTags.push(`<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mb-1" title="Colación tomada: ${di.minutos_colacion_real}m de ${di.minutos_colacion_auto}m"><i class="bi bi-cup-hot"></i> +${extraMin}m (Colación reducida)</span>`);
                 }
             }
@@ -3288,6 +3288,51 @@ window.cierreWizardConfirmarParametros = async function() {
     }
 };
 
+function cierreGetHEContextBadges(a) {
+    let tags = [];
+    
+    // 1. Trabajo en Colación (Tomó menos colación de la permitida)
+    if (a.minutos_colacion !== undefined && a.minutos_colacion_auto !== undefined && a.minutos_colacion !== null && a.minutos_colacion_auto !== null) {
+        if (a.minutos_colacion_real > 0 && a.minutos_colacion_auto > (a.minutos_colacion || 0)) {
+            let extraMin = a.minutos_colacion_auto - (a.minutos_colacion || 0);
+            tags.push(`<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-2" title="Colación tomada: ${a.minutos_colacion_real}m de ${a.minutos_colacion_auto}m"><i class="bi bi-cup-hot"></i> +${extraMin}m (Colación reducida)</span>`);
+        }
+    }
+    
+    // 2. Llegada Temprana Efectiva (Fuera del margen de anclaje)
+    if (a.hora_entrada_teorica && a.hora_entrada_real) {
+        let entTeo = new Date(`1970-01-01T${a.hora_entrada_teorica}`);
+        let entReal = new Date(`1970-01-01T${a.hora_entrada_real}`);
+        if (entReal > entTeo && (entReal - entTeo) > 12 * 3600000) entReal.setDate(entReal.getDate() - 1);
+        
+        let diffEntradaMin = Math.round((entTeo - entReal) / 60000); 
+        let obsLlegada = (a.observaciones || '').toLowerCase();
+        if (diffEntradaMin > 0 && obsLlegada.includes('llegada anticipada') && obsLlegada.includes('fuera del anclaje')) {
+            tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-in-right"></i> +${diffEntradaMin}m (Ingreso Anticipado)</span>`);
+        }
+    }
+    
+    // 3. Salida Tardía Efectiva
+    if (a.hora_salida_teorica && a.hora_salida_real) {
+        let salTeo = new Date(`1970-01-01T${a.hora_salida_teorica}`);
+        let salReal = new Date(`1970-01-01T${a.hora_salida_real}`);
+        if (salReal < salTeo && (salTeo - salReal) > 12 * 3600000) salReal.setDate(salReal.getDate() + 1);
+        
+        let diffSalidaMin = Math.round((salReal - salTeo) / 60000);
+        let obsSalida = (a.observaciones || '').toLowerCase();
+        if (diffSalidaMin > 0 && !obsSalida.includes('salida dentro del anclaje')) {
+            tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-right"></i> +${diffSalidaMin}m (Salida Tardía)</span>`);
+        }
+    }
+    
+    // Fallback si no identificó nada específico pero hay horas extras
+    if (tags.length === 0) {
+        tags.push(`<span class="badge bg-light text-secondary border border-secondary-subtle ms-2 text-uppercase" style="font-size: 0.65rem;"><i class="bi bi-tag-fill me-1"></i>Exceso Jornada</span>`);
+    }
+    
+    return tags.join('');
+}
+
 function renderWizardStep(step) {
     window.cierreWizardState.currentStep = step;
     updateWizardTabs(step);
@@ -3443,7 +3488,8 @@ function renderWizardStep(step) {
                             <span class="fw-bold text-dark small">${a.fecha}</span>
                             <span class="mx-2 text-muted">|</span>
                             <span class="text-secondary small">${a.nombre_completo}</span>
-                            <span class="badge bg-light text-primary border border-primary-subtle ms-2">${a.minutos_bruto} min</span>
+                            <span class="badge bg-light text-primary border border-primary-subtle ms-2">${formatExactMinutesToTime(a.minutos_bruto)}</span>
+                            ${cierreGetHEContextBadges(a)}
                         </div>
                     </div>
                     ${canApproveHE ? `
@@ -3471,7 +3517,7 @@ function renderWizardStep(step) {
                     </button>
                     ` : ''}
                 </div>
-                <div class="border rounded-3 shadow-sm overflow-hidden" style="max-height:230px; overflow-y:auto; background:#ffffff;">
+                <div class="border rounded-3 shadow-sm" style="max-height:230px; overflow-y:auto; background:#ffffff;">
                     <ul class="list-unstyled mb-0">${list}</ul>
                 </div>
             `;
@@ -5067,11 +5113,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
     // Colación Logic
     const colAuto = e.minutos_colacion_auto || 0;
-    const colReal = e.minutos_colacion_real || 0;
+    const colReal = e.minutos_colacion || 0;
     const colApli = e.minutos_colacion || 0;
 
     let colRealText = '';
-    if (colReal > 0) {
+    if (e.minutos_colacion_real > 0) {
         colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Marcas)</span>`;
     } else if (colApli > 0) {
         colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Auto)</span>`;

@@ -2866,7 +2866,12 @@ class AsistenciaService:
             # Si hay marcas intermedias (colación real), usamos ese tiempo.
             # DT-3: El tiempo real medido es la fuente de verdad (sin MAX)
             if res.get('minutos_colacion_real', 0) > 0:
-                minutos_colacion = res['minutos_colacion_real']
+                # Si la colación real es inferior a la programada y descuento_colacion_auto está habilitado,
+                # descontamos la programada (piso) para no generar horas extras indebidas.
+                if config_dia and int(colacion_flag or 0):
+                    minutos_colacion = max(res['minutos_colacion_real'], minutos_colacion_permitidos)
+                else:
+                    minutos_colacion = res['minutos_colacion_real']
             else:
                 # Si no hay marcas intermedias, aplicamos el descuento automático si está configurado
                 if config_dia and int(colacion_flag or 0):

@@ -24,9 +24,14 @@ class CierreService:
         query_he = f"""
             SELECT he.id, he.fecha, he.empleado_id,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   he.minutos_bruto, he.minutos_autorizados
+                   he.minutos_bruto, he.minutos_autorizados, he.origen,
+                   asi.hora_entrada_real, asi.hora_salida_real,
+                   asi.hora_entrada_teorica, asi.hora_salida_teorica,
+                   asi.minutos_colacion_real, asi.minutos_colacion_auto, asi.minutos_colacion,
+                   asi.observaciones
             FROM horas_extras he INDEXED BY idx_he_fecha
             JOIN empleados e ON he.empleado_id = e.id
+            LEFT JOIN asistencias asi ON he.empleado_id = asi.empleado_id AND he.fecha = asi.fecha
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                 AND he.fecha >= ha.fecha_desde
                 AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
