@@ -308,6 +308,50 @@ class ConfiguracionRepository:
             except Exception as e_mig:
                 logger.error(f"❌ Falló migración inicial de periodos: {e_mig}")
 
+        # 9. Tabla de Periodos RRHH (Tramos de Cierre) [NEW]
+        if not await self.db.table_exists("periodos_rrhh"):
+            logger.info("🛠️ Creando tabla 'periodos_rrhh' para tramos de cierre...")
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS periodos_rrhh (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mes_cierre TEXT NOT NULL,
+                    fecha_inicio TEXT NOT NULL,
+                    fecha_fin TEXT NOT NULL,
+                    activo INTEGER DEFAULT 0,
+                    estado TEXT DEFAULT 'abierto',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logger.info("✨ Tabla 'periodos_rrhh' creada exitosamente")
+
+            # Sembrar periodo por defecto
+            try:
+                from datetime import datetime, timedelta
+                hoy = datetime.now().date()
+                if hoy.day >= 26:
+                    inicio = hoy.replace(day=26)
+                    if hoy.month == 12:
+                        fin = hoy.replace(year=hoy.year + 1, month=1, day=25)
+                    else:
+                        fin = hoy.replace(month=hoy.month + 1, day=25)
+                else:
+                    if hoy.month == 1:
+                        inicio = hoy.replace(year=hoy.year - 1, month=12, day=26)
+                    else:
+                        inicio = hoy.replace(month=hoy.month - 1, day=26)
+                    fin = hoy.replace(day=25)
+
+                meses_es = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                mes_cierre = meses_es[hoy.month - 1]
+
+                await self.db.execute("""
+                    INSERT INTO periodos_rrhh (mes_cierre, fecha_inicio, fecha_fin, activo, estado)
+                    VALUES (?, ?, ?, 1, 'abierto')
+                """, (mes_cierre, inicio.strftime("%Y-%m-%d"), fin.strftime("%Y-%m-%d")))
+                logger.info(f"✨ Se ha sembrado el período activo por defecto: {mes_cierre} ({inicio} a {fin})")
+            except Exception as e_seed:
+                logger.warning(f"⚠️ Error sembrando periodo inicial: {e_seed}")
+
         logger.info("✅ Tablas de configuración, ajustes y periodos inicializadas")
 
     # --- BONOS ---
@@ -785,3 +829,40 @@ class ConfiguracionRepository:
     async def delete_notificaciones_area(self, area: str) -> bool:
         await self.db.execute("DELETE FROM notificaciones_areas WHERE area = ?", (area,))
         return True
+
+    # --- PERIODOS RRHH ---
+    async def get_all_periodos_rrhh(self) -> List[Dict[str, Any]]:
+        return await self.db.fetch_all("SELECT * FROM periodos_rrhh ORDER BY fecha_inicio DESC")
+
+    async def get_periodo_rrhh_activo(self) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
+
+    async def get_periodo_rrhh_by_id(self, id: int) -> Optional[Dict[str, Any]]:
+        return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE id = ?", (id,))
+
+    async def create_periodo_rrhh(self, mes_cierre: str, fecha_inicio: str, fecha_fin: str, activo: int, estado: str) -> int:
+        if activo == 1:
+            await self.db.execute("UPDATE periodos_rrhh SET activo = 0")
+        res = await self.db.execute(
+            "INSERT INTO periodos_rrhh (mes_cierre, fecha_inicio, fecha_fin, activo, estado) VALUES (?, ?, ?, ?, ?)",
+            (mes_cierre, fecha_inicio, fecha_fin, activo, estado)
+        )
+        return res.lastrowid
+
+    async def update_periodo_rrhh(self, id: int, mes_cierre: str, fecha_inicio: str, fecha_fin: str, activo: int, estado: str) -> bool:
+        if activo == 1:
+            await self.db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id != ?", (id,))
+        res = await self.db.execute(
+            "UPDATE periodos_rrhh SET mes_cierre = ?, fecha_inicio = ?, fecha_fin = ?, activo = ?, estado = ? WHERE id = ?",
+            (mes_cierre, fecha_inicio, fecha_fin, activo, estado, id)
+        )
+        return res.rowcount > 0
+
+    async def delete_periodo_rrhh(self, id: int) -> bool:
+        res = await self.db.execute("DELETE FROM periodos_rrhh WHERE id = ?", (id,))
+        return res.rowcount > 0
+
+    async def set_periodo_rrhh_activo(self, id: int) -> bool:
+        await self.db.execute("UPDATE periodos_rrhh SET activo = 0")
+        res = await self.db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (id,))
+        return res.rowcount > 0

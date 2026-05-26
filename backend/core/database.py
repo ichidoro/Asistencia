@@ -149,25 +149,15 @@ class HybridDatabase:
             
             # PRAGMAs de resiliencia y performance post-conexión
             try:
-                def _apply_pragmas():
-                    cursor = self.conn.cursor()
-                    # Resiliencia
-                    cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
-                    cursor.execute("PRAGMA journal_mode = WAL")    # WAL: lecturas concurrentes
-                    # PRAGMAs de performance (guía SQLite Forum + docs Turso Embedded Replica):
-                    cursor.execute("PRAGMA synchronous = NORMAL")  # WAL-safe: ahorra fsync
-                    # FULL (defecto): fsync en cada commit → lento en WAL mode
-                    # NORMAL: solo fsync en checkpoints → seguro porque WAL garantiza integridad
-                    cursor.execute("PRAGMA cache_size = -32000")   # 32MB page cache en RAM
-                    # Reduce I/O al leer las mismas páginas repetidamente (reproceso histórico)
-                    cursor.execute("PRAGMA temp_store = MEMORY")   # tablas temporales en RAM
-                    # Beneficia ORDER BY, GROUP BY y subconsultas de asistencias_service
-                    cursor.execute("PRAGMA mmap_size = 134217728") # 128MB memory-mapped I/O
-                    # Mapea el archivo DB al espacio virtual: elimina syscalls read() por página
-                    # Impacto principal: lecturas del reproceso histórico (110 días × consultas)
+                cursor = self.conn.cursor()
+                cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
+                cursor.execute("PRAGMA journal_mode = WAL")    # WAL: lecturas concurrentes
+                cursor.execute("PRAGMA synchronous = NORMAL")  # WAL-safe: ahorra fsync
+                cursor.execute("PRAGMA cache_size = -32000")   # 32MB page cache en RAM
+                cursor.execute("PRAGMA temp_store = MEMORY")   # tablas temporales en RAM
+                cursor.execute("PRAGMA mmap_size = 134217728") # 128MB memory-mapped I/O
                 self._pragma_applied = True
-                await asyncio.to_thread(_apply_pragmas)
-                logger.debug("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, sync=NORMAL, cache=32MB, mmap=128MB)")
+                logger.info("🛡️ PRAGMAs aplicados síncronamente (busy_timeout=5000, WAL, sync=NORMAL, cache=32MB, mmap=128MB)")
             except Exception as pragma_err:
                 logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 

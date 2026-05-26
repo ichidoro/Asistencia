@@ -1301,6 +1301,11 @@
                                         data-bs-target="#tab-bonos" type="button" role="tab">💰 Bonos</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="periodos-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-periodos" type="button" role="tab"
+                                        onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()">📅 Tramos de Cierre</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="justificaciones-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-justificaciones" type="button" role="tab">⚖️
                                         Justificaciones</button>
@@ -1442,6 +1447,10 @@
                                 <!-- Tab Bonos -->
                                 <div class="tab-pane fade" id="tab-bonos" role="tabpanel">
                                     <!-- Cargado por JS -->
+                                </div>
+                                <!-- Tab Tramos de Cierre -->
+                                <div class="tab-pane fade" id="tab-periodos" role="tabpanel">
+                                    <div id="periodos-config-container"></div>
                                 </div>
                                 <!-- Tab Justificaciones -->
                                 <div class="tab-pane fade" id="tab-justificaciones" role="tabpanel">
@@ -2111,6 +2120,78 @@
                     </div>
                 </div>
             </div>
+            <!-- Modal para Tramos de Cierre (Periodos RRHH) -->
+            <div id="modal-periodo" class="modal">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3 id="modal-periodo-title">Configurar Tramo de Cierre</h3>
+                        <button class="btn-close" onclick="closeModalPeriodo()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="form-periodo" onsubmit="event.preventDefault(); savePeriodoRRHH()">
+                            <input type="hidden" id="periodo-id">
+                            
+                            <div class="form-group mb-3">
+                                <label for="periodo-mes-cierre" class="fw-bold small">Mes Cierre *</label>
+                                <select id="periodo-mes-cierre" class="form-select" required>
+                                    <option value="">Seleccione mes...</option>
+                                    <option value="Enero">Enero</option>
+                                    <option value="Febrero">Febrero</option>
+                                    <option value="Marzo">Marzo</option>
+                                    <option value="Abril">Abril</option>
+                                    <option value="Mayo">Mayo</option>
+                                    <option value="Junio">Junio</option>
+                                    <option value="Julio">Julio</option>
+                                    <option value="Agosto">Agosto</option>
+                                    <option value="Septiembre">Septiembre</option>
+                                    <option value="Octubre">Octubre</option>
+                                    <option value="Noviembre">Noviembre</option>
+                                    <option value="Diciembre">Diciembre</option>
+                                </select>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="periodo-fecha-inicio" class="fw-bold small">Fecha Inicial *</label>
+                                    <input type="date" id="periodo-fecha-inicio" class="form-control" required onchange="calculatePeriodDays()">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="periodo-fecha-fin" class="fw-bold small">Fecha Final *</label>
+                                    <input type="date" id="periodo-fecha-fin" class="form-control" required onchange="calculatePeriodDays()">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="periodo-dias" class="fw-bold small">Cantidad días</label>
+                                    <input type="text" id="periodo-dias" class="form-control bg-light" readonly value="0">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="periodo-activo" class="fw-bold small">Estado Vigente</label>
+                                    <select id="periodo-activo" class="form-select">
+                                        <option value="0">Inactivo</option>
+                                        <option value="1">Activo</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="periodo-estado" class="fw-bold small">Estado Cierre</label>
+                                <select id="periodo-estado" class="form-select">
+                                    <option value="abierto">Abierto</option>
+                                    <option value="cerrado">Cerrado</option>
+                                </select>
+                            </div>
+
+                            <div class="modal-footer px-0 pb-0 pt-3 border-top d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-secondary" onclick="closeModalPeriodo()">Cancelar</button>
+                                <button type="submit" class="btn btn-primary fw-bold">Guardar Período</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <!-- Modal para Bono -->
             <div id="modal-bono" class="modal">
                 <div class="modal-content" style="max-width: 700px;">

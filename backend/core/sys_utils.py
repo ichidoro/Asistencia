@@ -108,3 +108,98 @@ def test_port_binding(port: int) -> bool:
         return False
     except Exception:
         return False
+
+
+# Global to hold lock file handle and prevent GC
+_lock_file = None
+
+def ensure_single_instance():
+    """
+    Garantiza que solo exista una instancia del worker ejecutándose.
+    Si detecta otra instancia (zombie o colgada), lee su PID y la termina forzosamente.
+    """
+    global _lock_file
+    import sys
+    import os
+    import time
+    
+    local_dir = os.path.join("data", "local_db")
+    os.makedirs(local_dir, exist_ok=True)
+    lock_path = os.path.join(local_dir, "app.lock")
+    pid_path = os.path.join(local_dir, "app.pid")
+    
+    # Intentar abrir el archivo de bloqueo
+    _lock_file = open(lock_path, "w")
+    
+    # Intentar adquirir el bloqueo de forma exclusiva y no bloqueante
+    acquired = False
+    
+    if sys.platform == "win32":
+        import msvcrt
+        try:
+            msvcrt.locking(_lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            acquired = True
+        except OSError:
+            pass
+    else:
+        import fcntl
+        try:
+            fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquired = True
+        except OSError:
+            pass
+            
+    if acquired:
+        # Bloqueo adquirido con éxito: guardar el PID actual
+        try:
+            with open(pid_path, "w") as f:
+                f.write(str(os.getpid()))
+            logger.info(f"🔒 Instancia única: Bloqueo adquirido exitosamente. PID: {os.getpid()}")
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo registrar el PID actual en {pid_path}: {e}")
+        return
+        
+    # Si falló, significa que otra instancia retiene el bloqueo
+    logger.warning("⚠️ Conflicto de instancia: Detectado otro proceso del servidor activo o bloqueado.")
+    
+    old_pid = None
+    if os.path.exists(pid_path):
+        try:
+            with open(pid_path, "r") as f:
+                old_pid = int(f.read().strip())
+        except Exception as e:
+            logger.warning(f"No se pudo leer el PID anterior desde {pid_path}: {e}")
+            
+    if old_pid and old_pid != os.getpid():
+        logger.warning(f"💀 Detectada instancia zombie (PID: {old_pid}). Forzando terminación...")
+        try:
+            if sys.platform == "win32":
+                # Forzar terminación del árbol de procesos en Windows
+                subprocess.run(f"taskkill /F /T /PID {old_pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                import signal
+                os.kill(old_pid, signal.SIGKILL)
+            logger.success(f"💀 Instancia zombie (PID: {old_pid}) terminada de forma agresiva.")
+        except Exception as e:
+            logger.error(f"No se pudo matar la instancia zombie {old_pid}: {e}")
+            
+        # Esperar a que el OS libere el socket y el lock de archivos
+        time.sleep(1.5)
+        
+        # Reintentar adquirir el bloqueo
+        try:
+            if sys.platform == "win32":
+                msvcrt.locking(_lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+            # Éxito en el reintento: escribir nuestro PID
+            with open(pid_path, "w") as f:
+                f.write(str(os.getpid()))
+            logger.success(f"🔒 Bloqueo adquirido tras remoción de instancia zombie. PID: {os.getpid()}")
+        except OSError as retry_err:
+            logger.critical(f"🛑 Falló la adquisición del bloqueo en reintento: {retry_err}")
+            # Si aún falla, continuamos de todos modos bajo riesgo de conflicto
+    else:
+        logger.warning("⚠️ No se pudo determinar el PID anterior para forzar la terminación.")
+

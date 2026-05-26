@@ -1912,3 +1912,349 @@ window.cargarCatalogoGeneros = async function() {
         container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
     }
 };
+
+// ==========================================
+// TRAMOS DE CIERRE (PERIODOS RRHH)
+// ==========================================
+window.loadPeriodosRRHH = async function() {
+    const container = document.getElementById('periodos-config-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="text-muted mt-2">Cargando tramos de cierre...</div>
+        </div>
+    `;
+
+    try {
+        const response = await fetch('/api/configuracion/periodos/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error("Error obteniendo los tramos de cierre");
+        const periodos = await response.json();
+        renderPeriodosRRHH(periodos);
+    } catch (error) {
+        console.error(error);
+        container.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div>`;
+    }
+};
+
+window.renderPeriodosRRHH = function(periodos) {
+    const container = document.getElementById('periodos-config-container');
+    if (!container) return;
+
+    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
+
+    let html = `
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold mb-1">📅 Tramos de Cierre Mensual</h5>
+            <p class="small text-muted mb-0">Defina los rangos de fechas de inicio y fin para el cierre de mes de Recursos Humanos.</p>
+        </div>
+        ${canEdit ? `
+        <button class="btn btn-primary btn-sm" onclick="openModalPeriodo()">
+            <i class="bi bi-plus-circle me-1"></i> Crear Periodo
+        </button>
+        ` : ''}
+    </div>
+    
+    <div class="alert alert-info py-2 small mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        El período marcado como <strong>Vigente (Activo)</strong> determinará automáticamente las fechas de búsqueda en el módulo de Marcaciones.
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Mes Cierre</th>
+                    <th>Fecha Inicial</th>
+                    <th>Fecha Final</th>
+                    <th class="text-center">Cantidad días</th>
+                    <th class="text-center">Estado Vigencia</th>
+                    <th class="text-center">Estado Cierre</th>
+                    <th class="text-center" style="width: 150px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    if (periodos.length === 0) {
+        html += `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    <div class="mb-2" style="font-size: 2rem;">📅</div>
+                    No hay tramos de cierre configurados.
+                </td>
+            </tr>
+        `;
+    } else {
+        periodos.forEach(p => {
+            const diffDays = calculateDaysBetween(p.fecha_inicio, p.fecha_fin);
+            
+            const vigenciaBadge = p.activo 
+                ? '<span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Vigente</span>'
+                : '<span class="badge bg-secondary">Inactivo</span>';
+                
+            const estadoBadge = p.estado === 'cerrado'
+                ? '<span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i>Cerrado</span>'
+                : '<span class="badge bg-warning text-dark"><i class="bi bi-unlock-fill me-1"></i>Abierto</span>';
+
+            let actionButtons = '';
+            if (canEdit) {
+                const activateBtn = !p.activo
+                    ? `<button class="btn btn-sm btn-outline-success me-1" onclick="activarPeriodoRRHH(${p.id})" title="Marcar como Vigente"><i class="bi bi-star-fill"></i></button>`
+                    : `<button class="btn btn-sm btn-success me-1" disabled title="Periodo Vigente Activo"><i class="bi bi-star-fill"></i></button>`;
+                
+                // Utilizar onclick con string escaped para pasar el objeto
+                const escapedObj = JSON.stringify(p).replace(/'/g, "\\'");
+                const editBtn = `<button class="btn btn-sm btn-outline-primary me-1" onclick="openModalPeriodo(JSON.parse('${escapedObj}'))" title="Editar"><i class="bi bi-pencil-fill"></i></button>`;
+                
+                const deleteBtn = `<button class="btn btn-sm btn-outline-danger" onclick="deletePeriodoRRHH(${p.id})" title="Eliminar"><i class="bi bi-trash-fill"></i></button>`;
+                
+                actionButtons = activateBtn + editBtn + deleteBtn;
+            } else {
+                actionButtons = '<span class="text-muted small">Sin permisos</span>';
+            }
+
+            html += `
+                <tr>
+                    <td class="fw-bold">${p.mes_cierre}</td>
+                    <td>${formatDateDMY(p.fecha_inicio)}</td>
+                    <td>${formatDateDMY(p.fecha_fin)}</td>
+                    <td class="text-center fw-bold">${diffDays} días</td>
+                    <td class="text-center">${vigenciaBadge}</td>
+                    <td class="text-center">${estadoBadge}</td>
+                    <td class="text-center">${actionButtons}</td>
+                </tr>
+            `;
+        });
+    }
+
+    html += `
+            </tbody>
+        </table>
+    </div>
+    `;
+    container.innerHTML = html;
+};
+
+function calculateDaysBetween(start, end) {
+    if (!start || !end) return 0;
+    const s = new Date(start + 'T00:00:00');
+    const e = new Date(end + 'T00:00:00');
+    const diff = e - s;
+    return Math.round(diff / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function formatDateDMY(dateStr) {
+    if (!dateStr) return "-";
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return dateStr;
+}
+
+window.openModalPeriodo = function(periodo = null) {
+    const modal = document.getElementById('modal-periodo');
+    const title = document.getElementById('modal-periodo-title');
+    const form = document.getElementById('form-periodo');
+
+    form.reset();
+
+    if (periodo) {
+        title.innerText = 'Editar Tramo de Cierre';
+        document.getElementById('periodo-id').value = periodo.id;
+        document.getElementById('periodo-mes-cierre').value = periodo.mes_cierre;
+        document.getElementById('periodo-fecha-inicio').value = periodo.fecha_inicio;
+        document.getElementById('periodo-fecha-fin').value = periodo.fecha_fin;
+        document.getElementById('periodo-activo').value = periodo.activo;
+        document.getElementById('periodo-estado').value = periodo.estado;
+    } else {
+        title.innerText = 'Crear Nuevo Tramo de Cierre';
+        document.getElementById('periodo-id').value = '';
+        document.getElementById('periodo-activo').value = '0';
+        document.getElementById('periodo-estado').value = 'abierto';
+    }
+
+    // Calcular días
+    calculatePeriodDays();
+
+    modal.style.display = 'flex';
+};
+
+window.closeModalPeriodo = function() {
+    document.getElementById('modal-periodo').style.display = 'none';
+};
+
+window.calculatePeriodDays = function() {
+    const init = document.getElementById('periodo-fecha-inicio').value;
+    const fin = document.getElementById('periodo-fecha-fin').value;
+    const countInput = document.getElementById('periodo-dias');
+    
+    if (init && fin) {
+        const days = calculateDaysBetween(init, fin);
+        countInput.value = days;
+        if (days > 35) {
+            countInput.classList.add('is-invalid');
+            countInput.classList.add('text-danger');
+        } else {
+            countInput.classList.remove('is-invalid');
+            countInput.classList.remove('text-danger');
+        }
+    } else {
+        countInput.value = '0';
+    }
+};
+
+window.savePeriodoRRHH = async function() {
+    const id = document.getElementById('periodo-id').value;
+    const mes_cierre = document.getElementById('periodo-mes-cierre').value;
+    const fecha_inicio = document.getElementById('periodo-fecha-inicio').value;
+    const fecha_fin = document.getElementById('periodo-fecha-fin').value;
+    const activo = parseInt(document.getElementById('periodo-activo').value, 10);
+    const estado = document.getElementById('periodo-estado').value;
+
+    const days = calculateDaysBetween(fecha_inicio, fecha_fin);
+    if (days <= 0) {
+        if (typeof showToast === 'function') {
+            showToast("La fecha inicial debe ser menor o igual a la fecha final", "error");
+        } else {
+            alert("La fecha inicial debe ser menor o igual a la fecha final");
+        }
+        return;
+    }
+
+    if (days > 35) {
+        if (typeof showToast === 'function') {
+            showToast("El rango seleccionado no puede superar los 35 días.", "error");
+        } else {
+            alert("El rango seleccionado no puede superar los 35 días.");
+        }
+        return;
+    }
+
+    const payload = {
+        mes_cierre,
+        fecha_inicio,
+        fecha_fin,
+        activo,
+        estado
+    };
+
+    const url = id ? `/api/configuracion/periodos/${id}/` : `/api/configuracion/periodos/`;
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || "Error al guardar el periodo");
+        }
+
+        closeModalPeriodo();
+        if (typeof showToast === 'function') {
+            showToast("Tramo de cierre guardado exitosamente.", "success");
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire("Éxito", "Tramo de cierre guardado exitosamente.", "success");
+        }
+        loadPeriodosRRHH();
+    } catch (error) {
+        console.error(error);
+        if (typeof showToast === 'function') {
+            showToast(error.message, "error");
+        } else {
+            alert(error.message);
+        }
+    }
+};
+
+window.deletePeriodoRRHH = async function(id) {
+    const action = async () => {
+        try {
+            const response = await fetch(`/api/configuracion/periodos/${id}/`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || "Error al eliminar el periodo");
+            }
+
+            if (typeof showToast === 'function') {
+                showToast("Tramo de cierre eliminado exitosamente.", "success");
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire("Eliminado", "Tramo de cierre eliminado exitosamente.", "success");
+            }
+            loadPeriodosRRHH();
+        } catch (error) {
+            console.error(error);
+            if (typeof showToast === 'function') {
+                showToast(error.message, "error");
+            } else {
+                alert(error.message);
+            }
+        }
+    };
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '¿Eliminar tramo de cierre?',
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                action();
+            }
+        });
+    } else {
+        if (confirm("¿Está seguro que desea eliminar este tramo de cierre?")) {
+            action();
+        }
+    }
+};
+
+window.activarPeriodoRRHH = async function(id) {
+    try {
+        const response = await fetch(`/api/configuracion/periodos/${id}/activar/`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || "Error al activar el periodo");
+        }
+
+        if (typeof showToast === 'function') {
+            showToast("Tramo de cierre activado exitosamente.", "success");
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire("Activado", "El tramo de cierre ahora está vigente.", "success");
+        }
+        loadPeriodosRRHH();
+    } catch (error) {
+        console.error(error);
+        if (typeof showToast === 'function') {
+            showToast(error.message, "error");
+        } else {
+            alert(error.message);
+        }
+    }
+};
+

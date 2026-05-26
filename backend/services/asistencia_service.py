@@ -3517,6 +3517,16 @@ class AsistenciaService:
         res_cierre = await db.execute(q_cierre, params_cierre)
         cierre_id = res_cierre.lastrowid
         
+        # 1.1 Si hay un periodo en periodos_rrhh que coincide con el rango cerrado, marcarlo como 'cerrado'
+        try:
+            await db.execute(
+                "UPDATE periodos_rrhh SET estado = 'cerrado' WHERE fecha_inicio = ? AND fecha_fin = ?",
+                (fecha_inicio, fecha_fin)
+            )
+            logger.info(f"✨ periodos_rrhh actualizado a 'cerrado' para el rango {fecha_inicio} a {fecha_fin}")
+        except Exception as e_close_rrhh:
+            logger.warning(f"⚠️ No se pudo actualizar el estado en periodos_rrhh: {e_close_rrhh}")
+        
         # 2. Recalcular las bolsas de todos los empleados afectados
         q_emp = "SELECT id FROM empleados WHERE activo = 1"
         params_emp = []

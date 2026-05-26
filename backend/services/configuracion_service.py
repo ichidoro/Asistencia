@@ -5,6 +5,7 @@ from backend.repositories.configuracion import ConfiguracionRepository
 from backend.repositories.empleado import EmpleadoRepository
 from backend.schemas.bono import BonoCreate, BonoResponse, BonoAsignacionCreate
 from backend.schemas.justificacion import JustificacionTipoCreate, JustificacionCreate
+from backend.schemas.periodo_rrhh import PeriodoRRHHCreate
 from backend.services.notification_service import NotificationService
 
 class ConfiguracionService:
@@ -631,3 +632,38 @@ class ConfiguracionService:
 
     async def update_pagador(self, pagador_id: int, nombre: str, activo: bool) -> bool:
         return await self.repository.update_pagador(pagador_id, nombre, activo)
+
+    # --- PERIODOS RRHH ---
+    async def get_all_periodos_rrhh(self) -> List[Dict[str, Any]]:
+        return await self.repository.get_all_periodos_rrhh()
+
+    async def get_periodo_rrhh_activo(self) -> Optional[Dict[str, Any]]:
+        return await self.repository.get_periodo_rrhh_activo()
+
+    async def get_periodo_rrhh_by_id(self, id: int) -> Optional[Dict[str, Any]]:
+        return await self.repository.get_periodo_rrhh_by_id(id)
+
+    async def create_periodo_rrhh(self, p: PeriodoRRHHCreate) -> int:
+        return await self.repository.create_periodo_rrhh(
+            mes_cierre=p.mes_cierre,
+            fecha_inicio=p.fecha_inicio,
+            fecha_fin=p.fecha_fin,
+            activo=p.activo or 0,
+            estado=p.estado or "abierto"
+        )
+
+    async def update_periodo_rrhh(self, id: int, p: PeriodoRRHHCreate) -> bool:
+        return await self.repository.update_periodo_rrhh(
+            id=id,
+            mes_cierre=p.mes_cierre,
+            fecha_inicio=p.fecha_inicio,
+            fecha_fin=p.fecha_fin,
+            activo=p.activo or 0,
+            estado=p.estado or "abierto"
+        )
+
+    async def delete_periodo_rrhh(self, id: int) -> bool:
+        return await self.repository.delete_periodo_rrhh(id)
+
+    async def set_periodo_rrhh_activo(self, id: int) -> bool:
+        return await self.repository.set_periodo_rrhh_activo(id)

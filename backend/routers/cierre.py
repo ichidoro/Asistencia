@@ -34,8 +34,8 @@ async def evaluar_cierre(
         d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
         diff_days = (d_fin - d_ini).days + 1
-        if diff_days > 31:
-            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 31 días.")
+        if diff_days > 35:
+            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 35 días.")
 
         service = CierreService(db)
         if not current_user.check_area_access(area):
@@ -63,8 +63,8 @@ async def ejecutar_cierre(
         d_ini = datetime.strptime(req.fecha_inicio, "%Y-%m-%d")
         d_fin = datetime.strptime(req.fecha_fin, "%Y-%m-%d")
         diff_days = (d_fin - d_ini).days + 1
-        if diff_days > 31:
-            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 31 días.")
+        if diff_days > 35:
+            raise HTTPException(status_code=400, detail="El rango seleccionado no puede superar los 35 días.")
 
         service = CierreService(db)
         if not current_user.check_area_access(req.area):

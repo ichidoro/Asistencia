@@ -1,5 +1,6 @@
 from backend.core.database import Database
 from datetime import datetime
+from loguru import logger
 
 class CierreService:
     def __init__(self, db: Database):
@@ -263,5 +264,15 @@ class CierreService:
             area,
             comentarios
         ))
+
+        # Si hay un periodo en periodos_rrhh que coincide con el rango cerrado, marcarlo como 'cerrado'
+        try:
+            await self.db.execute(
+                "UPDATE periodos_rrhh SET estado = 'cerrado' WHERE fecha_inicio = ? AND fecha_fin = ?",
+                (fecha_inicio, fecha_fin)
+            )
+            logger.info(f"✨ periodos_rrhh actualizado a 'cerrado' para el rango {fecha_inicio} a {fecha_fin} (CierreService)")
+        except Exception as e_close_rrhh:
+            logger.warning(f"⚠️ No se pudo actualizar el estado en periodos_rrhh: {e_close_rrhh}")
 
         return {"success": True, "message": "Periodo cerrado exitosamente.", "tipo_cierre": tipo_cierre}

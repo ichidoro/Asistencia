@@ -105,6 +105,10 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     
     try:
+        # Garantizar instancia única del servidor para evitar bloqueos de base de datos
+        from backend.core.sys_utils import ensure_single_instance
+        ensure_single_instance()
+
         # 1. Limpieza PRE-CONEXIÓN: Solo archivos .corrupt_* residuales.
         # ⚠️ NUNCA borrar .db-wal / .db-shm / .db-info / .db.meta:
         #   - .db-wal contiene transacciones no checkpointed (datos reales)

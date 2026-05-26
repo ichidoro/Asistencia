@@ -60,27 +60,45 @@ async function initMarcacionesUI() {
     // Inicializar fechas RRHH por defecto si no están configuradas
     if (!stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
         try {
-            const resp = await fetch('/api/asistencia/periodo-rrhh/ultimo-cierre/');
-            const ultimo = await resp.json();
-            
-            if (ultimo && ultimo.fecha_fin) {
-                const lastFin = new Date(ultimo.fecha_fin);
-                lastFin.setDate(lastFin.getDate() + 1);
-                stateMarcacionesApp.fechaInicioRRHH = lastFin.toISOString().split('T')[0];
-                
-                const nextFin = new Date(lastFin);
-                nextFin.setMonth(nextFin.getMonth() + 1);
-                nextFin.setDate(nextFin.getDate() - 1);
-                stateMarcacionesApp.fechaFinRRHH = nextFin.toISOString().split('T')[0];
-            } else {
-                const now = new Date();
-                const inicio = new Date(now.getFullYear(), now.getMonth() - 1, 26);
-                const fin = new Date(now.getFullYear(), now.getMonth(), 25);
-                stateMarcacionesApp.fechaInicioRRHH = inicio.toISOString().split('T')[0];
-                stateMarcacionesApp.fechaFinRRHH = fin.toISOString().split('T')[0];
+            const activeResp = await fetch('/api/configuracion/periodos/activo/', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (activeResp.ok) {
+                const activePeriod = await activeResp.json();
+                if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
+                    stateMarcacionesApp.fechaInicioRRHH = activePeriod.fecha_inicio;
+                    stateMarcacionesApp.fechaFinRRHH = activePeriod.fecha_fin;
+                    console.log("Periodo activo RRHH cargado:", activePeriod);
+                }
             }
         } catch (e) {
-            console.error("Error sugiriendo periodo por defecto:", e);
+            console.error("Error cargando periodo activo desde configuracion:", e);
+        }
+
+        if (!stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
+            try {
+                const resp = await fetch('/api/asistencia/periodo-rrhh/ultimo-cierre/');
+                const ultimo = await resp.json();
+                
+                if (ultimo && ultimo.fecha_fin) {
+                    const lastFin = new Date(ultimo.fecha_fin);
+                    lastFin.setDate(lastFin.getDate() + 1);
+                    stateMarcacionesApp.fechaInicioRRHH = lastFin.toISOString().split('T')[0];
+                    
+                    const nextFin = new Date(lastFin);
+                    nextFin.setMonth(nextFin.getMonth() + 1);
+                    nextFin.setDate(nextFin.getDate() - 1);
+                    stateMarcacionesApp.fechaFinRRHH = nextFin.toISOString().split('T')[0];
+                } else {
+                    const now = new Date();
+                    const inicio = new Date(now.getFullYear(), now.getMonth() - 1, 26);
+                    const fin = new Date(now.getFullYear(), now.getMonth(), 25);
+                    stateMarcacionesApp.fechaInicioRRHH = inicio.toISOString().split('T')[0];
+                    stateMarcacionesApp.fechaFinRRHH = fin.toISOString().split('T')[0];
+                }
+            } catch (e) {
+                console.error("Error sugiriendo periodo por defecto:", e);
+            }
         }
     }
 
@@ -2759,8 +2777,8 @@ async function openCierrePeriodoModal() {
     const diffTime = Math.abs(dFin - dIni);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    if (diffDays > 30) {
-        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (30 días).`, "error");
+    if (diffDays > 35) {
+        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (35 días).`, "error");
     }
 
     const html = `

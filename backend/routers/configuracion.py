@@ -6,6 +6,7 @@ from backend.core.database import get_db, Database
 from backend.schemas.bono import BonoCreate, BonoResponse
 from backend.schemas.justificacion import JustificacionTipoCreate, JustificacionTipoResponse, JustificacionCreate, JustificacionResponse
 from backend.schemas.pagador import PagadorResponse, PagadorCreate
+from backend.schemas.periodo_rrhh import PeriodoRRHHCreate, PeriodoRRHHResponse
 from backend.services.calendario_service import CalendarioService
 from typing import Optional
 from loguru import logger
@@ -779,4 +780,72 @@ async def get_catalogo_generos(
     query = "SELECT id, nombre FROM cat_generos ORDER BY nombre ASC"
     rows = await db.fetch_all(query)
     return [dict(r) for r in rows]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PERIODOS RRHH (Tramos de Cierre)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/periodos/", response_model=List[PeriodoRRHHResponse])
+async def get_periodos_rrhh(
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+):
+    """Listar todos los tramos de cierre configurados"""
+    return await service.get_all_periodos_rrhh()
+
+@router.get("/periodos/activo/", response_model=Optional[PeriodoRRHHResponse])
+async def get_periodo_rrhh_activo(
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Obtener el tramo de cierre activo actual"""
+    return await service.get_periodo_rrhh_activo()
+
+@router.post("/periodos/", response_model=Dict[str, Any])
+async def create_periodo_rrhh(
+    periodo: PeriodoRRHHCreate,
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Crear un nuevo tramo de cierre"""
+    new_id = await service.create_periodo_rrhh(periodo)
+    return {"id": new_id, "message": "Tramo de cierre creado exitosamente"}
+
+@router.put("/periodos/{periodo_id}/", response_model=Dict[str, Any])
+async def update_periodo_rrhh(
+    periodo_id: int,
+    periodo: PeriodoRRHHCreate,
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Actualizar un tramo de cierre"""
+    updated = await service.update_periodo_rrhh(periodo_id, periodo)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Tramo de cierre no encontrado")
+    return {"id": periodo_id, "message": "Tramo de cierre actualizado exitosamente"}
+
+@router.delete("/periodos/{periodo_id}/", status_code=204)
+async def delete_periodo_rrhh(
+    periodo_id: int,
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Eliminar un tramo de cierre"""
+    deleted = await service.delete_periodo_rrhh(periodo_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Tramo de cierre no encontrado")
+    return
+
+@router.post("/periodos/{periodo_id}/activar/", response_model=Dict[str, Any])
+async def set_periodo_rrhh_activo(
+    periodo_id: int,
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Marcar un tramo de cierre como activo (vigente)"""
+    success = await service.set_periodo_rrhh_activo(periodo_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Tramo de cierre no encontrado")
+    return {"success": True, "message": "Tramo de cierre marcado como activo"}
 
