@@ -147,6 +147,19 @@ window.abrirModalIntercambio = async function(empleadoId = null, fechaSugerida =
         document.getElementById('intercambios-list-container').classList.add('d-none');
     }
 
+    // Control de permisos para el botón de guardar
+    const saveBtn = document.querySelector('#modal-intercambio .btn-primary');
+    if (saveBtn) {
+        const hasPerm = typeof AuthService !== 'undefined' ? AuthService.hasPermission("marcaciones.intercambio") : true;
+        if (!hasPerm) {
+            saveBtn.disabled = true;
+            saveBtn.style.display = 'none';
+        } else {
+            saveBtn.disabled = false;
+            saveBtn.style.display = 'inline-block';
+        }
+    }
+
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
 };
@@ -243,18 +256,24 @@ async function cargarIntercambiosEmpleado(empleadoId) {
             return;
         }
 
-        listEl.innerHTML = delEmp.map(i => `
+        listEl.innerHTML = delEmp.map(i => {
+            const hasDelPerm = typeof AuthService !== 'undefined' ? AuthService.hasPermission("marcaciones.intercambio") : true;
+            const deleteBtnHtml = hasDelPerm ? `
+                <button class="btn btn-sm btn-outline-danger border-0" onclick="eliminarIntercambio(${i.id})" title="Eliminar y recalcular">
+                    <i class="bi bi-trash"></i>
+                </button>
+            ` : '';
+            return `
             <div class="d-flex justify-content-between align-items-center p-2 mb-2 bg-white border rounded shadow-sm">
                 <div>
                     <div class="fw-bold small" style="color:#4f46e5;">1x1: Faltó el ${i.fecha_origen} <i class="bi bi-arrow-right"></i> Trabajó el ${i.fecha_destino}</div>
                     <div class="text-muted" style="font-size: 0.7rem;">${i.observaciones}</div>
                     <div class="text-muted" style="font-size: 0.65rem;">Por: ${i.registrado_por_nombre || 'Admin'}</div>
                 </div>
-                <button class="btn btn-sm btn-outline-danger border-0" onclick="eliminarIntercambio(${i.id})" title="Eliminar y recalcular">
-                    <i class="bi bi-trash"></i>
-                </button>
+                ${deleteBtnHtml}
             </div>
-        `).join('');
+            `;
+        }).join('');
 
     } catch (e) {
         console.error(e);

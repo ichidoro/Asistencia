@@ -51,6 +51,7 @@ const MAPA_UI_PERMISOS = {
     'marcaciones.cierre_periodo':{ module: 'MARCACIONES', action: 'Cierre',        description: 'Cerrar y sellar período ⚠️ Contable',           permissions: ['marcaciones.cierre_periodo'] },
     'marcaciones.bypass_cierre': { module: 'MARCACIONES', action: 'Bypass Cierre', description: 'Editar meses ya cerrados ⚠️ Alto Riesgo',       permissions: ['marcaciones.bypass_cierre'] },
     'marcaciones.sincronizar':   { module: 'MARCACIONES', action: 'Sincronizar',   description: 'Sincronizar y reprocesar desde toolbar',        permissions: ['marcaciones.sincronizar'] },
+    'marcaciones.intercambio':   { module: 'MARCACIONES', action: 'Días Compensatorios', description: 'Registrar y revertir intercambios de días (1x1)', permissions: ['marcaciones.intercambio'] },
 
     // ── MÓDULO REPORTES (4) ──
     'reportes.ver':         { module: 'REPORTES', action: 'Ver',         description: 'Ver tablas y gráficos de reportes',    permissions: ['reportes.ver'] },
@@ -427,7 +428,8 @@ function getPermissionDetails(permId) {
         'marcaciones.bypass_cierre': { alert: 'Alerta Contable',          flow: 'Editar asistencia incluso si el mes ya está bloqueado' },
         'marcaciones.cierre_periodo':{ alert: 'Cierre Contable',          flow: 'Congela datos de asistencia para liquidación' },
         'marcaciones.horas_extras':  { alert: 'Autorización Financiera',  flow: 'Aprobar que las horas extras se paguen en sueldo' },
-        'marcaciones.sincronizar':   { alert: 'Integración BioAlba',     flow: 'Descarga marcaciones y reprocesa asistencia masivamente' },
+        'marcaciones.sincronizar':   { alert: 'Integración BioAlba',     flow: 'Descarga marcaciones y reprocesar asistencia masivamente' },
+        'marcaciones.intercambio':   { alert: 'Operativo',                flow: 'Intercambiar un día de descanso trabajado por un día laboral libre (1x1)' },
         // Reportes
         'reportes.reprocesar':  { alert: 'Cálculo Masivo',        flow: 'Dispara recálculo de asistencia desde Reportes' },
         'reportes.sincronizar': { alert: 'Integración Externa',   flow: 'Sincroniza marcaciones BioAlba desde Reportes' },

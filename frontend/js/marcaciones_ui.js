@@ -240,7 +240,9 @@ function renderMarcacionesToolbar(container) {
                         </label>
                     </div>
                 </div>
+                ` : ''}
 
+                ${AuthService.hasPermission("marcaciones.intercambio") ? `
                 <button class="btn btn-sm btn-outline-primary shadow-sm ms-2" onclick="window.abrirModalIntercambio ? window.abrirModalIntercambio() : console.warn('Intercambios panel not loaded')" title="Registrar Día Compensatorio" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
                     <i class="bi bi-arrow-left-right"></i> <span class="fw-bold">Días Compensatorios</span>
                 </button>
