@@ -2754,6 +2754,176 @@ function iniciarPollingReproceso(empleadoId, nombre, fechaDesde) {
 
 
 /**
+ * Busca los periodos configurados en el modulo de configuracion,
+ * muestra el que esta abierto (y los demas si aplica) para que el usuario
+ * pueda filtrar la grilla antes de evaluar y cerrar.
+ */
+async function mostrarSelectorPeriodosParaCierre() {
+    let periodos = [];
+    try {
+        const resp = await fetch('/api/configuracion/periodos/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (resp.ok) {
+            periodos = await resp.json();
+        }
+    } catch (e) {
+        console.error("Error al obtener periodos:", e);
+        return showToast("Error al obtener la lista de períodos", "error");
+    }
+
+    // Filtrar los que están abiertos
+    const periodosAbiertos = periodos.filter(p => p.estado === 'abierto');
+
+    if (periodosAbiertos.length === 0) {
+        return Swal.fire({
+            title: 'No hay períodos abiertos',
+            text: 'Todos los períodos configurados ya se encuentran cerrados en el sistema.',
+            icon: 'info',
+            confirmButtonText: 'Entendido'
+        });
+    }
+
+    // Obtener las áreas accesibles desde el select principal de la grilla
+    const areaSelectDOM = document.getElementById('marcacion-area');
+    let areas = [];
+    if (areaSelectDOM) {
+        areas = Array.from(areaSelectDOM.options)
+            .map(opt => opt.value)
+            .filter(val => val !== "" && val !== "Todas");
+    }
+
+    // Valor pre-seleccionado actual de la grilla
+    const areaActual = stateMarcacionesApp.area || "";
+
+    // Construir las opciones del selector de áreas
+    const areaOptionsHtml = areas.map(a => {
+        const isSelected = a === areaActual ? 'selected' : '';
+        return `<option value="${a}" ${isSelected}>${a}</option>`;
+    }).join('');
+
+    // Renderizar una lista de los períodos abiertos
+    const listHtml = periodosAbiertos.map(p => {
+        const activeBadge = p.activo ? '<span class="badge bg-primary ms-2">Vigente</span>' : '';
+        const fIniFormateada = p.fecha_inicio.split('-').reverse().join('-');
+        const fFinFormateada = p.fecha_fin.split('-').reverse().join('-');
+        return `
+            <div class="d-flex justify-content-between align-items-center p-3 mb-2 border rounded bg-white shadow-sm">
+                <div>
+                    <h6 class="fw-bold mb-1 text-dark">${p.mes_cierre}${activeBadge}</h6>
+                    <small class="text-muted"><i class="bi bi-calendar-range"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong></small>
+                </div>
+                <button class="btn btn-sm btn-warning fw-bold px-3 shadow-sm btn-cierre-action" 
+                        onclick="cierreFiltrarGrillaYIniciarCierre('${p.fecha_inicio}', '${p.fecha_fin}')"
+                        ${!areaActual ? 'disabled' : ''}
+                        title="${!areaActual ? 'Debe seleccionar un área primero' : 'Filtrar y Cerrar'}">
+                    <i class="bi bi-funnel-fill"></i> Filtrar y Cerrar
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    const html = `
+        <div class="modal fade" id="modal-seleccionar-periodo-cierre" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+                    <div class="modal-header bg-dark text-white border-0" style="border-radius: 12px 12px 0 0;">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-calendar-event text-warning me-2"></i> Seleccionar Período y Área</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body bg-light p-4">
+                        <!-- Selector de Área -->
+                        <div class="card border-0 shadow-sm p-3 mb-4 bg-white">
+                            <label for="cierre-area-select" class="form-label small fw-bold text-muted mb-2">
+                                <i class="bi bi-geo-alt-fill text-danger me-1"></i> Área para el Cierre:
+                            </label>
+                            <select class="form-select form-select-sm border-primary-subtle" id="cierre-area-select" onchange="cierreActualizarSeleccionDeArea(this.value)">
+                                <option value="">-- Seleccione una Área Específica --</option>
+                                ${areaOptionsHtml}
+                            </select>
+                            <div class="form-text text-muted small mt-2">
+                                El cierre se calcula y sella por área. Selecciona el área a cerrar para habilitar el proceso.
+                            </div>
+                        </div>
+
+                        <p class="text-muted small mb-3">
+                            Selecciona el período configurado que deseas cerrar. 
+                            <strong>La grilla se filtrará automáticamente</strong> con el área y fechas seleccionadas.
+                        </p>
+                        <div>
+                            ${listHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const old = document.getElementById('modal-seleccionar-periodo-cierre');
+    if (old) old.remove();
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    const modal = new bootstrap.Modal(document.getElementById('modal-seleccionar-periodo-cierre'));
+    modal.show();
+}
+
+window.cierreFiltrarGrillaYIniciarCierre = async function(fIni, fFin) {
+    const areaVal = document.getElementById('cierre-area-select')?.value;
+    if (!areaVal) {
+        return showToast("Debe seleccionar un área específica.", "error");
+    }
+
+    // 1. Cerrar modal selector
+    const modalEl = document.getElementById('modal-seleccionar-periodo-cierre');
+    if (modalEl) {
+        bootstrap.Modal.getInstance(modalEl)?.hide();
+    }
+
+    // 2. Actualizar fechas y área del estado y DOM
+    stateMarcacionesApp.fechaInicioRRHH = fIni;
+    stateMarcacionesApp.fechaFinRRHH = fFin;
+    stateMarcacionesApp.area = areaVal;
+    
+    const inputIni = document.getElementById('rrhh-fecha-inicio');
+    const inputFin = document.getElementById('rrhh-fecha-fin');
+    if (inputIni) inputIni.value = fIni;
+    if (inputFin) inputFin.value = fFin;
+    
+    const selectArea = document.getElementById('marcacion-area');
+    if (selectArea) selectArea.value = areaVal;
+
+    // 3. Forzar el recargado de la grilla de asistencia
+    showToast(`🔄 Filtrando grilla para área '${areaVal}' y período seleccionado...`, "info");
+    await loadMarcacionesData();
+
+    // 4. Lanzar asistente de cierre tras cargar la grilla
+    setTimeout(() => {
+        openCierrePeriodoModal();
+    }, 600);
+};
+
+window.cierreActualizarSeleccionDeArea = function(areaVal) {
+    // Actualizar state principal
+    stateMarcacionesApp.area = areaVal;
+    
+    // Sincronizar select de la barra de herramientas principal
+    const mainAreaSelect = document.getElementById('marcacion-area');
+    if (mainAreaSelect) mainAreaSelect.value = areaVal;
+    
+    // Habilitar/Deshabilitar botones de cierre
+    const buttons = document.querySelectorAll('.btn-cierre-action');
+    buttons.forEach(btn => {
+        if (areaVal) {
+            btn.disabled = false;
+            btn.title = "Filtrar y Cerrar";
+        } else {
+            btn.disabled = true;
+            btn.title = "Debe seleccionar un área primero";
+        }
+    });
+};
+
+/**
  * [NUEVO] Abre el Asistente Zero-Trust de Cierre de Periodo RRHH.
  */
 async function openCierrePeriodoModal() {
@@ -2781,6 +2951,19 @@ async function openCierrePeriodoModal() {
         return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (35 días).`, "error");
     }
 
+    // Obtener la lista de periodos oficiales configurados para cruzar
+    let periodos = [];
+    try {
+        const resp = await fetch('/api/configuracion/periodos/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (resp.ok) {
+            periodos = await resp.json();
+        }
+    } catch (e) {
+        console.error("Error al obtener periodos:", e);
+    }
+
     const html = `
         <div class="modal fade" id="modal-cierre-wizard" tabindex="-1" data-bs-backdrop="static">
             <div class="modal-dialog modal-xl">
@@ -2799,9 +2982,15 @@ async function openCierrePeriodoModal() {
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-4" disabled><i class="bi bi-person-dash text-info me-2"></i> 4. Inasistencias</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-5" disabled><i class="bi bi-file-earmark-pdf text-success me-2"></i> 5. Reporte Final</button>
                                 </div>
-                                <div class="alert alert-secondary small">
-                                    <i class="bi bi-calendar-check"></i> Rango:<br><strong>${fIni} al ${fFin}</strong><br>
-                                    <i class="bi bi-geo-alt-fill"></i> Área: <strong>${area}</strong>
+                                <div class="card border-0 bg-white shadow-sm p-3 mb-3">
+                                    <h6 class="fw-bold mb-2 small" style="color: #475569"><i class="bi bi-calendar-check text-primary me-1"></i> Período a Cerrar</h6>
+                                    
+                                    <div id="cierre-periodo-badge-container" class="mb-2"></div>
+                                    
+                                    <div class="small text-muted mb-0">
+                                        Rango: <strong id="cierre-rango-text">${fIni} al ${fFin}</strong><br>
+                                        Área: <strong>${area}</strong>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-9 bg-white border rounded shadow-sm p-4 position-relative" id="wizard-content" style="min-height: 350px;">
@@ -2830,7 +3019,18 @@ async function openCierrePeriodoModal() {
     const modal = new bootstrap.Modal(document.getElementById('modal-cierre-wizard'));
     modal.show();
 
-    window.cierreWizardState = { currentStep: 1, evaluacion: null, fIni, fFin, area, aceptarInasistencias: false };
+    window.cierreWizardState = { 
+        currentStep: 1, 
+        evaluacion: null, 
+        fIni, 
+        fFin, 
+        area, 
+        aceptarInasistencias: false,
+        periodos: periodos
+    };
+
+    // Actualizar badge e info del periodo en el sidebar
+    actualizarInfoPeriodoEnWizard();
 
     try {
         const url = `/api/cierre/pre-evaluacion?fecha_inicio=${fIni}&fecha_fin=${fFin}&area=${encodeURIComponent(area)}`;
@@ -2848,6 +3048,45 @@ async function openCierrePeriodoModal() {
                 <p>${e.message}</p>
             </div>
         `;
+    }
+}
+
+/**
+ * Actualiza el badge visual del período en el panel lateral del wizard
+ */
+window.actualizarInfoPeriodoEnWizard = function() {
+    const s = window.cierreWizardState;
+    const fIni = s.fIni;
+    const fFin = s.fFin;
+    
+    const badgeContainer = document.getElementById('cierre-periodo-badge-container');
+    const rangoText = document.getElementById('cierre-rango-text');
+    
+    if (rangoText) rangoText.textContent = `${fIni} al ${fFin}`;
+    
+    let matchedPeriod = s.periodos.find(p => p.fecha_inicio === fIni && p.fecha_fin === fFin);
+    
+    if (matchedPeriod) {
+        if (badgeContainer) {
+            const estadoBadge = matchedPeriod.estado === 'cerrado' 
+                ? '<span class="badge bg-danger"><i class="bi bi-lock-fill"></i> Cerrado</span>' 
+                : '<span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Abierto</span>';
+            badgeContainer.innerHTML = `
+                <div class="fw-bold text-success mb-1" style="font-size:0.95rem;">
+                    <i class="bi bi-calendar-check-fill"></i> ${matchedPeriod.mes_cierre}
+                </div>
+                ${estadoBadge} ${matchedPeriod.activo ? '<span class="badge bg-primary">Vigente</span>' : ''}
+            `;
+        }
+    } else {
+        if (badgeContainer) {
+            badgeContainer.innerHTML = `
+                <div class="alert alert-warning py-1 px-2 mb-1 small border-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Rango Personalizado
+                </div>
+                <span class="text-muted small" style="font-size:0.75rem;">No coincide con períodos RRHH configurados.</span>
+            `;
+        }
     }
 }
 
