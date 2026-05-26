@@ -57,8 +57,38 @@ async function initMarcacionesUI() {
     const container = document.getElementById('page-marcaciones');
     if (!container) return; // No estamos en la página correcta o no existe el contenedor
 
-    // Inicializar fechas RRHH por defecto si no están configuradas
+    // Estimar fechas locales temporales para pintar el Toolbar de inmediato si no están cargadas
+    let datesAlreadyLoaded = false;
     if (!stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
+        const now = new Date();
+        const inicio = new Date(now.getFullYear(), now.getMonth() - 1, 26);
+        const fin = new Date(now.getFullYear(), now.getMonth(), 25);
+        stateMarcacionesApp.fechaInicioRRHH = inicio.toISOString().split('T')[0];
+        stateMarcacionesApp.fechaFinRRHH = fin.toISOString().split('T')[0];
+    } else {
+        datesAlreadyLoaded = true;
+    }
+
+    // 1. Renderizar Estructura Base (Toolbar + Contenedor de Grilla) INMEDIATAMENTE
+    renderMarcacionesToolbar(container);
+
+    // Colocar un loading spinner en el contenedor de vistas de inmediato
+    const viewContainer = document.getElementById('marcaciones-view-container');
+    if (viewContainer) {
+        viewContainer.innerHTML = `
+            <div class="d-flex flex-column align-items-center justify-content-center py-5 text-center" style="min-height: 250px;">
+                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <h6 class="text-muted fw-bold mb-1">Cargando módulo de asistencia...</h6>
+                <p class="text-muted small">Por favor, espera mientras se inicializan los filtros y períodos de control.</p>
+            </div>
+        `;
+    }
+
+    // 2. Iniciar cargas asíncronas en paralelo (Promise.all)
+    const loadActivePeriodPromise = async () => {
+        if (datesAlreadyLoaded) return;
         try {
             const activeResp = await fetch('/api/configuracion/periodos/activo/', {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
@@ -68,18 +98,25 @@ async function initMarcacionesUI() {
                 if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
                     stateMarcacionesApp.fechaInicioRRHH = activePeriod.fecha_inicio;
                     stateMarcacionesApp.fechaFinRRHH = activePeriod.fecha_fin;
-                    console.log("Periodo activo RRHH cargado:", activePeriod);
+                    console.log("Periodo activo RRHH cargado (async):", activePeriod);
+                    
+                    // Actualizar inputs en el DOM si el usuario no los ha modificado
+                    const inputInicio = document.getElementById('rrhh-fecha-inicio');
+                    const inputFin = document.getElementById('rrhh-fecha-fin');
+                    if (inputInicio) inputInicio.value = activePeriod.fecha_inicio;
+                    if (inputFin) inputFin.value = activePeriod.fecha_fin;
+                    return;
                 }
             }
         } catch (e) {
             console.error("Error cargando periodo activo desde configuracion:", e);
         }
 
-        if (!stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
-            try {
-                const resp = await fetch('/api/asistencia/periodo-rrhh/ultimo-cierre/');
+        // Fallback al último cierre si el período activo no está configurado
+        try {
+            const resp = await fetch('/api/asistencia/periodo-rrhh/ultimo-cierre/');
+            if (resp.ok) {
                 const ultimo = await resp.json();
-                
                 if (ultimo && ultimo.fecha_fin) {
                     const lastFin = new Date(ultimo.fecha_fin);
                     lastFin.setDate(lastFin.getDate() + 1);
@@ -89,24 +126,51 @@ async function initMarcacionesUI() {
                     nextFin.setMonth(nextFin.getMonth() + 1);
                     nextFin.setDate(nextFin.getDate() - 1);
                     stateMarcacionesApp.fechaFinRRHH = nextFin.toISOString().split('T')[0];
-                } else {
-                    const now = new Date();
-                    const inicio = new Date(now.getFullYear(), now.getMonth() - 1, 26);
-                    const fin = new Date(now.getFullYear(), now.getMonth(), 25);
-                    stateMarcacionesApp.fechaInicioRRHH = inicio.toISOString().split('T')[0];
-                    stateMarcacionesApp.fechaFinRRHH = fin.toISOString().split('T')[0];
+
+                    const inputInicio = document.getElementById('rrhh-fecha-inicio');
+                    const inputFin = document.getElementById('rrhh-fecha-fin');
+                    if (inputInicio) inputInicio.value = stateMarcacionesApp.fechaInicioRRHH;
+                    if (inputFin) inputFin.value = stateMarcacionesApp.fechaFinRRHH;
                 }
-            } catch (e) {
-                console.error("Error sugiriendo periodo por defecto:", e);
             }
+        } catch (e) {
+            console.error("Error sugiriendo periodo por defecto:", e);
         }
+    };
+
+    const loadMetadataPromise = async () => {
+        try {
+            const respMeta = await fetch('/api/empleados/metadata/');
+            if (respMeta.ok) {
+                const metadata = await respMeta.json();
+                const areaSelect = document.getElementById('marcacion-area');
+                if (areaSelect && metadata.areas) {
+                    const currentVal = areaSelect.value;
+                    areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
+                        metadata.areas.map(a => `<option value="${a}">${a}</option>`).join('');
+                    if (currentVal) areaSelect.value = currentVal;
+                }
+            }
+        } catch (e) {
+            console.error("Error cargando metadatos de filtros:", e);
+        }
+    };
+
+    // Await paralelo
+    await Promise.all([loadActivePeriodPromise(), loadMetadataPromise()]);
+
+    // 3. Cargar Filtros Dependientes (Turnos y Empleados)
+    await loadMarcacionesDependentFilters();
+
+    // Reestablecer vista inicial (reemplaza el spinner de carga)
+    if (viewContainer) {
+        viewContainer.innerHTML = `
+            <div class="text-center py-5 text-muted opacity-50">
+                <i class="bi bi-hand-index-thumb mb-2" style="font-size: 2rem;"></i>
+                <p>Selecciona filtros para visualizar la asistencia.</p>
+            </div>
+        `;
     }
-
-    // 1. Renderizar Estructura Base (Toolbar + Contenedor de Grilla)
-    renderMarcacionesToolbar(container);
-
-    // 2. Cargar Filtros Iniciales
-    loadMarcacionesFilters();
 }
 
 function renderMarcacionesToolbar(container) {

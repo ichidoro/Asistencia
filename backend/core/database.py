@@ -65,6 +65,10 @@ class HybridDatabase:
         # lo reintentará en 30s, los datos están seguros en WAL local).
         self._sync_lock = asyncio.Lock()
         self._sync_pending: bool = False
+        self.read_conn: Optional[libsql.Connection] = None
+        self._read_db_lock = asyncio.Lock()
+        self._bg_sync_task: Optional[asyncio.Task] = None
+        
         
     async def connect(self, retry: bool = True) -> None:
         """Establece la conexión nativa con Turso (Embedded Replica o Remote)"""
@@ -145,9 +149,31 @@ class HybridDatabase:
             else:
                 logger.info(f"📋 WAL local vacío — sync inicial traerá datos frescos del cloud")
 
+            # Conectar conexión de lectura dedicada no bloqueante en modo híbrido
+            if not self._force_turso_only:
+                logger.info(f"🔌 Conectando conexión de lectura dedicada: {self.db_path}")
+                try:
+                    self.read_conn = await asyncio.to_thread(
+                        libsql.connect,
+                        database=str(self.db_path)
+                    )
+                    # Aplicar PRAGMAs optimizados de lectura
+                    try:
+                        cursor_r = self.read_conn.cursor()
+                        cursor_r.execute("PRAGMA busy_timeout = 5000")
+                        cursor_r.execute("PRAGMA journal_mode = WAL")
+                        cursor_r.execute("PRAGMA synchronous = NORMAL")
+                        cursor_r.execute("PRAGMA cache_size = -32000")
+                        logger.info("🛡️ PRAGMAs de lectura aplicados a read_conn")
+                    except Exception as pr_err:
+                        logger.warning(f"⚠️ PRAGMAs en read_conn no aplicados: {pr_err}")
+                except Exception as read_conn_err:
+                    logger.warning(f"⚠️ No se pudo inicializar read_conn dedicada (fallback a conn): {read_conn_err}")
+                    self.read_conn = None
+
             self._connected = True
             
-            # PRAGMAs de resiliencia y performance post-conexión
+            # PRAGMAs de resiliencia y performance post-conexión en la conexión principal
             try:
                 cursor = self.conn.cursor()
                 cursor.execute("PRAGMA busy_timeout = 5000")   # 5s espera ante SQLITE_BUSY
@@ -161,38 +187,70 @@ class HybridDatabase:
             except Exception as pragma_err:
                 logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 
-            # Sync post-conexión BLOQUEANTE: esperar a que la réplica local
-            # tenga todos los datos de Turso Cloud ANTES de servir requests.
-            # Con offline=True la replica arranca vacía; sin este sync los
-            # endpoints devuelven listas vacías hasta el scheduler (hasta 90s).
+            # Sync post-conexión:
+            # Si es la primera inicialización de la réplica (base de datos vacía), el sync es bloqueante.
+            # Si la DB local ya tiene datos, el sync inicial se ejecuta en segundo plano para no colgar el arranque del backend.
             if hasattr(self.conn, 'sync') and self.use_turso and not self._force_turso_only:
+                is_empty = True
                 try:
-                    logger.info("🔄 Sync inicial con Turso Cloud (bloqueante, máx 45s)...")
-                    # Sincronización protegida por lock inicial
-                    async with self._db_lock:
-                        await asyncio.wait_for(
-                            asyncio.to_thread(self.conn.sync),
-                            timeout=45.0
-                        )
-                        # Checkpoint del WAL después del sync inicial
-                        try:
-                            def _do_checkpoint():
-                                cursor = self.conn.cursor()
-                                cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
-                                cursor.execute("PRAGMA journal_size_limit = 4194304")
-                            await asyncio.to_thread(_do_checkpoint)
-                        except Exception:
-                            pass
-                    self._last_sync = datetime.now()
-                    logger.info("☁️ Sync inicial completado — réplica local actualizada con datos de Turso")
-                except asyncio.TimeoutError:
-                    logger.warning("⚠️ Sync inicial timeout (>45s) — Posible desincronización de réplica. Iniciando Auto-Healing preventivo...")
-                    asyncio.create_task(self._auto_heal_sync_conflict())
-                except Exception as sync_err:
-                    logger.warning(f"⚠️ Sync inicial falló: {sync_err}. Evaluando Auto-Healing...")
-                    err_msg = str(sync_err).lower()
-                    if "frame" in err_msg or "mismatch" in err_msg or "larger than" in err_msg or "durable" in err_msg:
+                    def _check_tables():
+                        cursor = self.conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                        return cursor.fetchall()
+                    tables = await asyncio.to_thread(_check_tables)
+                    if tables:
+                        is_empty = False
+                except Exception as check_err:
+                    logger.warning(f"⚠️ Error verificando tablas locales en connect: {check_err}")
+
+                if is_empty:
+                    try:
+                        logger.info("🔄 Sync inicial con Turso Cloud (bloqueante por DB vacía, máx 45s)...")
+                        # Sincronización protegida por lock inicial
+                        async with self._db_lock:
+                            await asyncio.wait_for(
+                                asyncio.to_thread(self.conn.sync),
+                                timeout=45.0
+                            )
+                            # Checkpoint del WAL después del sync inicial
+                            try:
+                                def _do_checkpoint():
+                                    cursor = self.conn.cursor()
+                                    cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                                    cursor.execute("PRAGMA journal_size_limit = 4194304")
+                                await asyncio.to_thread(_do_checkpoint)
+                            except Exception:
+                                pass
+                        self._last_sync = datetime.now()
+                        logger.info("☁️ Sync inicial completado — réplica local actualizada con datos de Turso")
+                    except asyncio.TimeoutError:
+                        logger.warning("⚠️ Sync inicial timeout (>45s) — Posible desincronización de réplica. Iniciando Auto-Healing preventivo...")
                         asyncio.create_task(self._auto_heal_sync_conflict())
+                    except Exception as sync_err:
+                        logger.warning(f"⚠️ Sync inicial falló: {sync_err}. Evaluando Auto-Healing...")
+                        err_msg = str(sync_err).lower()
+                        if "frame" in err_msg or "mismatch" in err_msg or "larger than" in err_msg or "durable" in err_msg:
+                            asyncio.create_task(self._auto_heal_sync_conflict())
+                else:
+                    logger.info("☁️ Base de datos local ya contiene tablas. Sincronización inicial diferida en segundo plano...")
+                    
+                    async def bg_initial_sync():
+                        try:
+                            async with self._db_lock:
+                                await asyncio.to_thread(self.conn.sync)
+                                try:
+                                    def _do_checkpoint():
+                                        cursor = self.conn.cursor()
+                                        cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                                    await asyncio.to_thread(_do_checkpoint)
+                                except Exception:
+                                    pass
+                            self._last_sync = datetime.now()
+                            logger.info("☁️ Sincronización inicial en segundo plano completada con éxito")
+                        except Exception as sync_err:
+                            logger.warning(f"⚠️ Sincronización inicial en segundo plano falló: {sync_err}")
+                            
+                    self._bg_sync_task = asyncio.create_task(bg_initial_sync())
 
             logger.success(f"✅ Motor LibSQL conectado (Modo: {'Cloud' if self._force_turso_only else 'Hybrid'})")
 
@@ -216,10 +274,18 @@ class HybridDatabase:
                 except Exception:
                     pass
                 self.conn = None
-                self._connected = False
-                import gc
-                gc.collect()
-                await asyncio.sleep(1.0)
+                
+            if self.read_conn:
+                try:
+                    await asyncio.to_thread(self.read_conn.close)
+                except Exception:
+                    pass
+                self.read_conn = None
+                
+            self._connected = False
+            import gc
+            gc.collect()
+            await asyncio.sleep(1.0)
             
             await self._cleanup_local_db_files(soft_only=False)  # Full reset: borra todo
             await asyncio.sleep(0.5)
@@ -353,6 +419,14 @@ class HybridDatabase:
         except Exception:
             pass  # Ignorar errores al cerrar
         self.conn = None
+
+        if self.read_conn:
+            try:
+                await asyncio.to_thread(self.read_conn.close)
+            except Exception:
+                pass
+            self.read_conn = None
+
         self._connected = False
         # Forzar liberación de handles del Rust backend en Windows
         import gc
@@ -563,9 +637,15 @@ class HybridDatabase:
             raise last_error
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
-        """Fetch all serializado con _db_lock (libsql hace auto-sync interno en SELECT también)"""
+        """Fetch all con conexión de lectura dedicada no bloqueante (con fallback a la principal en transacción)"""
         if not self._connected:
             await self.connect()
+
+        # Usar la conexión de lectura dedicada si no estamos en medio de una transacción activa
+        # Esto previene bloqueos de lectura cuando se ejecuta sync_from_cloud o escrituras largas.
+        use_read = self.read_conn is not None and not self._in_transaction
+        lock_to_use = self._read_db_lock if use_read else self._db_lock
+        conn_to_use = self.read_conn if use_read else self.conn
 
         max_retries = 3
         last_error = None
@@ -574,9 +654,10 @@ class HybridDatabase:
             try:
                 def _do_fetch():
                     try:
-                        if self.conn is None:
-                            raise Exception("conn is None")
-                        cursor = self.conn.cursor()
+                        nonlocal conn_to_use
+                        if conn_to_use is None:
+                            raise Exception("connection is None")
+                        cursor = conn_to_use.cursor()
                         rows = cursor.execute(query, params or ()).fetchall()
                         cols = [col[0] for col in cursor.description]
                         return [dict(zip(cols, row)) for row in rows], None
@@ -592,36 +673,38 @@ class HybridDatabase:
                             return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
                         raise panic_e
 
-                # Lecturas serializadas con _db_lock para evitar colisión con sync/escrituras concurrentes en self.conn
                 try:
                     async with asyncio.timeout(10):
-                        await self._db_lock.acquire()
+                        await lock_to_use.acquire()
                 except asyncio.TimeoutError:
-                    logger.warning(f"⏳ _db_lock timeout en FETCH (intento {attempt}/{max_retries}): {query[:60]}...")
-                    last_error = asyncio.TimeoutError("db_lock timeout")
-                    await asyncio.sleep(0.2)
+                    logger.warning(f"⏳ lock timeout en FETCH (intento {attempt}/{max_retries}, read={use_read}): {query[:60]}...")
+                    last_error = asyncio.TimeoutError("lock timeout")
+                    await asyncio.sleep(0.1)
                     continue
 
                 try:
                     status, error_obj = await asyncio.to_thread(_do_fetch)
                 finally:
-                    self._db_lock.release()
+                    lock_to_use.release()
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
-                        # Retry rápido para reads: 200ms (no 1s como escrituras)
-                        logger.warning(f"⚠️ WAL en FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
-                        await asyncio.sleep(0.2)
+                        # Retry rápido para reads: 100ms
+                        logger.warning(f"⚠️ WAL en FETCH (retry {attempt}/{max_retries}, read={use_read}): {query[:60]}...")
+                        await asyncio.sleep(0.1)
                     elif error_obj and "malformed" in str(error_obj).lower():
                         logger.warning(f"🧹 Corrupción detectada en FETCH: {error_obj}. Resetting...")
                         await self.reset_local_db()
                     else:
-                        logger.warning(f"🔄 FETCH retry {attempt}/{max_retries}: {error_obj}")
+                        logger.warning(f"🔄 FETCH retry {attempt}/{max_retries} (read={use_read}): {error_obj}")
                         self._connected = False
-                        # Stream expirado: reconectar inmediatamente (el stream ya está muerto)
                         if not self._is_stream_error(error_obj):
                             await asyncio.sleep(0.3)
                         await self.connect()
+                        # Si reconectamos, reevaluar las conexiones para el reintento
+                        use_read = self.read_conn is not None and not self._in_transaction
+                        lock_to_use = self._read_db_lock if use_read else self._db_lock
+                        conn_to_use = self.read_conn if use_read else self.conn
                     last_error = error_obj
                     continue
 
@@ -629,16 +712,19 @@ class HybridDatabase:
 
             except Exception as e:
                 if self._is_wal_conflict(e):
-                    logger.warning(f"⚠️ WAL outer FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
-                    await asyncio.sleep(0.2)
+                    logger.warning(f"⚠️ WAL outer FETCH (retry {attempt}/{max_retries}, read={use_read}): {query[:60]}...")
+                    await asyncio.sleep(0.1)
                     last_error = e
                     continue
 
                 if self._is_reconnect_error(e) and attempt < max_retries:
-                    logger.warning(f"🔄 FETCH retry {attempt}/{max_retries}: {e}")
+                    logger.warning(f"🔄 FETCH retry {attempt}/{max_retries} (read={use_read}): {e}")
                     self._connected = False
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.3)
                     await self.connect()
+                    use_read = self.read_conn is not None and not self._in_transaction
+                    lock_to_use = self._read_db_lock if use_read else self._db_lock
+                    conn_to_use = self.read_conn if use_read else self.conn
                     last_error = e
                     continue
 
@@ -647,9 +733,6 @@ class HybridDatabase:
 
         # Agotamos reintentos
         if last_error and self._is_wal_conflict(last_error):
-            # WAL persistente: lanzar excepción en lugar de devolver [] vacío.
-            # Devolver [] causaría que el auth diga "usuario no encontrado" → 401 incorrecto.
-            # Con excepción, FastAPI devuelve 500/503 y el usuario ve un error real, no un logout.
             logger.error(f"❌ WAL persistente en FETCH tras {max_retries} reintentos — proceso externo activo: {query[:60]}...")
             raise RuntimeError("DB sync conflict — reintente en unos segundos")
 
@@ -1021,6 +1104,15 @@ class HybridDatabase:
                 finally:
                     self.conn = None
                     self._connected = False
+
+            if self.read_conn:
+                try:
+                    await asyncio.to_thread(self.read_conn.close)
+                    logger.info("🔌 Conexión de lectura libsql cerrada")
+                except Exception as close_err:
+                    logger.warning(f"⚠️ Error al cerrar read_conn (ignorado): {close_err}")
+                finally:
+                    self.read_conn = None
             
             # 2. Forzar liberación de handles de Rust en Windows
             #    El hilo de sync_interval de libsql puede tardar hasta 2-3s en soltar handles
