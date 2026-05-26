@@ -3586,6 +3586,13 @@ function renderWizardStep(step) {
                     </div>
                 </div>
             </div>
+            
+            <div class="text-center my-3">
+                <button class="btn btn-outline-success fw-bold px-4 py-2.5 w-100 shadow-sm" onclick="window.cierreWizardDownloadExcel()">
+                    <i class="bi bi-file-earmark-excel-fill me-2"></i> Descargar Excel de Previsualización
+                </button>
+            </div>
+
             <div class="alert alert-warning mt-3 border-warning">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Atención:</strong> Esta acción sellará el periodo. Los empleados en el biométrico NO podrán alterar la asistencia de estas fechas retrospectivamente.
             </div>
@@ -3597,6 +3604,18 @@ function renderWizardStep(step) {
         btnNext.onclick = confirmarCierreRRHH;
     }
 }
+
+window.cierreWizardDownloadExcel = function() {
+    const s = window.cierreWizardState;
+    if (!s || !s.fIni || !s.fFin) {
+        showToast("Rango de fechas no válido para exportar.", "error");
+        return;
+    }
+    const token = typeof AuthService !== 'undefined' ? AuthService.getToken() : localStorage.getItem('access_token');
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    const url = `/api/reports/asistencia/excel/?fecha_inicio=${s.fIni}&fecha_fin=${s.fFin}&area=${encodeURIComponent(s.area)}${tokenParam}`;
+    window.location.href = url;
+};
 
 function nextWizardStep() {
     const s = window.cierreWizardState.currentStep;
