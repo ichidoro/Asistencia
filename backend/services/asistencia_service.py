@@ -3548,40 +3548,70 @@ class AsistenciaService:
         cierre_id = res_cierre.lastrowid
         
         # 1.1 Si hay un periodo en periodos_rrhh que coincide con el rango cerrado, marcarlo como 'cerrado'
+        # Pero solo si todas las áreas activas están cerradas
         try:
-            # Obtener la info del periodo antes de cerrarlo para ver si era el activo
-            periodo = await db.fetch_one(
-                "SELECT activo FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
+            active_areas_res = await db.fetch_all(
+                """
+                SELECT DISTINCT ar.nombre FROM empleados e
+                JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                    AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
+                JOIN areas ar ON ha.area_id = ar.id
+                WHERE e.activo = 1
+                """,
+                (fecha_fin, fecha_inicio)
+            )
+            active_areas = {r['nombre'] for r in active_areas_res if r['nombre']}
+
+            closed_areas_res = await db.fetch_all(
+                "SELECT DISTINCT area FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL",
                 (fecha_inicio, fecha_fin)
             )
-            
-            # Marcar como cerrado
-            await db.execute(
-                "UPDATE periodos_rrhh SET estado = 'cerrado' WHERE fecha_inicio = ? AND fecha_fin = ?",
-                (fecha_inicio, fecha_fin)
-            )
-            logger.info(f"✨ periodos_rrhh actualizado a 'cerrado' para el rango {fecha_inicio} a {fecha_fin} (AsistenciaService)")
-            
-            # Si era el periodo activo/vigente, hacer la transición
-            if periodo and (periodo["activo"] == 1 or periodo["activo"] is True):
-                await db.execute(
-                    "UPDATE periodos_rrhh SET activo = 0 WHERE fecha_inicio = ? AND fecha_fin = ?",
+            closed_areas = {r['area'] for r in closed_areas_res if r['area']}
+            if area:
+                closed_areas.add(area)
+
+            should_close_global = active_areas.issubset(closed_areas)
+
+            if should_close_global:
+                # Obtener la info del periodo antes de cerrarlo para ver si era el activo
+                periodo = await db.fetch_one(
+                    "SELECT activo FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
                     (fecha_inicio, fecha_fin)
                 )
-                logger.info(f"✨ Periodo {fecha_inicio} al {fecha_fin} desmarcado como Vigente.")
                 
-                # Buscar el siguiente periodo abierto
-                next_periodo = await db.fetch_one(
-                    "SELECT id, mes_cierre FROM periodos_rrhh WHERE estado = 'abierto' ORDER BY fecha_inicio ASC LIMIT 1"
+                # Marcar como cerrado
+                await db.execute(
+                    "UPDATE periodos_rrhh SET estado = 'cerrado' WHERE fecha_inicio = ? AND fecha_fin = ?",
+                    (fecha_inicio, fecha_fin)
                 )
-                if next_periodo:
+                logger.info(f"✨ periodos_rrhh actualizado a 'cerrado' para el rango {fecha_inicio} a {fecha_fin} (AsistenciaService)")
+                
+                # Si era el periodo activo/vigente, hacer la transición
+                if periodo and (periodo["activo"] == 1 or periodo["activo"] is True):
                     await db.execute(
-                        "UPDATE periodos_rrhh SET activo = 1 WHERE id = ?",
-                        (next_periodo["id"],)
+                        "UPDATE periodos_rrhh SET activo = 0 WHERE fecha_inicio = ? AND fecha_fin = ?",
+                        (fecha_inicio, fecha_fin)
                     )
-                    logger.info(f"✨ Siguiente periodo promovido a Vigente: {next_periodo['mes_cierre']} (ID: {next_periodo['id']})")
-                else:
-                    logger.info("ℹ️ No hay más periodos abiertos para promover como Vigente.")
+                    logger.info(f"✨ Periodo {fecha_inicio} al {fecha_fin} desmarcado como Vigente.")
+                    
+                    # Buscar el siguiente periodo abierto
+                    next_periodo = await db.fetch_one(
+                        "SELECT id, mes_cierre FROM periodos_rrhh WHERE estado = 'abierto' ORDER BY fecha_inicio ASC LIMIT 1"
+                    )
+                    if next_periodo:
+                        await db.execute(
+                            "UPDATE periodos_rrhh SET activo = 1 WHERE id = ?",
+                            (next_periodo["id"],)
+                        )
+                        logger.info(f"✨ Siguiente periodo promovido a Vigente: {next_periodo['mes_cierre']} (ID: {next_periodo['id']})")
+                    else:
+                        logger.info("ℹ️ No hay más periodos abiertos para promover como Vigente.")
+            else:
+                logger.info(
+                    f"ℹ️ Cierre de area '{area}' guardado (AsistenciaService), pero periodos_rrhh permanece 'abierto' "
+                    f"porque quedan areas activas por cerrar. "
+                    f"Activas: {active_areas} | Cerradas: {closed_areas}"
+                )
         except Exception as e_close_rrhh:
             logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh: {e_close_rrhh}")
         
