@@ -25,7 +25,7 @@ class CierreService:
             SELECT he.id, he.fecha, he.empleado_id,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
                    he.minutos_bruto, he.minutos_autorizados
-            FROM horas_extras he
+            FROM horas_extras he INDEXED BY idx_he_fecha
             JOIN empleados e ON he.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                 AND he.fecha >= ha.fecha_desde
@@ -150,7 +150,7 @@ class CierreService:
         query_he_aprobadas = f"""
             SELECT ROUND(SUM(he.minutos_autorizados) / 60.0, 2) AS he_horas,
                    COUNT(*) AS he_count
-            FROM horas_extras he
+            FROM horas_extras he INDEXED BY idx_he_fecha
             JOIN empleados e ON he.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                 AND he.fecha >= ha.fecha_desde
