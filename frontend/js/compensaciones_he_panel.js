@@ -55,7 +55,7 @@
                                         <small class="text-muted" style="font-size:0.65rem;">Día con falta o deuda a cubrir</small>
                                     </div>
                                     <div class="col-6">
-                                        <label class="form-label fw-bold text-dark small">Bolsa HE Disponible (Periodo)</label>
+                                        <div class="form-label fw-bold text-dark small">Bolsa HE Disponible (Periodo)</div>
                                         <div id="compensar-he-bolsa-badge-container" class="mt-1">
                                             <span class="badge p-2 bg-secondary text-white w-100">Seleccione empleado y fecha...</span>
                                         </div>

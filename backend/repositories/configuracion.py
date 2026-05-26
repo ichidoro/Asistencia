@@ -845,13 +845,55 @@ class ConfiguracionRepository:
         return True
 
     # --- PERIODOS RRHH ---
+    async def _auto_heal_periodos(self):
+        try:
+            cerrados = await self.db.fetch_all("SELECT * FROM periodos_rrhh WHERE estado = 'cerrado'")
+            for p in cerrados:
+                f_ini = p["fecha_inicio"]
+                f_fin = p["fecha_fin"]
+                
+                active_res = await self.db.fetch_all(
+                    """
+                    SELECT DISTINCT ar.nombre FROM empleados e
+                    JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                        AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
+                    JOIN areas ar ON ha.area_id = ar.id
+                    WHERE e.activo = 1
+                    """,
+                    (f_fin, f_ini)
+                )
+                active_areas = {r['nombre'] for r in active_res if r['nombre']}
+                
+                closed_res = await self.db.fetch_all(
+                    "SELECT DISTINCT area FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL",
+                    (f_ini, f_fin)
+                )
+                closed_areas = {r['area'] for r in closed_res if r['area']}
+                
+                if active_areas and not active_areas.issubset(closed_areas):
+                    logger.warning(
+                        f"[Auto-Healing] Reabriendo periodo {p['mes_cierre']} porque hay areas activas no cerradas. "
+                        f"Activas: {active_areas} | Cerradas: {closed_areas}"
+                    )
+                    await self.db.execute(
+                        "UPDATE periodos_rrhh SET estado = 'abierto' WHERE id = ?",
+                        (p["id"],)
+                    )
+                    await self.db.execute("UPDATE periodos_rrhh SET activo = 0")
+                    await self.db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (p["id"],))
+        except Exception as e_heal:
+            logger.warning(f"Error en auto-healing de periodos: {e_heal}")
+
     async def get_all_periodos_rrhh(self) -> List[Dict[str, Any]]:
+        await self._auto_heal_periodos()
         return await self.db.fetch_all("SELECT * FROM periodos_rrhh ORDER BY fecha_inicio DESC")
 
     async def get_periodo_rrhh_activo(self) -> Optional[Dict[str, Any]]:
+        await self._auto_heal_periodos()
         return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
 
     async def get_periodo_rrhh_by_id(self, id: int) -> Optional[Dict[str, Any]]:
+        await self._auto_heal_periodos()
         return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE id = ?", (id,))
 
     async def create_periodo_rrhh(self, mes_cierre: str, fecha_inicio: str, fecha_fin: str, activo: int, estado: str) -> int:

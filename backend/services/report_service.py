@@ -150,9 +150,14 @@ class ReportService:
                         
                         if not is_descanso:
                             dias_programados += 1
-                            estados_justificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO']
+                            estados_justificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION']
                             di_estado = di_check.get("estado", "") or ""
-                            is_justificado = di_estado == 'JORNADA_ESPECIAL' or any(ej in di_estado.upper() for ej in estados_justificados)
+                            di_nomen = di_check.get("nomenclatura", "") or ""
+                            is_justificado = (
+                                di_estado == 'JORNADA_ESPECIAL' or 
+                                any(ej in di_estado.upper() for ej in estados_justificados) or
+                                bool(di_nomen)
+                            )
                             
                             if is_justificado:
                                 dias_justificados += 1
@@ -611,8 +616,8 @@ class ReportService:
                                     elif di_estado == 'FERIADO': 
                                         sigla = 'FES'
                                         cell.font = Font(name="Segoe UI", size=9, color="FFD700", bold=True)
-                                    elif di_estado in ['VACACIONES', 'LICENCIA', 'LCM', 'LMU', 'CUM', 'DUE']: 
-                                        sigla = di_estado[:3].upper()
+                                    elif di.get("nomenclatura") or di_estado in ['VACACIONES', 'LICENCIA', 'LCM', 'LMU', 'CUM', 'DUE']: 
+                                        sigla = di.get("nomenclatura") or di_estado[:3].upper()
                                         cell.font = Font(name="Segoe UI", size=9, color="0000FF", bold=True)
                                     val = sigla
                                     

@@ -3960,10 +3960,11 @@ function renderVistaAnalitica(respData, container) {
                 if (!isDescanso) {
                     diasProgramados++;
                     // Identificar si el estado es una justificación que rebaja la meta (Art 25 bis / DT: Vacaciones, Licencias Médicas, Permisos pagados)
-                    const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO'];
+                    const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION'];
                     const isJustificado = diCheck.estado && (
                         diCheck.estado === 'JORNADA_ESPECIAL' ||
-                        estadosJustificados.some(ej => diCheck.estado.toUpperCase().includes(ej))
+                        estadosJustificados.some(ej => diCheck.estado.toUpperCase().includes(ej)) ||
+                        (diCheck.nomenclatura && diCheck.nomenclatura.trim() !== '')
                     );
                     
                     if (isJustificado) {

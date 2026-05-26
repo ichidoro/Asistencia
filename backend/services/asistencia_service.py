@@ -2327,6 +2327,7 @@ class AsistenciaService:
                 tipo_nombre = j.get('tipo_nombre', 'Sin detalle').upper()
                 # Mapeo dinámico: el estado es el nombre de la justificación
                 res['estado'] = tipo_nombre
+                res['justificacion_id'] = j.get('id')
                 if j.get('tipo_nomenclatura'):
                     res['nomenclatura'] = j.get('tipo_nomenclatura').upper()
                 
@@ -3432,6 +3433,7 @@ class AsistenciaService:
                             est = matrix[eid][f_str].get('estado')
                             if est and str(est).strip().upper() == str(just['tipo_nombre']).strip().upper():
                                 matrix[eid][f_str]['nomenclatura'] = nomen
+                                matrix[eid][f_str]['justificacion_id'] = just.get('id')
                         cur_dt += _td(days=1)
                 except (ValueError, KeyError) as _exc:
                     logger.debug(f"[Matrix] Nomenclatura no inyectada para just_id={just.get('id')} emp={eid}: {_exc}")

@@ -102,10 +102,11 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
 
         // Detectar si tiene justificación activa (estado contiene nombre de justificación como VAC, LIC, etc.)
-        const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO'];
+        const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION'];
         const tieneJustificacion = asistJ && (
             (asistJ.justificacion_id) ||
             (asistJ.estado && estadosJustificados.some(ej => asistJ.estado.toUpperCase().includes(ej))) ||
+            (asistJ.nomenclatura && asistJ.nomenclatura.trim() !== '') ||
             (asistJ.observaciones && asistJ.observaciones.toUpperCase().includes('JUSTIFICACI'))
         );
 
