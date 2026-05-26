@@ -1201,7 +1201,13 @@ window.updateVisorPDF = function(isDownload = false) {
         else if (estadoStr === 'SALIDA_ADELANTADA' || estadoStr === 'SAD') estadoBadge = 'Salida Adelantada';
         else if (estadoStr === 'ATR_SAD') estadoBadge = 'Atraso / Sal. Adelantada';
         else if (estadoStr === 'INASISTENCIA' || estadoStr === 'FALTA') estadoBadge = 'Inasistencia';
-        else if (estadoStr === 'INASISTENCIA_COMPENSADA') estadoBadge = 'Compensado con H.E.';
+        else if (estadoStr === 'INASISTENCIA_COMPENSADA') {
+            if (a.deuda_condonada === 3) {
+                estadoBadge = 'Compensado por Intercambio';
+            } else {
+                estadoBadge = 'Compensado con H.E.';
+            }
+        }
         else if (estadoStr === 'JORNADA_COMPENSATORIA') estadoBadge = 'Jornada Compensatoria';
         else if (estadoStr === 'LIBRE') estadoBadge = 'Día Libre';
         else if (estadoStr === 'NO_ACTIVO') estadoBadge = 'No Activo';
@@ -4661,6 +4667,15 @@ function _analiticaCellBadge(di) {
     if (!di || !di.estado) return '';
     let est = di.estado;
 
+    // Distinguir entre Compensado por Horas Extras y Compensado por Intercambio (1x1)
+    if (est === 'INASISTENCIA_COMPENSADA') {
+        if (di.deuda_condonada === 3) {
+            est = 'INASISTENCIA_COMPENSADA_INTERCAMBIO';
+        } else {
+            est = 'INASISTENCIA_COMPENSADA_HE';
+        }
+    }
+
     // --- Lógica Bolsa Flexible: Suprimir estados de penalización de tiempo ---
     if (di._esBolsa) {
         if (['ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'].includes(est)) {
@@ -4681,6 +4696,17 @@ function _analiticaCellBadge(di) {
         const shortLabel = e.short_label || (e.codigo === 'JORNADA_ESPECIAL' ? 'ESP' : (e.codigo.length <= 3 ? e.codigo : e.codigo.substring(0,3)));
         badgeMap[e.codigo] = [e.color_clase, icon + (e._badgeLabel || shortLabel)];
     });
+
+    // Inyectar mappings virtuales para los dos tipos de inasistencia compensada
+    badgeMap['INASISTENCIA_COMPENSADA_INTERCAMBIO'] = [
+        'badge-compensatorio', 
+        '<i class="bi bi-arrow-left-right me-1"></i>COMP'
+    ];
+    badgeMap['INASISTENCIA_COMPENSADA_HE'] = [
+        'badge-inasistencia-compensada-he', 
+        '<i class="bi bi-clock-history me-1"></i>C.HE'
+    ];
+
     // Fallback hardcodeado (si la caché aún no cargó)
     if (Object.keys(badgeMap).length === 0) {
         Object.assign(badgeMap, {
@@ -4695,7 +4721,8 @@ function _analiticaCellBadge(di) {
             'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
             'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
             'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR'],
-            'INASISTENCIA_COMPENSADA': ['badge-inasistencia-compensada-he', '<i class="bi bi-clock-history me-1"></i>C.HE'],
+            'INASISTENCIA_COMPENSADA_INTERCAMBIO': ['badge-compensatorio', '<i class="bi bi-arrow-left-right me-1"></i>COMP'],
+            'INASISTENCIA_COMPENSADA_HE':          ['badge-inasistencia-compensada-he', '<i class="bi bi-clock-history me-1"></i>C.HE'],
             'JORNADA_COMPENSATORIA':   ['badge-compensatorio',           '<i class="bi bi-arrow-left-right me-1"></i>COMP']
         });
     }
@@ -4712,6 +4739,8 @@ function _analiticaCellBadge(di) {
         if (est === 'LIBRE') tooltipTitle = 'Día Libre (Asignación automática)';
         else if (est === 'FERIADO') tooltipTitle = 'Feriado legal / Irrenunciable';
         else if (est === 'INASISTENCIA') tooltipTitle = 'Inasistencia (Generada automáticamente)';
+        else if (est === 'INASISTENCIA_COMPENSADA_INTERCAMBIO') tooltipTitle = 'Día Compensado por Intercambio (1x1)';
+        else if (est === 'INASISTENCIA_COMPENSADA_HE') tooltipTitle = 'Compensado con Horas Extras';
     } else if (di.nomenclatura) {
         pillClass = 'badge-state-info';
         label = di.nomenclatura;

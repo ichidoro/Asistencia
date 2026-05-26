@@ -202,7 +202,8 @@ class AsistenciaRepository:
                 num_semana_ganadora=excluded.num_semana_ganadora,
                 marcas_consumidas_ids=excluded.marcas_consumidas_ids,
                 deuda_condonada=CASE 
-                    WHEN excluded.deuda_condonada = 4 THEN 4
+                    WHEN excluded.deuda_condonada IN (3, 4) THEN excluded.deuda_condonada
+                    WHEN excluded.deuda_condonada = 0 AND excluded.estado IN ('INASISTENCIA', 'FALTA') THEN 0
                     WHEN excluded.deuda_condonada = 0 AND asistencias.deuda_condonada = 4 THEN 0
                     ELSE asistencias.deuda_condonada
                 END,
