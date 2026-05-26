@@ -139,53 +139,58 @@ class SeguridadRepository:
         await self._inyectar_semilla_seguridad()
 
     async def _inyectar_semilla_seguridad(self):
-        """Si la tabla de usuarios está vacía, crea el SuperAdmin y los permisos base."""
+        """Si la tabla de usuarios está vacía, crea el SuperAdmin y los permisos base. También asegura que existan todos los permisos base en la base de datos."""
         try:
-            # 1. Sembrar Permisos Base si están vacíos
-            count_p = await self.db.fetch_one("SELECT COUNT(*) as c FROM permisos")
-            if count_p and count_p['c'] == 0:
-                permisos_base = [
-                    # ── Empleados (7 permisos) ──
-                    ('empleados.ver',                'Empleados',      'Ver la lista general de empleados, cumpleaños y turnos asignados (Lectura)'),
-                    ('empleados.crear',              'Empleados',      'Crear nuevos empleados (Botón "+ Nuevo Empleado")'),
-                    ('empleados.editar',             'Empleados',      'Editar ficha personal, renovar/gestionar contratos y registrar bajas (desactivaciones)'),
-                    ('empleados.eliminar',           'Empleados',      'Eliminar de forma permanente empleados y su historial (Icono papelera roja)'),
-                    ('empleados.reincorporar',       'Empleados',      'Reincorporar y reactivar empleados inactivos (Asistente con BioAlba)'),
-                    ('empleados.bonos',              'Empleados',      'Ver matriz informativa de bonos asignados (Lectura)'),
-                    ('empleados.horarios',           'Empleados',      'Asignación masiva/individual de turnos y corrección de fecha inicial'),
+            permisos_base = [
+                # ── Empleados (7 permisos) ──
+                ('empleados.ver',                'Empleados',      'Ver la lista general de empleados, cumpleaños y turnos asignados (Lectura)'),
+                ('empleados.crear',              'Empleados',      'Crear nuevos empleados (Botón "+ Nuevo Empleado")'),
+                ('empleados.editar',             'Empleados',      'Editar ficha personal, renovar/gestionar contratos y registrar bajas (desactivaciones)'),
+                ('empleados.eliminar',           'Empleados',      'Eliminar de forma permanente empleados y su historial (Icono papelera roja)'),
+                ('empleados.reincorporar',       'Empleados',      'Reincorporar y reactivar empleados inactivos (Asistente con BioAlba)'),
+                ('empleados.bonos',              'Empleados',      'Ver matriz informativa de bonos asignados (Lectura)'),
+                ('empleados.horarios',           'Empleados',      'Asignación masiva/individual de turnos y corrección de fecha inicial'),
 
-                    # ── Marcaciones (7 permisos) ──
-                    ('marcaciones.ver',              'Marcaciones',    'Ver la grilla de asistencia, calendarios y filtros'),
-                    ('marcaciones.editar',           'Marcaciones',    'Editar horas de entrada/salida, relleno masivo, tramos, perdonazo'),
-                    ('marcaciones.justificar',       'Marcaciones',    'Doble-clic en celda de estado → crear/editar justificación'),
-                    ('marcaciones.horas_extras',     'Marcaciones',    'Modal de aprobación masiva → aprobar/rechazar horas extras'),
-                    ('marcaciones.cierre_periodo',   'Marcaciones',    'Botón "Cerrar Período" → sellar mes para liquidación'),
-                    ('marcaciones.bypass_cierre',    'Marcaciones',    'Desbloquear edición de meses ya cerrados (alto riesgo)'),
-                    ('marcaciones.sincronizar',      'Marcaciones',    'Botón "Sincronizar" en toolbar → descargar marcaciones y reprocesar'),
+                # ── Marcaciones (7 permisos) ──
+                ('marcaciones.ver',              'Marcaciones',    'Ver la grilla de asistencia, calendarios y filtros'),
+                ('marcaciones.editar',           'Marcaciones',    'Editar horas de entrada/salida, relleno masivo, tramos, perdonazo'),
+                ('marcaciones.justificar',       'Marcaciones',    'Doble-clic en celda de estado -> crear/editar justificación'),
+                ('marcaciones.horas_extras',     'Marcaciones',    'Modal de aprobación masiva -> aprobar/rechazar horas extras'),
+                ('marcaciones.cierre_periodo',   'Marcaciones',    'Botón "Cerrar Período" -> sellar mes para liquidación'),
+                ('marcaciones.bypass_cierre',    'Marcaciones',    'Desbloquear edición de meses ya cerrados (alto riesgo)'),
+                ('marcaciones.sincronizar',      'Marcaciones',    'Botón "Sincronizar" en toolbar -> descargar marcaciones y reprocesar'),
 
-                    # ── Reportes (4 permisos) ──
-                    ('reportes.ver',                 'Reportes',       'Ver tablas de reporte, gráficos de línea y filtros de período'),
-                    ('reportes.exportar',            'Reportes',       'Botón "Descargar Excel" → exportar reporte consolidado'),
-                    ('reportes.reprocesar',          'Reportes',       'Botón "Reprocesar" → disparar motor de cálculo desde reportes'),
-                    ('reportes.sincronizar',         'Reportes',       'Botón "Sincronizar" → descargar marcaciones desde reportes'),
+                # ── Reportes (4 permisos) ──
+                ('reportes.ver',                 'Reportes',       'Ver tablas de reporte, gráficos de línea y filtros de período'),
+                ('reportes.exportar',            'Reportes',       'Botón "Descargar Excel" -> exportar reporte consolidado'),
+                ('reportes.reprocesar',          'Reportes',       'Botón "Reprocesar" -> disparar motor de cálculo desde reportes'),
+                ('reportes.sincronizar',         'Reportes',       'Botón "Sincronizar" -> descargar marcaciones desde reportes'),
 
-                    # ── Configuración (10 permisos) ──
-                    ('configuracion.ver',            'Configuración',  'Acceso de solo lectura a todas las pestañas de configuración'),
-                    ('configuracion.horarios',       'Configuración',  'Pestaña Horarios → crear, editar y eliminar turnos'),
-                    ('configuracion.bonos',          'Configuración',  'Pestaña Bonos → crear, editar y eliminar bonos y pagadores'),
-                    ('configuracion.justificaciones','Configuración',  'Pestaña Justificaciones → crear, editar y eliminar tipos'),
-                    ('configuracion.calendario',     'Configuración',  'Pestaña Calendario → gestionar feriados'),
-                    ('configuracion.correo',         'Configuración',  'Pestaña Correo → configurar SMTP y notificaciones por área'),
-                    ('configuracion.estados',        'Configuración',  'Pestaña Estados → editar estados de asistencia'),
-                    ('configuracion.seguridad',      'Configuración',  'Pestaña Seguridad → gestionar usuarios, roles y ver auditoría'),
-                    ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header → Wizard de inicialización BioAlba'),
-                    ('configuracion.sistema',        'Configuración',  'Pestaña Sistema → diagnóstico de BD y modo de conexión'),
-                ]
-                await self.db.executemany(
-                    "INSERT INTO permisos (id, modulo, descripcion) VALUES (?, ?, ?)",
-                    permisos_base
-                )
-                logger.info("✨ Permisos base inyectados (28 permisos)")
+                # ── Configuración (10 permisos) ──
+                ('configuracion.ver',            'Configuración',  'Acceso de solo lectura a todas las pestañas de configuración'),
+                ('configuracion.horarios',       'Configuración',  'Pestaña Horarios -> crear, editar y eliminar turnos'),
+                ('configuracion.bonos',          'Configuración',  'Pestaña Bonos -> crear, editar y eliminar bonos y pagadores'),
+                ('configuracion.justificaciones','Configuración',  'Pestaña Justificaciones -> crear, editar y eliminar tipos'),
+                ('configuracion.calendario',     'Configuración',  'Pestaña Calendario -> gestionar feriados'),
+                ('configuracion.correo',         'Configuración',  'Pestaña Correo -> configurar SMTP y notificaciones por área'),
+                ('configuracion.estados',        'Configuración',  'Pestaña Estados -> editar estados de asistencia'),
+                ('configuracion.seguridad',      'Configuración',  'Pestaña Seguridad -> gestionar usuarios, roles y ver auditoría'),
+                ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header -> Wizard de inicialización BioAlba'),
+                ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
+            ]
+
+            # 1. Sembrar Permisos Base - Insertar los que no existan
+            nuevos_permisos = 0
+            for perm_id, modulo, descripcion in permisos_base:
+                exists = await self.db.fetch_one("SELECT id FROM permisos WHERE id = ?", (perm_id,))
+                if not exists:
+                    await self.db.execute(
+                        "INSERT INTO permisos (id, modulo, descripcion) VALUES (?, ?, ?)",
+                        (perm_id, modulo, descripcion)
+                    )
+                    nuevos_permisos += 1
+            if nuevos_permisos > 0:
+                logger.info(f"✨ Se inyectaron {nuevos_permisos} nuevos permisos base a la base de datos")
 
             # 2. Sembrar el Rol base si la tabla está vacía
             count_r = await self.db.fetch_one("SELECT COUNT(*) as c FROM roles")
@@ -194,10 +199,25 @@ class SeguridadRepository:
                     "INSERT INTO roles (id, nombre, descripcion, alcance_global) VALUES (?, ?, ?, ?)",
                     (1, 'Super Administrador', 'Control total del sistema. Ve y hace todo sin restricciones. Único acceso a la consola de seguridad para crear usuarios y modificar roles.', 1)
                 )
+                logger.info("✨ Rol 'Super Administrador' inyectado")
 
-                # Rol 1 — Super Admin: todos los permisos
-                await self.db.execute("INSERT INTO rol_permisos (rol_id, permiso_id) SELECT 1, id FROM permisos")
-                logger.info("✨ Rol 'Super Administrador' inyectado con todos los permisos")
+            # Asegurar que el Rol 1 (Super Administrador) tenga todos los permisos
+            rol1_exists = await self.db.fetch_one("SELECT 1 FROM roles WHERE id = 1")
+            if rol1_exists:
+                rol1_perms_agregados = 0
+                for perm_id, _, _ in permisos_base:
+                    exists_rp = await self.db.fetch_one(
+                        "SELECT 1 FROM rol_permisos WHERE rol_id = 1 AND permiso_id = ?",
+                        (perm_id,)
+                    )
+                    if not exists_rp:
+                        await self.db.execute(
+                            "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (1, ?)",
+                            (perm_id,)
+                        )
+                        rol1_perms_agregados += 1
+                if rol1_perms_agregados > 0:
+                    logger.info(f"✨ Se asignaron {rol1_perms_agregados} nuevos permisos al Rol 1 (Super Administrador)")
 
             # 3. Sembrar Usuario GOD MODE si no existe
             user_exists = await self.db.fetch_one("SELECT COUNT(*) as c FROM usuarios WHERE id = 9")

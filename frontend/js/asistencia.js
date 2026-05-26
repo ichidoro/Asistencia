@@ -164,7 +164,9 @@ async function downloadExcelReport() {
     }
 
     // Disparar descarga al endpoint adecuado según el módulo que lo invocó
-    window.location.href = `${endpoint}?fecha_inicio=${inicio}&fecha_fin=${fin}${areaParam}${turnoParam}`;
+    const token = typeof AuthService !== 'undefined' ? AuthService.getToken() : localStorage.getItem('access_token');
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    window.location.href = `${endpoint}?fecha_inicio=${inicio}&fecha_fin=${fin}${areaParam}${turnoParam}${tokenParam}`;
 }
 
 let attendanceChart = null;

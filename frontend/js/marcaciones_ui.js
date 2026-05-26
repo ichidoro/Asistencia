@@ -182,9 +182,11 @@ function renderMarcacionesToolbar(container) {
             </h2>
             <div class="d-flex gap-2 align-items-center">
                 <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
+                    ${(typeof AuthService !== 'undefined' && AuthService.hasPermission('reportes.exportar')) ? `
                     <button class="btn btn-sm btn-outline-secondary bg-white" onclick="downloadExcelReport()" title="Exportar a Excel">
                         <i class="bi bi-file-earmark-excel text-success"></i> Excel
                     </button>
+                    ` : ''}
                     <button class="btn btn-sm btn-outline-secondary bg-white" onclick="window.print()" title="Imprimir Reporte">
                         <i class="bi bi-printer"></i>
                     </button>

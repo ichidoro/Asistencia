@@ -63,6 +63,10 @@ async def get_current_user(
     )
     
     if not token:
+        # Fallback to query parameter (needed for browser downloads via window.location.href)
+        token = request.query_params.get("token")
+        
+    if not token:
         raise credentials_exception
 
     try:
