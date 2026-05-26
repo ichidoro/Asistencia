@@ -2926,31 +2926,10 @@ window.cierreActualizarSeleccionDeArea = function(areaVal) {
 /**
  * [NUEVO] Abre el Asistente Zero-Trust de Cierre de Periodo RRHH.
  */
+/**
+ * [NUEVO] Abre el Asistente Zero-Trust de Cierre de Periodo RRHH.
+ */
 async function openCierrePeriodoModal() {
-    const fIni = stateMarcacionesApp.fechaInicioRRHH;
-    const fFin = stateMarcacionesApp.fechaFinRRHH;
-
-    if (!fIni || !fFin) return showToast("Debe seleccionar un rango de fechas", "warning");
-
-    const area = stateMarcacionesApp.area;
-    if (!area || area === 'Todas' || area === '') {
-        return showToast("Debe seleccionar un Área específica para realizar el cierre.", "error");
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    if (today >= fIni && today <= fFin) {
-        return showToast("Bloqueo de Seguridad: No se pueden cerrar periodos que incluyan el día de hoy.", "error");
-    }
-
-    const dIni = new Date(fIni);
-    const dFin = new Date(fFin);
-    const diffTime = Math.abs(dFin - dIni);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    if (diffDays > 35) {
-        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (35 días).`, "error");
-    }
-
     // Obtener la lista de periodos oficiales configurados para cruzar
     let periodos = [];
     try {
@@ -2964,6 +2943,19 @@ async function openCierrePeriodoModal() {
         console.error("Error al obtener periodos:", e);
     }
 
+    // Obtener las áreas desde el select principal
+    const areaSelectDOM = document.getElementById('marcacion-area');
+    let areas = [];
+    if (areaSelectDOM) {
+        areas = Array.from(areaSelectDOM.options)
+            .map(opt => opt.value)
+            .filter(val => val !== "" && val !== "Todas");
+    }
+
+    const fIni = stateMarcacionesApp.fechaInicioRRHH || "";
+    const fFin = stateMarcacionesApp.fechaFinRRHH || "";
+    const area = (stateMarcacionesApp.area === 'Todas' || !stateMarcacionesApp.area) ? "" : stateMarcacionesApp.area;
+
     const html = `
         <div class="modal fade" id="modal-cierre-wizard" tabindex="-1" data-bs-backdrop="static">
             <div class="modal-dialog modal-xl">
@@ -2976,6 +2968,7 @@ async function openCierrePeriodoModal() {
                         <div class="row">
                             <div class="col-md-3">
                                 <div class="list-group list-group-flush mb-4 rounded shadow-sm">
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-0" disabled><i class="bi bi-gear-fill text-secondary me-2"></i> Parámetros</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-1" disabled><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> 1. Anomalías</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-2" disabled><i class="bi bi-clock-fill text-warning me-2"></i> 2. En Curso</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-3" disabled><i class="bi bi-calendar-plus text-primary me-2"></i> 3. Horas Extras</button>
@@ -2988,16 +2981,13 @@ async function openCierrePeriodoModal() {
                                     <div id="cierre-periodo-badge-container" class="mb-2"></div>
                                     
                                     <div class="small text-muted mb-0">
-                                        Rango: <strong id="cierre-rango-text">${fIni} al ${fFin}</strong><br>
-                                        Área: <strong>${area}</strong>
+                                        Rango: <strong id="cierre-rango-text">${fIni && fFin ? `${fIni} al ${fFin}` : 'No definido'}</strong><br>
+                                        Área: <strong id="cierre-area-sidebar">${area || 'No seleccionada'}</strong>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-9 bg-white border rounded shadow-sm p-4 position-relative" id="wizard-content" style="min-height: 350px;">
-                                <div class="text-center py-5">
-                                    <div class="spinner-border text-primary" role="status"></div>
-                                    <p class="mt-3 text-muted fw-bold">Pre-evaluando integridad de datos...</p>
-                                </div>
+                            <div class="col-md-9 bg-white border rounded shadow-sm p-4 position-relative" id="wizard-content" style="min-height: 400px;">
+                                <!-- Contenido dinámico del paso -->
                             </div>
                         </div>
                     </div>
@@ -3020,35 +3010,21 @@ async function openCierrePeriodoModal() {
     modal.show();
 
     window.cierreWizardState = { 
-        currentStep: 1, 
+        currentStep: 0, 
         evaluacion: null, 
         fIni, 
         fFin, 
         area, 
         aceptarInasistencias: false,
-        periodos: periodos
+        periodos: periodos,
+        areas: areas
     };
 
     // Actualizar badge e info del periodo en el sidebar
     actualizarInfoPeriodoEnWizard();
 
-    try {
-        const url = `/api/cierre/pre-evaluacion?fecha_inicio=${fIni}&fecha_fin=${fFin}&area=${encodeURIComponent(area)}`;
-        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.getToken()}` } });
-        const data = await resp.json();
-        
-        if (!resp.ok) throw new Error(data.detail || "Fallo en pre-evaluación");
-        
-        window.cierreWizardState.evaluacion = data;
-        renderWizardStep(1);
-    } catch (e) {
-        document.getElementById('wizard-content').innerHTML = `
-            <div class="alert alert-danger">
-                <h5><i class="bi bi-x-circle-fill"></i> Error de Validación</h5>
-                <p>${e.message}</p>
-            </div>
-        `;
-    }
+    // Renderizar Paso 0
+    renderWizardStep(0);
 }
 
 /**
@@ -3056,14 +3032,22 @@ async function openCierrePeriodoModal() {
  */
 window.actualizarInfoPeriodoEnWizard = function() {
     const s = window.cierreWizardState;
-    const fIni = s.fIni;
-    const fFin = s.fFin;
+    const fIni = s.fIni || "";
+    const fFin = s.fFin || "";
+    const area = s.area || "";
     
     const badgeContainer = document.getElementById('cierre-periodo-badge-container');
     const rangoText = document.getElementById('cierre-rango-text');
+    const areaSidebar = document.getElementById('cierre-area-sidebar');
     
-    if (rangoText) rangoText.textContent = `${fIni} al ${fFin}`;
+    if (rangoText) rangoText.innerHTML = fIni && fFin ? `${fIni} al ${fFin}` : '<i>No definido</i>';
+    if (areaSidebar) areaSidebar.textContent = area || 'No seleccionada';
     
+    if (!fIni || !fFin) {
+        if (badgeContainer) badgeContainer.innerHTML = '';
+        return;
+    }
+
     let matchedPeriod = s.periodos.find(p => p.fecha_inicio === fIni && p.fecha_fin === fFin);
     
     if (matchedPeriod) {
@@ -3091,26 +3075,249 @@ window.actualizarInfoPeriodoEnWizard = function() {
 }
 
 function updateWizardTabs(step) {
+    const tab0 = document.getElementById('wiz-tab-0');
+    if (tab0) {
+        if (step === 0) {
+            tab0.classList.add('active');
+            tab0.classList.remove('bg-light', 'text-muted');
+        } else {
+            tab0.classList.remove('active');
+            tab0.classList.add('bg-light', 'text-muted');
+        }
+    }
+
     for (let i = 1; i <= 5; i++) {
         const tab = document.getElementById(`wiz-tab-${i}`);
-        if (i === step) {
-            tab.classList.add('active');
-            tab.classList.remove('bg-light');
-        } else if (i < step) {
-            tab.classList.remove('active');
-            tab.classList.add('bg-light', 'text-muted');
-        } else {
-            tab.classList.remove('active', 'bg-light', 'text-muted');
+        if (tab) {
+            if (i === step) {
+                tab.classList.add('active');
+                tab.classList.remove('bg-light', 'text-muted');
+            } else if (i < step) {
+                tab.classList.remove('active');
+                tab.classList.add('bg-light', 'text-muted');
+            } else {
+                tab.classList.remove('active', 'bg-light', 'text-muted');
+            }
         }
     }
 }
+
+window.cierreWizardCambiarArea = function(val) {
+    window.cierreWizardState.area = val;
+    actualizarInfoPeriodoEnWizard();
+};
+
+window.cierreWizardCargarPeriodo = function(val) {
+    if (!val) return;
+    const [fIni, fFin] = val.split('|');
+    
+    const inputIni = document.getElementById('cierre-wizard-fini');
+    const inputFin = document.getElementById('cierre-wizard-ffin');
+    if (inputIni) inputIni.value = fIni;
+    if (inputFin) inputFin.value = fFin;
+    
+    window.cierreWizardState.fIni = fIni;
+    window.cierreWizardState.fFin = fFin;
+    
+    actualizarInfoPeriodoEnWizard();
+};
+
+window.cierreWizardCambiarFechas = function() {
+    window.cierreWizardState.fIni = document.getElementById('cierre-wizard-fini')?.value || "";
+    window.cierreWizardState.fFin = document.getElementById('cierre-wizard-ffin')?.value || "";
+    
+    const selectPeriodo = document.getElementById('cierre-wizard-periodo-select');
+    if (selectPeriodo) {
+        selectPeriodo.value = "";
+    }
+    
+    actualizarInfoPeriodoEnWizard();
+};
+
+window.cierreWizardConfirmarParametros = async function() {
+    const s = window.cierreWizardState;
+    const area = s.area;
+    const fIni = s.fIni;
+    const fFin = s.fFin;
+
+    if (!area) {
+        return showToast("Debe seleccionar un área específica.", "warning");
+    }
+    if (!fIni || !fFin) {
+        return showToast("Debe ingresar las fechas de inicio y fin.", "warning");
+    }
+
+    if (fIni > fFin) {
+        return showToast("La fecha de inicio no puede ser posterior a la fecha de fin.", "warning");
+    }
+
+    // Validar bloqueo hoy
+    const today = new Date().toISOString().split('T')[0];
+    if (today >= fIni && today <= fFin) {
+        return showToast("Bloqueo de Seguridad: No se pueden cerrar periodos que incluyan el día de hoy.", "error");
+    }
+
+    // Validar límite de 35 días
+    const dIni = new Date(fIni);
+    const dFin = new Date(fFin);
+    const diffTime = Math.abs(dFin - dIni);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays > 35) {
+        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (35 días).`, "error");
+    }
+
+    // 1. Sincronizar el estado global de la aplicación
+    stateMarcacionesApp.area = area;
+    stateMarcacionesApp.fechaInicioRRHH = fIni;
+    stateMarcacionesApp.fechaFinRRHH = fFin;
+
+    // 2. Sincronizar los filtros en el DOM de la grilla principal
+    const mainAreaSelect = document.getElementById('marcacion-area');
+    if (mainAreaSelect) mainAreaSelect.value = area;
+
+    const mainFIni = document.getElementById('rrhh-fecha-inicio');
+    if (mainFIni) mainFIni.value = fIni;
+
+    const mainFFin = document.getElementById('rrhh-fecha-fin');
+    if (mainFFin) mainFFin.value = fFin;
+
+    // 3. Forzar el recargado de la grilla de asistencia en segundo plano
+    showToast(`🔄 Filtrando grilla para área '${area}' y rango seleccionado...`, "info");
+    if (typeof loadMarcacionesData === 'function') {
+        loadMarcacionesData(); // se ejecuta en background
+    }
+
+    // 4. Mostrar spinner y proceder con la pre-evaluación
+    const content = document.getElementById('wizard-content');
+    content.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3 text-muted fw-bold">Pre-evaluando integridad de datos para el área: ${area}...</p>
+        </div>
+    `;
+
+    try {
+        const url = `/api/cierre/pre-evaluacion?fecha_inicio=${fIni}&fecha_fin=${fFin}&area=${encodeURIComponent(area)}`;
+        const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.getToken()}` } });
+        const data = await resp.json();
+        
+        if (!resp.ok) throw new Error(data.detail || "Fallo en pre-evaluación");
+        
+        window.cierreWizardState.evaluacion = data;
+        renderWizardStep(1);
+    } catch (e) {
+        content.innerHTML = `
+            <div class="alert alert-danger py-4">
+                <h5><i class="bi bi-x-circle-fill text-danger me-2"></i> Error de Validación</h5>
+                <p class="mb-3">${e.message}</p>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="cierreWizardConfirmarParametros()">
+                        <i class="bi bi-arrow-clockwise"></i> Reintentar
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="renderWizardStep(0)">
+                        <i class="bi bi-chevron-left"></i> Volver a Parámetros
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+};
 
 function renderWizardStep(step) {
     window.cierreWizardState.currentStep = step;
     updateWizardTabs(step);
     const content = document.getElementById('wizard-content');
     const btnNext = document.getElementById('btn-cierre-wizard-next');
-    const ev = window.cierreWizardState.evaluacion;
+    const s = window.cierreWizardState;
+
+    if (step === 0) {
+        btnNext.style.display = 'none';
+
+        // Filtrar periodos abiertos
+        const periodosAbiertos = s.periodos.filter(p => p.estado === 'abierto');
+
+        // Construir opciones de periodos
+        const periodosOptions = periodosAbiertos.map(p => {
+            const isSelected = (p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin) ? 'selected' : '';
+            return `<option value="${p.fecha_inicio}|${p.fecha_fin}" ${isSelected}>${p.mes_cierre} (${p.fecha_inicio.split('-').reverse().join('-')} al ${p.fecha_fin.split('-').reverse().join('-')})</option>`;
+        }).join('');
+
+        // Opciones de área
+        const areasOptions = s.areas.map(a => {
+            const isSelected = a === s.area ? 'selected' : '';
+            return `<option value="${a}" ${isSelected}>${a}</option>`;
+        }).join('');
+
+        content.innerHTML = `
+            <div class="py-2">
+                <h4 class="fw-bold text-dark mb-3"><i class="bi bi-gear-fill text-secondary me-2"></i> Configuración de Cierre de Período</h4>
+                <p class="text-muted small">
+                    Seleccione el área y el rango de fechas que desea evaluar y cerrar. El sistema filtrará la grilla principal en el fondo al confirmar.
+                </p>
+                
+                <div class="row g-3 mt-2">
+                    <!-- Selección de Área -->
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm p-3 h-100 bg-light">
+                            <label for="cierre-wizard-area-select" class="form-label fw-bold text-secondary small">
+                                <i class="bi bi-geo-alt-fill text-danger me-1"></i> 1. Área a Cerrar:
+                            </label>
+                            <select class="form-select border-primary-subtle" id="cierre-wizard-area-select" onchange="cierreWizardCambiarArea(this.value)">
+                                <option value="">-- Seleccione un Área --</option>
+                                ${areasOptions}
+                            </select>
+                            <div class="form-text text-muted small mt-2">
+                                El cierre se procesa por área. Solo se evaluarán los empleados pertenecientes a este grupo.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selección de Período Oficial -->
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm p-3 h-100 bg-light">
+                            <label for="cierre-wizard-periodo-select" class="form-label fw-bold text-secondary small">
+                                <i class="bi bi-calendar-check-fill text-success me-1"></i> 2. Cargar Período Oficial (Opcional):
+                            </label>
+                            <select class="form-select border-success-subtle" id="cierre-wizard-periodo-select" onchange="cierreWizardCargarPeriodo(this.value)">
+                                <option value="">-- Rango Personalizado --</option>
+                                ${periodosOptions}
+                            </select>
+                            <div class="form-text text-muted small mt-2">
+                                Seleccione un período configurado para rellenar las fechas automáticamente.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fechas Desde / Hasta -->
+                <div class="card border-0 shadow-sm p-3 mt-4 bg-light">
+                    <label class="form-label fw-bold text-secondary small mb-3">
+                        <i class="bi bi-calendar-range-fill text-primary me-1"></i> 3. Rango de Fechas del Cierre:
+                    </label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="cierre-wizard-fini" class="form-label small text-muted">Fecha Inicio (Desde):</label>
+                            <input type="date" class="form-control" id="cierre-wizard-fini" value="${s.fIni}" onchange="cierreWizardCambiarFechas()">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="cierre-wizard-ffin" class="form-label small text-muted">Fecha Fin (Hasta):</label>
+                            <input type="date" class="form-control" id="cierre-wizard-ffin" value="${s.fFin}" onchange="cierreWizardCambiarFechas()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botón de Envío -->
+                <div class="mt-4 text-end">
+                    <button class="btn btn-warning fw-bold px-4 py-2 shadow-sm" id="btn-cierre-wizard-iniciar" onclick="cierreWizardConfirmarParametros()">
+                        <i class="bi bi-funnel-fill me-1"></i> Filtrar e Iniciar Pre-evaluación
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const ev = s.evaluacion;
 
     if (step === 1) { // Anomalías
         if (ev.anomalias > 0) {
