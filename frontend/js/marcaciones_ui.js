@@ -2952,8 +2952,9 @@ async function openCierrePeriodoModal() {
             .filter(val => val !== "" && val !== "Todas");
     }
 
-    const fIni = stateMarcacionesApp.fechaInicioRRHH || "";
-    const fFin = stateMarcacionesApp.fechaFinRRHH || "";
+    const vigentePeriodo = periodos.find(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
+    const fIni = vigentePeriodo ? vigentePeriodo.fecha_inicio : (stateMarcacionesApp.fechaInicioRRHH || "");
+    const fFin = vigentePeriodo ? vigentePeriodo.fecha_fin : (stateMarcacionesApp.fechaFinRRHH || "");
     const area = (stateMarcacionesApp.area === 'Todas' || !stateMarcacionesApp.area) ? "" : stateMarcacionesApp.area;
 
     const html = `
@@ -3233,8 +3234,8 @@ function renderWizardStep(step) {
     if (step === 0) {
         btnNext.style.display = 'none';
 
-        // Filtrar periodos abiertos
-        const periodosAbiertos = s.periodos.filter(p => p.estado === 'abierto');
+        // Filtrar periodos abiertos y vigentes
+        const periodosAbiertos = s.periodos.filter(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
 
         // Construir opciones de periodos
         const periodosOptions = periodosAbiertos.map(p => {
