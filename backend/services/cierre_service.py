@@ -151,9 +151,8 @@ class CierreService:
         )
         resumen = dict(resumen_row) if resumen_row else {}
 
-        # HE aprobadas para el resumen
         query_he_aprobadas = f"""
-            SELECT ROUND(SUM(he.minutos_autorizados) / 60.0, 2) AS he_horas,
+            SELECT ROUND(SUM(he.minutos_autorizados - COALESCE(he.minutos_compensados, 0)) / 60.0, 2) AS he_horas,
                    COUNT(*) AS he_count
             FROM horas_extras he INDEXED BY idx_he_fecha
             JOIN empleados e ON he.empleado_id = e.id

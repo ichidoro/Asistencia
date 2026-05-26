@@ -52,3 +52,11 @@ class IntercambioCreate(BaseModel):
     fecha_origen: str  # YYYY-MM-DD (Día que debía trabajar pero faltará)
     fecha_destino: str # YYYY-MM-DD (Día que debía ser libre pero trabajará)
     observaciones: Optional[str] = None
+
+class CompensacionCreate(BaseModel):
+    empleado_id: int
+    fecha_inasistencia: str  # YYYY-MM-DD
+    fecha_he: str            # YYYY-MM-DD
+    minutos: float
+    observaciones: Optional[str] = None
+

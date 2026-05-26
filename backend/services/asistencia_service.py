@@ -2093,6 +2093,18 @@ class AsistenciaService:
                 resultado['minutos_extra_bruto'] = 0
                 resultado['observaciones'] = resultado.get('observaciones', '') + ' [Jornada Trabajada por Compensación]'
 
+        # ── INTERCEPTOR: COMPENSACIÓN CON HORAS EXTRAS ────────────────────────
+        compensaciones = await self.repository.get_compensacion_por_fecha(empleado_id, fecha)
+        if compensaciones and resultado and resultado.get('estado') in ('INASISTENCIA', 'FALTA', 'PENDIENTE'):
+            total_compensado = sum(c['minutos'] for c in compensaciones)
+            if total_compensado > 0:
+                resultado['estado'] = 'INASISTENCIA_COMPENSADA'
+                deuda_original = resultado.get('minutos_deuda', 0)
+                resultado['minutos_deuda'] = max(0, deuda_original - total_compensado)
+                resultado['deuda_condonada'] = 4  # Código de condonación por HE
+                resultado['observaciones'] = resultado.get('observaciones', '') + f' [Inasistencia Compensada con Horas Extras: {total_compensado} min]'
+
+
         # ── APLICACIÓN DE AGOTAMIENTO ATÓMICO (MEMORIA) ───────────────────────
         # [DT-13] Guard sin chequeo de hora_entrada_real:
         # Si el día es ANOMALIA por Salida Huérfana, hora_entrada_real=None pero los
@@ -3493,10 +3505,11 @@ class AsistenciaService:
         db = self.repository.db
         # FASE 4: HE aprobadas desde horas_extras (nueva tabla)
         rows_he = await db.fetch_all(
-            "SELECT minutos_autorizados FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ? AND estado = 'APROBADO'",
+            "SELECT minutos_autorizados, COALESCE(minutos_compensados, 0) as minutos_compensados FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ? AND estado = 'APROBADO'",
             (empleado_id, fecha_ini, fecha_fin)
         )
-        total_extra = sum(int(r.get('minutos_autorizados', 0) or 0) for r in rows_he)
+        total_extra = sum(max(0, int((r.get('minutos_autorizados') or 0) - (r.get('minutos_compensados') or 0))) for r in rows_he)
+
         # Deuda sigue leyendo de asistencias (es disciplinaria, no financiera)
         rows_deuda = await db.fetch_all(
             "SELECT minutos_deuda FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?",
@@ -3618,7 +3631,7 @@ class AsistenciaService:
         # FASE 4: HE aprobadas desde horas_extras (nueva tabla)
         q_sum = """
             SELECT 
-                COALESCE((SELECT SUM(h.minutos_autorizados) FROM horas_extras h
+                COALESCE((SELECT SUM(h.minutos_autorizados - COALESCE(h.minutos_compensados, 0)) FROM horas_extras h
                           JOIN empleados e2 ON h.empleado_id = e2.id
                           LEFT JOIN historial_areas ha2 ON e2.id = ha2.empleado_id AND ha2.es_actual = 1 AND ha2.validado = 1
                           LEFT JOIN areas ar2 ON ha2.area_id = ar2.id

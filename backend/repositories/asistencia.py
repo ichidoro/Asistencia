@@ -521,3 +521,80 @@ class AsistenciaRepository:
         query = "DELETE FROM intercambios_dias WHERE id = ?"
         await self.db.execute(query, (intercambio_id,))
 
+    # ═══════════════════════════════════════════════════════════════════
+    # COMPENSACIONES DE INASISTENCIA CON HORAS EXTRAS (HE)
+    # ═══════════════════════════════════════════════════════════════════
+
+    async def get_horas_extras_disponibles(self, empleado_id: int) -> List[Dict[str, Any]]:
+        """Retorna las horas extras aprobadas de un empleado que tienen minutos disponibles para compensación."""
+        query = """
+            SELECT fecha, minutos_autorizados, COALESCE(minutos_compensados, 0) as minutos_compensados,
+                   (minutos_autorizados - COALESCE(minutos_compensados, 0)) AS minutos_disponibles
+            FROM horas_extras
+            WHERE empleado_id = ?
+              AND estado = 'APROBADO'
+              AND (minutos_autorizados - COALESCE(minutos_compensados, 0)) > 0
+            ORDER BY fecha ASC
+        """
+        return await self.db.fetch_all(query, (empleado_id,))
+
+    async def get_compensacion_por_fecha(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
+        """Retorna las compensaciones de inasistencia activas para un empleado en una fecha específica."""
+        query = """
+            SELECT * FROM compensaciones_he_inasistencia
+            WHERE empleado_id = ? AND fecha_inasistencia = ?
+        """
+        return await self.db.fetch_all(query, (empleado_id, fecha))
+
+    async def get_compensaciones(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """Obtiene la lista de compensaciones en un rango de fechas de inasistencia."""
+        query = """
+            SELECT c.*, 
+                   e.nombre || ' ' || e.apellido_paterno AS empleado_nombre,
+                   u.nombre_completo AS registrado_por_nombre
+           FROM compensaciones_he_inasistencia c
+           JOIN empleados e ON c.empleado_id = e.id
+           LEFT JOIN usuarios u ON c.aprobado_por = u.id
+           WHERE c.fecha_inasistencia BETWEEN ? AND ?
+           ORDER BY c.created_at DESC
+        """
+        return await self.db.fetch_all(query, (fecha_inicio, fecha_fin))
+
+    async def create_compensacion(self, data: Dict[str, Any]) -> int:
+        """Crea un registro de compensación."""
+        query = """
+            INSERT INTO compensaciones_he_inasistencia 
+                (empleado_id, fecha_inasistencia, fecha_he, minutos, observaciones, aprobado_por)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """
+        params = (
+            data['empleado_id'],
+            data['fecha_inasistencia'],
+            data['fecha_he'],
+            data['minutos'],
+            data.get('observaciones'),
+            data.get('usuario_id')
+        )
+        cursor = await self.db.execute(query, params)
+        return cursor.lastrowid
+
+    async def delete_compensacion(self, compensacion_id: int) -> None:
+        """Elimina una compensación por ID."""
+        query = "DELETE FROM compensaciones_he_inasistencia WHERE id = ?"
+        await self.db.execute(query, (compensacion_id,))
+
+    async def recalcular_minutos_compensados_he(self, empleado_id: int, fecha_he: str) -> None:
+        """Actualiza minutos_compensados en la tabla horas_extras basándose en las compensaciones activas."""
+        query = """
+            UPDATE horas_extras
+            SET minutos_compensados = COALESCE(
+                (SELECT SUM(minutos) 
+                 FROM compensaciones_he_inasistencia 
+                 WHERE empleado_id = ? AND fecha_he = ?), 
+                0
+            )
+            WHERE empleado_id = ? AND fecha = ?
+        """
+        await self.db.execute(query, (empleado_id, fecha_he, empleado_id, fecha_he))
+
+

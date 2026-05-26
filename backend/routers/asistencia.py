@@ -26,6 +26,7 @@ from backend.schemas.asistencia import (
     BatchSyncRequest,
     CondonarDeudaRequest,
     IntercambioCreate,
+    CompensacionCreate,
 )
 
 router = APIRouter(
@@ -1996,3 +1997,192 @@ async def delete_intercambio(
         force=True
     )
     return {"success": True, "message": "Intercambio eliminado y fechas devueltas a estado natural"}
+
+
+@router.get("/compensaciones/disponibles/")
+async def get_he_disponibles(
+    empleado_id: int = Query(..., description="ID del empleado"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
+):
+    """Obtiene las horas extras aprobadas de un empleado con saldo disponible para compensación."""
+    # RLS Check
+    emp_repo = EmpleadoRepository(service.repository.db)
+    emp = await emp_repo.get_by_id(empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    disponibles = await service.repository.get_horas_extras_disponibles(empleado_id)
+    return {"success": True, "data": disponibles}
+
+
+@router.get("/compensaciones/")
+async def list_compensaciones(
+    fecha_inicio: str = Query(..., description="Fecha inicio YYYY-MM-DD"),
+    fecha_fin: str = Query(..., description="Fecha fin YYYY-MM-DD"),
+    empleado_id: Optional[int] = Query(None, description="Filtrar por empleado"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.ver", "marcaciones.compensar"]))
+):
+    """Lista las compensaciones de inasistencia en un rango de fechas."""
+    compensaciones = await service.repository.get_compensaciones(fecha_inicio, fecha_fin)
+    
+    # Filtrar por RLS y empleado_id si aplica
+    if empleado_id:
+        compensaciones = [c for c in compensaciones if c['empleado_id'] == empleado_id]
+        
+    if not current_user.alcance_global:
+        # Filtrar por áreas permitidas del usuario actual
+        emp_repo = EmpleadoRepository(service.repository.db)
+        areas_permitidas = set(current_user.areas or [])
+        res = []
+        for c in compensaciones:
+            emp = await emp_repo.get_by_id(c['empleado_id'])
+            if emp and emp.area in areas_permitidas:
+                res.append(c)
+        compensaciones = res
+
+    return {"success": True, "data": compensaciones}
+
+
+@router.post("/compensaciones/")
+async def create_compensacion(
+    data: CompensacionCreate,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
+):
+    """Crea una nueva compensación de inasistencia con horas extras."""
+    db = service.repository.db
+    # RLS Check
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(data.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    # Cierre Check
+    if await service.repository.check_rango_cerrado(data.fecha_inasistencia, data.fecha_inasistencia, data.empleado_id):
+        raise HTTPException(status_code=403, detail="La fecha de inasistencia se encuentra en un período cerrado.")
+    if await service.repository.check_rango_cerrado(data.fecha_he, data.fecha_he, data.empleado_id):
+        raise HTTPException(status_code=403, detail="La fecha de horas extras se encuentra en un período cerrado.")
+
+    # Validar que exista la HE aprobada y que tenga saldo suficiente
+    he_registro = await db.fetch_one(
+        "SELECT minutos_autorizados, COALESCE(minutos_compensados, 0) as minutos_compensados FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND estado = 'APROBADO'",
+        (data.empleado_id, data.fecha_he)
+    )
+    if not he_registro:
+        raise HTTPException(status_code=400, detail="No existen horas extras aprobadas en la fecha seleccionada.")
+
+    saldo_he = he_registro['minutos_autorizados'] - he_registro['minutos_compensados']
+    if data.minutos > saldo_he:
+        raise HTTPException(status_code=400, detail=f"Saldo insuficiente de horas extras en la fecha {data.fecha_he} (Disponible: {saldo_he} min).")
+
+    # Registrar la compensación
+    payload = {
+        'empleado_id': data.empleado_id,
+        'fecha_inasistencia': data.fecha_inasistencia,
+        'fecha_he': data.fecha_he,
+        'minutos': data.minutos,
+        'observaciones': data.observaciones,
+        'usuario_id': current_user.user_id
+    }
+    
+    compensacion_id = await service.repository.create_compensacion(payload)
+    
+    # Actualizar minutos compensados en horas_extras
+    await service.repository.recalcular_minutos_compensados_he(data.empleado_id, data.fecha_he)
+    
+    # Reprocesar ambas fechas de asistencia
+    await service.reprocesar_periodo_empleado(
+        empleado_id=data.empleado_id,
+        fecha_inicio=data.fecha_inasistencia,
+        fecha_fin=data.fecha_inasistencia,
+        force=True
+    )
+    await service.reprocesar_periodo_empleado(
+        empleado_id=data.empleado_id,
+        fecha_inicio=data.fecha_he,
+        fecha_fin=data.fecha_he,
+        force=True
+    )
+    
+    # Registrar auditoría
+    try:
+        await db.execute("""
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+            VALUES (?, ?, ?, ?, ?)
+        """, (current_user.user_id, current_user.username, 'CREATE_COMPENSACION', 'Marcaciones', 
+              f"Compensación ID {compensacion_id}: Inasistencia del {data.fecha_inasistencia} cubierta con {data.minutos} min de HE del {data.fecha_he}"))
+    except Exception as aud_err:
+        logger.warning(f"No se pudo registrar auditoría de compensación: {aud_err}")
+        
+    return {"success": True, "message": "Compensación registrada y asistencia recalculada", "id": compensacion_id}
+
+
+@router.delete("/compensaciones/{compensacion_id}/")
+async def delete_compensacion(
+    compensacion_id: int,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
+):
+    """Elimina una compensación y devuelve las fechas a su estado natural."""
+    db = service.repository.db
+    # Obtener el registro para saber a qué empleado y fechas corresponde
+    c = await db.fetch_one("SELECT * FROM compensaciones_he_inasistencia WHERE id = ?", (compensacion_id,))
+    if not c:
+        raise HTTPException(status_code=404, detail="Compensación no encontrada")
+        
+    empleado_id = c['empleado_id']
+    fecha_inasistencia = c['fecha_inasistencia']
+    fecha_he = c['fecha_he']
+    
+    # RLS Check
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+
+    # Cierre Check
+    if await service.repository.check_rango_cerrado(fecha_inasistencia, fecha_inasistencia, empleado_id):
+        raise HTTPException(status_code=403, detail="La fecha de inasistencia se encuentra en un período cerrado.")
+    if await service.repository.check_rango_cerrado(fecha_he, fecha_he, empleado_id):
+        raise HTTPException(status_code=403, detail="La fecha de horas extras se encuentra en un período cerrado.")
+
+    # Eliminar
+    await service.repository.delete_compensacion(compensacion_id)
+    
+    # Recalcular minutos compensados en la HE de origen
+    await service.repository.recalcular_minutos_compensados_he(empleado_id, fecha_he)
+    
+    # Reprocesar ambas fechas de asistencia
+    await service.reprocesar_periodo_empleado(
+        empleado_id=empleado_id,
+        fecha_inicio=fecha_inasistencia,
+        fecha_fin=fecha_inasistencia,
+        force=True
+    )
+    await service.reprocesar_periodo_empleado(
+        empleado_id=empleado_id,
+        fecha_inicio=fecha_he,
+        fecha_fin=fecha_he,
+        force=True
+    )
+    
+    # Registrar auditoría
+    try:
+        await db.execute("""
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+            VALUES (?, ?, ?, ?, ?)
+        """, (current_user.user_id, current_user.username, 'DELETE_COMPENSACION', 'Marcaciones', 
+              f"Eliminada compensación ID {compensacion_id}: Inasistencia del {fecha_inasistencia} cubierto por HE del {fecha_he}"))
+    except Exception as aud_err:
+        logger.warning(f"No se pudo registrar auditoría de eliminación de compensación: {aud_err}")
+        
+    return {"success": True, "message": "Compensación eliminada y asistencia recalculada"}
+
