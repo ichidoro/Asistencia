@@ -248,12 +248,6 @@ function renderMarcacionesToolbar(container) {
                 </button>
                 ` : ''}
 
-                ${AuthService.hasPermission("marcaciones.compensar") ? `
-                <button class="btn btn-sm btn-outline-success shadow-sm ms-2" onclick="window.abrirModalCompensacionHE ? window.abrirModalCompensacionHE() : console.warn('Compensaciones HE panel not loaded')" title="Compensar Inasistencia con Horas Extras" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
-                    <i class="bi bi-clock-history"></i> <span class="fw-bold">Compensar con H.E.</span>
-                </button>
-                ` : ''}
-
             </div>
         </div>
 
@@ -3928,7 +3922,7 @@ function renderVistaAnalitica(respData, container) {
 
     // ── 3. Calcular resumen por empleado ─────────────────────────────────────
     const rows = employees.map(emp => {
-        let he_bruto=0, he_apr=0, he_rec=0, he_pend=0, d_tot=0, min_atr=0, min_sad=0, min_col=0, min_per=0;
+        let he_bruto=0, he_apr=0, he_rec=0, he_pend=0, he_compensado=0, d_tot=0, min_atr=0, min_sad=0, min_col=0, min_per=0;
         let cnt_atr=0, cnt_sad=0, cnt_inas=0, cnt_esp=0, cnt_per=0, cnt_efectivos=0;
         // tipo_programacion viene del turno (emp.info), NO de cada fila de asistencia
         const esBolsa = emp.tipo_programacion === 'FLEXIBLE_BOLSA'
@@ -4075,7 +4069,7 @@ function renderVistaAnalitica(respData, container) {
                     if (excedido)                                    he_bruto += trab;
                     else if (acumBolsa > metaMin && trab > 0) { he_bruto += acumBolsa - metaMin; excedido = true; }
                 } else {
-                    he_bruto += (di.minutos_extra_bruto || 0);
+                    he_bruto += Math.max(di.minutos_extra_bruto || 0, di.minutos_extra_autorizados || 0);
                 }
             } else if (esBolsa) {
                 // Día especial (EXTRA, JORNADA_ESPECIAL, etc.): mantener snap sin sumar
@@ -4099,12 +4093,14 @@ function renderVistaAnalitica(respData, container) {
             // FLEXIBLE_BOLSA: he_apr/he_rec/he_pend NO usan minutos_extra_bruto del backend
             // porque ese campo no respeta la lógica del ciclo acumulado.
             // he_bruto para bolsa se calcula abajo con la lógica del acumulado.
+            he_compensado += (di.minutos_compensados_he || 0);
         });
 
 
         // Limpiar errores de coma flotante redondeando a 5 decimales (suficiente precisión)
         he_bruto = Math.round(he_bruto * 10000) / 10000;
-        he_apr = Math.round(he_apr * 10000) / 10000;
+        he_apr = Math.round((he_apr - he_compensado) * 10000) / 10000;
+        if (he_apr < 0) he_apr = 0;
         he_rec = Math.round(he_rec * 10000) / 10000;
         he_pend = Math.round(he_pend * 10000) / 10000;
 

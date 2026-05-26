@@ -202,13 +202,18 @@ window.abrirModalCompensacionHE = async function(empleadoId = null, fechaInasist
     
     if (empleadoId) {
         selectEmp.value = empleadoId;
+        selectEmp.disabled = true;
         if (fechaInasistencia) {
-            document.getElementById('compensar-he-fecha-inasistencia').value = fechaInasistencia;
+            const fechaInput = document.getElementById('compensar-he-fecha-inasistencia');
+            fechaInput.value = fechaInasistencia;
+            fechaInput.disabled = true;
             actualizarMinutosSugeridos(empleadoId, fechaInasistencia);
         }
         await cargarHE_Disponibles(empleadoId, fechaInasistencia);
         await cargarCompensacionesEmpleado(empleadoId);
     } else {
+        selectEmp.disabled = false;
+        document.getElementById('compensar-he-fecha-inasistencia').disabled = false;
         document.getElementById('compensar-he-bolsa-badge-container').innerHTML = '<span class="badge p-2 bg-secondary text-white w-100">Seleccione empleado y fecha...</span>';
         document.getElementById('compensaciones-he-list-container').classList.add('d-none');
     }

@@ -3237,7 +3237,8 @@ class AsistenciaService:
         q_asist = f"""
             SELECT a.*, t.nombre as turno_nombre,
                    he.estado as estado_he,
-                   he.minutos_autorizados as minutos_extra_autorizados
+                   he.minutos_autorizados as minutos_extra_autorizados,
+                   COALESCE((SELECT SUM(minutos) FROM compensaciones_he_inasistencia WHERE empleado_id = a.empleado_id AND fecha_inasistencia = a.fecha), 0.0) as minutos_compensados_he
             FROM asistencias a
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha

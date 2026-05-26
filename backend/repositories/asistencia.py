@@ -558,7 +558,7 @@ class AsistenciaRepository:
             }
 
     async def get_bolsa_he_disponible(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> Dict[str, Any]:
-        """Calcula el total de HE aprobadas y el acumulado de minutos ya compensados en el periodo."""
+        """Calcula el total de HE aprobadas, restando las deudas ordinarias (atrasos, salidas adelantadas) y minutos ya compensados en el periodo."""
         # 1. Total HE Aprobadas en el periodo
         query_he = """
             SELECT SUM(minutos_autorizados) as total_he
@@ -580,10 +580,23 @@ class AsistenciaRepository:
         row_comp = await self.db.fetch_one(query_comp, (empleado_id, fecha_inicio, fecha_fin))
         total_comp = row_comp['total_comp'] if row_comp and row_comp['total_comp'] else 0.0
 
+        # 3. Total de otras deudas ordinarias (atrasos, salidas adelantadas, exceso de colación, etc.)
+        # Excluyendo días que son inasistencia normal, falta o inasistencia compensada
+        query_deudas_otras = """
+            SELECT SUM(minutos_deuda) as total_deudas_otras
+            FROM asistencias
+            WHERE empleado_id = ?
+              AND fecha BETWEEN ? AND ?
+              AND estado NOT IN ('INASISTENCIA', 'FALTA', 'INASISTENCIA_COMPENSADA')
+        """
+        row_do = await self.db.fetch_one(query_deudas_otras, (empleado_id, fecha_inicio, fecha_fin))
+        deudas_otras = row_do['total_deudas_otras'] if row_do and row_do['total_deudas_otras'] else 0.0
+
         return {
             "total_he_aprobadas": total_he,
             "total_compensado": total_comp,
-            "minutos_disponibles": max(0.0, total_he - total_comp)
+            "deudas_otras": deudas_otras,
+            "minutos_disponibles": max(0.0, total_he - total_comp - deudas_otras)
         }
 
     async def get_compensacion_por_fecha(self, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:

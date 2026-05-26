@@ -105,6 +105,7 @@ class ReportService:
                 he_apr = 0
                 he_rec = 0
                 he_pend = 0
+                he_compensado = 0
                 d_tot = 0
                 min_col = 0
                 min_per = 0
@@ -254,7 +255,7 @@ class ReportService:
                                 he_bruto += (acum_bolsa - meta_min)
                                 excedido = True
                         else:
-                            he_bruto += (di.get("minutos_extra_bruto") or 0)
+                            he_bruto += max(di.get("minutos_extra_bruto") or 0, di.get("minutos_extra_autorizados") or 0)
                     elif es_bolsa:
                         di["_acumuladoBolsaSnapPrev"] = acum_bolsa
                         di["_acumuladoBolsaSnap"] = acum_bolsa
@@ -267,7 +268,9 @@ class ReportService:
                             he_rec += (di.get("minutos_extra_bruto") or 0)
                         elif (di.get("minutos_extra_bruto") or 0) > 0:
                             he_pend += (di.get("minutos_extra_bruto") or 0)
+                        he_compensado += (di.get("minutos_compensados_he") or 0)
                             
+                he_apr = max(0.0, he_apr - he_compensado)
                 he_bruto = round(he_bruto)
                 he_apr = round(he_apr)
                 he_rec = round(he_rec)
