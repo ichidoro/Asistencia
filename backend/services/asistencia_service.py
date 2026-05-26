@@ -3519,13 +3519,41 @@ class AsistenciaService:
         
         # 1.1 Si hay un periodo en periodos_rrhh que coincide con el rango cerrado, marcarlo como 'cerrado'
         try:
+            # Obtener la info del periodo antes de cerrarlo para ver si era el activo
+            periodo = await db.fetch_one(
+                "SELECT activo FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
+                (fecha_inicio, fecha_fin)
+            )
+            
+            # Marcar como cerrado
             await db.execute(
                 "UPDATE periodos_rrhh SET estado = 'cerrado' WHERE fecha_inicio = ? AND fecha_fin = ?",
                 (fecha_inicio, fecha_fin)
             )
-            logger.info(f"✨ periodos_rrhh actualizado a 'cerrado' para el rango {fecha_inicio} a {fecha_fin}")
+            logger.info(f"✨ periodos_rrhh actualizado a 'cerrado' para el rango {fecha_inicio} a {fecha_fin} (AsistenciaService)")
+            
+            # Si era el periodo activo/vigente, hacer la transición
+            if periodo and (periodo["activo"] == 1 or periodo["activo"] is True):
+                await db.execute(
+                    "UPDATE periodos_rrhh SET activo = 0 WHERE fecha_inicio = ? AND fecha_fin = ?",
+                    (fecha_inicio, fecha_fin)
+                )
+                logger.info(f"✨ Periodo {fecha_inicio} al {fecha_fin} desmarcado como Vigente.")
+                
+                # Buscar el siguiente periodo abierto
+                next_periodo = await db.fetch_one(
+                    "SELECT id, mes_cierre FROM periodos_rrhh WHERE estado = 'abierto' ORDER BY fecha_inicio ASC LIMIT 1"
+                )
+                if next_periodo:
+                    await db.execute(
+                        "UPDATE periodos_rrhh SET activo = 1 WHERE id = ?",
+                        (next_periodo["id"],)
+                    )
+                    logger.info(f"✨ Siguiente periodo promovido a Vigente: {next_periodo['mes_cierre']} (ID: {next_periodo['id']})")
+                else:
+                    logger.info("ℹ️ No hay más periodos abiertos para promover como Vigente.")
         except Exception as e_close_rrhh:
-            logger.warning(f"⚠️ No se pudo actualizar el estado en periodos_rrhh: {e_close_rrhh}")
+            logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh: {e_close_rrhh}")
         
         # 2. Recalcular las bolsas de todos los empleados afectados
         q_emp = "SELECT id FROM empleados WHERE activo = 1"
