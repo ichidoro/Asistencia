@@ -306,8 +306,6 @@ class CierreService:
                 "SELECT DISTINCT area FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL",
                 (fecha_inicio, fecha_fin)
             )
-            closed_areas = {r['area'] for r in closed_res if r['area']} if hasattr(closed_areas_res, '__iter__') else set()
-            # fallback/resiliencia: si closed_res de la query no tiene los datos esperados
             closed_areas = {r['area'] for r in closed_areas_res if r['area']}
             if area:
                 closed_areas.add(area)
