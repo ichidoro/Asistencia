@@ -3234,14 +3234,8 @@ function renderWizardStep(step) {
     if (step === 0) {
         btnNext.style.display = 'none';
 
-        // Filtrar periodos abiertos y vigentes
-        const periodosAbiertos = s.periodos.filter(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
-
-        // Construir opciones de periodos
-        const periodosOptions = periodosAbiertos.map(p => {
-            const isSelected = (p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin) ? 'selected' : '';
-            return `<option value="${p.fecha_inicio}|${p.fecha_fin}" ${isSelected}>${p.mes_cierre} (${p.fecha_inicio.split('-').reverse().join('-')} al ${p.fecha_fin.split('-').reverse().join('-')})</option>`;
-        }).join('');
+        // Filtrar periodo vigente actual
+        const vigente = s.periodos.find(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
 
         // Opciones de área
         const areasOptions = s.areas.map(a => {
@@ -3249,18 +3243,55 @@ function renderWizardStep(step) {
             return `<option value="${a}" ${isSelected}>${a}</option>`;
         }).join('');
 
+        let periodInfoHtml = '';
+        if (vigente) {
+            // Asegurar que las fechas del wizard estén sincronizadas con el vigente
+            s.fIni = vigente.fecha_inicio;
+            s.fFin = vigente.fecha_fin;
+            
+            const fIniFormateada = vigente.fecha_inicio.split('-').reverse().join('-');
+            const fFinFormateada = vigente.fecha_fin.split('-').reverse().join('-');
+            
+            periodInfoHtml = `
+                <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-success-subtle" style="border-left: 4px solid #10b981 !important;">
+                    <label class="form-label fw-bold text-success small mb-2">
+                        <i class="bi bi-calendar-check-fill me-1"></i> 2. Período Vigente a Cerrar:
+                    </label>
+                    <div class="fw-bold text-dark fs-5 mb-1">${vigente.mes_cierre}</div>
+                    <div class="small text-muted mb-2">
+                        <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
+                    </div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle align-self-start">
+                        <i class="bi bi-unlock-fill me-1"></i> Período Abierto & Vigente
+                    </span>
+                </div>
+            `;
+        } else {
+            periodInfoHtml = `
+                <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-danger-subtle" style="border-left: 4px solid #ef4444 !important;">
+                    <label class="form-label fw-bold text-danger small mb-2">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> 2. Período a Cerrar:
+                    </label>
+                    <div class="text-danger fw-bold mb-2">No se encontró un Período Vigente</div>
+                    <p class="small text-muted mb-0">
+                        Debe configurar y marcar un tramo como **Vigente** en el panel de **Configuración > Tramos de Cierre** antes de continuar.
+                    </p>
+                </div>
+            `;
+        }
+
         content.innerHTML = `
             <div class="py-2">
                 <h4 class="fw-bold text-dark mb-3"><i class="bi bi-gear-fill text-secondary me-2"></i> Configuración de Cierre de Período</h4>
                 <p class="text-muted small">
-                    Seleccione el área y el rango de fechas que desea evaluar y cerrar. El sistema filtrará la grilla principal en el fondo al confirmar.
+                    Seleccione el área para iniciar la evaluación del cierre del período vigente. La grilla principal se filtrará automáticamente en el fondo al confirmar.
                 </p>
                 
                 <div class="row g-3 mt-2">
                     <!-- Selección de Área -->
                     <div class="col-md-6">
                         <div class="card border-0 shadow-sm p-3 h-100 bg-light">
-                            <label for="cierre-wizard-area-select" class="form-label fw-bold text-secondary small">
+                            <label for="cierre-wizard-area-select" class="form-label fw-bold text-secondary small mb-2">
                                 <i class="bi bi-geo-alt-fill text-danger me-1"></i> 1. Área a Cerrar:
                             </label>
                             <select class="form-select border-primary-subtle" id="cierre-wizard-area-select" onchange="cierreWizardCambiarArea(this.value)">
@@ -3273,43 +3304,18 @@ function renderWizardStep(step) {
                         </div>
                     </div>
 
-                    <!-- Selección de Período Oficial -->
+                    <!-- Período Vigente a Cerrar -->
                     <div class="col-md-6">
-                        <div class="card border-0 shadow-sm p-3 h-100 bg-light">
-                            <label for="cierre-wizard-periodo-select" class="form-label fw-bold text-secondary small">
-                                <i class="bi bi-calendar-check-fill text-success me-1"></i> 2. Cargar Período Oficial (Opcional):
-                            </label>
-                            <select class="form-select border-success-subtle" id="cierre-wizard-periodo-select" onchange="cierreWizardCargarPeriodo(this.value)">
-                                <option value="">-- Rango Personalizado --</option>
-                                ${periodosOptions}
-                            </select>
-                            <div class="form-text text-muted small mt-2">
-                                Seleccione un período configurado para rellenar las fechas automáticamente.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Fechas Desde / Hasta -->
-                <div class="card border-0 shadow-sm p-3 mt-4 bg-light">
-                    <label class="form-label fw-bold text-secondary small mb-3">
-                        <i class="bi bi-calendar-range-fill text-primary me-1"></i> 3. Rango de Fechas del Cierre:
-                    </label>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="cierre-wizard-fini" class="form-label small text-muted">Fecha Inicio (Desde):</label>
-                            <input type="date" class="form-control" id="cierre-wizard-fini" value="${s.fIni}" onchange="cierreWizardCambiarFechas()">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="cierre-wizard-ffin" class="form-label small text-muted">Fecha Fin (Hasta):</label>
-                            <input type="date" class="form-control" id="cierre-wizard-ffin" value="${s.fFin}" onchange="cierreWizardCambiarFechas()">
-                        </div>
+                        ${periodInfoHtml}
                     </div>
                 </div>
 
                 <!-- Botón de Envío -->
                 <div class="mt-4 text-end">
-                    <button class="btn btn-warning fw-bold px-4 py-2 shadow-sm" id="btn-cierre-wizard-iniciar" onclick="cierreWizardConfirmarParametros()">
+                    <button class="btn btn-warning fw-bold px-4 py-2 shadow-sm" 
+                            id="btn-cierre-wizard-iniciar" 
+                            ${!vigente ? 'disabled' : ''} 
+                            onclick="cierreWizardConfirmarParametros()">
                         <i class="bi bi-funnel-fill me-1"></i> Filtrar e Iniciar Pre-evaluación
                     </button>
                 </div>
