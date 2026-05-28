@@ -4,6 +4,23 @@
 
 const API_ASISTENCIA = '/api/asistencia/';
 
+// Fix #B/#E: Caché global de áreas — compartido entre Reportes, Dashboard y Empleados.
+// Se invalida cuando se agrega/edita un área.
+window._cachedAreas = window._cachedAreas || null;
+async function getAreasCache() {
+    if (window._cachedAreas) return window._cachedAreas;
+    try {
+        const r = await fetch('/api/empleados/stats/');
+        if (r.ok) {
+            const stats = await r.json();
+            window._cachedAreas = stats.areas || [];
+        }
+    } catch (e) {
+        console.warn('Error cargando áreas:', e);
+    }
+    return window._cachedAreas || [];
+}
+
 function initAsistencia() {
     // Set default dates (current month)
     const now = new Date();
@@ -32,13 +49,13 @@ function initAsistencia() {
 
 async function populateReportAreas() {
     try {
-        const response = await fetch('/api/empleados/stats/');
-        const stats = await response.json();
+        // Fix #E: reusar caché de áreas — no repetir la llamada HTTP
+        const areas = await getAreasCache();
         const select = document.getElementById('rep-area');
-        if (select && stats.areas) {
+        if (select && areas.length) {
             const currentVal = select.value;
             select.innerHTML = '<option value="">Todas</option>' +
-                stats.areas.map(a => `<option value="${a.area}">${a.area}</option>`).join('');
+                areas.map(a => `<option value="${a.area}">${a.area}</option>`).join('');
             select.value = currentVal;
         }
     } catch (e) {
@@ -380,34 +397,41 @@ async function triggerEngine() {
 
 /** Polling para reproceso masivo lanzado desde módulo Reportes */
 function _pollReprocesoPeriodo(inicio, fin, area, onDone) {
-    const POLL_INTERVAL = 2000;
+    // Fix #D: Polling adaptativo — empieza en 2s, crece hasta 5s
+    // Un reproceso típico de 20 empleados tarda ~45s → antes 22 consultas, ahora ~8
+    let pollInterval = 2000;
     let timer = null;
 
     const tick = async () => {
         try {
             const r = await fetch(`${API_ASISTENCIA}reproceso-masivo-status/`);
-            if (!r.ok) return;
+            if (!r.ok) {
+                timer = setTimeout(tick, pollInterval);
+                return;
+            }
             const s = await r.json();
 
-            // Mostrar progreso en consola (sin modal extra, no queremos saturar UI)
             const pct = s.total > 0 ? Math.round((s.procesados / s.total) * 100) : 0;
             console.log(`[Reproceso] ${s.procesados}/${s.total} empleados (${pct}%) — estado: ${s.estado}`);
 
-            // Estado terminal
             if (s.estado === 'completado' || s.estado === 'done' || s.estado === 'completed') {
-                clearInterval(timer);
                 showToast(
                     `✅ Reproceso completado: ${s.procesados} días procesados${s.errores > 0 ? ` (${s.errores} errores)` : ''}`,
                     s.errores > 0 ? 'warning' : 'success'
                 );
                 onDone();
+                return; // no reencolar
             }
+
+            // Proceso en curso → aumentar intervalo gradualmente (máx 5s)
+            pollInterval = Math.min(pollInterval * 1.3, 5000);
+            timer = setTimeout(tick, pollInterval);
         } catch (e) {
             console.warn('[Reproceso] Error en polling:', e);
+            timer = setTimeout(tick, pollInterval);
         }
     };
 
-    timer = setInterval(tick, POLL_INTERVAL);
     tick(); // primer tick inmediato
 }
 

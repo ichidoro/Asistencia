@@ -16,6 +16,7 @@ from .config import settings
 from backend.repositories.configuracion import ConfiguracionRepository
 from backend.services.configuracion_service import ConfiguracionService
 from .startup_manager import startup_manager
+import backend.services.asistencia_service as asis_svc
 
 if TYPE_CHECKING:
     from backend.services.empleado_service import EmpleadoService
@@ -282,8 +283,80 @@ async def lifespan(app: FastAPI):
                         max_instances=1,
                         misfire_grace_time=300  # 5 min de tolerancia
                     )
+                    # ── Purga semanal: logs_auditoria (retencion 12 meses) ────────────
+                    async def _purgar_logs_auditoria():
+                        try:
+                            result = await db.execute(
+                                "DELETE FROM logs_auditoria WHERE fecha < date('now', '-12 months')"
+                            )
+                            logger.info("🗑️ [Purga] logs_auditoria: registros > 12 meses eliminados")
+                        except Exception as purge_err:
+                            logger.warning(f"⚠️ [Purga] logs_auditoria falló: {purge_err}")
+
+                    scheduler.add_job(
+                        _purgar_logs_auditoria,
+                        'interval',
+                        weeks=1,
+                        id='purga_auditoria',
+                        replace_existing=True,
+                        coalesce=True,
+                        max_instances=1,
+                    )
+
+                    # ── Limpieza semanal: _JOB_REGISTRY en memoria ───────────────────
+                    async def _limpiar_job_registry():
+                        try:
+                            registry = asis_svc._JOB_REGISTRY
+                            completados = [
+                                k for k, v in registry.items()
+                                if v.get('status') in ('completed', 'error')
+                            ]
+                            # Conservar solo los últimos 50 completados
+                            a_borrar = completados[:-50] if len(completados) > 50 else []
+                            for k in a_borrar:
+                                del registry[k]
+                            if a_borrar:
+                                logger.info(f"🗑️ [Purga] _JOB_REGISTRY: {len(a_borrar)} jobs viejos eliminados, {len(registry)} quedan en memoria")
+                        except Exception as jreg_err:
+                            logger.warning(f"⚠️ [Purga] _JOB_REGISTRY falló: {jreg_err}")
+
+                    scheduler.add_job(
+                        _limpiar_job_registry,
+                        'interval',
+                        weeks=1,
+                        id='purga_job_registry',
+                        replace_existing=True,
+                        coalesce=True,
+                        max_instances=1,
+                    )
+
+                    # ── Purga mensual: logs_raw (retención 6 meses) ──────────────────
+                    # logs_raw = marcaciones CRUDAS de BioAlba (datos intermedios).
+                    # Las asistencias YA calculadas viven en la tabla 'asistencias'
+                    # y NO se tocan. Solo se limpian los datos brutos del biométrico.
+                    async def _purgar_logs_raw():
+                        try:
+                            cutoff = "date('now', '-6 months')"
+                            result = await db.execute(
+                                f"DELETE FROM logs_raw WHERE fecha_hora < {cutoff}"
+                            )
+                            logger.info("🗑️ [Purga] logs_raw: marcaciones crudas > 6 meses eliminadas (asistencias preservadas)")
+                        except Exception as purge_err:
+                            logger.warning(f"⚠️ [Purga] logs_raw falló: {purge_err}")
+
+                    scheduler.add_job(
+                        _purgar_logs_raw,
+                        'interval',
+                        days=30,          # Cada 30 días
+                        id='purga_logs_raw',
+                        replace_existing=True,
+                        coalesce=True,
+                        max_instances=1,
+                    )
+
                     scheduler.start()
-                    logger.success("✅ Sync Scheduler en ejecución (turso_sync + feriados_rolling)")
+                    logger.success("✅ Sync Scheduler en ejecución (turso_sync + feriados_rolling + purgas)")
+
 
 
             except Exception as bg_err:

@@ -50,6 +50,34 @@ class SecurityContext:
         # Intersección
         return [a for a in requested_areas if a in self.areas]
 
+    def get_areas_filter(self) -> Optional[List[str]]:
+        """
+        Helper RLS centralizado (Patrón A).
+        Retorna None si el usuario ve todo, o la lista de sus áreas si está restringido.
+        Reemplaza el patrón duplicado 8+ veces:
+            areas_permitidas = current_user.areas if not current_user.alcance_global else None
+        """
+        if self.is_superuser or self.alcance_global:
+            return None  # Sin filtro: ve todo
+        return self.areas or []
+
+    def verificar_acceso_area(self, area: str, recurso: str = "este recurso") -> None:
+        """
+        Helper RLS centralizado (Patrón B/C).
+        Lanza HTTPException 403 si el usuario no tiene acceso al área indicada.
+        Reemplaza el patrón duplicado 20+ veces:
+            if not current_user.alcance_global and emp.area not in (current_user.areas or []):
+                raise HTTPException(403, ...)
+        Si el usuario tiene alcance global o es superuser, no hace nada.
+        """
+        if self.is_superuser or self.alcance_global:
+            return  # Acceso total: sin verificación
+        if area and area not in (self.areas or []):
+            raise HTTPException(
+                status_code=403,
+                detail=f"No tiene acceso a {recurso} del área '{area}'"
+            )
+
 async def get_current_user(
     request: Request,
     token: str = Depends(oauth2_scheme), 

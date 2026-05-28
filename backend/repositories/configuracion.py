@@ -214,6 +214,10 @@ class ConfiguracionRepository:
             """)
             logger.info("✨ Tabla 'cierres_periodos' creada exitosamente")
 
+        # ⚡ Índice para cierres_periodos (query de rango en cada reproceso de asistencia)
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_cierres_rango ON cierres_periodos(fecha_inicio, fecha_fin)")
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_cierres_area ON cierres_periodos(area)")
+
         # Asegurar semilla de dia_cierre_rrhh si la tabla ya existía pero el valor no
         await self.db.execute("""
             INSERT OR IGNORE INTO ajustes (clave, valor, descripcion)
@@ -325,6 +329,10 @@ class ConfiguracionRepository:
                 )
             """)
             logger.info("✨ Tabla 'periodos_rrhh' creada exitosamente")
+
+            # ⚡ Índices para periodos_rrhh (búsqueda último cerrado — se usa en cada arranque)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_periodos_estado_fecha ON periodos_rrhh(estado, fecha_fin)")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_periodos_activo ON periodos_rrhh(activo)")
 
             # Migrar periodos antiguos para añadir el año si les falta
             try:

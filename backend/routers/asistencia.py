@@ -73,10 +73,10 @@ async def get_auditoria_bloqueo(
     except Exception:
         fecha_inicio_mes = now.replace(day=1).strftime("%Y-%m-%d")
 
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
-    
-    # Si no tiene áreas asignadas y no es superuser, no tiene nada que auditar
-    if not areas_permitidas and not current_user.alcance_global:
+    areas_permitidas = current_user.get_areas_filter()
+
+    # Si no tiene áreas asignadas y no tiene acceso global, no tiene nada que auditar
+    if areas_permitidas is not None and not areas_permitidas:
         return {"bloqueo": False, "anomalias": [], "can_bypass": False}
 
     area_filter = ""
@@ -736,8 +736,7 @@ async def condonar_deuda(
         emp = await emp_repo.get_by_id(emp_id)
         if not emp:
             raise HTTPException(status_code=404, detail=f"Empleado con ID {emp_id} no encontrado")
-        if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-            raise HTTPException(status_code=403, detail=f"No tiene permisos para el empleado con ID {emp_id}")
+        current_user.verificar_acceso_area(emp.area, f"empleado con ID {emp_id}")
         
         # Validar si el rango está cerrado para este empleado
         if await service.repository.check_rango_cerrado(request.fecha_inicio, request.fecha_fin, emp_id):
@@ -793,20 +792,13 @@ async def reproceso_masivo_async(
     from backend.services.asistencia_service import _reproceso_lock, get_reproceso_status
 
     # RLS: validar que el usuario pueda procesar el área solicitada
-    if area and not current_user.alcance_global:
-        if area not in (current_user.areas or []):
-            raise HTTPException(
-                status_code=403,
-                detail=f"No tiene permisos para reprocesar el área '{area}'"
-            )
+    current_user.verificar_acceso_area(area, f"reprocesar el área '{area}'") if area else None
 
     # Si el usuario no es global y no pasó área, restringir a sus propias áreas
     # (se convierte en la primera área permitida; si tiene varias se procesarán todas)
     area_final = area
-    if not current_user.alcance_global and not area:
-        # No-global sin filtro: solo puede procesar sus propias áreas
-        # Pasamos None al service y éste filtrará internamente por RLS según lo que tenga
-        # Para simplicidad, si tiene exactamente 1 área la imponemos como filtro
+    if current_user.get_areas_filter() is not None and not area:
+        # No-global sin filtro: restringir a sus propias áreas
         if current_user.areas and len(current_user.areas) == 1:
             area_final = current_user.areas[0]
 
@@ -879,11 +871,9 @@ async def get_reporte_asistencia(
     """
     Obtiene la asistencia procesada con RLS.
     """
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
-    
-    if area and not current_user.alcance_global:
-        if area not in (current_user.areas or []):
-             raise HTTPException(status_code=403, detail="No tiene permisos para ver el área solicitada")
+    if area:
+        current_user.verificar_acceso_area(area, "el área solicitada")
+    areas_permitidas = current_user.get_areas_filter()
 
     return await service.repository.get_asistencias_periodo(
         fecha_inicio, fecha_fin, area, turno_id=turno_id, areas_permitidas=areas_permitidas
@@ -901,7 +891,7 @@ async def get_asistencia_stats(
     if not fecha:
         fecha = datetime.now().strftime("%Y-%m-%d")
         
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
+    areas_permitidas = current_user.get_areas_filter()
     return await service.get_daily_stats(fecha, areas_permitidas=areas_permitidas)
 
 @router.get("/matrix/")
@@ -918,11 +908,9 @@ async def get_asistencia_matrix(
     """
     Obtiene datos para la Vista Matriz (Equipo) con RLS.
     """
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
-    
-    if area and not current_user.alcance_global:
-        if area not in (current_user.areas or []):
-             raise HTTPException(status_code=403, detail="No tiene permisos para ver el área solicitada")
+    if area:
+        current_user.verificar_acceso_area(area, "el área solicitada")
+    areas_permitidas = current_user.get_areas_filter()
 
     data = await service.get_matrix_data_with_projections(mes, anio, area, turno_id, search=search, areas_permitidas=areas_permitidas)
 
@@ -960,14 +948,11 @@ async def get_matriz_asistencia(
     Retorna la matriz de asistencia (días x empleados) para un periodo y área.
     Implementa RLS para limitar visualización según áreas permitidas.
     """
-    # RLS: Si el usuario tiene áreas restringidas, forzar el filtro
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
-    
-    # Si el usuario pidió un área específica, verificar que esté en sus permitidas
+    # RLS: verificar acceso al área solicitada y calcular filtro
+    if area:
+        current_user.verificar_acceso_area(area, "el área solicitada")
+    areas_permitidas = current_user.get_areas_filter()
     area_filter = area
-    if area and not current_user.alcance_global:
-        if area not in (current_user.areas or []):
-             raise HTTPException(status_code=403, detail="No tiene permisos para ver el área solicitada")
 
     # Guard: si llegan fechas vacías (carga inicial sin selector configurado), usar mes actual
     if not fecha_inicio or not fecha_fin:
@@ -1034,8 +1019,7 @@ async def get_asistencia_calendar(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para ver el calendario de este empleado")
+    current_user.verificar_acceso_area(emp.area, "el calendario de este empleado")
     # Usar la lógica de matriz enriquecida con proyecciones
     rich_data = await service.get_matrix_data_with_projections(
         mes=mes or 1, 
@@ -1092,11 +1076,9 @@ async def get_filters_data(
     Optimiza la performance al reducir el número de peticiones.
     """
     # RLS: Si pide un área, verificarla. Si no pide, filtrar por sus permitidas.
-    if area and not current_user.alcance_global:
-        if area not in (current_user.areas or []):
-            raise HTTPException(status_code=403, detail="No tiene acceso al área solicitada")
-    
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
+    if area:
+        current_user.verificar_acceso_area(area, "el área solicitada")
+    areas_permitidas = current_user.get_areas_filter()
     
     # 1. Obtener turnos del área (sin detalles de días para velocidad)
     turnos = await turno_service.get_all_turnos(area=area, include_details=False, areas_permitidas=areas_permitidas)
@@ -1146,7 +1128,7 @@ async def get_empleados_sin_turno_activos(
     Obtiene empleados activos sin turno asignado (Filtrado por RLS).
     Útil para mostrar alertas en UI.
     """
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
+    areas_permitidas = current_user.get_areas_filter()
     
     area_filter = ""
     params = []
@@ -1186,8 +1168,7 @@ async def diagnostic_no_shift(
     pero no tienen turno asignado en ese periodo.
     """
     # RLS
-    if not current_user.alcance_global and area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para ver esta área")
+    current_user.verificar_acceso_area(area, "esta área")
 
     import calendar
     last_day = calendar.monthrange(anio, mes)[1]
@@ -1230,8 +1211,7 @@ async def validar_jornada_endpoint(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para validar jornadas de este empleado")
+    current_user.verificar_acceso_area(emp.area, "jornadas de este empleado")
     
     # Blindaje de Cierre
     if await service.repository.check_fecha_cerrada(fecha, empleado_id):
@@ -1273,8 +1253,8 @@ async def aprobar_horas_extra(
     emp_repo = EmpleadoRepository(service.repository.db)
     emp = await emp_repo.get_by_id(request.empleado_id)
     
-    if emp and not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para aprobar HE de este empleado")
+    if emp:
+        current_user.verificar_acceso_area(emp.area, "HE de este empleado")
 
     try:
         # Convertir a formato de lote de un solo elemento
@@ -1304,12 +1284,11 @@ async def aprobar_horas_extra_batch(
     try:
         # RLS: Validar pertenencia de área para cada elemento del lote antes de procesar
         emp_repo = EmpleadoRepository(service.repository.db)
-        if not current_user.alcance_global:
-            for item in items:
-                emp_id = item.get('empleado_id')
-                emp = await emp_repo.get_by_id(emp_id)
-                if emp and emp.area not in (current_user.areas or []):
-                    raise HTTPException(status_code=403, detail=f"No tiene permisos para aprobar HE del empleado ID {emp_id}")
+        for item in items:
+            emp_id = item.get('empleado_id')
+            emp = await emp_repo.get_by_id(emp_id)
+            if emp:
+                current_user.verificar_acceso_area(emp.area, f"HE del empleado ID {emp_id}")
 
         return await service.aprobar_horas_extras_batch(items)
     except ValueError as ve:
@@ -1338,8 +1317,7 @@ async def agregar_marcacion_manual(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Blindaje de Cierre
     if await service.repository.check_fecha_cerrada(fecha, empleado_id):
@@ -1392,8 +1370,7 @@ async def eliminar_jornada_especial_manual(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Blindaje de Cierre
     if await service.repository.check_fecha_cerrada(fecha, empleado_id):
@@ -1447,8 +1424,8 @@ async def get_periodo_rrhh_resumen_global(
     Obtiene el resumen consolidado de todo el personal filtrado para el modal de cierre.
     """
     # RLS: Filtrar por áreas permitidas si no es global
-    areas_permitidas = current_user.areas if not current_user.alcance_global else None
-    if area and areas_permitidas and area not in areas_permitidas:
+    areas_permitidas = current_user.get_areas_filter()
+    if area and areas_permitidas is not None and area not in areas_permitidas:
         raise HTTPException(status_code=403, detail="No tiene permisos para el área solicitada")
     
     # Nota: El service usará la lógica de matrix que ya contempla areas_permitidas internamente si se le pasa el parámetro,
@@ -1530,8 +1507,7 @@ async def agregar_marcaciones_masivas(
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
 
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     db = service.repository.db
     # ── Blindaje de Cierre ──
@@ -1729,8 +1705,7 @@ async def actualizar_tramos(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Blindaje de Cierre
     if await service.is_fecha_cerrada_empleado(empleado_id, fecha):
@@ -1782,8 +1757,7 @@ async def recalcular_bolsa_endpoint(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
     try:
         resultado = await service.recalcular_bolsa_periodo(empleado_id, fecha_inicio, fecha_fin)
         if resultado.get("status") != "ok":
@@ -1820,8 +1794,7 @@ async def reprocesar_empleado_endpoint(
     if not emp:
          raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-         raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
     try:
         stats = await service.reprocesar_periodo_empleado(empleado_id, fecha_inicio, fecha_fin, force=force)
 
@@ -1894,9 +1867,9 @@ async def get_intercambios(
 ):
     """Obtiene los intercambios de días en un rango de fechas."""
     intercambios = await service.repository.get_intercambios(fecha_inicio, fecha_fin)
-    if not current_user.alcance_global:
-        areas_permitidas = current_user.areas or []
-        intercambios = [i for i in intercambios if i.get('area_nombre') in areas_permitidas]
+    areas_filtro = current_user.get_areas_filter()
+    if areas_filtro is not None:
+        intercambios = [i for i in intercambios if i.get('area_nombre') in areas_filtro]
     return {"success": True, "data": intercambios}
 
 
@@ -1912,8 +1885,7 @@ async def create_intercambio(
     emp = await emp_repo.get_by_id(data.empleado_id)
     if not emp:
         raise HTTPException(status_code=404, detail=f"Empleado con ID {data.empleado_id} no encontrado")
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Cierre Check
     if await service.repository.check_rango_cerrado(data.fecha_origen, data.fecha_origen, data.empleado_id):
@@ -1970,8 +1942,7 @@ async def delete_intercambio(
     emp = await emp_repo.get_by_id(emp_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado asociado al intercambio no encontrado")
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Cierre Check
     if await service.repository.check_rango_cerrado(intercambio['fecha_origen'], intercambio['fecha_origen'], emp_id):
@@ -2010,8 +1981,7 @@ async def get_bolsa_he_disponible(
     emp = await emp_repo.get_by_id(empleado_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     periodo = await service.repository.get_periodo_por_fecha(fecha)
     if not periodo:
@@ -2038,14 +2008,13 @@ async def list_compensaciones(
     if empleado_id:
         compensaciones = [c for c in compensaciones if c['empleado_id'] == empleado_id]
         
-    if not current_user.alcance_global:
-        # Filtrar por áreas permitidas del usuario actual
+    areas_filtro = current_user.get_areas_filter()
+    if areas_filtro is not None:
         emp_repo = EmpleadoRepository(service.repository.db)
-        areas_permitidas = set(current_user.areas or [])
         res = []
         for c in compensaciones:
             emp = await emp_repo.get_by_id(c['empleado_id'])
-            if emp and emp.area in areas_permitidas:
+            if emp and emp.area in areas_filtro:
                 res.append(c)
         compensaciones = res
 
@@ -2065,8 +2034,7 @@ async def create_compensacion(
     emp = await emp_repo.get_by_id(data.empleado_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Cierre Check
     if await service.repository.check_rango_cerrado(data.fecha_inasistencia, data.fecha_inasistencia, data.empleado_id):
@@ -2140,8 +2108,7 @@ async def delete_compensacion(
     emp = await emp_repo.get_by_id(empleado_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
-    if not current_user.alcance_global and emp.area not in (current_user.areas or []):
-        raise HTTPException(status_code=403, detail="No tiene permisos para este empleado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Cierre Check
     if await service.repository.check_rango_cerrado(fecha_inasistencia, fecha_inasistencia, empleado_id):

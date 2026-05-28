@@ -49,14 +49,26 @@ async function populateDashboardFilters() {
             iniDate.value = getFirstBusinessDay();
             finDate.value = new Date().toISOString().split('T')[0];
         }
-        const [statsResult, turnosResult] = await Promise.allSettled([
-            fetch('/api/empleados/stats/'), fetch('/api/turnos/')
+
+        // Fix #B: Reusar caché global de áreas (compartida con Empleados y Reportes).
+        // Solo va a la red si es la primera vez en esta sesión.
+        const [areasResult, turnosResult] = await Promise.allSettled([
+            (async () => {
+                if (window._cachedAreas) return { areas: window._cachedAreas };
+                const r = await fetch('/api/empleados/stats/');
+                if (!r.ok) return {};
+                const stats = await r.json();
+                window._cachedAreas = stats.areas || [];
+                return stats;
+            })(),
+            fetch('/api/turnos/')
         ]);
+
         const areaSelect = document.getElementById('dash-area');
-        if (areaSelect && statsResult.status === 'fulfilled') {
-            const stats = await statsResult.value.json();
+        if (areaSelect && areasResult.status === 'fulfilled') {
+            const stats = areasResult.value;
             areaSelect.innerHTML = '<option value="Todas">Todas las Áreas</option>';
-            (stats.areas || []).forEach(a => {
+            (stats.areas || window._cachedAreas || []).forEach(a => {
                 const opt = document.createElement('option');
                 opt.value = a.area; opt.textContent = a.area;
                 areaSelect.appendChild(opt);

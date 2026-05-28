@@ -312,12 +312,17 @@ class TurnoRepository:
                     logger.error(f"❌ Error crítico en migración de logs_raw ({col}): {mig_err}")
 
         # ⚡ Índices para logs_raw (tabla de marcaciones crudas - leida en cada recalculo)
-        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_logs_raw_empleado ON logs_raw(empleado_id)")
+        # [NOTA] idx_logs_raw_empleado eliminado: cubierto por el compuesto idx_logs_raw_emp_fecha
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_logs_raw_fecha ON logs_raw(fecha_hora)")
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_logs_raw_hash ON logs_raw(hash_original)")
         # ⚡ [CRÍTICO] Índice compuesto para el motor de cálculo (Overtime Lookahead + Reprocesamiento)
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_logs_raw_emp_fecha ON logs_raw(empleado_id, fecha_hora)")
         await self.db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_logs_raw_unique_marca ON logs_raw(empleado_id, fecha_hora, tipo)")
+        # Eliminar índice redundante si existe (limpieza)
+        try:
+            await self.db.execute("DROP INDEX IF EXISTS idx_logs_raw_empleado")
+        except Exception:
+            pass
 
         # ═══════════════════════════════════════════════════════════════════
         # 9. Tabla Horas Extras (Migración Plan v3.1 — Fase 1)

@@ -3,6 +3,22 @@
  * Módulo para visualizar Asistencia: Vista Matriz (Equipo) y Calendario (Personal).
  */
 
+// ── Fix #A: Caché de metadata — evita llamar /api/empleados/metadata/ múltiples veces ──
+// Se invalida automáticamente al agregar/editar empleados o áreas.
+window._cachedMetadata = window._cachedMetadata || null;
+async function getMetadata(forceRefresh = false) {
+    if (!forceRefresh && window._cachedMetadata) return window._cachedMetadata;
+    try {
+        const resp = await fetch('/api/empleados/metadata/');
+        if (resp.ok) {
+            window._cachedMetadata = await resp.json();
+        }
+    } catch (e) {
+        console.warn('Error cargando metadata:', e);
+    }
+    return window._cachedMetadata || { areas: [] };
+}
+
 // Evitar conflicto con versiones antiguas en caché (script fantasma)
 // Usamos un nombre de variable ÚNICO para esta versión
 window.stateMarcacionesApp = window.stateMarcacionesApp || {
@@ -140,19 +156,17 @@ async function initMarcacionesUI() {
 
     const loadMetadataPromise = async () => {
         try {
-            const respMeta = await fetch('/api/empleados/metadata/');
-            if (respMeta.ok) {
-                const metadata = await respMeta.json();
-                const areaSelect = document.getElementById('marcacion-area');
-                if (areaSelect && metadata.areas) {
-                    const currentVal = areaSelect.value;
-                    areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
-                        metadata.areas.map(a => `<option value="${a}">${a}</option>`).join('');
-                    if (currentVal) areaSelect.value = currentVal;
-                }
+            // Fix #A: usar caché — no ir a la BD si ya tenemos los datos
+            const metadata = await getMetadata();
+            const areaSelect = document.getElementById('marcacion-area');
+            if (areaSelect && metadata.areas) {
+                const currentVal = areaSelect.value;
+                areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
+                    metadata.areas.map(a => `<option value="${a}">${a}</option>`).join('');
+                if (currentVal) areaSelect.value = currentVal;
             }
         } catch (e) {
-            console.error("Error cargando metadatos de filtros:", e);
+            console.error('Error cargando metadatos de filtros:', e);
         }
     };
 
@@ -320,9 +334,8 @@ function renderMarcacionesToolbar(container) {
 // ==========================================
 async function loadMarcacionesFilters() {
     try {
-        // Cargar Metadatos (Areas, Cargos, etc.)
-        const respMeta = await fetch('/api/empleados/metadata/');
-        const metadata = await respMeta.json();
+        // Fix #A: usar caché — no repetir la llamada HTTP si ya tenemos los datos
+        const metadata = await getMetadata();
 
         const areaSelect = document.getElementById('marcacion-area');
         if (areaSelect && metadata.areas) {
@@ -794,8 +807,8 @@ function openSyncMarcacionesModal() {
 
 async function loadAreasForSync() {
     try {
-        const resp = await fetch('/api/empleados/metadata/');
-        const data = await resp.json();
+        // Fix #A: usar caché — no repetir la llamada HTTP
+        const data = await getMetadata();
         const areas = data.areas || [];
 
         const container = document.getElementById('areas-sync-list');

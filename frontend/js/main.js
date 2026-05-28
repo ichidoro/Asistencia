@@ -1,7 +1,27 @@
 // API Configuration
 // Usamos ruta relativa para evitar problemas de CORS/Host
 const API_BASE_URL = '/api';
-console.log("🚀 MAIN.JS LOADED - " + new Date().toISOString());
+
+// ── Guardia de Producción: silencia logs en entornos no-desarrollo ──────────
+// En producción (IP remota, dominio real) los console.log exponen datos internos.
+// Solo se mantienen activos en localhost/127.0.0.1 (desarrollo local).
+const _isDev = (
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1' ||
+    location.hostname.startsWith('192.168.') ||
+    location.hostname === ''
+);
+if (!_isDev) {
+    // Silenciar todos los logs en producción
+    console.log = () => {};
+    console.debug = () => {};
+    console.group = () => {};
+    console.groupEnd = () => {};
+    console.groupCollapsed = () => {};
+    console.time = () => {};
+    console.timeEnd = () => {};
+    // console.warn y console.error se mantienen para errores reales
+}
 
 // State
 let currentPage = 1;
@@ -1276,6 +1296,10 @@ async function saveEmpleado() {
       const savedEmpleado = await response.json();
       const wasEditing = !!currentEmpleadoId;
       closeModal();
+      // Fix #B: Invalidar caché de áreas al guardar un empleado
+      // (puede haber cambiado de área o ser nuevo en un área distinta)
+      window._cachedAreas = null;
+      window._cachedMetadata = null;
       await loadStats();
       await loadEmpleados();
       showNotification(
