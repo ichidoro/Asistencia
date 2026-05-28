@@ -63,8 +63,7 @@ class HybridDatabase:
         # lo reintentará en 30s, los datos están seguros en WAL local).
         self._sync_lock = asyncio.Lock()
         self._sync_pending: bool = False
-        self.read_conn: Optional[libsql.Connection] = None
-        self._read_db_lock = asyncio.Lock()
+
         self._bg_sync_task: Optional[asyncio.Task] = None
         self.last_activity_time: float = 0.0
         
@@ -148,27 +147,7 @@ class HybridDatabase:
             else:
                 logger.info(f"📋 WAL local vacío — sync inicial traerá datos frescos del cloud")
 
-            # Conectar conexión de lectura dedicada no bloqueante en modo híbrido
-            if not self._force_turso_only:
-                logger.info(f"🔌 Conectando conexión de lectura dedicada: {self.db_path}")
-                try:
-                    self.read_conn = await asyncio.to_thread(
-                        libsql.connect,
-                        database=str(self.db_path)
-                    )
-                    # Aplicar PRAGMAs optimizados de lectura
-                    try:
-                        cursor_r = self.read_conn.cursor()
-                        cursor_r.execute("PRAGMA busy_timeout = 5000")
-                        cursor_r.execute("PRAGMA journal_mode = WAL")
-                        cursor_r.execute("PRAGMA synchronous = NORMAL")
-                        cursor_r.execute("PRAGMA cache_size = -32000")
-                        logger.info("🛡️ PRAGMAs de lectura aplicados a read_conn")
-                    except Exception as pr_err:
-                        logger.warning(f"⚠️ PRAGMAs en read_conn no aplicados: {pr_err}")
-                except Exception as read_conn_err:
-                    logger.warning(f"⚠️ No se pudo inicializar read_conn dedicada (fallback a conn): {read_conn_err}")
-                    self.read_conn = None
+
 
             self._connected = True
             
@@ -284,12 +263,7 @@ class HybridDatabase:
                     pass
                 self.conn = None
                 
-            if self.read_conn:
-                try:
-                    await asyncio.to_thread(self.read_conn.close)
-                except Exception:
-                    pass
-                self.read_conn = None
+
                 
             self._connected = False
             import gc
@@ -429,12 +403,7 @@ class HybridDatabase:
             pass  # Ignorar errores al cerrar
         self.conn = None
 
-        if self.read_conn:
-            try:
-                await asyncio.to_thread(self.read_conn.close)
-            except Exception:
-                pass
-            self.read_conn = None
+
 
         self._connected = False
         # Forzar liberación de handles del Rust backend en Windows
@@ -585,8 +554,10 @@ class HybridDatabase:
                         logger.warning(f"⚠️ WAL residual post-lock en EXECUTE (retry {attempt}/{max_retries}): {query[:60]}...")
                         await asyncio.sleep(1)
                     elif error_obj and "malformed" in str(error_obj).lower():
-                        logger.warning(f"🧹 Corrupción detectada en EXECUTE: {error_obj}. Resetting...")
-                        await self.reset_local_db()
+                        logger.warning(f"🧹 Corrupción detectada en EXECUTE: {error_obj}. Reconectando...")
+                        self._connected = False
+                        await asyncio.sleep(0.3)
+                        await self.connect()
                     else:
                         logger.warning(f"🔄 EXECUTE retry {attempt}/{max_retries}: {error_obj}")
                         self._connected = False
@@ -647,16 +618,13 @@ class HybridDatabase:
             raise last_error
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
-        """Fetch all con conexión de lectura dedicada no bloqueante (con fallback a la principal en transacción)"""
+        """Fetch all usando conexión única serializada por _db_lock"""
         self.last_activity_time = time.time()
         if not self._connected:
             await self.connect()
 
-        # Usar la conexión de lectura dedicada si no estamos en medio de una transacción activa
-        # Esto previene bloqueos de lectura cuando se ejecuta sync_from_cloud o escrituras largas.
-        use_read = self.read_conn is not None and not self._in_transaction
-        lock_to_use = self._read_db_lock if use_read else self._db_lock
-        conn_to_use = self.read_conn if use_read else self.conn
+        lock_to_use = self._db_lock
+        conn_to_use = self.conn
 
         max_retries = 3
         last_error = None
@@ -700,22 +668,21 @@ class HybridDatabase:
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
-                        # Retry rápido para reads: 100ms
-                        logger.warning(f"⚠️ WAL en FETCH (retry {attempt}/{max_retries}, read={use_read}): {query[:60]}...")
+                        logger.warning(f"⚠️ WAL en FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
                         await asyncio.sleep(0.1)
                     elif error_obj and "malformed" in str(error_obj).lower():
-                        logger.warning(f"🧹 Corrupción detectada en FETCH: {error_obj}. Resetting...")
-                        await self.reset_local_db()
+                        logger.warning(f"🧹 Corrupción detectada en FETCH: {error_obj}. Reconectando...")
+                        self._connected = False
+                        await asyncio.sleep(0.3)
+                        await self.connect()
+                        conn_to_use = self.conn
                     else:
-                        logger.warning(f"🔄 FETCH retry {attempt}/{max_retries} (read={use_read}): {error_obj}")
+                        logger.warning(f"🔄 FETCH retry {attempt}/{max_retries}: {error_obj}")
                         self._connected = False
                         if not self._is_stream_error(error_obj):
                             await asyncio.sleep(0.3)
                         await self.connect()
-                        # Si reconectamos, reevaluar las conexiones para el reintento
-                        use_read = self.read_conn is not None and not self._in_transaction
-                        lock_to_use = self._read_db_lock if use_read else self._db_lock
-                        conn_to_use = self.read_conn if use_read else self.conn
+                        conn_to_use = self.conn
                     last_error = error_obj
                     continue
 
@@ -723,19 +690,17 @@ class HybridDatabase:
 
             except Exception as e:
                 if self._is_wal_conflict(e):
-                    logger.warning(f"⚠️ WAL outer FETCH (retry {attempt}/{max_retries}, read={use_read}): {query[:60]}...")
+                    logger.warning(f"⚠️ WAL outer FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
                     await asyncio.sleep(0.1)
                     last_error = e
                     continue
 
                 if self._is_reconnect_error(e) and attempt < max_retries:
-                    logger.warning(f"🔄 FETCH retry {attempt}/{max_retries} (read={use_read}): {e}")
+                    logger.warning(f"🔄 FETCH retry {attempt}/{max_retries}: {e}")
                     self._connected = False
                     await asyncio.sleep(0.3)
                     await self.connect()
-                    use_read = self.read_conn is not None and not self._in_transaction
-                    lock_to_use = self._read_db_lock if use_read else self._db_lock
-                    conn_to_use = self.read_conn if use_read else self.conn
+                    conn_to_use = self.conn
                     last_error = e
                     continue
 
