@@ -29,9 +29,6 @@ class HybridDatabase:
         # Rutas de DB Local
         if db_path:
             self.db_path = Path(db_path)
-        elif getattr(sys, 'frozen', False):
-            appdata = os.environ.get('LOCALAPPDATA', os.environ.get('APPDATA', os.path.expanduser("~")))
-            self.db_path = Path(appdata) / "Aguacol_Asistencia" / "data" / "local_db" / "asistencia_local.db"
         else:
             self.db_path = Path(settings.LOCAL_DB_PATH)
             

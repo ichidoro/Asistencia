@@ -6,25 +6,14 @@ Carga variables de entorno desde .env de forma type-safe
 from pydantic_settings import BaseSettings, SettingsConfigDict # touch trigger reload
 from typing import List, Optional
 from pathlib import Path
-import sys
 import os
 
 # ============================================
-# RUTAS DINÁMICAS (Soporte PyInstaller EXE)
+# RUTAS DINÁMICAS (Entorno de Desarrollo)
 # ============================================
-if getattr(sys, 'frozen', False):
-    # En un compilado, el ejecutable y los adjuntos (.env) viven en _MEIPASS
-    _EXEC_DIR = Path(sys._MEIPASS)
-    _ENV_FILE = str(_EXEC_DIR / ".env")
-    
-    # Para datos dinámicos (logs, carpetas) usamos AppData para evitar Permission Error
-    _app_data_str = os.environ.get('LOCALAPPDATA', os.environ.get('APPDATA', os.path.expanduser("~")))
-    _WRITABLE_DIR = Path(_app_data_str) / "Aguacol_Asistencia"
-else:
-    # Entorno de desarrollo
-    _EXEC_DIR = Path(__file__).resolve().parent.parent.parent
-    _ENV_FILE = str(_EXEC_DIR / ".env")
-    _WRITABLE_DIR = _EXEC_DIR
+_EXEC_DIR = Path(__file__).resolve().parent.parent.parent
+_ENV_FILE = str(_EXEC_DIR / ".env")
+_WRITABLE_DIR = _EXEC_DIR
 
 
 
