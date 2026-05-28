@@ -283,6 +283,8 @@ async def buscar_empleados(
     - **sort_by**: Columna para ordenar
     - **order**: Dirección del orden (asc/desc)
     """
+    # RLS: Si el usuario tiene alcance global, no aplicar filtro de áreas (None = sin restricción)
+    areas_rls = None if current_user.alcance_global else current_user.areas
     empleados, total = await service.search_empleados(
         q=q,
         area=area,
@@ -292,7 +294,7 @@ async def buscar_empleados(
         limit=limit,
         sort_by=sort_by,
         order=order,
-        areas_permitidas=current_user.areas
+        areas_permitidas=areas_rls
     )
     
     return EmpleadoListResponse(
@@ -322,12 +324,14 @@ async def obtener_matriz_bonos(
     - data: Lista de empleados con sus asignaciones (filas)
     - total: Total de empleados encontrados
     """
+    # RLS: Si el usuario tiene alcance global, no aplicar filtro de áreas (None = sin restricción)
+    areas_rls = None if current_user.alcance_global else current_user.areas
     return await service.get_empleados_matrix(
         q=q,
         area=area,
         skip=skip,
         limit=limit,
-        areas_permitidas=current_user.areas
+        areas_permitidas=areas_rls
     )
 
 

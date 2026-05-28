@@ -85,12 +85,14 @@ const StartupUI = {
         if (splash) {
             splash.classList.add('fade-out');
             
-            // 📊 Disparar Dashboard coordinadamente durante el fade-out
+            // 📊 Disparar evento 'app:ready' para que main.js cargue el Dashboard
+            // [FIX] Usamos evento custom en lugar de llamar switchPage() directamente.
+            // startup_ui.js se carga ANTES que main.js (orden defer), por lo que
+            // switchPage no existe aún cuando este setTimeout dispara.
+            // El evento garantiza que main.js ya se ejecutó y switchPage está definida.
             setTimeout(() => {
-                if (typeof switchPage === 'function') {
-                    console.log("📊 Disparando carga autonóma del Dashboard (Sincronizado)...");
-                    switchPage('dashboard');
-                }
+                console.log("📊 Emitiendo evento app:ready para carga del Dashboard...");
+                document.dispatchEvent(new CustomEvent('app:ready'));
             }, 100);
 
             setTimeout(() => {

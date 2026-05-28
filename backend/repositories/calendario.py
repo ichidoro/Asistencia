@@ -47,3 +47,11 @@ class CalendarioRepository:
         query = "SELECT id FROM feriados WHERE fecha = ?"
         res = await self.db.fetch_one(query, (str(fecha),))
         return res is not None
+
+    async def count_feriados_year(self, year: int) -> int:
+        """Cuenta cuántos feriados existen para un año. Operación barata (COUNT)."""
+        row = await self.db.fetch_one(
+            "SELECT COUNT(*) as cnt FROM feriados WHERE fecha LIKE ?",
+            (f"{year}-%",)
+        )
+        return int(row["cnt"]) if row else 0

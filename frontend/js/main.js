@@ -185,8 +185,26 @@ async function initializeApp() {
   checkTurnosExist();
 
   // Start health monitoring
-  updateSystemStatus();
-  setInterval(updateSystemStatus, 30000); // Check every 30s
+  // Fix #2: Health check adaptativo — empieza en 30s, sube hasta 2min si todo OK,
+  // vuelve a 30s inmediatamente si detecta una falla (no pierde sensibilidad)
+  let _healthInterval = 30000;
+  async function _chequearSaludAdaptativo() {
+    const ok = await updateSystemStatus();
+    _healthInterval = ok
+      ? Math.min(_healthInterval * 1.5, 120000)  // sube hasta 2 min si OK
+      : 30000;                                     // vuelve a 30s si falla
+    setTimeout(_chequearSaludAdaptativo, _healthInterval);
+  }
+  _chequearSaludAdaptativo();
+
+  // [FIX] Escuchar el evento 'app:ready' emitido por startup_ui.js cuando el splash termina.
+  // Esto resuelve la race condition: startup_ui.js carga ANTES que main.js (orden defer),
+  // por lo que no puede llamar switchPage() directamente. El evento garantiza que
+  // esta función ya está definida cuando se intenta navegar al dashboard.
+  document.addEventListener('app:ready', () => {
+    console.log('📊 [app:ready] Recibido → Cargando Dashboard inicial...');
+    switchPage('dashboard');
+  }, { once: true }); // once:true evita múltiples disparos si se re-emite
 }
 
 // Check if any turnos exist
@@ -544,7 +562,8 @@ async function loadStats() {
   }
 }
 
-// Función global para filtrar
+// Fix #3: toggleAreaFilter ya no llama loadStats() — los totales de la empresa
+// no cambian al filtrar por área. Solo se actualiza el badge y se recarga la tabla.
 window.toggleAreaFilter = function (area) {
   if (currentAreaFilter === area) {
     currentAreaFilter = null; // Toggle off
@@ -568,10 +587,7 @@ window.toggleAreaFilter = function (area) {
     if (badgeContainer) badgeContainer.style.display = 'none';
   }
 
-  // Re-render stats to update card active state
-  loadStats();
-
-  // Reload table
+  // Fix #3: Solo recargar la tabla — NO loadStats() (esos conteos no cambian al filtrar)
   currentPage = 1;
   loadEmpleados();
 };
@@ -1527,7 +1543,7 @@ window.showError = function (message) {
 async function updateSystemStatus() {
   const dot = document.querySelector('.status-dot');
   const text = document.querySelector('.status span:last-child');
-  if (!dot || !text) return;
+  if (!dot || !text) return true;
 
   try {
     const res = await fetch(`${API_BASE_URL}/sync/health/`);
@@ -1538,15 +1554,18 @@ async function updateSystemStatus() {
       dot.style.backgroundColor = '#10b981'; // Green
       text.textContent = 'En línea (Nube Sync)';
       dot.classList.remove('status-offline');
+      return true;  // ← OK: el intervalo puede crecer
     } else {
       dot.style.backgroundColor = '#f59e0b'; // Amber
       text.textContent = 'Degradado (Solo Local)';
       dot.classList.add('status-offline');
+      return false; // ← Degradado: mantener chequeo frecuente
     }
   } catch (e) {
     dot.style.backgroundColor = '#ef4444'; // Red
     text.textContent = 'Fuera de línea (Servidor)';
     dot.classList.add('status-offline');
+    return false;   // ← Error: volver a 30s
   }
 }
 

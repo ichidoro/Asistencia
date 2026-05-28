@@ -123,7 +123,9 @@ async function loadDashboard() {
     const fechaInicio = fechaInicioEl.value, fechaFin = fechaFinEl.value;
     try {
         const url = `/api/dashboard/analytics/?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&area=${area}&horario=${horario}&_v=${Date.now()}`;
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${AuthService.getToken()}` } });
+        // [FIX] El interceptor global de auth.js ya inyecta el header Authorization.
+        // No es necesario duplicarlo aquí; evitamos inconsistencias en refresh de token.
+        const response = await fetch(url);
         if (response.status === 401 || response.status === 403) { AuthService.logout(); return; }
         const json = await response.json();
         if (json.status === 'success') {

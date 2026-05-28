@@ -46,6 +46,13 @@ async def _recalcular_periodo_activo():
         fecha_fin = hoy
 
         try:
+            # Leer día de cierre configurable (por defecto 25 si no hay ajuste)
+            try:
+                row_dc = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'dia_cierre_rrhh'")
+                dia_inicio_periodo = (int(row_dc["valor"]) if row_dc else 25) + 1
+            except Exception:
+                dia_inicio_periodo = 26
+
             ultimo_cierre = await db.fetch_one(
                 "SELECT fecha_fin FROM periodos_rrhh WHERE estado='cerrado' ORDER BY fecha_fin DESC LIMIT 1"
             )
@@ -54,13 +61,18 @@ async def _recalcular_periodo_activo():
                 last_fin = datetime.strptime(ultimo_cierre["fecha_fin"], "%Y-%m-%d").date()
                 fecha_inicio = last_fin + timedelta(days=1)
             else:
-                # Sin cierres previos: usar inicio del mes pasado
+                # Sin cierres previos: usar inicio del mes pasado basado en dia configurado
                 fecha_inicio = hoy.replace(day=1) - timedelta(days=1)
-                fecha_inicio = fecha_inicio.replace(day=26)  # día 26 del mes anterior
+                fecha_inicio = fecha_inicio.replace(day=dia_inicio_periodo)
         except Exception:
-            # Fallback: mes anterior día 26 → hoy
+            # Fallback usando día de inicio estándar
             fecha_inicio = hoy.replace(day=1) - timedelta(days=1)
-            fecha_inicio = fecha_inicio.replace(day=26)
+            try:
+                row_dc2 = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'dia_cierre_rrhh'")
+                d = (int(row_dc2["valor"]) if row_dc2 else 25) + 1
+            except Exception:
+                d = 26
+            fecha_inicio = fecha_inicio.replace(day=d)
 
         if fecha_inicio > fecha_fin:
             logger.info("🔄 [Startup] Período activo vacío — sin días a recalcular.")
@@ -221,33 +233,24 @@ async def lifespan(app: FastAPI):
                 except Exception as mig_err:
                     logger.warning(f"⚠️ [Startup Migration] Error al migrar intercambios: {mig_err}")
                 
-                # Sincronizar feriados del año actual automáticamente en cada arranque
-                from datetime import date
-                await cal_service.sync_chile_holidays(date.today().year)
+                # ── Rolling Window Sync de Feriados ──────────────────────────────
+                # Garantiza año actual completo + 2 meses adelante.
+                # Barato si ya están cargados (solo COUNT queries).
+                # Solo hace upserts la primera vez que aparece un año nuevo.
+                from datetime import date as _date
+                rolling_result = await cal_service.sync_feriados_rolling()
+                if rolling_result["synced_years"]:
+                    logger.success(f"✅ [Startup] Feriados: años nuevos sincronizados {rolling_result['synced_years']}")
+                else:
+                    logger.info(f"☑️ [Startup] Feriados: ventana completa, sin sync necesario {rolling_result['already_ok']}")
 
-                # ⬆️ Push feriados a Turso: sync_chile_holidays escribe solo en local.
-                # Sin este push, Turso quedaría sin feriados y las BDs no serían gemelas.
-                try:
-                    await db.sync_to_cloud_explicit()
-                    logger.info("☁️ [Startup] Feriados sincronizados a Turso Cloud")
-                except Exception as _fs_err:
-                    logger.warning(f"⚠️ [Startup] No se pudo pushear feriados a Turso: {_fs_err}")
 
                 logger.info(f"⏱️ config+turno+calendario init_tables: {(datetime.now()-_t).total_seconds():.2f}s")
 
                 await db.clear_schema_cache()
 
-                # Esperar a que la sincronización inicial con Turso termine
-                if hasattr(db, '_bg_sync_task') and db._bg_sync_task is not None and not db._bg_sync_task.done():
-                    startup_manager.update(90, "Sincronizando con nube (Turso Cloud)...")
-                    _t_sync = datetime.now()
-                    try:
-                        task = db._bg_sync_task
-                        if task is not None:
-                            await task
-                        logger.info(f"⏱️ Sync inicial completado en: {(datetime.now()-_t_sync).total_seconds():.2f}s")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Sync inicial abortado/fallido: {e}")
+                # Sync ya fue completado en _connect_locked (bloqueante) — no hay bg_sync_task
+                logger.info("☁️ Sync con Turso Cloud ya completado durante la conexión inicial.")
 
                 startup_manager.update(100, "Iniciando Dashboard...", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
@@ -262,12 +265,26 @@ async def lifespan(app: FastAPI):
                         seconds=settings.SYNC_INTERVAL_SECONDS,
                         id='turso_sync',
                         replace_existing=True,
-                        coalesce=True,          # Si se acumulan disparos, ejecutar solo 1
-                        max_instances=1,        # Nunca 2 syncs en paralelo
-                        misfire_grace_time=60   # Tolerar hasta 60s de retraso antes de descartar
+                        coalesce=True,
+                        max_instances=1,
+                        misfire_grace_time=60
+                    )
+                    # Rolling Window de feriados — intervalo relativo al inicio del servidor.
+                    # No usa hora fija: si el servidor arranca a las 2 PM, dispara cada 12h
+                    # desde ese momento. Independiente de si hay usuarios conectados.
+                    scheduler.add_job(
+                        cal_service.sync_feriados_rolling,
+                        'interval',
+                        hours=12,
+                        id='feriados_rolling',
+                        replace_existing=True,
+                        coalesce=True,
+                        max_instances=1,
+                        misfire_grace_time=300  # 5 min de tolerancia
                     )
                     scheduler.start()
-                    logger.success("✅ Sync Scheduler en ejecución")
+                    logger.success("✅ Sync Scheduler en ejecución (turso_sync + feriados_rolling)")
+
 
             except Exception as bg_err:
                 logger.error(f"❌ Error en inicio background: {bg_err}")

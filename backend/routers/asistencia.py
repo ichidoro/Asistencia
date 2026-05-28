@@ -442,19 +442,17 @@ async def post_batch_sync(
     db = service.repository.db
 
     # ── 1. Recopilar RUTs para todos los empleados ────────────────────────
+    # ── Fix #1: 1 sola query para todos los empleados en vez de N individuales ─
+    ids_empleados = [item.empleado_id for item in data.items]
+    placeholders = ",".join("?" * len(ids_empleados))
+    emp_rows = await db.fetch_all(
+        f"SELECT id, rut, nombre, apellido_paterno FROM empleados WHERE id IN ({placeholders})",
+        ids_empleados
+    )
+    emp_info = {r["id"]: {"rut": r["rut"], "nombre": f"{r['apellido_paterno']} {r['nombre']}"} for r in emp_rows}
+
     job_ids = {}
-    emp_info = {}  # empleado_id → {rut, nombre}
     for item in data.items:
-        emp_row = await db.fetch_one(
-            "SELECT rut, nombre, apellido_paterno FROM empleados WHERE id = ?",
-            (item.empleado_id,)
-        )
-        if emp_row:
-            emp_info[item.empleado_id] = {
-                "rut": emp_row["rut"],
-                "nombre": f"{emp_row['apellido_paterno']} {emp_row['nombre']}"
-            }
-        # Inicializar job por empleado
         total_days = (datetime.strptime(hoy, "%Y-%m-%d").date() -
                       datetime.strptime(item.fecha_inicio, "%Y-%m-%d").date()).days + 1
         jid = f"repr-{item.empleado_id}-{uuid.uuid4().hex[:8]}"

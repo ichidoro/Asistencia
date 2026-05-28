@@ -139,7 +139,16 @@ class SeguridadRepository:
         await self._inyectar_semilla_seguridad()
 
     async def _inyectar_semilla_seguridad(self):
-        """Si la tabla de usuarios está vacía, crea el SuperAdmin y los permisos base. También asegura que existan todos los permisos base en la base de datos."""
+        """
+        Siembra permisos base, rol Super Administrador y usuario admin si no existen.
+
+        OPTIMIZACIÓN: usa COUNT(*) primero para evitar ~60 queries individuales
+        en cada arranque normal. Solo ejecuta los loops cuando el conteo no coincide
+        (nuevo permiso agregado al código o primer arranque).
+
+        Costo arranque normal  → 3-4 SELECT COUNT (más barato imposible)
+        Costo primer arranque  → loop completo de inserts (solo ocurre 1 vez)
+        """
         try:
             permisos_base = [
                 # ── Empleados (7 permisos) ──
@@ -182,18 +191,26 @@ class SeguridadRepository:
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
             ]
 
-            # 1. Sembrar Permisos Base - Insertar los que no existan
-            nuevos_permisos = 0
-            for perm_id, modulo, descripcion in permisos_base:
-                exists = await self.db.fetch_one("SELECT id FROM permisos WHERE id = ?", (perm_id,))
-                if not exists:
-                    await self.db.execute(
-                        "INSERT INTO permisos (id, modulo, descripcion) VALUES (?, ?, ?)",
-                        (perm_id, modulo, descripcion)
-                    )
-                    nuevos_permisos += 1
-            if nuevos_permisos > 0:
-                logger.info(f"✨ Se inyectaron {nuevos_permisos} nuevos permisos base a la base de datos")
+            total_esperado = len(permisos_base)
+
+            # ── 1. PERMISOS: 1 COUNT en vez de 29 SELECT individuales ────────────
+            cnt_permisos = await self.db.fetch_one("SELECT COUNT(*) as c FROM permisos")
+            cnt_permisos_bd = cnt_permisos['c'] if cnt_permisos else 0
+
+            if cnt_permisos_bd < total_esperado:
+                # Faltan permisos → primer arranque o nuevo permiso agregado al código
+                nuevos_permisos = 0
+                for perm_id, modulo, descripcion in permisos_base:
+                    exists = await self.db.fetch_one("SELECT id FROM permisos WHERE id = ?", (perm_id,))
+                    if not exists:
+                        await self.db.execute(
+                            "INSERT INTO permisos (id, modulo, descripcion) VALUES (?, ?, ?)",
+                            (perm_id, modulo, descripcion)
+                        )
+                        nuevos_permisos += 1
+                logger.info(f"✨ {nuevos_permisos} nuevo(s) permiso(s) base inyectado(s)")
+            else:
+                logger.debug(f"☑️  [Seguridad] Permisos OK ({cnt_permisos_bd}/{total_esperado}) — sin cambios")
 
             # 2. Sembrar el Rol base si la tabla está vacía
             count_r = await self.db.fetch_one("SELECT COUNT(*) as c FROM roles")
@@ -204,25 +221,33 @@ class SeguridadRepository:
                 )
                 logger.info("✨ Rol 'Super Administrador' inyectado")
 
-            # Asegurar que el Rol 1 (Super Administrador) tenga todos los permisos
+            # ── 3. ROL_PERMISOS: 1 COUNT en vez de 29 SELECT individuales ────────
             rol1_exists = await self.db.fetch_one("SELECT 1 FROM roles WHERE id = 1")
             if rol1_exists:
-                rol1_perms_agregados = 0
-                for perm_id, _, _ in permisos_base:
-                    exists_rp = await self.db.fetch_one(
-                        "SELECT 1 FROM rol_permisos WHERE rol_id = 1 AND permiso_id = ?",
-                        (perm_id,)
-                    )
-                    if not exists_rp:
-                        await self.db.execute(
-                            "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (1, ?)",
+                cnt_rp = await self.db.fetch_one(
+                    "SELECT COUNT(*) as c FROM rol_permisos WHERE rol_id = 1"
+                )
+                cnt_rp_bd = cnt_rp['c'] if cnt_rp else 0
+
+                if cnt_rp_bd < total_esperado:
+                    # Faltan asignaciones → primer arranque o permiso nuevo
+                    rol1_perms_agregados = 0
+                    for perm_id, _, _ in permisos_base:
+                        exists_rp = await self.db.fetch_one(
+                            "SELECT 1 FROM rol_permisos WHERE rol_id = 1 AND permiso_id = ?",
                             (perm_id,)
                         )
-                        rol1_perms_agregados += 1
-                if rol1_perms_agregados > 0:
-                    logger.info(f"✨ Se asignaron {rol1_perms_agregados} nuevos permisos al Rol 1 (Super Administrador)")
+                        if not exists_rp:
+                            await self.db.execute(
+                                "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (1, ?)",
+                                (perm_id,)
+                            )
+                            rol1_perms_agregados += 1
+                    logger.info(f"✨ {rol1_perms_agregados} permiso(s) asignado(s) al Rol 1 (Super Administrador)")
+                else:
+                    logger.debug(f"☑️  [Seguridad] Rol 1 permisos OK ({cnt_rp_bd}/{total_esperado}) — sin cambios")
 
-            # 3. Sembrar Usuario GOD MODE si no existe
+            # ── 4. USUARIO ADMIN: 1 SELECT (ya era eficiente) ────────────────
             user_exists = await self.db.fetch_one("SELECT COUNT(*) as c FROM usuarios WHERE id = 9")
             if user_exists and user_exists['c'] == 0:
                 hashed_pw = self.get_password_hash("aguacol2026")

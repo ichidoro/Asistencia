@@ -37,50 +37,25 @@ class TurnoRepository:
                 )
             """)
 
-        if not await self.db.column_exists("turnos", "minutos_colacion"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN minutos_colacion INTEGER DEFAULT 0")
-            except Exception as e: logger.debug(f"[Migration] minutos_colacion ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "anclaje_salida_minutos"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN anclaje_salida_minutos INTEGER DEFAULT 0")
-            except Exception as e: logger.debug(f"[Migration] anclaje_salida_minutos ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "hora_limite_ficticia"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN hora_limite_ficticia TEXT")
-            except Exception as e: logger.debug(f"[Migration] hora_limite_ficticia ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "area"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN area TEXT")
-            except Exception as e: logger.debug(f"[Migration] area ya existe o error benigno: {e}")
-
-        # Nuevas columnas para versionamiento de Turnos
-        if not await self.db.column_exists("turnos", "turno_padre_id"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN turno_padre_id INTEGER")
-            except Exception as e: logger.debug(f"[Migration] turno_padre_id ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "fecha_vigencia"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN fecha_vigencia TEXT")
-            except Exception as e: logger.debug(f"[Migration] fecha_vigencia ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "ventana_en_curso_minutos"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN ventana_en_curso_minutos INTEGER DEFAULT 0")
-            except Exception as e: logger.debug(f"[Migration] ventana_en_curso_minutos ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "tolerancia_exceso_colacion_minutos"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN tolerancia_exceso_colacion_minutos INTEGER DEFAULT 0")
-            except Exception as e: logger.debug(f"[Migration] tolerancia_exceso_colacion_minutos ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "umbral_horas_colacion"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN umbral_horas_colacion REAL DEFAULT 0.0")
-            except Exception as e: logger.debug(f"[Migration] umbral_horas_colacion ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "rotacion_secuencial"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN rotacion_secuencial BOOLEAN DEFAULT 1")
-            except Exception as e: logger.debug(f"[Migration] rotacion_secuencial ya existe o error benigno: {e}")
-
-        if not await self.db.column_exists("turnos", "semana_fallback_sin_marcas"):
-            try: await self.db.execute("ALTER TABLE turnos ADD COLUMN semana_fallback_sin_marcas INTEGER DEFAULT 1")
-            except Exception as e: logger.debug(f"[Migration] semana_fallback_sin_marcas ya existe o error benigno: {e}")
+        # Migraciones tabla turnos: 1 get_column_names() en vez de 10 column_exists() individuales
+        cols_turnos = set(await self.db.get_column_names("turnos"))
+        migraciones_turnos = [
+            ("minutos_colacion",                    "INTEGER DEFAULT 0"),
+            ("anclaje_salida_minutos",              "INTEGER DEFAULT 0"),
+            ("hora_limite_ficticia",                "TEXT"),
+            ("area",                               "TEXT"),
+            ("turno_padre_id",                     "INTEGER"),
+            ("fecha_vigencia",                     "TEXT"),
+            ("ventana_en_curso_minutos",            "INTEGER DEFAULT 0"),
+            ("tolerancia_exceso_colacion_minutos",  "INTEGER DEFAULT 0"),
+            ("umbral_horas_colacion",               "REAL DEFAULT 0.0"),
+            ("rotacion_secuencial",                 "BOOLEAN DEFAULT 1"),
+            ("semana_fallback_sin_marcas",          "INTEGER DEFAULT 1"),
+        ]
+        for col, defn in migraciones_turnos:
+            if col not in cols_turnos:
+                try: await self.db.execute(f"ALTER TABLE turnos ADD COLUMN {col} {defn}")
+                except Exception as e: logger.debug(f"[Migration] {col} en turnos: {e}")
 
         # 2. Tabla Turno Dias (Detalle Semanal)
         if not await self.db.table_exists("turno_dias"):
@@ -102,31 +77,23 @@ class TurnoRepository:
                 )
             """)
 
-        # Migraciones Manuales
-        if not await self.db.column_exists("turno_dias", "num_semana"):
-            try: 
-                await self.db.execute("ALTER TABLE turno_dias ADD COLUMN num_semana INTEGER DEFAULT 1")
-                logger.info("✨ Migración: Columna 'num_semana' agregada a turno_dias")
-            except Exception as e:
-                logger.error(f"❌ Error agregando columna num_semana: {e}")
-        if not await self.db.column_exists("turno_dias", "hora_entrada_2"):
-            try: await self.db.execute("ALTER TABLE turno_dias ADD COLUMN hora_entrada_2 TEXT")
-            except Exception as e: logger.debug(f"[Migration] hora_entrada_2 ya existe o error benigno: {e}")
-        if not await self.db.column_exists("turno_dias", "hora_salida_2"):
-            try: await self.db.execute("ALTER TABLE turno_dias ADD COLUMN hora_salida_2 TEXT")
-            except Exception as e: logger.debug(f"[Migration] hora_salida_2 ya existe o error benigno: {e}")
-        if not await self.db.column_exists("turno_dias", "cruza_medianoche_2"):
-            try: await self.db.execute("ALTER TABLE turno_dias ADD COLUMN cruza_medianoche_2 INTEGER DEFAULT 0")
-            except Exception as e: logger.debug(f"[Migration] cruza_medianoche_2 ya existe o error benigno: {e}")
-        if not await self.db.column_exists("turno_dias", "horas_teoricas"):
-            try: await self.db.execute("ALTER TABLE turno_dias ADD COLUMN horas_teoricas REAL DEFAULT 0")
-            except Exception as e: logger.debug(f"[Migration] horas_teoricas ya existe o error benigno: {e}")
-        if not await self.db.column_exists("turno_dias", "etiqueta_bloque"):
-            try: 
-                await self.db.execute("ALTER TABLE turno_dias ADD COLUMN etiqueta_bloque TEXT")
-                logger.info("✨ Migración: Columna 'etiqueta_bloque' agregada a turno_dias")
-            except Exception as e: 
-                logger.error(f"❌ Error agregando columna etiqueta_bloque: {e}")
+        # Migraciones tabla turno_dias: 1 get_column_names() en vez de 6 column_exists() individuales
+        cols_td = set(await self.db.get_column_names("turno_dias"))
+        migraciones_td = [
+            ("num_semana",       "INTEGER DEFAULT 1"),
+            ("hora_entrada_2",   "TEXT"),
+            ("hora_salida_2",    "TEXT"),
+            ("cruza_medianoche_2", "INTEGER DEFAULT 0"),
+            ("horas_teoricas",   "REAL DEFAULT 0"),
+            ("etiqueta_bloque",  "TEXT"),
+        ]
+        for col, defn in migraciones_td:
+            if col not in cols_td:
+                try:
+                    await self.db.execute(f"ALTER TABLE turno_dias ADD COLUMN {col} {defn}")
+                    logger.info(f"✨ Migración: Columna '{col}' agregada a turno_dias")
+                except Exception as e:
+                    logger.error(f"❌ Error agregando columna {col} a turno_dias: {e}")
 
         # ⚡ Índice compuesto para turno_dias (acelera búsqueda de config diaria en el motor)
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_turno_dias_lookup ON turno_dias(turno_id, dia_semana, num_semana)")
@@ -274,8 +241,11 @@ class TurnoRepository:
             # ── Condonación de Deuda (Perdonazo) ─────────────
             ("deuda_condonada",          "INTEGER DEFAULT 0"),
         ]
+
+        # Migraciones tabla asistencias: 1 get_column_names() en vez de 27 column_exists() individuales
+        cols_asis = set(await self.db.get_column_names("asistencias"))
         for col, type_def in columns_check:
-            if not await self.db.column_exists("asistencias", col):
+            if col not in cols_asis:
                 try:
                     await self.db.execute(f"ALTER TABLE asistencias ADD COLUMN {col} {type_def}")
                     logger.info(f"✨ Migración: Columna '{col}' agregada a asistencias")
@@ -324,14 +294,17 @@ class TurnoRepository:
                 )
             """)
 
-        # Migraciones para logs_raw (Escudadas ⚡)
+        # Migraciones para logs_raw (Escudad ⚡)
         logs_cols = [
             ("manual", "INTEGER DEFAULT 0"),
             ("observaciones", "TEXT"),
             ("usuario_id", "INTEGER")
         ]
+
+        # Migraciones tabla logs_raw: 1 get_column_names() en vez de 3 column_exists() individuales
+        cols_logs = set(await self.db.get_column_names("logs_raw"))
         for col, type_def in logs_cols:
-            if not await self.db.column_exists("logs_raw", col):
+            if col not in cols_logs:
                 try:
                     await self.db.execute(f"ALTER TABLE logs_raw ADD COLUMN {col} {type_def}")
                     logger.info(f"✨ Migración: Columna '{col}' agregada a logs_raw")
@@ -442,6 +415,31 @@ class TurnoRepository:
 
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_comp_he_inas_fecha ON compensaciones_he_inasistencia (empleado_id, fecha_inasistencia)")
 
+        # ═════════════════════════════════════════════════════════════════════
+        # 12. Tabla Intercambios de Días
+        # Fix #5: Faltaba esta tabla — causaba ERROR en cada arranque del servidor
+        # ═════════════════════════════════════════════════════════════════════
+        if not await self.db.table_exists("intercambios_dias"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS intercambios_dias (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empleado_solicitante_id INTEGER NOT NULL,
+                    empleado_receptor_id INTEGER NOT NULL,
+                    fecha_origen TEXT NOT NULL,
+                    fecha_destino TEXT NOT NULL,
+                    motivo TEXT,
+                    estado TEXT DEFAULT 'APROBADO',
+                    aprobado_por INTEGER,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (empleado_solicitante_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                    FOREIGN KEY (empleado_receptor_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                    FOREIGN KEY (aprobado_por) REFERENCES usuarios(id) ON DELETE SET NULL
+                )
+            """)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_intercambios_sol ON intercambios_dias(empleado_solicitante_id)")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_intercambios_rec ON intercambios_dias(empleado_receptor_id)")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_intercambios_fechas ON intercambios_dias(fecha_origen, fecha_destino)")
+            logger.info("✨ Tabla 'intercambios_dias' creada")
 
     async def create_turno(self, turno: TurnoCreate) -> int:
         """Crea un turno completo con sus días de configuración"""

@@ -132,9 +132,9 @@ class EmpleadoRepository:
                 logger.error(f"❌ Error poblando historial inicial: {e}")
         else:
             logger.debug("⚡ Tabla historial_areas ya existe")        
-        # Migración Inteligente: Solo agregar si no existen en el esquema actual
+        # Migración Inteligente: 1 sola llamada get_column_names() en vez de N column_exists() individuales
         try:
-            # Columnas a verificar y sus definiciones SQL
+            cols_empleados = set(await self.db.get_column_names("empleados"))
             new_columns = {
                 "fecha_nacimiento": "TEXT",
                 "cant_contratos": "INTEGER DEFAULT 1",
@@ -145,7 +145,7 @@ class EmpleadoRepository:
             }
 
             for col_name, col_def in new_columns.items():
-                if not await self.db.column_exists("empleados", col_name):
+                if col_name not in cols_empleados:
                     try:
                         await self.db.execute(f"ALTER TABLE empleados ADD COLUMN {col_name} {col_def}")
                         logger.info(f"✨ Migración: Columna '{col_name}' agregada a empleados")
@@ -759,24 +759,27 @@ class EmpleadoRepository:
             raise
     
     async def get_stats_by_area(self, areas: Optional[List[str]] = None) -> List[dict]:
-        """Obtener conteo de empleados por área con RLS"""
+        """Obtener conteo de empleados por área con RLS.
+        Incluye áreas con 0 empleados para que aparezcan en los selectores de la interfaz.
+        """
         area_filter = ""
         params = []
         if areas and len(areas) > 0:
             placeholders = ",".join(["?"] * len(areas))
-            area_filter = f" AND area IN ({placeholders})"
+            area_filter = f" AND a.nombre IN ({placeholders})"
             params = areas
 
+        # LEFT JOIN desde `areas` para incluir áreas con 0 empleados
         query = f"""
-        SELECT a.nombre as area, COUNT(*) as count 
-        FROM empleados e
-        LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
-            LEFT JOIN areas a ON ha.area_id = a.id
-        WHERE a.nombre IS NOT NULL AND a.nombre != '' AND e.activo = 1 {area_filter}
+        SELECT a.nombre as area, COUNT(e.id) as count
+        FROM areas a
+        LEFT JOIN historial_areas ha ON ha.area_id = a.id AND ha.es_actual = 1 AND ha.validado = 1
+        LEFT JOIN empleados e ON e.id = ha.empleado_id AND e.activo = 1
+        WHERE 1=1 {area_filter}
         GROUP BY a.nombre
-        ORDER BY count DESC
+        ORDER BY count DESC, a.nombre ASC
         """
-        
+
         results = await self.db.fetch_all(query, tuple(params) if params else None)
         return results
 

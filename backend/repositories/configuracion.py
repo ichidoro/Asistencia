@@ -338,22 +338,31 @@ class ConfiguracionRepository:
             except Exception as e_mig:
                 logger.warning(f"⚠️ Error migrando periodos antiguos: {e_mig}")
 
-            # Sembrar periodo por defecto
+            # Sembrar periodo por defecto usando dia_cierre_rrhh configurable
             try:
                 from datetime import datetime, timedelta
                 hoy = datetime.now().date()
-                if hoy.day >= 26:
-                    inicio = hoy.replace(day=26)
+
+                # Leer día de cierre desde ajuste configurable (por defecto 25)
+                try:
+                    row_dc = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'dia_cierre_rrhh'")
+                    dia_cierre = int(row_dc["valor"]) if row_dc else 25
+                except Exception:
+                    dia_cierre = 25
+                dia_inicio = dia_cierre + 1  # El inicio es el día siguiente al cierre
+
+                if hoy.day > dia_cierre:
+                    inicio = hoy.replace(day=dia_inicio)
                     if hoy.month == 12:
-                        fin = hoy.replace(year=hoy.year + 1, month=1, day=25)
+                        fin = hoy.replace(year=hoy.year + 1, month=1, day=dia_cierre)
                     else:
-                        fin = hoy.replace(month=hoy.month + 1, day=25)
+                        fin = hoy.replace(month=hoy.month + 1, day=dia_cierre)
                 else:
                     if hoy.month == 1:
-                        inicio = hoy.replace(year=hoy.year - 1, month=12, day=26)
+                        inicio = hoy.replace(year=hoy.year - 1, month=12, day=dia_inicio)
                     else:
-                        inicio = hoy.replace(month=hoy.month - 1, day=26)
-                    fin = hoy.replace(day=25)
+                        inicio = hoy.replace(month=hoy.month - 1, day=dia_inicio)
+                    fin = hoy.replace(day=dia_cierre)
 
                 meses_es = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 mes_cierre = f"{meses_es[fin.month - 1]} {fin.year}"
@@ -362,9 +371,9 @@ class ConfiguracionRepository:
                     INSERT INTO periodos_rrhh (mes_cierre, fecha_inicio, fecha_fin, activo, estado)
                     VALUES (?, ?, ?, 1, 'abierto')
                 """, (mes_cierre, inicio.strftime("%Y-%m-%d"), fin.strftime("%Y-%m-%d")))
-                logger.info(f"✨ Se ha sembrado el período activo por defecto: {mes_cierre} ({inicio} a {fin})")
+                logger.info(f"\u2728 Per\u00edodo sembrado: {mes_cierre} ({inicio} \u2192 {fin}) | dia_cierre={dia_cierre}")
             except Exception as e_seed:
-                logger.warning(f"⚠️ Error sembrando periodo inicial: {e_seed}")
+                logger.warning(f"\u26a0\ufe0f Error sembrando periodo inicial: {e_seed}")
 
         logger.info("✅ Tablas de configuración, ajustes y periodos inicializadas")
 

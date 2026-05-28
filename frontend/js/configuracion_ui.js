@@ -2109,6 +2109,45 @@ window.openModalPeriodo = function(periodo = null) {
         }
         document.getElementById('periodo-activo').value = '0';
         document.getElementById('periodo-estado').value = 'abierto';
+
+        // Autocompletar fechas usando dia_cierre_rrhh configurable desde la BD
+        (async () => {
+            try {
+                const ajResp = await fetch('/api/configuracion/ajustes/dia_cierre_rrhh', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const ajData = ajResp.ok ? await ajResp.json() : null;
+                const diaCierre = ajData ? parseInt(ajData.valor, 10) : 25;
+                const diaInicio = diaCierre + 1;
+
+                const hoy = new Date();
+                let inicioDate, finDate;
+
+                if (hoy.getDate() > diaCierre) {
+                    // Estamos después del cierre: período del mes actual al siguiente
+                    inicioDate = new Date(hoy.getFullYear(), hoy.getMonth(), diaInicio);
+                    finDate    = new Date(hoy.getFullYear(), hoy.getMonth() + 1, diaCierre);
+                } else {
+                    // Estamos antes del cierre: período del mes anterior al actual
+                    inicioDate = new Date(hoy.getFullYear(), hoy.getMonth() - 1, diaInicio);
+                    finDate    = new Date(hoy.getFullYear(), hoy.getMonth(), diaCierre);
+                }
+
+                const fmt = d => d.toISOString().split('T')[0];
+                document.getElementById('periodo-fecha-inicio').value = fmt(inicioDate);
+                document.getElementById('periodo-fecha-fin').value    = fmt(finDate);
+
+                // Autocompletar mes y año del cierre
+                const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                const mesSelect = document.getElementById('periodo-mes-cierre');
+                if (mesSelect) mesSelect.value = meses[finDate.getMonth()];
+                if (yearSelect) yearSelect.value = finDate.getFullYear();
+
+                calculatePeriodDays();
+            } catch(e) {
+                console.warn('No se pudo autocompletar fechas de periodo:', e);
+            }
+        })();
     }
 
     // Calcular días
