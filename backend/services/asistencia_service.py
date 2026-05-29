@@ -957,11 +957,19 @@ class AsistenciaService:
         global _reproceso_status, _empleados_en_reproceso
         _reproceso_status = {'estado': 'en_proceso', 'procesados': 0, 'errores': 0, 'total': 0}
         db = self.repository.db
-        q = "SELECT id FROM empleados WHERE activo = 1"
-        params = []
+        # FIX: La tabla empleados NO tiene columna 'area' directa.
+        # La relación correcta es: empleados → historial_areas → areas (nombre).
         if area:
-            q += " AND area = ?"
-            params.append(area)
+            q = """
+                SELECT e.id FROM empleados e
+                LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+                LEFT JOIN areas a ON ha.area_id = a.id
+                WHERE e.activo = 1 AND a.nombre = ?
+            """
+            params = [area]
+        else:
+            q = "SELECT id FROM empleados WHERE activo = 1"
+            params = []
         emp_rows = await db.fetch_all(q, tuple(params))
         emp_ids = [e['id'] for e in emp_rows]
         _reproceso_status['total'] = len(emp_ids)
@@ -2786,12 +2794,34 @@ class AsistenciaService:
         # Si el empleado salió DENTRO del margen post-turno configurado (anclaje_sal_min),
         # se ancla a h_sal_teorica para no contar esos minutos extras como trabajados.
         # Si salió mucho después (overtime real) o antes (adelantada), se respeta la marca.
+        logger.info(
+            f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | "
+            f"anclaje_sal_min={anclaje_sal_min}, h_sal_teorica={h_sal_teorica}, "
+            f"len(tiempos_proc)={len(tiempos_proc)}, "
+            f"tiempos_proc[-1]={tiempos_proc[-1] if len(tiempos_proc) >= 2 else 'N/A'}, "
+            f"config_dia.anclaje_salida={config_dia.get('anclaje_salida_minutos') if config_dia else 'NO_CONFIG'}, "
+            f"turno.anclaje_salida={turno.get('anclaje_salida_minutos', 'NOT_FOUND') if turno else 'NO_TURNO'}"
+        )
         if anclaje_sal_min > 0 and h_sal_teorica and len(tiempos_proc) >= 2:
             dt_salida_real = tiempos_proc[-1]
             diff_salida = (dt_salida_real - h_sal_teorica).total_seconds() / 60
+            logger.info(
+                f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | "
+                f"EVALUANDO: diff_salida={diff_salida:.2f} min, "
+                f"condicion 0<{diff_salida:.2f}<={anclaje_sal_min}: {0 < diff_salida <= anclaje_sal_min}"
+            )
             if 0 < diff_salida <= anclaje_sal_min:
                 tiempos_proc[-1] = h_sal_teorica
                 res['observaciones'] += f"Salida dentro del anclaje ({int(diff_salida)} min post-turno, pagado hasta {h_sal_teorica.strftime('%H:%M')}). "
+                logger.info(f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | ✅ ANCLAJE APLICADO → salida truncada a {h_sal_teorica.strftime('%H:%M')}")
+            else:
+                logger.info(f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | ❌ ANCLAJE NO APLICADO (diff fuera de rango)")
+        else:
+            reasons = []
+            if anclaje_sal_min <= 0: reasons.append(f"anclaje_sal_min={anclaje_sal_min}<=0")
+            if not h_sal_teorica: reasons.append("h_sal_teorica=None")
+            if len(tiempos_proc) < 2: reasons.append(f"len(tiempos_proc)={len(tiempos_proc)}<2")
+            logger.info(f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | ⛔ BLOQUE NO ENTRADO: {', '.join(reasons)}")
 
         # ── ACTUALIZAR RESULTADO CON ENTRADA/SALIDA ───────────────────────────
         res['hora_entrada_real'] = entrada_real
