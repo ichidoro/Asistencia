@@ -13,6 +13,7 @@ from pathlib import Path
 from loguru import logger
 import sys
 import uuid
+import os
 
 # Identificador único de ejecución para cache busting agnóstico
 STARTUP_ID = str(uuid.uuid4())[:8]
