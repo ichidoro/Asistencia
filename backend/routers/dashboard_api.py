@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional, List
 from backend.services.dashboard_service import dashboard_service
 from backend.services.dashboard_analytics import dashboard_analytics
-from backend.core.security import SecurityContext, get_current_user
+from backend.core.security import SecurityContext, get_current_user, RequirePermission
 
 router = APIRouter()
 
 @router.get("/pulse/")
 async def get_dashboard_pulse(
     area: Optional[str] = Query("Todas"),
-    current_user: SecurityContext = Depends(get_current_user)
+    current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))
 ):
     """
     Retorna métricas diarias en tiempo real con RLS.
@@ -33,7 +33,7 @@ async def get_dashboard_metrics(
     fecha_inicio: str = Query(...),
     fecha_fin: str = Query(...),
     area: Optional[str] = Query("Todas"),
-    current_user: SecurityContext = Depends(get_current_user)
+    current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))
 ):
     """
     Retorna métricas consolidadas con RLS.
@@ -54,7 +54,7 @@ async def get_dashboard_metrics(
 @router.get("/composition/")
 async def get_dashboard_composition(
     area: Optional[str] = Query("Todas"),
-    current_user: SecurityContext = Depends(get_current_user)
+    current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))
 ):
     """
     Retorna la composición de dotación por género con RLS.
@@ -78,7 +78,7 @@ async def get_dashboard_analytics(
     fecha_fin: str = Query(...),
     area: Optional[str] = Query("Todas"),
     horario: Optional[str] = Query("Todos"),
-    current_user: SecurityContext = Depends(get_current_user)
+    current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))
 ):
     """
     Retorna toda la data para el Dashboard de un solo golpe.
@@ -107,7 +107,7 @@ async def get_dashboard_desviaciones_detalle(
     motivo: Optional[str] = Query(None),
     area: Optional[str] = Query("Todas"),
     horario: Optional[str] = Query("Todos"),
-    current_user: SecurityContext = Depends(get_current_user)
+    current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))
 ):
     """
     Retorna el detalle (hasta 100 registros) que componen las fugas, ausencias o justificaciones.

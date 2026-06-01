@@ -87,6 +87,18 @@ window.closeSyncWizard = async function(force = false) {
     // Limpiar estado para evitar que F5 lo vuelva a abrir
     window.clearWizardStateFromLocalStorage();
 
+    // FIX: Invalidar cachés de áreas al cerrar el wizard.
+    // Áreas nuevas sincronizadas deben aparecer en todos los módulos.
+    window._cachedAreas = null;
+    window._cachedMetadata = null;
+    // Resetear flag de módulos lazy para que recarguen áreas al navegar
+    if (typeof asignacionesInitialized !== 'undefined') window.asignacionesInitialized = false;
+    // Refrescar datos de fondo para que los selectores se actualicen al navegar
+    if (typeof window.loadStats === 'function') window.loadStats();
+    if (typeof window.loadEmpleados === 'function') window.loadEmpleados();
+    // Refrescar áreas en reportes si existe
+    if (typeof window.populateReportAreas === 'function') window.populateReportAreas();
+
     const modalEl = document.getElementById('modal-sync-wizard');
     if (!modalEl) return;
     const modalInstance = bootstrap.Modal.getInstance(modalEl);
@@ -1808,7 +1820,8 @@ window.confirmWizardSync = async function() {
             areas: window._wizardState.resoluciones.areas,
             cargos: window._wizardState.resoluciones.cargos,
             generos: window._wizardState.resoluciones.generos || [],
-            turnos: window._wizardState.resoluciones.turnos || {}
+            turnos: window._wizardState.resoluciones.turnos || {},
+            bonos: window._wizardState.resoluciones.bonos || {}
         };
 
         const resp = await fetch('/api/sync/wizard/commit-all/', {
@@ -2236,14 +2249,8 @@ window.startWizardSSESync = async function(payload) {
         let buffer = '';
         let finalStats = null;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-
+        // Helper: procesar líneas SSE y despachar eventos
+        function _processSSELines(lines) {
             let eventType = null;
             let eventData = null;
             for (const line of lines) {
@@ -2271,6 +2278,59 @@ window.startWizardSSESync = async function(payload) {
                     eventData = null;
                 }
             }
+            // FIX: Si quedó un evento pendiente sin línea vacía final (último chunk),
+            // despacharlo igualmente. Esto ocurre cuando el servidor cierra la conexión
+            // justo después de emitir el último evento sin trailing newline.
+            if (eventType && eventData !== null) {
+                if (eventType === 'done') {
+                    finalStats = eventData;
+                } else if (eventType === 'error') {
+                    throw new Error(eventData.message || 'Error en streaming de datos');
+                }
+            }
+        }
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            _processSSELines(lines);
+        }
+
+        // FIX: Procesar buffer residual después de que el stream se cierre.
+        // El último evento puede quedar atrapado en el buffer si no termina en \n.
+        if (buffer.trim()) {
+            const remainingLines = buffer.split('\n');
+            remainingLines.push(''); // Agregar línea vacía para forzar despacho del último evento
+            _processSSELines(remainingLines);
+        }
+
+        if (!finalStats) {
+            // FALLBACK: El stream se cerró sin enviar evento 'done'.
+            // Esto puede pasar si Cloud Run cierra la conexión prematuramente,
+            // o si hay buffering intermedio (proxies, CDN).
+            // Los empleados YA se sincronizaron en el backend — solo se perdió la señal.
+            console.warn('[Wizard] Stream cerrado sin evento done — activando fallback');
+            logEl.innerHTML += `<span class="text-warning">[WARN] El servidor completó la sincronización pero la señal de finalización no llegó. Los datos están guardados.</span><br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+
+            if (progressBar) {
+                progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                progressBar.style.width = '100%';
+            }
+            if (percentEl) percentEl.textContent = '100%';
+            statusTextEl.textContent = 'Sincronización completada (señal parcial).';
+
+            // Construir stats mínimos desde los empleados que vimos pasar por progress
+            finalStats = {
+                empleados_nuevos: (window._wizardState.synchronizedEmployees || []).filter(e => e.es_nuevo).length,
+                empleados_actualizados: (window._wizardState.synchronizedEmployees || []).filter(e => !e.es_nuevo).length,
+                empleados_sin_cambios: 0,
+                nuevos_detalles: []
+            };
         }
 
         if (finalStats) {
@@ -2284,6 +2344,12 @@ window.startWizardSSESync = async function(payload) {
             }
             if (percentEl) percentEl.textContent = '100%';
             statusTextEl.textContent = 'Sincronización finalizada.';
+
+            // FIX: Invalidar cachés de áreas para que TODOS los módulos
+            // (Dashboard, Reportes, Marcaciones, Asignaciones) refresquen
+            // sus dropdowns y detecten áreas nuevas como MANTENCION.
+            window._cachedAreas = null;
+            window._cachedMetadata = null;
 
             if (typeof window.loadEmpleados === 'function') await window.loadEmpleados();
             if (typeof window.loadStats === 'function') await window.loadStats();

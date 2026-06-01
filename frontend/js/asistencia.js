@@ -155,15 +155,23 @@ async function downloadExcelReport() {
             turnoParam = `&turno_id=${uiTurno.value}`;
         }
     } else {
-        // Modo Marcaciones: Mes completo predeterminado
-        const uiMes = document.getElementById('marcacion-mes');
-        const uiAnio = document.getElementById('marcacion-anio');
-        const y = parseInt(uiAnio?.value || new Date().getFullYear(), 10);
-        const m = parseInt(uiMes?.value || (new Date().getMonth() + 1), 10);
+        // Modo Marcaciones: Usar las mismas fechas RRHH que la grilla muestra
+        // FIX: Antes usaba mes calendario (1-31), pero la grilla usa el período RRHH
+        // (ej: 26/04 al 25/05), lo que causaba discrepancias enormes en el Excel.
+        if (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.fechaInicioRRHH && stateMarcacionesApp.fechaFinRRHH) {
+            inicio = stateMarcacionesApp.fechaInicioRRHH;
+            fin = stateMarcacionesApp.fechaFinRRHH;
+        } else {
+            // Fallback: si no hay periodo RRHH cargado, usar mes calendario
+            const uiMes = document.getElementById('marcacion-mes');
+            const uiAnio = document.getElementById('marcacion-anio');
+            const y = parseInt(uiAnio?.value || new Date().getFullYear(), 10);
+            const m = parseInt(uiMes?.value || (new Date().getMonth() + 1), 10);
 
-        inicio = `${y}-${String(m).padStart(2, '0')}-01`;
-        const lastDay = new Date(y, m, 0).getDate();
-        fin = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+            inicio = `${y}-${String(m).padStart(2, '0')}-01`;
+            const lastDay = new Date(y, m, 0).getDate();
+            fin = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        }
         endpoint = '/api/reports/asistencia/excel/';
 
         const uiArea = document.getElementById('marcacion-area');

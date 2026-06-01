@@ -1,129 +1,147 @@
 """
-install_service.py
-==================
-Registra la aplicación como Servicio de Windows usando NSSM.
-El servicio arranca automáticamente al encender el PC.
+install_service.py — Registra la app como Servicio de Windows via NSSM.
+NSSM bundleado en assets/nssm.exe. NO se descarga en runtime.
 
-Usa NSSM (Non-Sucking Service Manager) — lo descarga si no está.
+Hechos confirmados:
+- main.py esta en backend/main.py (12162 bytes)
+- uvicorn usa "backend.main:app" -> CWD DEBE ser la raiz (padre de backend/)
+- NSSM necesita admin para install/set/start
+
 Uso: python install_service.py <ruta_instalacion>
 """
-
-import sys
-import os
-import subprocess
-import urllib.request
-import zipfile
-import io
+import sys, os, subprocess
 from pathlib import Path
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace") if hasattr(sys.stdout, "reconfigure") else None
 
 APP_DIR      = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("C:/Asistencia")
 VENV_PYTHON  = APP_DIR / ".venv" / "Scripts" / "python.exe"
 MAIN_SCRIPT  = APP_DIR / "backend" / "main.py"
 SERVICE_NAME = "AsistenciaAguacol"
-SERVICE_DESC = "Sistema de Asistencia Aguacol - Inicio automático"
-NSSM_URL     = "https://nssm.cc/release/nssm-2.24.zip"
+SERVICE_DISPLAY = "Sistema de Asistencia Aguacol"
+SERVICE_DESC = "Sistema de Gestion de Asistencia - Aguacol SPA - Inicio automatico"
 NSSM_PATH    = APP_DIR / "assets" / "nssm.exe"
-
 LOG_DIR      = APP_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE     = LOG_DIR / "service_install.log"
 
 
-def _download_nssm() -> bool:
-    """Descarga NSSM si no está presente"""
-    if NSSM_PATH.exists():
-        return True
+def log(msg):
+    print(msg, flush=True)
     try:
-        print(f"Descargando NSSM desde {NSSM_URL}...")
-        NSSM_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(NSSM_URL, timeout=30) as resp:
-            data = resp.read()
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
-            # Buscar nssm.exe de 64 bits
-            for name in z.namelist():
-                if "win64" in name.lower() and name.endswith("nssm.exe"):
-                    with z.open(name) as src, open(NSSM_PATH, "wb") as dst:
-                        dst.write(src.read())
-                    print(f"NSSM extraído en {NSSM_PATH}")
-                    return True
-        return False
-    except Exception as ex:
-        print(f"No se pudo descargar NSSM: {ex}")
-        return False
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
 
 
-def _run(cmd: list, desc: str) -> bool:
+def run_nssm(args, desc):
+    cmd = [str(NSSM_PATH)] + args
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            print(f"✓ {desc}")
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=30)
+        if r.returncode == 0:
+            log(f"  OK: {desc}")
             return True
         else:
-            print(f"✗ {desc}: {result.stderr.strip()[:80]}")
+            stderr = r.stderr.strip().replace("\x00", "")[:120]
+            log(f"  FALLO: {desc} -> {stderr}")
             return False
     except Exception as ex:
-        print(f"✗ {desc}: {ex}")
+        log(f"  ERROR: {desc} -> {ex}")
         return False
 
 
-def install_service():
-    """Registra o actualiza el servicio de Windows"""
+def install():
+    log(f"\n{'='*60}")
+    log(f"Instalando servicio: {SERVICE_NAME}")
+    log(f"  APP_DIR:     {APP_DIR}")
+    log(f"  VENV_PYTHON: {VENV_PYTHON}")
+    log(f"  MAIN_SCRIPT: {MAIN_SCRIPT}")
+    log(f"  NSSM_PATH:   {NSSM_PATH}")
+    log(f"{'='*60}")
+
+    # Validaciones
     if not VENV_PYTHON.exists():
-        print(f"✗ Python virtualenv no encontrado en {VENV_PYTHON}")
+        log(f"  CRITICO: {VENV_PYTHON} no existe")
+        sys.exit(1)
+    if not MAIN_SCRIPT.exists():
+        log(f"  CRITICO: {MAIN_SCRIPT} no existe")
+        sys.exit(1)
+    if not NSSM_PATH.exists():
+        log(f"  CRITICO: {NSSM_PATH} no existe")
         sys.exit(1)
 
-    # Descargar NSSM si necesario
-    if not _download_nssm():
-        print("✗ NSSM no disponible — usando alternativa con sc.exe")
-        _install_via_sc()
-        return
+    # 1. Detener y eliminar servicio previo (ignora errores si no existe)
+    log("\n--- Limpiando servicio anterior ---")
+    subprocess.run([str(NSSM_PATH), "stop", SERVICE_NAME],
+                   capture_output=True, timeout=15)
+    subprocess.run([str(NSSM_PATH), "remove", SERVICE_NAME, "confirm"],
+                   capture_output=True, timeout=15)
 
-    nssm = str(NSSM_PATH)
+    # 2. Instalar servicio nuevo
+    log("\n--- Registrando servicio ---")
+    if not run_nssm(["install", SERVICE_NAME, str(VENV_PYTHON)],
+                    "Registrar servicio"):
+        log("  No se pudo registrar. Abortando.")
+        sys.exit(1)
 
-    # Eliminar servicio previo si existe
-    subprocess.run([nssm, "stop",   SERVICE_NAME], capture_output=True, timeout=15)
-    subprocess.run([nssm, "remove", SERVICE_NAME, "confirm"], capture_output=True, timeout=15)
+    # 3. Configurar parametros (documentacion NSSM verificada)
+    log("\n--- Configurando parametros ---")
+    configs = [
+        # AppDirectory = raiz del proyecto (CWD para imports "backend.xxx")
+        (["set", SERVICE_NAME, "AppDirectory", str(APP_DIR)],
+         "AppDirectory (CWD)"),
+        # AppParameters = ruta al script main.py
+        (["set", SERVICE_NAME, "AppParameters", str(MAIN_SCRIPT)],
+         "AppParameters (script)"),
+        # Metadatos del servicio
+        (["set", SERVICE_NAME, "DisplayName", SERVICE_DISPLAY],
+         "DisplayName"),
+        (["set", SERVICE_NAME, "Description", SERVICE_DESC],
+         "Description"),
+        # Inicio automatico al encender el PC
+        (["set", SERVICE_NAME, "Start", "SERVICE_AUTO_START"],
+         "Start = AUTO"),
+        # Logs con rotacion
+        (["set", SERVICE_NAME, "AppStdout", str(LOG_DIR / "service.log")],
+         "AppStdout"),
+        (["set", SERVICE_NAME, "AppStderr", str(LOG_DIR / "service_err.log")],
+         "AppStderr"),
+        (["set", SERVICE_NAME, "AppRotateFiles", "1"],
+         "AppRotateFiles (rotacion ON)"),
+        (["set", SERVICE_NAME, "AppRotateBytes", "5242880"],
+         "AppRotateBytes (5MB max)"),
+        # Reintentar si falla (5 segundos de delay)
+        (["set", SERVICE_NAME, "AppRestartDelay", "5000"],
+         "AppRestartDelay (5s)"),
+        # Ejecutar como LocalSystem
+        (["set", SERVICE_NAME, "ObjectName", "LocalSystem"],
+         "ObjectName"),
+        # Sin consola visible
+        (["set", SERVICE_NAME, "AppNoConsole", "1"],
+         "AppNoConsole"),
+        # CRITICO: forzar UTF-8 para evitar crashes de encoding
+        (["set", SERVICE_NAME, "AppEnvironmentExtra", "PYTHONUTF8=1"],
+         "PYTHONUTF8=1 (encoding)"),
+    ]
 
-    # Instalar nuevo servicio
-    _run([nssm, "install",    SERVICE_NAME, str(VENV_PYTHON)], "Registrar servicio")
-    _run([nssm, "set", SERVICE_NAME, "AppDirectory",   str(APP_DIR)],           "Directorio de trabajo")
-    _run([nssm, "set", SERVICE_NAME, "AppParameters",  str(MAIN_SCRIPT)],       "Script de inicio")
-    _run([nssm, "set", SERVICE_NAME, "DisplayName",    SERVICE_DESC],            "Nombre del servicio")
-    _run([nssm, "set", SERVICE_NAME, "Description",    "Sistema de Gestión de Asistencia - Aguacol SPA"], "Descripción")
-    _run([nssm, "set", SERVICE_NAME, "Start",          "SERVICE_AUTO_START"],    "Inicio automático")
-    _run([nssm, "set", SERVICE_NAME, "AppStdout",      str(LOG_DIR / "service.log")], "Log stdout")
-    _run([nssm, "set", SERVICE_NAME, "AppStderr",      str(LOG_DIR / "service_error.log")], "Log stderr")
-    _run([nssm, "set", SERVICE_NAME, "AppRestartDelay", "5000"],                 "Reintentar en 5s si falla")
-    _run([nssm, "set", SERVICE_NAME, "ObjectName",     "LocalSystem"],           "Cuenta del servicio")
+    for args, desc in configs:
+        run_nssm(args, desc)
 
-    # Iniciar el servicio
-    _run([nssm, "start", SERVICE_NAME], "Iniciar servicio")
+    # 4. Iniciar el servicio
+    log("\n--- Iniciando servicio ---")
+    ok = run_nssm(["start", SERVICE_NAME], "Iniciar servicio")
 
-    print(f"\n✅ Servicio '{SERVICE_NAME}' instalado y arrancado.")
-    print(f"   El sistema iniciará automáticamente cada vez que se encienda el PC.")
+    if ok:
+        log(f"\nServicio '{SERVICE_NAME}' instalado y arrancado.")
+        log("Se iniciara automaticamente en cada arranque del sistema.")
+    else:
+        log(f"\nADVERTENCIA: Servicio registrado pero no se pudo iniciar ahora.")
+        log("Se iniciara automaticamente en el proximo arranque.")
 
-
-def _install_via_sc():
-    """Alternativa: usa sc.exe + un wrapper .bat para crear el servicio"""
-    wrapper_bat = APP_DIR / "service_wrapper.bat"
-    wrapper_content = f"""@echo off
-cd /d "{APP_DIR}"
-"{VENV_PYTHON}" "{MAIN_SCRIPT}"
-"""
-    wrapper_bat.write_text(wrapper_content, encoding="utf-8")
-
-    # Crear servicio con sc.exe usando cmd.exe como ejecutable
-    cmd_path = os.path.join(os.environ.get("SYSTEMROOT", "C:\\Windows"), "System32", "cmd.exe")
-    bin_path = f'"{cmd_path}" /c "{wrapper_bat}"'
-
-    subprocess.run(["sc", "stop",   SERVICE_NAME], capture_output=True)
-    subprocess.run(["sc", "delete", SERVICE_NAME], capture_output=True)
-    _run(
-        ["sc", "create", SERVICE_NAME, f"binPath={bin_path}", "start=auto", "DisplayName=Asistencia Aguacol"],
-        "Registrar servicio (alternativa)"
-    )
-    _run(["sc", "description", SERVICE_NAME, "Sistema de Gestión de Asistencia - Aguacol SPA"], "Descripción")
-    _run(["sc", "start", SERVICE_NAME], "Iniciar servicio")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
-    install_service()
+    install()

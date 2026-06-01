@@ -479,27 +479,44 @@ class TurnoRepository:
     async def get_all_turnos(self, include_details: bool = True) -> List[Dict]:
         """Obtener todos los turnos, opcionalmente con sus días"""
         try:
-            # Traer cabeceras
+            # 1 query: cabeceras
             query = "SELECT * FROM turnos ORDER BY nombre"
             turnos_list = await self.db.fetch_all(query)
             
-            if not include_details:
+            if not include_details or not turnos_list:
                 return turnos_list
 
-            # Enriquecer con días y áreas (Solo si se solicita)
+            # Batch queries: 3 queries fijas en vez de 1 + 2*N
+            turno_ids = [t['id'] for t in turnos_list]
+            placeholders = ",".join(["?"] * len(turno_ids))
+
+            # 1 query: todos los turno_dias
+            dias_rows = await self.db.fetch_all(
+                f"SELECT * FROM turno_dias WHERE turno_id IN ({placeholders}) ORDER BY turno_id, dia_semana",
+                tuple(turno_ids)
+            )
+            dias_by_turno: Dict[int, list] = {}
+            for d in dias_rows:
+                dias_by_turno.setdefault(d['turno_id'], []).append(d)
+
+            # 1 query: todas las turno_areas
+            areas_rows = await self.db.fetch_all(
+                f"SELECT ta.turno_id, a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id IN ({placeholders})",
+                tuple(turno_ids)
+            )
+            areas_by_turno: Dict[int, list] = {}
+            for a in areas_rows:
+                areas_by_turno.setdefault(a['turno_id'], []).append(a['nombre'])
+
+            # Agrupar en Python
             for t in turnos_list:
-                dias_query = "SELECT * FROM turno_dias WHERE turno_id = ? ORDER BY dia_semana"
-                dias = await self.db.fetch_all(dias_query, (t['id'],))
-                t['dias'] = dias
-                
-                areas_query = "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?"
-                areas_res = await self.db.fetch_all(areas_query, (t['id'],))
-                t['areas'] = [r['nombre'] for r in areas_res]
+                t['dias'] = dias_by_turno.get(t['id'], [])
+                t['areas'] = areas_by_turno.get(t['id'], [])
             
             return turnos_list
         except Exception as e:
             logger.error(f"Error getting turnos: {e}")
-            return []
+            raise
 
     async def get_turnos_by_areas(self, areas: List[str], include_details: bool = True) -> List[Dict]:
         """
@@ -524,23 +541,40 @@ class TurnoRepository:
             """
             turnos_list = await self.db.fetch_all(query, tuple(areas))
 
-            if not include_details:
+            if not include_details or not turnos_list:
                 return turnos_list
 
-            # Enriquecer con días y áreas (Solo si se solicita)
+            # Batch queries: 3 queries fijas en vez de 1 + 2*N
+            turno_ids = [t['id'] for t in turnos_list]
+            ph = ",".join(["?"] * len(turno_ids))
+
+            # 1 query: todos los turno_dias
+            dias_rows = await self.db.fetch_all(
+                f"SELECT * FROM turno_dias WHERE turno_id IN ({ph}) ORDER BY turno_id, dia_semana",
+                tuple(turno_ids)
+            )
+            dias_by_turno: Dict[int, list] = {}
+            for d in dias_rows:
+                dias_by_turno.setdefault(d['turno_id'], []).append(d)
+
+            # 1 query: todas las turno_areas
+            areas_rows = await self.db.fetch_all(
+                f"SELECT ta.turno_id, a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id IN ({ph})",
+                tuple(turno_ids)
+            )
+            areas_by_turno: Dict[int, list] = {}
+            for a in areas_rows:
+                areas_by_turno.setdefault(a['turno_id'], []).append(a['nombre'])
+
+            # Agrupar en Python
             for t in turnos_list:
-                dias_query = "SELECT * FROM turno_dias WHERE turno_id = ? ORDER BY dia_semana"
-                dias = await self.db.fetch_all(dias_query, (t['id'],))
-                t['dias'] = dias
-                
-                areas_query = "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?"
-                areas_res = await self.db.fetch_all(areas_query, (t['id'],))
-                t['areas'] = [r['nombre'] for r in areas_res]
+                t['dias'] = dias_by_turno.get(t['id'], [])
+                t['areas'] = areas_by_turno.get(t['id'], [])
 
             return turnos_list
         except Exception as e:
             logger.error(f"Error getting turnos by areas '{areas}': {e}")
-            return []
+            raise
 
     async def get_stats_por_area(self) -> Dict[str, Any]:
         """Devuelve un mapa con la cantidad de turnos asignados a cada área"""
@@ -572,7 +606,7 @@ class TurnoRepository:
             }
         except Exception as e:
             logger.error(f"Error en stats por área: {e}")
-            return {"areas": {}, "globales": 0}
+            raise
 
     async def create_asignacion(self, asignacion: AsignacionCreate) -> int:
         """
@@ -704,11 +738,13 @@ class TurnoRepository:
         """Elimina un turno and sus dependencias (días)"""
         try:
             # Cloud Sync: Usar db.execute
-            await self.db.execute("DELETE FROM turnos WHERE id = ?", (turno_id,))
+            cursor = await self.db.execute("DELETE FROM turnos WHERE id = ?", (turno_id,))
+            if hasattr(cursor, 'rowcount') and cursor.rowcount == 0:
+                return False
             return True
         except Exception as e:
             logger.error(f"Error eliminando turno {turno_id}: {e}")
-            return False
+            raise
 
     async def save_raw_log(self, data: Dict[str, Any]) -> bool:
         """
@@ -778,7 +814,7 @@ class TurnoRepository:
             
         except Exception as e:
             logger.error(f"Error guardando batch de raw logs: {e}")
-            return False
+            raise
 
     async def update_assignment_start_date(self, empleado_id: int, new_start_date: date) -> bool:
         """

@@ -3374,7 +3374,7 @@ class AsistenciaService:
             # Enriquecer con datos de turno para el acumulado semanal del frontend
             t_info = turno_ids_emp.get(eid, {})
             if t_info:
-                emp['meta_horas_semanales'] = t_info.get('meta_horas_semanales') or 44.0
+                emp['meta_horas_semanales'] = t_info.get('meta_horas_semanales') or 45.0
                 emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'DINAMICO_FLEXIBLE'
                 emp['turno'] = t_info.get('turno_nombre')
                 t_id = t_info.get('turno_id')

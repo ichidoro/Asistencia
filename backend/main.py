@@ -291,65 +291,63 @@ async def ping():
 
 if __name__ == "__main__":
     import uvicorn
-    import webbrowser
-    import threading
     import time
     
-    def open_browser():
-        """Abrir navegador de forma inteligente (polling al status de inicio)"""
-        host = settings.API_HOST
-        if host == "0.0.0.0":
-            host = "localhost"
-        url = f"http://{host}:{settings.API_PORT}"
+    is_cloud = bool(os.environ.get("K_SERVICE"))
+    port = int(os.environ.get("PORT", settings.API_PORT))
+    
+    if not is_cloud:
+        # Solo en ejecución local (Windows): limpiar puerto y abrir navegador
+        import webbrowser
+        import threading
         
-        # Polling hasta que el servidor esté realmente listo (max 30s)
-        import urllib.request
-        import json
-        status_url = f"{url}/api/startup/status"
-        
-        for _ in range(60): # 60 * 0.5s = 30s
+        def open_browser():
+            """Abrir navegador de forma inteligente (polling al status de inicio)"""
+            host = settings.API_HOST
+            if host == "0.0.0.0":
+                host = "localhost"
+            url = f"http://{host}:{port}"
+            
+            import urllib.request
+            import json
+            status_url = f"{url}/api/startup/status"
+            
+            for _ in range(60):
+                try:
+                    req = urllib.request.Request(status_url)
+                    with urllib.request.urlopen(req, timeout=1) as response:
+                        if response.status == 200:
+                            data = json.loads(response.read().decode())
+                            if data.get("ready"):
+                                break
+                except Exception:
+                    pass
+                time.sleep(0.5)
+
+            logger.info(f"--- Intentando abrir navegador en {url}...")
             try:
-                req = urllib.request.Request(status_url)
-                with urllib.request.urlopen(req, timeout=1) as response:
-                    if response.status == 200:
-                        data = json.loads(response.read().decode())
-                        if data.get("ready"):
-                            break
-            except Exception:
-                pass
-            time.sleep(0.5)
+                webbrowser.open(url)
+            except Exception as e:
+                logger.error(f"No se pudo abrir el navegador: {e}")
 
-        logger.info(f"--- Intentando abrir navegador en {url}...")
         try:
-            webbrowser.open(url)
+            if kill_process_on_port(port):
+                logger.info(f"--- Puerto {port} limpiado y listo.")
+            else:
+                logger.info(f"ℹ️ El puerto {port} estaba libre.")
         except Exception as e:
-            logger.error(f"No se pudo abrir el navegador: {e}")
-
-    # Auto-Kill Zombie Processes on Port 8000 (ANTES de abrir navegador)
-    # Esta lógica asegura que si reiniciamos la app, el puerto se libere primero.
-    try:
-        if kill_process_on_port(settings.API_PORT):
-            logger.info(f"--- Puerto {settings.API_PORT} limpiado y listo.")
-        else:
-            logger.info(f"ℹ️ El puerto {settings.API_PORT} estaba libre.")
-    except Exception as e:
-        logger.warning(f"Advertencia al limpiar puertos: {e}")
-
-    # Pequeña pausa de seguridad para dar tiempo al SO a liberar el socket completamente
-    time.sleep(1)
-
-    # Iniciar hilo para abrir navegador (DESPUÉS de liberar puerto)
-    threading.Thread(target=open_browser, daemon=True).start()
-
-    logger.info(f"--- Iniciando servidor en {settings.API_HOST}:{settings.API_PORT}")
+            logger.warning(f"Advertencia al limpiar puertos: {e}")
+        
+        time.sleep(1)
+        threading.Thread(target=open_browser, daemon=True).start()
+    
+    logger.info(f"--- Iniciando servidor en {settings.API_HOST}:{port}")
     
     uvicorn.run(
         "backend.main:app",
         host=settings.API_HOST,
-        port=settings.API_PORT,
-        reload=settings.API_RELOAD and settings.is_development,
+        port=port,
+        reload=settings.API_RELOAD and settings.is_development and not is_cloud,
         log_level=settings.LOG_LEVEL.lower(),
-
-        
         access_log=True
     )

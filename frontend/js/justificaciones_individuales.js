@@ -291,12 +291,14 @@ function _pollJustificacionJob(jobId) {
             const r = await fetch(`/api/asistencia/jobs/${jobId}/`);
             if (r.ok) {
                 const job = await r.json();
-                if (job.status === 'done' || job.status === 'error') {
+                if (job.status === 'done' || job.status === 'error' || job.status === 'not_found') {
                     clearInterval(timer);
                     // Refresh inmediato: el job terminó, los datos ya están en DB
                     window.loadMarcacionesData();
                     if (job.status === 'error') {
                         showToast("⚠️ Error en recálculo de asistencia", "warning");
+                    } else if (job.status === 'not_found') {
+                        showToast("⚠️ El servidor se reinició. Recargando datos...", "warning");
                     }
                     return;
                 }

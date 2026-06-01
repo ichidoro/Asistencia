@@ -115,7 +115,8 @@ async def get_usuarios(
     for user in usuarios:
         try:
             user["areas"] = json.loads(user.get("areas_json", "[]"))
-        except:
+        except Exception as e:
+            logger.warning(f"⚠️ areas_json corrupto para usuario {user.get('username', '?')}: {e}")
             user["areas"] = []
     return usuarios
 

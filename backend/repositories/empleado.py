@@ -212,8 +212,8 @@ class EmpleadoRepository:
                 try:
                     cursor_gen = await self.db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (g_name,))
                     gen_id = cursor_gen.lastrowid
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo crear género '{g_name}' en cat_generos (create): {e}")
             
         cursor = await self.db.execute(query, (
             empleado.rut,
@@ -467,7 +467,7 @@ class EmpleadoRepository:
             return res
         except Exception as e:
             logger.error(f"Error obteniendo rut_id_map: {e}")
-            return {}
+            raise
 
     async def get_ruts_by_areas(self, areas: List[str]) -> List[str]:
         """Obtener RUTs de empleados que pertenecen a las áreas dadas (Área Actual)"""
@@ -685,8 +685,8 @@ class EmpleadoRepository:
                 try:
                     cursor_gen = await self.db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (g_name,))
                     gen_id = cursor_gen.lastrowid
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo crear género '{g_name}' en cat_generos (update): {e}")
             
         await self.db.execute(query, (
             empleado.rut,
@@ -738,7 +738,7 @@ class EmpleadoRepository:
             
             # Borrar de tablas hijas
             await self.db.execute("DELETE FROM asignacion_turnos WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM bolsa_horas_resumen WHERE empleado_id = ?", (empleado_id,))
+            # [ELIMINADO] DELETE FROM bolsa_horas_resumen — tabla eliminada (fantasma, causa corrupción)
             await self.db.execute("DELETE FROM asistencias WHERE empleado_id = ?", (empleado_id,))
             await self.db.execute("DELETE FROM logs_raw WHERE empleado_id = ?", (empleado_id,))
             await self.db.execute("DELETE FROM bono_asignaciones WHERE empleado_id = ?", (empleado_id,))

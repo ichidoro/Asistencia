@@ -66,6 +66,13 @@ class HybridDatabase:
 
         self._bg_sync_task: Optional[asyncio.Task] = None
         self.last_activity_time: float = 0.0
+        self._realtime_sync_active: bool = False  # True después de enable_realtime_sync()
+        
+        # Cloud Run: usar conexión directa a Turso (sin réplica local)
+        # El filesystem efímero de containers no soporta SQLite WAL correctamente
+        if os.environ.get("K_SERVICE"):
+            self._force_turso_only = True
+            logger.info("☁️ Cloud Run detectado → Modo NUBE PURA (sin réplica local)")
         
         
     async def connect(self, retry: bool = True) -> None:
@@ -93,7 +100,9 @@ class HybridDatabase:
                 logger.info(f"🔌 Conectando a Embedded Replica: {self.db_path}")
                 try:
                     if self.use_turso and self.turso_url:
-                        # Timeout 60s: evita colgar el inicio si Turso Cloud no responde.
+                        # Fase 1: Conectar con offline=True para startup seguro.
+                        # El sync a cloud lo maneja el APScheduler después de
+                        # que init_tables() complete. No se usa sync_interval nativo.
                         self.conn = await asyncio.wait_for(
                             asyncio.to_thread(
                                 libsql.connect,
@@ -104,7 +113,7 @@ class HybridDatabase:
                             ),
                             timeout=60.0
                         )
-                        logger.info("🔄 Conexión establecida con Turso Cloud (offline=True, sync manual vía APScheduler)")
+                        logger.info("🔄 Conexión Turso Cloud (offline=True, sync manual durante startup)")
                     else:
                         self.conn = await asyncio.to_thread(
                             libsql.connect,
@@ -125,7 +134,7 @@ class HybridDatabase:
                             ),
                             timeout=60.0
                         )
-                        logger.info("🔄 Conexión establecida con Turso Cloud (segundo intento)")
+                        logger.info("🔄 Conexión Turso Cloud (segundo intento, offline=True)")
                     except Exception:
                         logger.warning("⏱️ Segundo timeout. Entrando en modo LOCAL OFFLINE puro.")
                         self.conn = await asyncio.to_thread(
@@ -164,28 +173,23 @@ class HybridDatabase:
 
             self._connected = True
             
-            # PRAGMAs de resiliencia y performance post-conexión en la conexión principal
-            # FIX2: synchronous=FULL en Windows — garantiza fsync antes del próximo write
-            # FIX3: journal_mode=mvcc — MVCC nativo de LibSQL elimina single-writer bloqueante
+            # PRAGMAs de resiliencia y performance post-conexión
+            # FIX-CORRUPCION: Usar solo PRAGMAs seguros para embedded replicas Turso
             try:
-                import sys as _sys
-                _synchronous = "FULL" if _sys.platform == "win32" else "NORMAL"
                 cursor = self.conn.cursor()
                 cursor.execute("PRAGMA busy_timeout = 5000")        # 5s espera ante SQLITE_BUSY
-                # FIX3: Intentar MVCC nativo de LibSQL; fallback a WAL si no soportado
-                try:
-                    cursor.execute("PRAGMA journal_mode = mvcc")
-                    logger.info("🔒 journal_mode=mvcc (MVCC nativo LibSQL activo)")
-                except Exception:
-                    cursor.execute("PRAGMA journal_mode = WAL")      # WAL: lecturas concurrentes
-                    logger.info("🔒 journal_mode=WAL (fallback desde mvcc)")
-                # FIX2: FULL en Windows para evitar WAL parcial ante crash
-                cursor.execute(f"PRAGMA synchronous = {_synchronous}")  # FULL=Windows, NORMAL=Linux/Mac
+                # WAL es el journal_mode recomendado por Turso para embedded replicas
+                # (mvcc es experimental y no está documentado con sync de replicas)
+                cursor.execute("PRAGMA journal_mode = WAL")
+                # NORMAL es seguro con WAL mode (WAL ya protege contra crash)
+                # FULL causaba overhead de fsync innecesario que ralentizaba writes
+                cursor.execute("PRAGMA synchronous = NORMAL")
                 cursor.execute("PRAGMA cache_size = -32000")         # 32MB page cache en RAM
                 cursor.execute("PRAGMA temp_store = MEMORY")         # tablas temporales en RAM
-                cursor.execute("PRAGMA mmap_size = 134217728")       # 128MB memory-mapped I/O
+                # FIX-CORRUPCION: mmap_size ELIMINADO — incompatible con embedded replicas
+                # El mmap puede mantener páginas stale que no reflejan los cambios del sync
                 self._pragma_applied = True
-                logger.info(f"🛡️ PRAGMAs aplicados (busy_timeout=5000, synchronous={_synchronous}, cache=32MB, mmap=128MB)")
+                logger.info("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, synchronous=NORMAL, cache=32MB)")
             except Exception as pragma_err:
                 logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 
@@ -239,6 +243,36 @@ class HybridDatabase:
                 return
             logger.error(f"❌ Error de conexión LibSQL: {e}")
             raise
+
+    async def enable_realtime_sync(self, interval: int = 3) -> None:
+        """
+        Fase 2: Sube las tablas creadas por init_tables() a Turso Cloud.
+        
+        FIX-CORRUPCION: Ya NO reconecta (close+reconnect causaba corrupción).
+        Solo hace un sync manual para subir los cambios locales al cloud.
+        El sync periódico lo maneja exclusivamente el APScheduler.
+        """
+        if not self.use_turso or self._force_turso_only or self._realtime_sync_active:
+            return
+        
+        logger.info("🔄 Sincronizando tablas creadas a Turso Cloud...")
+        try:
+            # Sync único para subir las tablas creadas por init_tables()
+            if hasattr(self.conn, 'sync'):
+                async with self._db_lock:
+                    await asyncio.to_thread(self.conn.sync)
+                logger.info("☁️ Tablas sincronizadas a Turso Cloud")
+            
+            self._realtime_sync_active = True
+            logger.success("✅ Sync post-init completado — scheduler se encarga del sync periódico")
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "conflict" in err_msg or "frame" in err_msg or "mismatch" in err_msg:
+                logger.warning(f"⚠️ Frame Mismatch en sync post-init: {e}. Iniciando auto-heal...")
+                await self._auto_heal_sync_conflict()
+            else:
+                logger.warning(f"⚠️ Sync post-init falló: {e}. El scheduler reintentará.")
+            self._realtime_sync_active = True  # Marcar como activo para que el scheduler trabaje
 
 
     async def reset_local_db(self):

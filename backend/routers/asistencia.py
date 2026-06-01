@@ -831,13 +831,17 @@ async def reproceso_masivo_async(
     # Adquirir el lock ANTES de lanzar el background task (se libera en el finally del Worker)
     await _reproceso_lock.acquire()
     
-    # Lanzar la tarea en segundo plano
-    background_tasks.add_task(
-        service.reproceso_masivo_async,
-        fecha_inicio=fecha_inicio,
-        fecha_fin=fecha_fin,
-        area=area_final,
-    )
+    # Lanzar la tarea en segundo plano (try/except para garantizar liberación del lock ante excepciones)
+    try:
+        background_tasks.add_task(
+            service.reproceso_masivo_async,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            area=area_final,
+        )
+    except Exception:
+        _reproceso_lock.release()
+        raise
     
     return {
         "message": "Reprocesamiento masivo iniciado en segundo plano.",
@@ -857,6 +861,80 @@ async def reproceso_masivo_status(
     """
     from backend.services.asistencia_service import get_reproceso_status
     return get_reproceso_status()
+
+
+# ── Change-detection para auto-refresh de la grilla ──────────────────────────
+# Endpoint ultra-liviano: solo MAX(updated_at) + COUNT(*) para el período.
+# El frontend lo pollea cada 30s y si detecta un cambio, recarga la grilla.
+# TTLCache multi-clave: 5 usuarios mirando áreas distintas NO se invalidan entre sí.
+# Max 20 claves (período+área), TTL 10s → máximo 1 query real cada 10s por combinación.
+_change_cache: TTLCache = TTLCache(maxsize=20, ttl=10)
+
+@router.get("/last-change/", summary="Detectar cambios recientes en asistencias")
+async def get_last_change(
+    fecha_inicio: str = Query(..., description="AAAA-MM-DD"),
+    fecha_fin: str = Query(..., description="AAAA-MM-DD"),
+    area: Optional[str] = Query(None),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """
+    Endpoint de change-detection para auto-refresh inteligente.
+    Retorna el timestamp de la última modificación y el conteo de registros.
+    El frontend compara estos valores con los anteriores: si cambian, recarga.
+    TTLCache multi-clave (10s) para multi-usuario.
+    """
+    cache_key = f"{fecha_inicio}|{fecha_fin}|{area or 'ALL'}"
+
+    # Cache hit (TTLCache maneja expiración automáticamente)
+    if cache_key in _change_cache:
+        return _change_cache[cache_key]
+
+    # Build query with optional area filter
+    area_filter = ""
+    params: list = [fecha_inicio, fecha_fin]
+    if area:
+        area_filter = """
+            AND a.empleado_id IN (
+                SELECT ha.empleado_id FROM historial_areas ha
+                JOIN areas ar ON ar.id = ha.area_id
+                WHERE ha.es_actual = 1 AND ar.nombre = ?
+            )
+        """
+        params.append(area)
+
+    # RLS: filter by user's allowed areas
+    areas_permitidas = current_user.get_areas_filter()
+    rls_filter = ""
+    if areas_permitidas:
+        placeholders = ",".join("?" for _ in areas_permitidas)
+        rls_filter = f"""
+            AND a.empleado_id IN (
+                SELECT ha2.empleado_id FROM historial_areas ha2
+                JOIN areas ar2 ON ar2.id = ha2.area_id
+                WHERE ha2.es_actual = 1 AND ar2.nombre IN ({placeholders})
+            )
+        """
+        params.extend(areas_permitidas)
+
+    row = await db.fetch_one(f"""
+        SELECT
+            MAX(a.updated_at) as last_update,
+            COUNT(*) as total_records
+        FROM asistencias a
+        WHERE a.fecha BETWEEN ? AND ?
+        {area_filter}
+        {rls_filter}
+    """, params)
+
+    result = {
+        "last_update": row["last_update"] if row else None,
+        "total_records": row["total_records"] if row else 0,
+        "cache_key": cache_key,
+    }
+
+    _change_cache[cache_key] = result
+    return result
 
 
 @router.get("/reporte/")
@@ -1252,9 +1330,10 @@ async def aprobar_horas_extra(
     # RLS: Verificar pertenencia de área
     emp_repo = EmpleadoRepository(service.repository.db)
     emp = await emp_repo.get_by_id(request.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
     
-    if emp:
-        current_user.verificar_acceso_area(emp.area, "HE de este empleado")
+    current_user.verificar_acceso_area(emp.area, "HE de este empleado")
 
     try:
         # Convertir a formato de lote de un solo elemento
@@ -1409,6 +1488,13 @@ async def get_periodo_rrhh_resumen(
     """
     Obtiene el resumen de HE, Deuda y Saldo Meta para un empleado específico (Uso individual).
     """
+    # RLS: Verificar que el empleado pertenece al área del usuario
+    if not current_user.alcance_global:
+        emp_repo = EmpleadoRepository(service.repository.db)
+        emp = await emp_repo.get_by_id(empleado_id)
+        if not emp:
+            raise HTTPException(status_code=404, detail="Empleado no encontrado")
+        current_user.verificar_acceso_area(emp.area, "el resumen de este empleado")
     return await service.get_period_summary_rrhh(empleado_id, fecha_inicio, fecha_fin)
 
 @router.get("/periodo-rrhh/resumen-global/")
@@ -1428,9 +1514,11 @@ async def get_periodo_rrhh_resumen_global(
     if area and areas_permitidas is not None and area not in areas_permitidas:
         raise HTTPException(status_code=403, detail="No tiene permisos para el área solicitada")
     
-    # Nota: El service usará la lógica de matrix que ya contempla areas_permitidas internamente si se le pasa el parámetro,
-    # pero aquí simplemente pasamos el área filtrada.
-    return await service.get_resumen_cierre_global(fecha_inicio, fecha_fin, area, turno_id)
+    # RLS: Si no es global y no especificó área, usar la primera área permitida
+    area_final = area
+    if not area_final and areas_permitidas:
+        area_final = areas_permitidas[0] if len(areas_permitidas) == 1 else None
+    return await service.get_resumen_cierre_global(fecha_inicio, fecha_fin, area_final, turno_id)
 
 @router.get("/periodo-rrhh/ultimo-cierre/")
 async def get_ultimo_cierre_rrhh(
@@ -1441,7 +1529,13 @@ async def get_ultimo_cierre_rrhh(
     """
     Obtiene la información del último cierre registrado para sugerir el siguiente periodo.
     """
-    return await service.repository.get_ultimo_cierre_periodo(tipo)
+    # RLS: Filtrar por áreas permitidas del usuario
+    cierre = await service.repository.get_ultimo_cierre_periodo(tipo)
+    if cierre and not current_user.alcance_global:
+        areas_permitidas = current_user.areas or []
+        if cierre.get('area') and cierre['area'] not in areas_permitidas:
+            return None
+    return cierre
 
 @router.get("/periodo-rrhh/historial/")
 async def get_historial_cierres_rrhh(
@@ -1452,7 +1546,12 @@ async def get_historial_cierres_rrhh(
     """
     Obtiene el historial de cierres de periodo.
     """
-    return await service.repository.get_cierres_historial(limit)
+    # RLS: Filtrar por áreas permitidas del usuario
+    cierres = await service.repository.get_cierres_historial(limit)
+    if not current_user.alcance_global:
+        areas_permitidas = current_user.areas or []
+        cierres = [c for c in cierres if not c.get('area') or c['area'] in areas_permitidas]
+    return cierres
 
 @router.post("/periodo-rrhh/cerrar/")
 async def cerrar_periodo_rrhh(
@@ -1468,6 +1567,11 @@ async def cerrar_periodo_rrhh(
     Registra el cierre y ejecuta el procesamiento masivo de saldos/bolsa.
     Permite segmentación por Área y Horario (turno_id).
     """
+    # RLS: Verificar que el área enviada está en las áreas del current_user
+    if area and not current_user.alcance_global:
+        areas_permitidas = current_user.areas or []
+        if area not in areas_permitidas:
+            raise HTTPException(status_code=403, detail=f"No tiene permisos para cerrar el área '{area}'.")
     resultado = await service.ejecutar_cierre_periodo(
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,

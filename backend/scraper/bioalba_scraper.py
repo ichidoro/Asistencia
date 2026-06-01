@@ -132,21 +132,78 @@ class BioAlbaScraper:
             return False
     
     async def get_empleados(self) -> List[Dict[str, Any]]:
-        """Obtener empleados descargando Excel completo"""
+        """Obtener empleados descargando Excel completo.
+        
+        IMPORTANTE: BioAlba mantiene estado de filtro en la sesión del servidor.
+        Si una descarga previa de marcaciones filtró por RUT, eso contamina la
+        sesión y las siguientes descargas de empleados retornan un subconjunto.
+        Solución: visitar primero la página de usuarios SIN filtros (prime session).
+        """
         try:
             if not await self.ensure_logged_in():
                 return []
             
             logger.info("📥 Descargando Excel de usuarios...")
             
-            # Descargar Excel
-            async with self.session.get(f"{self.base_url}/usuario/ver/excel?") as response:
+            # PASO 1: Prime session — visitar página de usuarios SIN filtro
+            # Esto limpia cualquier filtro residual de descargas de marcaciones previas
+            cache_buster = int(_t.time())
+            prime_url = f"{self.base_url}/usuarios?_cb={cache_buster}"
+            try:
+                async with self.session.get(prime_url) as resp_prime:
+                    logger.debug(f"🔄 Prime session usuarios: status={resp_prime.status}")
+            except Exception as prime_err:
+                logger.warning(f"⚠️ Error priming sesión usuarios (no fatal): {prime_err}")
+            
+            # PASO 2: Descargar Excel (ahora con sesión limpia)
+            download_url = f"{self.base_url}/usuario/ver/excel?_cb={cache_buster}"
+            async with self.session.get(download_url) as response:
                 if response.status != 200:
                     logger.error(f"❌ Error descargando Excel: {response.status}")
                     return []
                 
+                # Validar Content-Type
+                content_type = response.headers.get("Content-Type", "")
+                if "text/html" in content_type:
+                    logger.error("❌ BioAlba devolvió HTML en lugar de Excel (posible error de sesión)")
+                    # Invalidar sesión para forzar re-login en siguiente intento
+                    self.is_logged_in = False
+                    return []
+                
                 excel_data = await response.read()
                 logger.info(f"✅ Excel descargado: {len(excel_data)} bytes")
+            
+            # PASO 3: Validar tamaño mínimo del Excel
+            # Un Excel con 25+ empleados es típicamente >15KB.
+            # Si es <10KB probablemente está filtrado (contaminación de sesión).
+            if len(excel_data) < 10000:
+                logger.warning(f"⚠️ Excel sospechosamente pequeño ({len(excel_data)} bytes). "
+                              f"Posible filtro residual. Intentando con sesión nueva...")
+                # Forzar re-login y reintentar UNA vez
+                self.is_logged_in = False
+                if self.session and not self.session.closed:
+                    await self.session.close()
+                self.session = None
+                
+                if not await self.ensure_logged_in():
+                    return []
+                
+                # Re-prime y re-descargar
+                cache_buster2 = int(_t.time()) + 1
+                prime_url2 = f"{self.base_url}/usuarios?_cb={cache_buster2}"
+                try:
+                    async with self.session.get(prime_url2) as resp2:
+                        logger.debug(f"🔄 Re-prime session: status={resp2.status}")
+                except Exception:
+                    pass
+                
+                download_url2 = f"{self.base_url}/usuario/ver/excel?_cb={cache_buster2}"
+                async with self.session.get(download_url2) as response2:
+                    if response2.status != 200:
+                        logger.error(f"❌ Reintento fallido: {response2.status}")
+                        return []
+                    excel_data = await response2.read()
+                    logger.info(f"✅ Reintento Excel: {len(excel_data)} bytes")
             
             # Parsear Excel
             empleados = self._parse_excel(excel_data)

@@ -1,0 +1,1948 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   📱 RESPONSIVE CSS — Aguacol Attendance System
+   ═══════════════════════════════════════════════════════════════════════════
+   This file adds mobile-responsive overrides via @media queries.
+   It MUST be loaded AFTER styles.css to layer properly.
+   Breakpoints:
+     • 768px  — Tablets / Small screens
+     • 480px  — Phones (narrow)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1. LOGIN PAGE — Center + resize for mobile
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Login: ensure card doesn't overflow on tablets */
+    .login-card {
+        max-width: 92vw;
+        margin: 16px;
+    }
+
+    .login-card .card-header {
+        padding: 24px 16px;
+    }
+
+    .login-card .card-header h2 {
+        font-size: 1.25rem;
+    }
+
+    .login-card .card-header i {
+        font-size: 2.5rem;
+    }
+
+    .login-card .card-body {
+        padding: 28px 20px;
+    }
+
+    .login-card .btn-login {
+        min-height: 48px; /* Touch-friendly */
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-card {
+        max-width: 100vw;
+        margin: 8px;
+        border-radius: 12px;
+    }
+
+    .login-card .card-header {
+        padding: 20px 14px;
+    }
+
+    .login-card .card-header h2 {
+        font-size: 1.1rem;
+    }
+
+    .login-card .card-body {
+        padding: 24px 16px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2. SIDEBAR — Hamburger overlay on mobile (< 768px)
+   The existing styles.css already handles < 991px with sidebar slide-out.
+   We refine for < 768px with tighter mobile-specific adjustments.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Ensure the sidebar toggle (hamburger) is always visible */
+    .menu-toggle {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 22px;
+    }
+
+    /* Sidebar: hidden off-screen, slides in */
+    .sidebar {
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 2000;
+        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .sidebar.active {
+        transform: translateX(0);
+    }
+
+    /* Overlay backdrop */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 1999;
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+    }
+
+    /* Main content fills full width when sidebar is collapsed */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Sidebar nav items: ensure touch-friendly tap targets */
+    .sidebar-item {
+        min-height: 48px;
+        padding: 14px 20px;
+        font-size: 15px;
+    }
+
+    .sidebar-item .icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+
+    /* Logo container in sidebar */
+    .logo-container {
+        padding: 20px 16px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   3. HEADER — Responsive stacking and smaller fonts
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .header {
+        padding: 12px 16px;
+        gap: 8px;
+    }
+
+    .header-left {
+        gap: 10px;
+    }
+
+    .header-left h2,
+    .header h2 {
+        font-size: 16px;
+        letter-spacing: 0;
+    }
+
+    .header-right {
+        gap: 8px;
+    }
+
+    /* Hide sync button text, keep icon only */
+    .btn-sync span:last-child {
+        display: none;
+    }
+
+    .btn-sync {
+        padding: 8px 10px;
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    /* User menu: compact on mobile */
+    .user-menu {
+        padding: 6px 10px;
+        font-size: 0.85rem;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Notification center: touch target */
+    .notification-center .nav-link {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Content area: tighter padding */
+    .content {
+        padding: 16px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .header {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+    }
+
+    .header-left h2,
+    .header h2 {
+        font-size: 14px;
+    }
+
+    .header-right {
+        gap: 6px;
+    }
+
+    /* Hide notification center on very small screens to save space */
+    .notification-center {
+        display: none !important;
+    }
+
+    .content {
+        padding: 12px 8px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   4. DASHBOARD — Stack cards, full-width charts, scrollable tables
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Dashboard filter bar: stack vertically */
+    .filter-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+
+    .filter-bar > .d-flex {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    .filter-bar .filter-group {
+        width: 100%;
+    }
+
+    .filter-bar .filter-group select,
+    .filter-bar .filter-group input[type="date"] {
+        min-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Scorecards: stack to single column */
+    .row .col-lg-3.col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Charts row: full width */
+    .row .col-lg-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .row .col-lg-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .row .col-lg-5 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* KPI badges: stack */
+    .card-body > .d-flex.gap-3 {
+        flex-wrap: wrap;
+    }
+
+    /* Stats grid: 1 column */
+    .stats-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px;
+    }
+
+    /* Chart containers: reduce height on mobile */
+    .card-body div[style*="height: 300px"] {
+        height: 220px !important;
+    }
+
+    /* Dashboard tables: horizontal scroll */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Heatmap: scroll horizontally */
+    #heatmap-grid {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Card titles: smaller on mobile */
+    .card-title {
+        font-size: 0.85rem !important;
+    }
+
+    .card-body .text-muted[style*="font-size: 0.68rem"] {
+        font-size: 0.65rem !important;
+    }
+
+    /* Evolution chart KPI badges */
+    .card-body > .d-flex.justify-content-between .d-flex.gap-3 {
+        gap: 6px !important;
+    }
+
+    .card-body > .d-flex.justify-content-between .d-flex.gap-3 > div {
+        padding: 4px 8px !important;
+    }
+
+    .card-body > .d-flex.justify-content-between .d-flex.gap-3 .fs-5 {
+        font-size: 0.95rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Extra-narrow: tighter card padding */
+    .card-body {
+        padding: 12px !important;
+    }
+
+    .card-body.p-3 {
+        padding: 10px !important;
+    }
+
+    /* Scorecard values: slightly smaller */
+    .card-body .fw-bold.fs-5 {
+        font-size: 1rem !important;
+    }
+
+    .card-body .fw-bold.fs-4 {
+        font-size: 1.1rem !important;
+    }
+
+    /* KPI indicators in evolution chart — stack vertically */
+    .card-body > .d-flex.justify-content-between {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .card-body > .d-flex.justify-content-between > .d-flex.gap-3 {
+        justify-content: space-between;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   5. TABLES — Horizontal scroll wrapper for all pages
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* All table containers: enable horizontal scroll */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .data-table {
+        min-width: 600px; /* Force horizontal scroll on narrow screens */
+    }
+
+    /* Bootstrap tables */
+    .table {
+        min-width: 500px;
+    }
+
+    /* Reduce table cell padding on mobile */
+    .data-table td,
+    .data-table th {
+        padding: 10px 8px !important;
+        font-size: 0.8rem;
+    }
+
+    /* Matrix table (asignaciones): scroll */
+    .matrix-table {
+        min-width: 800px;
+    }
+
+    /* Pagination: compact */
+    .pagination {
+        gap: 8px;
+    }
+
+    .btn-page {
+        padding: 8px 12px;
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   6. EMPLEADOS PAGE — Toolbar, filter chips, tab pills, sub-tabs
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Toolbar: stack search + chips vertically */
+    .emp-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .emp-search-group {
+        max-width: 100%;
+    }
+
+    .emp-filter-chips {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .emp-filter-chip {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        font-size: 0.78rem;
+    }
+
+    /* Tab pills: scroll horizontally if too many */
+    .emp-nav-pills {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+    }
+
+    .emp-nav-pills .nav-link {
+        white-space: nowrap;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Stat cards */
+    .emp-stat-card {
+        padding: 16px;
+    }
+
+    .emp-stat-card .stat-metric {
+        font-size: 1.5rem;
+    }
+
+    /* Action buttons: touch-friendly sizing */
+    .btn-premium-action {
+        height: 40px !important;
+        width: 40px !important;
+    }
+
+    .action-buttons-container {
+        gap: 6px !important;
+    }
+
+    /* Birthday celebration grid */
+    .celebration-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 16px;
+    }
+
+    .bday-calendar-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .bday-calendar-day {
+        min-height: 80px;
+        padding: 6px;
+    }
+
+    /* ─── Tab 2: Historial Bajas ─── */
+    /* Section toolbar: stack vertically */
+    .emp-section-toolbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px;
+    }
+
+    .emp-section-toolbar .d-flex {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .emp-section-toolbar select {
+        width: 100% !important;
+    }
+
+    /* ─── Tab 4: Turnos Asignados (Visor de Asignaciones) ─── */
+    /* Stack the filter row into two rows */
+    #tab-asignaciones-emp .row.g-3.align-items-end {
+        flex-direction: column !important;
+    }
+
+    #tab-asignaciones-emp .row.g-3 > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Asignaciones matrix: ensure scroll */
+    #tab-asignaciones-emp .matrix-wrapper {
+        max-height: 400px !important;
+    }
+
+    /* Legend: wrap on mobile */
+    #asignaciones-legend {
+        font-size: 0.65rem !important;
+    }
+
+    /* ─── Tab 5: Asignación Masiva ─── */
+    /* Stack columns vertically */
+    #tab-asignacion-masiva-emp > .row > .col-md-7,
+    #tab-asignacion-masiva-emp > .row > .col-md-5 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Search bar in bulk assign */
+    #tab-asignacion-masiva-emp .input-group.w-50 {
+        width: 100% !important;
+    }
+
+    /* Info banner */
+    .emp-info-banner {
+        font-size: 0.8rem;
+        padding: 10px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .emp-filter-chips {
+        gap: 4px;
+    }
+
+    .emp-filter-chip {
+        padding: 6px 10px;
+        font-size: 0.72rem;
+    }
+
+    /* Birthday celebration: single column */
+    .celebration-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bday-calendar-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   7. MODALS — Mobile-friendly sizing for ALL modal types
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* ─── Custom modals (non-Bootstrap: display:block style) ─── */
+    .modal:not(.fade) .modal-content {
+        width: 98% !important;
+        max-width: 100% !important;
+        border-radius: 16px;
+        max-height: 95vh;
+    }
+
+    .modal:not(.fade) .modal-header {
+        padding: 20px 20px !important;
+    }
+
+    .modal:not(.fade) .modal-header h3 {
+        font-size: 18px;
+    }
+
+    .modal:not(.fade) .modal-body {
+        padding: 20px !important;
+    }
+
+    .modal-footer {
+        padding: 0 20px 24px 20px;
+        flex-wrap: wrap;
+    }
+
+    .modal-footer .btn {
+        flex: 1;
+        min-width: 120px;
+        min-height: 44px;
+    }
+
+    /* Form rows: stack to single column */
+    .form-row,
+    .form-row-3 {
+        grid-template-columns: 1fr !important;
+        gap: 14px;
+    }
+
+    /* ─── Bootstrap modals (.modal.fade) ─── */
+    .modal-dialog {
+        margin: 8px !important;
+        max-width: calc(100% - 16px) !important;
+    }
+
+    .modal-content {
+        border-radius: 16px !important;
+    }
+
+    /* XL modals: override max-width */
+    .modal-dialog.modal-xl {
+        max-width: calc(100% - 16px) !important;
+    }
+
+    .modal-dialog.modal-lg {
+        max-width: calc(100% - 16px) !important;
+    }
+
+    /* ─── Employee edit modal form rows ─── */
+    #modal-empleado .form-row {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Employee modal tab: history table scroll */
+    #tab-emp-historial .table-responsive {
+        max-height: 300px !important;
+    }
+
+    /* ─── Baja confirmation modal ─── */
+    #modal-baja-confirm .modal-content {
+        max-width: 100% !important;
+    }
+
+    /* ─── Confirmar Área modal: stack col-6 to full-width ─── */
+    #modal-confirmar-area-pendiente .col-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Período / Tramos modal ─── */
+    #modal-periodo .modal-content {
+        max-width: 100% !important;
+    }
+
+    #modal-periodo .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Bono modal ─── */
+    #modal-bono .modal-content {
+        max-width: 100% !important;
+    }
+
+    #modal-bono .form-row {
+        grid-template-columns: 1fr !important;
+    }
+
+    #modal-bono .rules-section .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── Tipo Justificación modal: stack columns ─── */
+    #modal-tipo-justificacion .modal-content {
+        max-width: 100% !important;
+    }
+
+    #modal-tipo-justificacion .row.g-2 > [class^="col-md"],
+    #modal-tipo-justificacion .row.g-3 > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Pagadores modal ─── */
+    #modal-gestion-pagadores .modal-content {
+        max-width: 100% !important;
+    }
+
+    /* ─── Registro Permiso modal ─── */
+    #modal-registro-permiso .modal-content {
+        max-width: 100% !important;
+    }
+
+    #modal-registro-permiso .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Bloqueo Mandatorio modal ─── */
+    #modal-bloqueo-mandatorio .modal-dialog {
+        margin: 4px !important;
+    }
+
+    #modal-bloqueo-mandatorio .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── Regularización modal ─── */
+    #modal-regularizacion-asistencia .modal-dialog {
+        margin: 4px !important;
+    }
+
+    /* ─── Asignar Turno Individual modal ─── */
+    #modal-asignar-turno-individual .modal-body {
+        padding: 16px !important;
+    }
+
+    /* ─── Danger zone: stack label and button ─── */
+    #danger-zone-container .d-flex {
+        flex-direction: column !important;
+        gap: 10px;
+    }
+
+    #danger-zone-container .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal:not(.fade) .modal-content {
+        width: 100% !important;
+        border-radius: 12px;
+    }
+
+    .modal:not(.fade) .modal-header {
+        padding: 16px !important;
+    }
+
+    .modal:not(.fade) .modal-body {
+        padding: 16px !important;
+    }
+
+    .modal-footer {
+        padding: 0 16px 20px 16px;
+    }
+
+    /* Full-width buttons on very narrow screens */
+    .modal-footer .btn {
+        flex: 0 0 100%;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   8. MARCACIONES PAGE — Filter bar, toolbar, matrix, legend
+   (Content injected dynamically by marcaciones_ui.js)
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* ─── Top toolbar: stack action buttons ─── */
+    #page-marcaciones > div > .d-flex.justify-content-between {
+        flex-direction: column !important;
+        gap: 12px;
+        align-items: stretch !important;
+    }
+
+    /* Title: smaller on mobile */
+    #page-marcaciones h2 {
+        font-size: 1.1rem !important;
+    }
+
+    /* Button groups: wrap */
+    #page-marcaciones .d-flex.gap-2.align-items-center {
+        flex-wrap: wrap;
+        gap: 6px !important;
+    }
+
+    #page-marcaciones .btn-group {
+        flex-wrap: wrap;
+    }
+
+    /* Hide text on action buttons, keep icons */
+    #page-marcaciones .btn-group .btn span.fw-bold {
+        display: none;
+    }
+
+    /* Auto-refresh and perdonazo switches: compact */
+    #page-marcaciones .form-check-label {
+        font-size: 0.72rem !important;
+    }
+
+    /* ─── Filter bar: stack to vertical ─── */
+    .marcaciones-filter-bar {
+        padding: 10px !important;
+    }
+
+    .marcaciones-filter-bar .row {
+        flex-direction: column !important;
+    }
+
+    .marcaciones-filter-bar .row > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 8px;
+    }
+
+    .marcaciones-filter-bar .form-control,
+    .marcaciones-filter-bar .form-select {
+        width: 100% !important;
+    }
+
+    /* ─── Matrix table: enable scroll ─── */
+    .matrix-table-premium {
+        min-width: 1200px;
+        font-size: 0.72rem !important;
+    }
+
+    /* Sticky column (employee name): narrower on mobile */
+    .matrix-table-premium .sticky-col-analitica {
+        min-width: 180px !important;
+        max-width: 180px !important;
+        width: 180px !important;
+        font-size: 0.72rem;
+    }
+
+    /* Sticky premium cols: reduce width */
+    .matrix-table-premium .sticky-premium-col {
+        font-size: 0.65rem;
+        padding: 4px 2px !important;
+    }
+
+    /* Day cells: compact */
+    .matrix-table-premium td,
+    .matrix-table-premium th {
+        padding: 4px 3px !important;
+    }
+
+    /* Matrix container */
+    #marcaciones-view-container > div[style*="overflow:auto"] {
+        max-height: calc(100vh - 300px) !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── Legend bar: wrap and smaller ─── */
+    .va-legend-bar {
+        font-size: 0.62rem !important;
+        gap: 6px !important;
+        padding: 8px 10px !important;
+    }
+
+    .va-legend-bar .ms-auto {
+        margin-left: 0 !important;
+        width: 100%;
+        margin-top: 6px;
+    }
+
+    /* Badge status in legend */
+    .badge-status {
+        font-size: 0.6rem;
+        padding: 2px 5px;
+    }
+
+    /* ─── Sync Marcaciones modal areas (if shown) ─── */
+    #modal-sync-marcaciones .col-md-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Even more compact matrix */
+    .matrix-table-premium .sticky-col-analitica {
+        min-width: 140px !important;
+        max-width: 140px !important;
+        width: 140px !important;
+        font-size: 0.65rem;
+    }
+
+    /* Overflow tooltip: limit width */
+    #grid-fly-tooltip {
+        max-width: 280px !important;
+        min-width: 200px !important;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   9. REPORTES PAGE — Filter row, chart, table
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Reports filter row: stack all columns */
+    #page-reportes .row.g-3 > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Action buttons row: wrap */
+    #page-reportes .col-md-auto {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    #page-reportes .col-md-auto .d-flex {
+        flex-wrap: wrap;
+        gap: 6px !important;
+    }
+
+    #page-reportes .col-md-auto .btn {
+        flex: 1;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* Chart: reduce height */
+    #attendanceChart {
+        max-height: 180px !important;
+    }
+
+    /* Reports table: horizontal scroll */
+    #page-reportes .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #page-reportes .table {
+        min-width: 700px;
+    }
+
+    /* Sortable headers: smaller clickable area */
+    #page-reportes th[style*="cursor: pointer"] {
+        white-space: nowrap;
+        font-size: 0.75rem;
+        padding: 8px 6px !important;
+    }
+
+    /* Reports: any toolbars or filter bars — stack vertically */
+    .toolbar {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .search-box {
+        max-width: 100%;
+    }
+
+    /* Buttons: full width */
+    .toolbar .btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 480px) {
+    #attendanceChart {
+        max-height: 150px !important;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   10. CONFIGURACIÓN PAGE — Scrollable tabs & form layouts
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* ─── Config tabs: horizontal scroll for 14+ tabs ─── */
+    #configTabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 2px;
+        scrollbar-width: thin;
+    }
+
+    #configTabs .nav-item {
+        flex-shrink: 0;
+    }
+
+    #configTabs .nav-link {
+        white-space: nowrap;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        font-size: 0.8rem;
+        padding: 8px 12px;
+    }
+
+    /* Generic nav pills/tabs anywhere (fallback) */
+    .nav-pills,
+    .nav-tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-pills .nav-link,
+    .nav-tabs .nav-link {
+        white-space: nowrap;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* ─── Tab content: tighter padding ─── */
+    #page-configuracion .card-body.p-4 {
+        padding: 16px !important;
+    }
+
+    /* ─── Áreas / Cargos / Géneros catalogue: stack header ─── */
+    #tab-areas .d-flex.justify-content-between,
+    #tab-cargos .d-flex.justify-content-between,
+    #tab-generos .d-flex.justify-content-between {
+        flex-direction: column !important;
+        gap: 10px;
+        align-items: stretch !important;
+    }
+
+    #tab-areas h4,
+    #tab-cargos h4,
+    #tab-generos h4 {
+        font-size: 1rem;
+    }
+
+    /* Catalog cards grid: full width */
+    #areas-catalogo-container.row,
+    #cargos-catalogo-container.row,
+    #generos-catalogo-container.row {
+        flex-direction: column !important;
+    }
+
+    #areas-catalogo-container > [class^="col"],
+    #cargos-catalogo-container > [class^="col"],
+    #generos-catalogo-container > [class^="col"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Pagadores tab: full width ─── */
+    #tab-pagadores .col-md-8 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Correo tab: stack columns ─── */
+    #tab-correo .col-md-8 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    #tab-correo .row.g-3 > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Seguridad tab: stack header + button group ─── */
+    #tab-seguridad > .d-flex.justify-content-between {
+        flex-direction: column !important;
+        gap: 12px;
+        align-items: stretch !important;
+    }
+
+    #tab-seguridad .btn-group {
+        flex-wrap: wrap;
+    }
+
+    #tab-seguridad .btn-group .btn {
+        flex: 1;
+        min-height: 44px;
+    }
+
+    /* Audit table: scroll */
+    #vista-seguridad-auditoria .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #vista-seguridad-auditoria .table {
+        min-width: 700px;
+    }
+
+    /* ─── Calendario tab: calendar grids ─── */
+    #tab-calendario .calendar-grid {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── Horarios tab: schedule cards ─── */
+    #tab-horarios .card {
+        margin-bottom: 12px;
+    }
+
+    /* Turno detail rows: stack */
+    #tab-horarios .row > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    #configTabs .nav-link {
+        font-size: 0.72rem;
+        padding: 6px 10px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   11. SYNC WIZARD — 10-step stepper, all step panels, footer
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* ─── Wizard dialog: near-full-screen ─── */
+    #modal-sync-wizard .modal-dialog {
+        margin: 4px !important;
+        max-width: 100% !important;
+    }
+
+    #modal-sync-wizard .modal-body {
+        padding: 16px !important;
+    }
+
+    /* ─── Stepper indicators: smaller ─── */
+    #modal-sync-wizard .step-indicator {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 0.65rem !important;
+    }
+
+    /* Step labels row: hide on mobile (too narrow for 10 labels) */
+    #modal-sync-wizard .modal-body > .d-flex.justify-content-between.mb-4.text-muted {
+        display: none !important;
+    }
+
+    /* ─── Wizard tables: horizontal scroll ─── */
+    .wizard-step .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .wizard-step .table {
+        min-width: 500px;
+    }
+
+    /* ─── Step 2: Stack cargos/generos columns ─── */
+    #wizard-step-2 .row > .col-md-7,
+    #wizard-step-2 .row > .col-md-5 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Step 5: Bonos buttons wrap ─── */
+    #wizard-step-5 .d-flex.gap-2 {
+        flex-wrap: wrap;
+    }
+
+    /* ─── Step 7: Preview search + filter bar ─── */
+    #wizard-step-7 .d-flex.gap-2.mb-2 {
+        flex-direction: column !important;
+    }
+
+    #wizard-step-7 #wizard-emp-search {
+        width: 100% !important;
+    }
+
+    #wizard-step-7 #wizard-emp-filter-type {
+        width: 100% !important;
+    }
+
+    /* Preview list container */
+    #wizard-empleados-list {
+        max-height: 350px !important;
+    }
+
+    /* Preview badge legend: wrap */
+    #wizard-step-7 > .mt-2.d-flex {
+        flex-wrap: wrap;
+        gap: 4px !important;
+    }
+
+    /* ─── Step 8: SSE progress area ─── */
+    #wizard-step-8 .d-flex.justify-content-between {
+        flex-direction: column !important;
+        gap: 6px;
+    }
+
+    /* Sync log: shorter on mobile */
+    #wizard-sync-log {
+        height: 100px !important;
+        font-size: 0.7rem !important;
+    }
+
+    /* ─── Step 9: Onboarding — stack employee list + form ─── */
+    #wizard-step-9 > .row > .col-md-3,
+    #wizard-step-9 > .row > .col-md-9 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Employee list: horizontal scroll bar on mobile */
+    #wizard-step-9 .col-md-3 {
+        border-right: none !important;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+    }
+
+    #wizard-onboarding-emp-list {
+        max-height: 200px !important;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #wizard-onboarding-emp-list .list-group-item {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    /* Onboarding form: stack BioAlba + local columns */
+    #form-wizard-empleado .row > .col-lg-5,
+    #form-wizard-empleado .row > .col-lg-7 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* BioAlba card: remove border-end */
+    #form-wizard-empleado .col-lg-5 {
+        border-right: none !important;
+        padding-right: 0 !important;
+        margin-bottom: 12px;
+    }
+
+    /* Form fields within onboarding: stack */
+    #form-wizard-empleado .row.g-2 > [class^="col-md"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* ─── Step 10: Turnos Individuales table ─── */
+    #wizard-step-10 .table-responsive {
+        max-height: 300px !important;
+    }
+
+    #wizard-step-10 .table {
+        min-width: 600px;
+    }
+
+    /* ─── Wizard footer buttons ─── */
+    #modal-sync-wizard .modal-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 16px !important;
+    }
+
+    #modal-sync-wizard .modal-footer .btn {
+        min-height: 44px;
+    }
+
+    /* Previous button: full width on its own row */
+    #btn-wizard-prev {
+        flex: 0 0 100%;
+    }
+
+    /* Next + Cancel buttons: share row */
+    #modal-sync-wizard .modal-footer > div {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+    }
+
+    #modal-sync-wizard .modal-footer > div .btn {
+        flex: 1;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Even smaller stepper dots */
+    #modal-sync-wizard .step-indicator {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 0.55rem !important;
+    }
+
+    /* Wizard body: tighter padding */
+    #modal-sync-wizard .modal-body {
+        padding: 10px !important;
+    }
+
+    /* Wizard step titles */
+    .wizard-step h6 {
+        font-size: 0.9rem;
+    }
+
+    /* Alerts in wizard: compact */
+    .wizard-step .alert {
+        font-size: 0.78rem;
+        padding: 8px 12px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   12. SWEETALERT2 — Ensure mobile-friendly dialogs
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .swal2-popup {
+        width: 92vw !important;
+        max-width: 100% !important;
+        font-size: 0.9rem !important;
+        padding: 20px 16px !important;
+    }
+
+    .swal2-title {
+        font-size: 1.1rem !important;
+    }
+
+    .swal2-html-container {
+        font-size: 0.85rem !important;
+    }
+
+    .swal2-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .swal2-actions .swal2-confirm,
+    .swal2-actions .swal2-cancel,
+    .swal2-actions .swal2-deny {
+        min-height: 44px;
+        min-width: 120px;
+    }
+
+    /* Toast notifications: slightly smaller */
+    .swal2-toast {
+        max-width: 85vw !important;
+        font-size: 0.82rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .swal2-popup {
+        width: 98vw !important;
+        padding: 16px 12px !important;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   13. SPLASH SCREEN — Mobile adjustments
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+    .splash-glass {
+        padding: 36px 24px;
+        border-radius: 20px;
+    }
+
+    .splash-title {
+        font-size: 16px;
+    }
+
+    .premium-spinner {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   14. GLOBAL TOUCH TARGETS — 44px minimum for interactive elements
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Buttons */
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-icon {
+        min-height: 44px;
+    }
+
+    .btn-icon {
+        min-width: 44px;
+        padding: 8px;
+    }
+
+    /* Small buttons: at least 36px for density */
+    .btn-sm {
+        min-height: 36px;
+    }
+
+    /* Links in sidebar */
+    .sidebar-item {
+        min-height: 48px;
+    }
+
+    /* Dropdown items */
+    .dropdown-item {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+    }
+
+    /* Form inputs */
+    .form-control,
+    .form-select {
+        min-height: 44px;
+        font-size: 16px !important; /* Prevent iOS zoom on focus */
+    }
+
+    /* Small form controls: at least 38px */
+    .form-control-sm,
+    .form-select-sm {
+        min-height: 38px;
+        font-size: 16px !important;
+    }
+
+    /* Checkboxes / Switches: larger touch target */
+    .form-check-input {
+        width: 1.2em;
+        height: 1.2em;
+    }
+
+    .form-switch .form-check-input {
+        width: 2.5em;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   15. GENERAL UTILITIES — Better mobile experience
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Prevent horizontal overflow on the body */
+    body {
+        overflow-x: hidden;
+    }
+
+    .app-container {
+        overflow-x: hidden;
+    }
+
+    /* Bootstrap row gutters: tighter on mobile */
+    .row.g-3 {
+        --bs-gutter-x: 0.75rem;
+        --bs-gutter-y: 0.75rem;
+    }
+
+    .row.g-4 {
+        --bs-gutter-x: 0.75rem;
+        --bs-gutter-y: 1rem;
+    }
+
+    /* Card hover: disable transform to prevent layout shift on touch */
+    .card:hover:not(.modal-content) {
+        transform: none;
+    }
+
+    .stat-card:hover,
+    .emp-stat-card:hover {
+        transform: none;
+    }
+
+    /* Area cards grid: fewer columns */
+    .areas-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 8px;
+    }
+
+    /* Badge adjustments */
+    .badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+
+    /* Empty state: less padding */
+    .empty-state {
+        padding: 40px 20px;
+    }
+
+    .empty-state h3 {
+        font-size: 20px;
+    }
+
+    /* ─── Dropdown menus: wider on mobile ─── */
+    .dropdown-menu {
+        min-width: 200px;
+        max-width: calc(100vw - 24px);
+    }
+
+    .dropdown-menu-end {
+        right: 0;
+        left: auto !important;
+        transform: none !important;
+    }
+
+    /* ─── Input groups: stack on mobile ─── */
+    .input-group {
+        flex-wrap: wrap;
+    }
+
+    .input-group .form-control,
+    .input-group .form-select {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    /* ─── d-flex helpers: common stacking patterns ─── */
+    .d-flex.justify-content-between.align-items-center.mb-4 {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    /* ─── Floating tooltip: constrain to viewport ─── */
+    #grid-fly-tooltip {
+        max-width: calc(100vw - 32px) !important;
+    }
+
+    /* ─── Scrollable containers: smooth scrolling ─── */
+    [style*="overflow-y: auto"],
+    [style*="overflow: auto"] {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* ─── List groups in wizards/modals: compact ─── */
+    .list-group-item {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+    }
+
+    /* ─── Alert component: tighter ─── */
+    .alert {
+        padding: 10px 14px;
+        font-size: 0.85rem;
+    }
+
+    .alert .bi {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .areas-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    /* Date range inputs in dashboard filter: stack vertically */
+    .d-flex.align-items-center.gap-2[role="group"] {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 4px !important;
+    }
+
+    .d-flex.align-items-center.gap-2[role="group"] > span.text-muted {
+        text-align: center;
+    }
+
+    /* Full-width columns on very narrow */
+    .col-md-2,
+    .col-md-3,
+    .col-md-4,
+    .col-md-5,
+    .col-md-6,
+    .col-md-7,
+    .col-md-8 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   16. ANDROID / CHROME AUTO-DARK FIX — Force light backgrounds everywhere
+   Chrome Android applies "Auto Dark Mode" which inverts colors on elements
+   without explicit backgrounds. This section forces light backgrounds.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Force explicit backgrounds to prevent Chrome Android auto-dark inversion */
+    html, body {
+        background-color: #f0f2f5 !important;
+        color: #1e293b !important;
+    }
+
+    .main-content {
+        background-color: #f0f2f5 !important;
+    }
+
+    .content {
+        background-color: #f0f2f5 !important;
+    }
+
+    .header {
+        background-color: #1e293b !important;
+        color: #ffffff !important;
+    }
+
+    .card {
+        background-color: #ffffff !important;
+    }
+
+    .card-header {
+        background-color: #ffffff !important;
+    }
+
+    .card-body {
+        background-color: #ffffff !important;
+    }
+
+    /* Tables */
+    .table, .data-table, .matrix-table, .matrix-table-premium {
+        background-color: #ffffff !important;
+    }
+
+    .table thead, .table-light {
+        background-color: #f8f9fa !important;
+    }
+
+    .table td, .table th, .data-table td, .data-table th {
+        background-color: inherit !important;
+    }
+
+    /* Form elements */
+    .form-control, .form-select {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+    }
+
+    /* Modals */
+    .modal-content {
+        background-color: #ffffff !important;
+    }
+
+    /* Dropdowns */
+    .dropdown-menu {
+        background-color: #ffffff !important;
+    }
+
+    /* Nav tabs/pills */
+    .nav-tabs, .nav-pills {
+        background-color: transparent !important;
+    }
+
+    .nav-link {
+        color: #475569 !important;
+    }
+
+    .nav-link.active {
+        background-color: #3b82f6 !important;
+        color: #ffffff !important;
+    }
+
+    .nav-tabs .nav-link.active {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        border-bottom-color: #ffffff !important;
+    }
+
+    /* Badges */
+    .badge {
+        color: inherit;
+    }
+
+    /* Alerts */
+    .alert {
+        background-color: #ffffff !important;
+    }
+
+    /* Popovers & tooltips */
+    .popover {
+        background-color: #ffffff !important;
+    }
+
+    /* Emp stat cards */
+    .emp-stat-card {
+        background-color: #ffffff !important;
+    }
+
+    /* Filter bars */
+    .filter-bar, .marcaciones-filter-bar, .emp-filter-toolbar {
+        background-color: #ffffff !important;
+    }
+
+    /* SweetAlert */
+    .swal2-popup {
+        background-color: #ffffff !important;
+    }
+
+    /* Splash screen - keep dark */
+    .splash-screen {
+        color-scheme: dark !important;
+    }
+
+    /* Sidebar - keep dark */
+    .sidebar {
+        color-scheme: dark !important;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   17. ENHANCED MATRIX GRID — Aggressive mobile optimization for Marcaciones
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    /* Matrix wrapper: full viewport scroll with momentum */
+    #marcaciones-view-container {
+        overflow: visible !important;
+    }
+
+    #marcaciones-view-container > div[style*="overflow"] {
+        overflow: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-height: calc(100vh - 220px) !important;
+        border-radius: 8px;
+    }
+
+    /* Employee name column: much narrower on mobile */
+    .sticky-col-analitica,
+    td.sticky-col-analitica,
+    th.sticky-col-analitica {
+        min-width: 130px !important;
+        max-width: 130px !important;
+        width: 130px !important;
+        font-size: 0.68rem !important;
+    }
+
+    /* Employee name truncation */
+    .sticky-col-analitica .emp-name-link {
+        font-size: 0.68rem !important;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sticky-col-analitica .emp-area-label {
+        font-size: 0.58rem !important;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Summary/premium sticky columns: much more compact */
+    .sticky-premium-col,
+    td.sticky-premium-col,
+    th.sticky-premium-col {
+        font-size: 0.6rem !important;
+        padding: 2px 1px !important;
+        min-width: 38px !important;
+        max-width: 45px !important;
+        width: 42px !important;
+    }
+
+    /* Bento header cells */
+    .th-bento, .th-bento-sub {
+        font-size: 0.55rem !important;
+        padding: 2px 1px !important;
+    }
+
+    /* Day cells: smaller for mobile */
+    .col-day,
+    td.col-day,
+    th.col-day {
+        min-width: 36px !important;
+        max-width: 40px !important;
+        width: 38px !important;
+        font-size: 0.6rem !important;
+        padding: 2px 1px !important;
+        height: 24px !important;
+    }
+
+    /* Day header */
+    th.col-day div[style*="font-size:0.7rem"] {
+        font-size: 0.58rem !important;
+    }
+
+    th.col-day div[style*="font-size:0.6rem"] {
+        font-size: 0.5rem !important;
+    }
+
+    /* Status badges inside cells */
+    .col-day .badge,
+    .col-day span[class*="badge"] {
+        font-size: 0.5rem !important;
+        padding: 1px 2px !important;
+    }
+
+    /* Matrix table overall */
+    .matrix-table-premium {
+        font-size: 0.65rem !important;
+    }
+
+    /* Saldo column highlight */
+    .sticky-saldo-col {
+        font-size: 0.65rem !important;
+    }
+
+    /* Landscape orientation hint for matrix page */
+    #page-marcaciones::before {
+        content: "📱 Gira el celular para ver mejor la grilla";
+        display: block;
+        background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        color: #1e40af;
+        text-align: center;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+        border: 1px solid #bfdbfe;
+    }
+
+    /* Legend bar: compact mobile */
+    .va-legend-bar {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        font-size: 0.58rem !important;
+    }
+
+    .va-legend-bar .badge {
+        font-size: 0.55rem !important;
+        padding: 2px 4px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Ultra-compact for very small phones */
+    .sticky-col-analitica,
+    td.sticky-col-analitica,
+    th.sticky-col-analitica {
+        min-width: 100px !important;
+        max-width: 100px !important;
+        width: 100px !important;
+        font-size: 0.6rem !important;
+    }
+
+    .sticky-col-analitica .emp-name-link {
+        max-width: 90px;
+        font-size: 0.6rem !important;
+    }
+
+    .sticky-col-analitica .emp-area-label {
+        display: none !important; /* Hide area label on very small screens */
+    }
+
+    .sticky-premium-col,
+    td.sticky-premium-col,
+    th.sticky-premium-col {
+        min-width: 32px !important;
+        max-width: 38px !important;
+        width: 35px !important;
+        font-size: 0.55rem !important;
+    }
+
+    .col-day,
+    td.col-day,
+    th.col-day {
+        min-width: 30px !important;
+        max-width: 34px !important;
+        width: 32px !important;
+        font-size: 0.55rem !important;
+        height: 22px !important;
+    }
+
+    /* Hide the landscape hint on very small screens (they'll figure it out) */
+    #page-marcaciones::before {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+    }
+}
+
+/* ─── Landscape mode: maximize grid space ─── */
+@media (max-width: 768px) and (orientation: landscape) {
+    /* In landscape, hide more chrome to give max space to grid */
+    .header {
+        padding: 6px 12px !important;
+    }
+
+    .header-left h2, .header h2 {
+        font-size: 12px !important;
+    }
+
+    .content {
+        padding: 8px 6px !important;
+    }
+
+    /* Landscape hint: hide it (they're already in landscape) */
+    #page-marcaciones::before {
+        display: none !important;
+    }
+
+    /* Maximize matrix viewport */
+    #marcaciones-view-container > div[style*="overflow"] {
+        max-height: calc(100vh - 150px) !important;
+    }
+
+    /* Even more compact names in landscape */
+    .sticky-col-analitica,
+    td.sticky-col-analitica {
+        min-width: 120px !important;
+        max-width: 120px !important;
+        width: 120px !important;
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   18. PRINT STYLES — Clean print output
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media print {
+    .sidebar,
+    .sidebar-overlay,
+    .header,
+    .menu-toggle,
+    .btn-sync,
+    .filter-bar,
+    .marcaciones-filter-bar,
+    .va-legend-bar,
+    .modal-footer,
+    .notification-center {
+        display: none !important;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    .content {
+        padding: 0 !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+
+    /* Matrix table: no sticky positioning for print */
+    .sticky-col,
+    .sticky-col-analitica,
+    .sticky-premium-col {
+        position: static !important;
+    }
+}
+

@@ -235,7 +235,10 @@ function renderMarcacionesToolbar(container) {
                     <div class="form-check form-switch mb-0">
                         <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh-switch" 
                                ${stateMarcacionesApp.autoRefreshEnabled ? 'checked' : ''} onchange="toggleAutoRefresh(this.checked)">
-                        <label class="form-check-label small fw-bold text-muted ms-1" for="auto-refresh-switch">Auto</label>
+                        <label class="form-check-label small fw-bold text-muted ms-1" for="auto-refresh-switch">
+                            <i class="bi bi-broadcast" style="font-size:0.7rem;${stateMarcacionesApp.autoRefreshEnabled ? 'color:#10b981;' : ''}"></i>
+                            Auto
+                        </label>
                     </div>
                 </div>
 
@@ -1432,8 +1435,13 @@ window.updateVisorPDF = function(isDownload = false) {
         
         doc.save(nombreArchivo);
     } else {
+        // FIX 5: Revocar blob URL anterior para evitar memory leak
+        if (window._lastPdfBlobUrl) {
+            URL.revokeObjectURL(window._lastPdfBlobUrl);
+        }
         const blob = doc.output('blob');
         const url = URL.createObjectURL(blob);
+        window._lastPdfBlobUrl = url;
         const container = document.getElementById('pdf-iframe-container');
         if (container) {
             container.innerHTML = `<iframe src="${url}" width="100%" height="800px" style="border: none; border-radius: 4px;"></iframe>`;
@@ -1636,7 +1644,6 @@ async function confirmAprobacionHE(empleadoId, fecha, estado, lastUpdatedAt) {
                 window.loadMarcacionesData();
             }
         } else {
-            const result = await resp.json();
             if (resp.status === 409) {
                 // Conflicto de concurrencia
                 showToast("Conflicto: " + result.detail, "error");
@@ -1655,34 +1662,121 @@ async function confirmAprobacionHE(empleadoId, fecha, estado, lastUpdatedAt) {
 }
 
 /**
- * Gestiona el refresco automático de la matriz
+ * ── Auto-Detección de Cambios (Smart Polling) ──────────────────────────────
+ * En lugar de recargar la grilla completa cada 60s (costoso),
+ * polleamos un endpoint ultraligero (/api/asistencia/last-change/)
+ * que solo retorna MAX(updated_at) + COUNT(*).
+ * Solo recargamos la grilla cuando detectamos un cambio real.
+ * 
  * @param {boolean} enabled 
  */
+
+// Estado interno del change-detector
+window._changeDetector = window._changeDetector || {
+    lastUpdate: null,
+    lastCount: null,
+    intervalId: null,
+    isChecking: false,
+};
+
 function toggleAutoRefresh(enabled) {
     stateMarcacionesApp.autoRefreshEnabled = enabled;
+    const cd = window._changeDetector;
 
     // Limpiar anterior si existe
-    if (stateMarcacionesApp.autoRefreshIntervalId) {
-        clearInterval(stateMarcacionesApp.autoRefreshIntervalId);
-        stateMarcacionesApp.autoRefreshIntervalId = null;
+    if (cd.intervalId) {
+        clearInterval(cd.intervalId);
+        cd.intervalId = null;
     }
 
     if (enabled) {
-        console.log("🔄 Auto-refresco activado (60s)");
-        showToast("Auto-refresco activado (60s)", "info");
-        stateMarcacionesApp.autoRefreshIntervalId = setInterval(() => {
-            // Solo si la página está activa y el contenedor existe
-            const container = document.getElementById('page-marcaciones');
-            if (container && container.classList.contains('active')) {
-                console.log("⏱️ Ejecutando auto-refresco de Marcaciones...");
-                if (typeof window.loadMarcacionesData === 'function') {
-                    window.loadMarcacionesData();
-                }
-            }
-        }, 60000);
+        console.log("🔄 Auto-detección activada (30s polling ligero)");
+        showToast("Auto-detección de marcaciones activada", "info");
+
+        // Capturar el estado actual como baseline
+        cd.lastUpdate = null;
+        cd.lastCount = null;
+
+        // Poll cada 30 segundos
+        cd.intervalId = setInterval(() => _checkForChanges(), 30000);
+        stateMarcacionesApp.autoRefreshIntervalId = cd.intervalId;
+
+        // Primer check inmediato para establecer baseline
+        _checkForChanges(true);
     } else {
-        console.log("🛑 Auto-refresco desactivado");
-        showToast("Auto-refresco desactivado", "info");
+        console.log("🛑 Auto-detección desactivada");
+        showToast("Auto-detección desactivada", "info");
+        cd.lastUpdate = null;
+        cd.lastCount = null;
+    }
+}
+
+/**
+ * Verifica si hubo cambios usando el endpoint ligero.
+ * @param {boolean} isBaseline - true si es la primera llamada (solo captura estado, no recarga)
+ */
+async function _checkForChanges(isBaseline = false) {
+    const cd = window._changeDetector;
+    const state = stateMarcacionesApp;
+
+    // No verificar si la página no está visible o no hay datos cargados
+    const container = document.getElementById('page-marcaciones');
+    if (!container || !container.classList.contains('active')) return;
+    if (!state.fechaInicioRRHH || !state.fechaFinRRHH) return;
+    if (cd.isChecking) return;
+
+    cd.isChecking = true;
+
+    try {
+        let url = `/api/asistencia/last-change/?fecha_inicio=${state.fechaInicioRRHH}&fecha_fin=${state.fechaFinRRHH}`;
+        if (state.area) url += `&area=${encodeURIComponent(state.area)}`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        const newUpdate = data.last_update;
+        const newCount = data.total_records;
+
+        if (isBaseline) {
+            // Primer llamada: solo guardar como referencia
+            cd.lastUpdate = newUpdate;
+            cd.lastCount = newCount;
+            console.log(`📡 Baseline capturado: updated=${newUpdate}, records=${newCount}`);
+            return;
+        }
+
+        // Comparar con el estado anterior
+        const hasChanged = (
+            (cd.lastUpdate !== null && cd.lastUpdate !== newUpdate) ||
+            (cd.lastCount !== null && cd.lastCount !== newCount)
+        );
+
+        if (hasChanged) {
+            console.log(`🔔 Cambio detectado: updated ${cd.lastUpdate} → ${newUpdate}, records ${cd.lastCount} → ${newCount}`);
+            
+            // Actualizar referencia ANTES de recargar
+            cd.lastUpdate = newUpdate;
+            cd.lastCount = newCount;
+
+            // Mostrar toast informativo
+            showToast("📡 Nuevas marcaciones detectadas. Actualizando...", "info");
+
+            // Recargar la grilla
+            if (typeof window.loadMarcacionesData === 'function') {
+                window.loadMarcacionesData();
+            }
+        } else {
+            // Sin cambios, solo actualizar referencia silenciosamente
+            cd.lastUpdate = newUpdate;
+            cd.lastCount = newCount;
+        }
+
+    } catch (e) {
+        // Silencioso: no molestar al usuario si el endpoint falla
+        console.debug('Change-detection poll error:', e.message);
+    } finally {
+        cd.isChecking = false;
     }
 }
 
@@ -2665,7 +2759,29 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
             if (!r.ok) return;
             const s = await r.json();
 
-            if (s.status === 'not_found') return;
+            // Job perdido (típicamente porque Cloud Run reemplazó la instancia durante un deploy)
+            if (s.status === 'not_found') {
+                clearInterval(_reprocesoPollingTimer);
+                const bar = el('repr-progress-bar');
+                bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                bar.style.background = 'linear-gradient(90deg,#f59e0b,#d97706)';
+                bar.style.width = '100%';
+                el('repr-pct').textContent = '⚠️';
+                el('repr-pct').className = 'badge rounded-pill bg-warning text-dark';
+                el('repr-header-title').textContent = 'Proceso Interrumpido';
+                el('repr-day-label').textContent = 'El servidor se reinició durante el proceso.';
+                el('repr-counter').textContent = 'Los datos ya sincronizados están guardados.';
+                el('repr-resumen-texto').textContent = 'El proceso fue interrumpido por una actualización del servidor. Los empleados y marcaciones descargados antes de la interrupción se guardaron correctamente. Puede reintentar la sincronización de marcaciones desde la grilla.';
+                el('repr-resumen').classList.remove('d-none');
+                el('repr-done-actions').classList.remove('d-none');
+                const logEl = el('repr-log');
+                const warnLine = document.createElement('div');
+                warnLine.style.color = '#fbbf24';
+                warnLine.textContent = `⚠️ Job ${jobId} no encontrado — el servidor fue reiniciado`;
+                logEl.appendChild(warnLine);
+                logEl.scrollTop = logEl.scrollHeight;
+                return;
+            }
 
             const phase = s.status;      // 'syncing' | 'running' | 'done' | 'completed' | 'error'
             const pct = s.pct ?? 0;
@@ -5283,6 +5399,9 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const esAncladoEntrada = e.observaciones && e.observaciones.includes("dentro del anclaje");
             if (hr_ent && ht_ent && !esAncladoEntrada) {
                 let diff = timeToMins(ht_ent) - timeToMins(hr_ent);
+                // Ajuste cruce de medianoche: si diff > 720 min (12h), restar 1440 (24h)
+                if (diff > 720) diff -= 1440;
+                if (diff < -720) diff += 1440;
                 if (diff > 0) {
                     txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Ingreso Anticipado:</span> <span style="font-family:monospace;font-weight:700;">${valMins(diff, 'var(--success-color, #10b981)')}</span></div>`);
                 }
@@ -5292,6 +5411,9 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const esAncladoSalida = e.observaciones && e.observaciones.includes("Salida dentro del anclaje");
             if (hr_sal && ht_sal && !esAncladoSalida) {
                 let diff = timeToMins(hr_sal) - timeToMins(ht_sal);
+                // Ajuste cruce de medianoche: si diff > 720 min (12h), restar 1440 (24h)
+                if (diff > 720) diff -= 1440;
+                if (diff < -720) diff += 1440;
                 if (diff > 0) {
                     txtArr.push(`<div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary,#64748b);">Salida Posterior:</span> <span style="font-family:monospace;font-weight:700;">${valMins(diff, 'var(--success-color, #10b981)')}</span></div>`);
                 }

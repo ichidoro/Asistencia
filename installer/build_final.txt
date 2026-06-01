@@ -1,0 +1,216 @@
+﻿Inno Setup 6 Command-Line Compiler
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2026 Martijn Laan. All rights reserved.
+Portions Copyright (C) 2001-2004 Alex Yackimoff. All rights reserved.
+https://www.innosetup.com
+
+Compiler engine version: Inno Setup 6.7.0
+Non-commercial use only
+
+Preprocessing
+   Reading file: C:\Program Files (x86)\Inno Setup 6\ISPPBuiltins.iss
+Parsing [Setup] section, line 15
+Parsing [Setup] section, line 16
+Parsing [Setup] section, line 17
+Parsing [Setup] section, line 18
+Parsing [Setup] section, line 19
+Parsing [Setup] section, line 20
+Parsing [Setup] section, line 21
+Parsing [Setup] section, line 22
+Parsing [Setup] section, line 23
+Parsing [Setup] section, line 24
+Parsing [Setup] section, line 25
+Parsing [Setup] section, line 26
+Parsing [Setup] section, line 27
+Parsing [Setup] section, line 28
+Parsing [Setup] section, line 29
+Parsing [Setup] section, line 30
+Parsing [Setup] section, line 31
+Parsing [Setup] section, line 32
+Parsing [Setup] section, line 33
+Parsing [Setup] section, line 34
+Parsing [Setup] section, line 35
+Parsing [Setup] section, line 36
+Parsing [Setup] section, line 37
+Parsing [Setup] section, line 38
+Parsing [Setup] section, line 39
+Parsing [Setup] section, line 40
+Parsing [Setup] section, line 41
+Parsing [Setup] section, line 42
+Parsing [Setup] section, line 43
+Parsing [Setup] section, line 44
+Reading file (WizardImageFile)
+   Reading file: C:\Users\danie\Proyectos_Python\Asistencia\installer\assets\sidebar.bmp
+Reading file (WizardSmallImageFile)
+   Reading file: C:\Users\danie\Proyectos_Python\Asistencia\installer\assets\logo_small.bmp
+Preparing Setup program executable
+   Verification successful
+   Updating icons (Setup.e32)
+   Updating version info (Setup.e32)
+Determining language code pages
+Parsing [Languages] section, line 47
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Languages\Spanish.isl
+   Messages in script file
+Reading default messages from Default.isl
+Parsing [Languages] section, line 47
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Languages\Spanish.isl
+Parsing [LangOptions], [Messages], and [CustomMessages] sections
+   Messages in script file
+Reading [Code] section
+Parsing [Dirs] section, line 78
+Parsing [Dirs] section, line 79
+Parsing [Dirs] section, line 80
+Parsing [Icons] section, line 85
+Parsing [Icons] section, line 88
+Parsing [Icons] section, line 89
+Parsing [Run] section, line 96
+Parsing [Run] section, line 104
+Parsing [UninstallRun] section, line 107
+Parsing [Files] section, line 55
+Parsing [Files] section, line 56
+Parsing [Files] section, line 57
+Parsing [Files] section, line 58
+Parsing [Files] section, line 59
+Parsing [Files] section, line 60
+Parsing [Files] section, line 63
+Parsing [Files] section, line 64
+Parsing [Files] section, line 65
+Parsing [Files] section, line 66
+Parsing [Files] section, line 67
+Parsing [Files] section, line 70
+Parsing [Files] section, line 73
+Parsing [Files] section, line 74
+Parsing [Files] section, line 75
+Compiling [Code] section
+Deleting Aguacol_Asistencia_Setup.exe from output directory
+Creating setup files
+   Verification successful
+   Updating icons (Setup.exe)
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\.env
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\main.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\config.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\constants.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\database.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\dependencies.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\events.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\security.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\startup_manager.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\sys_utils.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\core\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\models\empleado.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\models\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\area.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\asistencia.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\calendario.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\cargo.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\configuracion.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\empleado.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\hora_extra.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\seguridad.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\turno.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\repositories\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\asistencia.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\auth.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\cierre.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\configuracion.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\dashboard_api.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\empleados.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\reportes.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\seguridad.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\startup.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\sync.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\turnos.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\routers\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\asistencia.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\auth.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\bono.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\calendario.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\empleado.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\justificacion.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\pagador.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\periodo_rrhh.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\sync.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\turno.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\schemas\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\scraper\bioalba_scraper.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\scraper\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\asistencia_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\bono_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\calendario_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\cierre_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\configuracion_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\dashboard_analytics.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\dashboard_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\empleado_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\notification_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\report_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\sync_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\turno_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\backend\services\__init__.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\favicon.ico
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\index.html
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\login.html
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\assets\.gitkeep
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\assets\img\logo.ico
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\assets\img\logo.jpg
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\assets\img\logo_v5.png
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\css\all.min.css
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\css\bootstrap-icons.css
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\css\bootstrap.min.css
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\css\styles.css
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\css\fonts\bootstrap-icons.woff
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\css\fonts\bootstrap-icons.woff2
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\alerts_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\asignaciones_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\asistencia.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\auth.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\bootstrap.bundle.min.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\calendario_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\chart.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\chartjs-plugin-datalabels.min.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\compensaciones_he_panel.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\configuracion_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\contratos_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\cumpleanos_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\dashboard.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\horarios.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\intercambios_panel.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\jspdf.plugin.autotable.min.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\jspdf.umd.min.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\justificaciones_individuales.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\main.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\marcaciones_manuales.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\marcaciones_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\perdonazo_panel.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\reincorporacion_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\seguridad_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\startup_ui.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\sweetalert2.all.min.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\js\sync_wizard.js
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\webfonts\fa-brands-400.woff2
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\webfonts\fa-regular-400.woff2
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\frontend\webfonts\fa-solid-900.woff2
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\downloads\.gitkeep
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\local_db\app.lock
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\local_db\app.pid
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\local_db\asistencia_local.db
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\local_db\asistencia_local.db-info
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\local_db\asistencia_local.db-shm
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\..\data\local_db\asistencia_local.db-wal
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\requirements.txt
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\scripts\find_python.ps1
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\scripts\post_install.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\scripts\connectivity_check.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\scripts\install_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\scripts\uninstall_service.py
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\scripts\abrir_asistencia.pyw
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\assets\logo.ico
+   Compressing: C:\Users\danie\Proyectos_Python\Asistencia\installer\assets\nssm.exe
+   Compressing Setup program executable
+   Updating version info (Setup.exe)
+   Updating manifest (Setup.exe)
+
+
+Successful compile (2,563 sec). Resulting Setup program filename is:
+C:\Users\danie\Proyectos_Python\Asistencia\installer\dist\Aguacol_Asistencia_Setup.exe

@@ -273,15 +273,28 @@ class ReportService:
                             he_rec += (di.get("minutos_extra_bruto") or 0)
                         elif (di.get("minutos_extra_bruto") or 0) > 0:
                             he_pend += (di.get("minutos_extra_bruto") or 0)
-                        he_compensado += (di.get("minutos_compensados_he") or 0)
+                    # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
+                    # igual que en el frontend (marcaciones_ui.js línea 4266)
+                    he_compensado += (di.get("minutos_compensados_he") or 0)
                             
-                he_bruto = round(he_bruto)
-                he_apr = round(he_apr)
-                he_rec = round(he_rec)
-                he_pend = round(he_pend)
+                # FIX: Redondeo con 4 decimales para coincidir con el frontend
+                he_bruto = round(he_bruto, 4)
+                he_apr = round(he_apr, 4)
+                he_rec = round(he_rec, 4)
+                he_pend = round(he_pend, 4)
                 
                 saldo = he_apr - d_tot - he_compensado
                 saldo_meta = (acum_bolsa - meta_min) if es_bolsa else None
+                
+                # DEBUG: Log de auditoría para detectar discrepancia Excel vs Grilla
+                emp_nombre = f"{emp['apellido_paterno']} {emp.get('apellido_materno', '')} {emp['nombre']}".strip()
+                logger.info(
+                    f"📊 [EXCEL_DEBUG] {emp_nombre}: "
+                    f"he_apr={he_apr} d_tot={d_tot} he_comp={he_compensado} "
+                    f"saldo={saldo} ({self._format_hhmmss(saldo)}) | "
+                    f"he_bruto={he_bruto} he_rec={he_rec} he_pend={he_pend} "
+                    f"dias_procesados={sum(1 for d in rango_dias if dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}'))}"
+                )
                 
                 rows_calc.append({
                     "emp_id": emp_id,
@@ -563,12 +576,16 @@ class ReportService:
                         elif key == "min_atr": val = self._format_hhmmss(r["min_atr"])
                         elif key == "min_sad": val = self._format_hhmmss(r["min_sad"])
                         elif key == "d_tot": val = self._format_hhmmss(r["d_tot"])
-                        # Saldo Neto
+                        # Saldo Neto — FIX: usar el saldo pre-calculado que incluye he_compensado
+                        # Antes: self._get_saldo(he_apr, d_tot) → ignoraba he_compensado
+                        # Ahora: r["saldo"] = he_apr - d_tot - he_compensado (idéntico a la grilla)
                         elif key == "saldo_neto":
-                            val = self._get_saldo(r["he_apr"], r["d_tot"])
-                            if "+" in val:
+                            saldo_val = r["saldo"]
+                            signo = "+" if saldo_val > 0 else ("-" if saldo_val < 0 else "")
+                            val = f"{signo}{self._format_hhmmss(abs(saldo_val))}"
+                            if saldo_val > 0:
                                 cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
-                            elif "-" in val:
+                            elif saldo_val < 0:
                                 cell.font = Font(name="Segoe UI", size=9, color="FF0000", bold=True)
                         # Bolsa Flexible
                         elif key == "meta_min": val = self._format_hhmmss(r["metaMin"]) if r["esBolsa"] else ""
@@ -780,8 +797,10 @@ class ReportService:
                     elif key == "min_sad": val = self._format_hhmmss(sum(r["min_sad"] for r in rows_calc))
                     elif key == "d_tot": val = self._format_hhmmss(sum(r["d_tot"] for r in rows_calc))
                     elif key == "saldo_neto":
-                        s_tot = sum(r["he_apr"] - r["d_tot"] for r in rows_calc)
-                        val = ("+" if s_tot > 0 else "") + self._format_hhmmss(s_tot)
+                        # FIX: usar r["saldo"] pre-calculado que incluye he_compensado
+                        s_tot = sum(r["saldo"] for r in rows_calc)
+                        signo = "+" if s_tot > 0 else ("-" if s_tot < 0 else "")
+                        val = f"{signo}{self._format_hhmmss(abs(s_tot))}"
                         if s_tot > 0:
                             cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
                         elif s_tot < 0:

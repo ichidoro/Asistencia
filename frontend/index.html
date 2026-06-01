@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-bs-theme="light">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="only light">
     <!-- Premium UI (Fase V11) -->
     <script src="/static/js/sweetalert2.all.min.js" defer></script>
 
@@ -17,6 +18,8 @@
     <link rel="stylesheet" href="/static/css/all.min.css">
     <!-- Custom styles (MUST load after Bootstrap for proper override) -->
     <link rel="stylesheet" href="/static/css/styles.css">
+    <!-- Mobile Responsive Overrides (must load after styles.css) -->
+    <link rel="stylesheet" href="/static/css/responsive.css">
 
     <!-- Módulo de Seguridad (Centralizado) -->
     <script src="/static/js/auth.js?v={{ startup_id }}"></script>
@@ -3674,97 +3677,192 @@
                 </div>
             </div>
 
-            <!-- Modal de Decisión: ¿Qué desea realizar? -->
+            <!-- Modal de Decisión: Que desea realizar? -->
             <div class="modal fade" id="modal-decision-asistencia" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-sm modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0" style="border-radius:16px; overflow:hidden;">
-                        <div class="modal-header border-0 text-white pb-3 pt-4 px-4" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                    <div class="modal-content shadow-lg border-0" style="border-radius:20px; overflow:hidden;">
+                        <!-- Premium Header with gradient -->
+                        <div class="modal-header border-0 text-white py-3 px-4" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%); position:relative;">
                             <div class="d-flex align-items-center gap-3 w-100">
-                                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:40px;height:40px;background:rgba(255,255,255,0.1);backdrop-filter:blur(4px);">
-                                    <i class="bi bi-ui-checks-grid fs-5"></i>
+                                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:rgba(59,130,246,0.2);border:1.5px solid rgba(59,130,246,0.4);border-radius:10px;">
+                                    <i class="bi bi-ui-checks-grid" style="font-size:1rem;color:#60a5fa;"></i>
                                 </div>
                                 <div>
-                                    <h6 class="modal-title fw-bold mb-0">Acciones de Asistencia</h6>
+                                    <h6 class="modal-title fw-bold mb-0" style="font-size:0.95rem;letter-spacing:0.3px;">Acciones de Asistencia</h6>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeAsistenciaActionModal()"></button>
+                                <button type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size:0.65rem;opacity:0.7;"></button>
                             </div>
                         </div>
-                        <div class="modal-body d-grid gap-2 text-center p-4">
-                            <div class="mb-3">
-                                <div id="decision-emp-nombre" class="fw-bold fs-5 text-dark"></div>
-                                <div id="decision-fecha" class="badge bg-light text-muted border"></div>
+
+                        <div class="modal-body p-0">
+                            <!-- Employee Card -->
+                            <div class="px-4 pt-3 pb-2" style="background:linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);">
+                                <div class="d-flex align-items-center gap-3 p-2 rounded-3" style="background:white;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+                                    <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:12px;color:white;font-weight:700;font-size:0.95rem;" id="decision-avatar-initial">—</div>
+                                    <div style="min-width:0;">
+                                        <div id="decision-emp-nombre" class="fw-bold text-dark text-truncate" style="font-size:0.88rem;line-height:1.3;"></div>
+                                        <div class="d-flex align-items-center gap-2 mt-1">
+                                            <span id="decision-fecha" class="badge" style="background:#eff6ff;color:#3b82f6;border:1px solid #bfdbfe;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <button class="btn btn-outline-primary py-3 d-flex flex-column align-items-center"
-                                onclick="proceedToJustify()">
-                                <i class="bi bi-file-earmark-text mb-1 fs-4"></i>
-                                <div class="fw-bold">Justificar Ausencia</div>
-                            </button>
+                            <!-- Action Buttons -->
+                            <div class="px-3 pb-3 pt-1 d-grid gap-1" style="background:#ffffff;">
 
-                            <button id="btn-permiso-dynamic"
-                                class="btn btn-outline-warning text-dark py-3 d-flex flex-column align-items-center"
-                                onclick="proceedToPermission()">
-                                <i class="bi bi-clock-history mb-1 fs-4"></i>
-                                <div class="fw-bold title-permiso">Registrar Permiso</div>
-                            </button>
+                                <!-- Justificar Ausencia -->
+                                <button class="btn text-start p-0 border-0 rounded-3 decision-action-btn"
+                                    onclick="proceedToJustify()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #3b82f6;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#eff6ff;border-radius:10px;">
+                                            <i class="bi bi-file-earmark-text" style="font-size:1rem;color:#3b82f6;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Justificar Ausencia</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Vacaciones, licencia, permisos</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
-                            <button class="btn btn-outline-success py-3 d-flex flex-column align-items-center"
-                                onclick="proceedToManualEntry()">
-                                <i class="bi bi-keyboard mb-1 fs-4"></i>
-                                <div class="fw-bold">Ingreso Manual</div>
-                            </button>
+                                <!-- Registrar Permiso -->
+                                <button id="btn-permiso-dynamic"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn btn-outline-warning"
+                                    onclick="proceedToPermission()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #f59e0b;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fffbeb;border-radius:10px;">
+                                            <i class="bi bi-clock-history" style="font-size:1rem;color:#f59e0b;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark title-permiso" style="font-size:0.82rem;line-height:1.2;">Registrar Permiso / Salida</div>
+                                            <div class="text-muted sub-permiso" style="font-size:0.68rem;line-height:1.3;">Trámites personales, retiro</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
-                            <button class="btn btn-outline-info text-dark py-3 d-flex flex-column align-items-center"
-                                onclick="proceedToBulkFill()">
-                                <i class="bi bi-magic mb-1 fs-4"></i>
-                                <div class="fw-bold">Relleno (Turno)</div>
-                            </button>
+                                <!-- Ingreso Manual -->
+                                <button class="btn text-start p-0 border-0 rounded-3 decision-action-btn"
+                                    onclick="proceedToManualEntry()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #10b981;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
+                                            <i class="bi bi-keyboard" style="font-size:1rem;color:#10b981;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Ingreso Manual</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Corregir entrada o salida</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
-                            <button id="btn-edit-justificacion"
-                                class="btn btn-outline-danger py-3 d-flex flex-column align-items-center d-none"
-                                onclick="proceedToEditJustify()">
-                                <i class="bi bi-pencil-square mb-1 fs-4"></i>
-                                <div class="fw-bold">Editar / Eliminar Justificación</div>
-                            </button>
+                                <!-- Relleno (Turno) -->
+                                <button class="btn text-start p-0 border-0 rounded-3 decision-action-btn"
+                                    onclick="proceedToBulkFill()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #06b6d4;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfeff;border-radius:10px;">
+                                            <i class="bi bi-magic" style="font-size:1rem;color:#06b6d4;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Relleno (Turno)</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Auto-completar según turno</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
-                            <!-- NUEVO: Despachador Inteligente - Botones dinámicos para reglas de negocio -->
-                            <button id="btn-gestionar-he"
-                                class="btn btn-outline-warning py-3 d-flex flex-column align-items-center d-none"
-                                onclick="proceedToHoraExtra()">
-                                <i class="bi bi-star-fill mb-1 fs-4 text-warning"></i>
-                                <div class="fw-bold text-dark">Gestionar Horas Extras</div>
-                            </button>
+                                <!-- Separator for contextual actions -->
+                                <hr class="my-1" style="border-color:#f1f5f9;">
 
-                            <button id="btn-revertir-he"
-                                class="btn btn-outline-danger py-3 d-flex flex-column align-items-center d-none"
-                                onclick="proceedToRevertExtra()">
-                                <i class="bi bi-arrow-counterclockwise mb-1 fs-4 text-danger"></i>
-                                <div class="fw-bold text-dark">Revertir Jornada a Especial</div>
-                            </button>
+                                <!-- Editar / Eliminar Justificación (condicional) -->
+                                <button id="btn-edit-justificacion"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToEditJustify()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #ef4444;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef2f2;border-radius:10px;">
+                                            <i class="bi bi-pencil-square" style="font-size:1rem;color:#ef4444;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Editar / Eliminar Justificación</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Modificar justificación existente</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
-                            <button id="btn-compensar-he-action"
-                                class="btn btn-outline-success py-3 d-flex flex-column align-items-center d-none"
-                                onclick="proceedToCompensateHE()">
-                                <i class="bi bi-clock-history mb-1 fs-4 text-success"></i>
-                                <div class="fw-bold text-dark">Compensar con Horas Extras</div>
-                            </button>
+                                <!-- Gestionar Horas Extras (condicional) -->
+                                <button id="btn-gestionar-he"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToHoraExtra()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #f59e0b;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fffbeb;border-radius:10px;">
+                                            <i class="bi bi-star-fill" style="font-size:1rem;color:#f59e0b;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Gestionar Horas Extras</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Aprobar o rechazar HE del día</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
+                                <!-- Revertir Jornada a Especial (condicional) -->
+                                <button id="btn-revertir-he"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToRevertExtra()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #ef4444;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef2f2;border-radius:10px;">
+                                            <i class="bi bi-arrow-counterclockwise" style="font-size:1rem;color:#ef4444;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Revertir Jornada a Especial</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Deshacer autorización de HE</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
-                            <button id="btn-validar-jornada"
-                                class="btn btn-outline-dark py-3 d-flex flex-column align-items-center d-none"
-                                style="border-color: #8e44ad;"
-                                onclick="proceedToValidation()">
-                                <i class="bi bi-lightning-fill mb-1 fs-4" style="color: #8e44ad;"></i>
-                                <div class="fw-bold" style="color: #8e44ad;">Validar Jornada Especial</div>
-                            </button>
+                                <!-- Compensar con Horas Extras (condicional) -->
+                                <button id="btn-compensar-he-action"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToCompensateHE()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #10b981;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
+                                            <i class="bi bi-clock-history" style="font-size:1rem;color:#10b981;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Compensar con Horas Extras</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Usar saldo HE para cubrir falta</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
 
+                                <!-- Validar Jornada Especial (condicional) -->
+                                <button id="btn-validar-jornada"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToValidation()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #8b5cf6;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#f5f3ff;border-radius:10px;">
+                                            <i class="bi bi-lightning-fill" style="font-size:1rem;color:#8b5cf6;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Validar Jornada Especial</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Aprobar dia libre trabajado</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
+                            </div>
 
-
-
-
-
-                            <button class="btn btn-link text-secondary btn-sm mt-3 text-decoration-none"
-                                onclick="closeAsistenciaActionModal()">Cancelar</button>
+                            <!-- Footer cancel -->
+                            <div class="text-center py-2 px-3" style="background:#f8fafc;border-top:1px solid #f1f5f9;">
+                                <button class="btn btn-sm text-muted fw-medium border-0 w-100 py-2"
+                                    onclick="closeAsistenciaActionModal()" style="font-size:0.78rem;letter-spacing:0.2px;">
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

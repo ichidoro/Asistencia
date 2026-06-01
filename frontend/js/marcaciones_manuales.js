@@ -70,6 +70,13 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     document.getElementById('decision-emp-nombre').innerText = empNombre;
     document.getElementById('decision-fecha').innerText = dateStr;
 
+    // Set avatar initial from employee name
+    const avatarEl = document.getElementById('decision-avatar-initial');
+    if (avatarEl && empNombre) {
+        const parts = empNombre.trim().split(/\s+/);
+        avatarEl.textContent = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : empNombre[0].toUpperCase();
+    }
+
     // --- NUEVO: CAMBIAR TEXTO BOTÓN SI HAY PERMISO ACTIVO ---
     const btnPermiso = document.getElementById('btn-permiso-dynamic');
     if (btnPermiso) {
@@ -812,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Cerrar modales con click fuera
-window.onclick = function (event) {
+window.addEventListener('click', function (event) {
     if (event.target == marcacionesManualesState.manualModal) {
         closeManualEntryModal();
     }
@@ -827,7 +834,7 @@ window.onclick = function (event) {
     if (bulkModal && event.target == bulkModal) {
         closeBulkFillModal();
     }
-}
+});
 
 // ==========================================
 // LÓGICA RELLENO MASIVO (BULK FILL)

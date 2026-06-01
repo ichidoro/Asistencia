@@ -92,12 +92,37 @@ class AsistenciaRepository:
         query = "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?"
         return await self.db.fetch_one(query, (turno_id, dia_semana))
 
+    # ── Whitelist de columnas legítimas para update_asistencia (SQL Injection Guard) ──
+    ALLOWED_COLUMNS = frozenset({
+        "estado", "hora_entrada_real", "hora_salida_real",
+        "hora_entrada_teorica", "hora_salida_teorica",
+        "horas_trabajadas", "horas_teoricas",
+        "minutos_atraso", "minutos_salida_adelantada", "minutos_deuda",
+        "minutos_extra_bruto", "minutos_extra_autorizados",
+        "minutos_colacion", "minutos_colacion_real",
+        "observaciones", "deuda_condonada", "estado_he",
+        "minutos_permiso_personal_deuda", "minutos_permisos_detectados",
+        "tiene_atraso", "tiene_salida_adelantada",
+        "jornada_especial_id",
+        "hora_entrada_2_teorica", "hora_salida_2_teorica",
+        "hora_entrada_2_real", "hora_salida_2_real",
+        "horas_trabajadas_segmento_2",
+        "fuente_marcacion", "hash_marcacion",
+        "minutos_colacion_auto", "tolerancia_aplicada_tipo",
+    })
+
     async def update_asistencia(self, empleado_id: int, fecha: str, update_data: Dict[str, Any]) -> None:
         """
-        Actualiza campos especÃ­ficos de una asistencia existente.
+        Actualiza campos específicos de una asistencia existente.
+        Valida columnas contra ALLOWED_COLUMNS para prevenir SQL injection.
         """
         if not update_data:
             return
+        
+        # Validar que todas las columnas están en el whitelist
+        invalid_cols = set(update_data.keys()) - self.ALLOWED_COLUMNS
+        if invalid_cols:
+            raise ValueError(f"Columnas no permitidas en update_asistencia: {invalid_cols}")
         
         set_clauses = []
         params = []

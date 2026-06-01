@@ -312,15 +312,24 @@ class SeguridadRepository:
         return rol_id
 
     async def update_rol(self, rol_id: int, nombre: str, descripcion: str, alcance_global: int, permisos: List[str]):
-        query_rol = "UPDATE roles SET nombre = ?, descripcion = ?, alcance_global = ? WHERE id = ?"
-        await self.db.execute(query_rol, (nombre, descripcion, alcance_global, rol_id))
-        
-        # Recrear permisos
-        await self.db.execute("DELETE FROM rol_permisos WHERE rol_id = ?", (rol_id,))
-        
-        if permisos:
-            permisos_data = [(rol_id, p) for p in permisos]
-            await self.db.executemany("INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)", permisos_data)
+        try:
+            # 1. Actualizar datos del rol
+            query_rol = "UPDATE roles SET nombre = ?, descripcion = ?, alcance_global = ? WHERE id = ?"
+            await self.db.execute(query_rol, (nombre, descripcion, alcance_global, rol_id))
+            
+            # 2. Recrear permisos atómicamente (DELETE + INSERTs en un solo batch)
+            batch_ops = [
+                ("DELETE FROM rol_permisos WHERE rol_id = ?", (rol_id,))
+            ]
+            for p in (permisos or []):
+                batch_ops.append((
+                    "INSERT INTO rol_permisos (rol_id, permiso_id) VALUES (?, ?)",
+                    (rol_id, p)
+                ))
+            await self.db.execute_batch(batch_ops)
+        except Exception as e:
+            logger.error(f"Error actualizando rol {rol_id} ('{nombre}'): {e}")
+            raise
 
     async def get_all_usuarios(self) -> List[Dict]:
         query = """

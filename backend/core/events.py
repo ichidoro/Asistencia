@@ -257,6 +257,9 @@ async def lifespan(app: FastAPI):
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
 
+                # Fase 2: Activar sync en tiempo real ahora que las tablas existen
+                await db.enable_realtime_sync(interval=3)
+
                 # 4. Iniciar Sincronización Automática
                 if settings.SYNC_ENABLED:
                     logger.info(f"⏰ Iniciando Sync Scheduler (Intervalo: {settings.SYNC_INTERVAL_SECONDS}s)")
@@ -363,14 +366,17 @@ async def lifespan(app: FastAPI):
                 logger.error(f"❌ Error en inicio background: {bg_err}")
                 startup_manager.update(100, "Inicio parcial", ready=True, error=str(bg_err))
 
-        # Lanzar en background — el servidor queda disponible de inmediato
-        # Guardar referencia: evita que el GC destruya la tarea antes de completarse
-        _startup_bg_task = asyncio.create_task(finish_startup())
-        logger.info("⚡ Servidor disponible — schemas iniciando en background...")
+        # FIX-CORRUPCION: finish_startup es BLOQUEANTE — el servidor NO acepta
+        # requests hasta que TODAS las tablas estén creadas y sincronizadas.
+        # Antes era background (create_task), lo que causaba race conditions:
+        # - Requests llegaban antes de que las tablas existieran
+        # - DDL (CREATE TABLE) corría en paralelo con queries de usuario
+        # - El sync nativo competía con los CREATE TABLE
+        await finish_startup()
         
         logger.info(f"🌐 API escuchando en {settings.API_HOST}:{settings.API_PORT}")
         logger.success("=" * 60)
-        logger.success("✅ Servidor listo (Tareas de fondo en progreso)")
+        logger.success("✅ Servidor listo — todas las tablas creadas y sincronizadas")
         logger.success("=" * 60)
         
     except Exception as e:

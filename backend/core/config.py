@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     # ============================================
     # API
     # ============================================
-    API_HOST: str = "127.0.0.1"
-    API_PORT: int = 8000
+    API_HOST: str = "0.0.0.0"  # Cloud-ready: acepta conexiones externas
+    API_PORT: int = int(os.environ.get("PORT", 8000))  # Cloud Run define PORT
     API_RELOAD: bool = True  # Solo en development
     
     # CORS
@@ -43,6 +43,7 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "http://localhost:3000",  # Si usas React u otro frontend
+        "https://*.run.app",     # Google Cloud Run
     ]
     
     # ============================================
@@ -194,6 +195,11 @@ class Settings(BaseSettings):
     def is_testing(self) -> bool:
         """Check si está en testing"""
         return self.TESTING or self.APP_ENV == "testing"
+    
+    @property
+    def is_cloud(self) -> bool:
+        """Detecta si corre en Google Cloud Run (K_SERVICE es auto-set por Cloud Run)"""
+        return bool(os.environ.get("K_SERVICE"))
 
 
 # Instancia global de settings

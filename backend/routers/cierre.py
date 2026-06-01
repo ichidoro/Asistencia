@@ -131,12 +131,14 @@ async def reabrir_cierre(
                 (cierre['fecha_inicio'], cierre['fecha_fin'])
             )
             
-            # Desmarcar todos los demás periodos como activos y marcar el reabierto como activo/vigente
-            await db.execute("UPDATE periodos_rrhh SET activo = 0")
-            await db.execute(
-                "UPDATE periodos_rrhh SET activo = 1 WHERE fecha_inicio = ? AND fecha_fin = ?",
+            # Desactivar solo el periodo específico que se está reabriendo y reactivarlo
+            periodo_row = await db.fetch_one(
+                "SELECT id FROM periodos_rrhh WHERE fecha_inicio = ? AND fecha_fin = ?",
                 (cierre['fecha_inicio'], cierre['fecha_fin'])
             )
+            if periodo_row:
+                await db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id = ?", (periodo_row['id'],))
+                await db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (periodo_row['id'],))
             logger.info(f"✨ periodos_rrhh actualizado a 'abierto' y marcado como Vigente para el rango {cierre['fecha_inicio']} a {cierre['fecha_fin']} (Reapertura)")
         except Exception as e_open_rrhh:
             logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh tras reapertura: {e_open_rrhh}")

@@ -60,6 +60,21 @@ class ConfiguracionRepository:
                 )
             """)
 
+        # 3b. Tabla Relación Bonos ↔ Áreas (Wizard)
+        if not await self.db.table_exists("area_bonos"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS area_bonos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    area_id INTEGER NOT NULL,
+                    bono_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE CASCADE,
+                    FOREIGN KEY (bono_id) REFERENCES bonos (id) ON DELETE CASCADE,
+                    UNIQUE(area_id, bono_id)
+                )
+            """)
+            logger.info("✨ Tabla 'area_bonos' creada exitosamente")
+
         # 4. Tabla Tipos de Justificación (Maestro)
         if not await self.db.table_exists("justificacion_tipos"):
             await self.db.execute("""
@@ -727,11 +742,6 @@ class ConfiguracionRepository:
         """
         return await self.db.fetch_all(query, (empleado_id, fecha, fecha))
 
-    async def get_justificacion_activa(self, empleado_id: int, fecha: str) -> Optional[Dict]:
-        """
-        Busca si existe una justificación activa para la fecha dada.
-        Retorna el detalle si existe, o None.
-        """
     async def get_justificacion_activa(self, empleado_id: int, fecha: str) -> Optional[Dict]:
         """
         Busca si existe una justificación activa para la fecha dada.

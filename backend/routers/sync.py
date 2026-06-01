@@ -201,11 +201,12 @@ class WizardCommitAllRequest(BaseModel):
     cargos: Dict[str, str]
     generos: List[str]
     turnos: Dict[str, Optional[int]]
+    bonos: Optional[Dict[str, List[int]]] = None  # area_name → [bono_ids]
 
 @router.post(
     "/wizard/commit-all/",
     summary="Wizard Mega-Commit: Persistir todo",
-    description="Crea áreas, cargos, géneros y asignaciones de turnos en una sola transacción ACID."
+    description="Crea áreas, cargos, géneros, asignaciones de turnos y bonos por área en una sola transacción ACID."
 )
 async def wizard_commit_all(
     request: WizardCommitAllRequest,
@@ -217,7 +218,8 @@ async def wizard_commit_all(
             areas=request.areas,
             cargos=request.cargos,
             generos=request.generos,
-            turnos=request.turnos
+            turnos=request.turnos,
+            bonos=request.bonos
         )
         return result
     except Exception as e:
