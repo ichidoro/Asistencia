@@ -111,27 +111,8 @@ class TurnoRepository:
             """)
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_turno_areas_area ON turno_areas(area_id)")
 
-        # 3. Tabla Turno Segmentos (Micro-Shifts Opcional)
-        if not await self.db.table_exists("turno_segmentos"):
-            await self.db.execute("""
-                CREATE TABLE IF NOT EXISTS turno_segmentos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    turno_dia_id INTEGER NOT NULL,
-                    hora_inicio TEXT NOT NULL,
-                    hora_fin TEXT NOT NULL,
-                    FOREIGN KEY (turno_dia_id) REFERENCES turno_dias (id) ON DELETE CASCADE
-                )
-            """)
-
-        # 4. Tabla Plantillas Planificación
-        if not await self.db.table_exists("plantillas_planificacion"):
-            await self.db.execute("""
-                CREATE TABLE IF NOT EXISTS plantillas_planificacion (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nombre TEXT NOT NULL,
-                    configuracion_json TEXT NOT NULL
-                )
-            """)
+        # [ELIMINADO] turno_segmentos — tabla fantasma, nunca usada (causa corrupción en Turso)
+        # [ELIMINADO] plantillas_planificacion — tabla fantasma, nunca usada (causa corrupción en Turso)
 
         # 5. Tabla Asignación Turnos
         if not await self.db.table_exists("asignacion_turnos"):
@@ -155,20 +136,7 @@ class TurnoRepository:
         # Sin esto, el motor hacía 3 lookups separados por cada día del periodo reprocesado.
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_asig_emp_rango ON asignacion_turnos(empleado_id, fecha_inicio, fecha_fin)")
         
-        # 6. Tabla Bolsa de Horas
-        if not await self.db.table_exists("bolsa_horas_resumen"):
-            await self.db.execute("""
-                CREATE TABLE IF NOT EXISTS bolsa_horas_resumen (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    empleado_id INTEGER NOT NULL,
-                    periodo TEXT NOT NULL,
-                    saldo_inicial REAL DEFAULT 0,
-                    horas_trabajadas REAL DEFAULT 0,
-                    horas_teoricas REAL DEFAULT 0,
-                    saldo_final REAL DEFAULT 0,
-                    FOREIGN KEY (empleado_id) REFERENCES empleados (id)
-                )
-            """)
+        # [ELIMINADO] bolsa_horas_resumen — tabla fantasma sin INSERT, causa corrupción en Turso
 
         # 7. Tabla Asistencias (Marcaciones Procesadas)
         if not await self.db.table_exists("asistencias"):
@@ -476,7 +444,12 @@ class TurnoRepository:
             # Asociar a múltiples áreas
             if turno.areas:
                 for area_name in turno.areas:
-                    await self.db.execute("INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ?", (turno_id, area_name))
+                    cursor_ta = await self.db.execute(
+                        "INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ? COLLATE NOCASE",
+                        (turno_id, area_name)
+                    )
+                    if cursor_ta and hasattr(cursor_ta, 'rowcount') and cursor_ta.rowcount == 0:
+                        logger.warning(f"⚠️ Área '{area_name}' no encontrada en tabla areas — turno_areas no insertado para turno #{turno_id}")
             
             # 2. Insertar Días
             sql_dia = """
@@ -544,10 +517,9 @@ class TurnoRepository:
             query = f"""
                 SELECT DISTINCT t.*
                 FROM turnos t
-                LEFT JOIN turno_areas ta ON t.id = ta.turno_id
-                LEFT JOIN areas a ON ta.area_id = a.id
+                INNER JOIN turno_areas ta ON t.id = ta.turno_id
+                INNER JOIN areas a ON ta.area_id = a.id
                 WHERE a.nombre IN ({placeholders})
-                   OR ta.area_id IS NULL -- Fallback para turnos huérfanos/globales
                 ORDER BY t.nombre
             """
             turnos_list = await self.db.fetch_all(query, tuple(areas))
@@ -921,7 +893,12 @@ class TurnoRepository:
             await self.db.execute("DELETE FROM turno_areas WHERE turno_id = ?", (turno_id,))
             if turno.areas:
                 for area_name in turno.areas:
-                    await self.db.execute("INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ?", (turno_id, area_name))
+                    cursor_ta = await self.db.execute(
+                        "INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ? COLLATE NOCASE",
+                        (turno_id, area_name)
+                    )
+                    if cursor_ta and hasattr(cursor_ta, 'rowcount') and cursor_ta.rowcount == 0:
+                        logger.warning(f"⚠️ Área '{area_name}' no encontrada en tabla areas — turno_areas no insertado para turno #{turno_id}")
             
             
             # 2. Recrear Días

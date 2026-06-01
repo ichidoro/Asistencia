@@ -467,6 +467,7 @@ function renderHorariosUI() {
                                                     Horas Semanales <i id="sort-icon-turnos-meta_horas_semanales" class="bi bi-arrow-down-up small text-muted"></i>
                                                 </th>
                                                 <th>Tolerancias (Alerta/Desc)</th>
+                                                <th>Áreas</th>
                                                 <th>Acciones</th>
                                             </tr>
                                         </thead>
@@ -993,7 +994,7 @@ function renderTurnosTable() {
     if (!tbody) return;
 
     if (turnosList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">No hay turnos creados</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No hay turnos creados</td></tr>`;
         return;
     }
 
@@ -1010,6 +1011,7 @@ function renderTurnosTable() {
             <td><span class="badge bg-secondary">${tipoBadge}</span></td>
             <td>${t.meta_horas_semanales} hrs</td>
             <td>${t.tolerancia_retraso_alerta} min / ${t.tolerancia_retraso_descuento} min</td>
+            <td>${(t.areas && t.areas.length > 0) ? t.areas.map(a => `<span class="badge bg-info bg-opacity-75 me-1 mb-1" style="font-size:.7em">${a}</span>`).join('') : '<span class="badge bg-warning text-dark" style="font-size:.7em"><i class="bi bi-exclamation-triangle me-1"></i>Sin Área</span>'}</td>
             <td>
                 ${canEdit ? `
                 <div class="btn-group btn-group-sm">

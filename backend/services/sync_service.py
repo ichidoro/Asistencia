@@ -55,6 +55,81 @@ def _set_empleados_cache(data: List[Dict]) -> None:
     logger.debug(f"⚡ [Cache] Empleados BioAlba almacenados ({len(data)} registros, TTL={_EMPLEADOS_TTL}s)")
 
 
+class CatalogCache:
+    """
+    Pre-carga catálogos (áreas, cargos, géneros) en memoria con queries bulk.
+    Reemplaza cientos de queries individuales por ~5 queries totales.
+    Uso:
+        cache = await CatalogCache.load(db)
+        area_id = cache.find_area_id("BODEGA")
+        cargo_id = cache.find_cargo_id("OPERADOR")
+        genero_id = cache.find_genero_id("Masculino")
+    """
+    def __init__(self):
+        self._areas_by_name: Dict[str, int] = {}      # nombre -> id
+        self._areas_by_alias: Dict[str, int] = {}      # alias -> area_id
+        self._areas_by_id: Dict[int, str] = {}          # id -> nombre
+        self._cargos_by_name: Dict[str, int] = {}
+        self._cargos_by_alias: Dict[str, int] = {}
+        self._cargos_by_id: Dict[int, str] = {}
+        self._generos_by_name: Dict[str, int] = {}      # nombre_lower -> id
+
+    @classmethod
+    async def load(cls, database) -> "CatalogCache":
+        """Carga todos los catálogos con 5 queries bulk."""
+        cache = cls()
+        
+        # 1. Áreas (1 query)
+        areas = await database.fetch_all("SELECT id, nombre FROM areas")
+        for a in areas:
+            cache._areas_by_name[a["nombre"]] = a["id"]
+            cache._areas_by_id[a["id"]] = a["nombre"]
+        
+        # 2. Alias de áreas (1 query)
+        aliases_a = await database.fetch_all("SELECT alias, area_id FROM areas_alias")
+        for al in aliases_a:
+            cache._areas_by_alias[al["alias"]] = al["area_id"]
+        
+        # 3. Cargos (1 query)
+        cargos = await database.fetch_all("SELECT id, nombre FROM cargos")
+        for c in cargos:
+            cache._cargos_by_name[c["nombre"]] = c["id"]
+            cache._cargos_by_id[c["id"]] = c["nombre"]
+        
+        # 4. Alias de cargos (1 query)
+        aliases_c = await database.fetch_all("SELECT alias, cargo_id FROM cargos_alias")
+        for al in aliases_c:
+            cache._cargos_by_alias[al["alias"]] = al["cargo_id"]
+        
+        # 5. Géneros (1 query)
+        generos = await database.fetch_all("SELECT id, nombre FROM cat_generos")
+        for g in generos:
+            cache._generos_by_name[g["nombre"].lower()] = g["id"]
+        
+        logger.info(f"⚡ CatalogCache cargado: {len(cache._areas_by_name)} áreas, "
+                     f"{len(cache._areas_by_alias)} alias áreas, "
+                     f"{len(cache._cargos_by_name)} cargos, "
+                     f"{len(cache._cargos_by_alias)} alias cargos, "
+                     f"{len(cache._generos_by_name)} géneros (5 queries)")
+        return cache
+    
+    def find_area_id(self, name_or_alias: str) -> Optional[int]:
+        """Busca área por nombre o alias — O(1) en memoria."""
+        return self._areas_by_name.get(name_or_alias) or self._areas_by_alias.get(name_or_alias)
+    
+    def find_cargo_id(self, name_or_alias: str) -> Optional[int]:
+        """Busca cargo por nombre o alias — O(1) en memoria."""
+        return self._cargos_by_name.get(name_or_alias) or self._cargos_by_alias.get(name_or_alias)
+    
+    def find_genero_id(self, nombre: str) -> Optional[int]:
+        """Busca género por nombre — O(1) en memoria."""
+        return self._generos_by_name.get(nombre.lower()) if nombre else None
+    
+    def get_area_name(self, area_id: int) -> Optional[str]:
+        """Obtiene nombre de área por ID — O(1) en memoria."""
+        return self._areas_by_id.get(area_id)
+
+
 class SyncService:
     """
     Servicio para sincronizar datos desde BioAlba al sistema local.
@@ -138,6 +213,7 @@ class SyncService:
         """
         Guardián de Áreas (Pre-Check): Descarga empleados, extrae áreas, verifica contra DB local.
         Retorna status: requires_confirmation siempre que haya datos, para abrir el unificado Modal de Sincronización.
+        OPTIMIZADO: Usa CatalogCache (5 queries bulk) en vez de queries individuales por empleado.
         """
         try:
             logger.info("🛡️ Guardián de Áreas: Verificando integridad de catálogo y preparando selector...")
@@ -153,10 +229,9 @@ class SyncService:
                 return {"status": "ok"}
             
             await db.connect()
-            from backend.repositories.area import AreaRepository
-            area_repo = AreaRepository(db)
-            from backend.repositories.cargo import CargoRepository
-            cargo_repo = CargoRepository(db)
+            
+            # ⚡ Pre-cargar TODOS los catálogos con 5 queries bulk
+            cache = await CatalogCache.load(db)
             
             areas_desconocidas = set()
             areas_conocidas = set()
@@ -167,10 +242,11 @@ class SyncService:
             cargos_conocidos_por_area = {}
             generos_desconocidos = set()
             
+            # ⚡ Loop sin queries — todo se resuelve en memoria
             for emp_data in empleados_bioalba:
                 area_raw = str(emp_data.get('area', '')).strip()
                 if area_raw and area_raw not in ['---', 'None']:
-                    area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
+                    area_id = cache.find_area_id(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
                     else:
@@ -179,7 +255,7 @@ class SyncService:
 
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
                 if cargo_raw and cargo_raw not in ['---', 'None']:
-                    cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
+                    cargo_id = cache.find_cargo_id(cargo_raw)
                     if not cargo_id:
                         if cargo_raw not in cargos_desconocidos:
                             cargos_desconocidos[cargo_raw] = set()
@@ -192,8 +268,7 @@ class SyncService:
                         
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None']:
-                    genero_row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero_raw,))
-                    if not genero_row:
+                    if not cache.find_genero_id(genero_raw):
                         generos_desconocidos.add(genero_raw)
                         
             # Siempre retornamos requires_confirmation para que el Guardián actúe como Selector Principal.
@@ -217,6 +292,7 @@ class SyncService:
         except Exception as e:
             logger.error(f"❌ Error en check_guardian_areas: {e}")
             return {"status": "error", "message": str(e)}
+
 
     async def commit_wizard_areas(self, areas: Dict[str, str]) -> Dict[str, Any]:
         from backend.repositories.area import AreaRepository
@@ -269,18 +345,20 @@ class SyncService:
         areas: Dict[str, str],
         cargos: Dict[str, str],
         generos: List[str],
-        turnos: Dict[str, Optional[int]]
+        turnos: Dict[str, Optional[int]],
+        bonos: Optional[Dict[str, List[int]]] = None
     ) -> Dict[str, Any]:
         """
         Mega-Commit del Wizard de Sincronización.
-        Guarda en una sola transacción ACID todas las resoluciones de áreas, cargos, géneros y asignaciones de turnos.
+        Guarda en una sola transacción ACID todas las resoluciones de áreas, cargos, géneros,
+        asignaciones de turnos y bonos por área.
         Si cualquier paso falla, se hace rollback automático de todo.
         """
         from backend.repositories.area import AreaRepository
         from backend.repositories.cargo import CargoRepository
         
         await db.connect()
-        creados = {"areas": 0, "cargos": 0, "generos": 0, "turnos": 0}
+        creados = {"areas": 0, "cargos": 0, "generos": 0, "turnos": 0, "bonos": 0}
 
         async with db.transaction():
             area_repo = AreaRepository(db)
@@ -325,18 +403,44 @@ class SyncService:
                     await db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (genero,))
                     creados["generos"] += 1
 
-            # 4. TURNOS
+            # 4. TURNOS (Aditivo: un área puede tener múltiples turnos)
             for area_name, turno_id in turnos.items():
                 if not turno_id:
                     continue
                 area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
                 if area_id:
-                    await db.execute("DELETE FROM turno_areas WHERE area_id = ?", (area_id,))
-                    await db.execute("INSERT INTO turno_areas (area_id, turno_id) VALUES (?, ?)", (area_id, turno_id))
-                    creados["turnos"] += 1
+                    # Verificar si ya existe la relación antes de insertar
+                    existing = await db.fetch_one(
+                        "SELECT 1 FROM turno_areas WHERE area_id = ? AND turno_id = ?",
+                        (area_id, turno_id)
+                    )
+                    if not existing:
+                        await db.execute(
+                            "INSERT OR IGNORE INTO turno_areas (area_id, turno_id) VALUES (?, ?)",
+                            (area_id, turno_id)
+                        )
+                        creados["turnos"] += 1
+                    else:
+                        logger.debug(f"Turno {turno_id} ya asignado a área {area_name} (area_id={area_id})")
+
+
+            # 5. BONOS POR ÁREA
+            if bonos:
+                for area_name, bono_ids in bonos.items():
+                    area_id = await area_repo.find_area_id_by_name_or_alias(area_name)
+                    if area_id:
+                        # Limpiar asignaciones anteriores para esta área
+                        await db.execute("DELETE FROM area_bonos WHERE area_id = ?", (area_id,))
+                        for bono_id in bono_ids:
+                            await db.execute(
+                                "INSERT OR IGNORE INTO area_bonos (area_id, bono_id) VALUES (?, ?)",
+                                (area_id, bono_id)
+                            )
+                            creados["bonos"] += 1
 
         logger.info(f"✅ [WizardCommitAll] Transacción exitosa. Creados: {creados}")
         return {"status": "ok", "stats": creados}
+
 
     # ELIMINADO: finalize_wizard_sync() — código muerto (80 líneas)
     # Reemplazado por commits progresivos:
@@ -475,8 +579,10 @@ class SyncService:
             area_repo = AreaRepository(db)
             cargo_repo = CargoRepository(db)
             
-            # --- NUEVO: GUARDIÁN DE ÁREAS ---
-            # Validar que todas las áreas de los empleados a sincronizar existan en el catálogo o alias
+            # ⚡ GUARDIÁN DE ÁREAS (OPTIMIZADO con CatalogCache)
+            # Pre-cargar todos los catálogos con 5 queries bulk
+            cache = await CatalogCache.load(db)
+            
             areas_desconocidas = set()
             areas_conocidas = set()
             areas_conteo = {}
@@ -492,6 +598,7 @@ class SyncService:
                     r.replace('.', '').replace('-', '').strip().upper() for r in ruts
                 )
 
+            # ⚡ Loop sin queries — todo se resuelve en memoria
             for emp_data in empleados_bioalba:
                 # Si el usuario seleccionó RUTs específicos, ignorar los demás en el Guardián
                 if ruts_seleccionados:
@@ -506,7 +613,7 @@ class SyncService:
                     continue
                     
                 if area_raw and area_raw not in ['---', 'None']:
-                    area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
+                    area_id = cache.find_area_id(area_raw)
                     if not area_id:
                         areas_desconocidas.add(area_raw)
                         areas_conteo[area_raw] = areas_conteo.get(area_raw, 0) + 1
@@ -515,7 +622,7 @@ class SyncService:
             
                 cargo_raw = str(emp_data.get('cargo', '')).strip()
                 if cargo_raw and cargo_raw not in ['---', 'None']:
-                    cargo_id = await cargo_repo.find_cargo_id_by_name_or_alias(cargo_raw)
+                    cargo_id = cache.find_cargo_id(cargo_raw)
                     if not cargo_id:
                         if cargo_raw not in cargos_desconocidos:
                             cargos_desconocidos[cargo_raw] = set()
@@ -528,8 +635,7 @@ class SyncService:
 
                 genero_raw = str(emp_data.get('genero', '')).strip()
                 if genero_raw and genero_raw not in ['---', 'None']:
-                    genero_row = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero_raw,))
-                    if not genero_row:
+                    if not cache.find_genero_id(genero_raw):
                         generos_desconocidos.add(genero_raw)
 
             if areas_desconocidas or cargos_desconocidos or generos_desconocidos:
@@ -573,27 +679,17 @@ class SyncService:
                 emp_filtrados.append(emp_data)
 
             # --- AUDITORÍA DE SEGURIDAD (GUARDIÁN DE TURNOS) ---
-            # Impedir sincronización de empleados cuyas áreas no tienen turno asociado
+            # ⚡ OPTIMIZADO: Usa CatalogCache para resolver áreas sin queries
             from backend.repositories.turno import TurnoRepository
             turno_repo = TurnoRepository(db)
             turnos_stats = await turno_repo.get_stats_por_area()
             
-            area_id_cache = {}
-            area_name_cache = {}
             emp_validos = []
             
             for emp_data in emp_filtrados:
                 area_raw = str(emp_data.get('area', '')).strip()
-                if area_raw not in area_id_cache:
-                    area_id = await area_repo.find_area_id_by_name_or_alias(area_raw)
-                    area_id_cache[area_raw] = area_id
-                    if area_id:
-                        real_area = await area_repo.get_area_by_id(area_id)
-                        area_name_cache[area_raw] = real_area['nombre'] if real_area else None
-                    else:
-                        area_name_cache[area_raw] = None
-                        
-                real_area_name = area_name_cache.get(area_raw)
+                area_id = cache.find_area_id(area_raw)
+                real_area_name = cache.get_area_name(area_id) if area_id else None
                 
                 if real_area_name:
                     turnos_globales = turnos_stats.get('globales', 0)
@@ -607,6 +703,7 @@ class SyncService:
                 emp_validos.append(emp_data)
                 
             emp_filtrados = emp_validos
+
 
             total_a_sync = len(emp_filtrados)
             logger.info(f"📊 Empleados a sincronizar: {total_a_sync} (filtrados: {self.stats['filtrados']})")
