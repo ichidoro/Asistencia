@@ -891,7 +891,7 @@ class AsistenciaService:
             if job_id:
                 _complete_job(job_id, stats['procesados'], stats['errores'], t_total)
             # Retornar dict especial con los resultados crudos
-            return {'_collect': results_to_save, '_he_collect': he_to_save, '_he_delete': he_to_delete, **stats}
+            return {'_collect': results_to_save, '_delete_collect': results_to_delete, '_he_collect': he_to_save, '_he_delete': he_to_delete, **stats}
 
         # ⚡ BATCH FINAL: guardar todos los resultados restantes en UN SOLO commit local (WAL)
         # suppress_auto_sync=True: NO disparar conn.sync() aquí.
@@ -975,12 +975,45 @@ class AsistenciaService:
         _reproceso_status['total'] = len(emp_ids)
 
         try:
+            import time as _time_mod
+
+            # ── PRE-CARGA COMPARTIDA: feriados 1 vez para todos ──────────────
+            feriados_dict = {}
+            try:
+                from backend.services.calendario_service import CalendarioService
+                cal_svc = CalendarioService()
+                anio_ini = int(fecha_inicio[:4])
+                anio_fin = int(fecha_fin[:4])
+                for _anio in range(anio_ini, anio_fin + 1):
+                    raw = await cal_svc.get_feriados(_anio)
+                    feriados_dict.update({f['fecha']: f['descripcion'] for f in raw})
+                logger.info(f"[⚡ Masivo] Feriados pre-cargados: {len(feriados_dict)} (años {anio_ini}-{anio_fin})")
+            except Exception as fer_err:
+                logger.warning(f"⚠️ [Masivo] Pre-carga feriados falló: {fer_err}. Cada empleado los cargará solo.")
+                feriados_dict = None
+
+            # ── FASE 1: Calcular en memoria (collect_only=True, 0 writes) ────
+            all_results_to_save = []
+            all_results_to_delete = []
+            all_he_to_save = []
+            all_he_to_delete = []
+            t0_masivo = _time_mod.time()
+
             for eid in emp_ids:
                 if eid in _empleados_en_reproceso:
                     continue
                 _empleados_en_reproceso.add(eid)
                 try:
-                    r = await self.reprocesar_periodo_empleado(eid, fecha_inicio, fecha_fin, force=force)
+                    r = await self.reprocesar_periodo_empleado(
+                        eid, fecha_inicio, fecha_fin, force=force,
+                        feriados_preloaded=feriados_dict,
+                        collect_only=True,
+                    )
+                    # Acumular resultados
+                    all_results_to_save.extend(r.get('_collect', []))
+                    all_results_to_delete.extend(r.get('_delete_collect', []))
+                    all_he_to_save.extend(r.get('_he_collect', []))
+                    all_he_to_delete.extend(r.get('_he_delete', []))
                     _reproceso_status['procesados'] += r.get('procesados', 0)
                     _reproceso_status['errores'] += r.get('errores', 0)
                 except Exception as e:
@@ -989,16 +1022,59 @@ class AsistenciaService:
                 finally:
                     _empleados_en_reproceso.discard(eid)
 
-            # ── 1 ÚNICO sync final a Turso Cloud (patrón batch) ──────────────
-            # Todos los batch_upsert anteriores usaron suppress_auto_sync=True (WAL local).
-            # Este único conn.sync() consolida TODO el WAL en 1 sola operación de red.
-            # Elimina los N×429 "Too Many Requests" que ocurrían con N syncs simultáneos.
+            t_calc = int((_time_mod.time() - t0_masivo) * 1000)
+            logger.info(
+                f"[⚡ Masivo] Cálculo completado en {t_calc}ms: "
+                f"{len(all_results_to_save)} upserts, {len(all_results_to_delete)} deletes, "
+                f"{len(all_he_to_save)} HE upserts, {len(all_he_to_delete)} HE deletes"
+            )
+
+            # ── FASE 2: 1 SOLO batch_upsert masivo ──────────────────────────
+            if all_results_to_save:
+                try:
+                    t_save = _time_mod.time()
+                    await self.repository.batch_upsert_asistencia(
+                        all_results_to_save, suppress_auto_sync=True
+                    )
+                    logger.info(f"💾 [Masivo] {len(all_results_to_save)} asistencias guardadas en {int((_time_mod.time() - t_save)*1000)}ms")
+                except Exception as save_err:
+                    logger.error(f"❌ [Masivo] Batch upsert falló: {save_err}. Intentando por empleado...")
+                    # Fallback: guardar por empleado individual
+                    for eid in emp_ids:
+                        emp_results = [r for r in all_results_to_save if r.get('empleado_id') == eid]
+                        if emp_results:
+                            try:
+                                await self.repository.batch_upsert_asistencia(emp_results, suppress_auto_sync=True)
+                            except Exception as fb_err:
+                                logger.error(f"❌ [Masivo Fallback] emp {eid}: {fb_err}")
+
+            if all_results_to_delete:
+                for eid_del, f_str in all_results_to_delete:
+                    try:
+                        await self.repository.delete_asistencia(eid_del, f_str)
+                    except Exception:
+                        pass
+
+            if all_he_to_save:
+                try:
+                    await self.he_repo.batch_upsert(all_he_to_save, suppress_auto_sync=True)
+                except Exception as he_err:
+                    logger.error(f"❌ [Masivo] HE batch upsert falló: {he_err}")
+
+            if all_he_to_delete:
+                for eid_del, f_str in all_he_to_delete:
+                    try:
+                        await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
+                    except Exception:
+                        pass
+
+            # ── FASE 3: 1 ÚNICO sync final a Turso Cloud ────────────────────
             try:
-                logger.info(f"☁️ [Reproceso Masivo] Iniciando sync final único a Turso Cloud ({len(emp_ids)} empleados)...")
+                logger.info(f"☁️ [Masivo] Sync final a Turso Cloud ({len(emp_ids)} empleados)...")
                 await db.sync_to_cloud_explicit()
-                logger.info(f"☁️ [Reproceso Masivo] Sync final completado.")
+                logger.info(f"☁️ [Masivo] Sync final completado.")
             except Exception as sync_err:
-                logger.warning(f"⚠️ [Reproceso Masivo] Sync final falló (datos seguros en WAL local): {sync_err}")
+                logger.warning(f"⚠️ [Masivo] Sync final falló (datos seguros en WAL): {sync_err}")
 
             _reproceso_status['estado'] = 'completado'
 
