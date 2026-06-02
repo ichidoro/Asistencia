@@ -250,7 +250,14 @@ function renderAsistenciaGlobal(matriz, fugasVal) {
         return req >= (maxRequerido * 0.15);
     });
     
-    const labels = tendenciaFiltrada.map(t => t.fecha ? new Date(t.fecha + 'T12:00:00').toLocaleDateString('es-ES', {day:'2-digit', month:'short'}) : '');
+    const labels = tendenciaFiltrada.map(t => {
+        if (!t.fecha) return '';
+        const dObj = new Date(t.fecha + 'T12:00:00');
+        const fechaStr = dObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+        const diaSemana = dObj.toLocaleDateString('es-ES', { weekday: 'long' });
+        const diaCapitalizado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
+        return [fechaStr, diaCapitalizado];
+    });
     const asistencias = tendenciaFiltrada.map(t => t.asistencia || 0);
     const ausenciasJustificadas = tendenciaFiltrada.map(t => t.ausencia_justificada || 0);
     const inasistencias = tendenciaFiltrada.map(t => t.inasistencia || 0);
