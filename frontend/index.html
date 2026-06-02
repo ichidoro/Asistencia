@@ -1758,6 +1758,25 @@
                                                 </div>
                                             </div>
                                         </div>
+
+                                        <!-- Tarjeta Sincronización BioAlba -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border-0 shadow-sm">
+                                                <div class="card-header bg-white fw-bold py-3">
+                                                    <i class="bi bi-arrow-repeat text-primary me-2"></i>Sincronización BioAlba
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="mb-3">
+                                                        <label for="ajuste-dias-volatilidad" class="form-label fw-bold small text-muted">Días de Volatilidad (Sincronización)</label>
+                                                        <div class="input-group">
+                                                            <input type="number" class="form-control" id="ajuste-dias-volatilidad" min="0" max="60" placeholder="Ej: 7">
+                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('bioalba_dias_volatilidad', 'ajuste-dias-volatilidad')" title="Guardar"><i class="bi bi-save"></i></button>
+                                                        </div>
+                                                        <div class="form-text">Días desde el fin de meses anteriores para permitir descargas. Usa 0 para desactivar.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -14,6 +14,8 @@ class SyncAsistenciaRequest(BaseModel):
     fecha_inicio: Optional[str] = None
     fecha_fin: Optional[str] = None
     areas: Optional[List[str]] = None
+    deep_sync: Optional[bool] = None
+    force_recalculate: Optional[bool] = None
 
 class WizardCommitAreasRequest(BaseModel):
     areas: Dict[str, str]

@@ -456,21 +456,27 @@ async def set_ajuste(
         "vencimiento_dias_alerta", 
         "dias_alerta_bloqueante", 
         "limite_contratos_temporales", 
-        "dia_cierre_rrhh"
+        "dia_cierre_rrhh",
+        "bioalba_dias_volatilidad"
     ]
     
     if clave in claves_numericas_criticas:
         try:
             val_int = int(valor)
-            if val_int < 1:
-                raise ValueError("El valor no puede ser menor a 1")
+            if clave == "bioalba_dias_volatilidad":
+                if val_int < 0:
+                    raise ValueError("El valor no puede ser menor a 0")
+            else:
+                if val_int < 1:
+                    raise ValueError("El valor no puede ser menor a 1")
             
             # Restricción especial para el cierre de RRHH para evitar problemas con Febrero
             if clave == "dia_cierre_rrhh" and val_int > 28:
                 raise HTTPException(status_code=400, detail="El día de cierre no puede ser mayor a 28 para prevenir errores en Febrero.")
                 
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Valor inválido para {clave}: Debe ser un número entero válido mayor a 0.")
+            msg_error = "Debe ser un número entero válido mayor o igual a 0." if clave == "bioalba_dias_volatilidad" else "Debe ser un número entero válido mayor a 0."
+            raise HTTPException(status_code=400, detail=f"Valor inválido para {clave}: {msg_error}")
 
     success = await service.set_ajuste(clave, valor)
     return {"success": success, "message": "Ajuste guardado"}

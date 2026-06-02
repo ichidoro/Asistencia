@@ -574,6 +574,8 @@ async def sincronizar_asistencia(
 async def sincronizar_asistencia_sync(
     fecha_inicio: Optional[str] = Query(None, description="AAAA-MM-DD"),
     fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD"),
+    deep_sync: bool = Query(False),
+    force_recalculate: bool = Query(False),
     request: SyncAsistenciaRequest = None,
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.wizard", "marcaciones.sincronizar", "reportes.sincronizar"]))
 ) -> Dict[str, Any]:
@@ -583,6 +585,8 @@ async def sincronizar_asistencia_sync(
     _inicio = (request.fecha_inicio if request and request.fecha_inicio else None) or fecha_inicio
     _fin    = (request.fecha_fin    if request and request.fecha_fin    else None) or fecha_fin
     areas   = request.areas if request else None
+    _deep_sync = (request.deep_sync if request and request.deep_sync is not None else None) or deep_sync
+    _force_recalc = (request.force_recalculate if request and request.force_recalculate is not None else None) or force_recalculate
 
     # RLS Check
     if not current_user.alcance_global:
@@ -596,9 +600,9 @@ async def sincronizar_asistencia_sync(
             else:
                 raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
 
-    logger.info(f"📅 Sync marcaciones: {_inicio} → {_fin} | áreas: {areas or 'todas'}")
+    logger.info(f"📅 Sync marcaciones: {_inicio} → {_fin} | áreas: {areas or 'todas'} | deep: {_deep_sync} | force_recalc: {_force_recalc}")
 
-    stats = await service.sync_marcaciones(_inicio, _fin, areas, force_recalculate=True)
+    stats = await service.sync_marcaciones(_inicio, _fin, areas, deep_sync=_deep_sync, force_recalculate=_force_recalc)
     return {
         "message": "Sincronización de asistencia completada",
         "stats": stats,

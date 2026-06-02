@@ -1592,7 +1592,8 @@ window.loadAjustesSistema = async function() {
             'limite_contratos_temporales': 'ajuste-limite-contratos',
             'vencimiento_dias_alerta': 'ajuste-dias-alerta',
             'dias_alerta_bloqueante': 'ajuste-dias-bloqueante',
-            'dia_cierre_rrhh': 'ajuste-dia-cierre'
+            'dia_cierre_rrhh': 'ajuste-dia-cierre',
+            'bioalba_dias_volatilidad': 'ajuste-dias-volatilidad'
         };
 
         // Rellenar valores

@@ -610,7 +610,7 @@ async function _loadMarcacionesDataImpl() {
     }
 }
 
-async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, fechaFinOverride = null) {
+async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, fechaFinOverride = null, deepSync = false) {
     const btn = document.querySelector('button[onclick="syncMarcacionesBioAlba()"]');
     const originalContent = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conectando...'; }
@@ -630,11 +630,29 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         // Calcular el último día del mes correctamente evitando problemas de Timezone
         const mes  = stateMarcacionesApp.month;
         const anio = stateMarcacionesApp.year;
-        const ultimoDia = new Date(anio, mes, 0).getDate(); // mes es 1-12, 'mes' como parámetro de Date(year, monthIndex) donde monthIndex es 0-11. Pero Date(year, month, 0) nos da el último día del mes especificado!
+        const ultimoDia = new Date(anio, mes, 0).getDate();
         fechaFin = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
     }
 
-    console.log(`[Sync BioAlba] Rango: ${fechaInicio} → ${fechaFin}`, areas ? `Áreas: ${areas.join(', ')}` : 'Todas las áreas');
+    console.log(`[Sync BioAlba] Rango: ${fechaInicio} → ${fechaFin}`, areas ? `Áreas: ${areas.join(', ')}` : 'Todas las áreas', `Deep Sync: ${deepSync}`);
+
+    // Mostrar overlay de carga SweetAlert2
+    Swal.fire({
+        title: '<span style="font-size:1.15rem;font-weight:800;color:#1e293b;">⚡ Sincronizando con BioAlba</span>',
+        html: `
+            <div class="text-center py-2" style="font-family:'Inter',sans-serif;">
+                <div class="spinner-border text-primary mb-3" style="width: 2.5rem; height: 2.5rem;" role="status"></div>
+                <p class="mb-1 fw-bold text-slate-700">Descargando marcaciones y procesando asistencia...</p>
+                <p class="text-muted small mb-0">Por favor, no cierres esta ventana. El proceso tardará unos segundos.</p>
+            </div>
+        `,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
 
     try {
         // Construir payload (áreas son body, fechas van en query params)
@@ -644,9 +662,9 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-        if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando... (esto puede tardar varios minutos)';
+        if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando...';
 
-        const url = `/api/sync/asistencia/now/?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const url = `/api/sync/asistencia/now/?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&deep_sync=${deepSync}`;
         const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -714,9 +732,11 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
 
             if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
         } else {
+            Swal.close();
             showToast('❌ Error en sincronización: ' + (result.detail || 'Error desconocido'), 'error');
         }
     } catch (e) {
+        Swal.close();
         console.error('[Sync BioAlba] Error:', e);
         if (e.name === 'AbortError') {
             showToast('⏱️ Timeout: La sincronización tardó más de 5 minutos.', 'error');
@@ -788,6 +808,16 @@ function openSyncMarcacionesModal() {
                             <div class="text-center">
                                 <div class="spinner-border spinner-border-sm text-primary"></div>
                                 <span class="ms-2">Cargando áreas...</span>
+                            </div>
+                        </div>
+                        <!-- Sincronización profunda (Deep Sync) -->
+                        <div class="mt-3 pt-2 border-top">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sync-deep-sync">
+                                <label class="form-check-label fw-bold text-danger small" for="sync-deep-sync">
+                                    <i class="bi bi-exclamation-triangle"></i> Sincronización profunda (Forzar red)
+                                </label>
+                                <div class="form-text small">Descarga completa del periodo omitiendo la regla de meses estables.</div>
                             </div>
                         </div>
                     </div>
@@ -868,10 +898,14 @@ async function confirmSyncMarcaciones() {
     // Cerrar modal liberando foco (evita advertencia ARIA)
     const modalEl = document.getElementById('modal-sync-marcaciones');
     if (document.activeElement) document.activeElement.blur();
+    
+    // Leer el valor de deep_sync antes de cerrar/destruir el modal
+    const deepSync = document.getElementById('sync-deep-sync')?.checked || false;
+    
     bootstrap.Modal.getInstance(modalEl)?.hide();
 
     // Sincronizar con áreas Y rango de fechas
-    await syncMarcacionesBioAlba(selectedAreas, fInicio, fFin);
+    await syncMarcacionesBioAlba(selectedAreas, fInicio, fFin, deepSync);
 }
 
 

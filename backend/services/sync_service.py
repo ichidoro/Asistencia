@@ -801,7 +801,7 @@ class SyncService:
             logger.error(f"❌ Error buscando empleado en BioAlba: {e}")
             return []
 
-    async def sync_marcaciones(self, fecha_inicio: str = None, fecha_fin: str = None, areas: List[str] = None, ruts: List[str] = None, force_recalculate: bool = False, skip_recalc: bool = False) -> Dict[str, Any]:
+    async def sync_marcaciones(self, fecha_inicio: str = None, fecha_fin: str = None, areas: List[str] = None, ruts: List[str] = None, force_recalculate: bool = False, skip_recalc: bool = False, deep_sync: bool = False) -> Dict[str, Any]:
         """
         Sincronizar marcaciones de asistencia desde BioAlba y RECALCULAR ASISTENCIA.
         Soporta rangos multi-mes: si fecha_inicio y fecha_fin abarcan más de un mes,
@@ -810,6 +810,7 @@ class SyncService:
         force_recalculate: Si es True, recalcula todo el rango incluso si no hay marcas nuevas.
         skip_recalc: Si es True, sólo guarda las marcaciones raw y omite el recálculo de asistencia.
                      Usar cuando el caller realizará el reproceso completo por su cuenta.
+        deep_sync: Si es True, fuerza la descarga completa de red de todos los meses sin omitir estables.
         """
         try:
             import calendar
@@ -842,7 +843,7 @@ class SyncService:
 
             logger.info(
                 f"🔄 Iniciando sync de marcaciones (rango: {fecha_inicio} → {fecha_fin}, "
-                f"meses: {len(meses_a_sincronizar)}, Force: {force_recalculate})..."
+                f"meses: {len(meses_a_sincronizar)}, Force Recalc: {force_recalculate}, Deep Sync: {deep_sync})..."
             )
 
             # Reset stats
@@ -879,11 +880,74 @@ class SyncService:
 
             logger.info(f"👥 Total empleados válidos para sync: {len(valid_ruts)}")
 
+            # Leer bioalba_dias_volatilidad de la base de datos
+            try:
+                row_vol = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'bioalba_dias_volatilidad'")
+                dias_volatilidad = int(row_vol['valor']) if row_vol else 7
+            except Exception as e_vol:
+                logger.warning(f"⚠️ No se pudo leer bioalba_dias_volatilidad de DB, usando default=7: {e_vol}")
+                dias_volatilidad = 7
+
+            # Obtener IDs de empleados correspondientes a valid_ruts para check de logs_raw
+            valid_emp_ids = set()
+            if valid_ruts:
+                try:
+                    rut_list = list(valid_ruts)
+                    if len(rut_list) < 900:
+                        placeholders = ','.join('?' for _ in rut_list)
+                        rows_emp = await db.fetch_all(
+                            f"SELECT id FROM empleados WHERE REPLACE(REPLACE(rut, '.', ''), '-', '') IN ({placeholders})",
+                            tuple(rut_list)
+                        )
+                    else:
+                        rows_emp = await db.fetch_all("SELECT id FROM empleados")
+                    valid_emp_ids = {r['id'] for r in rows_emp}
+                except Exception as e_emp:
+                    logger.warning(f"⚠️ Error obteniendo IDs de empleados para validación de logs_raw: {e_emp}")
+
             # 2. Descargar marcaciones de BioAlba para CADA MES del rango
             # BioAlba solo expone un Excel mensual, por lo que iteramos.
             marcaciones_bioalba = []
             async with self.scraper:
                 for mes_iter, anio_iter in meses_a_sincronizar:
+                    # Determinar si el mes es estable (fuera de la ventana de volatilidad)
+                    _, last_day = calendar.monthrange(anio_iter, mes_iter)
+                    fecha_fin_mes_iter = datetime(anio_iter, mes_iter, last_day)
+                    
+                    es_estable = False
+                    if not ((anio_iter > now.year) or (anio_iter == now.year and mes_iter >= now.month)):
+                        if dias_volatilidad == 0:
+                            es_estable = True
+                        else:
+                            limite_volatilidad = fecha_fin_mes_iter + _td(days=dias_volatilidad)
+                            hoy_inicio_dia = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                            es_estable = limite_volatilidad < hoy_inicio_dia
+
+                    omitir_descarga = False
+                    if es_estable and not deep_sync and valid_emp_ids:
+                        primer_dia_mes = f"{anio_iter}-{mes_iter:02d}-01"
+                        ultimo_dia_mes = f"{anio_iter}-{mes_iter:02d}-{last_day} 23:59:59"
+                        
+                        try:
+                            emp_list = list(valid_emp_ids)
+                            if len(emp_list) < 900:
+                                placeholders = ','.join('?' for _ in emp_list)
+                                query_check = f"SELECT COUNT(*) as count FROM logs_raw WHERE empleado_id IN ({placeholders}) AND fecha_hora >= ? AND fecha_hora <= ?"
+                                params = emp_list + [primer_dia_mes, ultimo_dia_mes]
+                            else:
+                                query_check = "SELECT COUNT(*) as count FROM logs_raw WHERE fecha_hora >= ? AND fecha_hora <= ?"
+                                params = [primer_dia_mes, ultimo_dia_mes]
+                                
+                            res_check = await db.fetch_one(query_check, tuple(params))
+                            if res_check and res_check['count'] > 0:
+                                omitir_descarga = True
+                        except Exception as e_check:
+                            logger.warning(f"⚠️ Error verificando logs_raw para el mes {anio_iter}-{mes_iter:02d}: {e_check}")
+
+                    if omitir_descarga:
+                        logger.info(f"⏭️ Omitiendo scraping para mes estable: {anio_iter}-{mes_iter:02d} (ya existen marcaciones locales y deep_sync=False)")
+                        continue
+
                     logger.info(f"📥 Descargando BioAlba: {anio_iter}-{mes_iter:02d}...")
                     lote = await self.scraper.get_marcaciones(
                         mes=mes_iter, anio=anio_iter, ruts_set=valid_ruts
@@ -1061,6 +1125,12 @@ class SyncService:
                 else:
                     # Sin marcas nuevas para nadie → no recalcular (evita trabajo inútil)
                     empleados_afectados_ids = None
+
+            if not logs_to_save and not force_recalculate:
+                logger.info("⚡ [No-Op Rápido] No hay marcaciones nuevas y force_recalculate=False. Omitiendo recálculo y finalizando de inmediato.")
+                self.stats['fin'] = datetime.now().isoformat()
+                self.stats['duracion_segundos'] = (datetime.now() - start_time).total_seconds()
+                return self.stats
 
             # [ATOMIC_SYNC_TRANSACTION]: WAL-only — sin sync a cloud aquí
             #

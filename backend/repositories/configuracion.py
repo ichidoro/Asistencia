@@ -201,7 +201,8 @@ class ConfiguracionRepository:
                 ("vencimiento_dias_alerta", "45", "Días de anticipación para alertas de vencimiento"),
                 ("dias_alerta_bloqueante", "5", "Días de anticipación para bloqueo de inicio"),
                 ("limite_contratos_temporales", "2", "Máximo de contratos temporales antes de alertar paso a planta"),
-                ("dia_cierre_rrhh", "25", "Día del mes por defecto para cierre de periodo RRHH")
+                ("dia_cierre_rrhh", "25", "Día del mes por defecto para cierre de periodo RRHH"),
+                ("bioalba_dias_volatilidad", "7", "Días de volatilidad para sincronización de marcaciones BioAlba")
             ]
             try:
                 await self.db.executemany(
@@ -237,6 +238,12 @@ class ConfiguracionRepository:
         await self.db.execute("""
             INSERT OR IGNORE INTO ajustes (clave, valor, descripcion)
             VALUES ('dia_cierre_rrhh', '25', 'Día del mes por defecto para cierre de periodo RRHH')
+        """)
+
+        # Asegurar semilla de bioalba_dias_volatilidad si la tabla ya existía pero el valor no
+        await self.db.execute("""
+            INSERT OR IGNORE INTO ajustes (clave, valor, descripcion)
+            VALUES ('bioalba_dias_volatilidad', '7', 'Días de volatilidad para sincronización de marcaciones BioAlba')
         """)
 
         # 7.1. Tabla Notificaciones Areas [NEW]
