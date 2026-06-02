@@ -1004,6 +1004,18 @@ class SyncService:
                     WHERE (ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))
                 """, (fecha_fin_mes, fecha_ini_mes))
             
+            # Obtener el primer turno asignado para cada empleado para el filtro de seguridad
+            first_rows = await db.fetch_all("""
+                SELECT e.rut, MIN(ast.fecha_inicio) as min_f
+                FROM asignacion_turnos ast
+                JOIN empleados e ON ast.empleado_id = e.id
+                GROUP BY e.rut
+            """)
+            first_assignments_map = {}
+            for r in first_rows:
+                r_key = str(r['rut']).replace(".", "").replace("-", "").strip()
+                first_assignments_map[r_key] = r['min_f']
+
             # Mapa de [rut_limpio] -> set(fechas_con_turno)
             asig_map_gate = {}
             # Mapa de [rut_limpio] -> empleado_id (para acotar recálculo al batch)
@@ -1070,6 +1082,12 @@ class SyncService:
                     if not fecha_str or rut_clean not in asig_map_gate or fecha_str not in asig_map_gate[rut_clean]:
                         count_gate_blocked += 1
                         continue  # [RFC PASO 1] Descarte estricto: no llega a logs_to_save
+
+                    # Barrera de seguridad adicional: no permitir marcaciones previas al primer turno asignado
+                    first_assign_date = first_assignments_map.get(rut_clean)
+                    if first_assign_date and fecha_str < first_assign_date:
+                        count_gate_blocked += 1
+                        continue
 
                     tipo = log_data.get('tipo')
 

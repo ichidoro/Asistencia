@@ -408,6 +408,7 @@ class AsistenciaService:
                     results_to_delete_he.append((emp_id, fecha))
             else:
                 results_to_delete.append((emp_id, fecha))
+                results_to_delete_he.append((emp_id, fecha))
         
         if results_to_save:
             await self.repository.batch_upsert_asistencia(results_to_save, suppress_auto_sync=True)
@@ -894,6 +895,7 @@ class AsistenciaService:
                     if existing:
                         results_to_delete.append((empleado_id, fecha_str))
                         # No agregamos a stats['sin_cambio'] porque estamos eliminando el registro
+                    he_to_delete.append((empleado_id, fecha_str))
                 stats['procesados'] += 1
             except Exception as e:
                 logger.error(f"Error calculando asistencia empleado {empleado_id} fecha {fecha_str}: {e}")
@@ -1379,15 +1381,16 @@ class AsistenciaService:
             marcas_disponibles = bool(raw_tmp)
 
         if f_primer_turno and fecha < f_primer_turno:
-            if not marcas_disponibles:
-                if not save:
-                    return None
-                # Si estamos procesando individualmente, nos aseguramos de borrarlo
-                asist_actual_del = await self.repository.get_asistencia(empleado_id, fecha)
-                if asist_actual_del:
-                    logger.info(f"🧹 Limpiando registro residual antes de primera asignación: Emp {empleado_id} en {fecha}")
-                    await self.repository.delete_asistencia(empleado_id, fecha)
+            if not save:
                 return None
+            # Si estamos procesando individualmente, nos aseguramos de borrarlo
+            asist_actual_del = await self.repository.get_asistencia(empleado_id, fecha)
+            if asist_actual_del:
+                logger.info(f"🧹 Limpiando registro residual antes de primera asignación: Emp {empleado_id} en {fecha}")
+                await self.repository.delete_asistencia(empleado_id, fecha)
+            # También eliminamos horas extras si existieran
+            await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+            return None
 
         # 2. Obtener Turno Asignado Vigente para el día
         if bulk_ctx:
