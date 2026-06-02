@@ -304,7 +304,30 @@ function renderAsistenciaGlobal(matriz, fugasVal) {
                     position: 'top',
                     labels: { boxWidth: 12, font: { size: 10 } } 
                 }, 
-                datalabels: { display: false } 
+                datalabels: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            // Ocultar Días Libres del listado numérico
+                            if (context.dataset.label.includes('Días Libres')) {
+                                return null;
+                            }
+                            return context.dataset.label + ': ' + context.raw;
+                        },
+                        footer: function(tooltipItems) {
+                            if (!tooltipItems || tooltipItems.length === 0) return '';
+                            const dataIndex = tooltipItems[0].dataIndex;
+                            const item = tendenciaFiltrada[dataIndex];
+                            if (item) {
+                                const req = (item.asistencia || 0) + (item.ausencia_justificada || 0) + (item.inasistencia || 0);
+                                if (req === 0) {
+                                    return 'Feriado / Día Libre General';
+                                }
+                            }
+                            return '';
+                        }
+                    }
+                }
             },
             scales: { 
                 y: { 
