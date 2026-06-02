@@ -570,6 +570,48 @@ class AsistenciaService:
         )
         justs = [dict(j) for j in all_justs]
 
+        # Pre-carga de Intercambios del periodo
+        q_intercambios = """
+            SELECT * FROM intercambios_dias
+            WHERE (empleado_solicitante_id = ? OR empleado_receptor_id = ?)
+              AND (
+                (fecha_origen BETWEEN ? AND ?) 
+                OR (fecha_destino BETWEEN ? AND ?)
+              )
+              AND estado = 'APROBADO'
+        """
+        inter_rows = await db.fetch_all(q_intercambios, (empleado_id, empleado_id, fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
+        intercambios_por_fecha = {}
+        for row in inter_rows:
+            row_dict = dict(row)
+            intercambios_por_fecha[row_dict['fecha_origen']] = row_dict
+            intercambios_por_fecha[row_dict['fecha_destino']] = row_dict
+
+        # Pre-carga de Compensaciones del periodo
+        q_compensaciones = """
+            SELECT * FROM compensaciones_he_inasistencia
+            WHERE empleado_id = ?
+              AND fecha_inasistencia BETWEEN ? AND ?
+        """
+        comp_rows = await db.fetch_all(q_compensaciones, (empleado_id, fecha_inicio, fecha_fin))
+        compensaciones_por_fecha = {}
+        for row in comp_rows:
+            row_dict = dict(row)
+            f_inasist = row_dict['fecha_inasistencia']
+            if f_inasist not in compensaciones_por_fecha:
+                compensaciones_por_fecha[f_inasist] = []
+            compensaciones_por_fecha[f_inasist].append(row_dict)
+
+        # Pre-carga de Jornadas Especiales del periodo (+1 dia buffer por nocturnos de ayer)
+        ayer_ini_je = (start - timedelta(days=1)).strftime("%Y-%m-%d")
+        q_jornadas_esp = """
+            SELECT * FROM jornadas_especiales
+            WHERE empleado_id = ?
+              AND fecha BETWEEN ? AND ?
+        """
+        je_rows = await db.fetch_all(q_jornadas_esp, (empleado_id, ayer_ini_je, fecha_fin))
+        jornadas_especiales_por_fecha = {row['fecha']: dict(row) for row in je_rows}
+
         # Feriados — reutilizar pre-carga del batch si está disponible
         if feriados_preloaded is not None:
             feriados_dict = feriados_preloaded
@@ -801,12 +843,15 @@ class AsistenciaService:
                 'turnos_weeks': turno_weeks_count,
                 'asistencias_ayer': {empleado_id: prev_db} if prev_db else {},
                 'asistencias_hoy': {empleado_id: asistencias_map.get(fecha_str)} if asistencias_map.get(fecha_str) else {},
-                'horas_extras': {empleado_id: he_map.get(fecha_str)} if he_map.get(fecha_str) else {},
+                'horas_extras': {empleado_id: he_map},  # Guardamos todo el mapa para buscar por fecha en procesar_empleado_dia
                 'feriados': feriados_dict,
                 'periodos_empleo': {empleado_id: periodos},
                 'first_assignments': {empleado_id: first_assignment},
                 'rotativo_last_sem_dict': rotativo_last_sem_dict,
-                'closed_dates': closed_dates
+                'closed_dates': closed_dates,
+                'intercambios': {empleado_id: intercambios_por_fecha},
+                'compensaciones': {empleado_id: compensaciones_por_fecha},
+                'jornadas_especiales': {empleado_id: jornadas_especiales_por_fecha}
             }
 
             try:
@@ -1433,7 +1478,10 @@ class AsistenciaService:
 
                 obs_ayer = asist_ayer.get('observaciones') or ''
                 if 'procesadas en jornadas_especiales' in obs_ayer and not consumidas_emp:
-                    je_ayer = await db.fetch_one("SELECT hora_salida, hora_entrada FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (empleado_id, ayer_str))
+                    if bulk_ctx and 'jornadas_especiales' in bulk_ctx:
+                        je_ayer = bulk_ctx['jornadas_especiales'].get(empleado_id, {}).get(ayer_str)
+                    else:
+                        je_ayer = await db.fetch_one("SELECT hora_salida, hora_entrada FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (empleado_id, ayer_str))
                     if je_ayer and je_ayer['hora_salida']:
                         hora_salida_je = str(je_ayer['hora_salida'])
                         hora_entrada_je = str(je_ayer['hora_entrada']) if je_ayer['hora_entrada'] else None
@@ -2126,8 +2174,8 @@ class AsistenciaService:
         # FASE 2 (Fix B1): Sourcing de last_state desde horas_extras con fallback a legacy
         he_previo = None
         if bulk_ctx and 'horas_extras' in bulk_ctx:
-            he_previo = bulk_ctx['horas_extras'].get(empleado_id)
-        if he_previo is None:
+            he_previo = bulk_ctx['horas_extras'].get(empleado_id, {}).get(fecha)
+        if he_previo is None and (not bulk_ctx or 'horas_extras' not in bulk_ctx):
             he_previo = await self.he_repo.get_estado_previo(empleado_id, fecha)
         last_state = he_previo['estado'] if he_previo else None
 
@@ -2163,7 +2211,10 @@ class AsistenciaService:
             return None
 
         # ── INTERCEPTOR: DÍA COMPENSATORIO (Intercambio de Días 1x1) ───────────
-        intercambio = await self.repository.get_intercambio_por_fecha(empleado_id, fecha)
+        if bulk_ctx and 'intercambios' in bulk_ctx:
+            intercambio = bulk_ctx['intercambios'].get(empleado_id, {}).get(fecha)
+        else:
+            intercambio = await self.repository.get_intercambio_por_fecha(empleado_id, fecha)
         if intercambio:
             if fecha == intercambio['fecha_origen'] and resultado.get('estado') in ('INASISTENCIA', 'FALTA'):
                 resultado['estado'] = 'INASISTENCIA_COMPENSADA'
@@ -2178,7 +2229,10 @@ class AsistenciaService:
                 resultado['observaciones'] = resultado.get('observaciones', '') + ' [Jornada Trabajada por Compensación]'
 
         # ── INTERCEPTOR: COMPENSACIÓN CON HORAS EXTRAS ────────────────────────
-        compensaciones = await self.repository.get_compensacion_por_fecha(empleado_id, fecha)
+        if bulk_ctx and 'compensaciones' in bulk_ctx:
+            compensaciones = bulk_ctx['compensaciones'].get(empleado_id, {}).get(fecha, [])
+        else:
+            compensaciones = await self.repository.get_compensacion_por_fecha(empleado_id, fecha)
         if compensaciones and resultado and resultado.get('estado') in ('INASISTENCIA', 'FALTA', 'PENDIENTE'):
             total_compensado = sum(c['minutos'] for c in compensaciones)
             if total_compensado > 0:
@@ -2263,10 +2317,13 @@ class AsistenciaService:
                 min_trab = int(resultado.get('horas_trabajadas', 0) * 60) if 'horas_trabajadas' in resultado and resultado['horas_trabajadas'] > 0 else resultado.get('minutos_extra_bruto', 0)
                 
                 # Fetch existing to check for manual validation
-                je_prev = await self.repository.db.fetch_one(
-                    "SELECT estado, observaciones FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
-                    (empleado_id, fecha)
-                )
+                if bulk_ctx and 'jornadas_especiales' in bulk_ctx:
+                    je_prev = bulk_ctx['jornadas_especiales'].get(empleado_id, {}).get(fecha)
+                else:
+                    je_prev = await self.repository.db.fetch_one(
+                        "SELECT estado, observaciones FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                        (empleado_id, fecha)
+                    )
                 
                 estado_je = resultado.get('estado')
                 obs_je = resultado.get('observaciones') or ''
