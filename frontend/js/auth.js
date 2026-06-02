@@ -139,66 +139,73 @@ const AuthService = {
     },
 
     applySecurityToUI: function () {
-        // [FIX] Si ya se aplicó en esta carga de página, no repetir para evitar parpadeo (flashing)
-        if (this._ui_secured || document.body.getAttribute('data-ui-secured') === 'true') {
-            console.log("🛡️ Seguridad UI ya aplicada y blindada. Omitiendo.");
-            return;
-        }
+        return new Promise((resolve) => {
+            // [FIX] Si ya se aplicó en esta carga de página, no repetir para evitar parpadeo (flashing)
+            if (this._ui_secured || document.body.getAttribute('data-ui-secured') === 'true') {
+                console.log("🛡️ Seguridad UI ya aplicada y blindada. Omitiendo.");
+                resolve();
+                return;
+            }
 
-        const user = this.getUser();
-        if (!user) return;
+            const user = this.getUser();
+            if (!user) {
+                resolve();
+                return;
+            }
 
-        // 1. Cargar datos en el Header (inmediato, no requiere permisos)
-        const usernameEl = document.getElementById('header-username');
-        const roleEl = document.getElementById('header-role');
+            // 1. Cargar datos en el Header (inmediato, no requiere permisos)
+            const usernameEl = document.getElementById('header-username');
+            const roleEl = document.getElementById('header-role');
 
-        if (usernameEl) {
-            usernameEl.innerHTML = `<i class="fa-solid fa-user-circle me-1"></i> ${user.username} <i class="bi bi-caret-down-fill ms-1 small"></i>`;
-        }
-        if (roleEl) {
-            let roleBadge = user.alcance_global ? '<span class="badge bg-primary">Alcance Global</span>' : '<span class="badge bg-secondary">Zonal</span>';
-            roleEl.innerHTML = `Rol: ${roleBadge}`;
-        }
+            if (usernameEl) {
+                usernameEl.innerHTML = `<i class="fa-solid fa-user-circle me-1"></i> ${user.username} <i class="bi bi-caret-down-fill ms-1 small"></i>`;
+            }
+            if (roleEl) {
+                let roleBadge = user.alcance_global ? '<span class="badge bg-primary">Alcance Global</span>' : '<span class="badge bg-secondary">Zonal</span>';
+                roleEl.innerHTML = `Rol: ${roleBadge}`;
+            }
 
-        // 2. Refresco silencioso de permisos PRIMERO → luego aplicar blindaje
-        // [HILO ROJO] El fetch es asíncrono. El blindaje DEBE ocurrir dentro del .then()
-        // para que los permisos actualizados ya estén en localStorage antes de ocultar elementos.
-        const applyBlindaje = () => {
-            console.log("🛡️ Aplicando Blindaje de Seguridad a la UI...");
+            // 2. Refresco silencioso de permisos PRIMERO → luego aplicar blindaje
+            // [HILO ROJO] El fetch es asíncrono. El blindaje DEBE ocurrir dentro del .then()
+            // para que los permisos actualizados ya estén en localStorage antes de ocultar elementos.
+            const applyBlindaje = () => {
+                console.log("🛡️ Aplicando Blindaje de Seguridad a la UI...");
 
-            // Blindaje dinámico: oculta TODOS los elementos con data-permiso que no se tengan
-            document.querySelectorAll('[data-permiso]').forEach(el => {
-                const permisoReq = el.getAttribute('data-permiso');
-                if (!AuthService.hasPermission(permisoReq)) {
-                    el.classList.add('d-none');
-                    el.style.display = 'none';
-                }
-            });
+                // Blindaje dinámico: oculta TODOS los elementos con data-permiso que no se tengan
+                document.querySelectorAll('[data-permiso]').forEach(el => {
+                    const permisoReq = el.getAttribute('data-permiso');
+                    if (!AuthService.hasPermission(permisoReq)) {
+                        el.classList.add('d-none');
+                        el.style.display = 'none';
+                    }
+                });
 
-            AuthService._ui_secured = true;
-            document.body.setAttribute('data-ui-secured', 'true');
-        };
+                AuthService._ui_secured = true;
+                document.body.setAttribute('data-ui-secured', 'true');
+                resolve();
+            };
 
-        if (this.getToken()) {
-            fetch('/api/auth/permissions/', {
-                headers: { 'Authorization': `Bearer ${this.getToken()}` }
-            }).then(r => r.json()).then(data => {
-                if (data && data.permisos) {
-                    localStorage.setItem('user_permissions', JSON.stringify(data.permisos));
-                }
-                if (data && typeof data.is_superuser !== 'undefined') {
-                    const stored = JSON.parse(localStorage.getItem(this.USER_KEY) || '{}');
-                    stored.is_superuser = data.is_superuser;
-                    localStorage.setItem(this.USER_KEY, JSON.stringify(stored));
-                }
+            if (this.getToken()) {
+                fetch('/api/auth/permissions/', {
+                    headers: { 'Authorization': `Bearer ${this.getToken()}` }
+                }).then(r => r.json()).then(data => {
+                    if (data && data.permisos) {
+                        localStorage.setItem('user_permissions', JSON.stringify(data.permisos));
+                    }
+                    if (data && typeof data.is_superuser !== 'undefined') {
+                        const stored = JSON.parse(localStorage.getItem(this.USER_KEY) || '{}');
+                        stored.is_superuser = data.is_superuser;
+                        localStorage.setItem(this.USER_KEY, JSON.stringify(stored));
+                    }
+                    applyBlindaje();
+                }).catch(e => {
+                    console.warn('Error refreshing permissions, applying blindaje with cached data', e);
+                    applyBlindaje(); // ← blindaje con datos cacheados si falla el fetch
+                });
+            } else {
                 applyBlindaje();
-            }).catch(e => {
-                console.warn('Error refreshing permissions, applying blindaje with cached data', e);
-                applyBlindaje(); // ← blindaje con datos cacheados si falla el fetch
-            });
-        } else {
-            applyBlindaje();
-        }
+            }
+        });
     }
 };
 

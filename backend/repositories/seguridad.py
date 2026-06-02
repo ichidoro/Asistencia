@@ -151,6 +151,9 @@ class SeguridadRepository:
         """
         try:
             permisos_base = [
+                # ── Dashboard (1 permiso) ──
+                ('dashboard.ver',                'Dashboard',      'Ver el dashboard analítico de asistencia, métricas de paridad, edades y productividad'),
+
                 # ── Empleados (7 permisos) ──
                 ('empleados.ver',                'Empleados',      'Ver la lista general de empleados, cumpleaños y turnos asignados (Lectura)'),
                 ('empleados.crear',              'Empleados',      'Crear nuevos empleados (Botón "+ Nuevo Empleado")'),

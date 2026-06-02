@@ -448,6 +448,30 @@ function setupEventListeners() {
 }
 
 function switchPage(pageName) {
+  // Validar permisos antes de cambiar de página
+  const sidebarItem = document.querySelector(`.sidebar-item[data-page="${pageName}"]`);
+  if (sidebarItem && typeof AuthService !== 'undefined') {
+    const permisoReq = sidebarItem.getAttribute('data-permiso');
+    if (permisoReq && !AuthService.hasPermission(permisoReq)) {
+      console.warn(`🚫 Acceso denegado a la sección "${pageName}" (falta permiso: ${permisoReq}).`);
+      
+      // Buscar la primera sección permitida
+      const allowedItem = Array.from(document.querySelectorAll('.sidebar-item')).find(item => {
+        const p = item.getAttribute('data-permiso');
+        return !p || AuthService.hasPermission(p);
+      });
+      
+      if (allowedItem) {
+        const fallbackPage = allowedItem.getAttribute('data-page');
+        console.log(`➡️ Redirigiendo automáticamente a la sección permitida: "${fallbackPage}"`);
+        switchPage(fallbackPage);
+      } else {
+        AuthService.logout("No tiene permisos para acceder a ninguna sección del sistema.");
+      }
+      return;
+    }
+  }
+
   // Onboarding Guard: Prevent access to empleados if no turnos exist
   if (pageName === 'empleados') {
     if (window._hasTurnos === false) {

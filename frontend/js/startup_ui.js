@@ -76,32 +76,38 @@ const StartupUI = {
     finishStartup() {
         if (this.isFinished) return; // Evitar ejecución múltiple
         this.isFinished = true;
-        
+
+        const proceed = () => {
+            const splash = document.getElementById('splash-screen');
+            if (splash) {
+                splash.classList.add('fade-out');
+                
+                // 📊 Disparar evento 'app:ready' para que main.js cargue el Dashboard
+                // [FIX] Usamos evento custom en lugar de llamar switchPage() directamente.
+                // startup_ui.js se carga ANTES que main.js (orden defer), por lo que
+                // switchPage no existe aún cuando este setTimeout dispara.
+                // El evento garantiza que main.js ya se ejecutó y switchPage está definida.
+                setTimeout(() => {
+                    console.log("📊 Emitiendo evento app:ready para carga del Dashboard...");
+                    document.dispatchEvent(new CustomEvent('app:ready'));
+                }, 100);
+
+                setTimeout(() => {
+                    document.body.style.overflow = 'auto';
+                    splash.style.display = 'none'; // Asegurar que no bloquea clics
+                }, 800);
+            }
+            console.log("✅ Sistema listo, Splash Screen finalizado.");
+        };
+
         if (typeof AuthService !== 'undefined') {
-            AuthService.applySecurityToUI();
+            AuthService.applySecurityToUI().then(proceed).catch(err => {
+                console.error("Error aplicando seguridad en startup:", err);
+                proceed();
+            });
+        } else {
+            proceed();
         }
-
-        const splash = document.getElementById('splash-screen');
-        if (splash) {
-            splash.classList.add('fade-out');
-            
-            // 📊 Disparar evento 'app:ready' para que main.js cargue el Dashboard
-            // [FIX] Usamos evento custom en lugar de llamar switchPage() directamente.
-            // startup_ui.js se carga ANTES que main.js (orden defer), por lo que
-            // switchPage no existe aún cuando este setTimeout dispara.
-            // El evento garantiza que main.js ya se ejecutó y switchPage está definida.
-            setTimeout(() => {
-                console.log("📊 Emitiendo evento app:ready para carga del Dashboard...");
-                document.dispatchEvent(new CustomEvent('app:ready'));
-            }, 100);
-
-            setTimeout(() => {
-                document.body.style.overflow = 'auto';
-                splash.style.display = 'none'; // Asegurar que no bloquea clics
-            }, 800);
-        }
-
-        console.log("✅ Sistema listo, Splash Screen finalizado.");
     },
 
     handleError(errorMsg) {

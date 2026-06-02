@@ -138,7 +138,20 @@ async function loadDashboard() {
         // [FIX] El interceptor global de auth.js ya inyecta el header Authorization.
         // No es necesario duplicarlo aquí; evitamos inconsistencias en refresh de token.
         const response = await fetch(url);
-        if (response.status === 401 || response.status === 403) { AuthService.logout(); return; }
+        if (response.status === 401) { AuthService.logout(); return; }
+        if (response.status === 403) {
+            console.warn("🚫 Acceso denegado a Dashboard (403). Redirigiendo.");
+            const allowedItem = Array.from(document.querySelectorAll('.sidebar-item')).find(item => {
+                const p = item.getAttribute('data-permiso');
+                return !p || AuthService.hasPermission(p);
+            });
+            if (allowedItem) {
+                switchPage(allowedItem.getAttribute('data-page'));
+            } else {
+                AuthService.logout("No tiene permisos para acceder al sistema.");
+            }
+            return;
+        }
         const json = await response.json();
         if (json.status === 'success') {
             const d = json.data;
