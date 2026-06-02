@@ -106,6 +106,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-in-production-to-a-random-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    CRON_SECRET: str = "mi-super-secreto-compartido-para-sincronizacion-auto-123"
+
     
     # ============================================
     # TAREAS PROGRAMADAS

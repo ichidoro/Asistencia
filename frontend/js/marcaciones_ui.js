@@ -106,7 +106,8 @@ async function initMarcacionesUI() {
     const loadActivePeriodPromise = async () => {
         if (datesAlreadyLoaded) return;
         try {
-            const activeResp = await fetch('/api/configuracion/periodos/activo/', {
+            const currentAreaName = stateMarcacionesApp.area || 'Todas';
+            const activeResp = await fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(currentAreaName)}/`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (activeResp.ok) {
@@ -447,6 +448,31 @@ function updateMarcacionesState(key, value) {
         if (turnoSelect) turnoSelect.value = "";
         if (empSelect) empSelect.value = "";
         shouldLoadFilters = true;
+
+        // ⚡ CARGA AUTOMÁTICA DEL TRAMO ACTIVO/ABIERTO PARA EL ÁREA SELECCIONADA
+        const areaName = value || 'Todas';
+        fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(areaName)}/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+        .then(r => {
+            if (r.ok) return r.json();
+            throw new Error();
+        })
+        .then(activePeriod => {
+            if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
+                stateMarcacionesApp.fechaInicioRRHH = activePeriod.fecha_inicio;
+                stateMarcacionesApp.fechaFinRRHH = activePeriod.fecha_fin;
+                console.log(`Periodo activo para ${areaName} cargado:`, activePeriod);
+                
+                const inputInicio = document.getElementById('rrhh-fecha-inicio');
+                const inputFin = document.getElementById('rrhh-fecha-fin');
+                if (inputInicio) inputInicio.value = activePeriod.fecha_inicio;
+                if (inputFin) inputFin.value = activePeriod.fecha_fin;
+            }
+        })
+        .catch(e => {
+            console.error("Error actualizando tramo activo por área:", e);
+        });
     } else if (key === 'turnoId') {
         // Nivel 3 cambió: resetear nivel 4 y recargar solo empleados (cascade)
         stateMarcacionesApp.empleadoId = "";
@@ -636,14 +662,13 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
 
     console.log(`[Sync BioAlba] Rango: ${fechaInicio} → ${fechaFin}`, areas ? `Áreas: ${areas.join(', ')}` : 'Todas las áreas', `Deep Sync: ${deepSync}`);
 
-    // Mostrar overlay de carga SweetAlert2
+    // Mostrar overlay de carga SweetAlert2 sin doble spinner
     Swal.fire({
         title: '<span style="font-size:1.15rem;font-weight:800;color:#1e293b;">⚡ Sincronizando con BioAlba</span>',
         html: `
             <div class="text-center py-2" style="font-family:'Inter',sans-serif;">
-                <div class="spinner-border text-primary mb-3" style="width: 2.5rem; height: 2.5rem;" role="status"></div>
-                <p class="mb-1 fw-bold text-slate-700">Descargando marcaciones y procesando asistencia...</p>
-                <p class="text-muted small mb-0">Por favor, no cierres esta ventana. El proceso tardará unos segundos.</p>
+                <p id="swal-sync-status" class="mb-1 fw-bold text-slate-700">Conectando con BioAlba...</p>
+                <p id="swal-sync-detail" class="text-muted small mb-0">Por favor, no cierres esta ventana. El proceso tardará unos segundos.</p>
             </div>
         `,
         allowOutsideClick: false,
@@ -658,90 +683,154 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         // Construir payload (áreas son body, fechas van en query params)
         const payload = areas ? { areas } : {};
 
-        // Crear AbortController para timeout de 5 minutos
+        // Crear AbortController para timeout de 6 minutos
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000);
+        const timeoutId = setTimeout(() => controller.abort(), 360000);
 
         if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando...';
 
-        const url = `/api/sync/asistencia/now/?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&deep_sync=${deepSync}`;
+        const url = `/api/sync/asistencia/now/stream/?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&deep_sync=${deepSync}`;
         const resp = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
             body: JSON.stringify(payload),
             signal: controller.signal
         });
 
         clearTimeout(timeoutId);
 
-        const result = await resp.json();
-
-        if (resp.ok) {
-            const stats = result.stats || result;
-            const nuevas        = stats.marcaciones_nuevas    ?? 0;
-            const recalc        = stats.dias_recalculados     ?? 0;
-            const bloqueadas    = stats.bloqueados_sin_asig   ?? 0;
-            const filtradas     = stats.filtrados_area        ?? 0;
-            const errores       = stats.errores               ?? 0;
-            const duracion      = stats.duracion_segundos     ? parseFloat(stats.duracion_segundos).toFixed(1) : '—';
-            const areasLabel    = areas ? `${areas.length} área${areas.length > 1 ? 's' : ''}` : 'Todas las áreas';
-
-            const iconoNuevas   = nuevas > 0 ? '🟢' : '⚪';
-            const mensajeExtra  = nuevas === 0
-                ? '<p style="color:#64748b;font-size:0.85rem;margin-top:8px;">No hay marcaciones nuevas para el período. Los datos ya estaban actualizados.</p>'
-                : '';
-
-            await Swal.fire({
-                title: '<span style="font-size:1.1rem;font-weight:800;color:#1e293b;">☁️ Sincronización BioAlba</span>',
-                html: `
-                    <div style="text-align:left;font-family:'Inter',sans-serif;">
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-                            <span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:999px;">${areasLabel}</span>
-                            <span style="background:#f1f5f9;color:#475569;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:999px;">${fechaInicio} → ${fechaFin}</span>
-                            <span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:3px 8px;border-radius:999px;">⏱ ${duracion}s</span>
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-                            <div style="background:${nuevas > 0 ? '#f0fdf4' : '#f8fafc'};border:1px solid ${nuevas > 0 ? '#86efac' : '#e2e8f0'};border-radius:10px;padding:12px;text-align:center;">
-                                <div style="font-size:1.6rem;font-weight:800;color:${nuevas > 0 ? '#16a34a' : '#94a3b8'};">${nuevas}</div>
-                                <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">${iconoNuevas} Marcaciones nuevas</div>
-                            </div>
-                            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;text-align:center;">
-                                <div style="font-size:1.6rem;font-weight:800;color:#2563eb;">${recalc}</div>
-                                <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">📅 Días recalculados</div>
-                            </div>
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                            <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
-                                <span style="font-size:0.75rem;color:#64748b;">🔒 Sin asignación</span>
-                                <span style="font-weight:700;color:#f59e0b;font-size:0.85rem;">${bloqueadas}</span>
-                            </div>
-                            <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
-                                <span style="font-size:0.75rem;color:#64748b;">❌ Errores</span>
-                                <span style="font-weight:700;color:${errores > 0 ? '#dc2626' : '#10b981'};font-size:0.85rem;">${errores}</span>
-                            </div>
-                        </div>
-                        ${mensajeExtra}
-                    </div>
-                `,
-                icon: nuevas > 0 ? 'success' : 'info',
-                confirmButtonText: 'Entendido',
-                confirmButtonColor: '#6366f1',
-                showCloseButton: true,
-                customClass: { popup: 'shadow-lg' }
-            });
-
-            if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
-        } else {
-            Swal.close();
-            showToast('❌ Error en sincronización: ' + (result.detail || 'Error desconocido'), 'error');
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.detail || `Error HTTP ${resp.status}`);
         }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let stats = null;
+
+        const statusEl = document.getElementById('swal-sync-status');
+        const detailEl = document.getElementById('swal-sync-detail');
+
+        // Helper para procesar la lectura del stream SSE
+        function _processSSELines(lines) {
+            let eventType = null;
+            let eventData = null;
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    eventType = line.slice(7).trim();
+                } else if (line.startsWith('data: ')) {
+                    try { eventData = JSON.parse(line.slice(6)); } catch { eventData = null; }
+                } else if (line === '' && eventType && eventData !== null) {
+                    if (eventType === 'start') {
+                        if (statusEl) statusEl.textContent = eventData.info || 'Verificando periodos...';
+                    } else if (eventType === 'info') {
+                        if (detailEl) detailEl.textContent = eventData.message || '';
+                    } else if (eventType === 'start_recalc') {
+                        if (statusEl) statusEl.textContent = 'Iniciando recálculo...';
+                        if (detailEl) detailEl.textContent = `Total a procesar: ${eventData.total} empleados`;
+                    } else if (eventType === 'progress') {
+                        if (eventData.stage === 'download') {
+                            if (statusEl) statusEl.textContent = 'Descargando de BioAlba...';
+                            if (detailEl) detailEl.textContent = eventData.info || '';
+                        } else if (eventData.stage === 'recalc') {
+                            if (statusEl) statusEl.textContent = `Recalculando (${eventData.idx}/${eventData.total})`;
+                            if (detailEl) detailEl.textContent = eventData.info || '';
+                        }
+                    } else if (eventType === 'done') {
+                        stats = eventData;
+                    } else if (eventType === 'error') {
+                        throw new Error(eventData.message || 'Error durante la sincronización');
+                    }
+                    eventType = null;
+                    eventData = null;
+                }
+            }
+        }
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            _processSSELines(lines);
+        }
+
+        // Procesar buffer residual
+        if (buffer.trim()) {
+            const remainingLines = buffer.split('\n');
+            remainingLines.push('');
+            _processSSELines(remainingLines);
+        }
+
+        if (!stats) {
+            throw new Error('La conexión se cerró sin recibir el reporte de finalización.');
+        }
+
+        const nuevas        = stats.marcaciones_nuevas    ?? 0;
+        const recalc        = stats.dias_recalculados     ?? 0;
+        const bloqueadas    = stats.bloqueados_sin_asig   ?? 0;
+        const errores       = stats.errores               ?? 0;
+        const duracion      = stats.duracion_segundos     ? parseFloat(stats.duracion_segundos).toFixed(1) : '—';
+        const areasLabel    = areas ? `${areas.length} área${areas.length > 1 ? 's' : ''}` : 'Todas las áreas';
+
+        const iconoNuevas   = nuevas > 0 ? '🟢' : '⚪';
+        const mensajeExtra  = nuevas === 0
+            ? '<p style="color:#64748b;font-size:0.85rem;margin-top:8px;">No hay marcaciones nuevas para el período. Los datos ya estaban actualizados.</p>'
+            : '';
+
+        await Swal.fire({
+            title: '<span style="font-size:1.1rem;font-weight:800;color:#1e293b;">☁️ Sincronización BioAlba</span>',
+            html: `
+                <div style="text-align:left;font-family:'Inter',sans-serif;">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+                        <span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:999px;">${areasLabel}</span>
+                        <span style="background:#f1f5f9;color:#475569;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:999px;">${fechaInicio} → ${fechaFin}</span>
+                        <span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:3px 8px;border-radius:999px;">⏱ ${duracion}s</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                        <div style="background:${nuevas > 0 ? '#f0fdf4' : '#f8fafc'};border:1px solid ${nuevas > 0 ? '#86efac' : '#e2e8f0'};border-radius:10px;padding:12px;text-align:center;">
+                            <div style="font-size:1.6rem;font-weight:800;color:${nuevas > 0 ? '#16a34a' : '#94a3b8'};">${nuevas}</div>
+                            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">${iconoNuevas} Marcaciones nuevas</div>
+                        </div>
+                        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;text-align:center;">
+                            <div style="font-size:1.6rem;font-weight:800;color:#2563eb;">${recalc}</div>
+                            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">📅 Días recalculados</div>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:0.75rem;color:#64748b;">🔒 Sin asignación</span>
+                            <span style="font-weight:700;color:#f59e0b;font-size:0.85rem;">${bloqueadas}</span>
+                        </div>
+                        <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:0.75rem;color:#64748b;">❌ Errores</span>
+                            <span style="font-weight:700;color:${errores > 0 ? '#dc2626' : '#10b981'};font-size:0.85rem;">${errores}</span>
+                        </div>
+                    </div>
+                    ${mensajeExtra}
+                </div>
+            `,
+            icon: nuevas > 0 ? 'success' : 'info',
+            confirmButtonText: 'Entendido',
+            confirmButtonColor: '#6366f1',
+            showCloseButton: true,
+            customClass: { popup: 'shadow-lg' }
+        });
+
+        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
     } catch (e) {
         Swal.close();
         console.error('[Sync BioAlba] Error:', e);
         if (e.name === 'AbortError') {
-            showToast('⏱️ Timeout: La sincronización tardó más de 5 minutos.', 'error');
+            showToast('⏱️ Timeout: La sincronización tardó más de 6 minutos.', 'error');
         } else {
-            showToast('❌ Error de conexión: ' + e.message, 'error');
+            showToast('❌ Error de sincronización: ' + e.message, 'error');
         }
         try { await window.loadMarcacionesData(); } catch (_) {}
     } finally {
@@ -3610,11 +3699,36 @@ function renderWizardStep(step) {
 
     if (step === 1) { // Anomalías
         if (ev.anomalias > 0) {
-            const list = ev.detalle_anomalias.map(a => `<li>${a.fecha} - ${a.nombre_completo}</li>`).join('');
+            const list = ev.detalle_anomalias.map(a => {
+                const nameEscaped = (a.nombre_completo || '').replace(/'/g, "\\'");
+                return `
+                    <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom hover-bg-light">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                            <div>
+                                <span class="fw-bold text-dark small">${a.fecha}</span>
+                                <span class="mx-2 text-muted">|</span>
+                                <span class="text-secondary small">${a.nombre_completo}</span>
+                                ${a.hora_entrada_real || a.hora_salida_real ? `
+                                    <span class="badge bg-warning-subtle text-warning-emphasis ms-2" style="font-size: 0.7rem;">
+                                        <i class="bi bi-clock-fill me-1"></i>${a.hora_entrada_real || '--:--'} / ${a.hora_salida_real || '--:--'}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary fw-bold py-1 px-3 shadow-sm" 
+                                onclick="window.cierreCorregirAnomalia(${a.empleado_id}, '${a.fecha}', '${nameEscaped}', '${a.hora_entrada_real || ''}', '${a.hora_salida_real || ''}')">
+                            <i class="bi bi-pencil-square me-1"></i> Corregir
+                        </button>
+                    </li>
+                `;
+            }).join('');
             content.innerHTML = `
                 <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: Anomalías Detectadas</h4>
-                <p>Se encontraron <strong>${ev.anomalias} anomalías</strong> que bloquean el cierre. Debes solucionarlas en la grilla de marcaciones antes de continuar.</p>
-                <div class="border rounded p-3 bg-light" style="max-height:200px; overflow-y:auto;"><ul>${list}</ul></div>
+                <p>Se encontraron <strong>${ev.anomalias} anomalías</strong> que bloquean el cierre. Debes solucionarlas antes de continuar.</p>
+                <div class="border rounded-3 shadow-sm bg-white" style="max-height:250px; overflow-y:auto;">
+                    <ul class="list-unstyled mb-0">${list}</ul>
+                </div>
             `;
             btnNext.style.display = 'none';
         } else {
@@ -3708,11 +3822,31 @@ function renderWizardStep(step) {
         }
     } else if (step === 4) { // Inasistencias (Soft Stop)
         if (ev.inasistencias_injustificadas > 0) {
-            const list = ev.detalle_ina.map(a => `<li>${a.fecha} - ${a.nombre_completo}</li>`).join('');
+            const list = ev.detalle_ina.map(a => {
+                const nameEscaped = (a.nombre_completo || '').replace(/'/g, "\\'");
+                return `
+                    <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom hover-bg-light">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-calendar-x text-info me-2"></i>
+                            <div>
+                                <span class="fw-bold text-dark small">${a.fecha}</span>
+                                <span class="mx-2 text-muted">|</span>
+                                <span class="text-secondary small">${a.nombre_completo}</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-info fw-bold py-1 px-3 shadow-sm" 
+                                onclick="window.cierreGestionarInasistencia(${a.empleado_id}, '${a.fecha}', '${nameEscaped}')">
+                            <i class="bi bi-gear-fill me-1"></i> Gestionar
+                        </button>
+                    </li>
+                `;
+            }).join('');
             content.innerHTML = `
                 <h4 class="text-info fw-bold"><i class="bi bi-info-circle"></i> SOFT STOP: Inasistencias no justificadas</h4>
-                <p>Hay <strong>${ev.inasistencias_injustificadas} inasistencias</strong>. Si cierra ahora, se consolidarán como inasistencias definitivas sin goce de sueldo.</p>
-                <div class="border rounded p-3 bg-light mb-3" style="max-height:150px; overflow-y:auto;"><ul>${list}</ul></div>
+                <p>Hay <strong>${ev.inasistencias_injustificadas} inasistencias</strong>. Si cierra ahora, se consolidarán como inasistencias definitivas sin goce de sueldo, o puedes gestionarlas desde aquí.</p>
+                <div class="border rounded-3 shadow-sm bg-white mb-3" style="max-height:180px; overflow-y:auto;">
+                    <ul class="list-unstyled mb-0">${list}</ul>
+                </div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="chk-aceptar-inasistencias" onchange="window.cierreWizardState.aceptarInasistencias = this.checked; document.getElementById('btn-cierre-wizard-next').disabled = !this.checked;">
                     <label class="form-check-label fw-bold" for="chk-aceptar-inasistencias">
@@ -3851,6 +3985,9 @@ async function recargarPreEvaluacionCierre() {
 }
 
 window.cierreResolverHE = async function(empId, fecha, minutos, estado) {
+    if (typeof showBatchLoadingOverlay === 'function') {
+        showBatchLoadingOverlay(estado === 'APROBADO' ? 'Procesando aprobación de Hora Extra...' : 'Procesando rechazo de Hora Extra...');
+    }
     try {
         const res = await fetch('/api/asistencia/aprobar-he-batch/', {
             method: 'POST',
@@ -3874,6 +4011,10 @@ window.cierreResolverHE = async function(empId, fecha, minutos, estado) {
         }
     } catch (e) {
         showToast('Error de conexión: ' + e.message, 'danger');
+    } finally {
+        if (typeof hideBatchLoadingOverlay === 'function') {
+            hideBatchLoadingOverlay();
+        }
     }
 };
 
@@ -3883,6 +4024,10 @@ window.cierreResolverTodasHE = async function() {
     
     if (!confirm(`¿Está seguro que desea APROBAR todas las horas extras pendientes (${s.evaluacion.detalle_he.length}) de este período?`)) {
         return;
+    }
+
+    if (typeof showBatchLoadingOverlay === 'function') {
+        showBatchLoadingOverlay(`Aprobando todas las horas extras pendientes (${s.evaluacion.detalle_he.length})...`);
     }
 
     const items = s.evaluacion.detalle_he.map(a => ({
@@ -3910,6 +4055,37 @@ window.cierreResolverTodasHE = async function() {
         }
     } catch (e) {
         showToast('Error de conexión: ' + e.message, 'danger');
+    } finally {
+        if (typeof hideBatchLoadingOverlay === 'function') {
+            hideBatchLoadingOverlay();
+        }
+    }
+};
+
+window.cierreCorregirAnomalia = function(empId, fecha, nombreCompleto, horaEntrada, horaSalida) {
+    if (typeof openManualEntryModal === 'function') {
+        openManualEntryModal(
+            empId,
+            fecha,
+            nombreCompleto,
+            "Ingreso Manual (Corrección de Anomalía)",
+            horaEntrada || null,
+            horaSalida || null
+        );
+    } else {
+        showToast("Error: Modal de ingreso manual no disponible.", "danger");
+    }
+};
+
+window.cierreGestionarInasistencia = function(empId, fecha, nombreCompleto) {
+    if (typeof openAsistenciaActionModal === 'function') {
+        openAsistenciaActionModal(
+            empId,
+            fecha,
+            nombreCompleto
+        );
+    } else {
+        showToast("Error: Modal de acciones de asistencia no disponible.", "danger");
     }
 };
 

@@ -14,6 +14,19 @@ class CierreService:
         3. EN_CURSO            → Hard Stop 3
         4. INASISTENCIAS       → Soft Stop (aceptar con checkbox)
         """
+        # Validar que no exista solapamiento de periodos cerrados para esta área
+        overlap_query = """
+            SELECT id, fecha_inicio, fecha_fin FROM cierres_periodos 
+            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+            LIMIT 1
+        """
+        solapamiento = await self.db.fetch_one(overlap_query, (area, fecha_fin, fecha_inicio))
+        if solapamiento:
+            raise ValueError(
+                f"El período seleccionado ya se encuentra cerrado para el área '{area}' "
+                f"({solapamiento['fecha_inicio']} al {solapamiento['fecha_fin']})."
+            )
+
         params_area = []
         filtro_area = ""
         if area and area != 'Todas':
@@ -48,7 +61,7 @@ class CierreService:
         # ── HARD STOP 2: Anomalías sin corregir ───────────────────────────────
         # Excluye anomalías que tienen JE aprobada (EXTRA) con ambas marcas → no son bloqueantes
         query_anomalias = f"""
-            SELECT a.id, a.fecha, a.hora_entrada_real, a.hora_salida_real,
+            SELECT a.id, a.empleado_id, a.fecha, a.hora_entrada_real, a.hora_salida_real,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
                    ar.nombre AS area
             FROM asistencias a
@@ -106,7 +119,7 @@ class CierreService:
         # ── SOFT STOP: Inasistencias sin justificar ────────────────────────────
         # Solo INASISTENCIA, ya NO incluye ANOMALIA (separadas en Hard Stop 2)
         query_ina = f"""
-            SELECT a.id, a.fecha,
+            SELECT a.id, a.empleado_id, a.fecha,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
                    ar.nombre AS area
             FROM asistencias a

@@ -926,6 +926,59 @@ class ConfiguracionRepository:
         await self._auto_heal_periodos()
         return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
 
+    async def get_periodo_rrhh_activo_area(self, area: str) -> Optional[Dict[str, Any]]:
+        await self._auto_heal_periodos()
+        from datetime import datetime
+        # Obtener el periodo que contiene la fecha actual
+        hoy_str = datetime.now().strftime("%Y-%m-%d")
+        
+        base_periodo = await self.db.fetch_one(
+            "SELECT * FROM periodos_rrhh WHERE ? BETWEEN fecha_inicio AND fecha_fin LIMIT 1",
+            (hoy_str,)
+        )
+        
+        if not base_periodo:
+            # Fallback al periodo activo global (activo = 1)
+            base_periodo = await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
+            if not base_periodo:
+                base_periodo = await self.db.fetch_one("SELECT * FROM periodos_rrhh ORDER BY fecha_inicio DESC LIMIT 1")
+                if not base_periodo:
+                    return None
+                    
+        base_periodo_dict = dict(base_periodo)
+        
+        # Si area es "Todas" o vacío, retornamos el periodo base
+        if not area or area.lower() in ("todas", "todos", ""):
+            return base_periodo_dict
+            
+        area_upper = area.upper().strip()
+        
+        # Verificar si está cerrado para esa área
+        cierre = await self.db.fetch_one(
+            "SELECT id FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND UPPER(TRIM(area)) = ?",
+            (base_periodo_dict["fecha_inicio"], base_periodo_dict["fecha_fin"], area_upper)
+        )
+        
+        if not cierre:
+            return base_periodo_dict
+            
+        # Si está cerrado, buscar el primer periodo posterior que esté abierto y no tenga cierre para esta área
+        periodos_posteriores = await self.db.fetch_all(
+            "SELECT * FROM periodos_rrhh WHERE fecha_inicio > ? AND estado = 'abierto' ORDER BY fecha_inicio ASC",
+            (base_periodo_dict["fecha_fin"],)
+        )
+        
+        for p in periodos_posteriores:
+            p_dict = dict(p)
+            cierre_p = await self.db.fetch_one(
+                "SELECT id FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND UPPER(TRIM(area)) = ?",
+                (p_dict["fecha_inicio"], p_dict["fecha_fin"], area_upper)
+            )
+            if not cierre_p:
+                return p_dict
+                
+        return base_periodo_dict
+
     async def get_periodo_rrhh_by_id(self, id: int) -> Optional[Dict[str, Any]]:
         await self._auto_heal_periodos()
         return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE id = ?", (id,))

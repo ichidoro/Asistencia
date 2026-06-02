@@ -295,6 +295,9 @@ function _pollJustificacionJob(jobId) {
                     clearInterval(timer);
                     // Refresh inmediato: el job terminó, los datos ya están en DB
                     window.loadMarcacionesData();
+                    if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
+                        recargarPreEvaluacionCierre();
+                    }
                     if (job.status === 'error') {
                         showToast("⚠️ Error en recálculo de asistencia", "warning");
                     } else if (job.status === 'not_found') {

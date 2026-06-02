@@ -668,8 +668,11 @@ async function saveManualEntry() {
             if (typeof showToast === 'function') showToast(`Se guardaron ${successCount} marcaciones.`, "success");
             closeManualEntryModal();
             if (typeof window.loadMarcacionesData === 'function') {
-            window.loadMarcacionesData();
-        }
+                window.loadMarcacionesData();
+            }
+            if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
+                recargarPreEvaluacionCierre();
+            }
         }
 
     } catch (e) {
@@ -748,6 +751,9 @@ async function validateJornada(accion = 'APROBAR') {
 
             closeValidationModal();
             if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
+                recargarPreEvaluacionCierre();
+            }
         } else {
             const result = await resp.json();
             if (resp.status === 409) {
@@ -794,6 +800,9 @@ async function deleteManualJornada(empId, fecha) {
             // Refrescar grilla
             if (typeof window.loadMarcacionesData === 'function') {
                 window.loadMarcacionesData();
+            }
+            if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
+                recargarPreEvaluacionCierre();
             }
         } else {
             const error = await resp.json();
@@ -923,6 +932,9 @@ async function executeBulkFill() {
             closeBulkFillModal();
             // Recargar Grilla
             if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
+                recargarPreEvaluacionCierre();
+            }
         } else {
             alert(`⚠️ Error: ${result.detail || result.mensaje || 'Error desconocido'}`);
             console.error("Bulk Fill Error:", result);
@@ -1095,6 +1107,9 @@ async function savePermissionEntry() {
 
             closePermissionModal();
             if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
+                recargarPreEvaluacionCierre();
+            }
         } else {
             const err = await resp.json();
             alert("Error: " + (err.detail || "Fallo en la operación"));

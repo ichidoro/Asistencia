@@ -816,6 +816,15 @@ class SyncService:
             import calendar
             from datetime import timedelta as _td
 
+            # Helper para invocar el callback de progreso de asistencia
+            import inspect as _inspect
+            async def _call_cb(event_type: str, data: Dict[str, Any]):
+                cb = getattr(self, '_asist_progress_callback', None)
+                if cb and _inspect.iscoroutinefunction(cb):
+                    await cb(event_type, data)
+
+            await _call_cb('start', {'info': 'Conectando con BioAlba y verificando períodos cerrados...'})
+
             # ── Determinar el rango real de fechas ──────────────────────────
             now = datetime.now()
             if fecha_inicio:
@@ -879,6 +888,147 @@ class SyncService:
                 valid_ruts = set(await empleado_repo.get_all_ruts())
 
             logger.info(f"👥 Total empleados válidos para sync: {len(valid_ruts)}")
+
+            # --- DETECCIÓN DE PERÍODOS CERRADOS ---
+            closed_pairs = set()
+            try:
+                # 1. Consultar cierres en la base de datos
+                closures_rows = await db.fetch_all("""
+                    SELECT fecha_inicio, fecha_fin, area, turno_id
+                    FROM cierres_periodos 
+                    WHERE fecha_inicio <= ? AND fecha_fin >= ?
+                """, (fecha_fin, fecha_inicio))
+                
+                rrhh_closures = await db.fetch_all("""
+                    SELECT fecha_inicio, fecha_fin
+                    FROM periodos_rrhh
+                    WHERE estado = 'cerrado' AND fecha_inicio <= ? AND fecha_fin >= ?
+                """, (fecha_fin, fecha_inicio))
+
+                # 2. Obtener empleados y sus áreas correspondientes a valid_ruts
+                rut_list = list(valid_ruts)
+                emp_rows = []
+                if rut_list:
+                    if len(rut_list) < 900:
+                        placeholders = ','.join('?' for _ in rut_list)
+                        emp_rows = await db.fetch_all(f"""
+                            SELECT e.id, e.rut, e.nombre, e.apellido_paterno, a.nombre as area_nombre
+                            FROM empleados e
+                            LEFT JOIN areas a ON e.area_id = a.id
+                            WHERE REPLACE(REPLACE(e.rut, '.', ''), '-', '') IN ({placeholders})
+                        """, tuple(rut_list))
+                    else:
+                        emp_rows = await db.fetch_all("""
+                            SELECT e.id, e.rut, e.nombre, e.apellido_paterno, a.nombre as area_nombre
+                            FROM empleados e
+                            LEFT JOIN areas a ON e.area_id = a.id
+                        """)
+
+                emp_id_to_rut = {}
+                emp_id_to_name = {}
+                rut_to_current_area = {}
+                emp_ids = []
+                for r in emp_rows:
+                    rut_clean = str(r['rut']).replace('.', '').replace('-', '').strip().upper()
+                    emp_id_to_rut[r['id']] = rut_clean
+                    emp_id_to_name[r['id']] = f"{r.get('nombre','') or ''} {r.get('apellido_paterno','') or ''}".strip()
+                    rut_to_current_area[rut_clean] = r['area_nombre']
+                    emp_ids.append(r['id'])
+
+                # Historial de áreas para los empleados involucrados
+                emp_history = {}
+                if emp_ids:
+                    if len(emp_ids) < 900:
+                        placeholders = ','.join('?' for _ in emp_ids)
+                        hist_rows = await db.fetch_all(f"""
+                            SELECT ha.empleado_id, ha.fecha_desde, ha.fecha_hasta, a.nombre as area_nombre
+                            FROM historial_areas ha
+                            JOIN areas a ON ha.area_id = a.id
+                            WHERE ha.validado = 1 AND ha.empleado_id IN ({placeholders})
+                        """, tuple(emp_ids))
+                    else:
+                        hist_rows = await db.fetch_all("""
+                            SELECT ha.empleado_id, ha.fecha_desde, ha.fecha_hasta, a.nombre as area_nombre
+                            FROM historial_areas ha
+                            JOIN areas a ON ha.area_id = a.id
+                            WHERE ha.validado = 1
+                        """)
+                    for h in hist_rows:
+                        eid = h['empleado_id']
+                        if eid not in emp_history:
+                            emp_history[eid] = []
+                        emp_history[eid].append({
+                            'desde': h['fecha_desde'],
+                            'hasta': h['fecha_hasta'],
+                            'area': h['area_nombre']
+                        })
+
+                # Calcular días en el rango
+                dt_ini_c = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+                dt_fin_c = datetime.strptime(fecha_fin, "%Y-%m-%d")
+                days_in_range = []
+                curr_dt = dt_ini_c
+                while curr_dt <= dt_fin_c:
+                    days_in_range.append(curr_dt.strftime("%Y-%m-%d"))
+                    curr_dt += _td(days=1)
+
+                # Días cerrados globalmente (periodos_rrhh)
+                globally_closed_days = set()
+                for r_c in rrhh_closures:
+                    c_start = datetime.strptime(r_c['fecha_inicio'], "%Y-%m-%d")
+                    c_end = datetime.strptime(r_c['fecha_fin'], "%Y-%m-%d")
+                    curr_c = max(c_start, dt_ini_c)
+                    limit_c = min(c_end, dt_fin_c)
+                    while curr_c <= limit_c:
+                        globally_closed_days.add(curr_c.strftime("%Y-%m-%d"))
+                        curr_c += _td(days=1)
+
+                # Cruzar empleados y días
+                for emp_id, rut_clean in emp_id_to_rut.items():
+                    history = emp_history.get(emp_id, [])
+                    curr_area = rut_to_current_area.get(rut_clean)
+                    
+                    for day_str in days_in_range:
+                        if day_str in globally_closed_days:
+                            closed_pairs.add((rut_clean, day_str))
+                            continue
+                            
+                        # Determinar área en este día
+                        emp_area = None
+                        for h in history:
+                            desde = h['desde']
+                            hasta = h['hasta']
+                            if desde <= day_str and (not hasta or day_str <= hasta):
+                                emp_area = h['area']
+                                break
+                        if not emp_area:
+                            emp_area = curr_area
+                            
+                        is_closed = False
+                        if emp_area:
+                            for cl in closures_rows:
+                                is_global_closure = (cl['area'] is None or cl['area'] == '' or cl['area'] == 'Todas')
+                                cl_area_upper = str(cl['area'] or '').strip().upper()
+                                emp_area_upper = str(emp_area).strip().upper()
+                                if (is_global_closure or cl_area_upper == emp_area_upper) and cl['fecha_inicio'] <= day_str <= cl['fecha_fin']:
+                                    is_closed = True
+                                    break
+                        
+                        if is_closed:
+                            closed_pairs.add((rut_clean, day_str))
+
+                # Early Exit Check (100% cerrado)
+                total_combinations = len(valid_ruts) * len(days_in_range)
+                if len(closed_pairs) == total_combinations and total_combinations > 0:
+                    logger.warning("🚫 [Early Exit] El período seleccionado está completamente cerrado para los empleados y áreas consultadas. Sync cancelado.")
+                    self.stats['fin'] = datetime.now().isoformat()
+                    self.stats['duracion_segundos'] = (datetime.now() - start_time).total_seconds()
+                    self.stats['mensaje'] = "El período seleccionado está completamente cerrado. Sincronización cancelada."
+                    return self.stats
+                elif len(closed_pairs) > 0:
+                    logger.info(f"🛡️ Período parcialmente cerrado: se filtrarán marcaciones para {len(closed_pairs)} de {total_combinations} combinaciones (Empleado x Día).")
+            except Exception as e_closure:
+                logger.error(f"⚠️ Error al calcular períodos cerrados para sync: {e_closure}. Continuando sin filtros de cierres.")
 
             # Leer bioalba_dias_volatilidad de la base de datos
             try:
@@ -949,6 +1099,7 @@ class SyncService:
                         continue
 
                     logger.info(f"📥 Descargando BioAlba: {anio_iter}-{mes_iter:02d}...")
+                    await _call_cb('progress', {'stage': 'download', 'info': f"Descargando marcaciones de BioAlba para {anio_iter}-{mes_iter:02d}..."})
                     lote = await self.scraper.get_marcaciones(
                         mes=mes_iter, anio=anio_iter, ruts_set=valid_ruts
                     )
@@ -1056,6 +1207,7 @@ class SyncService:
             count_filtered = 0
             count_gate_blocked = 0
             count_tipo_invalido = 0
+            count_closed_blocked = 0
 
             # Tipos válidos reconocidos por el motor de asistencia (D8)
             _TIPOS_VALIDOS = {'entrada', 'entry', 'e', 'in', '1', 'salida', 'exit', 's', 'out', '2'}
@@ -1075,6 +1227,11 @@ class SyncService:
 
                     fecha_hora = log_data.get('fecha_hora')
                     fecha_str = fecha_hora.split(' ')[0] if fecha_hora else None
+                    
+                    # FILTRO DE PERIODOS CERRADOS
+                    if (rut_clean, fecha_str) in closed_pairs:
+                        count_closed_blocked += 1
+                        continue
                     
                     # REGLA 2+3: BIOALBA GATE — Solo marcaciones con turno activo en esa fecha
                     # Si el empleado no tiene turno asignado O la fecha es anterior a su fecha_inicio,
@@ -1175,6 +1332,7 @@ class SyncService:
 
                 n_emp = len(emp_ids_to_recalc)
                 logger.info(f"⚡ Recalculando período {fecha_inicio} → {fecha_fin} para {n_emp} empleados afectados...")
+                await _call_cb('start_recalc', {'total': n_emp})
                 from backend.services.asistencia_service import AsistenciaService
                 from backend.repositories.asistencia import AsistenciaRepository
                 
@@ -1195,8 +1353,16 @@ class SyncService:
                     logger.warning(f"⚠️ No se pudieron pre-cargar feriados: {fer_err}")
                     feriados_batch = None
 
-                for emp_id in sorted(list(emp_ids_to_recalc)):
+                for idx, emp_id in enumerate(sorted(list(emp_ids_to_recalc)), start=1):
                     try:
+                        emp_name = emp_id_to_name.get(emp_id, f"ID {emp_id}")
+                        await _call_cb('progress', {
+                            'stage': 'recalc',
+                            'idx': idx,
+                            'total': n_emp,
+                            'info': f"Recalculando asistencia: {emp_name}",
+                            'nombre': emp_name
+                        })
                         # Reprocesar el período completo para este empleado
                         await asist_service.reprocesar_periodo_empleado(
                             empleado_id=emp_id,
@@ -1278,6 +1444,7 @@ class SyncService:
             self.stats['bloqueados_sin_asig'] = count_gate_blocked
             self.stats['filtrados_area'] = count_filtered
             self.stats['tipo_invalido_descartado'] = count_tipo_invalido
+            self.stats['bloqueados_por_cierre'] = count_closed_blocked
             
             # --- NUEVO: Grabar log de sincronización ---
             try:
@@ -1292,7 +1459,11 @@ class SyncService:
                     self.stats['dias_recalculados'],
                     self.stats['errores'],
                     self.stats['duracion_segundos'],
-                    json.dumps({"bloqueados_sin_asig": count_gate_blocked, "filtrados_area": count_filtered})
+                    json.dumps({
+                        "bloqueados_sin_asig": count_gate_blocked, 
+                        "filtrados_area": count_filtered,
+                        "bloqueados_por_cierre": count_closed_blocked
+                    })
                 ))
             except Exception as e_log:
                 logger.error(f"Error grabando sync_log (marcaciones): {e_log}")
@@ -1301,6 +1472,7 @@ class SyncService:
                 f"✅ Sync Completo: {self.stats['marcaciones_nuevas']} nuevas, "
                 f"{count_skipped} duplicadas, "
                 f"{count_gate_blocked} bloqueadas por Bioalba Gate (Sin Asignación), "
+                f"{count_closed_blocked} bloqueadas por Período Cerrado, "
                 f"{count_tipo_invalido} descartadas por tipo inválido (D8), "
                 f"{self.stats['dias_recalculados']} días recal."
             )

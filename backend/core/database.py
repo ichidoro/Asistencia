@@ -68,6 +68,11 @@ class HybridDatabase:
         self.last_activity_time: float = 0.0
         self._realtime_sync_active: bool = False  # True después de enable_realtime_sync()
         
+        # Forzar MODO NUBE PURA (sin réplica local) si use_turso está habilitado
+        if self.use_turso:
+            self._force_turso_only = True
+            logger.info("☁️ Turso Cloud detectado → MODO NUBE PURA FORZADO (sin réplica local ni SQLite local)")
+        
         # Cloud Run: usar conexión directa a Turso (sin réplica local)
         # El filesystem efímero de containers no soporta SQLite WAL correctamente
         if os.environ.get("K_SERVICE"):
@@ -414,7 +419,7 @@ class HybridDatabase:
         # ANTES de cerrar la conexión. Esto asegura que los datos locales
         # (en WAL) se repliquen al Cloud y no se pierdan si algo externo
         # limpia los archivos WAL antes del próximo startup.
-        if hasattr(self.conn, 'sync') and self.use_turso:
+        if self.sync_supported:
             try:
                 await asyncio.to_thread(self.conn.sync)
                 logger.info("🔄 Sync final completado (datos locales empujados a Cloud)")

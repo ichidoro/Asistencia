@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.core.database import db
 from backend.services.sync_service import SyncService
+from backend.core.config import settings
 
 
 # Router
@@ -608,6 +609,136 @@ async def sincronizar_asistencia_sync(
         "stats": stats,
         "filters": {"areas": areas}
     }
+
+
+@router.post(
+    "/asistencia/now/stream/",
+    summary="Sincronizar marcaciones con SSE (progreso en tiempo real)",
+    description="Sincroniza marcaciones emitiendo Server-Sent Events con el progreso y detalles."
+)
+async def sincronizar_asistencia_stream(
+    fecha_inicio: Optional[str] = Query(None, description="AAAA-MM-DD"),
+    fecha_fin: Optional[str] = Query(None, description="AAAA-MM-DD"),
+    deep_sync: bool = Query(False),
+    force_recalculate: bool = Query(False),
+    request: SyncAsistenciaRequest = None,
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.wizard", "marcaciones.sincronizar", "reportes.sincronizar"]))
+):
+    service = SyncService()
+    # Prioridad: body > query param
+    _inicio = (request.fecha_inicio if request and request.fecha_inicio else None) or fecha_inicio
+    _fin    = (request.fecha_fin    if request and request.fecha_fin    else None) or fecha_fin
+    areas   = request.areas if request else None
+    _deep_sync = (request.deep_sync if request and request.deep_sync is not None else None) or deep_sync
+    _force_recalc = (request.force_recalculate if request and request.force_recalculate is not None else None) or force_recalculate
+
+    # RLS Check
+    if not current_user.alcance_global:
+        if areas:
+            for a in areas:
+                if a not in (current_user.areas or []):
+                    raise HTTPException(status_code=403, detail=f"No tiene permisos para el área '{a}'")
+        else:
+            if current_user.areas:
+                areas = current_user.areas
+            else:
+                raise HTTPException(status_code=403, detail="No tiene áreas permitidas asignadas")
+
+    # Queue para pasar eventos desde el task al generador SSE
+    progress_q: asyncio.Queue = asyncio.Queue()
+
+    async def _run_sync():
+        try:
+            async def _on_progress(event_type: str, data: Dict[str, Any]):
+                await progress_q.put((event_type, data))
+
+            service._asist_progress_callback = _on_progress
+            stats = await service.sync_marcaciones(
+                _inicio, _fin, areas, deep_sync=_deep_sync, force_recalculate=_force_recalc
+            )
+            await progress_q.put(('done', stats))
+        except Exception as err:
+            logger.error(f"❌ [Stream Sync Asist] Error en task: {err}")
+            await progress_q.put(('error', {'message': str(err)}))
+
+    async def _stream():
+        task = asyncio.create_task(_run_sync())
+        done = False
+        while not done:
+            try:
+                event_type, data = await asyncio.wait_for(progress_q.get(), timeout=360)
+            except asyncio.TimeoutError:
+                yield f"event: error\ndata: {json.dumps({'message': 'Timeout esperando respuesta del servidor'})}\n\n"
+                task.cancel()
+                return
+
+            if event_type in ('start', 'info', 'progress', 'start_recalc'):
+                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+            elif event_type == 'done':
+                yield f"event: done\ndata: {json.dumps(data)}\n\n"
+                done = True
+            elif event_type == 'error':
+                yield f"event: error\ndata: {json.dumps(data)}\n\n"
+                done = True
+
+        await task
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class SyncCronRequest(BaseModel):
+    cron_secret: str
+    areas: Optional[List[str]] = None
+
+@router.post(
+    "/cron/",
+    summary="Sincronización automática de marcaciones (Cloud Scheduler)",
+    description="Invocado de forma programada por Google Cloud Scheduler usando una clave secreta."
+)
+async def ejecutar_cron_sync(request: SyncCronRequest):
+    if not request.cron_secret or request.cron_secret != settings.CRON_SECRET:
+        logger.warning("🚫 [Cron Sync] Intento de ejecución con clave secreta inválida")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autorizado: Clave secreta inválida o ausente"
+        )
+    
+    logger.info("⏰ [Cron Sync] Iniciando sincronización automática desde Cloud Scheduler...")
+    
+    # Rango de fechas por defecto: día de ayer y hoy para cubrir marcaciones del día en curso
+    # y ajustes de turnos que cruzan la medianoche.
+    from datetime import timedelta
+    hoy = _dt.now()
+    ayer = hoy - timedelta(days=1)
+    
+    fecha_inicio = ayer.strftime("%Y-%m-%d")
+    fecha_fin = hoy.strftime("%Y-%m-%d")
+    
+    service = SyncService()
+    try:
+        stats = await service.sync_marcaciones(
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            areas=request.areas,
+            force_recalculate=True # Asegura que se recalculen las horas del día de ayer/hoy
+        )
+        logger.success(f"✅ [Cron Sync] Sincronización automática completada: {stats}")
+        return {
+            "status": "ok",
+            "message": "Sincronización automática de marcaciones completada con éxito",
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"❌ [Cron Sync] Error en ejecución automática: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en sincronización automática: {str(e)}"
+        )
+
 
 
 @router.post(

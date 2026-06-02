@@ -3397,6 +3397,24 @@ tr:hover .emp-name-cell {
 .modal-backdrop {
     z-index: 2040 !important;
 }
+
+/* Soporte para Modales Apilados (ej: Ingreso Manual / Validación / Justificación sobre el Wizard de Cierre) */
+#modal-decision-asistencia {
+    z-index: 2100 !important;
+}
+#modal-marcacion-manual,
+#modal-validacion-jornada,
+#modal-justificacion-individual {
+    z-index: 2150 !important;
+}
+
+/* Ajuste de z-index para backdrops apilados dinámicamente en Bootstrap 5 */
+.modal-backdrop:nth-of-type(2) {
+    z-index: 2090 !important;
+}
+.modal-backdrop:nth-of-type(3) {
+    z-index: 2140 !important;
+}
 .swal2-container {
     z-index: 3000 !important;
 }

@@ -797,7 +797,7 @@ async def get_catalogo_generos(
 @router.get("/periodos/", response_model=List[PeriodoRRHHResponse])
 async def get_periodos_rrhh(
     service: ConfiguracionService = Depends(get_config_service),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "marcaciones.cierre_periodo", "marcaciones.ver"]))
 ):
     """Listar todos los tramos de cierre configurados"""
     return await service.get_all_periodos_rrhh()
@@ -809,6 +809,15 @@ async def get_periodo_rrhh_activo(
 ):
     """Obtener el tramo de cierre activo actual"""
     return await service.get_periodo_rrhh_activo()
+
+@router.get("/periodos/activo/{area}/", response_model=Optional[PeriodoRRHHResponse])
+async def get_periodo_rrhh_activo_area(
+    area: str,
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Obtener el tramo de cierre activo actual para un área específica"""
+    return await service.get_periodo_rrhh_activo_area(area)
 
 @router.post("/periodos/", response_model=Dict[str, Any])
 async def create_periodo_rrhh(

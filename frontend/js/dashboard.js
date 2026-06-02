@@ -41,14 +41,32 @@ async function initDashboard() {
     }
 }
 
+async function updateDashboardPeriodForArea(area) {
+    const iniDate = document.getElementById('dash-fecha-inicio');
+    const finDate = document.getElementById('dash-fecha-fin');
+    if (!iniDate || !finDate) return;
+    try {
+        const areaName = area || 'Todas';
+        const activeResp = await fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(areaName)}/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (activeResp.ok) {
+            const activePeriod = await activeResp.json();
+            if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
+                iniDate.value = activePeriod.fecha_inicio;
+                finDate.value = activePeriod.fecha_fin;
+                console.log(`[Dashboard] Periodo activo para ${areaName} cargado:`, activePeriod);
+            }
+        }
+    } catch (e) {
+        console.error("Error cargando periodo activo en dashboard:", e);
+    }
+}
+
 async function populateDashboardFilters() {
     try {
         const iniDate = document.getElementById('dash-fecha-inicio');
         const finDate = document.getElementById('dash-fecha-fin');
-        if (iniDate && !iniDate.value) {
-            iniDate.value = getFirstBusinessDay();
-            finDate.value = new Date().toISOString().split('T')[0];
-        }
 
         // Fix #B: Reusar caché global de áreas (compartida con Empleados y Reportes).
         // Solo va a la red si es la primera vez en esta sesión.
@@ -84,6 +102,12 @@ async function populateDashboardFilters() {
                 horarioSelect.appendChild(opt);
             });
         }
+
+        // Carga inicial del período según el área por defecto
+        if (iniDate && !iniDate.value) {
+            const defaultArea = areaSelect ? areaSelect.value : 'Todas';
+            await updateDashboardPeriodForArea(defaultArea);
+        }
     } catch (e) { console.error("⚠️ Error poblando filtros:", e); }
 }
 
@@ -116,6 +140,7 @@ function setupDashboardEventListeners() {
 
     if (areaSelect) areaSelect.addEventListener('change', async () => {
         await updateHorarioFilter(areaSelect.value);
+        await updateDashboardPeriodForArea(areaSelect.value);
         loadDashboard();
     });
     if (horarioSelect) horarioSelect.addEventListener('change', () => debouncedLoad());

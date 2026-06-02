@@ -640,6 +640,9 @@ class ConfiguracionService:
     async def get_periodo_rrhh_activo(self) -> Optional[Dict[str, Any]]:
         return await self.repository.get_periodo_rrhh_activo()
 
+    async def get_periodo_rrhh_activo_area(self, area: str) -> Optional[Dict[str, Any]]:
+        return await self.repository.get_periodo_rrhh_activo_area(area)
+
     async def get_periodo_rrhh_by_id(self, id: int) -> Optional[Dict[str, Any]]:
         return await self.repository.get_periodo_rrhh_by_id(id)
 
