@@ -264,7 +264,18 @@ class DashboardAnalytics:
         try:
             params = [fecha_inicio, fecha_fin] + filters['params'] + filters['horario_params']
             
-            # 1. Total turnos obligatorios (Esperados)
+            # 1. Obtener la dotación activa teórica de empleados según los filtros
+            query_dotacion = f"""
+                SELECT COUNT(*) as dotacion
+                FROM empleados e
+                WHERE e.activo = 1
+                {filters['emp_cond']} {filters['horario_emp_cond']}
+            """
+            params_dot = filters['params'] + filters['horario_params']
+            res_dot = await self.db.fetch_one(query_dotacion, tuple(params_dot))
+            dotacion_total_area = res_dot.get('dotacion', 0) if res_dot else 0
+
+            # 2. Total turnos obligatorios (Esperados)
             # Regla: Sumamos registros que NO sean exclusiones, O registros que siendo exclusiones (LIBRE/FERIADO) tengan marca real.
             query_esperado = f"""
                 SELECT COUNT(*) as esperado
@@ -278,7 +289,7 @@ class DashboardAnalytics:
             res_esperado = await self.db.fetch_one(query_esperado, tuple(params))
             esperado_total = res_esperado.get('esperado', 0) if res_esperado else 0
 
-            # 2. Desglose detallado de estados reales DIARIOS
+            # 3. Desglose detallado de estados reales DIARIOS
             query_estados = f"""
                 SELECT a.fecha, a.estado, a.hora_entrada_real, COUNT(*) as qty
                 FROM asistencias a
@@ -301,7 +312,17 @@ class DashboardAnalytics:
             estados_inasistencia_pura = ['INASISTENCIA', 'FALTA']
             estados_justificados = ['JORNADA_ESPECIAL', 'PERMISO', 'INASISTENCIA_COMPENSADA', 'JORNADA_COMPENSATORIA']
             
+            # Generar lista de todas las fechas del rango
+            from datetime import datetime, timedelta
+            start_date = datetime.strptime(fecha_inicio, '%Y-%m-%d')
+            end_date = datetime.strptime(fecha_fin, '%Y-%m-%d')
+            
             tendencia_diaria = {}
+            curr = start_date
+            while curr <= end_date:
+                f_str = curr.strftime('%Y-%m-%d')
+                tendencia_diaria[f_str] = {"asistencia": 0, "puntualidad": 0, "ausencia_justificada": 0, "inasistencia": 0, "libres": 0}
+                curr += timedelta(days=1)
             
             for r in res_estados:
                 fecha = r['fecha']
@@ -322,12 +343,17 @@ class DashboardAnalytics:
                 elif est in estados_justificados:
                     tendencia_diaria[fecha]["ausencia_justificada"] += qty
                 else:
-                    # Si no cumple lo anterior y es LIBRE o FERIADO (sin marcas), se cuenta como libres programados
                     if est in ['LIBRE', 'FERIADO']:
                         tendencia_diaria[fecha]["libres"] += qty
                     else:
-                        # Fallback por seguridad
                         tendencia_diaria[fecha]["ausencia_justificada"] += qty
+
+            # Autocompletar la dotación para cada día con libres programados/futuros
+            for f in tendencia_diaria.keys():
+                d = tendencia_diaria[f]
+                registrados = d["asistencia"] + d["ausencia_justificada"] + d["inasistencia"] + d["libres"]
+                diferencia = max(0, dotacion_total_area - registrados)
+                d["libres"] += diferencia
 
             # Transformar a lista ordenada
             puntualidad_total = 0

@@ -240,15 +240,8 @@ function renderAsistenciaGlobal(matriz, fugasVal) {
     
     const tendencia = matriz.tendencia || [];
     
-    // Alternativa A: Omitir días no laborales generales.
-    // Calculamos el máximo diario de personas planificadas/requeridas en el periodo.
-    const maxRequerido = Math.max(...tendencia.map(t => (t.asistencia || 0) + (t.ausencia_justificada || 0) + (t.inasistencia || 0)), 1);
-    
-    // Filtramos la tendencia para dejar solo días donde la dotación planificada sea >= 15% de la máxima.
-    const tendenciaFiltrada = tendencia.filter(t => {
-        const req = (t.asistencia || 0) + (t.ausencia_justificada || 0) + (t.inasistencia || 0);
-        return req >= (maxRequerido * 0.15);
-    });
+    // Mostramos todos los días del rango seleccionado (tengan o no marcas)
+    const tendenciaFiltrada = tendencia;
     
     const labels = tendenciaFiltrada.map(t => {
         if (!t.fecha) return '';
@@ -261,6 +254,7 @@ function renderAsistenciaGlobal(matriz, fugasVal) {
     const asistencias = tendenciaFiltrada.map(t => t.asistencia || 0);
     const ausenciasJustificadas = tendenciaFiltrada.map(t => t.ausencia_justificada || 0);
     const inasistencias = tendenciaFiltrada.map(t => t.inasistencia || 0);
+    const libres = tendenciaFiltrada.map(t => t.libres || 0);
 
     chartAsistenciaInstance = new Chart(ctx, {
         type: 'bar',
@@ -288,6 +282,14 @@ function renderAsistenciaGlobal(matriz, fugasVal) {
                     data: inasistencias, 
                     backgroundColor: 'hsla(350, 75%, 55%, 0.85)', 
                     borderColor: 'hsla(350, 75%, 55%, 1)', 
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                { 
+                    label: 'Días Libres / Feriados', 
+                    data: libres, 
+                    backgroundColor: 'hsla(210, 16%, 82%, 0.75)', 
+                    borderColor: 'hsla(210, 16%, 82%, 1)', 
                     borderWidth: 1,
                     borderRadius: 4
                 }
