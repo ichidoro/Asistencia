@@ -294,10 +294,12 @@ class DashboardAnalytics:
             
             asistencia_real_total = 0
             
-            # Clasificación semántica estricta
-            estados_asistencia = ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'EN_CURSO', 'JORNADA_ESPECIAL', 'EXTRA']
-            estados_puntual = ['OK']  # Solo OK = sin atraso ni salida adelantada
+            # Clasificación conceptual pura
+            # Los estados compuestos/mixtos (como ATR_SAD, PER_ATR, etc.) o anomalías representan asistencia física (presencia)
+            estados_asistencia_puros = ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'PER_ATR', 'PER_SAD', 'PER_ATR_SAD', 'EN_CURSO', 'EXTRA', 'ANOMALIA']
+            estados_puntual = ['OK']
             estados_inasistencia_pura = ['INASISTENCIA', 'FALTA']
+            estados_justificados = ['JORNADA_ESPECIAL', 'PERMISO', 'INASISTENCIA_COMPENSADA', 'JORNADA_COMPENSATORIA']
             
             tendencia_diaria = {}
             
@@ -305,21 +307,27 @@ class DashboardAnalytics:
                 fecha = r['fecha']
                 est = str(r['estado']).upper()
                 qty = r['qty']
+                tiene_marca = r['hora_entrada_real'] is not None
                 
                 if fecha not in tendencia_diaria:
-                    tendencia_diaria[fecha] = {"asistencia": 0, "puntualidad": 0, "ausencia_justificada": 0, "inasistencia": 0}
+                    tendencia_diaria[fecha] = {"asistencia": 0, "puntualidad": 0, "ausencia_justificada": 0, "inasistencia": 0, "libres": 0}
                     
-                if est in estados_asistencia or (est in ['LIBRE', 'FERIADO'] and r['hora_entrada_real']):
+                if est in estados_asistencia_puros or (est in ['LIBRE', 'FERIADO'] and tiene_marca):
                     tendencia_diaria[fecha]["asistencia"] += qty
                     asistencia_real_total += qty
-                    # Puntualidad: solo estado OK (sin atraso ni salida adelantada)
                     if est in estados_puntual:
                         tendencia_diaria[fecha]["puntualidad"] += qty
                 elif est in estados_inasistencia_pura:
                     tendencia_diaria[fecha]["inasistencia"] += qty
-                else:
-                    # Todo lo demás (vacaciones, licencias, duelos) es Ausencia Justificada
+                elif est in estados_justificados:
                     tendencia_diaria[fecha]["ausencia_justificada"] += qty
+                else:
+                    # Si no cumple lo anterior y es LIBRE o FERIADO (sin marcas), se cuenta como libres programados
+                    if est in ['LIBRE', 'FERIADO']:
+                        tendencia_diaria[fecha]["libres"] += qty
+                    else:
+                        # Fallback por seguridad
+                        tendencia_diaria[fecha]["ausencia_justificada"] += qty
 
             # Transformar a lista ordenada
             puntualidad_total = 0
@@ -327,7 +335,7 @@ class DashboardAnalytics:
             for f in sorted(tendencia_diaria.keys()):
                 d = tendencia_diaria[f]
                 d['fecha'] = f
-                # Esperado diario es aprox la suma de los 3 (ya que excluimos libres de la base)
+                # Esperado diario es la suma de asistencia, ausencia justificada e inasistencia
                 d['esperado_diario'] = d['asistencia'] + d['ausencia_justificada'] + d['inasistencia']
                 puntualidad_total += d['puntualidad']
                 tendencia_list.append(d)

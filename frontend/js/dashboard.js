@@ -237,25 +237,79 @@ function renderAsistenciaGlobal(matriz, fugasVal) {
     const ctx = document.getElementById('chart-asistencia');
     if (!ctx) return;
     if (chartAsistenciaInstance) chartAsistenciaInstance.destroy();
+    
     const tendencia = matriz.tendencia || [];
-    const labels = tendencia.map(t => t.fecha ? new Date(t.fecha + 'T12:00:00').toLocaleDateString('es-ES', {day:'2-digit', month:'short'}) : '');
-    const asistencias = tendencia.map(t => t.asistencia || 0);
-    const puntualidades = tendencia.map(t => t.puntualidad || 0);
-    const inasistencias = tendencia.map(t => t.inasistencia || 0);
-    const gAsis = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
-    gAsis.addColorStop(0, 'rgba(16,185,129,0.3)'); gAsis.addColorStop(1, 'rgba(16,185,129,0)');
-    const gPunt = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
-    gPunt.addColorStop(0, 'rgba(99,102,241,0.2)'); gPunt.addColorStop(1, 'rgba(99,102,241,0)');
+    
+    // Alternativa A: Omitir días no laborales generales.
+    // Calculamos el máximo diario de personas planificadas/requeridas en el periodo.
+    const maxRequerido = Math.max(...tendencia.map(t => (t.asistencia || 0) + (t.ausencia_justificada || 0) + (t.inasistencia || 0)), 1);
+    
+    // Filtramos la tendencia para dejar solo días donde la dotación planificada sea >= 15% de la máxima.
+    const tendenciaFiltrada = tendencia.filter(t => {
+        const req = (t.asistencia || 0) + (t.ausencia_justificada || 0) + (t.inasistencia || 0);
+        return req >= (maxRequerido * 0.15);
+    });
+    
+    const labels = tendenciaFiltrada.map(t => t.fecha ? new Date(t.fecha + 'T12:00:00').toLocaleDateString('es-ES', {day:'2-digit', month:'short'}) : '');
+    const asistencias = tendenciaFiltrada.map(t => t.asistencia || 0);
+    const ausenciasJustificadas = tendenciaFiltrada.map(t => t.ausencia_justificada || 0);
+    const inasistencias = tendenciaFiltrada.map(t => t.inasistencia || 0);
+
     chartAsistenciaInstance = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets: [
-            { label: 'Asistencias', data: asistencias, borderColor: '#10b981', backgroundColor: gAsis, fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2 },
-            { label: 'Puntualidad', data: puntualidades, borderColor: '#6366f1', backgroundColor: gPunt, fill: true, tension: 0.4, pointRadius: 1, borderWidth: 2 },
-            { label: 'Inasistencias', data: inasistencias, borderColor: '#f43f5e', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, borderDash: [5,5], borderWidth: 1.5 }
-        ] },
-        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-            plugins: { legend: { labels: { boxWidth: 10, font: { size: 11 } } }, datalabels: { display: false } },
-            scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+        type: 'bar',
+        data: { 
+            labels, 
+            datasets: [
+                { 
+                    label: 'Asistencias', 
+                    data: asistencias, 
+                    backgroundColor: 'hsla(142, 70%, 45%, 0.85)', 
+                    borderColor: 'hsla(142, 70%, 45%, 1)', 
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                { 
+                    label: 'Ausencias Justificadas', 
+                    data: ausenciasJustificadas, 
+                    backgroundColor: 'hsla(200, 80%, 55%, 0.85)', 
+                    borderColor: 'hsla(200, 80%, 55%, 1)', 
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                { 
+                    label: 'Inasistencias', 
+                    data: inasistencias, 
+                    backgroundColor: 'hsla(350, 75%, 55%, 0.85)', 
+                    borderColor: 'hsla(350, 75%, 55%, 1)', 
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            interaction: { mode: 'index', intersect: false },
+            plugins: { 
+                legend: { 
+                    position: 'top',
+                    labels: { boxWidth: 12, font: { size: 10 } } 
+                }, 
+                datalabels: { display: false } 
+            },
+            scales: { 
+                y: { 
+                    stacked: true,
+                    beginAtZero: true, 
+                    grid: { color: '#f1f5f9' },
+                    ticks: { font: { size: 9 } }
+                }, 
+                x: { 
+                    stacked: true,
+                    grid: { display: false }, 
+                    ticks: { font: { size: 9 } } 
+                } 
+            }
         }
     });
 }
