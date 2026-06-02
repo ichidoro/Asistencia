@@ -333,7 +333,8 @@ class DashboardAnalytics:
                 if fecha not in tendencia_diaria:
                     tendencia_diaria[fecha] = {"asistencia": 0, "puntualidad": 0, "ausencia_justificada": 0, "inasistencia": 0, "libres": 0}
                     
-                if est in estados_asistencia_puros or (est in ['LIBRE', 'FERIADO'] and tiene_marca):
+                # Regla de oro: si hay marca física de entrada, representa asistencia real
+                if tiene_marca or est in estados_asistencia_puros:
                     tendencia_diaria[fecha]["asistencia"] += qty
                     asistencia_real_total += qty
                     if est in estados_puntual:
@@ -341,6 +342,7 @@ class DashboardAnalytics:
                 elif est in estados_inasistencia_pura:
                     tendencia_diaria[fecha]["inasistencia"] += qty
                 elif est in estados_justificados:
+                    # Sin marcas y con estado de justificación = Ausencia Justificada
                     tendencia_diaria[fecha]["ausencia_justificada"] += qty
                 else:
                     if est in ['LIBRE', 'FERIADO']:
