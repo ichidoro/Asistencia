@@ -34,6 +34,9 @@ let cacheSeguridad = {
 };
 
 const MAPA_UI_PERMISOS = {
+    // ── MÓDULO DASHBOARD (1) ──
+    'dashboard.ver':           { module: 'DASHBOARD', action: 'Ver',           description: 'Ver el dashboard analítico de asistencia y fuerza laboral (Lectura)', permissions: ['dashboard.ver'] },
+
     // ── MÓDULO EMPLEADOS (7) ──
     'empleados.ver':           { module: 'EMPLEADOS', action: 'Ver',           description: 'Ver lista general de empleados, cumpleaños y turnos asignados (Lectura)', permissions: ['empleados.ver'] },
     'empleados.crear':         { module: 'EMPLEADOS', action: 'Crear',         description: 'Crear nuevos empleados (Botón "+ Nuevo Empleado")',                       permissions: ['empleados.crear'] },
@@ -417,6 +420,8 @@ async function loadRoles() {
 
 function getPermissionDetails(permId) {
     const details = {
+        // Dashboard
+        'dashboard.ver':           { alert: 'Ubicación: Menú lateral (Dashboard)',   flow: 'Visualizar métricas diarias, KPIs de paridad, edades y productividad.' },
         // Empleados
         'empleados.ver':           { alert: 'Ubicación: Menú lateral y pestañas',   flow: 'Visualizar lista general, visor de turnos y cumpleaños (Lectura).' },
         'empleados.crear':         { alert: 'Ubicación: Botón "+ Nuevo Empleado"',  flow: 'Habilitar el botón de cabecera para abrir la modal de creación.' },
@@ -468,6 +473,7 @@ function renderMatrizPermisos() {
 
     // Module icons
     const moduleIcons = {
+        'DASHBOARD': '📊',
         'EMPLEADOS': '👥',
         'MARCACIONES': '🕐',
         'REPORTES': '📊',
