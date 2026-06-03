@@ -423,7 +423,29 @@ window.ejecutarPerdonazoPanelSeleccionados = async function() {
         return;
     }
     if (!fecha) return;
-    await window.executeCondonacionMasiva(empIds, fecha, fecha, tipo);
+
+    // Obtener los botones para colocar spinner y deshabilitar
+    const btnAplicar = document.querySelector('#panel-perdonazo button[onclick="ejecutarPerdonazoPanelSeleccionados()"]');
+    const btnRevocar = document.querySelector('#panel-perdonazo button[onclick="revocarPerdonazoPanelSeleccionados()"]');
+    let originalHTML = '';
+    if (btnAplicar) {
+        originalHTML = btnAplicar.innerHTML;
+        btnAplicar.disabled = true;
+        if (btnRevocar) btnRevocar.disabled = true;
+        btnAplicar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Aplicando...';
+    }
+
+    try {
+        await window.executeCondonacionMasiva(empIds, fecha, fecha, tipo);
+    } catch (err) {
+        console.error("Error al aplicar perdonazo masivo:", err);
+    } finally {
+        if (btnAplicar) {
+            btnAplicar.disabled = false;
+            btnAplicar.innerHTML = originalHTML;
+        }
+        if (btnRevocar) btnRevocar.disabled = false;
+    }
 };
 
 /** Revoca el perdonazo para los seleccionados en el panel */
@@ -436,5 +458,27 @@ window.revocarPerdonazoPanelSeleccionados = async function() {
         return;
     }
     if (!fecha) return;
-    await window.executeCondonacionMasiva(empIds, fecha, fecha, 0);
+
+    // Obtener los botones para colocar spinner y deshabilitar
+    const btnAplicar = document.querySelector('#panel-perdonazo button[onclick="ejecutarPerdonazoPanelSeleccionados()"]');
+    const btnRevocar = document.querySelector('#panel-perdonazo button[onclick="revocarPerdonazoPanelSeleccionados()"]');
+    let originalHTML = '';
+    if (btnRevocar) {
+        originalHTML = btnRevocar.innerHTML;
+        btnRevocar.disabled = true;
+        if (btnAplicar) btnAplicar.disabled = true;
+        btnRevocar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>...';
+    }
+
+    try {
+        await window.executeCondonacionMasiva(empIds, fecha, fecha, 0);
+    } catch (err) {
+        console.error("Error al revocar perdonazo masivo:", err);
+    } finally {
+        if (btnRevocar) {
+            btnRevocar.disabled = false;
+            btnRevocar.innerHTML = originalHTML;
+        }
+        if (btnAplicar) btnAplicar.disabled = false;
+    }
 };
