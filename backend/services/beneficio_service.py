@@ -43,10 +43,9 @@ class BeneficioService:
             """
             SELECT j.*, jt.nombre AS tipo_nombre,
                    jt.con_goce_sueldo, jt.descuenta_remuneracion, jt.pagador,
-                   COALESCE(cp.aplica_bono, 1) AS aplica_bono_pagador
+                   1 AS aplica_bono_pagador
             FROM justificaciones j
             JOIN justificacion_tipos jt ON j.tipo_id = jt.id
-            LEFT JOIN cat_pagadores cp ON jt.pagador = cp.nombre
             WHERE j.fecha_inicio <= ? AND j.fecha_fin >= ?
             """,
             (fecha_fin, fecha_inicio),
@@ -132,15 +131,26 @@ class BeneficioService:
                 })
                 continue
 
-            # --- Regla 2: Asistencia (Heredada del Bono de Compromiso) ---
+            # --- Regla 2: Asistencia (Heredada del Bono de Compromiso, sin exclusiones de cargo) ---
             califica_asistencia = True
             motivo_asistencia = "Cumple asistencia 100%."
             
             if compromiso_bono and compromiso_bono.get("activo"):
+                import copy
+                # Modificar las reglas del bono en memoria para que aplique universalmente a cualquier cargo y contrato
+                compromiso_beneficio = copy.deepcopy(compromiso_bono)
+                compromiso_beneficio["reglas"] = [{
+                    "cargo_requerido": None,
+                    "cargos_excluidos": None,
+                    "tipo_contrato": None,
+                    "es_proporcional": 0,
+                    "monto": 1000
+                }]
+                
                 # Ejecutar calificacion de bono Compromiso
                 res_calif = bono_service._calificar_bono(
                     emp_dict,
-                    compromiso_bono,
+                    compromiso_beneficio,
                     asist_map.get(emp_id, []),
                     just_map.get(emp_id, []),
                     matrix_data.get(emp_id),
@@ -150,11 +160,9 @@ class BeneficioService:
                     feriados_set
                 )
                 
-                # Si el bono no aplica por cargo/contrato o si no califica por asistencia
-                if not res_calif.get("aplica"):
-                    califica_asistencia = False
-                    motivo_asistencia = res_calif.get("motivo", "No aplica para este Cargo/Contrato.")
-                elif not res_calif.get("califica"):
+                # Para el beneficio de productos propios, no se excluye a nadie (aplica es siempre True)
+                # Solo se evalua si califica por su asistencia
+                if not res_calif.get("califica"):
                     califica_asistencia = False
                     motivo_asistencia = f"No califica por asistencia. Detalle: {res_calif.get('motivo')}"
             else:

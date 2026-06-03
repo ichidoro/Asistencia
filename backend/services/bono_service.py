@@ -50,10 +50,9 @@ class BonoService:
             """
             SELECT j.*, jt.nombre AS tipo_nombre,
                    jt.con_goce_sueldo, jt.descuenta_remuneracion, jt.pagador,
-                   COALESCE(cp.aplica_bono, 1) AS aplica_bono_pagador
+                   1 AS aplica_bono_pagador
             FROM justificaciones j
             JOIN justificacion_tipos jt ON j.tipo_id = jt.id
-            LEFT JOIN cat_pagadores cp ON jt.pagador = cp.nombre
             WHERE j.fecha_inicio <= ? AND j.fecha_fin >= ?
             """,
             (fecha_fin, fecha_inicio),
