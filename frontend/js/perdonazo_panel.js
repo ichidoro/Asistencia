@@ -467,7 +467,7 @@ window.revocarPerdonazoPanelSeleccionados = async function() {
         originalHTML = btnRevocar.innerHTML;
         btnRevocar.disabled = true;
         if (btnAplicar) btnAplicar.disabled = true;
-        btnRevocar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>...';
+        btnRevocar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Revocando...';
     }
 
     try {

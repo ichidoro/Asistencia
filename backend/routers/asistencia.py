@@ -749,23 +749,26 @@ async def condonar_deuda(
     fechas = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(dias_totales)]
 
     try:
+        # 1. Marcar condonacion en la BD en un solo batch (N+1 optimization)
+        query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
+        params = [(request.tipo_condonacion, emp_id, fecha_str) for emp_id in request.empleados_ids for fecha_str in fechas]
+        await service.repository.db.executemany(query, params)
+
+        # 2. Reprocesar en paralelo los días de los empleados (N+1 optimization)
+        import asyncio
+        tasks = []
         for emp_id in request.empleados_ids:
             for fecha_str in fechas:
-                # 1. Marcar condonacion en la BD
-                await service.repository.toggle_condonacion_deuda(
-                    empleado_id=emp_id,
-                    fecha=fecha_str,
-                    tipo_condonacion=request.tipo_condonacion
+                tasks.append(
+                    service.reprocesar_periodo_empleado(
+                        empleado_id=emp_id,
+                        fecha_inicio=fecha_str,
+                        fecha_fin=fecha_str,
+                        force=True
+                    )
                 )
-                
-                # 2. Reprocesar solo ese dia para ese empleado para que el CASE en el upsert surta efecto
-                await service.reprocesar_periodo_empleado(
-                    empleado_id=emp_id,
-                    fecha_inicio=fecha_str,
-                    fecha_fin=fecha_str,
-                    force=True
-                )
-                
+        await asyncio.gather(*tasks)
+
         accion = "condonada" if request.tipo_condonacion > 0 else "revocada"
         return {"success": True, "message": f"Deuda {accion} correctamente para {len(request.empleados_ids)} empleado(s) en {dias_totales} día(s)."}
     except Exception as e:
