@@ -75,6 +75,10 @@ const MAPA_UI_PERMISOS = {
     'configuracion.seguridad':      { module: 'CONFIGURACIÓN', action: 'Seguridad',      description: 'Gestionar usuarios y roles ⚠️ Riesgo Máximo',   permissions: ['configuracion.seguridad'] },
     'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
     'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
+
+    // ── MÓDULO BENEFICIOS (2) ──
+    'beneficios.ver':               { module: 'BENEFICIOS', action: 'Ver',               description: 'Ver panel de beneficios de productos propios', permissions: ['beneficios.ver'] },
+    'beneficios.editar':            { module: 'BENEFICIOS', action: 'Editar',            description: 'Asignar productos propios a empleados y gestionar catálogo', permissions: ['beneficios.editar'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
@@ -453,6 +457,10 @@ function getPermissionDetails(permId) {
         'configuracion.estados':        { alert: 'Lógica de Negocio',     flow: 'Estados que clasifican cada marcación del sistema' },
         'configuracion.wizard':         { alert: 'Setup del Sistema',     flow: 'Wizard de inicialización que conecta BioAlba' },
         'configuracion.sistema':        { alert: 'Solo Admin',            flow: 'Diagnóstico de BD, modo de conexión y velocidad' },
+
+        // Beneficios
+        'beneficios.ver':               { alert: 'Ubicación: Menú lateral (Beneficios)', flow: 'Visualizar planilla de habilitados para beneficios de productos propios.' },
+        'beneficios.editar':            { alert: 'Ubicación: Configuración y Asignación', flow: 'Asignar productos a empleados habilitados y gestionar el catálogo de productos.' },
     };
     return details[permId] || null;
 }
@@ -477,7 +485,8 @@ function renderMatrizPermisos() {
         'EMPLEADOS': '👥',
         'MARCACIONES': '🕐',
         'REPORTES': '📊',
-        'CONFIGURACIÓN': '⚙️'
+        'CONFIGURACIÓN': '⚙️',
+        'BENEFICIOS': '🎁'
     };
 
     // Render HTML
