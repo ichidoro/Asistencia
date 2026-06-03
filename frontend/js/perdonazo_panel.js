@@ -92,7 +92,7 @@
             <div class="panel-footer">
                 <div style="margin-bottom:10px;">
                     <label for="panel-tipo-condonacion" style="font-size:0.75rem;font-weight:700;color:#374151;display:block;margin-bottom:5px;">¿Qué deuda condonar?</label>
-                    <select id="panel-tipo-condonacion" style="width:100%;padding:6px 10px;border:1px solid #d1fae5;border-radius:8px;font-size:0.8rem;background:#f0fdf4;color:#047857;font-weight:600;">
+                    <select id="panel-tipo-condonacion" onchange="renderizarListaPerdonazo()" style="width:100%;padding:6px 10px;border:1px solid #d1fae5;border-radius:8px;font-size:0.8rem;background:#f0fdf4;color:#047857;font-weight:600;">
                         <option value="1">Solo Salida Adelantada</option>
                         <option value="2">Solo Atraso</option>
                         <option value="3">Atraso + Salida Adelantada</option>
@@ -175,7 +175,6 @@ window.abrirPanelPerdonazoPorFecha = function(fecha) {
     const panel = document.getElementById('panel-perdonazo');
     const overlay = document.getElementById('perdonazo-overlay');
     const titulo = document.getElementById('panel-perdonazo-titulo');
-    const body = document.getElementById('panel-perdonazo-body');
     if (!panel) return;
 
     // Título humanizado
@@ -185,98 +184,224 @@ window.abrirPanelPerdonazoPorFecha = function(fecha) {
     titulo.textContent = fechaDisplay;
     panel.dataset.fechaActual = fecha;
 
-    // Recopilar empleados con deuda desde datos en memoria
+    panel.classList.add('abierto');
+    overlay.classList.add('visible');
+    window._perdonazoState.seleccionados.clear();
+    window.renderizarListaPerdonazo();
+};
+
+/** Renderiza la lista dividida en Atrasos (arriba) y Salidas Adelantadas (abajo) con filtros reactivos */
+window.renderizarListaPerdonazo = function() {
+    const panel = document.getElementById('panel-perdonazo');
+    if (!panel) return;
+    const fecha = panel.dataset.fechaActual;
+    if (!fecha) return;
+
+    const body = document.getElementById('panel-perdonazo-body');
+    const tipo = parseInt(document.getElementById('panel-tipo-condonacion')?.value || '3', 10);
+
     const matrix = window.stateMarcacionesApp.data?.matrix;
     const empleados = window.stateMarcacionesApp.data?.empleados || [];
 
     if (!matrix) {
         body.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">No hay datos cargados</div>';
-        panel.classList.add('abierto');
-        overlay.classList.add('visible');
         return;
     }
 
-    const empConDeuda = [];
-    const empCondonados = [];
-
-    for (const emp of empleados) {
-        const asist = matrix[emp.id]?.[fecha];
-        if (!asist) continue;
-        if (asist.deuda_condonada > 0) {
-            empCondonados.push({ emp, asist });
-        } else if (asist.minutos_atraso > 0 || asist.minutos_salida_adelantada > 0) {
-            empConDeuda.push({ emp, asist });
-        }
-    }
-
+    // Formateador de minutos
     const fmtMin = (m) => {
         if (!m || m <= 0) return '';
         const h = Math.floor(m / 60); const min = m % 60;
         return h > 0 ? `${h}h ${min}m` : `${min}m`;
     };
 
-    let html = '';
+    // Clasificar
+    const atrasosPendientes = [];
+    const atrasosCondonados = [];
+    const salidasPendientes = [];
+    const salidasCondonadas = [];
 
-    if (empConDeuda.length === 0 && empCondonados.length === 0) {
-        html = '<div style="text-align:center;padding:40px;color:#94a3b8;"><i class="bi bi-check-circle" style="font-size:2rem;display:block;margin-bottom:10px;"></i>Sin incidencias ni deudas pendientes este día</div>';
-    } else {
-        if (empConDeuda.length > 0) {
-            html += `<div style="font-size:0.65rem;font-weight:800;color:#dc2626;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">
-                <i class="bi bi-exclamation-circle-fill me-1"></i> Con Incidencias o Deuda (${empConDeuda.length})
-            </div>`;
-            for (const { emp, asist } of empConDeuda) {
-                const badges = [];
-                if (asist.minutos_atraso > 0) badges.push(`<span class="badge-estado badge-deuda">Atraso ${fmtMin(asist.minutos_atraso)}</span>`);
-                if (asist.minutos_salida_adelantada > 0) badges.push(`<span class="badge-estado badge-deuda">Sal.Ant. ${fmtMin(asist.minutos_salida_adelantada)}</span>`);
-                html += `
-                <div class="emp-row" id="panel-emp-${emp.id}" onclick="toggleSeleccionEmpPanel(${emp.id})">
-                    <input type="checkbox" class="form-check-input" id="cb-panel-${emp.id}" style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
-                    <div style="flex:1;">
-                        <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
-                        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">${badges.join('')}</div>
-                    </div>
-                </div>`;
-            }
+    for (const emp of empleados) {
+        const asist = matrix[emp.id]?.[fecha];
+        if (!asist) continue;
+
+        // Atrasos
+        if (asist.deuda_condonada === 2 || asist.deuda_condonada === 3) {
+            atrasosCondonados.push({ emp, asist });
+        } else if (asist.minutos_atraso > 0) {
+            atrasosPendientes.push({ emp, asist });
         }
 
-        if (empCondonados.length > 0) {
-            html += `<div style="font-size:0.65rem;font-weight:800;color:#16a34a;letter-spacing:1px;text-transform:uppercase;margin:12px 0 6px;">
-                <i class="bi bi-check-circle-fill me-1"></i> Ya Condonados (${empCondonados.length})
+        // Salidas Adelantadas
+        if (asist.deuda_condonada === 1 || asist.deuda_condonada === 3) {
+            salidasCondonadas.push({ emp, asist });
+        } else if (asist.minutos_salida_adelantada > 0) {
+            salidasPendientes.push({ emp, asist });
+        }
+    }
+
+    let html = '';
+
+    // Botones de selección rápida al principio
+    html += `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding: 4px 10px; margin-bottom: 10px; font-size:0.8rem; border-bottom: 1px solid #f1f5f9; flex-shrink:0;">
+        <span style="color:#64748b; font-weight:600;">Selección rápida:</span>
+        <div style="display:flex; gap:12px;">
+            <button onclick="seleccionarTodosPanel(true)" style="background:none; border:none; color:#10b981; font-weight:700; cursor:pointer; font-size:0.75rem; padding: 2px 4px;">Seleccionar todos</button>
+            <button onclick="seleccionarTodosPanel(false)" style="background:none; border:none; color:#64748b; font-weight:700; cursor:pointer; font-size:0.75rem; padding: 2px 4px;">Deseleccionar todos</button>
+        </div>
+    </div>
+    `;
+
+    const hasAtrasos = atrasosPendientes.length > 0 || atrasosCondonados.length > 0;
+    const hasSalidas = salidasPendientes.length > 0 || salidasCondonadas.length > 0;
+
+    if ((tipo === 2 && !hasAtrasos) || (tipo === 1 && !hasSalidas) || (tipo === 3 && !hasAtrasos && !hasSalidas)) {
+        html += '<div style="text-align:center;padding:40px;color:#94a3b8;"><i class="bi bi-check-circle" style="font-size:2rem;display:block;margin-bottom:10px;"></i>Sin incidencias ni deudas del tipo seleccionado</div>';
+        body.innerHTML = html;
+        return;
+    }
+
+    // Renderizar Atrasos (si tipo es 2 o 3)
+    if (tipo === 2 || tipo === 3) {
+        if (hasAtrasos) {
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#374151;background:#f1f5f9;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
+                <span>⏳ ATRASOS</span>
+                <span style="font-size:0.6rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${atrasosPendientes.length}</span>
             </div>`;
-            const tipos = { 1: 'Salida Adelantada', 2: 'Atraso', 3: 'Atraso + Salida' };
-            for (const { emp, asist } of empCondonados) {
+
+            // Pendientes
+            for (const { emp, asist } of atrasosPendientes) {
+                const isSel = window._perdonazoState.seleccionados.has(emp.id);
                 html += `
-                <div class="emp-row" id="panel-emp-${emp.id}" onclick="toggleSeleccionEmpPanel(${emp.id})">
-                    <input type="checkbox" class="form-check-input" id="cb-panel-${emp.id}" style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
+                <div class="emp-row panel-emp-${emp.id} ${isSel ? 'seleccionado' : ''}" onclick="toggleSeleccionEmpPanel(${emp.id})">
+                    <input type="checkbox" class="form-check-input cb-panel-${emp.id}" ${isSel ? 'checked' : ''} style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
                     <div style="flex:1;">
                         <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
-                        <div style="margin-top:3px;"><span class="badge-estado badge-condonado">&#10003; ${tipos[asist.deuda_condonada] || 'Condonado'}</span></div>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">
+                            <span class="badge-estado badge-deuda">Atraso ${fmtMin(asist.minutos_atraso)}</span>
+                        </div>
                     </div>
                 </div>`;
             }
+
+            // Condonados
+            if (atrasosCondonados.length > 0) {
+                html += `<div style="font-size:0.65rem;font-weight:700;color:#16a34a;margin:6px 0 4px;padding-left:10px;">Atrasos Condonados (${atrasosCondonados.length})</div>`;
+                for (const { emp, asist } of atrasosCondonados) {
+                    const isSel = window._perdonazoState.seleccionados.has(emp.id);
+                    html += `
+                    <div class="emp-row panel-emp-${emp.id} ${isSel ? 'seleccionado' : ''}" onclick="toggleSeleccionEmpPanel(${emp.id})">
+                        <input type="checkbox" class="form-check-input cb-panel-${emp.id}" ${isSel ? 'checked' : ''} style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
+                        <div style="flex:1;">
+                            <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
+                            <div style="margin-top:3px;">
+                                <span class="badge-estado badge-condonado">&#10003; Atraso Condonado</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+            }
+        } else if (tipo === 3) {
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;">⏳ Sin atrasos este día</div>`;
+        }
+    }
+
+    // Renderizar Salidas Adelantadas (si tipo es 1 o 3)
+    if (tipo === 1 || tipo === 3) {
+        if (hasSalidas) {
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#374151;background:#f1f5f9;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:18px 0 6px;display:flex;justify-content:space-between;align-items:center;">
+                <span>🚶 SALIDAS ADELANTADAS</span>
+                <span style="font-size:0.6rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${salidasPendientes.length}</span>
+            </div>`;
+
+            // Pendientes
+            for (const { emp, asist } of salidasPendientes) {
+                const isSel = window._perdonazoState.seleccionados.has(emp.id);
+                html += `
+                <div class="emp-row panel-emp-${emp.id} ${isSel ? 'seleccionado' : ''}" onclick="toggleSeleccionEmpPanel(${emp.id})">
+                    <input type="checkbox" class="form-check-input cb-panel-${emp.id}" ${isSel ? 'checked' : ''} style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">
+                            <span class="badge-estado badge-deuda">Sal.Ant. ${fmtMin(asist.minutos_salida_adelantada)}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // Condonados
+            if (salidasCondonadas.length > 0) {
+                html += `<div style="font-size:0.65rem;font-weight:700;color:#16a34a;margin:6px 0 4px;padding-left:10px;">Salidas Condonadas (${salidasCondonadas.length})</div>`;
+                for (const { emp, asist } of salidasCondonadas) {
+                    const isSel = window._perdonazoState.seleccionados.has(emp.id);
+                    html += `
+                    <div class="emp-row panel-emp-${emp.id} ${isSel ? 'seleccionado' : ''}" onclick="toggleSeleccionEmpPanel(${emp.id})">
+                        <input type="checkbox" class="form-check-input cb-panel-${emp.id}" ${isSel ? 'checked' : ''} style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
+                        <div style="flex:1;">
+                            <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
+                            <div style="margin-top:3px;">
+                                <span class="badge-estado badge-condonado">&#10003; Salida Condonada</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+            }
+        } else if (tipo === 3) {
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">🚶 Sin salidas adelantadas este día</div>`;
         }
     }
 
     body.innerHTML = html;
-    panel.classList.add('abierto');
-    overlay.classList.add('visible');
-    window._perdonazoState.seleccionados.clear();
     _actualizarInfoSeleccion();
 };
 
-/** Toggle de selección de empleado en el panel */
+/** Toggle de selección de empleado en el panel (soporta duplicados en diferentes secciones) */
 window.toggleSeleccionEmpPanel = function(empId) {
-    const row = document.getElementById(`panel-emp-${empId}`);
-    const cb = document.getElementById(`cb-panel-${empId}`);
+    const rows = document.querySelectorAll(`.panel-emp-${empId}`);
+    const cbs = document.querySelectorAll(`.cb-panel-${empId}`);
     if (window._perdonazoState.seleccionados.has(empId)) {
         window._perdonazoState.seleccionados.delete(empId);
-        row?.classList.remove('seleccionado');
-        if (cb) cb.checked = false;
+        rows.forEach(r => r.classList.remove('seleccionado'));
+        cbs.forEach(c => c.checked = false);
     } else {
         window._perdonazoState.seleccionados.add(empId);
-        row?.classList.add('seleccionado');
-        if (cb) cb.checked = true;
+        rows.forEach(r => r.classList.add('seleccionado'));
+        cbs.forEach(c => c.checked = true);
     }
+    _actualizarInfoSeleccion();
+};
+
+/** Selecciona o deselecciona todos los empleados visibles actualmente */
+window.seleccionarTodosPanel = function(status) {
+    const checkboxes = document.querySelectorAll('#panel-perdonazo-body .emp-row input[type="checkbox"]');
+    for (const cb of checkboxes) {
+        const classList = Array.from(cb.classList);
+        const empClass = classList.find(c => c.startsWith('cb-panel-'));
+        if (empClass) {
+            const empId = parseInt(empClass.replace('cb-panel-', ''), 10);
+            if (status) {
+                window._perdonazoState.seleccionados.add(empId);
+            } else {
+                window._perdonazoState.seleccionados.delete(empId);
+            }
+        }
+    }
+    
+    // Sincronizar todos los elementos visuales
+    const allRows = document.querySelectorAll('#panel-perdonazo-body .emp-row');
+    allRows.forEach(row => {
+        const classList = Array.from(row.classList);
+        const empClass = classList.find(c => c.startsWith('panel-emp-'));
+        if (empClass) {
+            const empId = parseInt(empClass.replace('panel-emp-', ''), 10);
+            const isSel = window._perdonazoState.seleccionados.has(empId);
+            row.classList.toggle('seleccionado', isSel);
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = isSel;
+        }
+    });
+    
     _actualizarInfoSeleccion();
 };
 
