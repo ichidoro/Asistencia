@@ -33,7 +33,7 @@ window.stateMarcacionesApp = window.stateMarcacionesApp || {
     viewMode: 'conceptos', // 'conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos'
     panelMode: 'analitica', // La vista única será siempre Analítica
     data: null,
-    autoRefreshEnabled: false,
+    autoRefreshEnabled: true,
     autoRefreshIntervalId: null,
     controllers: {
         filters: null
@@ -185,6 +185,11 @@ async function initMarcacionesUI() {
                 <p>Selecciona filtros para visualizar la asistencia.</p>
             </div>
         `;
+    }
+
+    // Iniciar auto-refresh silenciosamente al inicializar la UI
+    if (stateMarcacionesApp.autoRefreshEnabled) {
+        toggleAutoRefresh(true, true);
     }
 }
 
@@ -1802,7 +1807,7 @@ window._changeDetector = window._changeDetector || {
     isChecking: false,
 };
 
-function toggleAutoRefresh(enabled) {
+function toggleAutoRefresh(enabled, silent = false) {
     stateMarcacionesApp.autoRefreshEnabled = enabled;
     const cd = window._changeDetector;
 
@@ -1814,7 +1819,9 @@ function toggleAutoRefresh(enabled) {
 
     if (enabled) {
         console.log("🔄 Auto-detección activada (30s polling ligero)");
-        showToast("Auto-detección de marcaciones activada", "info");
+        if (!silent) {
+            showToast("Auto-detección de marcaciones activada", "info");
+        }
 
         // Capturar el estado actual como baseline
         cd.lastUpdate = null;
