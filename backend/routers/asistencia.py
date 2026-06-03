@@ -754,20 +754,17 @@ async def condonar_deuda(
         params = [(request.tipo_condonacion, emp_id, fecha_str) for emp_id in request.empleados_ids for fecha_str in fechas]
         await service.repository.db.executemany(query, params)
 
-        # 2. Reprocesar en paralelo los días de los empleados (N+1 optimization)
-        import asyncio
-        tasks = []
-        for emp_id in request.empleados_ids:
-            for fecha_str in fechas:
-                tasks.append(
-                    service.reprocesar_periodo_empleado(
-                        empleado_id=emp_id,
-                        fecha_inicio=fecha_str,
-                        fecha_fin=fecha_str,
-                        force=True
-                    )
-                )
-        await asyncio.gather(*tasks)
+        # 2. Reprocesar los días de los empleados en bulk usando procesar_dia
+        for fecha_str in fechas:
+            await service.procesar_dia(
+                fecha=fecha_str,
+                force=True,
+                empleado_ids=set(request.empleados_ids),
+                suppress_sync=True
+            )
+        
+        # 3. Forzar sincronización final una sola vez para toda la operación
+        await service.repository.db.sync_to_cloud_explicit()
 
         accion = "condonada" if request.tipo_condonacion > 0 else "revocada"
         return {"success": True, "message": f"Deuda {accion} correctamente para {len(request.empleados_ids)} empleado(s) en {dias_totales} día(s)."}

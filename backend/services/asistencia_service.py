@@ -285,6 +285,105 @@ class AsistenciaService:
         )
         first_assignments = {r['empleado_id']: r['min_fecha'] for r in fa_rows}
 
+        # ── PRECARGA DE CONTEXTO ADICIONAL (Para evitar N+1 queries secuenciales) ──
+        # 1. Cargar áreas históricas en la fecha para los empleados
+        q_hist_areas = f"""
+            SELECT h.empleado_id, a_table.nombre as area_nombre 
+            FROM historial_areas h 
+            LEFT JOIN areas a_table ON h.area_id = a_table.id
+            WHERE h.empleado_id IN ({ids_placeholder}) 
+              AND ? BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
+              AND h.validado = 1
+        """
+        hist_areas_rows = await db.fetch_all(q_hist_areas, tuple(emp_ids) + (fecha,))
+        hist_areas_map = {r['empleado_id']: r['area_nombre'] for r in hist_areas_rows}
+
+        # 2. Cargar cierres vigentes en la fecha
+        closures_rows = await db.fetch_all(
+            "SELECT area FROM cierres_periodos WHERE ? BETWEEN fecha_inicio AND fecha_fin",
+            (fecha,)
+        )
+        closed_areas = {r['area'] for r in closures_rows}
+        has_global_closure = None in closed_areas or any(x is None for x in closed_areas)
+
+        # 3. Determinar para cada empleado si está cerrado
+        closed_dates = {}
+        for e in empleados_rows:
+            eid = e['id']
+            emp_area = hist_areas_map.get(eid) or e['area']
+            is_closed = False
+            if closures_rows:
+                if has_global_closure:
+                    is_closed = True
+                elif emp_area in closed_areas:
+                    is_closed = True
+            
+            if is_closed:
+                closed_dates[eid] = {fecha}
+            else:
+                closed_dates[eid] = set()
+
+        # 4. Intercambios
+        q_intercambios = f"""
+            SELECT * FROM intercambios_dias
+            WHERE (empleado_solicitante_id IN ({ids_placeholder}) OR empleado_receptor_id IN ({ids_placeholder}))
+              AND (fecha_origen = ? OR fecha_destino = ?)
+              AND estado = 'APROBADO'
+        """
+        inter_rows = await db.fetch_all(q_intercambios, tuple(emp_ids) + tuple(emp_ids) + (fecha, fecha))
+        intercambios_map = {}
+        for row in inter_rows:
+            row_dict = dict(row)
+            sol_id = row_dict['empleado_solicitante_id']
+            rec_id = row_dict['empleado_receptor_id']
+            if sol_id in emp_ids:
+                intercambios_map.setdefault(sol_id, {})[fecha] = row_dict
+            if rec_id in emp_ids:
+                intercambios_map.setdefault(rec_id, {})[fecha] = row_dict
+
+        # 5. Compensaciones
+        q_compensaciones = f"""
+            SELECT * FROM compensaciones_he_inasistencia
+            WHERE empleado_id IN ({ids_placeholder})
+              AND fecha_inasistencia = ?
+        """
+        comp_rows = await db.fetch_all(q_compensaciones, tuple(emp_ids) + (fecha,))
+        compensaciones_map = {}
+        for row in comp_rows:
+            row_dict = dict(row)
+            eid = row_dict['empleado_id']
+            compensaciones_map.setdefault(eid, {}).setdefault(fecha, []).append(row_dict)
+
+        # 6. Jornadas Especiales
+        q_jornadas_esp = f"""
+            SELECT * FROM jornadas_especiales
+            WHERE empleado_id IN ({ids_placeholder})
+              AND fecha = ?
+        """
+        je_rows = await db.fetch_all(q_jornadas_esp, tuple(emp_ids) + (fecha,))
+        jornadas_especiales_map = {}
+        for row in je_rows:
+            row_dict = dict(row)
+            eid = row_dict['empleado_id']
+            jornadas_especiales_map.setdefault(eid, {})[fecha] = row_dict
+
+        # 7. Último record de asistencia anterior a la fecha para rotativos
+        q_rot = f"""
+            SELECT a.empleado_id, a.num_semana_ganadora
+            FROM asistencias a
+            INNER JOIN (
+                SELECT empleado_id, MAX(fecha) as max_fecha
+                FROM asistencias
+                WHERE empleado_id IN ({ids_placeholder}) AND fecha < ?
+                GROUP BY empleado_id
+            ) m ON a.empleado_id = m.empleado_id AND a.fecha = m.max_fecha
+        """
+        rot_rows = await db.fetch_all(q_rot, tuple(emp_ids) + (fecha,))
+        rot_map = {}
+        for r in rot_rows:
+            if r['num_semana_ganadora'] is not None:
+                rot_map[r['empleado_id']] = r['num_semana_ganadora']
+
         logger.success(f"✅ Contexto masivo cargado: {len(emp_ids)} empleados")
 
         # Cargar feriados para el año correspondiente (necesario para ley de víspera)
@@ -312,6 +411,11 @@ class AsistenciaService:
             'feriados': feriados_dict_bulk,
             'periodos_empleo': periodos_emp,
             'first_assignments': first_assignments,
+            'closed_dates': closed_dates,
+            'intercambios': intercambios_map,
+            'compensaciones': compensaciones_map,
+            'jornadas_especiales': jornadas_especiales_map,
+            'rotativo_last_sem_dict': rot_map,
         }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -367,6 +471,7 @@ class AsistenciaService:
         areas: Optional[List[str]] = None,
         force: bool = False,
         empleado_ids: Optional[set] = None,
+        suppress_sync: bool = False,
     ):
         bulk_ctx = await self.get_bulk_context(fecha, area, empleado_ids=empleado_ids)
         if not bulk_ctx:
@@ -421,7 +526,7 @@ class AsistenciaService:
             for eid_del, f_str in results_to_delete_he:
                 await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
         
-        if results_to_save or results_to_delete or he_to_save or results_to_delete_he:
+        if not suppress_sync and (results_to_save or results_to_delete or he_to_save or results_to_delete_he):
             await self.repository.db.sync_to_cloud_explicit()
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1280,7 +1385,18 @@ class AsistenciaService:
         # Validar si el día está cerrado
         is_closed = False
         if bulk_ctx and 'closed_dates' in bulk_ctx:
-            is_closed = fecha in bulk_ctx['closed_dates']
+            closed_val = bulk_ctx['closed_dates']
+            if isinstance(closed_val, dict):
+                is_closed = fecha in closed_val.get(empleado_id, set())
+            elif isinstance(closed_val, set):
+                if closed_val:
+                    first_el = next(iter(closed_val))
+                    if isinstance(first_el, tuple):
+                        is_closed = (empleado_id, fecha) in closed_val
+                    else:
+                        is_closed = fecha in closed_val
+                else:
+                    is_closed = False
         else:
             is_closed = await self.is_fecha_cerrada_empleado(empleado_id, fecha)
             

@@ -208,11 +208,19 @@ window.renderizarListaPerdonazo = function() {
         return;
     }
 
-    // Formateador de minutos
+    // Formateador de minutos (formato HH:MM:SS sin decimales)
     const fmtMin = (m) => {
-        if (!m || m <= 0) return '';
-        const h = Math.floor(m / 60); const min = m % 60;
-        return h > 0 ? `${h}h ${min}m` : `${min}m`;
+        if (!m || m <= 0) return '00:00:00';
+        let isNeg = m < 0;
+        m = Math.abs(m);
+        const totalSecs = Math.round(m * 60);
+        const h = Math.floor(totalSecs / 3600);
+        const min = Math.floor((totalSecs % 3600) / 60);
+        const s = totalSecs % 60;
+        const hh = String(h).padStart(2, '0');
+        const mm = String(min).padStart(2, '0');
+        const ss = String(s).padStart(2, '0');
+        return (isNeg ? '-' : '') + `${hh}:${mm}:${ss}`;
     };
 
     // Clasificar
