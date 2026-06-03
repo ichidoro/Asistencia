@@ -534,6 +534,7 @@ function _executeSwitchPage(pageName) {
     'marcaciones': 'Marcaciones de Asistencia',
     'calendario': 'Calendario Mensual',
     'reportes': 'Reportes y Estadísticas',
+    'beneficios': 'Beneficios de Productos Propios',
     'configuracion': 'Panel de Configuración'
   };
   document.getElementById('page-title').textContent = titles[pageName] || pageName;
@@ -556,6 +557,9 @@ function _executeSwitchPage(pageName) {
   } else if (pageName === 'marcaciones') {
     console.log('⏰ Inicializando Marcaciones...');
     if (typeof initMarcacionesUI === 'function') initMarcacionesUI();
+  } else if (pageName === 'beneficios') {
+    console.log('🎁 Inicializando Beneficios...');
+    if (typeof BeneficiosModule !== 'undefined') BeneficiosModule.init();
   }
 }
 

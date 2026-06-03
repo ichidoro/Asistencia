@@ -192,6 +192,10 @@ class SeguridadRepository:
                 ('configuracion.seguridad',      'Configuración',  'Pestaña Seguridad -> gestionar usuarios, roles y ver auditoría'),
                 ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header -> Wizard de inicialización BioAlba'),
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
+
+                # ── Beneficios de Productos (2 permisos) ──
+                ('beneficios.ver',               'Beneficios',     'Ver el panel de asignación de beneficios de productos propios'),
+                ('beneficios.editar',            'Beneficios',     'Asignar/modificar productos propios a empleados y gestionar el catálogo'),
             ]
 
             total_esperado = len(permisos_base)

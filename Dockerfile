@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código de la aplicación
 COPY backend/ backend/
 COPY frontend/ frontend/
+COPY Productos.xlsx .
 
 # Crear directorios necesarios
 RUN mkdir -p data/downloads data/local_db logs

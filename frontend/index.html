@@ -175,6 +175,10 @@
                     <span class="icon">📈</span>
                     <span>Reportes</span>
                 </a>
+                <a href="#" class="sidebar-item" data-page="beneficios" data-permiso="beneficios.ver">
+                    <span class="icon">🎁</span>
+                    <span>Beneficios</span>
+                </a>
                 <a href="#" class="sidebar-item" data-page="configuracion" data-permiso="configuracion.ver">
                     <span class="icon">⚙️</span>
                     <span>Configuración</span>
@@ -1268,6 +1272,88 @@
                     </div>
                 </div>
 
+                <div id="page-beneficios" class="page">
+                    <!-- Cabecera Premium -->
+                    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                        <div>
+                            <h2 class="fw-bold mb-1"><span class="me-2">🎁</span>Beneficio de Productos Propios</h2>
+                            <p class="text-muted mb-0 small">Planilla de asignación de productos de fabricación propia para personal calificado (100% asistencia y antigüedad mínima).</p>
+                        </div>
+                        <div>
+                            <button class="btn btn-light border shadow-sm btn-sm px-3" onclick="BeneficiosModule.cargarEvaluaciones()">
+                                <i class="bi bi-arrow-clockwise text-primary me-1"></i> Actualizar Planilla
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Panel de Filtros -->
+                    <div class="card shadow-sm border-0 mb-4 bg-white" style="border-radius: 12px;">
+                        <div class="card-body p-3">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-lg-3 col-md-4">
+                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar Empleado</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-funnel text-muted"></i></span>
+                                        <input type="text" id="beneficios-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="BeneficiosModule.renderizarEvaluaciones()">
+                                    </div>
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-sm-6">
+                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-calendar-event me-1"></i>Mes</label>
+                                    <select id="beneficio-filtro-mes" class="form-select form-select-sm bg-light">
+                                        <option value="1">Enero</option>
+                                        <option value="2">Febrero</option>
+                                        <option value="3">Marzo</option>
+                                        <option value="4">Abril</option>
+                                        <option value="5">Mayo</option>
+                                        <option value="6">Junio</option>
+                                        <option value="7">Julio</option>
+                                        <option value="8">Agosto</option>
+                                        <option value="9">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-sm-6">
+                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-calendar3 me-1"></i>Año</label>
+                                    <select id="beneficio-filtro-anio" class="form-select form-select-sm bg-light">
+                                        <option value="2024">2024</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2026">2026</option>
+                                        <option value="2027">2027</option>
+                                        <option value="2028">2028</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-3 col-md-4">
+                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-filter-circle me-1"></i>Filtrar Estado</label>
+                                    <select id="beneficios-filtro-estado" class="form-select form-select-sm bg-light" onchange="BeneficiosModule.renderizarEvaluaciones()">
+                                        <option value="todos">Todos los Empleados</option>
+                                        <option value="califica">Solo Habilitados / Califican</option>
+                                        <option value="bloqueado">Solo Bloqueados</option>
+                                        <option value="asignado">Con Productos Seleccionados</option>
+                                        <option value="pendiente">Pendientes de Selección</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2 col-md-4 text-end">
+                                    <div class="d-grid">
+                                        <button class="btn btn-primary btn-sm px-3" onclick="BeneficiosModule.cargarEvaluaciones()">
+                                            <i class="bi bi-search me-1"></i> Filtrar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grilla de Empleados -->
+                    <div id="beneficios-empleados-grid" class="row g-3">
+                        <div class="col-12 text-center py-5 text-muted">
+                            <i class="bi bi-info-circle fs-1"></i>
+                            <div class="mt-2">Presione el botón "Filtrar" o "Actualizar" para cargar la planilla.</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="page-configuracion" class="page">
                     <div class="card shadow-sm border-0">
                         <div class="card-header bg-white border-bottom-0 pt-3">
@@ -1339,6 +1425,12 @@
                                         data-bs-target="#tab-robot-bioalba" type="button" role="tab"
                                         onclick="if(typeof loadRobotSyncLogs === 'function') loadRobotSyncLogs()">🤖
                                         Robot BioAlba</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="productos-propios-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="beneficios.ver"
+                                        onclick="if(typeof BeneficiosModule !== 'undefined') BeneficiosModule.renderizarConfiguracionCatalogo()">🎁
+                                        Productos Propios</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="sistema-config-tab" data-bs-toggle="tab"
@@ -1775,9 +1867,11 @@
                                                         <div class="form-text">Días desde el fin de meses anteriores para permitir descargas. Usa 0 para desactivar.</div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
                                     </div>
+                                </div>
+                                <!-- Tab Productos Propios (Catálogo Beneficios) -->
+                                <div class="tab-pane fade" id="tab-productos-propios" role="tabpanel">
+                                    <!-- Renders CRUD via JS -->
                                 </div>
                             </div>
                         </div>
@@ -4057,6 +4151,7 @@
 
 
             <!-- Inicializador Principal -->
+            <script src="/static/js/beneficios.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/sync_wizard.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/main.js?v={{ startup_id }}" defer></script>
 
