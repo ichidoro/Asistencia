@@ -111,7 +111,7 @@ async def reabrir_cierre(
             
         # Registrar en auditoría
         await db.execute(
-            "INSERT INTO auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
             (
                 current_user.user_id,
                 current_user.username,
