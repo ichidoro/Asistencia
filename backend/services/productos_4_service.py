@@ -288,35 +288,37 @@ class Productos4Service:
                 asig.get("producto3_codigo"),
                 asig.get("producto4_codigo")
             ]
-            codigos = [c for c in codigos_seleccionados if c is not None]
             area_name = asig.get("area_nombre") or "Sin Área"
 
             prod_list = []
-            for code in codigos:
-                prod = prod_map.get(code)
-                if prod:
-                    prod_list.append({
-                        "codigo": prod["codigo"],
-                        "descripcion": prod["descripcion"],
-                        "unidad": prod["unidad"],
-                        "tipo": prod["tipo"],
-                        "marca": prod["marca"]
-                    })
+            for code in codigos_seleccionados:
+                if code is not None:
+                    prod = prod_map.get(code)
+                    if prod:
+                        prod_list.append({
+                            "codigo": prod["codigo"],
+                            "descripcion": prod["descripcion"],
+                            "unidad": prod["unidad"],
+                            "tipo": prod["tipo"],
+                            "marca": prod["marca"]
+                        })
+                    else:
+                        prod_list.append({
+                            "codigo": code,
+                            "descripcion": f"Cód. {code} (No encontrado)",
+                            "unidad": "",
+                            "tipo": "DESCONOCIDO",
+                            "marca": ""
+                        })
+
+                    # Sumar a totales del producto
+                    resumen_counts[code] = resumen_counts.get(code, 0) + 1
+
+                    # Sumar a desglose por área
+                    desglose_areas.setdefault(code, {})
+                    desglose_areas[code][area_name] = desglose_areas[code].get(area_name, 0) + 1
                 else:
-                    prod_list.append({
-                        "codigo": code,
-                        "descripcion": f"Cód. {code} (No encontrado)",
-                        "unidad": "",
-                        "tipo": "DESCONOCIDO",
-                        "marca": ""
-                    })
-
-                # Sumar a totales del producto
-                resumen_counts[code] = resumen_counts.get(code, 0) + 1
-
-                # Sumar a desglose por área
-                desglose_areas.setdefault(code, {})
-                desglose_areas[code][area_name] = desglose_areas[code].get(area_name, 0) + 1
+                    prod_list.append(None)
 
             detalles.append({
                 "empleado_id": asig.get("empleado_id"),

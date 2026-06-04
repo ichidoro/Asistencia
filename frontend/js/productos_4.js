@@ -12,6 +12,29 @@ const Productos4Module = {
 
     async init() {
         logger_ui("Iniciando Módulo de 4 Productos...");
+
+        // Cargar periodo activo de la base de datos si está disponible
+        try {
+            const activeResp = await fetch('/api/configuracion/periodos/activo/', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (activeResp.ok) {
+                const activePeriod = await activeResp.json();
+                if (activePeriod && activePeriod.fecha_fin) {
+                    const dateParts = activePeriod.fecha_fin.split('-');
+                    if (dateParts.length === 3) {
+                        this.periodoActivo = {
+                            mes: parseInt(dateParts[1]),
+                            anio: parseInt(dateParts[0])
+                        };
+                        logger_ui(`Periodo activo cargado de la BD: ${this.periodoActivo.anio}-${this.periodoActivo.mes}`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error al cargar periodo activo desde la BD, usando fecha actual:", err);
+        }
+
         await this.cargarProductos();
         await this.cargarFiltroAreas();
         this.inicializarFiltrosPeriodo();
@@ -689,6 +712,7 @@ const Productos4Module = {
             const data = await response.json();
             
             // Guardar detalles de asignaciones y entregas para el listado general en el Consolidado
+            this.ultimoConsolidadoData = data;
             this.consolidadoDetalles = data.detalles || [];
             
             this.renderizarConsolidado(data);
@@ -799,9 +823,16 @@ const Productos4Module = {
             ${bannerHtml}
             <div class="col-12">
                 <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px;">
-                    <div class="card-header bg-white pt-3 pb-2 border-bottom-0">
-                        <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Matriz de Distribución de Stock por Área</h5>
-                        <p class="text-muted small mb-0 mt-0.5">Resumen consolidado global de las unidades asignadas por tipo de producto y departamento para la preparación logística en bodega.</p>
+                    <div class="card-header bg-white pt-3 pb-2 border-bottom-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Matriz de Distribución de Stock por Área</h5>
+                            <p class="text-muted small mb-0 mt-0.5">Resumen consolidado global de las unidades asignadas por tipo de producto y departamento para la preparación logística en bodega.</p>
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-danger btn-sm px-3 rounded-pill fw-bold shadow-sm" onclick="Productos4Module.exportarPDF()">
+                                <i class="bi bi-file-pdf-fill me-1"></i> Descargar PDF
+                            </button>
+                        </div>
                     </div>
                     <div class="table-responsive p-3" style="border-radius: 12px;">
                         <table class="table table-bordered table-hover align-middle mb-0" style="font-size: 0.82rem;">
@@ -845,13 +876,17 @@ const Productos4Module = {
                                     <th class="text-start">Nombre Empleado</th>
                                     <th class="text-start">Área</th>
                                     <th class="text-start">Cargo</th>
+                                    <th class="text-start" style="width: 150px;">Producto 1</th>
+                                    <th class="text-start" style="width: 150px;">Producto 2</th>
+                                    <th class="text-start" style="width: 150px;">Producto 3</th>
+                                    <th class="text-start" style="width: 150px;">Producto 4</th>
                                     <th class="text-center" style="width: 130px;">Estado</th>
                                     <th class="text-start" style="width: 250px;">Información de Entrega</th>
                                 </tr>
                             </thead>
                             <tbody id="consolidado-empleados-entregas-tbody">
                                 <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">
+                                    <td colspan="10" class="text-center py-4 text-muted">
                                         <div class="spinner-border spinner-border-sm me-2" role="status"></div> Cargando listado de entregas...
                                     </td>
                                 </tr>
@@ -887,6 +922,18 @@ const Productos4Module = {
 
         const detalles = this.consolidadoDetalles || [];
 
+        if (detalles.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" class="text-center py-5 text-muted">
+                        <i class="bi bi-info-circle fs-4 d-block mb-2"></i>
+                        No se registran asignaciones de beneficios en este período.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
         const filtrados = detalles.filter(d => {
             const matchQuery = d.empleado_nombre.toLowerCase().includes(q) || 
                                d.empleado_rut.toLowerCase().includes(q) || 
@@ -906,7 +953,7 @@ const Productos4Module = {
         if (filtrados.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center py-5 text-muted">
+                    <td colspan="10" class="text-center py-5 text-muted">
                         <i class="bi bi-info-circle fs-4 d-block mb-2"></i>
                         No se encontraron empleados con los filtros aplicados.
                     </td>
@@ -939,12 +986,22 @@ const Productos4Module = {
                 `;
             }
 
+            // Mapear cada uno de los 4 productos en su respectiva columna
+            const p1 = d.productos && d.productos[0] ? `<div class="small fw-semibold text-dark">${d.productos[0].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[0].unidad} (${d.productos[0].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p2 = d.productos && d.productos[1] ? `<div class="small fw-semibold text-dark">${d.productos[1].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[1].unidad} (${d.productos[1].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p3 = d.productos && d.productos[2] ? `<div class="small fw-semibold text-dark">${d.productos[2].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[2].unidad} (${d.productos[2].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p4 = d.productos && d.productos[3] ? `<div class="small fw-semibold text-dark">${d.productos[3].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[3].unidad} (${d.productos[3].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+
             return `
                 <tr>
                     <td class="font-monospace fw-bold text-secondary ps-3">${d.empleado_rut}</td>
                     <td class="fw-semibold text-dark">${d.empleado_nombre}</td>
                     <td>${d.area}</td>
                     <td class="text-muted">${d.empleado_cargo || 'Sin Cargo'}</td>
+                    <td class="text-start">${p1}</td>
+                    <td class="text-start">${p2}</td>
+                    <td class="text-start">${p3}</td>
+                    <td class="text-start">${p4}</td>
                     <td class="text-center">${statusBadge}</td>
                     <td class="text-start">${deliveryInfo}</td>
                 </tr>
@@ -1023,7 +1080,7 @@ const Productos4Module = {
             `;
         } else {
             cardsHTML = filtrados.map(e => {
-                const prodNombres = e.productos.map(p => `[${p.tipo}] ${p.descripcion} (${p.unidad})`);
+                const prodNombres = e.productos.filter(p => p !== null).map(p => `[${p.tipo}] ${p.descripcion} (${p.unidad})`);
 
                 const badge = e.entregado 
                     ? `<span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>Entregado</span>`
@@ -1665,6 +1722,221 @@ const Productos4Module = {
                 });
             }
         }
+    },
+
+    exportarPDF() {
+        const { jsPDF } = window.jspdf || {};
+        if (!jsPDF) {
+            showToast("No se pudo cargar la librería de PDF.", "error");
+            return;
+        }
+
+        const data = this.ultimoConsolidadoData;
+        if (!data) {
+            showToast("No hay datos de consolidado cargados para exportar.", "warning");
+            return;
+        }
+
+        const doc = new jsPDF('l', 'pt', 'letter');
+        
+        const mesStr = String(this.periodoActivo.mes).padStart(2, '0');
+        const periodStr = `${this.periodoActivo.anio}-${mesStr}`;
+        const timestamp = new Date().toLocaleString();
+        const userName = (typeof AuthService !== 'undefined' && AuthService.currentUser) ? AuthService.currentUser.username : 'Usuario';
+
+        // Título del PDF
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.setTextColor(33, 37, 41);
+        doc.text("Reporte Consolidado de Beneficios: 4 Productos", 40, 45);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(108, 117, 125);
+        doc.text(`Período: ${periodStr}   |   Generado por: ${userName}   |   Fecha: ${timestamp}`, 40, 62);
+
+        // --- SECCIÓN 1: MATRIZ DE STOCK ---
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(33, 37, 41);
+        doc.text("1. Matriz de Distribución de Stock por Área", 40, 95);
+
+        const resumen = data.resumen || [];
+        const tempAreas = new Set();
+        resumen.forEach(r => {
+            (r.desglose_areas || []).forEach(da => {
+                if (da.area) tempAreas.add(da.area);
+            });
+        });
+        if (this.areasList && this.areasList.length > 0) {
+            this.areasList.forEach(a => tempAreas.add(a));
+        }
+        const areas = [...tempAreas];
+        areas.sort();
+
+        // Encabezados Matriz
+        const matrixHeaders = ['Descripción / Producto'];
+        areas.forEach(a => matrixHeaders.push(a));
+        matrixHeaders.push('Total Requerido');
+
+        // Cuerpo Matriz
+        const matrixBody = [];
+        const areaTotals = {};
+        areas.forEach(a => { areaTotals[a] = 0; });
+        let totalGeneralSum = 0;
+
+        resumen.forEach(r => {
+            const row = [`[${r.tipo}] ${r.descripcion} (${r.unidad})`];
+            areas.forEach(a => {
+                const breakdown = (r.desglose_areas || []).find(da => da.area === a);
+                const qty = breakdown ? breakdown.cantidad : 0;
+                areaTotals[a] += qty;
+                row.push(qty > 0 ? `${qty}` : '—');
+            });
+            row.push(`${r.cantidad_total} uds`);
+            totalGeneralSum += r.cantidad_total;
+            matrixBody.push(row);
+        });
+
+        // Fila Totales
+        const totalsRow = ['TOTALES POR ÁREA:'];
+        areas.forEach(a => {
+            totalsRow.push(`${areaTotals[a]}`);
+        });
+        totalsRow.push(`${totalGeneralSum} uds`);
+        matrixBody.push(totalsRow);
+
+        doc.autoTable({
+            head: [matrixHeaders],
+            body: matrixBody,
+            startY: 110,
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 8, cellPadding: 5 },
+            headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+            columnStyles: {
+                0: { halign: 'left', fontStyle: 'semibold', cellWidth: 160 }
+            },
+            didParseCell: function(cellData) {
+                if (cellData.row.index === matrixBody.length - 1) {
+                    cellData.cell.styles.fontStyle = 'bold';
+                    cellData.cell.styles.fillColor = [240, 240, 240];
+                    if (cellData.column.index === matrixHeaders.length - 1) {
+                        cellData.cell.styles.fillColor = [44, 62, 80];
+                        cellData.cell.styles.textColor = [255, 255, 255];
+                    }
+                }
+                if (cellData.column.index > 0) {
+                    cellData.cell.styles.halign = 'center';
+                }
+            }
+        });
+
+        // --- SECCIÓN 2: LISTADO DE ENTREGAS ---
+        let startY2 = doc.lastAutoTable.finalY + 35;
+        
+        // Agregar salto de página si no cabe en el espacio vertical de la hoja Carta (alto: 612 pt)
+        if (startY2 > 460) {
+            doc.addPage();
+            startY2 = 45;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(33, 37, 41);
+        doc.text("2. Estado de Entrega de Beneficios por Empleado", 40, startY2);
+
+        // Obtener datos filtrados según el estado actual de los inputs en pantalla
+        const q = document.getElementById('consolidado-emp-search')?.value.toLowerCase().trim() || '';
+        const filterState = document.getElementById('consolidado-emp-filtro-estado')?.value || 'todos';
+
+        const detalles = this.consolidadoDetalles || [];
+        const filtrados = detalles.filter(d => {
+            const matchQuery = d.empleado_nombre.toLowerCase().includes(q) || 
+                               d.empleado_rut.toLowerCase().includes(q) || 
+                               d.area.toLowerCase().includes(q) || 
+                               (d.empleado_cargo || '').toLowerCase().includes(q);
+            
+            let matchState = true;
+            if (filterState === 'entregado') {
+                matchState = d.entregado;
+            } else if (filterState === 'pendiente') {
+                matchState = !d.entregado;
+            }
+
+            return matchQuery && matchState;
+        });
+
+        // Encabezados checklist
+        const deliveryHeaders = ['RUT', 'Nombre Empleado', 'Área', 'Cargo', 'Producto 1', 'Producto 2', 'Producto 3', 'Producto 4', 'Estado', 'Detalle Entrega'];
+
+        // Cuerpo checklist
+        const deliveryBody = filtrados.map(d => {
+            const p1 = d.productos && d.productos[0] ? `${d.productos[0].descripcion} (${d.productos[0].unidad})` : '—';
+            const p2 = d.productos && d.productos[1] ? `${d.productos[1].descripcion} (${d.productos[1].unidad})` : '—';
+            const p3 = d.productos && d.productos[2] ? `${d.productos[2].descripcion} (${d.productos[2].unidad})` : '—';
+            const p4 = d.productos && d.productos[3] ? `${d.productos[3].descripcion} (${d.productos[3].unidad})` : '—';
+
+            const statusText = d.entregado ? 'ENTREGADO' : 'PENDIENTE';
+            
+            let deliveryText = '—';
+            if (d.entregado) {
+                let dateFormatted = 'N/A';
+                if (d.fecha_entrega) {
+                    const dateObj = new Date(d.fecha_entrega);
+                    if (!isNaN(dateObj.getTime())) {
+                        const formattedDatePart = window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(dateObj) : dateObj.toLocaleDateString();
+                        const timePart = `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+                        dateFormatted = `${formattedDatePart} ${timePart}`;
+                    }
+                }
+                deliveryText = `Por: ${d.usuario_entrega_nombre || 'Sistema'}\nEl: ${dateFormatted}`;
+            }
+
+            return [
+                d.empleado_rut,
+                d.empleado_nombre,
+                d.area,
+                d.empleado_cargo || 'Sin Cargo',
+                p1,
+                p2,
+                p3,
+                p4,
+                statusText,
+                deliveryText
+            ];
+        });
+
+        doc.autoTable({
+            head: [deliveryHeaders],
+            body: deliveryBody,
+            startY: startY2 + 15,
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 4 },
+            headStyles: { fillColor: [46, 204, 113], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+            columnStyles: {
+                0: { fontStyle: 'bold', halign: 'center', cellWidth: 52 }, // RUT
+                1: { fontStyle: 'semibold' }, // Nombre (auto-estirar)
+                2: { cellWidth: 60 }, // Área
+                3: { cellWidth: 60 }, // Cargo
+                4: { cellWidth: 76 }, // P1
+                5: { cellWidth: 76 }, // P2
+                6: { cellWidth: 76 }, // P3
+                7: { cellWidth: 76 }, // P4
+                8: { halign: 'center', fontStyle: 'bold', cellWidth: 52 }, // Estado
+                9: { fontSize: 6, cellWidth: 72 } // Detalle
+            },
+            didParseCell: function(cellData) {
+                if (cellData.section === 'body' && cellData.column.index === 8) {
+                    if (cellData.cell.raw === 'ENTREGADO') {
+                        cellData.cell.styles.textColor = [39, 174, 96];
+                    } else {
+                        cellData.cell.styles.textColor = [230, 126, 34];
+                    }
+                }
+            }
+        });
+
+        doc.save(`consolidado_4_productos_${periodStr}.pdf`);
     }
 };
 
