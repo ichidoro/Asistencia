@@ -92,7 +92,7 @@ function renderCalendario() {
 
             html += `
                 <tr>
-                    <td class="fw-bold text-primary">${f.fecha}</td>
+                    <td class="fw-bold text-primary">${window.formatFechaDDMMYYYY(f.fecha)}</td>
                     <td>
                         <div class="fw-bold">${f.descripcion}</div>
                         <div class="small text-muted">${dateStr}</div>

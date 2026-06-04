@@ -68,7 +68,7 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     marcacionesManualesState.currentSalida = (horaSalida === 'null' || !horaSalida || horaSalida === '--:--') ? null : horaSalida;
 
     document.getElementById('decision-emp-nombre').innerText = empNombre;
-    document.getElementById('decision-fecha').innerText = dateStr;
+    document.getElementById('decision-fecha').innerText = window.formatFechaDDMMYYYY(dateStr);
 
     // Set avatar initial from employee name
     const avatarEl = document.getElementById('decision-avatar-initial');
@@ -416,7 +416,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     // Reset Form
     const lblFecha = document.getElementById('manual-fecha-display');
     if (lblFecha) {
-        lblFecha.value = dateStr;
+        lblFecha.value = window.formatFechaDDMMYYYY(dateStr);
     }
 
     const lblEmp = document.getElementById('manual-empleado-display');
@@ -692,7 +692,7 @@ function openValidationModal(empId, dateStr, empNombre) {
     marcacionesManualesState.currentEmpId = empId;
     marcacionesManualesState.currentDate = dateStr;
 
-    document.getElementById('val-fecha-display').innerText = dateStr;
+    document.getElementById('val-fecha-display').innerText = window.formatFechaDDMMYYYY(dateStr);
     document.getElementById('val-empleado-display').innerText = empNombre;
 
     const footer = marcacionesManualesState.validationModal.querySelector('.modal-footer');
@@ -775,7 +775,7 @@ async function validateJornada(accion = 'APROBAR') {
  * @param {string} fecha 
  */
 async function deleteManualJornada(empId, fecha) {
-    if (!confirm(`¿Está seguro que desea eliminar TODAS las marcaciones manuales ingresadas para el día ${fecha}? Esta acción no se puede deshacer.`)) {
+    if (!confirm(`¿Está seguro que desea eliminar TODAS las marcaciones manuales ingresadas para el día ${window.formatFechaDDMMYYYY(fecha)}? Esta acción no se puede deshacer.`)) {
         return;
     }
 
@@ -960,7 +960,7 @@ async function openPermissionModal(empId, empNombre, dateStr) {
     marcacionesManualesState.permisoActivoActual = null;
 
     document.getElementById('permiso-emp-nombre').innerText = empNombre;
-    document.getElementById('permiso-fecha').innerText = dateStr;
+    document.getElementById('permiso-fecha').innerText = window.formatFechaDDMMYYYY(dateStr);
     document.getElementById('permiso-tipo-id').innerHTML = '<option value="">Cargando...</option>';
     document.getElementById('permiso-info-deuda').classList.add('d-none');
     document.getElementById('form-registro-permiso').reset();

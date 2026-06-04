@@ -1225,8 +1225,8 @@ window.updateVisorPDF = function(isDownload = false) {
 
     let fechaInicio = '', fechaFin = '';
     if (data.periodo) {
-        fechaInicio = new Date(data.periodo.inicio + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
-        fechaFin = new Date(data.periodo.fin + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        fechaInicio = window.formatFechaDDMMYYYY(data.periodo.inicio);
+        fechaFin = window.formatFechaDDMMYYYY(data.periodo.fin);
     }
     
     // Header
@@ -1242,7 +1242,7 @@ window.updateVisorPDF = function(isDownload = false) {
     // Adjust header right alignment based on format width
     const pageWidth = doc.internal.pageSize.getWidth();
     doc.text(`Periodo: ${fechaInicio} al ${fechaFin}`, pageWidth - 195, 40);
-    doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')}`, pageWidth - 195, 55);
+    doc.text(`Generado: ${window.formatFechaDDMMYYYY(new Date())}`, pageWidth - 195, 55);
     
     doc.line(40, 65, pageWidth - 40, 65); // separator
 
@@ -2443,7 +2443,7 @@ function openRegularizacionModal(anomalias, fecha) {
             </td>
             <td><span class="badge bg-light text-dark border">${a.area}</span></td>
             <td>
-                <div class="text-info small fw-bold"><i class="bi bi-calendar-check-fill me-1"></i>Desde: ${a.fecha}</div>
+                <div class="text-info small fw-bold"><i class="bi bi-calendar-check-fill me-1"></i>Desde: ${window.formatFechaDDMMYYYY(a.fecha)}</div>
                 <div class="text-muted x-small">Pendiente de regularización</div>
             </td>
             <td class="text-end">
@@ -3713,7 +3713,7 @@ function renderWizardStep(step) {
                         <div class="d-flex align-items-center">
                             <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
                             <div>
-                                <span class="fw-bold text-dark small">${a.fecha}</span>
+                                <span class="fw-bold text-dark small">${window.formatFechaDDMMYYYY(a.fecha)}</span>
                                 <span class="mx-2 text-muted">|</span>
                                 <span class="text-secondary small">${a.nombre_completo}</span>
                                 ${a.hora_entrada_real || a.hora_salida_real ? `
@@ -4169,9 +4169,15 @@ async function openHistorialCierresModal() {
                                         ${historial.length === 0 ? `<tr><td colspan="${isSuperAdmin ? '6' : '5'}" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>` : 
                                             historial.map(c => `
                                             <tr>
-                                                <td><span class="badge bg-info-subtle text-info border border-info-subtle">${c.fecha_inicio} al ${c.fecha_fin}</span></td>
+                                                <td><span class="badge bg-info-subtle text-info border border-info-subtle">${window.formatFechaDDMMYYYY(c.fecha_inicio)} al ${window.formatFechaDDMMYYYY(c.fecha_fin)}</span></td>
                                                 <td><span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">${c.area || 'Todas'}</span></td>
-                                                <td class="small">${new Date(c.created_at || c.fecha_cierre).toLocaleString('es-ES')}</td>
+                                                <td class="small">${(() => {
+                                                    const d = new Date(c.created_at || c.fecha_cierre);
+                                                    if (isNaN(d.getTime())) return 'N/A';
+                                                    const formattedDatePart = window.formatFechaDDMMYYYY(d);
+                                                    const timePart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+                                                    return `${formattedDatePart} ${timePart}`;
+                                                })()}</td>
                                                 <td><i class="bi bi-person-circle me-1"></i> ${c.username || c.usuario_cierre || 'N/A'}</td>
                                                 <td class="small text-muted italic">${c.comentarios || c.comentario || '--'}</td>
                                                 ${isSuperAdmin ? `

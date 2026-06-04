@@ -247,7 +247,7 @@ function renderVencimientoRow(emp, isProcessed) {
                 <span class="badge bg-secondary">N° ${emp.cant_contratos || 1}</span>
             </td>
             <td><span class="badge bg-light text-dark border">${emp.tipo_contrato}</span></td>
-            <td class="${isProcessed ? 'text-muted' : 'text-danger'} fw-bold" style="white-space: nowrap;">${emp.fecha_salida || 'Sin definir'}</td>
+            <td class="${isProcessed ? 'text-muted' : 'text-danger'} fw-bold" style="white-space: nowrap;">${window.formatFechaDDMMYYYY(emp.fecha_salida) || 'Sin definir'}</td>
             <td class="text-center" style="white-space: nowrap;">
                 <span class="badge bg-light text-dark border">
                     ${emp.dias_restantes !== undefined ? (emp.dias_restantes < 0 ? 'Vencido (' + emp.dias_restantes + ')' : emp.dias_restantes + ' días') : '-'}

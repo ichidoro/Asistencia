@@ -680,7 +680,7 @@ async function showDesviacionesDetalle(tipo, motivo = null) {
                 
                 return `
                     <tr>
-                        <td>${r.fecha}</td>
+                        <td>${window.formatFechaDDMMYYYY(r.fecha)}</td>
                         <td class="text-truncate" style="max-width: 150px;" title="${r.empleado}">${r.empleado}</td>
                         <td><span class="badge bg-secondary">${r.estado}</span></td>
                         <td class="text-end">${prog.toFixed(1)}h</td>

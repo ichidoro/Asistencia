@@ -178,7 +178,13 @@ async function loadAuditoria() {
         }
 
         tbody.innerHTML = logs.map(log => {
-            const fecha = new Date(log.created_at).toLocaleString();
+            const d = new Date(log.created_at);
+            let fecha = 'N/A';
+            if (!isNaN(d.getTime())) {
+                const formattedDatePart = window.formatFechaDDMMYYYY(d);
+                const timePart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+                fecha = `${formattedDatePart} ${timePart}`;
+            }
             let badgeColor = 'bg-secondary';
             if (log.accion === 'CREATE' || log.accion === 'LOGIN') badgeColor = 'bg-success';
             if (log.accion === 'UPDATE') badgeColor = 'bg-warning text-dark';
@@ -243,7 +249,7 @@ async function loadUsuarios() {
                         <div>${badgeDios}</div>
                     </td>
                     <td>${areasHtml}</td>
-                    <td>${badgeAcceso}<br><div class="small text-muted mt-1">Acceso: ${user.ultimo_acceso ? new Date(user.ultimo_acceso).toLocaleDateString() : 'Nunca'}</div></td>
+                    <td>${badgeAcceso}<br><div class="small text-muted mt-1">Acceso: ${user.ultimo_acceso ? window.formatFechaDDMMYYYY(user.ultimo_acceso) : 'Nunca'}</div></td>
                     <td class="text-end">
                         <button class="btn btn-sm btn-outline-primary" ${selfAdminBlock} onclick="editUsuario(${user.id})"><i class="bi bi-pencil"></i></button>
                     </td>

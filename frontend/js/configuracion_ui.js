@@ -1553,8 +1553,14 @@ window.loadRobotSyncLogs = async function() {
             
             // Asegurar formato ISO para navegadores estrictos
             const rawFecha = log.fecha_inicio || '';
-            const isoFecha = rawFecha.replace(' ', 'T');
-            const formattedDate = isoFecha ? new Date(isoFecha + (isoFecha.includes('Z') ? '' : 'Z')).toLocaleString('es-CL') : 'N/A';
+            let formattedDate = 'N/A';
+            if (rawFecha) {
+                const parts = rawFecha.split(/[\sT]/);
+                const datePart = parts[0];
+                const timePart = parts[1] || '';
+                const formattedDatePart = window.formatFechaDDMMYYYY(datePart);
+                formattedDate = formattedDatePart + (timePart ? ' ' + timePart.split('.')[0] : '');
+            }
 
             return `
                 <tr>
@@ -2096,12 +2102,7 @@ function calculateDaysBetween(start, end) {
 }
 
 function formatDateDMY(dateStr) {
-    if (!dateStr) return "-";
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return dateStr;
+    return window.formatFechaDDMMYYYY(dateStr);
 }
 
 window.openModalPeriodo = function(periodo = null) {

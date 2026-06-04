@@ -95,7 +95,7 @@ function renderContratosTable(empleados) {
             const fechaFin = new Date(emp.fecha_salida + 'T00:00:00');
             diffDaysNumeric = Math.ceil((fechaFin - today) / (1000 * 60 * 60 * 24));
 
-            fechaFmt = fechaFin.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+            fechaFmt = window.formatFechaDDMMYYYY(emp.fecha_salida);
             diffDaysText = `${diffDaysNumeric} días`;
 
             if (diffDaysNumeric < 0) {
@@ -510,13 +510,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Helper para formatear fechas (YYYY-MM-DD -> DD/MM/YYYY)
 function formatDate(dateString) {
-    if (!dateString) return '-';
-    // Si la fecha viene como YYYY-MM-DD
-    const parts = dateString.split('-');
-    if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return dateString;
+    return window.formatFechaDDMMYYYY(dateString) || '-';
 }

@@ -1,3 +1,36 @@
+window.formatFechaDDMMYYYY = function(dateInput) {
+    if (dateInput === null || dateInput === undefined) return '';
+    
+    if (dateInput instanceof Date) {
+        const day = String(dateInput.getDate()).padStart(2, '0');
+        const month = String(dateInput.getMonth() + 1).padStart(2, '0');
+        return `${day}-${month}-${dateInput.getFullYear()}`;
+    }
+    
+    let dateStr = String(dateInput).trim();
+    if (!dateStr || dateStr === 'null' || dateStr === 'undefined' || dateStr === '-') return '';
+    
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+        return dateStr;
+    }
+    
+    const matchYMD = dateStr.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+    if (matchYMD) {
+        return `${matchYMD[3]}-${matchYMD[2]}-${matchYMD[1]}`;
+    }
+    
+    try {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            return `${day}-${month}-${d.getFullYear()}`;
+        }
+    } catch (e) {}
+    
+    return dateStr;
+};
+
 // ==========================================
 // Módulo de Autenticación y Seguridad Frontend
 // Actúa como Middleware global para la UI

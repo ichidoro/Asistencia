@@ -2618,7 +2618,7 @@ async function loadOnboardingEmployeeForm(empId) {
             if (emailBio) emailBio.textContent = bio.email || '-';
             if (telefonoBio) telefonoBio.textContent = bio.telefono || '-';
             if (generoBio) generoBio.textContent = bio.genero || 'No Especificado';
-            if (fechaIngresoBio) fechaIngresoBio.textContent = bio.fecha_ingreso || '-';
+            if (fechaIngresoBio) fechaIngresoBio.textContent = window.formatFechaDDMMYYYY(bio.fecha_ingreso) || '-';
         } else {
             // Fallback usando el registro local si no está en la cola actual
             if (rutBio) rutBio.textContent = empleado.rut_formateado || empleado.rut || '-';
@@ -2629,7 +2629,7 @@ async function loadOnboardingEmployeeForm(empId) {
             if (emailBio) emailBio.textContent = empleado.email || '-';
             if (telefonoBio) telefonoBio.textContent = empleado.telefono || '-';
             if (generoBio) generoBio.textContent = empleado.genero || 'No Especificado';
-            if (fechaIngresoBio) fechaIngresoBio.textContent = empleado.fecha_ingreso || '-';
+            if (fechaIngresoBio) fechaIngresoBio.textContent = window.formatFechaDDMMYYYY(empleado.fecha_ingreso) || '-';
         }
 
         // Configurar Género Local (Si viene vacío de BioAlba, es editable; si no, queda fijo)

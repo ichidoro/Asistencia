@@ -323,7 +323,7 @@ function renderReporte(list) {
 
         return `
             <tr>
-                <td class="small fw-bold">${row.fecha}</td>
+                <td class="small fw-bold">${window.formatFechaDDMMYYYY(row.fecha)}</td>
                 <td>
                     <div class="fw-bold">${row.apellido_paterno} ${row.apellido_materno || ''} ${row.nombre}</div>
                     <div class="small text-muted">${row.rut}</div>

@@ -119,7 +119,7 @@ window.iniciarEdicionFecha = function(id, originalValue, element) {
     const handleUpdate = async () => {
         const newDate = input.value;
         if (newDate && newDate !== cleanValue) {
-            if (confirm(`¿Desea cambiar la fecha de inicio a ${newDate}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
+            if (confirm(`¿Desea cambiar la fecha de inicio a ${window.formatFechaDDMMYYYY(newDate)}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
                 try {
                     // Feedback visual: deshabilitar y mostrar carga
                     element.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
@@ -983,13 +983,13 @@ function renderEmpleados(empleados) {
                 <td><div class="small">${empleado.cargo || sinAsignar}</div></td>
                 <td>${areaBadge}</td>
                 <td><div class="small">${empleado.tipo_contrato || sinAsignar}</div></td>
-                <td><div class="small text-muted">${empleado.fecha_nacimiento || sinAsignar}</div></td>
-                <td><div class="small text-muted">${empleado.fecha_ingreso || sinAsignar}</div></td>
+                <td><div class="small text-muted">${window.formatFechaDDMMYYYY(empleado.fecha_nacimiento) || sinAsignar}</div></td>
+                <td><div class="small text-muted">${window.formatFechaDDMMYYYY(empleado.fecha_ingreso) || sinAsignar}</div></td>
                     <td class="text-center align-middle" 
                     style="cursor: pointer;" 
                     data-bs-toggle="tooltip" data-bs-title="Doble clic para corregir fecha"
                     ondblclick="window.iniciarEdicionFecha(${empleado.id}, '${empleado.fecha_asignacion_turno || ''}', this)">
-                    <div class="small text-muted">${empleado.fecha_asignacion_turno || sinAsignar}</div>
+                    <div class="small text-muted">${window.formatFechaDDMMYYYY(empleado.fecha_asignacion_turno) || sinAsignar}</div>
                 </td>
                 <td><span class="status-pill ${empleado.activo ? 'status-pill-success' : 'status-pill-danger'}"><span class="pill-dot" style="background: ${empleado.activo ? '#10b981' : '#f43f5e'};"></span>${estadoText}</span></td>
                 <td>

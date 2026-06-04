@@ -896,7 +896,15 @@ const Productos4Module = {
 
                 let deliveryAction = '';
                 if (e.entregado) {
-                    const dateFormatted = e.fecha_entrega ? new Date(e.fecha_entrega).toLocaleString() : 'N/A';
+                    let dateFormatted = 'N/A';
+                    if (e.fecha_entrega) {
+                        const d = new Date(e.fecha_entrega);
+                        if (!isNaN(d.getTime())) {
+                            const formattedDatePart = window.formatFechaDDMMYYYY(d);
+                            const timePart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+                            dateFormatted = `${formattedDatePart} ${timePart}`;
+                        }
+                    }
                     deliveryAction = `
                         <button class="btn btn-sm btn-outline-danger w-100 mt-3" onclick="Productos4Module.marcarEntrega(${e.empleado_id}, false)">
                             <i class="bi bi-arrow-counterclockwise me-1"></i> Revertir Entrega
