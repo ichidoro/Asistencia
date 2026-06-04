@@ -688,6 +688,9 @@ const Productos4Module = {
             if (!response.ok) throw new Error("Error al obtener el consolidado.");
             const data = await response.json();
             
+            // Guardar detalles de asignaciones y entregas para el listado general en el Consolidado
+            this.consolidadoDetalles = data.detalles || [];
+            
             this.renderizarConsolidado(data);
         } catch (error) {
             content.innerHTML = `
@@ -814,7 +817,139 @@ const Productos4Module = {
                     </div>
                 </div>
             </div>
+
+            <div class="col-12 mt-4">
+                <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px;">
+                    <div class="card-header bg-white pt-3.5 pb-2 border-bottom-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-list-check text-success me-2"></i>Estado de Entrega de Beneficios por Empleado</h5>
+                            <p class="text-muted small mb-0 mt-0.5">Listado general de despacho del período actual sin restricción de área (se gestiona en la pestaña Entrega Beneficio).</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <div class="input-group input-group-sm" style="max-width: 220px;">
+                                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                <input type="text" id="consolidado-emp-search" class="form-control form-control-sm bg-light border-start-0" placeholder="Buscar empleado...">
+                            </div>
+                            <select id="consolidado-emp-filtro-estado" class="form-select form-select-sm bg-light" style="max-width: 160px;">
+                                <option value="todos">Todos los Estados</option>
+                                <option value="entregado">Entregados</option>
+                                <option value="pendiente">Pendientes</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive p-3" style="border-radius: 12px; max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                            <thead class="table-light text-secondary text-center sticky-top">
+                                <tr>
+                                    <th class="text-start ps-3" style="width: 120px;">RUT</th>
+                                    <th class="text-start">Nombre Empleado</th>
+                                    <th class="text-start">Área</th>
+                                    <th class="text-start">Cargo</th>
+                                    <th class="text-center" style="width: 130px;">Estado</th>
+                                    <th class="text-start" style="width: 250px;">Información de Entrega</th>
+                                </tr>
+                            </thead>
+                            <tbody id="consolidado-empleados-entregas-tbody">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">
+                                        <div class="spinner-border spinner-border-sm me-2" role="status"></div> Cargando listado de entregas...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         `;
+
+        // Vincular los eventos de búsqueda y filtro del listado general inferior
+        setTimeout(() => {
+            const searchInput = document.getElementById('consolidado-emp-search');
+            const stateSelect = document.getElementById('consolidado-emp-filtro-estado');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', () => this.filtrarYRenderizarDetallesConsolidado());
+            }
+            if (stateSelect) {
+                stateSelect.addEventListener('change', () => this.filtrarYRenderizarDetallesConsolidado());
+            }
+            
+            this.filtrarYRenderizarDetallesConsolidado();
+        }, 50);
+    },
+
+    filtrarYRenderizarDetallesConsolidado() {
+        const tbody = document.getElementById('consolidado-empleados-entregas-tbody');
+        if (!tbody) return;
+
+        const q = document.getElementById('consolidado-emp-search')?.value.toLowerCase().trim() || '';
+        const filterState = document.getElementById('consolidado-emp-filtro-estado')?.value || 'todos';
+
+        const detalles = this.consolidadoDetalles || [];
+
+        const filtrados = detalles.filter(d => {
+            const matchQuery = d.empleado_nombre.toLowerCase().includes(q) || 
+                               d.empleado_rut.toLowerCase().includes(q) || 
+                               d.area.toLowerCase().includes(q) || 
+                               (d.empleado_cargo || '').toLowerCase().includes(q);
+            
+            let matchState = true;
+            if (filterState === 'entregado') {
+                matchState = d.entregado;
+            } else if (filterState === 'pendiente') {
+                matchState = !d.entregado;
+            }
+
+            return matchQuery && matchState;
+        });
+
+        if (filtrados.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-info-circle fs-4 d-block mb-2"></i>
+                        No se encontraron empleados con los filtros aplicados.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = filtrados.map(d => {
+            const statusBadge = d.entregado
+                ? `<span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>ENTREGADO</span>`
+                : `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-clock-fill me-1"></i>PENDIENTE</span>`;
+
+            let deliveryInfo = '<span class="text-muted opacity-50">—</span>';
+            if (d.entregado) {
+                let dateFormatted = 'N/A';
+                if (d.fecha_entrega) {
+                    const dateObj = new Date(d.fecha_entrega);
+                    if (!isNaN(dateObj.getTime())) {
+                        const formattedDatePart = window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(dateObj) : dateObj.toLocaleDateString();
+                        const timePart = `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+                        dateFormatted = `${formattedDatePart} ${timePart}`;
+                    }
+                }
+                deliveryInfo = `
+                    <div class="small lh-sm text-secondary font-monospace" style="font-size: 0.72rem;">
+                        Por: <strong>${d.usuario_entrega_nombre || 'Sistema'}</strong><br>
+                        El: ${dateFormatted}
+                    </div>
+                `;
+            }
+
+            return `
+                <tr>
+                    <td class="font-monospace fw-bold text-secondary ps-3">${d.empleado_rut}</td>
+                    <td class="fw-semibold text-dark">${d.empleado_nombre}</td>
+                    <td>${d.area}</td>
+                    <td class="text-muted">${d.empleado_cargo || 'Sin Cargo'}</td>
+                    <td class="text-center">${statusBadge}</td>
+                    <td class="text-start">${deliveryInfo}</td>
+                </tr>
+            `;
+        }).join('');
     },
 
     // ==========================================
