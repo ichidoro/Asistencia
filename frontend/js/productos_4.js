@@ -1,16 +1,17 @@
 /**
- * Módulo de Beneficio de Productos Propios
+ * Módulo de 4 Productos
  * Controla la visualización, evaluación de empleados, asignación y catálogo.
  */
 
-const BeneficiosModule = {
+const Productos4Module = {
     productos: [],
     evaluaciones: [],
     periodoActivo: { mes: new Date().getMonth() + 1, anio: new Date().getFullYear() },
 
     async init() {
-        logger_ui("Iniciando Módulo de Beneficios...");
+        logger_ui("Iniciando Módulo de 4 Productos...");
         await this.cargarProductos();
+        await this.cargarFiltroAreas();
         this.inicializarFiltrosPeriodo();
         await this.cargarEvaluaciones();
     },
@@ -18,7 +19,7 @@ const BeneficiosModule = {
     // --- Cargar Catálogo ---
     async cargarProductos() {
         try {
-            const response = await fetch('/api/beneficios/productos?incluir_inactivos=true', {
+            const response = await fetch('/api/productos-4/productos?incluir_inactivos=true', {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (!response.ok) throw new Error("Error al obtener catálogo de productos propios.");
@@ -29,10 +30,42 @@ const BeneficiosModule = {
         }
     },
 
+    // --- Cargar Áreas permitidas ---
+    async cargarFiltroAreas() {
+        const selectArea = document.getElementById('productos-4-filtro-area');
+        if (!selectArea) return;
+
+        try {
+            let areas = [];
+            if (typeof getAreasCache === 'function') {
+                areas = await getAreasCache();
+            } else {
+                const r = await fetch('/api/empleados/stats/', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (r.ok) {
+                    const stats = await r.json();
+                    areas = stats.areas || [];
+                }
+            }
+
+            selectArea.innerHTML = '<option value="">Todas las Áreas</option>' +
+                areas.map(a => `<option value="${a.area}">${a.area}</option>`).join('');
+
+            // RLS: si el usuario solo tiene una área asignada, la preseleccionamos y bloqueamos
+            if (areas.length === 1) {
+                selectArea.value = areas[0].area;
+                selectArea.setAttribute('disabled', 'true');
+            }
+        } catch (e) {
+            console.error("Error cargando filtro de áreas en 4 Productos:", e);
+        }
+    },
+
     // --- Filtros de Periodo ---
     inicializarFiltrosPeriodo() {
-        const selectMes = document.getElementById('beneficio-filtro-mes');
-        const selectAnio = document.getElementById('beneficio-filtro-anio');
+        const selectMes = document.getElementById('productos-4-filtro-mes');
+        const selectAnio = document.getElementById('productos-4-filtro-anio');
 
         if (selectMes && selectAnio) {
             // Set current period
@@ -46,8 +79,8 @@ const BeneficiosModule = {
     },
 
     async cambiarPeriodo() {
-        const selectMes = document.getElementById('beneficio-filtro-mes');
-        const selectAnio = document.getElementById('beneficio-filtro-anio');
+        const selectMes = document.getElementById('productos-4-filtro-mes');
+        const selectAnio = document.getElementById('productos-4-filtro-anio');
         if (selectMes && selectAnio) {
             this.periodoActivo.mes = parseInt(selectMes.value);
             this.periodoActivo.anio = parseInt(selectAnio.value);
@@ -57,7 +90,7 @@ const BeneficiosModule = {
 
     // --- Cargar grilla de evaluación ---
     async cargarEvaluaciones() {
-        const grid = document.getElementById('beneficios-empleados-grid');
+        const grid = document.getElementById('productos-4-empleados-grid');
         if (!grid) return;
 
         // Show spinner
@@ -68,8 +101,15 @@ const BeneficiosModule = {
             </div>
         `;
 
+        const areaVal = document.getElementById('productos-4-filtro-area')?.value || "";
+
         try {
-            const response = await fetch(`/api/beneficios/evaluacion?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`, {
+            let url = `/api/productos-4/evaluacion?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`;
+            if (areaVal) {
+                url += `&area=${encodeURIComponent(areaVal)}`;
+            }
+
+            const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (!response.ok) throw new Error("Error al evaluar el periodo.");
@@ -87,9 +127,9 @@ const BeneficiosModule = {
     },
 
     renderizarEvaluaciones() {
-        const grid = document.getElementById('beneficios-empleados-grid');
-        const searchInput = document.getElementById('beneficios-search');
-        const statusFilter = document.getElementById('beneficios-filtro-estado');
+        const grid = document.getElementById('productos-4-empleados-grid');
+        const searchInput = document.getElementById('productos-4-search');
+        const statusFilter = document.getElementById('productos-4-filtro-estado');
         
         if (!grid) return;
 
@@ -143,7 +183,7 @@ const BeneficiosModule = {
                         </div>
                     `;
                     cardAction = `
-                        <button class="btn btn-sm btn-outline-primary w-100 mt-3" onclick="BeneficiosModule.abrirModalAsignacion(${e.empleado_id})">
+                        <button class="btn btn-sm btn-outline-primary w-100 mt-3" onclick="Productos4Module.abrirModalAsignacion(${e.empleado_id})">
                             <i class="bi bi-pencil-square me-1"></i> Editar Selección
                         </button>
                     `;
@@ -154,7 +194,7 @@ const BeneficiosModule = {
                         </div>
                     `;
                     cardAction = `
-                        <button class="btn btn-sm btn-primary w-100 mt-3" onclick="BeneficiosModule.abrirModalAsignacion(${e.empleado_id})">
+                        <button class="btn btn-sm btn-primary w-100 mt-3" onclick="Productos4Module.abrirModalAsignacion(${e.empleado_id})">
                             <i class="bi bi-gift me-1"></i> Asignar Productos
                         </button>
                     `;
@@ -322,7 +362,7 @@ const BeneficiosModule = {
                 // Realizar POST
                 try {
                     Swal.showLoading();
-                    const response = await fetch('/api/beneficios/asignaciones', {
+                    const response = await fetch('/api/productos-4/asignaciones', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -415,7 +455,7 @@ const BeneficiosModule = {
         const container = document.getElementById('tab-productos-propios');
         if (!container) return;
 
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('beneficios.editar') : true;
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.editar') : true;
 
         container.innerHTML = `
             <div class="p-3">
@@ -425,12 +465,12 @@ const BeneficiosModule = {
                         <p class="text-muted small mb-0">Gestione los productos fabricados por la empresa disponibles para el beneficio mensual por 100% de asistencia.</p>
                     </div>
                     ${canEdit ? `
-                    <button class="btn btn-primary btn-sm px-3" onclick="BeneficiosModule.abrirModalCrearProducto()">
+                    <button class="btn btn-primary btn-sm px-3" onclick="Productos4Module.abrirModalCrearProducto()">
                         <i class="bi bi-plus-circle me-1"></i> Agregar Producto
                     </button>
                     ` : ''}
                 </div>
-
+ 
                 <div class="table-responsive shadow-sm rounded-3">
                     <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
                         <thead class="table-light">
@@ -465,7 +505,7 @@ const BeneficiosModule = {
         const tbody = document.getElementById('catalogo-productos-tbody');
         if (!tbody) return;
 
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('beneficios.editar') : true;
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.editar') : true;
 
         if (this.productos.length === 0) {
             tbody.innerHTML = `
@@ -484,7 +524,7 @@ const BeneficiosModule = {
                 : `<span class="badge bg-secondary-subtle text-secondary px-2 py-0.8 rounded-pill small">Inactivo</span>`;
 
             const actionBtn = canEdit 
-                ? `<button class="btn btn-sm btn-outline-secondary px-2.5" onclick="BeneficiosModule.abrirModalEditarProducto(${p.codigo})"><i class="bi bi-pencil"></i></button>`
+                ? `<button class="btn btn-sm btn-outline-secondary px-2.5" onclick="Productos4Module.abrirModalEditarProducto(${p.codigo})"><i class="bi bi-pencil"></i></button>`
                 : '';
 
             return `
@@ -561,7 +601,7 @@ const BeneficiosModule = {
 
                 try {
                     Swal.showLoading();
-                    const response = await fetch('/api/beneficios/productos', {
+                    const response = await fetch('/api/productos-4/productos', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -657,7 +697,7 @@ const BeneficiosModule = {
 
                 try {
                     Swal.showLoading();
-                    const response = await fetch(`/api/beneficios/productos/${codigo}`, {
+                    const response = await fetch(`/api/productos-4/productos/${codigo}`, {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -694,5 +734,5 @@ const BeneficiosModule = {
 
 // Logger simple para debug en UI
 function logger_ui(msg) {
-    console.log(`%c[UI-BENEFICIOS] ${msg}`, "color: #10b981; font-weight: bold;");
+    console.log(`%c[UI-PRODUCTOS-4] ${msg}`, "color: #10b981; font-weight: bold;");
 }

@@ -76,9 +76,9 @@ const MAPA_UI_PERMISOS = {
     'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
     'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
 
-    // ── MÓDULO BENEFICIOS (2) ──
-    'beneficios.ver':               { module: 'BENEFICIOS', action: 'Ver',               description: 'Ver panel de beneficios de productos propios', permissions: ['beneficios.ver'] },
-    'beneficios.editar':            { module: 'BENEFICIOS', action: 'Editar',            description: 'Asignar productos propios a empleados y gestionar catálogo', permissions: ['beneficios.editar'] },
+    // ── MÓDULO 4 PRODUCTOS (2) ──
+    'productos_4.ver':              { module: '4 PRODUCTOS', action: 'Ver',              description: 'Ver panel de 4 Productos a empleados', permissions: ['productos_4.ver'] },
+    'productos_4.editar':           { module: '4 PRODUCTOS', action: 'Editar',           description: 'Asignar 4 Productos a empleados y gestionar catálogo', permissions: ['productos_4.editar'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
@@ -458,9 +458,9 @@ function getPermissionDetails(permId) {
         'configuracion.wizard':         { alert: 'Setup del Sistema',     flow: 'Wizard de inicialización que conecta BioAlba' },
         'configuracion.sistema':        { alert: 'Solo Admin',            flow: 'Diagnóstico de BD, modo de conexión y velocidad' },
 
-        // Beneficios
-        'beneficios.ver':               { alert: 'Ubicación: Menú lateral (Beneficios)', flow: 'Visualizar planilla de habilitados para beneficios de productos propios.' },
-        'beneficios.editar':            { alert: 'Ubicación: Configuración y Asignación', flow: 'Asignar productos a empleados habilitados y gestionar el catálogo de productos.' },
+        // 4 Productos
+        'productos_4.ver':              { alert: 'Ubicación: Menú lateral (4 Productos)', flow: 'Visualizar planilla de habilitados para 4 Productos.' },
+        'productos_4.editar':           { alert: 'Ubicación: Configuración y Asignación', flow: 'Asignar productos a empleados habilitados y gestionar el catálogo.' },
     };
     return details[permId] || null;
 }
@@ -486,7 +486,7 @@ function renderMatrizPermisos() {
         'MARCACIONES': '🕐',
         'REPORTES': '📊',
         'CONFIGURACIÓN': '⚙️',
-        'BENEFICIOS': '🎁'
+        '4 PRODUCTOS': '🎁'
     };
 
     // Render HTML
