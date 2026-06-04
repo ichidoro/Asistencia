@@ -76,6 +76,9 @@ const AuthService = {
 
         try {
             const permisosDB = JSON.parse(permisosStr);
+            if (permisoReq.includes('||')) {
+                return permisoReq.split('||').some(p => permisosDB.includes(p.trim()));
+            }
             return permisosDB.includes(permisoReq);
         } catch (e) {
             return false;

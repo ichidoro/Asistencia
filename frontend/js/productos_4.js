@@ -1,19 +1,126 @@
 /**
  * Módulo de 4 Productos
- * Controla la visualización, evaluación de empleados, asignación y catálogo.
+ * Controla la visualización, evaluación de empleados, asignación, consolidación, entregas y catálogo.
  */
 
 const Productos4Module = {
     productos: [],
     evaluaciones: [],
     periodoActivo: { mes: new Date().getMonth() + 1, anio: new Date().getFullYear() },
+    activeTab: 'asignacion',
+    areasList: [],
 
     async init() {
         logger_ui("Iniciando Módulo de 4 Productos...");
         await this.cargarProductos();
         await this.cargarFiltroAreas();
         this.inicializarFiltrosPeriodo();
-        await this.cargarEvaluaciones();
+
+        const canAsignar = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.asignar') : true;
+        const canConsolidar = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.consolidar') : true;
+        const canEntregar = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.entregar') : true;
+
+        const tabAsig = document.getElementById('tab-p4-asignacion');
+        const tabCons = document.getElementById('tab-p4-consolidado');
+        const tabEntr = document.getElementById('tab-p4-entrega');
+
+        if (tabAsig) {
+            if (!canAsignar) tabAsig.closest('li')?.classList.add('d-none');
+            else tabAsig.closest('li')?.classList.remove('d-none');
+        }
+        if (tabCons) {
+            if (!canConsolidar) tabCons.closest('li')?.classList.add('d-none');
+            else tabCons.closest('li')?.classList.remove('d-none');
+        }
+        if (tabEntr) {
+            if (!canEntregar) tabEntr.closest('li')?.classList.add('d-none');
+            else tabEntr.closest('li')?.classList.remove('d-none');
+        }
+
+        let defaultTab = '';
+        if (canAsignar) defaultTab = 'asignacion';
+        else if (canConsolidar) defaultTab = 'consolidado';
+        else if (canEntregar) defaultTab = 'entrega';
+
+        if (defaultTab) {
+            this.cambiarTab(defaultTab);
+            
+            // Activar tab de Bootstrap
+            let btn = null;
+            if (defaultTab === 'asignacion') btn = tabAsig;
+            else if (defaultTab === 'consolidado') btn = tabCons;
+            else if (defaultTab === 'entrega') btn = tabEntr;
+
+            if (btn) {
+                const triggerEl = document.querySelector(`#${btn.id}`);
+                if (triggerEl) {
+                    const tabTrigger = new bootstrap.Tab(triggerEl);
+                    tabTrigger.show();
+                }
+            }
+        } else {
+            const grid = document.getElementById('productos-4-empleados-grid');
+            if (grid) {
+                grid.innerHTML = `
+                    <div class="col-12 text-center py-5 text-warning">
+                        <i class="bi bi-shield-lock-fill fs-1"></i>
+                        <div class="mt-2 fw-bold">Acceso Denegado</div>
+                        <div class="small text-muted">No tiene permisos asignados para este módulo.</div>
+                    </div>
+                `;
+            }
+        }
+    },
+
+    cambiarTab(tabName) {
+        this.activeTab = tabName;
+        
+        const fBuscar = document.getElementById('filtro-p4-container-buscar');
+        const fArea = document.getElementById('filtro-p4-container-area');
+        const fEstado = document.getElementById('filtro-p4-container-estado');
+
+        // Mostrar / Ocultar filtros según pestaña
+        if (tabName === 'asignacion') {
+            if (fBuscar) fBuscar.classList.remove('d-none');
+            if (fArea) fArea.classList.remove('d-none');
+            if (fEstado) fEstado.classList.remove('d-none');
+        } else if (tabName === 'consolidado') {
+            if (fBuscar) fBuscar.classList.add('d-none'); // Consolidado es tabular de stock de áreas, no requiere buscador
+            if (fArea) fArea.classList.add('d-none');
+            if (fEstado) fEstado.classList.add('d-none');
+        } else if (tabName === 'entrega') {
+            if (fBuscar) fBuscar.classList.remove('d-none'); // Buscar habilitado para checklist de despacho
+            if (fArea) fArea.classList.remove('d-none');     // Keep Area filter visible!
+            if (fEstado) fEstado.classList.add('d-none');
+        }
+
+        // Remover clases active/show previas para evitar superposición
+        document.querySelectorAll('#productos-4-tab-content .tab-pane').forEach(el => {
+            el.classList.remove('show', 'active');
+        });
+
+        // Activar el contenedor correcto en el DOM
+        let paneId = 'view-p4-asignacion';
+        if (tabName === 'consolidado') paneId = 'view-p4-consolidado';
+        else if (tabName === 'entrega') paneId = 'view-p4-entrega';
+
+        const pane = document.getElementById(paneId);
+        if (pane) {
+            pane.classList.add('show', 'active');
+        }
+
+        this.refrescarVistaActiva();
+    },
+
+    async refrescarVistaActiva() {
+        await this.verificarEstadoPeriodo();
+        if (this.activeTab === 'asignacion') {
+            this.cargarEvaluaciones();
+        } else if (this.activeTab === 'consolidado') {
+            this.cargarConsolidado();
+        } else if (this.activeTab === 'entrega') {
+            this.cargarEntrega();
+        }
     },
 
     // --- Cargar Catálogo ---
@@ -48,6 +155,10 @@ const Productos4Module = {
                     areas = stats.areas || [];
                 }
             }
+
+            // Guardar lista de todas las áreas para el Consolidado tabular
+            this.areasList = areas.map(a => a.area);
+            this.areasList.sort();
 
             selectArea.innerHTML = '<option value="">Todas las Áreas</option>' +
                 areas.map(a => `<option value="${a.area}">${a.area}</option>`).join('');
@@ -84,7 +195,7 @@ const Productos4Module = {
         if (selectMes && selectAnio) {
             this.periodoActivo.mes = parseInt(selectMes.value);
             this.periodoActivo.anio = parseInt(selectAnio.value);
-            await this.cargarEvaluaciones();
+            this.refrescarVistaActiva();
         }
     },
 
@@ -152,8 +263,12 @@ const Productos4Module = {
             return matchQuery;
         });
 
+        const bannerHtml = this.obtenerHtmlBannerEstado();
+        const isPeriodLocked = this.periodoEstado && this.periodoEstado.status !== 'open';
+
         if (filtrados.length === 0) {
             grid.innerHTML = `
+                ${bannerHtml}
                 <div class="col-12 text-center py-5 text-muted">
                     <i class="bi bi-folder-x fs-1"></i>
                     <div class="mt-2">No se encontraron empleados en este periodo con los filtros aplicados.</div>
@@ -162,7 +277,7 @@ const Productos4Module = {
             return;
         }
 
-        grid.innerHTML = filtrados.map(e => {
+        grid.innerHTML = bannerHtml + filtrados.map(e => {
             const badge = e.califica 
                 ? `<span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>Califica</span>`
                 : `<span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-lock-fill me-1"></i>Bloqueado</span>`;
@@ -175,16 +290,16 @@ const Productos4Module = {
                     const prodNombres = this.obtenerNombresProductosAsignados(e.seleccion);
                     seleccionBadge = `
                         <div class="mt-3 p-2 bg-light rounded text-start border border-dashed">
-                            <small class="text-muted fw-bold d-block"><i class="bi bi-box-seam me-1"></i>Productos Asignados:</small>
+                            <small class="text-muted fw-bold d-block mb-1"><i class="bi bi-box-seam me-1"></i>Productos Asignados:</small>
                             <ul class="mb-0 ps-3 small text-secondary">
                                 ${prodNombres.map(n => `<li>${n}</li>`).join('')}
                             </ul>
-                            ${e.seleccion.observaciones ? `<div class="mt-1 small text-muted font-monospace text-truncate" title="${e.seleccion.observaciones}">Obs: ${e.seleccion.observaciones}</div>` : ''}
+                            ${e.seleccion.observaciones ? `<div class="mt-1.5 small text-muted font-monospace text-truncate" title="${e.seleccion.observaciones}">Obs: ${e.seleccion.observaciones}</div>` : ''}
                         </div>
                     `;
                     cardAction = `
-                        <button class="btn btn-sm btn-outline-primary w-100 mt-3" onclick="Productos4Module.abrirModalAsignacion(${e.empleado_id})">
-                            <i class="bi bi-pencil-square me-1"></i> Editar Selección
+                        <button class="btn btn-sm btn-outline-primary w-100 mt-3" ${isPeriodLocked ? 'disabled' : ''} onclick="Productos4Module.abrirModalAsignacion(${e.empleado_id})">
+                            <i class="bi bi-pencil-square me-1"></i> ${isPeriodLocked ? 'Bloqueado (Cerrado)' : 'Editar Selección'}
                         </button>
                     `;
                 } else {
@@ -194,8 +309,8 @@ const Productos4Module = {
                         </div>
                     `;
                     cardAction = `
-                        <button class="btn btn-sm btn-primary w-100 mt-3" onclick="Productos4Module.abrirModalAsignacion(${e.empleado_id})">
-                            <i class="bi bi-gift me-1"></i> Asignar Productos
+                        <button class="btn btn-sm btn-primary w-100 mt-3" ${isPeriodLocked ? 'disabled' : ''} onclick="Productos4Module.abrirModalAsignacion(${e.empleado_id})">
+                            <i class="bi bi-gift me-1"></i> ${isPeriodLocked ? 'Bloqueado (Cerrado)' : 'Asignar Productos'}
                         </button>
                     `;
                 }
@@ -245,7 +360,7 @@ const Productos4Module = {
             if (c) {
                 const prod = this.productos.find(p => p.codigo === c);
                 if (prod) {
-                    list.push(`${prod.descripcion} (${prod.unidad})`);
+                    list.push(`[${prod.tipo}] ${prod.descripcion} (${prod.unidad})`);
                 } else {
                     list.push(`Cód. ${c}`);
                 }
@@ -257,6 +372,15 @@ const Productos4Module = {
 
     // --- Modal de Asignación ---
     abrirModalAsignacion(empleadoId) {
+        if (this.periodoEstado && this.periodoEstado.status !== 'open') {
+            Swal.fire({
+                title: "Período Cerrado/Bloqueado",
+                text: "No se pueden realizar ni editar asignaciones en este período.",
+                icon: "error"
+            });
+            return;
+        }
+
         const emp = this.evaluaciones.find(e => e.empleado_id === empleadoId);
         if (!emp) return;
 
@@ -270,17 +394,15 @@ const Productos4Module = {
             return;
         }
 
+        const uniqueTipos = [...new Set(activeProds.map(p => p.tipo).filter(Boolean))];
+        uniqueTipos.sort();
+
         const sel = emp.seleccion || {};
         const p1Val = sel.p1 || "";
         const p2Val = sel.p2 || "";
         const p3Val = sel.p3 || "";
         const p4Val = sel.p4 || "";
         const obsVal = sel.observaciones || "";
-
-        const selectOptions = `
-            <option value="">-- Sin Seleccionar --</option>
-            ${activeProds.map(p => `<option value="${p.codigo}">${p.descripcion} (${p.unidad}) [Límit. Max: ${p.max_cantidad}]</option>`).join('')}
-        `;
 
         Swal.fire({
             title: `<span class="fw-bold fs-5">🎁 Asignar Productos a ${emp.nombre}</span>`,
@@ -289,31 +411,41 @@ const Productos4Module = {
                     <p class="small text-muted mb-4">Seleccione hasta 4 productos propios. La interfaz validará en tiempo real que no exceda las cantidades máximas definidas por producto.</p>
                     
                     <div class="mb-3">
-                        <label for="asig-select-1" class="form-label small fw-bold">Opción 1</label>
-                        <select id="asig-select-1" class="form-select form-select-sm asig-prod-select">${selectOptions}</select>
+                        <label for="asig-filtro-tipo" class="form-label small fw-bold text-primary"><i class="bi bi-funnel-fill me-1"></i>Filtrar por Tipo de Producto</label>
+                        <select id="asig-filtro-tipo" class="form-select form-select-sm bg-light-subtle">
+                            <option value="">-- Todos los Tipos --</option>
+                            ${uniqueTipos.map(t => `<option value="${t}">${t}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <hr class="opacity-10 my-3">
+                    
+                    <div class="mb-3">
+                        <label for="asig-select-1" class="form-label small fw-bold text-secondary">Opción 1</label>
+                        <select id="asig-select-1" class="form-select form-select-sm asig-prod-select"></select>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="asig-select-2" class="form-label small fw-bold">Opción 2</label>
-                        <select id="asig-select-2" class="form-select form-select-sm asig-prod-select">${selectOptions}</select>
+                        <label for="asig-select-2" class="form-label small fw-bold text-secondary">Opción 2</label>
+                        <select id="asig-select-2" class="form-select form-select-sm asig-prod-select"></select>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="asig-select-3" class="form-label small fw-bold">Opción 3</label>
-                        <select id="asig-select-3" class="form-select form-select-sm asig-prod-select">${selectOptions}</select>
+                        <label for="asig-select-3" class="form-label small fw-bold text-secondary">Opción 3</label>
+                        <select id="asig-select-3" class="form-select form-select-sm asig-prod-select"></select>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="asig-select-4" class="form-label small fw-bold">Opción 4</label>
-                        <select id="asig-select-4" class="form-select form-select-sm asig-prod-select">${selectOptions}</select>
+                        <label for="asig-select-4" class="form-label small fw-bold text-secondary">Opción 4</label>
+                        <select id="asig-select-4" class="form-select form-select-sm asig-prod-select"></select>
                     </div>
 
                     <div class="mb-3">
-                        <label for="asig-obs" class="form-label small fw-bold">Observaciones / Nota adicional</label>
+                        <label for="asig-obs" class="form-label small fw-bold text-secondary">Observaciones / Nota adicional</label>
                         <textarea id="asig-obs" class="form-control form-control-sm" rows="2" placeholder="Ej. Entregado en recepción">${obsVal}</textarea>
                     </div>
 
-                    <div id="asig-validation-alert" class="alert alert-danger d-none py-2 small mb-0 mt-3">
+                    <div id="asig-validation-alert" class="alert alert-danger d-none py-2 px-3 small mb-0 mt-3">
                         <i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="asig-validation-message"></span>
                     </div>
                 </div>
@@ -327,16 +459,26 @@ const Productos4Module = {
             },
             buttonsStyling: false,
             didOpen: () => {
-                // Seleccionar valores previos
+                const selectTipo = document.getElementById('asig-filtro-tipo');
+                
+                // Initialize values mapping to selects
+                this.filtrarOpcionesPorTipo("");
+
                 document.getElementById('asig-select-1').value = p1Val;
                 document.getElementById('asig-select-2').value = p2Val;
                 document.getElementById('asig-select-3').value = p3Val;
                 document.getElementById('asig-select-4').value = p4Val;
 
-                // Enlazar listeners para validación reactiva
+                // Bind cascade events
+                selectTipo.addEventListener('change', (e) => {
+                    this.filtrarOpcionesPorTipo(e.target.value);
+                });
+
+                // Bind listener to reactively update select availability
                 const selects = document.querySelectorAll('.asig-prod-select');
-                selects.forEach(s => s.addEventListener('change', () => this.validarSeleccionReactiva()));
-                this.validarSeleccionReactiva();
+                selects.forEach(s => s.addEventListener('change', () => this.actualizarOpcionesDisponibles()));
+                
+                this.actualizarOpcionesDisponibles();
             },
             preConfirm: async () => {
                 const p1 = document.getElementById('asig-select-1').value;
@@ -399,6 +541,83 @@ const Productos4Module = {
         });
     },
 
+    filtrarOpcionesPorTipo(selectedTipo) {
+        const activeProds = this.productos.filter(p => p.activo);
+
+        for (let i = 1; i <= 4; i++) {
+            const select = document.getElementById(`asig-select-${i}`);
+            if (!select) continue;
+            const currentValue = select.value;
+
+            // Filtrar productos
+            let filteredProds = activeProds;
+            if (selectedTipo) {
+                filteredProds = activeProds.filter(p => p.tipo === selectedTipo);
+            }
+
+            // Asegurarse de mantener la selección actual en la lista, incluso si no coincide con el tipo, para no borrarla
+            if (currentValue) {
+                const currentProd = this.productos.find(p => p.codigo === parseInt(currentValue));
+                if (currentProd && !filteredProds.some(p => p.codigo === currentProd.codigo)) {
+                    filteredProds = [...filteredProds, currentProd];
+                }
+            }
+
+            filteredProds.sort((a, b) => a.descripcion.localeCompare(b.descripcion));
+
+            select.innerHTML = `
+                <option value="">-- Sin Seleccionar --</option>
+                ${filteredProds.map(p => `<option value="${p.codigo}">[${p.tipo}] ${p.descripcion} (${p.unidad}) [Máx: ${p.max_cantidad}]</option>`).join('')}
+            `;
+
+            select.value = currentValue;
+        }
+
+        this.actualizarOpcionesDisponibles();
+    },
+
+    actualizarOpcionesDisponibles() {
+        const p1 = document.getElementById('asig-select-1')?.value || "";
+        const p2 = document.getElementById('asig-select-2')?.value || "";
+        const p3 = document.getElementById('asig-select-3')?.value || "";
+        const p4 = document.getElementById('asig-select-4')?.value || "";
+
+        const selections = [p1, p2, p3, p4].filter(v => v !== "");
+        const counts = {};
+        selections.forEach(v => {
+            counts[v] = (counts[v] || 0) + 1;
+        });
+
+        // Habilitar/Deshabilitar dinámicamente opciones que violan el max_cantidad
+        for (let i = 1; i <= 4; i++) {
+            const select = document.getElementById(`asig-select-${i}`);
+            if (!select) continue;
+            const currentValue = select.value;
+
+            Array.from(select.options).forEach(opt => {
+                if (opt.value === "") return;
+                const code = opt.value;
+                const prod = this.productos.find(p => p.codigo === parseInt(code));
+                if (!prod) return;
+
+                const currentCount = counts[code] || 0;
+                
+                // Si ya fue seleccionado tantas veces como su límite, y no es el valor actual de este dropdown
+                if (currentCount >= prod.max_cantidad && code !== currentValue) {
+                    opt.disabled = true;
+                    if (!opt.innerText.startsWith("🔒")) {
+                        opt.innerText = `🔒 [${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Límite Máx alcanzado]`;
+                    }
+                } else {
+                    opt.disabled = false;
+                    opt.innerText = `[${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Máx: ${prod.max_cantidad}]`;
+                }
+            });
+        }
+
+        this.validarSeleccionReactiva();
+    },
+
     validarLimitesSeleccion(codigos) {
         const counts = {};
         for (const code of codigos) {
@@ -422,21 +641,21 @@ const Productos4Module = {
     },
 
     validarSeleccionReactiva() {
-        const p1 = document.getElementById('asig-select-1').value;
-        const p2 = document.getElementById('asig-select-2').value;
-        const p3 = document.getElementById('asig-select-3').value;
-        const p4 = document.getElementById('asig-select-4').value;
+        const p1 = document.getElementById('asig-select-1')?.value || "";
+        const p2 = document.getElementById('asig-select-2')?.value || "";
+        const p3 = document.getElementById('asig-select-3')?.value || "";
+        const p4 = document.getElementById('asig-select-4')?.value || "";
         
         const codigos = [p1, p2, p3, p4].filter(c => c !== "").map(c => parseInt(c));
         const alertDiv = document.getElementById('asig-validation-alert');
         const msgSpan = document.getElementById('asig-validation-message');
+        if (!alertDiv || !msgSpan) return;
 
         const validacion = this.validarLimitesSeleccion(codigos);
 
         if (!validacion.ok) {
             msgSpan.innerText = validacion.msg;
             alertDiv.classList.remove('d-none');
-            // Deshabilitar botón de confirmar Swal
             const confirmBtn = Swal.getConfirmButton();
             if (confirmBtn) confirmBtn.setAttribute('disabled', 'true');
         } else {
@@ -446,6 +665,374 @@ const Productos4Module = {
         }
     },
 
+    // ==========================================
+    // SECCIÓN CONSOLIDADO GLOBAL
+    // ==========================================
+
+    async cargarConsolidado() {
+        const content = document.getElementById('productos-4-consolidado-content');
+        if (!content) return;
+
+        content.innerHTML = `
+            <div class="col-12 text-center py-5 text-muted">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <div>Generando reporte consolidado global del periodo...</div>
+            </div>
+        `;
+
+        try {
+            const url = `/api/productos-4/consolidado?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error("Error al obtener el consolidado.");
+            const data = await response.json();
+            
+            this.renderizarConsolidado(data);
+        } catch (error) {
+            content.innerHTML = `
+                <div class="col-12 text-center py-5 text-danger">
+                    <i class="bi bi-exclamation-triangle-fill fs-1"></i>
+                    <div class="mt-2 fw-bold">No se pudo cargar el reporte consolidado.</div>
+                    <div class="small text-muted">${error.message}</div>
+                </div>
+            `;
+        }
+    },
+
+    renderizarConsolidado(data) {
+        const content = document.getElementById('productos-4-consolidado-content');
+        if (!content) return;
+
+        const resumen = data.resumen || [];
+
+        // 1. Obtener la lista de áreas del sistema (dinámica y combinada)
+        const tempAreas = new Set();
+        resumen.forEach(r => {
+            (r.desglose_areas || []).forEach(da => {
+                if (da.area) tempAreas.add(da.area);
+            });
+        });
+        if (this.areasList && this.areasList.length > 0) {
+            this.areasList.forEach(a => tempAreas.add(a));
+        }
+        const areas = [...tempAreas];
+        areas.sort();
+
+        // 2. Construir los encabezados de la tabla (Matriz)
+        let headerColsHTML = `
+            <th class="align-middle text-start ps-3">Descripción</th>
+        `;
+        areas.forEach(a => {
+            headerColsHTML += `<th class="align-middle text-center" style="min-width: 100px;">${a}</th>`;
+        });
+        headerColsHTML += `<th class="align-middle text-center bg-light text-dark fw-bold" style="width: 130px;">Total Requerido</th>`;
+
+        // 3. Construir filas por cada producto
+        let rowsHTML = '';
+        const areaTotals = {};
+        areas.forEach(a => { areaTotals[a] = 0; });
+        let totalGeneralSum = 0;
+
+        if (resumen.length === 0) {
+            rowsHTML = `
+                <tr>
+                    <td colspan="${areas.length + 2}" class="text-center py-5 text-muted">
+                        <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                        No se registran asignaciones de productos en este periodo.
+                    </td>
+                </tr>
+            `;
+        } else {
+            rowsHTML = resumen.map(r => {
+                let cellsHTML = '';
+                areas.forEach(a => {
+                    const breakdown = (r.desglose_areas || []).find(da => da.area === a);
+                    const qty = breakdown ? breakdown.cantidad : 0;
+                    areaTotals[a] += qty;
+                    
+                    if (qty > 0) {
+                        cellsHTML += `<td class="text-center fw-bold text-primary" style="font-size: 0.9rem;">${qty}</td>`;
+                    } else {
+                        cellsHTML += `<td class="text-center text-muted opacity-30">—</td>`;
+                    }
+                });
+
+                totalGeneralSum += r.cantidad_total;
+
+                return `
+                    <tr>
+                        <td class="fw-semibold ps-3 text-start">
+                            <span class="text-dark">[${r.tipo}] ${r.descripcion} (${r.unidad})</span>
+                        </td>
+                        ${cellsHTML}
+                        <td class="text-center fw-bold text-dark bg-light" style="font-size: 0.9rem;">${r.cantidad_total} uds</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // 4. Fila de Totales por área en el pie
+            let footerCellsHTML = '';
+            areas.forEach(a => {
+                const total = areaTotals[a];
+                if (total > 0) {
+                    footerCellsHTML += `<td class="text-center fw-bold text-dark bg-light-subtle" style="font-size: 0.9rem;">${total}</td>`;
+                } else {
+                    footerCellsHTML += `<td class="text-center text-muted opacity-30 bg-light-subtle">0</td>`;
+                }
+            });
+
+            rowsHTML += `
+                <tr class="table-secondary fw-bold border-top-2">
+                    <td class="text-end pe-3 align-middle bg-light-subtle" style="font-size: 0.82rem; letter-spacing: 0.5px;">TOTALES POR ÁREA:</td>
+                    ${footerCellsHTML}
+                    <td class="text-center text-white bg-dark fw-bold" style="font-size: 0.92rem;">${totalGeneralSum} uds</td>
+                </tr>
+            `;
+        }
+
+        const bannerHtml = this.obtenerHtmlBannerEstado();
+        content.innerHTML = `
+            ${bannerHtml}
+            <div class="col-12">
+                <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px;">
+                    <div class="card-header bg-white pt-3 pb-2 border-bottom-0">
+                        <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Matriz de Distribución de Stock por Área</h5>
+                        <p class="text-muted small mb-0 mt-0.5">Resumen consolidado global de las unidades asignadas por tipo de producto y departamento para la preparación logística en bodega.</p>
+                    </div>
+                    <div class="table-responsive p-3" style="border-radius: 12px;">
+                        <table class="table table-bordered table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                            <thead class="table-light text-secondary text-center">
+                                <tr>
+                                    ${headerColsHTML}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    // ==========================================
+    // SECCIÓN ENTREGA DE BENEFICIO
+    // ==========================================
+
+    async cargarEntrega() {
+        const content = document.getElementById('productos-4-entrega-content');
+        if (!content) return;
+
+        content.innerHTML = `
+            <div class="col-12 text-center py-5 text-muted">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <div>Cargando listado de entregas y despachos del periodo...</div>
+            </div>
+        `;
+
+        const areaVal = document.getElementById('productos-4-filtro-area')?.value || "";
+
+        try {
+            let url = `/api/productos-4/entregas?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`;
+            if (areaVal) {
+                url += `&area=${encodeURIComponent(areaVal)}`;
+            }
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error("Error al obtener la lista de entregas.");
+            const data = await response.json();
+            
+            this.renderizarEntrega(data);
+        } catch (error) {
+            content.innerHTML = `
+                <div class="col-12 text-center py-5 text-danger">
+                    <i class="bi bi-exclamation-triangle-fill fs-1"></i>
+                    <div class="mt-2 fw-bold">No se pudo cargar el panel de entregas.</div>
+                    <div class="small text-muted">${error.message}</div>
+                </div>
+            `;
+        }
+    },
+
+    renderizarEntrega(entregas) {
+        const content = document.getElementById('productos-4-entrega-content');
+        if (!content) return;
+
+        const searchInput = document.getElementById('productos-4-search');
+        const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+        // Filtrar entregas según el buscador
+        const filtrados = entregas.filter(e => {
+            return e.empleado_nombre.toLowerCase().includes(q) || 
+                   e.empleado_rut.toLowerCase().includes(q) || 
+                   e.area.toLowerCase().includes(q);
+        });
+
+        // Métricas de progreso
+        const totalAsignados = entregas.length;
+        const totalEntregados = entregas.filter(e => e.entregado).length;
+        const totalPendientes = totalAsignados - totalEntregados;
+        const porcentajeEntregado = totalAsignados > 0 ? Math.round((totalEntregados / totalAsignados) * 100) : 0;
+
+        // Armar tarjetas de los empleados
+        let cardsHTML = '';
+        if (filtrados.length === 0) {
+            cardsHTML = `
+                <div class="col-12 text-center py-5 text-muted">
+                    <i class="bi bi-folder-x fs-1"></i>
+                    <div class="mt-2">No se encontraron entregas en este periodo con los filtros aplicados.</div>
+                </div>
+            `;
+        } else {
+            cardsHTML = filtrados.map(e => {
+                const prodNombres = e.productos.map(p => `[${p.tipo}] ${p.descripcion} (${p.unidad})`);
+
+                const badge = e.entregado 
+                    ? `<span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>Entregado</span>`
+                    : `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2.5 py-1 rounded-pill"><i class="bi bi-clock-fill me-1"></i>Pendiente</span>`;
+
+                let deliveryAction = '';
+                if (e.entregado) {
+                    const dateFormatted = e.fecha_entrega ? new Date(e.fecha_entrega).toLocaleString() : 'N/A';
+                    deliveryAction = `
+                        <button class="btn btn-sm btn-outline-danger w-100 mt-3" onclick="Productos4Module.marcarEntrega(${e.empleado_id}, false)">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Revertir Entrega
+                        </button>
+                        <div class="text-secondary text-center small font-monospace mt-2" style="font-size: 0.72rem; line-height: 1.25;">
+                            Por: <strong>${e.usuario_entrega_nombre || 'Sistema'}</strong><br>
+                            El: ${dateFormatted}
+                        </div>
+                    `;
+                } else {
+                    deliveryAction = `
+                        <button class="btn btn-sm btn-success w-100 mt-3 fw-bold shadow-sm" onclick="Productos4Module.marcarEntrega(${e.empleado_id}, true)">
+                            <i class="bi bi-check-circle me-1"></i> Registrar Entrega
+                        </button>
+                    `;
+                }
+
+                return `
+                    <div class="col-xl-3 col-lg-4 col-md-6">
+                        <div class="card h-100 shadow-sm border-0 position-relative transition-all hover-translate-y" style="border-radius: 12px;">
+                            <div class="card-body p-3.5 d-flex flex-column justify-content-between">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div class="small text-muted font-monospace">${e.empleado_rut}</div>
+                                        ${badge}
+                                    </div>
+                                    <h6 class="fw-bold mb-1 text-truncate" title="${e.empleado_nombre}">${e.empleado_nombre}</h6>
+                                    <div class="small text-secondary text-truncate mb-1"><i class="bi bi-briefcase me-1"></i>${e.empleado_cargo || 'Sin Cargo'}</div>
+                                    <div class="small text-secondary text-truncate"><i class="bi bi-geo-alt me-1"></i>${e.area}</div>
+                                    
+                                    <div class="mt-3 p-2 bg-light rounded text-start border border-dashed">
+                                        <small class="text-muted fw-bold d-block mb-1"><i class="bi bi-box-seam me-1"></i>Productos Asignados:</small>
+                                        <ul class="mb-0 ps-3 small text-secondary">
+                                            ${prodNombres.map(n => `<li>${n}</li>`).join('')}
+                                        </ul>
+                                        ${e.observaciones ? `<div class="mt-1.5 small text-muted font-monospace text-truncate" title="${e.observaciones}">Obs: ${e.observaciones}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div>
+                                    ${deliveryAction}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        const bannerHtml = this.obtenerHtmlBannerEstado();
+        content.innerHTML = `
+            ${bannerHtml}
+            <div class="col-12">
+                <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px;">
+                    <div class="card-body p-3.5">
+                        <div class="row align-items-center g-3">
+                            <div class="col-md-4">
+                                <h6 class="text-secondary small fw-bold mb-1"><i class="bi bi-pie-chart me-1"></i>Progreso de Entregas</h6>
+                                <div class="fs-4 fw-bold text-dark">${totalEntregados} <span class="fs-6 text-muted font-normal">de ${totalAsignados} beneficios entregados (${porcentajeEntregado}%)</span></div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="progress rounded-pill bg-light border" style="height: 14px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success rounded-pill" role="progressbar" style="width: ${porcentajeEntregado}%" aria-valuenow="${porcentajeEntregado}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-end d-flex justify-content-end gap-3.5">
+                                <div class="text-center">
+                                    <div class="small text-muted">Pendientes</div>
+                                    <span class="badge bg-warning text-warning-emphasis rounded-pill fs-6 px-3 py-1 mt-1">${totalPendientes}</span>
+                                </div>
+                                <div class="text-center">
+                                    <div class="small text-muted">Entregados</div>
+                                    <span class="badge bg-success text-success-emphasis rounded-pill fs-6 px-3 py-1 mt-1">${totalEntregados}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 mt-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-list-check me-2 text-success"></i>Planilla de Despacho y Firma</h5>
+                    <span class="badge bg-light text-dark border font-monospace py-1.5 px-3">Mostrando: ${filtrados.length} / ${totalAsignados}</span>
+                </div>
+                <div class="row g-3">
+                    ${cardsHTML}
+                </div>
+            </div>
+        `;
+    },
+
+    async marcarEntrega(empleadoId, entregado) {
+        const actionText = entregado ? "marcar como ENTREGADO" : "REVERTIR la entrega a PENDIENTE";
+        const confirmColor = entregado ? "#198754" : "#dc3545";
+        
+        const result = await Swal.fire({
+            title: `¿Confirmar operación?`,
+            text: `¿Está seguro de que desea ${actionText} para este empleado en el periodo seleccionado?`,
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Sí, registrar",
+            cancelButtonText: "Cancelar",
+            confirmButtonColor: confirmColor
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const response = await fetch('/api/productos-4/entregar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    empleado_id: empleadoId,
+                    mes: this.periodoActivo.mes,
+                    anio: this.periodoActivo.anio,
+                    entregado: entregado
+                })
+            });
+
+            const res = await response.json();
+            if (!response.ok) throw new Error(res.detail || "Error al actualizar la entrega.");
+
+            showToast("Entrega de beneficio actualizada con éxito.", "success");
+            this.cargarEntrega();
+        } catch (error) {
+            console.error(error);
+            Swal.fire({
+                title: "Error",
+                text: error.message,
+                icon: "error"
+            });
+        }
+    },
 
     // ==========================================
     // SECCIÓN CRUD: Catálogo de Productos
@@ -455,7 +1042,7 @@ const Productos4Module = {
         const container = document.getElementById('tab-productos-propios');
         if (!container) return;
 
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.editar') : true;
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.catalogo') : true;
 
         container.innerHTML = `
             <div class="p-3">
@@ -505,7 +1092,7 @@ const Productos4Module = {
         const tbody = document.getElementById('catalogo-productos-tbody');
         if (!tbody) return;
 
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.editar') : true;
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.catalogo') : true;
 
         if (this.productos.length === 0) {
             tbody.innerHTML = `
@@ -729,6 +1316,212 @@ const Productos4Module = {
                 this.renderizarConfiguracionCatalogo();
             }
         });
+    },
+
+    // --- Control de Períodos ---
+    async verificarEstadoPeriodo() {
+        try {
+            const response = await fetch(`/api/productos-4/periodo/status?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (response.ok) {
+                this.periodoEstado = await response.json();
+            } else {
+                console.error("Error al verificar estado del periodo");
+                this.periodoEstado = { status: 'open', mensaje: 'Error al verificar estado, asumiendo abierto.' };
+            }
+        } catch (error) {
+            console.error("Error en verificarEstadoPeriodo:", error);
+            this.periodoEstado = { status: 'open', mensaje: 'Error al verificar estado, asumiendo abierto.' };
+        }
+        
+        this.renderizarAccionesPeriodo();
+    },
+
+    renderizarAccionesPeriodo() {
+        const container = document.getElementById('productos-4-period-actions');
+        if (!container) return;
+
+        if (!this.periodoEstado) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const canAsignar = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.asignar') : true;
+        const canCatalogo = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.catalogo') : false;
+
+        let html = '';
+
+        if (this.periodoEstado.status === 'closed') {
+            html += `
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle d-inline-flex align-items-center px-3 py-2 rounded-pill fw-bold">
+                    <i class="bi bi-lock-fill me-1"></i> Período Cerrado
+                </span>
+            `;
+            if (canCatalogo) {
+                html += `
+                    <button class="btn btn-outline-danger btn-sm border shadow-sm px-3 rounded-pill fw-bold" onclick="Productos4Module.confirmarReabrirPeriodo()">
+                        <i class="bi bi-unlock-fill me-1"></i> Reabrir Período
+                    </button>
+                `;
+            }
+        } else if (this.periodoEstado.status === 'blocked_previous') {
+            html += `
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle d-inline-flex align-items-center px-3 py-2 rounded-pill fw-bold" 
+                      title="${this.periodoEstado.mensaje || ''}" data-bs-toggle="tooltip" data-bs-placement="bottom">
+                    <i class="bi bi-slash-circle-fill me-1"></i> Bloqueado
+                </span>
+            `;
+        } else {
+            // status === 'open'
+            if (canAsignar) {
+                html += `
+                    <button class="btn btn-warning btn-sm border shadow-sm px-3 rounded-pill fw-bold" onclick="Productos4Module.confirmarCerrarPeriodo()">
+                        <i class="bi bi-lock-fill me-1"></i> Cerrar Período
+                    </button>
+                `;
+            } else {
+                html += `
+                    <span class="badge bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center px-3 py-2 rounded-pill fw-bold">
+                        <i class="bi bi-check-circle-fill me-1"></i> Abierto
+                    </span>
+                `;
+            }
+        }
+
+        container.innerHTML = html;
+
+        // Inicializar tooltips
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            const tooltips = container.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltips.forEach(el => new bootstrap.Tooltip(el));
+        }
+    },
+
+    obtenerHtmlBannerEstado() {
+        if (!this.periodoEstado) return '';
+
+        if (this.periodoEstado.status === 'closed') {
+            return `
+                <div class="col-12 mb-4">
+                    <div class="alert alert-danger d-flex align-items-center border-0 shadow-sm p-3" style="border-radius: 12px; background-color: #fff5f5; border-left: 5px solid #e53e3e !important;">
+                        <i class="bi bi-lock-fill fs-4 text-danger me-3"></i>
+                        <div>
+                            <strong class="text-danger">Período Cerrado:</strong> El período de asignación de productos propios para este mes ha sido cerrado. No se permiten nuevas asignaciones ni modificaciones de productos.
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (this.periodoEstado.status === 'blocked_previous') {
+            const prevMesStr = String(this.periodoEstado.prev_mes).padStart(2, '0');
+            return `
+                <div class="col-12 mb-4">
+                    <div class="alert alert-warning d-flex align-items-center border-0 shadow-sm p-3" style="border-radius: 12px; background-color: #fffdf5; border-left: 5px solid #dd6b20 !important;">
+                        <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-3"></i>
+                        <div>
+                            <strong class="text-warning">Período Bloqueado:</strong> No se pueden realizar asignaciones para este mes porque el período anterior (<strong>${this.periodoEstado.prev_anio}-${prevMesStr}</strong>) aún no se ha cerrado.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        return '';
+    },
+
+    async confirmarCerrarPeriodo() {
+        const mesStr = String(this.periodoActivo.mes).padStart(2, '0');
+        const result = await Swal.fire({
+            title: '¿Cerrar Período?',
+            text: `Esta acción bloqueará las asignaciones para el período ${this.periodoActivo.anio}-${mesStr}. No se podrán editar ni agregar nuevas asignaciones.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, cerrar período',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'btn btn-warning btn-sm px-3.5 me-2',
+                cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
+            },
+            buttonsStyling: false
+        });
+
+        if (result.isConfirmed) {
+            try {
+                Swal.showLoading();
+                const response = await fetch('/api/productos-4/periodo/cerrar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        mes: this.periodoActivo.mes,
+                        anio: this.periodoActivo.anio
+                    })
+                });
+
+                const res = await response.json();
+                if (!response.ok) throw new Error(res.detail || "Error al cerrar el período.");
+
+                showToast("El período ha sido cerrado exitosamente.", "success");
+                await this.verificarEstadoPeriodo();
+                this.refrescarVistaActiva();
+            } catch (error) {
+                console.error(error);
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message,
+                    icon: 'error'
+                });
+            }
+        }
+    },
+
+    async confirmarReabrirPeriodo() {
+        const mesStr = String(this.periodoActivo.mes).padStart(2, '0');
+        const result = await Swal.fire({
+            title: '¿Reabrir Período?',
+            text: `Esta acción volverá a habilitar la edición y asignación de productos para el período ${this.periodoActivo.anio}-${mesStr}.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, reabrir período',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'btn btn-danger btn-sm px-3.5 me-2',
+                cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
+            },
+            buttonsStyling: false
+        });
+
+        if (result.isConfirmed) {
+            try {
+                Swal.showLoading();
+                const response = await fetch('/api/productos-4/periodo/reabrir', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        mes: this.periodoActivo.mes,
+                        anio: this.periodoActivo.anio
+                    })
+                });
+
+                const res = await response.json();
+                if (!response.ok) throw new Error(res.detail || "Error al reabrir el período.");
+
+                showToast("El período ha sido reabierto exitosamente.", "success");
+                await this.verificarEstadoPeriodo();
+                this.refrescarVistaActiva();
+            } catch (error) {
+                console.error(error);
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message,
+                    icon: 'error'
+                });
+            }
+        }
     }
 };
 

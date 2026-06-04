@@ -203,6 +203,11 @@ class Productos4Service:
         """
         Valida y guarda la seleccion de productos de elaboracion propia para el empleado en el periodo.
         """
+        # 0. Verificar el estado del período
+        status_info = await self.get_period_status(mes, anio)
+        if status_info["status"] != "open":
+            return False, status_info["mensaje"]
+
         # 1. Validar que la lista tenga un maximo de 4 elementos
         if len(codigos) > 4:
             return False, "La seleccion no puede exceder los 4 productos propios."
@@ -258,3 +263,202 @@ class Productos4Service:
             return True, "Asignacion de 4 Productos guardada exitosamente."
         else:
             return False, "Ocurrio un error al intentar guardar la asignacion en la base de datos."
+
+    async def get_consolidado_periodo(self, mes: int, anio: int, areas: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Obtiene el reporte consolidado de asignaciones del periodo (totales agrupados y desglose).
+        """
+        # 1. Obtener asignaciones filtradas opcionalmente por área
+        asignaciones = await self.repo.get_raw_asignaciones_periodo(mes, anio, areas=areas)
+
+        # 2. Cargar todos los productos (incluidos inactivos para mapeo de histórico)
+        productos = await self.repo.get_all_productos(incluir_inactivos=True)
+        prod_map = {p["codigo"]: p for p in productos}
+
+        # 3. Procesar consolidación
+        resumen_counts = {}
+        # Estructura del desglose de áreas por producto: {codigo: {area_nombre: cantidad}}
+        desglose_areas = {}
+        detalles = []
+
+        for asig in asignaciones:
+            codigos_seleccionados = [
+                asig.get("producto1_codigo"),
+                asig.get("producto2_codigo"),
+                asig.get("producto3_codigo"),
+                asig.get("producto4_codigo")
+            ]
+            codigos = [c for c in codigos_seleccionados if c is not None]
+            area_name = asig.get("area_nombre") or "Sin Área"
+
+            prod_list = []
+            for code in codigos:
+                prod = prod_map.get(code)
+                if prod:
+                    prod_list.append({
+                        "codigo": prod["codigo"],
+                        "descripcion": prod["descripcion"],
+                        "unidad": prod["unidad"],
+                        "tipo": prod["tipo"],
+                        "marca": prod["marca"]
+                    })
+                else:
+                    prod_list.append({
+                        "codigo": code,
+                        "descripcion": f"Cód. {code} (No encontrado)",
+                        "unidad": "",
+                        "tipo": "DESCONOCIDO",
+                        "marca": ""
+                    })
+
+                # Sumar a totales del producto
+                resumen_counts[code] = resumen_counts.get(code, 0) + 1
+
+                # Sumar a desglose por área
+                desglose_areas.setdefault(code, {})
+                desglose_areas[code][area_name] = desglose_areas[code].get(area_name, 0) + 1
+
+            detalles.append({
+                "empleado_id": asig.get("empleado_id"),
+                "empleado_nombre": asig.get("empleado_nombre") or "Sin Nombre",
+                "empleado_rut": asig.get("empleado_rut") or "Sin RUT",
+                "empleado_cargo": asig.get("empleado_cargo") or "Sin Cargo",
+                "area": area_name,
+                "productos": prod_list,
+                "observaciones": asig.get("observaciones") or "",
+                "entregado": bool(asig.get("entregado", 0)),
+                "fecha_entrega": asig.get("fecha_entrega"),
+                "usuario_entrega_nombre": asig.get("usuario_entrega_nombre"),
+                "updated_at": asig.get("updated_at")
+            })
+
+        # Armar lista ordenada de resumen
+        resumen = []
+        for code, total in resumen_counts.items():
+            prod = prod_map.get(code)
+            desglose = desglose_areas.get(code, {})
+            # Formatear el desglose como lista de objetos para que sea fácil de mapear en frontend
+            desglose_list = [{"area": k, "cantidad": v} for k, v in desglose.items()]
+
+            if prod:
+                resumen.append({
+                    "codigo": prod["codigo"],
+                    "descripcion": prod["descripcion"],
+                    "unidad": prod["unidad"],
+                    "tipo": prod["tipo"],
+                    "marca": prod["marca"],
+                    "cantidad_total": total,
+                    "desglose_areas": desglose_list
+                })
+            else:
+                resumen.append({
+                    "codigo": code,
+                    "descripcion": f"Código {code} (No encontrado)",
+                    "unidad": "",
+                    "tipo": "DESCONOCIDO",
+                    "marca": "",
+                    "cantidad_total": total,
+                    "desglose_areas": desglose_list
+                })
+
+        resumen.sort(key=lambda x: x["descripcion"])
+
+        return {
+            "resumen": resumen,
+            "detalles": detalles
+        }
+
+    async def marcar_entrega_producto(
+        self, empleado_id: int, mes: int, anio: int, entregado: bool, usuario_entrega_id: int
+    ) -> Tuple[bool, str]:
+        """
+        Registra la entrega física del beneficio a un empleado en base de datos.
+        """
+        # Verificar que ya exista una asignación guardada
+        asig = await self.repo.get_asignacion_empleado(empleado_id, mes, anio)
+        if not asig:
+            return False, "No se puede marcar la entrega porque el empleado no tiene productos asignados para este periodo."
+
+        success = await self.repo.update_delivery_status(
+            empleado_id=empleado_id,
+            mes=mes,
+            anio=anio,
+            entregado=entregado,
+            usuario_entrega_id=usuario_entrega_id
+        )
+
+        if success:
+            msg = "Entrega registrada exitosamente." if entregado else "Entrega revertida a pendiente."
+            return True, msg
+        else:
+            return False, "Error al actualizar el estado de entrega en la base de datos."
+
+    async def get_period_status(self, mes: int, anio: int) -> Dict[str, Any]:
+        """
+        Determina el estado del periodo actual para la asignacion de 4 productos:
+        - 'closed': Si el periodo actual ya fue cerrado.
+        - 'blocked_previous': Si el periodo anterior tiene asignaciones y no esta cerrado.
+        - 'open': Si esta abierto y se puede operar.
+        """
+        # 1. ¿Está el periodo actual cerrado?
+        is_closed = await self.repo.is_period_closed(mes, anio)
+        if is_closed:
+            return {
+                "status": "closed",
+                "mes": mes,
+                "anio": anio,
+                "mensaje": f"El período {anio}-{mes:02d} se encuentra cerrado para asignación."
+            }
+
+        # 2. Calcular periodo anterior
+        prev_mes = mes - 1
+        prev_anio = anio
+        if prev_mes == 0:
+            prev_mes = 12
+            prev_anio = anio - 1
+
+        # 3. ¿Tiene asignaciones el periodo anterior?
+        prev_has_asig = await self.repo.has_assignments_in_period(prev_mes, prev_anio)
+        if prev_has_asig:
+            # Si tiene asignaciones, ¿está cerrado?
+            prev_closed = await self.repo.is_period_closed(prev_mes, prev_anio)
+            if not prev_closed:
+                return {
+                    "status": "blocked_previous",
+                    "mes": mes,
+                    "anio": anio,
+                    "prev_mes": prev_mes,
+                    "prev_anio": prev_anio,
+                    "mensaje": f"No se pueden realizar asignaciones en {anio}-{mes:02d} hasta que el período anterior ({prev_anio}-{prev_mes:02d}) esté CERRADO."
+                }
+
+        # 4. De lo contrario, está abierto
+        return {
+            "status": "open",
+            "mes": mes,
+            "anio": anio,
+            "mensaje": "El período está abierto."
+        }
+
+    async def cerrar_periodo(self, mes: int, anio: int, usuario_id: int) -> Tuple[bool, str]:
+        is_closed = await self.repo.is_period_closed(mes, anio)
+        if is_closed:
+            return False, f"El período {anio}-{mes:02d} ya está cerrado."
+            
+        success = await self.repo.close_period(mes, anio, usuario_id)
+        if success:
+            return True, f"Período {anio}-{mes:02d} cerrado exitosamente."
+        else:
+            return False, "Error al guardar el cierre del período en la base de datos."
+
+    async def reabrir_periodo(self, mes: int, anio: int) -> Tuple[bool, str]:
+        is_closed = await self.repo.is_period_closed(mes, anio)
+        if not is_closed:
+            return False, f"El período {anio}-{mes:02d} ya está abierto."
+            
+        success = await self.repo.reopen_period(mes, anio)
+        if success:
+            return True, f"Período {anio}-{mes:02d} reabierto exitosamente."
+        else:
+            return False, "Error al reabrir el período en la base de datos."
+

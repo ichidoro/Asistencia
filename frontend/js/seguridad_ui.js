@@ -76,9 +76,11 @@ const MAPA_UI_PERMISOS = {
     'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
     'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
 
-    // ── MÓDULO 4 PRODUCTOS (2) ──
-    'productos_4.ver':              { module: '4 PRODUCTOS', action: 'Ver',              description: 'Ver panel de 4 Productos a empleados', permissions: ['productos_4.ver'] },
-    'productos_4.editar':           { module: '4 PRODUCTOS', action: 'Editar',           description: 'Asignar 4 Productos a empleados y gestionar catálogo', permissions: ['productos_4.editar'] },
+    // ── MÓDULO 4 PRODUCTOS (4) ──
+    'productos_4.asignar':          { module: '4 PRODUCTOS', action: 'Asignar',          description: 'Ver y asignar 4 Productos a empleados (con RLS de área)', permissions: ['productos_4.asignar'] },
+    'productos_4.consolidar':       { module: '4 PRODUCTOS', action: 'Consolidar',       description: 'Ver consolidado global de productos propios (sin RLS)', permissions: ['productos_4.consolidar'] },
+    'productos_4.entregar':         { module: '4 PRODUCTOS', action: 'Entregar',         description: 'Ver y registrar entregas de productos propios (sin RLS)', permissions: ['productos_4.entregar'] },
+    'productos_4.catalogo':         { module: '4 PRODUCTOS', action: 'Catálogo',         description: 'Ver y gestionar el catálogo de productos propios en Configuración', permissions: ['productos_4.catalogo'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
@@ -459,8 +461,10 @@ function getPermissionDetails(permId) {
         'configuracion.sistema':        { alert: 'Solo Admin',            flow: 'Diagnóstico de BD, modo de conexión y velocidad' },
 
         // 4 Productos
-        'productos_4.ver':              { alert: 'Ubicación: Menú lateral (4 Productos)', flow: 'Visualizar planilla de habilitados para 4 Productos.' },
-        'productos_4.editar':           { alert: 'Ubicación: Configuración y Asignación', flow: 'Asignar productos a empleados habilitados y gestionar el catálogo.' },
+        'productos_4.asignar':          { alert: 'Ubicación: Menú lateral / Tab Asignación', flow: 'Visualizar planilla de habilitados y asignar productos a empleados (con RLS de área).' },
+        'productos_4.consolidar':       { alert: 'Ubicación: Menú lateral / Tab Consolidado', flow: 'Ver consolidado global acumulado por producto (sin RLS).' },
+        'productos_4.entregar':         { alert: 'Ubicación: Menú lateral / Tab Entrega Beneficio', flow: 'Ver listado y registrar entregas físicas de productos (sin RLS).' },
+        'productos_4.catalogo':         { alert: 'Ubicación: Configuración / Catálogo Propio', flow: 'Ver y administrar el catálogo de productos de elaboración propia.' },
     };
     return details[permId] || null;
 }

@@ -175,7 +175,7 @@
                     <span class="icon">📈</span>
                     <span>Reportes</span>
                 </a>
-                <a href="#" class="sidebar-item" data-page="productos_4" data-permiso="productos_4.ver">
+                <a href="#" class="sidebar-item" data-page="productos_4" data-permiso="productos_4.asignar || productos_4.consolidar || productos_4.entregar">
                     <span class="icon">🎁</span>
                     <span>4 Productos</span>
                 </a>
@@ -1277,29 +1277,51 @@
                     <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                         <div>
                             <h2 class="fw-bold mb-1"><span class="me-2">🎁</span>4 Productos</h2>
-                            <p class="text-muted mb-0 small">Planilla de asignación de productos de fabricación propia para personal calificado (100% asistencia y antigüedad mínima).</p>
+                            <p class="text-muted mb-0 small">Planilla de asignación, consolidación y entrega de productos de fabricación propia para personal calificado.</p>
                         </div>
-                        <div>
-                            <button class="btn btn-light border shadow-sm btn-sm px-3" onclick="Productos4Module.cargarEvaluaciones()">
-                                <i class="bi bi-arrow-clockwise text-primary me-1"></i> Actualizar Planilla
+                        <div class="d-flex align-items-center gap-2">
+                            <div id="productos-4-period-actions" class="d-inline-flex gap-2"></div>
+                            <button class="btn btn-light border shadow-sm btn-sm px-3" onclick="Productos4Module.refrescarVistaActiva()">
+                                <i class="bi bi-arrow-clockwise text-primary me-1"></i> Actualizar Vista
                             </button>
                         </div>
                     </div>
 
-                    <!-- Panel de Filtros -->
+                    <!-- Pestañas del Módulo (Protegidas por Permisos Granulares) -->
+                    <div class="mb-4">
+                        <ul class="nav nav-pills border p-1 bg-white rounded-pill d-inline-flex shadow-sm" id="productos-4-tabs" role="tablist" style="border-radius: 50px;">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-bold px-4 py-2 rounded-pill" id="tab-p4-asignacion" data-bs-toggle="tab" data-bs-target="#view-p4-asignacion" type="button" role="tab" data-permiso="productos_4.asignar" onclick="Productos4Module.cambiarTab('asignacion')">
+                                    <i class="bi bi-person-check me-1"></i> Asignación
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-bold px-4 py-2 rounded-pill" id="tab-p4-consolidado" data-bs-toggle="tab" data-bs-target="#view-p4-consolidado" type="button" role="tab" data-permiso="productos_4.consolidar" onclick="Productos4Module.cambiarTab('consolidado')">
+                                    <i class="bi bi-bar-chart-fill me-1"></i> Consolidado
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-bold px-4 py-2 rounded-pill" id="tab-p4-entrega" data-bs-toggle="tab" data-bs-target="#view-p4-entrega" type="button" role="tab" data-permiso="productos_4.entregar" onclick="Productos4Module.cambiarTab('entrega')">
+                                    <i class="bi bi-truck me-1"></i> Entrega Beneficio
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Panel de Filtros Compartido -->
                     <div class="card shadow-sm border-0 mb-4 bg-white" style="border-radius: 12px;">
                         <div class="card-body p-3">
                             <div class="row g-3 align-items-end">
-                                <div class="col-lg-2 col-md-4">
+                                <div class="col-lg-2 col-md-4" id="filtro-p4-container-buscar">
                                     <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar Empleado</label>
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light border-end-0"><i class="bi bi-funnel text-muted"></i></span>
-                                        <input type="text" id="productos-4-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="Productos4Module.renderizarEvaluaciones()">
+                                        <input type="text" id="productos-4-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="Productos4Module.refrescarVistaActiva()">
                                     </div>
                                 </div>
-                                <div class="col-lg-2 col-md-4 col-sm-6">
+                                <div class="col-lg-2 col-md-4 col-sm-6" id="filtro-p4-container-area">
                                     <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-geo-alt me-1"></i>Área</label>
-                                    <select id="productos-4-filtro-area" class="form-select form-select-sm bg-light" onchange="Productos4Module.renderizarEvaluaciones()">
+                                    <select id="productos-4-filtro-area" class="form-select form-select-sm bg-light" onchange="Productos4Module.refrescarVistaActiva()">
                                         <option value="">Todas</option>
                                     </select>
                                 </div>
@@ -1330,9 +1352,9 @@
                                         <option value="2028">2028</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-3 col-md-4">
+                                <div class="col-lg-3 col-md-4" id="filtro-p4-container-estado">
                                     <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-filter-circle me-1"></i>Filtrar Estado</label>
-                                    <select id="productos-4-filtro-estado" class="form-select form-select-sm bg-light" onchange="Productos4Module.renderizarEvaluaciones()">
+                                    <select id="productos-4-filtro-estado" class="form-select form-select-sm bg-light" onchange="Productos4Module.refrescarVistaActiva()">
                                         <option value="todos">Todos los Empleados</option>
                                         <option value="califica">Solo Habilitados / Califican</option>
                                         <option value="bloqueado">Solo Bloqueados</option>
@@ -1342,7 +1364,7 @@
                                 </div>
                                 <div class="col-lg-2 col-md-4 text-end">
                                     <div class="d-grid">
-                                        <button class="btn btn-primary btn-sm px-3" onclick="Productos4Module.cargarEvaluaciones()">
+                                        <button class="btn btn-primary btn-sm px-3" onclick="Productos4Module.refrescarVistaActiva()">
                                             <i class="bi bi-search me-1"></i> Filtrar
                                         </button>
                                     </div>
@@ -1351,11 +1373,37 @@
                         </div>
                     </div>
 
-                    <!-- Grilla de Empleados -->
-                    <div id="productos-4-empleados-grid" class="row g-3">
-                        <div class="col-12 text-center py-5 text-muted">
-                            <i class="bi bi-info-circle fs-1"></i>
-                            <div class="mt-2">Presione el botón "Filtrar" o "Actualizar" para cargar la planilla.</div>
+                    <!-- Contenedores de Pestañas (Tab Content) -->
+                    <div class="tab-content" id="productos-4-tab-content">
+                        <!-- PESTAÑA: ASIGNACIÓN -->
+                        <div class="tab-pane fade" id="view-p4-asignacion" role="tabpanel" aria-labelledby="tab-p4-asignacion">
+                            <!-- Grilla de Empleados -->
+                            <div id="productos-4-empleados-grid" class="row g-3">
+                                <div class="col-12 text-center py-5 text-muted">
+                                    <i class="bi bi-info-circle fs-1"></i>
+                                    <div class="mt-2">Presione el botón "Filtrar" para cargar la planilla.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PESTAÑA: CONSOLIDADO -->
+                        <div class="tab-pane fade" id="view-p4-consolidado" role="tabpanel" aria-labelledby="tab-p4-consolidado">
+                            <div id="productos-4-consolidado-content" class="row g-4">
+                                <div class="col-12 text-center py-5 text-muted">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <div class="mt-2">Cargando reporte consolidado global...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PESTAÑA: ENTREGA BENEFICIO -->
+                        <div class="tab-pane fade" id="view-p4-entrega" role="tabpanel" aria-labelledby="tab-p4-entrega">
+                            <div id="productos-4-entrega-content" class="row g-4">
+                                <div class="col-12 text-center py-5 text-muted">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <div class="mt-2">Cargando checklist de entregas...</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1434,7 +1482,7 @@
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="productos-propios-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.ver"
+                                        data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo"
                                         onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()">🎁
                                         Productos Propios</button>
                                 </li>
@@ -1461,9 +1509,14 @@
                                             <h4 class="mb-1 fw-bold text-dark">Auditoría de Áreas y Errores</h4>
                                             <p class="text-muted mb-0 small">Visualice el catálogo de áreas oficiales y los errores que BioAlba les redirige.</p>
                                         </div>
-                                        <button class="btn btn-light shadow-sm" onclick="cargarCatalogoAreas()">
-                                            <i class="bi bi-arrow-clockwise text-primary"></i> Actualizar
-                                        </button>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-primary shadow-sm" onclick="abrirModalCrearArea()" data-permiso="configuracion.editar">
+                                                <i class="bi bi-plus-circle me-1"></i> Crear Área
+                                            </button>
+                                            <button class="btn btn-light shadow-sm" onclick="cargarCatalogoAreas()">
+                                                <i class="bi bi-arrow-clockwise text-primary"></i> Actualizar
+                                            </button>
+                                        </div>
                                     </div>
                                     <div id="areas-catalogo-container" class="row g-3">
                                         <!-- Cargado dinámicamente -->
@@ -1480,9 +1533,14 @@
                                             <h4 class="mb-1 fw-bold text-dark">Auditoría de Cargos y Errores</h4>
                                             <p class="text-muted mb-0 small">Visualice el catálogo de cargos oficiales y los errores que BioAlba les redirige.</p>
                                         </div>
-                                        <button class="btn btn-light shadow-sm" onclick="cargarCatalogoCargos()">
-                                            <i class="bi bi-arrow-clockwise text-primary"></i> Actualizar
-                                        </button>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-primary shadow-sm" onclick="abrirModalCrearCargo()" data-permiso="configuracion.editar">
+                                                <i class="bi bi-plus-circle me-1"></i> Crear Cargo
+                                            </button>
+                                            <button class="btn btn-light shadow-sm" onclick="cargarCatalogoCargos()">
+                                                <i class="bi bi-arrow-clockwise text-primary"></i> Actualizar
+                                            </button>
+                                        </div>
                                     </div>
                                     <div id="cargos-catalogo-container" class="row g-3">
                                         <!-- Cargado dinámicamente -->

@@ -193,24 +193,37 @@ class SeguridadRepository:
                 ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header -> Wizard de inicialización BioAlba'),
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
 
-                # ── 4 Productos (2 permisos) ──
-                ('productos_4.ver',              '4 Productos',    'Ver el panel de asignación de 4 Productos a empleados'),
-                ('productos_4.editar',           '4 Productos',    'Asignar/modificar 4 Productos a empleados y gestionar el catálogo'),
+                # ── 4 Productos (4 permisos granulares) ──
+                ('productos_4.asignar',          '4 Productos',    'Ver y asignar 4 Productos a empleados (con RLS de área)'),
+                ('productos_4.consolidar',       '4 Productos',    'Ver consolidado global de productos propios (sin RLS)'),
+                ('productos_4.entregar',         '4 Productos',    'Ver y registrar entregas de productos propios (sin RLS)'),
+                ('productos_4.catalogo',         '4 Productos',    'Ver y gestionar el catálogo de productos propios en Configuración'),
             ]
 
-            # --- MIGRACIÓN DE PERMISOS beneficios -> productos_4 ---
-            perm_ver_exists = await self.db.fetch_one("SELECT 1 FROM permisos WHERE id = 'beneficios.ver'")
-            if perm_ver_exists:
-                logger.info("🛠️ Ejecutando migración de permisos: beneficios -> productos_4...")
-                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.ver', '4 Productos', 'Ver el panel de asignación de 4 Productos a empleados')")
-                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.editar', '4 Productos', 'Asignar/modificar 4 Productos a empleados y gestionar el catálogo')")
+            # --- MIGRACIÓN DE PERMISOS: productos_4 antiguos -> nuevos granulares ---
+            perm_p4_ver_exists = await self.db.fetch_one("SELECT 1 FROM permisos WHERE id = 'productos_4.ver'")
+            if perm_p4_ver_exists:
+                logger.info("🛠️ Ejecutando migración de permisos: productos_4 antiguos -> granulares...")
+                # Insertar los nuevos permisos
+                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.asignar', '4 Productos', 'Ver y asignar 4 Productos a empleados (con RLS de área)')")
+                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.consolidar', '4 Productos', 'Ver consolidado global de productos propios (sin RLS)')")
+                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.entregar', '4 Productos', 'Ver y registrar entregas de productos propios (sin RLS)')")
+                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.catalogo', '4 Productos', 'Ver y gestionar el catálogo de productos propios en Configuración')")
                 
-                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.ver' FROM rol_permisos WHERE permiso_id = 'beneficios.ver'")
-                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.editar' FROM rol_permisos WHERE permiso_id = 'beneficios.editar'")
+                # Copiar relaciones de rol_permisos desde productos_4.ver
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.asignar' FROM rol_permisos WHERE permiso_id = 'productos_4.ver'")
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.consolidar' FROM rol_permisos WHERE permiso_id = 'productos_4.ver'")
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.entregar' FROM rol_permisos WHERE permiso_id = 'productos_4.ver'")
                 
-                await self.db.execute("DELETE FROM rol_permisos WHERE permiso_id IN ('beneficios.ver', 'beneficios.editar')")
-                await self.db.execute("DELETE FROM permisos WHERE id IN ('beneficios.ver', 'beneficios.editar')")
-                logger.success("✅ Migración de permisos completada.")
+                # Copiar relaciones de rol_permisos desde productos_4.editar
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.asignar' FROM rol_permisos WHERE permiso_id = 'productos_4.editar'")
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.consolidar' FROM rol_permisos WHERE permiso_id = 'productos_4.editar'")
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.entregar' FROM rol_permisos WHERE permiso_id = 'productos_4.editar'")
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.catalogo' FROM rol_permisos WHERE permiso_id = 'productos_4.editar'")
+                
+                # Limpiar permisos antiguos (las asociaciones en rol_permisos se borrarán por la restricción CASCADE en SQLite)
+                await self.db.execute("DELETE FROM permisos WHERE id IN ('productos_4.ver', 'productos_4.editar')")
+                logger.success("✅ Migración de permisos granulares completada.")
 
             total_esperado = len(permisos_base)
 

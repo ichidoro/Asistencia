@@ -2337,3 +2337,97 @@ window.activarPeriodoRRHH = async function(id) {
     }
 };
 
+window.abrirModalCrearArea = async function() {
+    Swal.fire({
+        title: 'Crear Nueva Área',
+        input: 'text',
+        inputLabel: 'Nombre del área',
+        inputPlaceholder: 'Ej: CONTABILIDAD, VENTAS...',
+        showCancelButton: true,
+        confirmButtonText: 'Crear Área',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+            if (!value || !value.trim()) {
+                return 'El nombre del área no puede estar vacío';
+            }
+        },
+        customClass: {
+            confirmButton: 'btn btn-primary btn-sm px-3.5 me-2',
+            cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
+        },
+        buttonsStyling: false,
+        preConfirm: async (nombre) => {
+            try {
+                Swal.showLoading();
+                const response = await fetch('/api/configuracion/areas/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ nombre: nombre.trim() })
+                });
+
+                const res = await response.json();
+                if (!response.ok) throw new Error(res.detail || "Error al crear el área.");
+                return res;
+            } catch (error) {
+                Swal.showValidationMessage(error.message);
+                return false;
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showToast("Área creada exitosamente.", "success");
+            cargarCatalogoAreas();
+        }
+    });
+};
+
+window.abrirModalCrearCargo = async function() {
+    Swal.fire({
+        title: 'Crear Nuevo Cargo',
+        input: 'text',
+        inputLabel: 'Nombre del cargo',
+        inputPlaceholder: 'Ej: ADMINISTRATIVO, OPERARIO...',
+        showCancelButton: true,
+        confirmButtonText: 'Crear Cargo',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+            if (!value || !value.trim()) {
+                return 'El nombre del cargo no puede estar vacío';
+            }
+        },
+        customClass: {
+            confirmButton: 'btn btn-primary btn-sm px-3.5 me-2',
+            cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
+        },
+        buttonsStyling: false,
+        preConfirm: async (nombre) => {
+            try {
+                Swal.showLoading();
+                const response = await fetch('/api/configuracion/cargos/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ nombre: nombre.trim() })
+                });
+
+                const res = await response.json();
+                if (!response.ok) throw new Error(res.detail || "Error al crear el cargo.");
+                return res;
+            } catch (error) {
+                Swal.showValidationMessage(error.message);
+                return false;
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            showToast("Cargo creado exitosamente.", "success");
+            cargarCatalogoCargos();
+        }
+    });
+};
+

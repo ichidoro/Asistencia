@@ -723,6 +723,14 @@ async def seed_estados_asistencia(
 # ÁREAS Y ALIAS (CATÁLOGO Y AUDITORÍA)
 # ============================================
 
+from pydantic import BaseModel, Field
+
+class AreaCreateRequest(BaseModel):
+    nombre: str = Field(..., min_length=1, description="Nombre del área")
+
+class CargoCreateRequest(BaseModel):
+    nombre: str = Field(..., min_length=1, description="Nombre del cargo")
+
 @router.get("/areas/", response_model=List[Dict[str, Any]])
 async def get_catalogo_areas(
     db: Database = Depends(get_db),
@@ -732,6 +740,49 @@ async def get_catalogo_areas(
     from backend.repositories.area import AreaRepository
     repo = AreaRepository(db)
     return await repo.get_areas_with_aliases()
+
+@router.post("/areas/", response_model=Dict[str, Any])
+async def create_area_manual(
+    req: AreaCreateRequest,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Crear un área manualmente en el catálogo principal"""
+    from backend.repositories.area import AreaRepository
+    repo = AreaRepository(db)
+    nombre_normalizado = req.nombre.strip()
+    if not nombre_normalizado:
+        raise HTTPException(status_code=400, detail="El nombre del área no puede estar vacío.")
+    
+    # Verificar si ya existe (exacto)
+    existente = await repo.get_area_by_name(nombre_normalizado)
+    if existente:
+        raise HTTPException(status_code=400, detail=f"El área '{nombre_normalizado}' ya existe en el catálogo.")
+    
+    # Verificar case-insensitive
+    case_exist = await db.fetch_one("SELECT nombre FROM areas WHERE LOWER(nombre) = LOWER(?)", (nombre_normalizado,))
+    if case_exist:
+        raise HTTPException(status_code=400, detail=f"Ya existe una área con este nombre pero diferente capitalización ('{case_exist['nombre']}').")
+
+    # Verificar en alias para evitar colisiones
+    alias_colision = await db.fetch_one("SELECT id FROM areas_alias WHERE LOWER(alias) = LOWER(?)", (nombre_normalizado,))
+    if alias_colision:
+        raise HTTPException(status_code=400, detail=f"El nombre '{nombre_normalizado}' ya está registrado como alias de otra área.")
+
+    area_id = await repo.create_area(nombre_normalizado)
+    
+    # Registrar en auditoría
+    await db.execute(
+        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+        (
+            current_user.user_id,
+            current_user.username,
+            "CREATE_AREA_MANUAL",
+            "Configuracion",
+            f"Creada área manualmente: '{nombre_normalizado}' (ID: {area_id})."
+        )
+    )
+    return {"id": area_id, "nombre": nombre_normalizado, "message": "Área creada exitosamente"}
 
 @router.delete("/areas/alias/{alias_id}", status_code=204)
 async def delete_area_alias(
@@ -760,6 +811,49 @@ async def get_catalogo_cargos(
     from backend.repositories.cargo import CargoRepository
     repo = CargoRepository(db)
     return await repo.get_cargos_with_aliases()
+
+@router.post("/cargos/", response_model=Dict[str, Any])
+async def create_cargo_manual(
+    req: CargoCreateRequest,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Crear un cargo manualmente en el catálogo principal"""
+    from backend.repositories.cargo import CargoRepository
+    repo = CargoRepository(db)
+    nombre_normalizado = req.nombre.strip()
+    if not nombre_normalizado:
+        raise HTTPException(status_code=400, detail="El nombre del cargo no puede estar vacío.")
+    
+    # Verificar si ya existe (exacto)
+    existente = await repo.get_cargo_by_name(nombre_normalizado)
+    if existente:
+        raise HTTPException(status_code=400, detail=f"El cargo '{nombre_normalizado}' ya existe en el catálogo.")
+    
+    # Verificar case-insensitive
+    case_exist = await db.fetch_one("SELECT nombre FROM cargos WHERE LOWER(nombre) = LOWER(?)", (nombre_normalizado,))
+    if case_exist:
+        raise HTTPException(status_code=400, detail=f"Ya existe un cargo con este nombre pero diferente capitalización ('{case_exist['nombre']}').")
+
+    # Verificar en alias para evitar colisiones
+    alias_colision = await db.fetch_one("SELECT id FROM cargos_alias WHERE LOWER(alias) = LOWER(?)", (nombre_normalizado,))
+    if alias_colision:
+        raise HTTPException(status_code=400, detail=f"El nombre '{nombre_normalizado}' ya está registrado como alias de otro cargo.")
+
+    cargo_id = await repo.create_cargo(nombre_normalizado)
+    
+    # Registrar en auditoría
+    await db.execute(
+        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+        (
+            current_user.user_id,
+            current_user.username,
+            "CREATE_CARGO_MANUAL",
+            "Configuracion",
+            f"Creado cargo manualmente: '{nombre_normalizado}' (ID: {cargo_id})."
+        )
+    )
+    return {"id": cargo_id, "nombre": nombre_normalizado, "message": "Cargo creado exitosamente"}
 
 @router.delete("/cargos/alias/{alias_id}", status_code=204)
 async def delete_cargo_alias(

@@ -200,9 +200,9 @@ async def lifespan(app: FastAPI):
                 await turno_repo.init_tables()
                 
                 # Inicializar tablas de beneficios de productos propios
-                from backend.repositories.beneficio import BeneficioRepository
-                beneficio_repo = BeneficioRepository()
-                await beneficio_repo.init_tables()
+                from backend.repositories.productos_4 import Productos4Repository
+                productos4_repo = Productos4Repository()
+                await productos4_repo.init_tables()
                 
                 # Sincronizar/poblar tabla horas_extras con registros pendientes
                 from backend.repositories.hora_extra import HoraExtraRepository
