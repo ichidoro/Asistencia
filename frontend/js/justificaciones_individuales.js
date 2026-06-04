@@ -251,7 +251,7 @@ async function saveJustificacionIndividual() {
             showToast(successMsg, "success");
             closeModalJustify();
             // Polling basado en job_id: espera al recálculo completo antes de refrescar
-            _pollJustificacionJob(data.job_id);
+            _pollJustificacionJob(data.job_id, empId);
         } else {
             const error = await resp.json();
             showToast(`Error: ${error.detail || 'No se pudo guardar'}`, "error");
@@ -271,11 +271,17 @@ async function saveJustificacionIndividual() {
  * hasta que el recálculo termine (status='done'), luego refresca la grilla.
  * Safety: máximo 60s de polling.
  */
-function _pollJustificacionJob(jobId) {
+function _pollJustificacionJob(jobId, empId = null) {
     if (!jobId || typeof window.loadMarcacionesData !== 'function') {
         // Fallback si no hay job_id: refresh a los 5s
         if (typeof window.loadMarcacionesData === 'function') {
-            setTimeout(() => window.loadMarcacionesData(), 5000);
+            setTimeout(() => {
+                if (empId && typeof window.reloadSingleEmployeeRow === 'function') {
+                    window.reloadSingleEmployeeRow(empId);
+                } else {
+                    window.loadMarcacionesData();
+                }
+            }, 5000);
         }
         return;
     }
@@ -294,7 +300,12 @@ function _pollJustificacionJob(jobId) {
                 if (job.status === 'done' || job.status === 'error' || job.status === 'not_found') {
                     clearInterval(timer);
                     // Refresh inmediato: el job terminó, los datos ya están en DB
-                    window.loadMarcacionesData();
+                    let targetEmpId = job.empleado_id || empId;
+                    if (targetEmpId && typeof window.reloadSingleEmployeeRow === 'function') {
+                        window.reloadSingleEmployeeRow(targetEmpId);
+                    } else {
+                        window.loadMarcacionesData();
+                    }
                     if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
                         recargarPreEvaluacionCierre();
                     }
@@ -310,7 +321,11 @@ function _pollJustificacionJob(jobId) {
 
         if (pollCount >= MAX_POLLS) {
             clearInterval(timer);
-            window.loadMarcacionesData(); // refresh final de seguridad
+            if (empId && typeof window.reloadSingleEmployeeRow === 'function') {
+                window.reloadSingleEmployeeRow(empId);
+            } else {
+                window.loadMarcacionesData(); // refresh final de seguridad
+            }
         }
     }, POLL_INTERVAL);
 }
@@ -334,7 +349,8 @@ async function deleteJustificacionFromModal() {
             showToast("Justificación eliminada correctamente", "success");
             closeModalJustify();
             // Polling basado en job_id: espera al recálculo completo
-            _pollJustificacionJob(data.job_id);
+            const empId = document.getElementById('just-id-empleado').value;
+            _pollJustificacionJob(data.job_id, empId);
         } else {
             const error = await resp.json();
             showToast(`Error: ${error.detail || 'No se pudo eliminar'}`, "error");

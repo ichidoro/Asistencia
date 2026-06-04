@@ -269,12 +269,14 @@ async function proceedToRevertExtra() {
             } else {
                 alert("Jornada revertida a Especial exitosamente");
             }
-            if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+            else if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
         } else {
             const result = await resp.json();
             if (resp.status === 409) {
                 alert(`Conflicto de Concurrencia: ${result.detail}`);
-                if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+                if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+                else if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
             } else {
                 alert(`Error: ${result.detail || 'Fallo al revertir'}`);
             }
@@ -667,7 +669,9 @@ async function saveManualEntry() {
         if (successCount > 0) {
             if (typeof showToast === 'function') showToast(`Se guardaron ${successCount} marcaciones.`, "success");
             closeManualEntryModal();
-            if (typeof window.loadMarcacionesData === 'function') {
+            if (typeof window.reloadSingleEmployeeRow === 'function') {
+                window.reloadSingleEmployeeRow(empId);
+            } else if (typeof window.loadMarcacionesData === 'function') {
                 window.loadMarcacionesData();
             }
             if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
@@ -750,7 +754,11 @@ async function validateJornada(accion = 'APROBAR') {
             else alert(msg);
 
             closeValidationModal();
-            if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof window.reloadSingleEmployeeRow === 'function') {
+                window.reloadSingleEmployeeRow(payload.empleado_id);
+            } else if (typeof loadMarcacionesData === 'function') {
+                loadMarcacionesData();
+            }
             if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
                 recargarPreEvaluacionCierre();
             }
@@ -758,7 +766,11 @@ async function validateJornada(accion = 'APROBAR') {
             const result = await resp.json();
             if (resp.status === 409) {
                 alert(`Conflicto de Concurrencia: ${result.detail}`);
-                if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+                if (typeof window.reloadSingleEmployeeRow === 'function') {
+                    window.reloadSingleEmployeeRow(payload.empleado_id);
+                } else if (typeof loadMarcacionesData === 'function') {
+                    loadMarcacionesData();
+                }
             } else {
                 alert(`Error: ${result.detail || 'Fallo al validar'}`);
             }
@@ -798,7 +810,9 @@ async function deleteManualJornada(empId, fecha) {
             closeValidationModal();
             
             // Refrescar grilla
-            if (typeof window.loadMarcacionesData === 'function') {
+            if (typeof window.reloadSingleEmployeeRow === 'function') {
+                window.reloadSingleEmployeeRow(empId);
+            } else if (typeof window.loadMarcacionesData === 'function') {
                 window.loadMarcacionesData();
             }
             if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
@@ -931,7 +945,11 @@ async function executeBulkFill() {
             alert(`✅ ${result.mensaje}`);
             closeBulkFillModal();
             // Recargar Grilla
-            if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof window.reloadSingleEmployeeRow === 'function') {
+                window.reloadSingleEmployeeRow(empId);
+            } else if (typeof loadMarcacionesData === 'function') {
+                loadMarcacionesData();
+            }
             if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
                 recargarPreEvaluacionCierre();
             }
@@ -1106,7 +1124,11 @@ async function savePermissionEntry() {
             else alert(msgOperacion);
 
             closePermissionModal();
-            if (typeof loadMarcacionesData === 'function') loadMarcacionesData();
+            if (typeof window.reloadSingleEmployeeRow === 'function') {
+                window.reloadSingleEmployeeRow(marcacionesManualesState.currentEmpId);
+            } else if (typeof loadMarcacionesData === 'function') {
+                loadMarcacionesData();
+            }
             if (typeof recargarPreEvaluacionCierre === 'function' && document.getElementById('modal-cierre-wizard')?.classList.contains('show')) {
                 recargarPreEvaluacionCierre();
             }

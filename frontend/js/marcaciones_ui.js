@@ -4263,6 +4263,572 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
     showSaldoMeta: true  // Visible por defecto cuando hay bolsa flexible
 };
 
+window.getStickyLeft = function(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta) {
+    let offset = 0;
+    const keys = ['empleado', 'bonos', 'incidencias', 'he', 'deudas', 'saldo', 'bolsa'];
+    for (const k of keys) {
+        if (k === key) {
+            if (k === 'bonos' && showBonos) return offset + subIndex * 65;
+            if (k === 'incidencias' && showIncidencias) return offset + subIndex * 65;
+            if (k === 'he' && showHE) return offset + subIndex * 65;
+            if (k === 'deudas' && showDeudas) return offset + subIndex * 65;
+            if (k === 'bolsa' && showSaldoMeta) return offset + subIndex * 72;
+            return offset;
+        }
+        if (stickyCols[k]) {
+            offset += stickyCols[k].width;
+        }
+    }
+    return offset;
+};
+
+window.getStickyWidthStyle = function(key, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta) {
+    let w = 0;
+    if (key === 'bonos') w = showBonos ? 65 : 50;
+    else if (key === 'incidencias') w = showIncidencias ? 65 : 50;
+    else if (key === 'he') w = showHE ? 65 : 50;
+    else if (key === 'deudas') w = showDeudas ? 65 : 50;
+    else if (key === 'saldo') w = 70;
+    else if (key === 'bolsa') w = showSaldoMeta ? 72 : 50;
+    return `width:${w}px; min-width:${w}px; max-width:${w}px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
+};
+
+window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
+    let he_bruto=0, he_apr=0, he_rec=0, he_pend=0, he_compensado=0, d_tot=0, min_atr=0, min_sad=0, min_col=0, min_per=0;
+    let cnt_atr=0, cnt_sad=0, cnt_inas=0, cnt_esp=0, cnt_per=0, cnt_efectivos=0;
+    const esBolsa = emp.tipo_programacion === 'FLEXIBLE_BOLSA'
+                 || (emp.info && emp.info.tipo_programacion === 'FLEXIBLE_BOLSA');
+    emp._esBolsaFlag = esBolsa;
+    let acumBolsa=0, excedido=false, metaMin=0;
+
+    if (esBolsa && emp.info) {
+        let metaOriginal = emp.info.meta_mensual_minutos
+               || Math.round((emp.info.meta_horas_semanales || 0) * 60);
+
+        let diasProgramados = 0;
+        let diasJustificados = 0;
+        
+        dates.forEach(d => {
+            const dt = new Date(d+'T00:00:00');
+            const isFer = feriadosArray.includes(d);
+            const diCheck = emp.dias[d] || {};
+            
+            const dayDB = (dt.getDay() + 6) % 7; 
+            const isStructurallyLibre = (emp.info.turno_dias && emp.info.turno_dias[dayDB] && emp.info.turno_dias[dayDB].es_libre === 1);
+            
+            const isDescanso = isFer || isStructurallyLibre || (diCheck.estado === 'LIBRE');
+            
+            if (!isDescanso) {
+                diasProgramados++;
+                const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION'];
+                const isJustificado = diCheck.estado && (
+                    diCheck.estado === 'JORNADA_ESPECIAL' ||
+                    estadosJustificados.some(ej => diCheck.estado.toUpperCase().includes(ej)) ||
+                    (diCheck.nomenclatura && diCheck.nomenclatura.trim() !== '')
+                );
+                
+                if (isJustificado) {
+                    diasJustificados++;
+                    diCheck._esDiaJustificadoBolsa = true;
+                }
+            }
+        });
+
+        if (diasProgramados > 0 && diasJustificados > 0) {
+            const valorTurnoMin = metaOriginal / diasProgramados;
+            metaMin = Math.round(metaOriginal - (valorTurnoMin * diasJustificados));
+            emp._metaOriginalBolsa = metaOriginal;
+            emp._diasJustificadosBolsa = diasJustificados;
+            emp._valorTurnoMinBolsa = valorTurnoMin;
+        } else {
+            metaMin = metaOriginal;
+        }
+        
+        if (emp.info.meta_ajustada_minutos_descuento && diasJustificados === 0) {
+            metaMin = Math.max(0, metaMin - emp.info.meta_ajustada_minutos_descuento);
+        }
+    }
+
+    let acumSemanal = 0;
+    let startDayJS = 1; 
+    if (emp.info && emp.info.primer_dia_semana_turno !== undefined) {
+        startDayJS = (emp.info.primer_dia_semana_turno + 1) % 7;
+    }
+
+    dates.forEach(d => {
+        const dt = new Date(d+'T00:00:00');
+        if (dt.getDay() === startDayJS) acumSemanal = 0; 
+
+        const di = emp.dias[d];
+        if (!di) return;
+
+        if (esBolsa) { di._esBolsa = true; di._metaMinBolsa = metaMin; }
+
+        const trab = Math.round((di.horas_trabajadas||0)*60);
+        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA';
+        
+        if (!esBolsa && !isEsp) {
+            acumSemanal += trab;
+        }
+        if (!esBolsa) di._acumuladoSemanalSnap = acumSemanal;
+        if (!isEsp && !esBolsa) {
+            const tieneCondonacion = (di.deuda_condonada || 0) > 0;
+            const netDeuda = tieneCondonacion ? 0 : (di.minutos_deuda || 0);
+
+            const rawCol = di.minutos_exceso_colacion || 0;
+            const rawPer = di.minutos_permiso_personal_deuda || 0;
+            const rawAtr = tieneCondonacion ? 0 : (di.minutos_atraso || 0);
+            const rawSad = tieneCondonacion ? 0 : (di.minutos_salida_adelantada || 0);
+
+            const rawTotal = rawCol + rawPer + rawAtr + rawSad;
+
+            let dayCol = 0;
+            let dayPer = 0;
+            let dayAtr = 0;
+            let daySad = 0;
+
+            if (netDeuda > 0 && rawTotal > 0) {
+                if (netDeuda >= rawTotal) {
+                    dayCol = rawCol;
+                    dayPer = rawPer;
+                    dayAtr = rawAtr;
+                    daySad = rawSad;
+                } else {
+                    const factor = netDeuda / rawTotal;
+                    dayCol = rawCol * factor;
+                    dayPer = rawPer * factor;
+                    dayAtr = rawAtr * factor;
+                    daySad = rawSad * factor;
+                }
+            }
+
+            d_tot   += netDeuda;
+            min_col += dayCol;
+            min_per += dayPer;
+            min_atr += dayAtr;
+            min_sad += daySad;
+
+            if ((di.minutos_atraso||0) > 0 && !tieneCondonacion)  cnt_atr++;
+            if ((di.minutos_salida_adelantada||0) > 0 && !tieneCondonacion) cnt_sad++;
+            if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
+        }
+        if (di.estado === 'INASISTENCIA') cnt_inas++;
+        if (isEsp)                         cnt_esp++;
+        if (di.hora_entrada_real && !isEsp && !['LIBRE','FERIADO','INASISTENCIA'].includes(di.estado)) cnt_efectivos++;
+
+        if (!isEsp) {
+            if (esBolsa) {
+                const snapAntes = acumBolsa; 
+                acumBolsa += trab;
+                di._acumuladoBolsaSnapPrev = snapAntes; 
+                di._acumuladoBolsaSnap = acumBolsa;    
+                di._metaMinBolsa = metaMin;             
+                if (excedido)                                    he_bruto += trab;
+                else if (acumBolsa > metaMin && trab > 0) { he_bruto += acumBolsa - metaMin; excedido = true; }
+            } else {
+                he_bruto += Math.max(di.minutos_extra_bruto || 0, di.minutos_extra_autorizados || 0);
+            }
+        } else if (esBolsa) {
+            di._acumuladoBolsaSnapPrev = acumBolsa;
+            di._acumuladoBolsaSnap = acumBolsa;
+            di._metaMinBolsa = metaMin;
+        }
+
+        if (!isEsp) {
+            if (di.estado_he === 'APROBADO') {
+                const apr = di.minutos_extra_autorizados || 0;
+                he_apr += apr;
+            } else if (di.estado_he === 'RECHAZADO') {
+                he_rec += (di.minutos_extra_bruto || 0);
+            } else if ((di.minutos_extra_bruto || 0) > 0) {
+                he_pend += (di.minutos_extra_bruto || 0);
+            }
+        }
+        he_compensado += (di.minutos_compensados_he || 0);
+    });
+
+    he_bruto = Math.round(he_bruto * 10000) / 10000;
+    he_apr = Math.round(he_apr * 10000) / 10000;
+    he_rec = Math.round(he_rec * 10000) / 10000;
+    he_pend = Math.round(he_pend * 10000) / 10000;
+
+    const saldo = he_apr - d_tot - he_compensado;
+    const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null; 
+    return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
+             cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
+             esBolsa, metaMin, acumBolsa, saldoMeta };
+};
+
+window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols) {
+    const { emp } = r;
+    const sClass = r.saldo > 0 ? 'text-success' : r.saldo < 0 ? 'text-danger' : 'text-muted';
+    const sPrefix = r.saldo > 0 ? '+' : r.saldo < 0 ? '-' : '';
+    const nameClass = emp.activo ? '' : 'text-danger opacity-75';
+
+    const empEval = bonosEval[emp.id] || {};
+    let bonoCells = '';
+    if (hasBonos) {
+        const wStyle = window.getStickyWidthStyle('bonos', showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+        if (showBonos) {
+            bonoCells = bonosNombres.map((bName, idx) => {
+                const bRes = empEval[bName];
+                const borderStyle = idx === 0 ? 'border-left:3px solid #10b981' : 'border-left:1px solid #e2e8f0';
+                const cellLeft = window.getStickyLeft('bonos', idx, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+                const inlineStyle = `position:sticky; z-index:40; ${borderStyle}; left:${cellLeft}px; ${wStyle}`;
+                if (!bRes || !bRes.aplica) return `<td class="text-center align-middle sticky-premium-col" style="background:#f8fafc;font-size:0.75rem;${inlineStyle}"></td>`;
+                if (bRes.califica) {
+                    return `<td class="text-center align-middle text-success fw-bold sticky-premium-col" style="background:#f8fafc;font-size:1.1rem;${inlineStyle}" title="${bRes.motivo||''}"><i class="bi bi-check-circle-fill"></i></td>`;
+                } else {
+                    return `<td class="text-center align-middle text-danger opacity-75 sticky-premium-col" style="background:#f8fafc;font-size:1.1rem;${inlineStyle}" title="${bRes.motivo||''}"><i class="bi bi-dash-circle-fill"></i></td>`;
+                }
+            }).join('');
+        } else {
+            let cntAplica = 0;
+            let cntCalifica = 0;
+            bonosNombres.forEach(bName => {
+                const bRes = empEval[bName];
+                if (bRes && bRes.aplica) {
+                    cntAplica++;
+                    if (bRes.califica) cntCalifica++;
+                }
+            });
+            const cellLeft = window.getStickyLeft('bonos', 0, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+            const inlineStyle = `position:sticky; z-index:40; left:${cellLeft}px; ${wStyle}`;
+            if (cntAplica > 0) {
+                const color = cntCalifica === cntAplica ? 'text-success' : (cntCalifica > 0 ? 'text-warning' : 'text-danger');
+                bonoCells = `<td class="text-center align-middle fw-bold ${color} sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981;${inlineStyle}" title="${cntCalifica} cumplidos de ${cntAplica} aplicables">${cntCalifica}/${cntAplica}</td>`;
+            } else {
+                bonoCells = `<td class="text-center align-middle text-muted sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981;${inlineStyle}"></td>`;
+            }
+        }
+    }
+
+    const dayCells = dates.map(d => {
+        const di = emp.dias[d];
+        const dt = new Date(d+'T00:00:00');
+        const feriadoDesc = getFeriadoDesc(d);
+        const isFer = !!feriadoDesc;
+        const isWE  = (dt.getDay()===0||dt.getDay()===6);
+        const bg = isFer ? 'background:#fff9c4;' : isWE ? 'background:#f8f9fa;' : '';
+        const empNameEsc = (emp.nombre_completo||'').replace(/'/g,"\\'");
+        const hEnt = di && di.hora_entrada_real ? `'${di.hora_entrada_real}'` : 'null';
+        const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
+        const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode, isFer);
+        const tooltipData = _buildRichTooltipData(di, d, dt, feriadoDesc, isWE, emp);
+        return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
+                    onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
+                    ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
+                    data-grid-tooltip data-bs-html="true"
+                    data-bs-content="${tooltipData}">
+                    ${cellContent}
+                </td>`;
+    }).join('');
+
+    const hasHE = r.he_pend > 0;
+    const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
+
+    const getStickyLeftLocal = (key, subIndex = 0) => window.getStickyLeft(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+    const getStickyWidthStyleLocal = (key) => window.getStickyWidthStyle(key, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+
+    return `<tr id="row-empleado-${emp.id}">
+        <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
+            ondblclick="openBatchApprovalModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
+            title="${hasHE ? '⚡ Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
+            <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
+            <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
+        </td>
+        ${bonoCells}
+        ${showIncidencias ? `
+        <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;left:${getStickyLeftLocal('incidencias', 0)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_per||''}</td>
+        <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 1)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_atr||''}</td>
+        <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 2)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_sad||''}</td>
+        <td class="text-center align-middle ${r.cnt_inas>0?'text-danger fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 3)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_inas||''}</td>
+        <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 4)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
+        <td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 5)}px;${getStickyWidthStyleLocal('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b;left:${getStickyLeftLocal('incidencias')}px;${getStickyWidthStyleLocal('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
+        ${showHE ? `
+        <td class="text-center align-middle tabular-nums text-warning fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeftLocal('he', 0)}px;${getStickyWidthStyleLocal('he')}">${r.he_pend>0?_fmtMin(r.he_pend):''}</td>
+        <td class="text-center align-middle tabular-nums text-success fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 1)}px;${getStickyWidthStyleLocal('he')}">${r.he_apr>0?_fmtMin(r.he_apr):''}</td>
+        <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 2)}px;${getStickyWidthStyleLocal('he')}">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
+        <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 3)}px;${getStickyWidthStyleLocal('he')}">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeftLocal('he')}px;${getStickyWidthStyleLocal('he')}">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
+        ${showDeudas ? `
+        <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_col>0?_fmtMin(r.min_col):''}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_per>0?_fmtMin(r.min_per):''}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
+        <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}">${r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
+        <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#f9fafb;font-size:0.8rem;left:${getStickyLeftLocal('saldo')}px;${getStickyWidthStyleLocal('saldo')}">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
+        ${(hayBolsa) ? (
+            showSaldoMeta
+                ? (r.esBolsa
+                    ? (() => {
+                        const sm = r.saldoMeta;
+                        const smColor = sm >= 0 ? '#10b981' : '#ef4444';
+                        const smBg    = sm >= 0 ? '#f0fdf4' : '#fff5f5';
+                        const smSign  = sm > 0 ? '+' : sm < 0 ? '-' : '';
+                        const metaTooltip = r.emp._diasJustificadosBolsa > 0 
+                            ? `Meta original: ${_fmtMin(r.emp._metaOriginalBolsa)} | Descuento por ${r.emp._diasJustificadosBolsa} día(s) justificado(s)`
+                            : `Meta mensual del ciclo`;
+
+                        return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
+                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
+                                <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>`;
+                    })()
+                    : `<td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                       <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                       <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}"></td>`
+                  )
+                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>`
+        ) : ''}
+        ${dayCells}
+    </tr>`;
+};
+
+window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
+    const s = window.vistaAnaliticaState;
+    const hasBonos = (stateMarcacionesApp.data.bonos_nombres || []).length > 0;
+    const showBonos = window.vistaAnaliticaState.showBonos;
+    const bonosNombres = stateMarcacionesApp.data.bonos_nombres || [];
+    const showIncidencias = window.vistaAnaliticaState.showIncidencias !== false;
+    const showHE = window.vistaAnaliticaState.showHE !== false;
+    const showDeudas = window.vistaAnaliticaState.showDeudas !== false;
+
+    const employees = [];
+    if (stateMarcacionesApp.data.empleados) {
+        stateMarcacionesApp.data.empleados.forEach(e_raw => {
+            const eid = e_raw.id;
+            const mEmp = stateMarcacionesApp.data.matrix[eid];
+            if (!mEmp) return;
+            const info = mEmp.info || {};
+            employees.push({
+                id: eid, info,
+                nombre_completo: info.nombre_completo || e_raw.nombre_completo || e_raw.nombre,
+                area: info.area || e_raw.area || '',
+                turno: info.turno || info.nombre_turno || '',
+                turno_dias: info.turno_dias || {},
+                tipo_programacion: info.tipo_programacion || '',
+                activo: info.activo !== false,
+                dias: mEmp
+            });
+        });
+    }
+
+    const rows = employees.map(emp => window.calcularStatsEmpleado(emp, dates, feriadosArray));
+
+    let visibleRows = rows;
+    if (s.soloNegativo) visibleRows = visibleRows.filter(r => r.saldo < 0);
+    if (s.soloConHE)    visibleRows = visibleRows.filter(r => r.he_bruto > 0);
+
+    const tot = visibleRows.reduce((acc,r) => {
+        acc.he_bruto+=r.he_bruto; acc.he_apr+=r.he_apr; acc.he_rec+=r.he_rec; acc.he_pend+=r.he_pend;
+        acc.d_tot+=r.d_tot; acc.saldo+=r.saldo;
+        acc.cnt_atr+=r.cnt_atr; acc.cnt_sad+=r.cnt_sad; acc.cnt_inas+=r.cnt_inas;
+        acc.cnt_esp+=r.cnt_esp; acc.cnt_per+=r.cnt_per;
+        acc.min_col+=(r.min_col||0); acc.min_per+=(r.min_per||0); 
+        acc.min_atr+=(r.min_atr||0); acc.min_sad+=(r.min_sad||0);
+        return acc;
+    }, {he_bruto:0,he_apr:0,he_rec:0,he_pend:0,d_tot:0,saldo:0,cnt_atr:0,cnt_sad:0,cnt_inas:0,cnt_esp:0,cnt_per:0,min_col:0,min_per:0,min_atr:0,min_sad:0});
+
+    const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'text-muted';
+    const totSPrefix = tot.saldo > 0 ? '+' : tot.saldo < 0 ? '-' : '';
+
+    const hayBolsa = rows.some(r => r.esBolsa);
+    const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
+
+    const stickyCols = {
+        empleado: { width: 260 },
+        bonos: { width: hasBonos ? (showBonos ? bonosNombres.length * 65 : 50) : 0 },
+        incidencias: { width: showIncidencias ? 6 * 65 : 50 },
+        he: { width: showHE ? 4 * 65 : 50 },
+        deudas: { width: showDeudas ? 5 * 65 : 50 },
+        saldo: { width: 70 }
+    };
+    if (hayBolsa) {
+        stickyCols.bolsa = { width: showSaldoMeta ? 3 * 72 : 50 };
+    }
+
+    const getStickyLeftLocal = (key, subIndex = 0) => window.getStickyLeft(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+    const getStickyWidthStyleLocal = (key) => window.getStickyWidthStyle(key, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
+
+    let bonosTotalsCell = '';
+    if (hasBonos) {
+        if (showBonos) {
+            bonosTotalsCell = bonosNombres.map((bName, idx) => {
+                const borderStyle = idx === 0 ? 'border-left:3px solid #10b981' : 'border-left:1px solid #e2e8f0';
+                return `<td class="sticky-premium-col" style="position:sticky; z-index:60; ${borderStyle};left:${getStickyLeftLocal('bonos', idx)}px;${getStickyWidthStyleLocal('bonos')}"></td>`;
+            }).join('');
+        } else {
+            bonosTotalsCell = `<td class="sticky-premium-col" style="position:sticky; z-index:60; border-left:3px solid #10b981;left:${getStickyLeftLocal('bonos')}px;${getStickyWidthStyleLocal('bonos')}"></td>`;
+        }
+    }
+
+    const totalsRowHtml = `<tr class="fw-bold text-center" style="font-size:0.78rem; border-top: 2px solid #e2e8f0; background: #f8fafc;">
+        <td class="sticky-col-analitica text-start ps-2" style="position:sticky; left:0; z-index:60; background: #f8fafc; color: #475569; font-weight: 800; width:260px; min-width:260px; max-width:260px;">TOTALES</td>
+        ${bonosTotalsCell}
+        ${showIncidencias ? `
+        <td class="sticky-premium-col" style="position:sticky; z-index:60; border-left:3px solid #f59e0b;left:${getStickyLeftLocal('incidencias', 0)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_per||''}</td>
+        <td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', 1)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_atr||''}</td>
+        <td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', 2)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_sad||''}</td>
+        <td class="sticky-premium-col ${tot.cnt_inas>0?'text-danger':''}" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', 3)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_inas||''}</td>
+        <td class="sticky-premium-col ${tot.cnt_esp>0?'text-info':''}" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', 4)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_esp||''}</td>
+        <td class="fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', 5)}px;${getStickyWidthStyleLocal('incidencias')}">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))||''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #f59e0b; color:#f59e0b;left:${getStickyLeftLocal('incidencias')}px;${getStickyWidthStyleLocal('incidencias')}" class="fw-bold sticky-premium-col">${((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((tot.cnt_per||0)+(tot.cnt_atr||0)+(tot.cnt_sad||0)+(tot.cnt_inas||0)+(tot.cnt_esp||0)) : ''}</td>`}
+        ${showHE ? `
+        <td style="position:sticky; z-index:60; border-left:3px solid #3b82f6;left:${getStickyLeftLocal('he', 0)}px;${getStickyWidthStyleLocal('he')}" class="tabular-nums text-warning sticky-premium-col">${tot.he_pend>0?_fmtMin(tot.he_pend):''}</td>
+        <td class="tabular-nums text-success sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('he', 1)}px;${getStickyWidthStyleLocal('he')}">${tot.he_apr>0?_fmtMin(tot.he_apr):''}</td>
+        <td class="tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('he', 2)}px;${getStickyWidthStyleLocal('he')}">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
+        <td class="tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('he', 3)}px;${getStickyWidthStyleLocal('he')}">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #3b82f6; color:#3b82f6;left:${getStickyLeftLocal('he')}px;${getStickyWidthStyleLocal('he')}" class="tabular-nums fw-bold sticky-premium-col">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
+        ${showDeudas ? `
+        <td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}" class="tabular-nums ${tot.min_col>0?'text-muted fw-bold':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
+        <td class="tabular-nums ${tot.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
+        <td class="tabular-nums ${tot.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
+        <td class="tabular-nums ${tot.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
+        <td class="tabular-nums text-muted fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}" class="tabular-nums text-muted fw-bold sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
+        <td class="tabular-nums ${totSClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('saldo')}px;${getStickyWidthStyleLocal('saldo')}">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
+        ${(hayBolsa) ? (
+            showSaldoMeta
+                ? `<td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                   <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>`
+        ) : ''}
+        <td colspan="${dates.length}"></td>
+    </tr>`;
+
+    const tfoot = document.querySelector('.matrix-table-premium tfoot');
+    if (tfoot) {
+        tfoot.innerHTML = totalsRowHtml;
+    }
+};
+
+window.reloadSingleEmployeeRow = async function(empId) {
+    if (!stateMarcacionesApp.data || !stateMarcacionesApp.fechaInicioRRHH || !stateMarcacionesApp.fechaFinRRHH) {
+        console.warn("reloadSingleEmployeeRow: stateMarcacionesApp.data or dates not ready, falling back to full reload");
+        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        return;
+    }
+
+    const rowEl = document.getElementById("row-empleado-" + empId);
+    if (!rowEl) {
+        console.warn(`reloadSingleEmployeeRow: element row-empleado-${empId} not found, doing full client redraw`);
+        const container = document.getElementById('marcaciones-view-container');
+        if (container) renderVistaAnalitica(stateMarcacionesApp.data, container);
+        return;
+    }
+
+    const nameCell = rowEl.querySelector('.emp-name-link');
+    const originalNameHtml = nameCell ? nameCell.innerHTML : '';
+    if (nameCell) {
+        nameCell.innerHTML = `<span class="spinner-border spinner-border-sm text-primary me-1" role="status"></span>Actualizando...`;
+    }
+
+    try {
+        let url = `/api/asistencia/matriz/?fecha_inicio=${stateMarcacionesApp.fechaInicioRRHH}&fecha_fin=${stateMarcacionesApp.fechaFinRRHH}&empleado_id=${empId}`;
+        if (stateMarcacionesApp.area) url += `&area=${encodeURIComponent(stateMarcacionesApp.area)}`;
+        if (stateMarcacionesApp.turnoId) url += `&turno_id=${stateMarcacionesApp.turnoId}`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error("Error loading single row data");
+
+        const data = await resp.json();
+        if (!data.matrix || !data.matrix[empId]) {
+            throw new Error("No data returned for employee " + empId);
+        }
+
+        stateMarcacionesApp.data.matrix[empId] = data.matrix[empId];
+        if (data.bonos_evaluacion && data.bonos_evaluacion[empId]) {
+            stateMarcacionesApp.data.bonos_evaluacion[empId] = data.bonos_evaluacion[empId];
+        }
+
+        const dates = [];
+        if (stateMarcacionesApp.data.periodo) {
+            let curr = new Date(stateMarcacionesApp.data.periodo.inicio + 'T00:00:00');
+            const end  = new Date(stateMarcacionesApp.data.periodo.fin   + 'T00:00:00');
+            while (curr <= end) { dates.push(curr.toISOString().split('T')[0]); curr.setDate(curr.getDate()+1); }
+        } else {
+            const y = stateMarcacionesApp.year, m = stateMarcacionesApp.month;
+            const daysInMonth = new Date(y, m, 0).getDate();
+            for (let i = 1; i <= daysInMonth; i++)
+                dates.push(`${y}-${String(m).padStart(2,'0')}-${String(i).padStart(2,'0')}`);
+        }
+
+        const feriadosArray = stateMarcacionesApp.data.feriados ? stateMarcacionesApp.data.feriados.map(f => f.fecha || f) : [];
+        const getFeriadoDesc = (d) => {
+            if (!stateMarcacionesApp.data.feriados) return null;
+            const f = stateMarcacionesApp.data.feriados.find(x => (x.fecha || x) === d);
+            return f ? (f.descripcion || 'Feriado') : null;
+        };
+
+        const empRaw = stateMarcacionesApp.data.empleados.find(e => String(e.id) === String(empId));
+        if (!empRaw) {
+            window.loadMarcacionesData();
+            return;
+        }
+
+        const mEmp = data.matrix[empId];
+        const info = mEmp.info || {};
+        const empObject = {
+            id: empId, info,
+            nombre_completo: info.nombre_completo || empRaw.nombre_completo || empRaw.nombre,
+            area: info.area || empRaw.area || '',
+            turno: info.turno || info.nombre_turno || '',
+            turno_dias: info.turno_dias || {},
+            tipo_programacion: info.tipo_programacion || '',
+            activo: info.activo !== false,
+            dias: mEmp
+        };
+
+        const r = window.calcularStatsEmpleado(empObject, dates, feriadosArray);
+
+        const s = window.vistaAnaliticaState;
+        let matchesFilter = true;
+        if (s.soloNegativo && !(r.saldo < 0)) matchesFilter = false;
+        if (s.soloConHE && !(r.he_bruto > 0)) matchesFilter = false;
+
+        if (!matchesFilter) {
+            rowEl.style.display = "none";
+        } else {
+            rowEl.style.display = "";
+
+            const hasBonos = (stateMarcacionesApp.data.bonos_nombres || []).length > 0;
+            const showBonos = window.vistaAnaliticaState.showBonos;
+            const bonosNombres = stateMarcacionesApp.data.bonos_nombres || [];
+            const bonosEval = stateMarcacionesApp.data.bonos_evaluacion || {};
+            const showIncidencias = window.vistaAnaliticaState.showIncidencias !== false;
+            const showHE = window.vistaAnaliticaState.showHE !== false;
+            const showDeudas = window.vistaAnaliticaState.showDeudas !== false;
+            const hayBolsa = stateMarcacionesApp.data.empleados.some(e => {
+                const matrixEmp = stateMarcacionesApp.data.matrix[e.id];
+                return matrixEmp?.info?.tipo_programacion === 'FLEXIBLE_BOLSA';
+            });
+            const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
+
+            const stickyCols = {
+                empleado: { width: 260 },
+                bonos: { width: hasBonos ? (showBonos ? bonosNombres.length * 65 : 50) : 0 },
+                incidencias: { width: showIncidencias ? 6 * 65 : 50 },
+                he: { width: showHE ? 4 * 65 : 50 },
+                deudas: { width: showDeudas ? 5 * 65 : 50 },
+                saldo: { width: 70 }
+            };
+            if (hayBolsa) {
+                stickyCols.bolsa = { width: showSaldoMeta ? 3 * 72 : 50 };
+            }
+
+            const newRowHtml = window.renderEmployeeRowHtml(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols);
+            rowEl.outerHTML = newRowHtml;
+        }
+
+        window.recalculateTotalsRow(dates, feriadosArray, getFeriadoDesc);
+        
+        if (typeof showToast === 'function') {
+            showToast("Fila actualizada en tiempo real", "success");
+        }
+
+    } catch (err) {
+        console.error("reloadSingleEmployeeRow failed:", err);
+        if (nameCell) nameCell.innerHTML = originalNameHtml;
+        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+    }
+};
 
 // ─── PUNTO DE ENTRADA (llamado desde marcaciones_ui.js) ──────────────────────
 function renderVistaAnalitica(respData, container) {
@@ -4317,195 +4883,7 @@ function renderVistaAnalitica(respData, container) {
     };
 
     // ── 3. Calcular resumen por empleado ─────────────────────────────────────
-    const rows = employees.map(emp => {
-        let he_bruto=0, he_apr=0, he_rec=0, he_pend=0, he_compensado=0, d_tot=0, min_atr=0, min_sad=0, min_col=0, min_per=0;
-        let cnt_atr=0, cnt_sad=0, cnt_inas=0, cnt_esp=0, cnt_per=0, cnt_efectivos=0;
-        // tipo_programacion viene del turno (emp.info), NO de cada fila de asistencia
-        const esBolsa = emp.tipo_programacion === 'FLEXIBLE_BOLSA'
-                     || (emp.info && emp.info.tipo_programacion === 'FLEXIBLE_BOLSA');
-        emp._esBolsaFlag = esBolsa;
-        let acumBolsa=0, excedido=false, metaMin=0;
-
-        if (esBolsa && emp.info) {
-            // meta_horas_semanales en bolsa flexible es la meta mensual total
-            let metaOriginal = emp.info.meta_mensual_minutos
-                   || Math.round((emp.info.meta_horas_semanales || 0) * 60);
-
-            // --- Lógica Art 25 bis: Reducción proporcional por ausencias justificadas ---
-            let diasProgramados = 0;
-            let diasJustificados = 0;
-            
-            dates.forEach(d => {
-                const dt = new Date(d+'T00:00:00');
-                const isFer = feriadosArray.includes(d);
-                const diCheck = emp.dias[d] || {};
-                
-                // Convertir JS day (0=Dom) a DB day (0=Lun, 6=Dom)
-                const dayDB = (dt.getDay() + 6) % 7; 
-                const isStructurallyLibre = (emp.info.turno_dias && emp.info.turno_dias[dayDB] && emp.info.turno_dias[dayDB].es_libre === 1);
-                
-                // No es programado si es Feriado, Libre estructural o Libre marcado manual
-                const isDescanso = isFer || isStructurallyLibre || (diCheck.estado === 'LIBRE');
-                
-                if (!isDescanso) {
-                    diasProgramados++;
-                    // Identificar si el estado es una justificación que rebaja la meta (Art 25 bis / DT: Vacaciones, Licencias Médicas, Permisos pagados)
-                    const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION'];
-                    const isJustificado = diCheck.estado && (
-                        diCheck.estado === 'JORNADA_ESPECIAL' ||
-                        estadosJustificados.some(ej => diCheck.estado.toUpperCase().includes(ej)) ||
-                        (diCheck.nomenclatura && diCheck.nomenclatura.trim() !== '')
-                    );
-                    
-                    if (isJustificado) {
-                        diasJustificados++;
-                        diCheck._esDiaJustificadoBolsa = true;
-                    }
-                }
-            });
-
-            if (diasProgramados > 0 && diasJustificados > 0) {
-                const valorTurnoMin = metaOriginal / diasProgramados;
-                metaMin = Math.round(metaOriginal - (valorTurnoMin * diasJustificados));
-                emp._metaOriginalBolsa = metaOriginal;
-                emp._diasJustificadosBolsa = diasJustificados;
-                emp._valorTurnoMinBolsa = valorTurnoMin;
-            } else {
-                metaMin = metaOriginal;
-            }
-            
-            if (emp.info.meta_ajustada_minutos_descuento && diasJustificados === 0) {
-                // Fallback por si backend manda descuento duro
-                metaMin = Math.max(0, metaMin - emp.info.meta_ajustada_minutos_descuento);
-            }
-        }
-
-        let acumSemanal = 0;
-        let startDayJS = 1; // Default Lunes
-        if (emp.info && emp.info.primer_dia_semana_turno !== undefined) {
-            // Convertir DB (0=Lunes, 6=Domingo) a JS (0=Domingo, 1=Lunes)
-            startDayJS = (emp.info.primer_dia_semana_turno + 1) % 7;
-        }
-
-        dates.forEach(d => {
-            const dt = new Date(d+'T00:00:00');
-            if (dt.getDay() === startDayJS) acumSemanal = 0; // Reset semanal dinámico
-
-            const di = emp.dias[d];
-            if (!di) return;
-
-            // Tag para que _analiticaCellContent sepa el tipo sin depender de di.tipo_programacion
-            if (esBolsa) { di._esBolsa = true; di._metaMinBolsa = metaMin; }
-
-            const trab = Math.round((di.horas_trabajadas||0)*60);
-            const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA';
-            
-            if (!esBolsa && !isEsp) {
-                acumSemanal += trab;
-            }
-            if (!esBolsa) di._acumuladoSemanalSnap = acumSemanal;
-            if (!isEsp && !esBolsa) {
-                // En Bolsa Flexible no existen atrasos, salidas adelantadas ni deuda diaria.
-                // Es un modelo de acumulación pura donde solo importa el balance contra la meta mensual.
-
-                // ✅ Si el día tiene deuda condonada, NO acumular en las columnas de deuda
-                const tieneCondonacion = (di.deuda_condonada || 0) > 0;
-                const netDeuda = tieneCondonacion ? 0 : (di.minutos_deuda || 0);
-
-                // Distribución de la deuda neta diaria entre las categorías que la generaron
-                const rawCol = di.minutos_exceso_colacion || 0;
-                const rawPer = di.minutos_permiso_personal_deuda || 0;
-                const rawAtr = tieneCondonacion ? 0 : (di.minutos_atraso || 0);
-                const rawSad = tieneCondonacion ? 0 : (di.minutos_salida_adelantada || 0);
-
-                const rawTotal = rawCol + rawPer + rawAtr + rawSad;
-
-                let dayCol = 0;
-                let dayPer = 0;
-                let dayAtr = 0;
-                let daySad = 0;
-
-                if (netDeuda > 0 && rawTotal > 0) {
-                    if (netDeuda >= rawTotal) {
-                        dayCol = rawCol;
-                        dayPer = rawPer;
-                        dayAtr = rawAtr;
-                        daySad = rawSad;
-                    } else {
-                        // Distribuir proporcionalmente si parte de la deuda fue compensada
-                        const factor = netDeuda / rawTotal;
-                        dayCol = rawCol * factor;
-                        dayPer = rawPer * factor;
-                        dayAtr = rawAtr * factor;
-                        daySad = rawSad * factor;
-                    }
-                }
-
-                d_tot   += netDeuda;
-                min_col += dayCol;
-                min_per += dayPer;
-                min_atr += dayAtr;
-                min_sad += daySad;
-
-                if ((di.minutos_atraso||0) > 0 && !tieneCondonacion)  cnt_atr++;
-                if ((di.minutos_salida_adelantada||0) > 0 && !tieneCondonacion) cnt_sad++;
-                if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
-            }
-            if (di.estado === 'INASISTENCIA') cnt_inas++;
-            if (isEsp)                         cnt_esp++;
-            if (di.hora_entrada_real && !isEsp && !['LIBRE','FERIADO','INASISTENCIA'].includes(di.estado)) cnt_efectivos++;
-
-            // HE bruto (misma lógica que vista actual)
-            if (!isEsp) {
-                if (esBolsa) {
-                    const snapAntes = acumBolsa; // guardar antes de sumar
-                    acumBolsa += trab;
-                    di._acumuladoBolsaSnapPrev = snapAntes; // acumulado ANTES de este día
-                    di._acumuladoBolsaSnap = acumBolsa;    // acumulado DESPUÉS de este día
-                    di._metaMinBolsa = metaMin;             // meta del ciclo (para la vista)
-                    if (excedido)                                    he_bruto += trab;
-                    else if (acumBolsa > metaMin && trab > 0) { he_bruto += acumBolsa - metaMin; excedido = true; }
-                } else {
-                    he_bruto += Math.max(di.minutos_extra_bruto || 0, di.minutos_extra_autorizados || 0);
-                }
-            } else if (esBolsa) {
-                // Día especial (EXTRA, JORNADA_ESPECIAL, etc.): mantener snap sin sumar
-                di._acumuladoBolsaSnapPrev = acumBolsa;
-                di._acumuladoBolsaSnap = acumBolsa;
-                di._metaMinBolsa = metaMin;
-            }
-
-
-            if (!isEsp) {
-                // Turnos normales: HE se toman directamente del backend
-                if (di.estado_he === 'APROBADO') {
-                    const apr = di.minutos_extra_autorizados || 0;
-                    he_apr += apr;
-                } else if (di.estado_he === 'RECHAZADO') {
-                    he_rec += (di.minutos_extra_bruto || 0);
-                } else if ((di.minutos_extra_bruto || 0) > 0) {
-                    he_pend += (di.minutos_extra_bruto || 0);
-                }
-            }
-            // FLEXIBLE_BOLSA: he_apr/he_rec/he_pend NO usan minutos_extra_bruto del backend
-            // porque ese campo no respeta la lógica del ciclo acumulado.
-            // he_bruto para bolsa se calcula abajo con la lógica del acumulado.
-            he_compensado += (di.minutos_compensados_he || 0);
-        });
-
-
-        // Limpiar errores de coma flotante redondeando a 5 decimales (suficiente precisión)
-        he_bruto = Math.round(he_bruto * 10000) / 10000;
-        he_apr = Math.round(he_apr * 10000) / 10000;
-        he_rec = Math.round(he_rec * 10000) / 10000;
-        he_pend = Math.round(he_pend * 10000) / 10000;
-
-        const saldo = he_apr - d_tot - he_compensado;
-        const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null; // null = no bolsa
-        return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
-                 cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
-                 esBolsa, metaMin, acumBolsa, saldoMeta };
-    });
+    const rows = employees.map(emp => window.calcularStatsEmpleado(emp, dates, feriadosArray));
 
     // ── 4. Aplicar filtros UI ────────────────────────────────────────────────
     const s = window.vistaAnaliticaState;
@@ -4629,123 +5007,7 @@ function renderVistaAnalitica(respData, container) {
 
     // ── 7. Filas de empleados ────────────────────────────────────────────────
     const bodyRows = visibleRows.map(r => {
-        const { emp } = r;
-        const sClass = r.saldo > 0 ? 'text-success' : r.saldo < 0 ? 'text-danger' : 'text-muted';
-        const sPrefix = r.saldo > 0 ? '+' : r.saldo < 0 ? '-' : '';
-        const nameClass = emp.activo ? '' : 'text-danger opacity-75';
-
-        const empEval = bonosEval[emp.id] || {};
-        let bonoCells = '';
-        if (hasBonos) {
-            const wStyle = getStickyWidthStyle('bonos');
-            if (showBonos) {
-                bonoCells = bonosNombres.map((bName, idx) => {
-                    const bRes = empEval[bName];
-                    const borderStyle = idx === 0 ? 'border-left:3px solid #10b981' : 'border-left:1px solid #e2e8f0';
-                    const cellLeft = getStickyLeft('bonos', idx);
-                    const inlineStyle = `position:sticky; z-index:40; ${borderStyle}; left:${cellLeft}px; ${wStyle}`;
-                    if (!bRes || !bRes.aplica) return `<td class="text-center align-middle sticky-premium-col" style="background:#f8fafc;font-size:0.75rem;${inlineStyle}"></td>`;
-                    if (bRes.califica) {
-                        return `<td class="text-center align-middle text-success fw-bold sticky-premium-col" style="background:#f8fafc;font-size:1.1rem;${inlineStyle}" title="${bRes.motivo||''}"><i class="bi bi-check-circle-fill"></i></td>`;
-                    } else {
-                        return `<td class="text-center align-middle text-danger opacity-75 sticky-premium-col" style="background:#f8fafc;font-size:1.1rem;${inlineStyle}" title="${bRes.motivo||''}"><i class="bi bi-dash-circle-fill"></i></td>`;
-                    }
-                }).join('');
-            } else {
-                let cntAplica = 0;
-                let cntCalifica = 0;
-                bonosNombres.forEach(bName => {
-                    const bRes = empEval[bName];
-                    if (bRes && bRes.aplica) {
-                        cntAplica++;
-                        if (bRes.califica) cntCalifica++;
-                    }
-                });
-                const cellLeft = getStickyLeft('bonos');
-                const inlineStyle = `position:sticky; z-index:40; left:${cellLeft}px; ${wStyle}`;
-                if (cntAplica > 0) {
-                    const color = cntCalifica === cntAplica ? 'text-success' : (cntCalifica > 0 ? 'text-warning' : 'text-danger');
-                    bonoCells = `<td class="text-center align-middle fw-bold ${color} sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981;${inlineStyle}" title="${cntCalifica} cumplidos de ${cntAplica} aplicables">${cntCalifica}/${cntAplica}</td>`;
-                } else {
-                    bonoCells = `<td class="text-center align-middle text-muted sticky-premium-col" style="background:#f8fafc;font-size:0.78rem;border-left:3px solid #10b981;${inlineStyle}"></td>`;
-                }
-            }
-        }
-
-        const dayCells = dates.map(d => {
-            const di = emp.dias[d];
-            const dt = new Date(d+'T00:00:00');
-            const feriadoDesc = getFeriadoDesc(d);
-            const isFer = !!feriadoDesc;
-            const isWE  = (dt.getDay()===0||dt.getDay()===6);
-            const bg = isFer ? 'background:#fff9c4;' : isWE ? 'background:#f8f9fa;' : '';
-            const empNameEsc = (emp.nombre_completo||'').replace(/'/g,"\\'");
-            const hEnt = di && di.hora_entrada_real ? `'${di.hora_entrada_real}'` : 'null';
-            const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
-            const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode, isFer);
-            const tooltipData = _buildRichTooltipData(di, d, dt, feriadoDesc, isWE, emp);
-            return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
-                        onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
-                        ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
-                        data-grid-tooltip data-bs-html="true"
-                        data-bs-content="${tooltipData}">
-                        ${cellContent}
-                    </td>`;
-        }).join('');
-
-        const hasHE = r.he_pend > 0;
-        const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
-        return `<tr>
-            <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
-                ondblclick="openBatchApprovalModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
-                title="${hasHE ? '⚡ Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
-                <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
-                <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
-            </td>
-            ${bonoCells}
-            ${showIncidencias ? `
-            <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;left:${getStickyLeft('incidencias', 0)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_per||''}</td>
-            <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 1)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_atr||''}</td>
-            <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 2)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_sad||''}</td>
-            <td class="text-center align-middle ${r.cnt_inas>0?'text-danger fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 3)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_inas||''}</td>
-            <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 4)}px;${getStickyWidthStyle('incidencias')}">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
-            <td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeft('incidencias', 5)}px;${getStickyWidthStyle('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b;left:${getStickyLeft('incidencias')}px;${getStickyWidthStyle('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
-            ${showHE ? `
-            <td class="text-center align-middle tabular-nums text-warning fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeft('he', 0)}px;${getStickyWidthStyle('he')}">${r.he_pend>0?_fmtMin(r.he_pend):''}</td>
-            <td class="text-center align-middle tabular-nums text-success fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 1)}px;${getStickyWidthStyle('he')}">${r.he_apr>0?_fmtMin(r.he_apr):''}</td>
-            <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
-            <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('he', 3)}px;${getStickyWidthStyle('he')}">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeft('he')}px;${getStickyWidthStyle('he')}">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
-            ${showDeudas ? `
-            <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}">${r.min_col>0?_fmtMin(r.min_col):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}">${r.min_per>0?_fmtMin(r.min_per):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
-            <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
-            <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px;${getStickyWidthStyle('deudas')}">${r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
-            <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#f9fafb;font-size:0.8rem;left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
-            ${(hayBolsa) ? (
-                showSaldoMeta
-                    ? (r.esBolsa
-                        ? (() => {
-                            const sm = r.saldoMeta;
-                            const smColor = sm >= 0 ? '#10b981' : '#ef4444';
-                            const smBg    = sm >= 0 ? '#f0fdf4' : '#fff5f5';
-                            const smSign  = sm > 0 ? '+' : sm < 0 ? '-' : '';
-                            const metaTooltip = r.emp._diasJustificadosBolsa > 0 
-                                ? `Meta original: ${_fmtMin(r.emp._metaOriginalBolsa)} | Descuento por ${r.emp._diasJustificadosBolsa} día(s) justificado(s)`
-                                : `Meta mensual del ciclo`;
-
-                            return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
-                                    <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
-                                    <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>`;
-                        })()
-                        : `<td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}"></td>
-                           <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}"></td>
-                           <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}"></td>`
-                      )
-                    : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>`
-            ) : ''}
-            ${dayCells}
-        </tr>`;
+        return window.renderEmployeeRowHtml(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols);
     }).join('');
 
     // Fila totales
@@ -4903,7 +5165,7 @@ function renderVistaAnalitica(respData, container) {
             ${dayHeaders}
         </tr>
     </thead>
-    <tbody>${bodyRows}</tbody>
+    <tbody id="matrix-tbody">${bodyRows}</tbody>
     <tfoot>${totalsRow}</tfoot>
     </table>
     </div>

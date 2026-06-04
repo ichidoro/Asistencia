@@ -1018,6 +1018,7 @@ async def get_matriz_asistencia(
     area: Optional[str] = Query(None),
     turno_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
+    empleado_id: Optional[int] = Query(None),
     service: AsistenciaService = Depends(get_asistencia_service),
     bono_service: BonoService = Depends(get_bono_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
@@ -1041,7 +1042,7 @@ async def get_matriz_asistencia(
         last_day = _cal.monthrange(hoy.year, hoy.month)[1]
         fecha_fin = hoy.replace(day=last_day).strftime("%Y-%m-%d")
 
-    data = await service.get_matriz_periodo(fecha_inicio, fecha_fin, area_filter, turno_id, search, areas_permitidas=areas_permitidas)
+    data = await service.get_matriz_periodo(fecha_inicio, fecha_fin, area_filter, turno_id, search, areas_permitidas=areas_permitidas, empleado_id=empleado_id)
     
     # Siempre incluir la lista maestra de todos los bonos activos (columnas estáticas)
     todos_bonos = await bono_service.config_repo.get_all_bonos()

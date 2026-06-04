@@ -3392,6 +3392,7 @@ class AsistenciaService:
         turno_id: Optional[int] = None,
         search: Optional[str] = None,
         areas_permitidas: Optional[List] = None,
+        empleado_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Vista Matriz por rango de fechas (endpoint /matriz/).
@@ -3407,6 +3408,7 @@ class AsistenciaService:
             turno_id=turno_id,
             search=search,
             areas_permitidas=areas_permitidas,
+            empleado_id=empleado_id,
             fecha_inicio_override=fecha_inicio,
             fecha_fin_override=fecha_fin,
         )
