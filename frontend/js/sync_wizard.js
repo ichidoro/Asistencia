@@ -1338,13 +1338,32 @@ async function fetchAndRenderWizardStep3() {
 
 function guardarSeleccionesPaso3() {
     const areasList = getConsolidatedAreas();
+    let valid = true;
+    let areasSinTurno = [];
+
     areasList.forEach((area, idx) => {
         const radioChecked = document.querySelector(
             `input[name="wiz-turno-area-${idx}"]:checked`
         );
-        window._wizardState.resoluciones.turnos[area] =
-            radioChecked ? parseInt(radioChecked.value) : null;
+        if (radioChecked) {
+            window._wizardState.resoluciones.turnos[area] = parseInt(radioChecked.value);
+        } else {
+            window._wizardState.resoluciones.turnos[area] = null;
+            areasSinTurno.push(area);
+            valid = false;
+        }
     });
+
+    if (!valid) {
+        Swal.fire({
+            title: 'Turnos requeridos',
+            html: `Debes configurar y seleccionar un turno de trabajo para cada área antes de continuar.<br><br><strong>Áreas pendientes:</strong><br>${areasSinTurno.map(a => `• ${a}`).join('<br>')}`,
+            icon: 'warning',
+            confirmButtonText: 'Entendido'
+        });
+        return false;
+    }
+
     return true;
 }
 
