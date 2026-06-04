@@ -1781,14 +1781,18 @@ window.cargarCatalogoCargos = async function() {
             return;
         }
 
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
+
         container.innerHTML = cargos.map(cargo => {
             const aliasHtml = cargo.alias.length > 0 
                 ? cargo.alias.map(al => `
                     <div class="d-flex justify-content-between align-items-center bg-white p-2 mb-2 rounded border border-light shadow-sm" id="cargo-alias-row-${al.id}">
                         <div class="text-danger fw-bold small"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> ${al.alias}</div>
+                        ${canEdit ? `
                         <button class="btn btn-sm btn-outline-danger border-0" onclick="confirmDeleteCargoAlias(${al.id}, '${al.alias}')" title="Desvincular Error">
                             <i class="bi bi-trash"></i>
                         </button>
+                        ` : ''}
                     </div>
                   `).join('')
                 : `<div class="text-muted small text-center font-monospace py-2 bg-light rounded"><i class="bi bi-check-circle text-success me-1"></i> Cargo Limpio. Sin errores redirigidos.</div>`;
@@ -1803,6 +1807,10 @@ window.cargarCatalogoCargos = async function() {
                             <span class="badge ${badgeCls} rounded-pill">${cargo.alias.length} errores</span>
                         </div>
                         <div class="card-body p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" role="switch" id="cargo-excluir-${cargo.id}" ${cargo.excluido_asistencia ? 'checked' : ''} ${canEdit ? '' : 'disabled'} onchange="toggleCargoExclusion(${cargo.id}, this.checked)">
+                                <label class="form-check-label small fw-bold" for="cargo-excluir-${cargo.id}">Excluido de asistencia (Art. 22)</label>
+                            </div>
                             ${aliasHtml}
                         </div>
                     </div>
@@ -1813,6 +1821,38 @@ window.cargarCatalogoCargos = async function() {
     } catch (error) {
         console.error(error);
         container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
+    }
+};
+
+window.toggleCargoExclusion = async function(cargoId, value) {
+    try {
+        const response = await fetch(`/api/configuracion/cargos/${cargoId}/excluir/?excluir=${value}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Error al actualizar exclusión del cargo');
+        }
+        if (typeof showToast === 'function') {
+            showToast("Configuración del cargo y empleados actualizada.", "success");
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire('Guardado', 'Configuración de cargo actualizada.', 'success');
+        }
+        cargarCatalogoCargos();
+    } catch (error) {
+        console.error(error);
+        if (typeof showToast === 'function') {
+            showToast(error.message, "error");
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', error.message, 'error');
+        } else {
+            alert(error.message);
+        }
+        cargarCatalogoCargos();
     }
 };
 

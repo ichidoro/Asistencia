@@ -2046,12 +2046,18 @@
                                             <label for="input-rut">RUT *</label>
                                             <input type="text" id="input-rut" required placeholder="12345678-9">
                                         </div>
-                                        <div class="form-group">
+                                        <div class="form-group" style="width: 150px;">
                                             <label for="input-activo">Estado</label>
                                             <select id="input-activo">
                                                 <option value="true">Activo</option>
                                                 <option value="false">Inactivo</option>
                                             </select>
+                                        </div>
+                                        <div class="form-group d-flex align-items-center" style="margin-left: 20px; padding-top: 25px;">
+                                            <div class="custom-control custom-switch">
+                                                <input type="checkbox" class="custom-control-input" id="input-excluido-asistencia">
+                                                <label class="custom-control-label font-weight-bold text-danger" for="input-excluido-asistencia">Excluido de Control de Asistencia (Art. 22)</label>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -2076,15 +2082,15 @@
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label for="input-cargo">Cargo</label>
-                                            <input type="text" id="input-cargo">
+                                            <select id="input-cargo" class="form-control"></select>
                                         </div>
                                         <div class="form-group">
-                                            <label for="input-area">Área BioAlba (Actual) <i class="bi bi-info-circle text-muted ms-1" title="Dato sincronizado desde BioAlba" data-bs-toggle="tooltip"></i></label>
-                                            <input type="text" id="input-area" readonly class="form-control" style="background-color: #f8f9fa; cursor: not-allowed; border-color: #e9ecef;">
+                                            <label for="input-area">Área BioAlba (Actual) <i class="bi bi-info-circle text-muted ms-1" id="tooltip-area-info" title="Dato sincronizado desde BioAlba" data-bs-toggle="tooltip"></i></label>
+                                            <select id="input-area" class="form-control"></select>
                                         </div>
                                         <div class="form-group" style="width: 150px;">
-                                            <label for="input-genero">Género <i class="bi bi-info-circle text-muted ms-1" title="Dato sincronizado desde BioAlba" data-bs-toggle="tooltip"></i></label>
-                                            <input type="text" id="input-genero" readonly class="form-control" style="background-color: #f8f9fa; cursor: not-allowed; border-color: #e9ecef;">
+                                            <label for="input-genero">Género <i class="bi bi-info-circle text-muted ms-1" id="tooltip-genero-info" title="Dato sincronizado desde BioAlba" data-bs-toggle="tooltip"></i></label>
+                                            <select id="input-genero" class="form-control"></select>
                                         </div>
                                     </div>
 

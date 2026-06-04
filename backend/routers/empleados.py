@@ -196,6 +196,12 @@ async def crear_empleado(
     service: EmpleadoService = Depends(get_empleado_service),
     current_user: SecurityContext = Depends(RequirePermission("empleados.crear"))
 ):
+    # RLS: Resolver área a partir de ID si es necesario para validación de permisos
+    if empleado.area_id and not empleado.area:
+        res = await service.repository.db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (empleado.area_id,))
+        if res:
+            empleado.area = res["nombre"]
+
     # RLS: Validar que el área elegida sea permitida para el usuario
     if not current_user.alcance_global and empleado.area not in (current_user.areas or []):
          raise HTTPException(status_code=403, detail=f"No tiene permisos para crear empleados en el área {empleado.area}")
@@ -573,6 +579,12 @@ async def actualizar_empleado(
     emp_actual = await service.get_empleado(empleado_id)
     if not current_user.alcance_global and emp_actual.area not in (current_user.areas or []):
          raise HTTPException(status_code=403, detail="No tiene permisos para editar este empleado")
+
+    # RLS: Resolver área a partir de ID si es necesario para validación de permisos
+    if empleado_data.area_id and not empleado_data.area:
+        res = await service.repository.db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (empleado_data.area_id,))
+        if res:
+            empleado_data.area = res["nombre"]
 
     # RLS: Si está cambiando de área, la nueva área también debe ser permitida
     if empleado_data.area and not current_user.alcance_global:

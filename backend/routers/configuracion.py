@@ -734,7 +734,7 @@ class CargoCreateRequest(BaseModel):
 @router.get("/areas/", response_model=List[Dict[str, Any]])
 async def get_catalogo_areas(
     db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "empleados.ver", "empleados.crear", "empleados.editar"]))
 ):
     """Obtener el catálogo de áreas principales y sus alias (errores redirigidos)"""
     from backend.repositories.area import AreaRepository
@@ -805,7 +805,7 @@ async def delete_area_alias(
 @router.get("/cargos/", response_model=List[Dict[str, Any]])
 async def get_catalogo_cargos(
     db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "empleados.ver", "empleados.crear", "empleados.editar"]))
 ):
     """Obtener el catálogo de cargos principales y sus alias"""
     from backend.repositories.cargo import CargoRepository
@@ -869,6 +869,54 @@ async def delete_cargo_alias(
         raise HTTPException(status_code=404, detail="Alias no encontrado")
     return
 
+@router.put("/cargos/{cargo_id}/excluir/", response_model=Dict[str, Any])
+async def toggle_cargo_exclusion(
+    cargo_id: int,
+    excluir: bool = Query(..., description="True para excluir, False para requerir asistencia"),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Habilitar/deshabilitar la exclusión de asistencia por cargo y propagarla a los empleados con ese cargo"""
+    # Verificar si el cargo existe
+    cargo = await db.fetch_one("SELECT * FROM cargos WHERE id = ?", (cargo_id,))
+    if not cargo:
+        raise HTTPException(status_code=404, detail="Cargo no encontrado")
+        
+    val = 1 if excluir else 0
+    
+    # Actualizar cargo
+    await db.execute("UPDATE cargos SET excluido_asistencia = ? WHERE id = ?", (val, cargo_id))
+    
+    # Propagar únicamente a empleados manuales (los sincronizados nunca se excluyen por Art. 22)
+    await db.execute("UPDATE empleados SET excluido_asistencia = ? WHERE cargo_id = ? AND es_manual = 1", (val, cargo_id))
+    
+    # Limpieza para los empleados afectados (solo manuales)
+    periodo_activo = await db.fetch_one("SELECT fecha_inicio, fecha_fin FROM periodos_rrhh WHERE activo = 1 LIMIT 1")
+    if periodo_activo:
+        f_ini = periodo_activo["fecha_inicio"]
+        f_fin = periodo_activo["fecha_fin"]
+        emp_rows = await db.fetch_all("SELECT id FROM empleados WHERE cargo_id = ? AND activo = 1 AND es_manual = 1", (cargo_id,))
+        for r in emp_rows:
+            emp_id = r["id"]
+            if excluir:
+                # Si se excluye, borrar registros residuales del periodo activo
+                await db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (emp_id, f_ini, f_fin))
+                await db.execute("DELETE FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (emp_id, f_ini, f_fin))
+                
+    # Registrar auditoría
+    await db.execute(
+        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+        (
+            current_user.user_id,
+            current_user.username,
+            "TOGGLE_CARGO_EXCLUSION",
+            "Configuracion",
+            f"Modificado excluido_asistencia a {val} para cargo '{cargo['nombre']}' (ID: {cargo_id}) y sus empleados."
+        )
+    )
+    
+    return {"id": cargo_id, "excluido_asistencia": excluir, "message": "Exclusión de cargo y empleados actualizada exitosamente"}
+
 # ============================================
 # GÉNEROS (CATÁLOGO)
 # ============================================
@@ -876,7 +924,7 @@ async def delete_cargo_alias(
 @router.get("/generos/", response_model=List[Dict[str, Any]])
 async def get_catalogo_generos(
     db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.ver", "empleados.ver", "empleados.crear", "empleados.editar"]))
 ):
     """Obtener el catálogo de géneros"""
     query = "SELECT id, nombre FROM cat_generos ORDER BY nombre ASC"

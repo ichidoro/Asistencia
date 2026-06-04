@@ -1518,6 +1518,12 @@ class SyncService:
             empleado_existente = None
         
         if empleado_existente:
+            # Prevent overwriting manual employees from BioAlba synchronization
+            if getattr(empleado_existente, "es_manual", False):
+                logger.info(f"🛡️ Sync: Saltando actualización para empleado manual '{empleado_existente.nombre_completo}' (RUT: {rut}) para evitar sobrescritura.")
+                self.stats['empleados_sin_cambios'] += 1
+                return
+                
             # Recuperar Area ID y Cargo ID
             from backend.repositories.area import AreaRepository
             from backend.repositories.cargo import CargoRepository

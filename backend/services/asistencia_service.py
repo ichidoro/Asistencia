@@ -141,11 +141,11 @@ class AsistenciaService:
             # GUARD activo=1: si un empleado se desactiva durante el sync (raro pero posible),
             # no debe ser procesado aunque su ID ya esté en el set del batch.
             ph = ','.join('?' * len(empleado_ids))
-            q_emp = f"SELECT * FROM empleados WHERE id IN ({ph}) AND activo = 1"
+            q_emp = f"SELECT * FROM empleados WHERE id IN ({ph}) AND activo = 1 AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
             params_emp = list(empleado_ids)
         else:
             # Modo completo: todos los activos (comportamiento original)
-            q_emp = "SELECT * FROM empleados WHERE activo = 1 OR (fecha_salida IS NOT NULL AND fecha_salida >= ?)"
+            q_emp = "SELECT * FROM empleados WHERE (activo = 1 OR (fecha_salida IS NOT NULL AND fecha_salida >= ?)) AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
             params_emp = [fecha]
             if area:
                 q_emp += " AND area = ?"
@@ -566,6 +566,13 @@ class AsistenciaService:
         emp_row = await db.fetch_one("SELECT * FROM empleados WHERE id = ?", (empleado_id,))
         if not emp_row:
             return {'error': 'Empleado no encontrado'}
+
+        # Article 22 Compliance - Exclusión en reprocesamientos
+        if emp_row.get("excluido_asistencia"):
+            logger.info(f"📊 Omitiendo reprocesamiento para empleado {empleado_id} (Art. 22). Limpiando registros residuales...")
+            await db.execute("DELETE FROM asistencias WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
+            await db.execute("DELETE FROM horas_extras WHERE empleado_id = ? AND fecha BETWEEN ? AND ?", (empleado_id, fecha_inicio, fecha_fin))
+            return {"status": "omitted", "message": "Empleado excluido por Art. 22"}
 
         # Pre-cargar periodos cerrados para el empleado
         q_areas = """
@@ -1116,11 +1123,11 @@ class AsistenciaService:
                 SELECT e.id FROM empleados e
                 LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
                 LEFT JOIN areas a ON ha.area_id = a.id
-                WHERE e.activo = 1 AND a.nombre = ?
+                WHERE e.activo = 1 AND a.nombre = ? AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
             """
             params = [area]
         else:
-            q = "SELECT id FROM empleados WHERE activo = 1"
+            q = "SELECT id FROM empleados WHERE activo = 1 AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
             params = []
         emp_rows = await db.fetch_all(q, tuple(params))
         emp_ids = [e['id'] for e in emp_rows]
@@ -3901,7 +3908,7 @@ class AsistenciaService:
             logger.warning(f"⚠️ No se pudo actualizar el estado/vigencia en periodos_rrhh: {e_close_rrhh}")
         
         # 2. Recalcular las bolsas de todos los empleados afectados
-        q_emp = "SELECT id FROM empleados WHERE activo = 1"
+        q_emp = "SELECT id FROM empleados WHERE activo = 1 AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
         params_emp = []
         if area:
             q_emp += " AND area = ?"
@@ -3937,7 +3944,7 @@ class AsistenciaService:
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas ar ON ha.area_id = ar.id
             LEFT JOIN asistencias a ON e.id = a.empleado_id AND a.fecha BETWEEN ? AND ?
-            WHERE e.activo = 1
+            WHERE e.activo = 1 AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
         """
         params = [fecha_inicio, fecha_fin]
         if area:
@@ -3964,7 +3971,7 @@ class AsistenciaService:
             JOIN empleados e2 ON h.empleado_id = e2.id
             LEFT JOIN historial_areas ha2 ON e2.id = ha2.empleado_id AND ha2.es_actual = 1 AND ha2.validado = 1
             LEFT JOIN areas ar2 ON ha2.area_id = ar2.id
-            WHERE h.fecha BETWEEN ? AND ? AND e2.activo = 1 AND h.estado = 'APROBADO'
+            WHERE h.fecha BETWEEN ? AND ? AND e2.activo = 1 AND (e2.excluido_asistencia = 0 OR e2.excluido_asistencia IS NULL) AND h.estado = 'APROBADO'
         """
         if area:
             q_he += " AND ar2.nombre = ?"
@@ -3978,7 +3985,7 @@ class AsistenciaService:
             JOIN empleados e3 ON c.empleado_id = e3.id
             LEFT JOIN historial_areas ha3 ON e3.id = ha3.empleado_id AND ha3.es_actual = 1 AND ha3.validado = 1
             LEFT JOIN areas ar3 ON ha3.area_id = ar3.id
-            WHERE c.fecha_inasistencia BETWEEN ? AND ? AND e3.activo = 1
+            WHERE c.fecha_inasistencia BETWEEN ? AND ? AND e3.activo = 1 AND (e3.excluido_asistencia = 0 OR e3.excluido_asistencia IS NULL)
         """
         if area:
             q_comp += " AND ar3.nombre = ?"
@@ -3992,7 +3999,7 @@ class AsistenciaService:
             JOIN empleados e ON a.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ? AND e.activo = 1
+            WHERE a.fecha BETWEEN ? AND ? AND e.activo = 1 AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
         """
         if area:
             q_asis += " AND ar.nombre = ?"

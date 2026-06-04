@@ -73,7 +73,7 @@ class CargoRepository:
         Obtiene todos los cargos y sus alias asociados construyendo una estructura jerárquica.
         """
         query = """
-            SELECT c.id as cargo_id, c.nombre as cargo_nombre, 
+            SELECT c.id as cargo_id, c.nombre as cargo_nombre, c.excluido_asistencia,
                    al.id as alias_id, al.alias as alias_nombre
             FROM cargos c
             LEFT JOIN cargos_alias al ON c.id = al.cargo_id
@@ -89,6 +89,7 @@ class CargoRepository:
                 cargos_dict[cargo_id] = {
                     "id": cargo_id,
                     "nombre": row["cargo_nombre"],
+                    "excluido_asistencia": bool(row.get("excluido_asistencia", 0)),
                     "alias": []
                 }
             

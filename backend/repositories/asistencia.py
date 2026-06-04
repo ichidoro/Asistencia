@@ -331,6 +331,7 @@ class AsistenciaRepository:
             WHERE a.fecha BETWEEN ? AND ?
               AND a.fecha >= COALESCE(e.fecha_ingreso, '1900-01-01')
               AND a.fecha <= COALESCE(e.fecha_salida, '2099-12-31')
+              AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
         """
         params = [fecha_inicio, fecha_fin]
         

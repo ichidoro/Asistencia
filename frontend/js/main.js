@@ -297,6 +297,23 @@ function setupEventListeners() {
       });
   }
 
+  // Lógica para marcar por defecto Artículo 22 según el Cargo
+  const inputCargo = document.getElementById('input-cargo');
+  if (inputCargo) {
+      inputCargo.addEventListener('change', () => {
+          const selectedOption = inputCargo.options[inputCargo.selectedIndex];
+          if (selectedOption) {
+              const exclDefault = selectedOption.getAttribute('data-excluido-default');
+              if (exclDefault !== null) {
+                  const switchArt22 = document.getElementById('input-excluido-asistencia');
+                  if (switchArt22) {
+                      switchArt22.checked = (exclDefault === '1');
+                  }
+              }
+          }
+      });
+  }
+
   // Search and Filter
   let searchTimeout;
   const handleSearchAndFilter = () => {
@@ -1141,6 +1158,59 @@ window.nextPage = function() {
   loadEmpleados();
 };
 
+// Catalog variables for dynamic dropdowns
+let catalogsLoaded = false;
+let catalogAreas = [];
+let catalogCargos = [];
+let catalogGeneros = [];
+
+async function loadCatalogsForModal() {
+  if (catalogsLoaded) return;
+  try {
+    const [resAreas, resCargos, resGeneros] = await Promise.all([
+      fetch(`${API_BASE_URL}/configuracion/areas/`),
+      fetch(`${API_BASE_URL}/configuracion/cargos/`),
+      fetch(`${API_BASE_URL}/configuracion/generos/`)
+    ]);
+    
+    if (resAreas.ok) catalogAreas = await resAreas.json();
+    if (resCargos.ok) catalogCargos = await resCargos.json();
+    if (resGeneros.ok) catalogGeneros = await resGeneros.json();
+    
+    catalogsLoaded = true;
+  } catch (error) {
+    console.error("Error loading catalogs for employee modal:", error);
+  }
+}
+
+function setupDynamicSelects() {
+  const selectArea = document.getElementById('input-area');
+  const selectCargo = document.getElementById('input-cargo');
+  const selectGenero = document.getElementById('input-genero');
+  
+  if (selectArea) {
+    selectArea.innerHTML = '<option value="">-- Seleccionar Área --</option>';
+    catalogAreas.forEach(area => {
+      selectArea.innerHTML += `<option value="${area.id}">${area.nombre}</option>`;
+    });
+  }
+  
+  if (selectCargo) {
+    selectCargo.innerHTML = '<option value="">-- Seleccionar Cargo --</option>';
+    catalogCargos.forEach(cargo => {
+      const defaultExcl = cargo.excluido_asistencia ? '1' : '0';
+      selectCargo.innerHTML += `<option value="${cargo.id}" data-excluido-default="${defaultExcl}">${cargo.nombre}</option>`;
+    });
+  }
+  
+  if (selectGenero) {
+    selectGenero.innerHTML = '<option value="">-- Seleccionar Género --</option>';
+    catalogGeneros.forEach(gen => {
+      selectGenero.innerHTML += `<option value="${gen.id}">${gen.nombre}</option>`;
+    });
+  }
+}
+
 // Modal Functions
 async function openModal(empleadoId = null) {
   currentEmpleadoId = empleadoId;
@@ -1154,14 +1224,30 @@ async function openModal(empleadoId = null) {
     firstTab.show();
   }
 
-  // Populate dynamic select
-  await populateGenerosSelect();
+  // Load catalogs and populate selects
+  await loadCatalogsForModal();
+  setupDynamicSelects();
+
+  // Reset fields to editable by default (for new manual employee)
+  document.getElementById('input-rut').disabled = false;
+  document.getElementById('input-nombre').disabled = false;
+  document.getElementById('input-apellido-paterno').disabled = false;
+  document.getElementById('input-apellido-materno').disabled = false;
+  document.getElementById('input-area').disabled = false;
+  document.getElementById('input-cargo').disabled = false;
+  document.getElementById('input-genero').disabled = false;
+  
+  // Hide tooltips initially
+  const tooltipArea = document.getElementById('tooltip-area-info');
+  const tooltipGenero = document.getElementById('tooltip-genero-info');
+  if (tooltipArea) tooltipArea.style.display = 'none';
+  if (tooltipGenero) tooltipGenero.style.display = 'none';
 
   if (empleadoId) {
     document.getElementById('modal-title').textContent = 'Editar Empleado';
     if (dangerZone) dangerZone.classList.remove('d-none');
     if (tabHistorial) tabHistorial.style.display = 'block'; // Mostrar si es edición
-    loadEmpleadoData(empleadoId);
+    await loadEmpleadoData(empleadoId);
   } else {
     document.getElementById('modal-title').textContent = 'Nuevo Empleado';
     if (dangerZone) dangerZone.classList.add('d-none');
@@ -1179,6 +1265,11 @@ async function openModal(empleadoId = null) {
     if (inputFechaNacimiento) {
         inputFechaNacimiento.dispatchEvent(new Event('input'));
     }
+
+    const switchArt22 = document.getElementById('input-excluido-asistencia');
+    if (switchArt22) {
+        switchArt22.checked = false;
+    }
   }
 
   modal.classList.add('active');
@@ -1188,14 +1279,7 @@ async function openModal(empleadoId = null) {
 function closeModal() {
   modal.classList.remove('active');
   formEmpleado.reset();
-  const inputGenero = document.getElementById('input-genero');
-  if (inputGenero) inputGenero.value = '';
   currentEmpleadoId = null;
-}
-
-async function populateGenerosSelect() {
-  // Ya no es un select, es un input de solo lectura llenado por la sincronización
-  return;
 }
 
 async function loadEmpleadoData(id) {
@@ -1213,11 +1297,35 @@ async function loadEmpleadoData(id) {
     window.currentEmpleadoName = `${empleado.apellido_paterno} ${empleado.apellido_materno || ''} ${empleado.nombre}`.trim().replace(/  +/g, ' ');
 
     document.getElementById('input-rut').value = empleado.rut || '';
+    document.getElementById('input-rut').disabled = true; // RUT inmutable en edición
     document.getElementById('input-nombre').value = empleado.nombre || '';
     document.getElementById('input-apellido-paterno').value = empleado.apellido_paterno || '';
     document.getElementById('input-apellido-materno').value = empleado.apellido_materno || '';
-    document.getElementById('input-cargo').value = empleado.cargo || '';
-    document.getElementById('input-area').value = empleado.area || '';
+    
+    // Cargar y resolver Cargo Select (con fallback a texto)
+    const selectCargo = document.getElementById('input-cargo');
+    if (empleado.cargo_id) {
+      selectCargo.value = empleado.cargo_id;
+    } else if (empleado.cargo) {
+      const nameLower = empleado.cargo.toLowerCase().trim();
+      const option = Array.from(selectCargo.options).find(opt => opt.text.toLowerCase().trim() === nameLower);
+      if (option) selectCargo.value = option.value;
+    } else {
+      selectCargo.value = '';
+    }
+    
+    // Cargar y resolver Área Select (con fallback a texto)
+    const selectArea = document.getElementById('input-area');
+    if (empleado.area_id) {
+      selectArea.value = empleado.area_id;
+    } else if (empleado.area) {
+      const nameLower = empleado.area.toLowerCase().trim();
+      const option = Array.from(selectArea.options).find(opt => opt.text.toLowerCase().trim() === nameLower);
+      if (option) selectArea.value = option.value;
+    } else {
+      selectArea.value = '';
+    }
+
     document.getElementById('input-compania').value = empleado.compania || '';
     document.getElementById('input-email').value = empleado.email || '';
     document.getElementById('input-telefono').value = empleado.telefono || '';
@@ -1235,10 +1343,37 @@ async function loadEmpleadoData(id) {
     document.getElementById('input-cant-contratos').value = empleado.cant_contratos || 1;
     document.getElementById('input-activo').value = empleado.activo.toString();
 
-    const inputGenero = document.getElementById('input-genero');
-    if (inputGenero) {
-      inputGenero.value = empleado.genero || '';
+    // Cargar y resolver Género Select (con fallback a texto)
+    const selectGenero = document.getElementById('input-genero');
+    if (empleado.genero_id) {
+      selectGenero.value = empleado.genero_id;
+    } else if (empleado.genero) {
+      const nameLower = empleado.genero.toLowerCase().trim();
+      const option = Array.from(selectGenero.options).find(opt => opt.text.toLowerCase().trim() === nameLower);
+      if (option) selectGenero.value = option.value;
+    } else {
+      selectGenero.value = '';
     }
+
+    // Switch de Artículo 22
+    const switchArt22 = document.getElementById('input-excluido-asistencia');
+    if (switchArt22) {
+      switchArt22.checked = !!empleado.excluido_asistencia;
+    }
+
+    // Control de edición según origen (Manual vs Sincronizado)
+    const isManual = !!empleado.es_manual;
+    document.getElementById('input-nombre').disabled = !isManual;
+    document.getElementById('input-apellido-paterno').disabled = !isManual;
+    document.getElementById('input-apellido-materno').disabled = !isManual;
+    document.getElementById('input-cargo').disabled = !isManual;
+    document.getElementById('input-area').disabled = !isManual;
+    document.getElementById('input-genero').disabled = !isManual;
+    
+    const tooltipArea = document.getElementById('tooltip-area-info');
+    const tooltipGenero = document.getElementById('tooltip-genero-info');
+    if (tooltipArea) tooltipArea.style.display = isManual ? 'none' : 'inline-block';
+    if (tooltipGenero) tooltipGenero.style.display = isManual ? 'none' : 'inline-block';
   } catch (error) {
     console.error('Error loading empleado:', error);
     showError('Error al cargar datos del empleado');
@@ -1250,14 +1385,14 @@ let _isSaving = false; // Guard contra doble-click en Guardar
 async function saveEmpleado() {
     if (_isSaving) return; // Ignorar clicks mientras ya hay una petición en curso
 
-    const genero = document.getElementById('input-genero')?.value || null;
+    const generoIdVal = document.getElementById('input-genero')?.value || null;
     const tipoContrato = document.getElementById('input-tipo-contrato').value || 'Temporal';
     const fechaSalida = document.getElementById('input-fecha-salida').value || null;
     const activo = document.getElementById('input-activo').value === 'true';
 
     // 🛡️ VALIDACIÓN ESTRICTA (Anti-Dirty Data)
     if (activo) {
-        if (!genero) {
+        if (!generoIdVal) {
             showError("El GÉNERO es obligatorio para empleados activos.");
             return;
         }
@@ -1267,13 +1402,22 @@ async function saveEmpleado() {
         }
     }
 
+    const selectCargo = document.getElementById('input-cargo');
+    const selectArea = document.getElementById('input-area');
+    
+    const cargoId = parseInt(selectCargo.value) || null;
+    const areaId = parseInt(selectArea.value) || null;
+    const generoId = parseInt(generoIdVal) || null;
+
     const data = {
         rut: document.getElementById('input-rut').value,
         nombre: document.getElementById('input-nombre').value,
         apellido_paterno: document.getElementById('input-apellido-paterno').value,
         apellido_materno: document.getElementById('input-apellido-materno').value,
-        cargo: document.getElementById('input-cargo').value || null,
-        area: document.getElementById('input-area').value || null,
+        cargo_id: cargoId,
+        cargo: null,
+        area_id: areaId,
+        area: null,
         compania: document.getElementById('input-compania').value || null,
         email: document.getElementById('input-email').value || null,
         telefono: document.getElementById('input-telefono').value || null,
@@ -1283,8 +1427,14 @@ async function saveEmpleado() {
         tipo_contrato: tipoContrato,
         cant_contratos: parseInt(document.getElementById('input-cant-contratos').value) || 1,
         activo: activo,
-        genero: genero
+        genero_id: generoId,
+        genero: null,
+        excluido_asistencia: document.getElementById('input-excluido-asistencia')?.checked || false
     };
+
+    if (!currentEmpleadoId) {
+        data.es_manual = true;
+    }
 
     // Bloquear botón durante la operación
     const btnSubmit = formEmpleado.querySelector('[type="submit"], .btn-guardar-empleado, button[onclick*="save"]')

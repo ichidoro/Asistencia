@@ -35,6 +35,35 @@ class EmpleadoService:
         self.notification_service = notification_service
         self.asis_service = asis_service
     
+    async def resolve_catalogs(self, empleado: Empleado) -> None:
+        """Resolver nombres de área, cargo y género a partir de sus IDs si no están especificados"""
+        db = self.repository.db
+        
+        # Resolver área
+        if empleado.area_id and not empleado.area:
+            res_area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (empleado.area_id,))
+            if res_area:
+                empleado.area = res_area["nombre"]
+                
+        # Resolver cargo
+        if empleado.cargo_id and not empleado.cargo:
+            res_cargo = await db.fetch_one("SELECT nombre, excluido_asistencia FROM cargos WHERE id = ?", (empleado.cargo_id,))
+            if res_cargo:
+                empleado.cargo = res_cargo["nombre"]
+                # Si el cargo está excluido por defecto de asistencia, asignar a excluido_asistencia (solo si es manual)
+                if empleado.excluido_asistencia is None:
+                    empleado.excluido_asistencia = bool(res_cargo["excluido_asistencia"]) if empleado.es_manual else False
+                
+        # Forzar excluido_asistencia = False para empleados sincronizados de BioAlba
+        if not empleado.es_manual:
+            empleado.excluido_asistencia = False
+
+        # Resolver género
+        if empleado.genero_id and not empleado.genero:
+            res_gen = await db.fetch_one("SELECT nombre FROM cat_generos WHERE id = ?", (empleado.genero_id,))
+            if res_gen:
+                empleado.genero = res_gen["nombre"]
+
     async def create_empleado(self, empleado_data: EmpleadoCreate) -> Empleado:
         """
         Crear un nuevo empleado.
@@ -66,6 +95,8 @@ class EmpleadoService:
             genero=empleado_data.genero,
             genero_id=getattr(empleado_data, 'genero_id', None),
             activo=empleado_data.activo,
+            es_manual=getattr(empleado_data, 'es_manual', False) or False,
+            excluido_asistencia=getattr(empleado_data, 'excluido_asistencia', None),
             fecha_ingreso=empleado_data.fecha_ingreso,
             fecha_salida=empleado_data.fecha_salida,
             fecha_nacimiento=empleado_data.fecha_nacimiento,
@@ -73,8 +104,22 @@ class EmpleadoService:
             cant_contratos=empleado_data.cant_contratos
         )
         
+        # Resolver catálogos antes de guardar
+        await self.resolve_catalogs(empleado)
+        
         # Crear en DB
         empleado_created = await self.repository.create(empleado)
+        
+        # Registrar historial de áreas inicial al crear un empleado
+        if empleado_created.area_id:
+            fecha_desde = empleado_created.fecha_ingreso or date.today().isoformat()
+            await self.repository.add_historial_area(
+                empleado_id=empleado_created.id,
+                area_id=empleado_created.area_id,
+                fecha_desde=fecha_desde,
+                es_actual=True,
+                validado=True
+            )
         
         # Trigger Recálculo de Asignaciones (solo si el empleado es activo)
         if self.config_service and empleado_created.activo:
@@ -307,12 +352,20 @@ class EmpleadoService:
         empleado = await self.get_empleado(empleado_id)
         old_fecha_salida = empleado.fecha_salida
         old_activo = empleado.activo
+        old_area_id = empleado.area_id
         
         # Actualizar solo campos que vienen en el request
         update_data = empleado_data.model_dump(exclude_unset=True)
         
         for field, value in update_data.items():
             setattr(empleado, field, value)
+            
+        # Resolver catálogos
+        await self.resolve_catalogs(empleado)
+        
+        area_changed = False
+        if empleado.area_id is not None and empleado.area_id != old_area_id:
+            area_changed = True
         
         # Guardar en DB
         empleado_updated = await self.repository.update(empleado_id, empleado)
@@ -320,6 +373,26 @@ class EmpleadoService:
         if not empleado_updated:
             logger.error(f"❌ Falló actualización de empleado {empleado_id} (Repo retornó None)")
             return empleado # Retornamos el objeto en memoria aunque no se haya persistido para no romper el flujo
+            
+        if area_changed:
+            historial = await self.repository.get_historial_areas(empleado_id)
+            actual = next((h for h in historial if h.get("es_actual")), None)
+            hoy = date.today().isoformat()
+            from datetime import timedelta
+            ayer = (date.today() - timedelta(days=1)).isoformat()
+            if actual:
+                await self.repository.update_historial_area(
+                    actual["id"],
+                    fecha_hasta=ayer,
+                    es_actual=0
+                )
+            await self.repository.add_historial_area(
+                empleado_id=empleado_id,
+                area_id=empleado_updated.area_id,
+                fecha_desde=hoy,
+                es_actual=True,
+                validado=True
+            )
             
         # 1. Auto-ajuste de turnos si la fecha de salida cambió (Extensión o Acortamiento)
         if empleado_updated.fecha_salida != old_fecha_salida:

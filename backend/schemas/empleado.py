@@ -22,6 +22,9 @@ class EmpleadoBase(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="Email corporativo")
     telefono: Optional[str] = Field(None, max_length=20, description="Teléfono de contacto")
     genero: Optional[str] = Field(None, max_length=20, description="Género (Hombre/Mujer/Otro)")
+    genero_id: Optional[int] = Field(None, description="ID del género en la tabla cat_generos")
+    es_manual: Optional[bool] = Field(False, description="Si el empleado fue ingresado manualmente")
+    excluido_asistencia: Optional[bool] = Field(None, description="Si el empleado está bajo Art. 22 (excluido de asistencia)")
     activo: bool = Field(True, description="Si el empleado está activo")
     fecha_nacimiento: Optional[str] = Field(None, description="Fecha de nacimiento (YYYY-MM-DD)")
     fecha_ingreso: Optional[str] = Field(None, description="Fecha de ingreso (YYYY-MM-DD)")
@@ -108,6 +111,8 @@ class EmpleadoUpdate(_ValidateDatesMixin, BaseModel):
     telefono: Optional[str] = Field(None, max_length=20)
     genero: Optional[str] = Field(None, max_length=20, description="Género (Hombre/Mujer/Otro)")
     genero_id: Optional[int] = Field(None, description="ID del género en la tabla cat_generos")
+    es_manual: Optional[bool] = None
+    excluido_asistencia: Optional[bool] = None
     activo: Optional[bool] = True
     fecha_nacimiento: Optional[str] = None
     fecha_ingreso: Optional[str] = None

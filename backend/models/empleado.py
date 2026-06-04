@@ -35,6 +35,8 @@ class Empleado:
     genero: Optional[str] = None
     genero_id: Optional[int] = None
     activo: bool = True
+    es_manual: bool = False
+    excluido_asistencia: Optional[bool] = None
     
     # Fechas
     fecha_nacimiento: Optional[str] = None  # Formato: YYYY-MM-DD
@@ -99,6 +101,8 @@ class Empleado:
             "genero": self.genero,
             "genero_id": self.genero_id,
             "activo": self.activo,
+            "es_manual": self.es_manual,
+            "excluido_asistencia": self.excluido_asistencia,
             "fecha_nacimiento": self.fecha_nacimiento,
             "fecha_ingreso": self.fecha_ingreso,
             "fecha_salida": self.fecha_salida,
@@ -130,6 +134,8 @@ class Empleado:
             genero=data.get("genero"),
             genero_id=data.get("genero_id"),
             activo=bool(data.get("activo", True)),
+            es_manual=bool(data.get("es_manual", False)),
+            excluido_asistencia=bool(data.get("excluido_asistencia", False)),
             fecha_nacimiento=data.get("fecha_nacimiento"),
             fecha_ingreso=data.get("fecha_ingreso"),
             fecha_salida=data.get("fecha_salida"),

@@ -42,6 +42,7 @@ class EmpleadoRepository:
             CREATE TABLE IF NOT EXISTS cargos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL UNIQUE,
+                excluido_asistencia INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             
@@ -72,6 +73,8 @@ class EmpleadoRepository:
                 tipo_contrato TEXT DEFAULT 'Indefinido',
                 cant_contratos INTEGER DEFAULT 1,
                 decision_vencimiento TEXT,
+                es_manual INTEGER DEFAULT 0,
+                excluido_asistencia INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (area_id) REFERENCES areas (id),
@@ -141,7 +144,9 @@ class EmpleadoRepository:
                 "genero": "TEXT",
                 "genero_id": "INTEGER",
                 "decision_vencimiento": "TEXT",
-                "cargo_id": "INTEGER REFERENCES cargos(id)"
+                "cargo_id": "INTEGER REFERENCES cargos(id)",
+                "es_manual": "INTEGER DEFAULT 0",
+                "excluido_asistencia": "INTEGER DEFAULT 0"
             }
 
             for col_name, col_def in new_columns.items():
@@ -158,10 +163,17 @@ class EmpleadoRepository:
                 CREATE TABLE IF NOT EXISTS cargos (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     nombre TEXT NOT NULL UNIQUE,
+                    excluido_asistencia INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
                 """)
                 logger.info("✨ Tabla cargos creada (migración)")
+            else:
+                # Si cargos ya existe, verificar columna excluido_asistencia
+                cols_cargos = set(await self.db.get_column_names("cargos"))
+                if "excluido_asistencia" not in cols_cargos:
+                    await self.db.execute("ALTER TABLE cargos ADD COLUMN excluido_asistencia INTEGER DEFAULT 0")
+                    logger.info("✨ Migración: Columna 'excluido_asistencia' agregada a cargos")
             
             if not await self.db.table_exists("cargos_alias"):
                 await self.db.execute("""
@@ -197,8 +209,9 @@ class EmpleadoRepository:
         INSERT INTO empleados (
             rut, nombre, apellido_paterno, apellido_materno,
             cargo, cargo_id, area_id, compania, email, telefono, genero, genero_id, activo,
-            fecha_nacimiento, fecha_ingreso, fecha_salida, tipo_contrato, cant_contratos, decision_vencimiento
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fecha_nacimiento, fecha_ingreso, fecha_salida, tipo_contrato, cant_contratos, decision_vencimiento,
+            es_manual, excluido_asistencia
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         # Mapeo manual si viene solo genero (por compatibilidad)
@@ -234,7 +247,9 @@ class EmpleadoRepository:
             empleado.fecha_salida,
             empleado.tipo_contrato or "Indefinido",
             empleado.cant_contratos,
-            empleado.decision_vencimiento
+            empleado.decision_vencimiento,
+            1 if empleado.es_manual else 0,
+            1 if empleado.excluido_asistencia else 0
         ))
         
         empleado.id = cursor.lastrowid
@@ -670,6 +685,8 @@ class EmpleadoRepository:
             tipo_contrato = ?,
             cant_contratos = ?,
             decision_vencimiento = ?,
+            es_manual = ?,
+            excluido_asistencia = ?,
             updated_at = datetime('now')
         WHERE id = ?
         """
@@ -708,6 +725,8 @@ class EmpleadoRepository:
             empleado.tipo_contrato or "Indefinido",
             empleado.cant_contratos,
             empleado.decision_vencimiento,
+            1 if empleado.es_manual else 0,
+            1 if empleado.excluido_asistencia else 0,
             empleado_id
         ))
         
@@ -978,5 +997,7 @@ class EmpleadoRepository:
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             decision_vencimiento=data.get("decision_vencimiento"),
-            fecha_asignacion_turno=data.get("fecha_asignacion_turno")
+            fecha_asignacion_turno=data.get("fecha_asignacion_turno"),
+            es_manual=bool(data.get("es_manual", 0)),
+            excluido_asistencia=bool(data.get("excluido_asistencia", 0))
         )
