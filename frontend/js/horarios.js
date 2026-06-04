@@ -93,6 +93,7 @@ async function saveTurno() {
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
+        activo: formData.get('activo') !== 'false',
         dias: []
     };
 
@@ -259,6 +260,7 @@ async function openModalHorario(id = null) {
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
             if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "";
             if (form.meta_horas_semanales) form.meta_horas_semanales.value = turno.meta_horas_semanales || "";
+            if (form.activo) form.activo.value = String(turno.activo !== false);
             
             // Cargar áreas (soporta nuevo modelo areas: List[str] o fallback antiguo area: str)
             let areasToSelect = turno.areas || [];
@@ -320,6 +322,7 @@ async function openModalHorario(id = null) {
         }
     } else {
         form.reset();
+        if (form.activo) form.activo.value = "true";
         if (form.meta_horas_semanales) form.meta_horas_semanales.value = "";
         if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
         if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
@@ -468,6 +471,9 @@ function renderHorariosUI() {
                                                 </th>
                                                 <th>Tolerancias (Alerta/Desc)</th>
                                                 <th>Áreas</th>
+                                                <th style="cursor: pointer;" onclick="sortTurnos('activo')" title="Ordenar por Estado">
+                                                    Estado <i id="sort-icon-turnos-activo" class="bi bi-arrow-down-up small text-muted"></i>
+                                                </th>
                                                 <th>Acciones</th>
                                             </tr>
                                         </thead>
@@ -832,12 +838,12 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
 
         if (!areas || areas.length === 0) {
             // Sin área → traer todos
-            const res = await fetch('/api/turnos/');
+            const res = await fetch('/api/turnos/?activo=true');
             lista = res.ok ? await res.json() : [];
             hintHtml = '';
         } else if (areas.length === 1) {
             // Un área específica
-            const res = await fetch(`/api/turnos/?area=${encodeURIComponent(areas[0])}`);
+            const res = await fetch(`/api/turnos/?area=${encodeURIComponent(areas[0])}&activo=true`);
             lista = res.ok ? await res.json() : [];
             hintHtml = `
                 <div class="d-flex align-items-center gap-1 mt-1" style="font-size:0.78rem;">
@@ -846,7 +852,7 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
                 </div>`;
         } else {
             // Múltiples áreas: traer todos y mostrar advertencia
-            const res = await fetch('/api/turnos/');
+            const res = await fetch('/api/turnos/?activo=true');
             lista = res.ok ? await res.json() : [];
             hintHtml = `
                 <div class="d-flex align-items-center gap-1 mt-1" style="font-size:0.78rem;">
@@ -994,7 +1000,7 @@ function renderTurnosTable() {
     if (!tbody) return;
 
     if (turnosList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No hay turnos creados</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted p-4">No hay turnos creados</td></tr>`;
         return;
     }
 
@@ -1005,6 +1011,10 @@ function renderTurnosTable() {
             ? 'Bolsa de Horas (Art. 25 BIS)'
             : 'Ciclo Inteligente';
 
+        const estadoBadge = t.activo !== false
+            ? '<span class="badge bg-success">Activo</span>'
+            : '<span class="badge bg-secondary">Inactivo</span>';
+
         return `
         <tr>
             <td class="fw-bold">${t.nombre}</td>
@@ -1012,6 +1022,7 @@ function renderTurnosTable() {
             <td>${t.meta_horas_semanales} hrs</td>
             <td>${t.tolerancia_retraso_alerta} min / ${t.tolerancia_retraso_descuento} min</td>
             <td>${(t.areas && t.areas.length > 0) ? t.areas.map(a => `<span class="badge bg-info bg-opacity-75 me-1 mb-1" style="font-size:.7em">${a}</span>`).join('') : '<span class="badge bg-warning text-dark" style="font-size:.7em"><i class="bi bi-exclamation-triangle me-1"></i>Sin Área</span>'}</td>
+            <td>${estadoBadge}</td>
             <td>
                 ${canEdit ? `
                 <div class="btn-group btn-group-sm">
@@ -1045,20 +1056,28 @@ function renderModalHtml() {
                                 <label for="input-nombre-turno" class="form-label">Nombre del Turno</label>
                                 <input type="text" id="input-nombre-turno" class="form-control" name="nombre" required placeholder="Ej: Operativo Mañana">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
                                     <option value="DINAMICO_FLEXIBLE">Ciclo Inteligente</option>
                                     <option value="FLEXIBLE_BOLSA">Bolsa de Horas (Art. 25 BIS)</option>
                                 </select>
                             </div>
-                            <div class="col-md-3" id="div-meta-jornada">
+                            <div class="col-md-2" id="div-meta-jornada">
                                 <label for="input-meta-jornada" class="form-label fw-bold text-primary">Jornada Semanal</label>
                                 <div class="input-group">
                                     <input type="number" id="input-meta-jornada" class="form-control border-primary" name="meta_horas_semanales" value="" step="0.5" oninput="updateAllCalculations()" required>
                                     <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
                                 </div>
                                 <div class="form-text small text-primary">Meta de horas esperadas.</div>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="input-activo-turno" class="form-label fw-bold text-dark">Estado</label>
+                                <select id="input-activo-turno" class="form-select" name="activo">
+                                    <option value="true">Activo</option>
+                                    <option value="false">Inactivo</option>
+                                </select>
+                                <div class="form-text small text-muted">¿Permitir nuevas asignaciones?</div>
                             </div>
                             <div class="col-md-3">
                                 <div class="form-label fw-bold text-success d-flex justify-content-between align-items-center mb-1">

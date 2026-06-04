@@ -76,7 +76,7 @@ async function loadAsignacionesTurnos(area = '') {
     select.disabled = true;
 
     try {
-        let url = area ? `/api/turnos/?area=${encodeURIComponent(area)}` : '/api/turnos/';
+        let url = area ? `/api/turnos/?area=${encodeURIComponent(area)}&activo=true` : '/api/turnos/?activo=true';
         const resp = await fetch(url);
         const lista = resp.ok ? await resp.json() : [];
 

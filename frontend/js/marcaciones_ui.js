@@ -2525,7 +2525,7 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
     
     try {
         const t = Date.now();
-        const resp = await fetch(`/api/turnos/?area=${encodeURIComponent(area)}&_t=${t}`);
+        const resp = await fetch(`/api/turnos/?area=${encodeURIComponent(area)}&activo=true&_t=${t}`);
         if (!resp.ok) {
             const errText = await resp.text();
             throw new Error(`Status: ${resp.status} - ${errText}`);

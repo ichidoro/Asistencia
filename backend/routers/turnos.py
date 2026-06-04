@@ -109,18 +109,19 @@ async def create_turno(
 @router.get("/", response_model=List[TurnoResponse])
 async def get_turnos(
     area: Optional[str] = None,
+    activo: Optional[bool] = None,
     service: TurnoService = Depends(get_turno_service),
     current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
 ):
-    """Listar todos los turnos disponibles, opcionalmente filtrados por área"""
+    """Listar todos los turnos disponibles, opcionalmente filtrados por área y estado activo"""
     if not current_user.alcance_global:
         if area:
             if area not in (current_user.areas or []):
                 raise HTTPException(status_code=403, detail="No tiene permisos para el área solicitada")
         else:
-            return await service.get_all_turnos(area=None, areas_permitidas=current_user.areas or [])
+            return await service.get_all_turnos(area=None, areas_permitidas=current_user.areas or [], activo=activo)
 
-    return await service.get_all_turnos(area=area)
+    return await service.get_all_turnos(area=area, activo=activo)
 
 @router.get("/stats/por-area")
 async def get_turnos_stats_por_area(

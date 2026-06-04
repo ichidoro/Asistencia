@@ -66,6 +66,13 @@ class TurnoBase(BaseModel):
     fecha_vigencia: Optional[str] = None # YYYY-MM-DD: Desde cuándo aplica esta versión
     rotacion_secuencial: bool = True
     semana_fallback_sin_marcas: int = 1
+    activo: bool = True
+
+    @validator('activo', pre=True, always=True)
+    def default_activo(cls, v):
+        if v is None:
+            return True
+        return bool(v)
 
 class TurnoCreate(TurnoBase):
     dias: List[TurnoDiaCreate]

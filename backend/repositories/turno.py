@@ -33,6 +33,7 @@ class TurnoRepository:
                     area TEXT, -- Nuevo: Área de visibilidad
                     ventana_en_curso_minutos INTEGER DEFAULT 0,
                     tolerancia_exceso_colacion_minutos INTEGER DEFAULT 0,
+                    activo BOOLEAN DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -51,6 +52,7 @@ class TurnoRepository:
             ("umbral_horas_colacion",               "REAL DEFAULT 0.0"),
             ("rotacion_secuencial",                 "BOOLEAN DEFAULT 1"),
             ("semana_fallback_sin_marcas",          "INTEGER DEFAULT 1"),
+            ("activo",                              "BOOLEAN DEFAULT 1"),
         ]
         for col, defn in migraciones_turnos:
             if col not in cols_turnos:
@@ -425,8 +427,9 @@ class TurnoRepository:
                     redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion, es_turno_cortado,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
-                    turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
+                    activo
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
@@ -435,7 +438,8 @@ class TurnoRepository:
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
-                1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas
+                1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas,
+                1 if turno.activo else 0
             )
             
             cursor = await self.db.execute(sql_turno, params_turno)
@@ -476,12 +480,17 @@ class TurnoRepository:
             # Idealmente deberíamos manejar transacción distribuida, pero por ahora logueamos.
             raise
 
-    async def get_all_turnos(self, include_details: bool = True) -> List[Dict]:
+    async def get_all_turnos(self, include_details: bool = True, activo: Optional[bool] = None) -> List[Dict]:
         """Obtener todos los turnos, opcionalmente con sus días"""
         try:
             # 1 query: cabeceras
-            query = "SELECT * FROM turnos ORDER BY nombre"
-            turnos_list = await self.db.fetch_all(query)
+            query = "SELECT * FROM turnos"
+            params = ()
+            if activo is not None:
+                query += " WHERE activo = ?"
+                params = (1 if activo else 0,)
+            query += " ORDER BY nombre"
+            turnos_list = await self.db.fetch_all(query, params)
             
             if not include_details or not turnos_list:
                 return turnos_list
@@ -518,7 +527,7 @@ class TurnoRepository:
             logger.error(f"Error getting turnos: {e}")
             raise
 
-    async def get_turnos_by_areas(self, areas: List[str], include_details: bool = True) -> List[Dict]:
+    async def get_turnos_by_areas(self, areas: List[str], include_details: bool = True, activo: Optional[bool] = None) -> List[Dict]:
         """
         Obtiene turnos visibles para un conjunto de áreas.
         Retorna:
@@ -537,9 +546,13 @@ class TurnoRepository:
                 INNER JOIN turno_areas ta ON t.id = ta.turno_id
                 INNER JOIN areas a ON ta.area_id = a.id
                 WHERE a.nombre IN ({placeholders})
-                ORDER BY t.nombre
             """
-            turnos_list = await self.db.fetch_all(query, tuple(areas))
+            params = list(areas)
+            if activo is not None:
+                query += " AND t.activo = ?"
+                params.append(1 if activo else 0)
+            query += " ORDER BY t.nombre"
+            turnos_list = await self.db.fetch_all(query, tuple(params))
 
             if not include_details or not turnos_list:
                 return turnos_list
@@ -911,7 +924,7 @@ class TurnoRepository:
                     redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?, es_turno_cortado=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, tolerancia_exceso_colacion_minutos=?,
-                    turno_padre_id=?, fecha_vigencia=?
+                    turno_padre_id=?, fecha_vigencia=?, activo=?
                 WHERE id=?
             """
             params = (
@@ -921,6 +934,7 @@ class TurnoRepository:
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
+                1 if turno.activo else 0,
                 turno_id
             )
             await self.db.execute(sql_update, params)

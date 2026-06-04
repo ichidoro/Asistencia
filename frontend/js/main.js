@@ -2678,7 +2678,7 @@ window.loadTurnosForNewArea = async function(areaName) {
     console.log(`🔍 Cargando turnos para área: ${areaName}`);
     
     try {
-        const resp = await fetch(`${API_BASE_URL}/turnos/?area=${encodeURIComponent(areaName || '')}`);
+        const resp = await fetch(`${API_BASE_URL}/turnos/?area=${encodeURIComponent(areaName || '')}&activo=true`);
         if (!resp.ok) throw new Error(`HTTP Error: ${resp.status}`);
         
         const turnos = await resp.json();

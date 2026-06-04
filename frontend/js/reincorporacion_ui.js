@@ -218,7 +218,7 @@ async function reincLoadTurnos(area) {
     select.innerHTML = '<option value="">-- Cargando turnos... --</option>';
     
     try {
-        const response = await fetch(`/api/turnos/?area=${encodeURIComponent(area)}`);
+        const response = await fetch(`/api/turnos/?area=${encodeURIComponent(area)}&activo=true`);
         const turnos = await response.json();
         
         if (turnos.length === 0) {

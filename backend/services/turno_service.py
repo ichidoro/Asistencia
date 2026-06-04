@@ -15,20 +15,20 @@ class TurnoService:
     async def create_turno(self, turno: TurnoCreate) -> int:
         return await self.repository.create_turno(turno)
 
-    async def get_all_turnos(self, area: Optional[str] = None, include_details: bool = True, areas_permitidas: Optional[List[str]] = None) -> List[Dict]:
+    async def get_all_turnos(self, area: Optional[str] = None, include_details: bool = True, areas_permitidas: Optional[List[str]] = None, activo: Optional[bool] = None) -> List[Dict]:
         """
         Obtiene todos los turnos, opcionalmente filtrados por área y con detalles.
         """
         if area:
             # Como el router ya valida si area está en areas_permitidas, 
             # podemos heredar esa validación o simplemente filtrar por áreas
-            return await self.repository.get_turnos_by_areas([area], include_details=include_details)
+            return await self.repository.get_turnos_by_areas([area], include_details=include_details, activo=activo)
         elif areas_permitidas is not None:
             if not areas_permitidas:
                 return []
-            return await self.repository.get_turnos_by_areas(areas_permitidas, include_details=include_details)
+            return await self.repository.get_turnos_by_areas(areas_permitidas, include_details=include_details, activo=activo)
         else:
-            return await self.repository.get_all_turnos(include_details=include_details)
+            return await self.repository.get_all_turnos(include_details=include_details, activo=activo)
 
     async def get_stats_por_area(self) -> Dict[str, Any]:
         return await self.repository.get_stats_por_area()
