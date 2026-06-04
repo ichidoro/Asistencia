@@ -4,30 +4,30 @@ from typing import List, Dict, Any, Tuple, Optional
 from loguru import logger
 
 from backend.core.database import db
-from backend.repositories.beneficio import BeneficioRepository
+from backend.repositories.productos_4 import Productos4Repository
 from backend.repositories.empleado import EmpleadoRepository
 from backend.repositories.configuracion import ConfiguracionRepository
 from backend.services.bono_service import BonoService
 from backend.services.asistencia_service import AsistenciaService
 from backend.repositories.asistencia import AsistenciaRepository
 
-class BeneficioService:
+class Productos4Service:
     def __init__(self):
         self.db = db
-        self.repo = BeneficioRepository()
+        self.repo = Productos4Repository()
         self.emp_repo = EmpleadoRepository(db)
         self.config_repo = ConfiguracionRepository(db)
 
-    async def evaluar_beneficio_empleados(self, mes: int, anio: int) -> List[Dict[str, Any]]:
+    async def evaluar_beneficio_empleados(self, mes: int, anio: int, areas: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-        Evalua a todos los empleados activos del periodo actual.
+        Evalua a todos los empleados activos del periodo actual, opcionalmente filtrados por areas (RLS).
         Retorna la lista de empleados indicando si califican o estan bloqueados con su motivo.
         """
-        logger.info(f"📋 [BeneficioService] Evaluando calificacion de productos propios para {anio}-{mes:02d}")
+        logger.info(f"📋 [Productos4Service] Evaluando calificacion de 4 Productos para {anio}-{mes:02d}. Areas: {areas}")
         
-        # 1. Cargar todos los empleados activos
-        # Nota: Usamos skip=0, limit=1000 para cargar toda la planilla activa de forma eficiente
-        empleados = await self.emp_repo.get_all(activo=True, limit=1000)
+        # 1. Cargar todos los empleados activos filtrados por area si se especifica
+        # Nota: Usamos skip=0, limit=1000 para cargar planilla activa de forma eficiente
+        empleados = await self.emp_repo.get_all(activo=True, limit=1000, areas=areas)
         
         # 2. Cargar contexto de asistencia masivo (optimizado) para evitar N+1
         fecha_inicio = f"{anio}-{mes:02d}-01"
@@ -160,7 +160,7 @@ class BeneficioService:
                     feriados_set
                 )
                 
-                # Para el beneficio de productos propios, no se excluye a nadie (aplica es siempre True)
+                # Para el beneficio de 4 Productos, no se excluye a nadie (aplica es siempre True)
                 # Solo se evalua si califica por su asistencia
                 if not res_calif.get("califica"):
                     califica_asistencia = False
@@ -168,7 +168,7 @@ class BeneficioService:
             else:
                 # Si el Bono de Compromiso no esta configurado o esta inactivo,
                 # se asume que no hay restriccion de asistencia activa.
-                logger.warning("[BeneficioService] Bono de Compromiso inactivo o no configurado. Omite asistencia.")
+                logger.warning("[Productos4Service] Bono de Compromiso inactivo o no configurado. Omite asistencia.")
             
             # Obtener seleccion previa si existe
             prev_asig = asignaciones_map.get(emp_id)
@@ -255,6 +255,6 @@ class BeneficioService:
         )
         
         if success:
-            return True, "Asignacion de productos propios guardada exitosamente."
+            return True, "Asignacion de 4 Productos guardada exitosamente."
         else:
             return False, "Ocurrio un error al intentar guardar la asignacion en la base de datos."

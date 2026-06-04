@@ -193,10 +193,24 @@ class SeguridadRepository:
                 ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header -> Wizard de inicialización BioAlba'),
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
 
-                # ── Beneficios de Productos (2 permisos) ──
-                ('beneficios.ver',               'Beneficios',     'Ver el panel de asignación de beneficios de productos propios'),
-                ('beneficios.editar',            'Beneficios',     'Asignar/modificar productos propios a empleados y gestionar el catálogo'),
+                # ── 4 Productos (2 permisos) ──
+                ('productos_4.ver',              '4 Productos',    'Ver el panel de asignación de 4 Productos a empleados'),
+                ('productos_4.editar',           '4 Productos',    'Asignar/modificar 4 Productos a empleados y gestionar el catálogo'),
             ]
+
+            # --- MIGRACIÓN DE PERMISOS beneficios -> productos_4 ---
+            perm_ver_exists = await self.db.fetch_one("SELECT 1 FROM permisos WHERE id = 'beneficios.ver'")
+            if perm_ver_exists:
+                logger.info("🛠️ Ejecutando migración de permisos: beneficios -> productos_4...")
+                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.ver', '4 Productos', 'Ver el panel de asignación de 4 Productos a empleados')")
+                await self.db.execute("INSERT OR IGNORE INTO permisos (id, modulo, descripcion) VALUES ('productos_4.editar', '4 Productos', 'Asignar/modificar 4 Productos a empleados y gestionar el catálogo')")
+                
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.ver' FROM rol_permisos WHERE permiso_id = 'beneficios.ver'")
+                await self.db.execute("INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id) SELECT rol_id, 'productos_4.editar' FROM rol_permisos WHERE permiso_id = 'beneficios.editar'")
+                
+                await self.db.execute("DELETE FROM rol_permisos WHERE permiso_id IN ('beneficios.ver', 'beneficios.editar')")
+                await self.db.execute("DELETE FROM permisos WHERE id IN ('beneficios.ver', 'beneficios.editar')")
+                logger.success("✅ Migración de permisos completada.")
 
             total_esperado = len(permisos_base)
 

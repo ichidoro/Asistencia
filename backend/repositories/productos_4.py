@@ -4,13 +4,13 @@ from typing import List, Dict, Optional
 from loguru import logger
 from backend.core.database import db
 
-class BeneficioRepository:
+class Productos4Repository:
     def __init__(self):
         self.db = db
 
     async def init_tables(self):
-        """Inicializa las tablas del beneficio y siembra los productos de elaboracion propia."""
-        # 1. Crear tabla productos_elaboracion_propia
+        """Inicializa las tablas de 4 Productos y siembra los productos de elaboración propia."""
+        # 1. Crear tabla productos_elaboracion_propia (mismo nombre de tabla por consistencia)
         await self.db.execute("""
             CREATE TABLE IF NOT EXISTS productos_elaboracion_propia (
                 codigo INTEGER PRIMARY KEY,
@@ -23,7 +23,7 @@ class BeneficioRepository:
             )
         """)
 
-        # 2. Crear tabla empleado_productos_periodo
+        # 2. Crear tabla empleado_productos_periodo (mismo nombre de tabla por consistencia)
         await self.db.execute("""
             CREATE TABLE IF NOT EXISTS empleado_productos_periodo (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,22 +55,22 @@ class BeneficioRepository:
         try:
             excel_path = "Productos.xlsx"
             if not os.path.exists(excel_path):
-                logger.warning(f"⚠️ [Beneficios Seeder] Archivo '{excel_path}' no encontrado. Se omite la siembra automatica.")
+                logger.warning(f"⚠️ [Productos4 Seeder] Archivo '{excel_path}' no encontrado. Se omite la siembra automatica.")
                 return
 
             # Verificar si la tabla ya tiene registros
             row = await self.db.fetch_one("SELECT COUNT(*) as count FROM productos_elaboracion_propia")
             if row and row["count"] > 0:
-                logger.info(f"☑️ [Beneficios Seeder] La tabla de productos propios ya tiene {row['count']} registros. Se omite siembra.")
+                logger.info(f"☑️ [Productos4 Seeder] La tabla de productos propios ya tiene {row['count']} registros. Se omite siembra.")
                 return
 
             # Leer Excel
-            logger.info(f"💾 [Beneficios Seeder] Sembrando productos propios desde '{excel_path}'...")
+            logger.info(f"💾 [Productos4 Seeder] Sembrando productos propios desde '{excel_path}'...")
             df = pd.read_excel(excel_path)
             required = {"Codigo Producto", "Descripcion", "Tipo Producto", "Marca", "Unidad", "Maximo"}
             missing = required - set(df.columns)
             if missing:
-                logger.error(f"❌ [Beneficios Seeder] Error de columnas en Excel: {missing}")
+                logger.error(f"❌ [Productos4 Seeder] Error de columnas en Excel: {missing}")
                 return
 
             operations = []
@@ -92,10 +92,10 @@ class BeneficioRepository:
             if operations:
                 # Ejecutar por lotes usando el core seguro
                 await self.db.execute_batch(operations)
-                logger.success(f"✅ [Beneficios Seeder] Se sembraron exitosamente {len(operations)} productos.")
+                logger.success(f"✅ [Productos4 Seeder] Se sembraron exitosamente {len(operations)} productos.")
 
         except Exception as e:
-            logger.error(f"⚠️ [Beneficios Seeder] Fallo no critico al sembrar productos propios: {e}")
+            logger.error(f"⚠️ [Productos4 Seeder] Fallo no critico al sembrar productos propios: {e}")
 
     # --- Operaciones CRUD Catálogo ---
 
@@ -184,5 +184,5 @@ class BeneficioRepository:
             ))
             return True
         except Exception as e:
-            logger.error(f"Error guardando asignacion de beneficios: {e}")
+            logger.error(f"Error guardando asignacion de 4 Productos: {e}")
             return False
