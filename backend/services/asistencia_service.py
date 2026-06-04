@@ -14,11 +14,19 @@ import asyncio
 import math
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from loguru import logger
 
+from backend.core.config import settings
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.empleado import EmpleadoRepository
 from asyncio import Lock
+
+CHILE_TZ = ZoneInfo(settings.TIMEZONE)
+
+def _get_now_local() -> datetime:
+    """Retorna la fecha/hora actual naive en la zona horaria configurada (America/Santiago)"""
+    return datetime.now(CHILE_TZ).replace(tzinfo=None)
 
 _reproceso_lock = Lock()
 _reproceso_status: Dict[str, Any] = {}
@@ -2726,15 +2734,15 @@ class AsistenciaService:
             _es_bolsa_aqui = turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA' if turno else False
             if _es_bolsa_aqui:
                 hora_limite_ficticia = turno.get('hora_limite_ficticia') if turno else None
-                if hora_limite_ficticia and fecha == datetime.now().strftime("%Y-%m-%d"):
+                if hora_limite_ficticia and fecha == _get_now_local().strftime("%Y-%m-%d"):
                     try:
                         limite_dt = datetime.strptime(f"{fecha} {hora_limite_ficticia}", "%Y-%m-%d %H:%M")
-                        if datetime.now() < limite_dt:
+                        if _get_now_local() < limite_dt:
                             return None  # Aún no llegó la hora límite, celda vacía
                     except Exception as e:
                         logger.error(f"Error parseando hora_limite_ficticia '{hora_limite_ficticia}' para fecha {fecha}: {e}")
                         res['observaciones'] = f"{res.get('observaciones', '')} ⚠️ [ALERTA SISTEMA: Error parsing hora límite]".strip()
-                elif fecha > datetime.now().strftime("%Y-%m-%d"):
+                elif fecha > _get_now_local().strftime("%Y-%m-%d"):
                     return None  # Fecha futura, celda vacía
                 res['estado'] = 'INASISTENCIA'
                 res['observaciones'] = 'Inasistencia detectada (Bolsa Flexible sin marcas)'
@@ -2761,17 +2769,17 @@ class AsistenciaService:
                         limite_dt = datetime.strptime(f"{fecha} {entrada_mas_tardio_str}", "%Y-%m-%d %H:%M")
                         hora_limite_alerta = limite_dt + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
                         
-                        if datetime.now() < hora_limite_alerta:
+                        if _get_now_local() < hora_limite_alerta:
                             return None
                     except Exception as e:
                         logger.error(f"Error parseando hora_entrada límite '{entrada_mas_tardio_str}': {e}")
                         if h_ent_teorica:
                             hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                            if datetime.now() < hora_limite_alerta:
+                            if _get_now_local() < hora_limite_alerta:
                                 return None
                 elif h_ent_teorica:
                     hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                    if datetime.now() < hora_limite_alerta:
+                    if _get_now_local() < hora_limite_alerta:
                         return None
 
                 res['estado'] = 'INASISTENCIA'
@@ -3098,7 +3106,7 @@ class AsistenciaService:
                     
                 if h_ent_teorica:
                     hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                    if datetime.now() < hora_limite_alerta:
+                    if _get_now_local() < hora_limite_alerta:
                         return None
                 
                 if salida_real:
@@ -3122,7 +3130,7 @@ class AsistenciaService:
         # ── EN CURSO (sin salida aún, día de hoy o trasnoche) ─────────────────
         if not salida_real:
             fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
-            hoy_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            hoy_dt = _get_now_local().replace(hour=0, minute=0, second=0, microsecond=0)
             es_hoy = (fecha_dt >= hoy_dt)
             
             # Determinar si aún está "en curso" (Automatizado: 3 horas de gracia tras la salida teórica)
@@ -3130,7 +3138,7 @@ class AsistenciaService:
             if h_sal_teorica:
                 # h_sal_teorica ya tiene +1 día aplicado si cruza medianoche
                 limite_ventana = h_sal_teorica + timedelta(hours=3)
-                if datetime.now() < limite_ventana:
+                if _get_now_local() < limite_ventana:
                     en_curso_por_hora = True
             else:
                 # Fallback si no hay salida teórica (ej. Bolsa Flexible)
