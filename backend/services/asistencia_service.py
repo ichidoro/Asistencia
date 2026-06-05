@@ -915,8 +915,8 @@ class AsistenciaService:
             ayer_str = (current - timedelta(days=1)).strftime("%Y-%m-%d")
             day_index += 1
 
-            # Bloqueo: saltar días cerrados
-            if fecha_str in closed_dates:
+            # Bloqueo: saltar días cerrados (a menos que se fuerce el reprocesamiento)
+            if fecha_str in closed_dates and not force:
                 existing_day = asistencias_map.get(fecha_str)
                 if existing_day and existing_day.get('num_semana_ganadora'):
                     rotativo_last_sem_dict[empleado_id] = existing_day['num_semana_ganadora']
@@ -1415,7 +1415,7 @@ class AsistenciaService:
         else:
             is_closed = await self.is_fecha_cerrada_empleado(empleado_id, fecha)
             
-        if is_closed:
+        if is_closed and not force:
             logger.warning(f"🚫 Intento de procesar día cerrado: emp {empleado_id}, fecha {fecha}. Retornando registro existente.")
             return await self.repository.get_asistencia(empleado_id, fecha)
 
