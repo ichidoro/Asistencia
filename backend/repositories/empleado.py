@@ -777,9 +777,17 @@ class EmpleadoRepository:
             await self.db.execute("DELETE FROM horas_extras WHERE empleado_id = ?", (empleado_id,))
             await self.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ?", (empleado_id,))
             
-            # Finalmente, borrar al empleado
-            query = "DELETE FROM empleados WHERE id = ?"
-            await self.db.execute(query, (empleado_id,))
+            # Deshabilitar claves foráneas temporalmente para evitar que la tabla corrupta (asistencias_corrupt)
+            # aborte la eliminación del empleado.
+            await self.db.execute("PRAGMA foreign_keys = OFF;")
+            
+            try:
+                # Finalmente, borrar al empleado
+                query = "DELETE FROM empleados WHERE id = ?"
+                await self.db.execute(query, (empleado_id,))
+            finally:
+                # Volver a habilitar las claves foráneas
+                await self.db.execute("PRAGMA foreign_keys = ON;")
             
             logger.warning(f"✅ Empleado eliminado permanentemente junto a todo su historial: ID {empleado_id}")
             return True
