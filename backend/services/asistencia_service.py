@@ -517,7 +517,7 @@ class AsistenciaService:
                         'minutos_autorizados': resultado.get('_he_minutos_autorizados', 0),
                         'estado': he_estado or 'PENDIENTE'
                     })
-                elif he_estado == 'PENDIENTE':
+                else:
                     results_to_delete_he.append((emp_id, fecha))
             else:
                 results_to_delete.append((emp_id, fecha))
@@ -3385,6 +3385,12 @@ class AsistenciaService:
             res['minutos_atraso'] = 0
             res['minutos_salida_adelantada'] = 0
             res['minutos_deuda'] = 0
+
+        # Enforce mutual exclusivity of debt and overtime (business rule)
+        if res.get('minutos_deuda', 0) > 0:
+            res['minutos_extra_bruto'] = 0.0
+        elif res.get('minutos_extra_bruto', 0) > 0:
+            res['minutos_deuda'] = 0.0
 
         return res
 
