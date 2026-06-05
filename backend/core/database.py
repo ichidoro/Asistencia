@@ -80,12 +80,40 @@ class HybridDatabase:
             logger.info("☁️ Cloud Run detectado → Modo NUBE PURA (sin réplica local)")
         
         
+    def _get_lock(self, name: str) -> asyncio.Lock:
+        """Obtiene o recrea el lock asegurando que esté vinculado al event loop actual"""
+        lock_var = f"_{name}"
+        lock = getattr(self, lock_var)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return lock
+            
+        if hasattr(lock, '_loop') and lock._loop is not None:
+            if lock._loop != loop:
+                logger.warning(f"🔄 Recreando {lock_var} porque el event loop actual cambió o es diferente")
+                lock = asyncio.Lock()
+                setattr(self, lock_var, lock)
+        return lock
+
+    @property
+    def db_lock(self) -> asyncio.Lock:
+        return self._get_lock('db_lock')
+
+    @property
+    def reset_lock(self) -> asyncio.Lock:
+        return self._get_lock('reset_lock')
+
+    @property
+    def sync_lock(self) -> asyncio.Lock:
+        return self._get_lock('sync_lock')
+
     async def connect(self, retry: bool = True) -> None:
         """Establece la conexión nativa con Turso (Embedded Replica o Remote)"""
         if self._connected:
             return
             
-        async with self._reset_lock:
+        async with self.reset_lock:
             if self._connected:
                 return
             await self._connect_locked(retry)
@@ -180,23 +208,27 @@ class HybridDatabase:
             
             # PRAGMAs de resiliencia y performance post-conexión
             # FIX-CORRUPCION: Usar solo PRAGMAs seguros para embedded replicas Turso
-            try:
-                cursor = self.conn.cursor()
-                cursor.execute("PRAGMA busy_timeout = 5000")        # 5s espera ante SQLITE_BUSY
-                # WAL es el journal_mode recomendado por Turso para embedded replicas
-                # (mvcc es experimental y no está documentado con sync de replicas)
-                cursor.execute("PRAGMA journal_mode = WAL")
-                # NORMAL es seguro con WAL mode (WAL ya protege contra crash)
-                # FULL causaba overhead de fsync innecesario que ralentizaba writes
-                cursor.execute("PRAGMA synchronous = NORMAL")
-                cursor.execute("PRAGMA cache_size = -32000")         # 32MB page cache en RAM
-                cursor.execute("PRAGMA temp_store = MEMORY")         # tablas temporales en RAM
-                # FIX-CORRUPCION: mmap_size ELIMINADO — incompatible con embedded replicas
-                # El mmap puede mantener páginas stale que no reflejan los cambios del sync
-                self._pragma_applied = True
-                logger.info("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, synchronous=NORMAL, cache=32MB)")
-            except Exception as pragma_err:
-                logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
+            if self._force_turso_only:
+                logger.info("☁️ Modo Nube Pura: Se omiten PRAGMAs locales (no soportados por Hrana)")
+                self._pragma_applied = False
+            else:
+                try:
+                    cursor = self.conn.cursor()
+                    cursor.execute("PRAGMA busy_timeout = 5000")        # 5s espera ante SQLITE_BUSY
+                    # WAL es el journal_mode recomendado por Turso para embedded replicas
+                    # (mvcc es experimental y no está documentado con sync de replicas)
+                    cursor.execute("PRAGMA journal_mode = WAL")
+                    # NORMAL es seguro con WAL mode (WAL ya protege contra crash)
+                    # FULL causaba overhead de fsync innecesario que ralentizaba writes
+                    cursor.execute("PRAGMA synchronous = NORMAL")
+                    cursor.execute("PRAGMA cache_size = -32000")         # 32MB page cache en RAM
+                    cursor.execute("PRAGMA temp_store = MEMORY")         # tablas temporales en RAM
+                    # FIX-CORRUPCION: mmap_size ELIMINADO — incompatible con embedded replicas
+                    # El mmap puede mantener páginas stale que no reflejan los cambios del sync
+                    self._pragma_applied = True
+                    logger.info("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, synchronous=NORMAL, cache=32MB)")
+                except Exception as pragma_err:
+                    logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
 
             # Sync post-conexión:
             # Si es la primera inicialización de la réplica (base de datos vacía), el sync es bloqueante.
@@ -220,7 +252,7 @@ class HybridDatabase:
                 try:
                     sync_label = "DB vacía" if is_empty else "DB con tablas"
                     logger.info(f"🔄 Sync inicial bloqueante ({sync_label}) — descargando datos de Turso Cloud...")
-                    async with self._db_lock:
+                    async with self.db_lock:
                         def _sync_and_checkpoint():
                             """Sync + checkpoint en el MISMO thread para evitar WAL corrupto."""
                             self.conn.sync()
@@ -264,7 +296,7 @@ class HybridDatabase:
         try:
             # Sync único para subir las tablas creadas por init_tables()
             if hasattr(self.conn, 'sync'):
-                async with self._db_lock:
+                async with self.db_lock:
                     await asyncio.to_thread(self.conn.sync)
                 logger.info("☁️ Tablas sincronizadas a Turso Cloud")
             
@@ -282,7 +314,7 @@ class HybridDatabase:
 
     async def reset_local_db(self):
         """Desconecta, limpia archivos locales y reconecta con control de concurrencia"""
-        async with self._reset_lock:
+        async with self.reset_lock:
             logger.warning("🔄 Iniciando proceso de RESET de base de datos local...")
             
             if self._connected and self.conn:
@@ -563,7 +595,7 @@ class HybridDatabase:
                 # Fase 1: Adquisición del lock con timeout de 10s
                 try:
                     async with asyncio.timeout(10):
-                        await self._db_lock.acquire()
+                        await self.db_lock.acquire()
                 except asyncio.TimeoutError:
                     logger.warning(f"⏳ _db_lock timeout en EXECUTE (intento {attempt}/{max_retries}): {query[:60]}...")
                     last_error = asyncio.TimeoutError("db_lock timeout")
@@ -574,7 +606,7 @@ class HybridDatabase:
                 try:
                     status, error_obj = await asyncio.to_thread(_do_execute)
                 finally:
-                    self._db_lock.release()
+                    self.db_lock.release()
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
@@ -650,7 +682,7 @@ class HybridDatabase:
         if not self._connected:
             await self.connect()
 
-        lock_to_use = self._db_lock
+        lock_to_use = self.db_lock
         conn_to_use = self.conn
 
         max_retries = 3
@@ -805,7 +837,7 @@ class HybridDatabase:
                 # ── Adquisición del lock (máx 10s) ──────────────────────────
                 try:
                     async with asyncio.timeout(10):
-                        await self._db_lock.acquire()
+                        await self.db_lock.acquire()
                 except asyncio.TimeoutError:
                     logger.warning(f"⏳ _db_lock timeout en BATCH (intento {attempt}/{max_retries})")
                     await asyncio.sleep(0.5)
@@ -816,7 +848,7 @@ class HybridDatabase:
                     status, error_obj = await asyncio.to_thread(_do_batch_local)
                 finally:
                     # Lock liberado ANTES del sync a la nube → desbloquea hot path
-                    self._db_lock.release()
+                    self.db_lock.release()
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
@@ -910,7 +942,7 @@ class HybridDatabase:
 
                 try:
                     async with asyncio.timeout(30):
-                        async with self._db_lock:
+                        async with self.db_lock:
                             status, error_obj = await asyncio.to_thread(_do_script)
                 except asyncio.TimeoutError:
                     logger.warning(f"⏳ _db_lock timeout en SCRIPT (intento {attempt}/{max_retries})")
@@ -991,13 +1023,13 @@ class HybridDatabase:
 
         # Si ya hay un sync en vuelo (push_to_cloud del execute_batch), descartamos este turno.
         # El scheduler lo reintentará en el próximo intervalo. Los datos están seguros en WAL local.
-        if self._sync_lock.locked():
+        if self.sync_lock.locked():
             logger.debug("⏸️ sync_from_cloud: sync en vuelo, turno del scheduler descartado")
             return
 
         try:
-            async with self._sync_lock:
-                async with self._db_lock:
+            async with self.sync_lock:
+                async with self.db_lock:
                     _t0 = datetime.now()
                     await asyncio.to_thread(self.conn.sync)
                     _elapsed = (datetime.now() - _t0).total_seconds()
@@ -1051,7 +1083,7 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 t0 = asyncio.get_event_loop().time()
-                async with self._db_lock:
+                async with self.db_lock:
                     await asyncio.to_thread(self.conn.sync)
                     
                     # FIX4: Checkpoint TRUNCATE — consolida y vacía el WAL completamente.
@@ -1174,7 +1206,7 @@ class HybridDatabase:
             if self.conn and hasattr(self.conn, 'sync'):
                 try:
                     logger.info("🔄 Descargando datos desde Turso Cloud (sync post-heal)...")
-                    async with self._db_lock:
+                    async with self.db_lock:
                         await asyncio.wait_for(
                             asyncio.to_thread(self.conn.sync),
                             timeout=120.0

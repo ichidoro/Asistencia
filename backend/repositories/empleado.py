@@ -637,11 +637,11 @@ class EmpleadoRepository:
         
         if q:
             query += """ AND (
-                nombre LIKE ? OR 
-                apellido_paterno LIKE ? OR 
-                apellido_materno LIKE ? OR
-                rut LIKE ? OR
-                cargo LIKE ?
+                e.nombre LIKE ? OR 
+                e.apellido_paterno LIKE ? OR 
+                e.apellido_materno LIKE ? OR
+                e.rut LIKE ? OR
+                e.cargo LIKE ?
             )"""
             search_pattern = f"%{q}%"
             params.extend([search_pattern] * 5)
@@ -651,11 +651,11 @@ class EmpleadoRepository:
             params.append(area)
         
         if compania:
-            query += " AND compania = ?"
+            query += " AND e.compania = ?"
             params.append(compania)
         
         if activo is not None:
-            query += " AND activo = ?"
+            query += " AND e.activo = ?"
             params.append(1 if activo else 0)
         
         result = await self.db.fetch_one(query, tuple(params))
