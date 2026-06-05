@@ -320,7 +320,8 @@ class AsistenciaRepository:
                 a.hora_salida_colacion, a.hora_entrada_colacion, a.hora_inicio_permiso, a.hora_termino_permiso, a.minutos_permisos_detectados,
                 a.tiene_atraso, a.tiene_salida_adelantada, a.tiene_permiso, a.deuda_condonada,
                 e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, a_table.nombre as area, e.activo,
-                t.nombre as turno_nombre
+                t.nombre as turno_nombre,
+                td.etiqueta_bloque
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
@@ -328,6 +329,9 @@ class AsistenciaRepository:
                 AND a.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
             LEFT JOIN areas a_table ON h.area_id = a_table.id
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
+            LEFT JOIN turno_dias td ON td.turno_id = a.turno_asignado_id 
+                AND td.num_semana = a.num_semana_ganadora 
+                AND td.dia_semana = (CASE strftime('%w', a.fecha) WHEN '0' THEN 6 ELSE CAST(strftime('%w', a.fecha) AS INTEGER) - 1 END)
             WHERE a.fecha BETWEEN ? AND ?
               AND a.fecha >= COALESCE(e.fecha_ingreso, '1900-01-01')
               AND a.fecha <= COALESCE(e.fecha_salida, '2099-12-31')

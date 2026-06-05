@@ -3539,15 +3539,18 @@ class AsistenciaService:
 
         cal_svc = CalendarioService()
 
-        # Definición de queries para carga masiva concurrente
         q_asist = f"""
             SELECT a.*, t.nombre as turno_nombre,
                    he.estado as estado_he,
                    he.minutos_autorizados as minutos_extra_autorizados,
-                   COALESCE((SELECT SUM(minutos) FROM compensaciones_he_inasistencia WHERE empleado_id = a.empleado_id AND fecha_inasistencia = a.fecha), 0.0) as minutos_compensados_he
+                   COALESCE((SELECT SUM(minutos) FROM compensaciones_he_inasistencia WHERE empleado_id = a.empleado_id AND fecha_inasistencia = a.fecha), 0.0) as minutos_compensados_he,
+                   td.etiqueta_bloque
             FROM asistencias a
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
+            LEFT JOIN turno_dias td ON td.turno_id = a.turno_asignado_id 
+                AND td.num_semana = a.num_semana_ganadora 
+                AND td.dia_semana = (CASE strftime('%w', a.fecha) WHEN '0' THEN 6 ELSE CAST(strftime('%w', a.fecha) AS INTEGER) - 1 END)
             WHERE a.empleado_id IN ({ids_ph}) AND a.fecha BETWEEN ? AND ?
             ORDER BY a.empleado_id, a.fecha
         """

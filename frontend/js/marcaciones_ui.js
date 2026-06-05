@@ -5631,8 +5631,15 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
 // ─── TOOLTIP DASHBOARD PREMIUM (LIGHT THEME) ────────────────────
 function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const dayName = dt ? days[dt.getDay()] : '';
-    const dateFormatted = dayName ? `${dayName} ${dateStr}` : dateStr;
+    let dateFormatted = dateStr;
+    if (dt) {
+        const dayNum = dt.getDate();
+        const monthName = months[dt.getMonth()];
+        const year = dt.getFullYear();
+        dateFormatted = dayName ? `${dayName} ${dayNum} de ${monthName}, ${year}` : dateStr;
+    }
     const empName = empInfo ? (empInfo.nombre_completo || empInfo.nombre || 'Empleado') : 'Empleado';
     const empAreaText = empInfo && empInfo.area ? empInfo.area : 'SIN ÁREA';
     const isFer = !!feriadoDesc;
@@ -5660,16 +5667,18 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                     <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
                 </div>
-                <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem; margin-bottom: 8px;">
-                    ${dateFormatted}
-                </div>
-                <div style="display:flex; align-items:flex-start; justify-content:flex-start; gap:8px; margin-bottom: 10px;">
-                    <span style="color:var(--text-secondary, #64748b); font-weight:700; font-size:0.65rem; text-transform:uppercase; margin-top: 4px;">ESTADO:</span>
-                    <div style="flex:1; display:flex; justify-content:flex-start; text-align:left;">${emptyStateHtml}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem;">
+                        ${dateFormatted}
+                    </div>
+                    <div>
+                        ${emptyStateHtml}
+                    </div>
                 </div>
                 <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
                 <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
                 <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-bottom:2px;">TURNO: <span style="color:var(--text-primary, #1e293b);">${fallbackShift}</span></div>
+                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-bottom:2px;">CICLO: <span style="color:var(--text-primary, #1e293b);">--</span></div>
                 ${scheduleHtml}
                 ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
             </div>
@@ -5692,15 +5701,13 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         'JORNADA_ESPECIAL': '<i class="bi bi-star-fill me-1"></i>',
         'EXTRA': '<i class="bi bi-plus-circle-fill me-1"></i>',
         'ANOMALIA': '<i class="bi bi-exclamation-triangle-fill me-1"></i>',
-        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>'  // fallback defensivo
+        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>'
     };
     
-    // Nombres para mostrar en tooltip — desde caché de BD con fallback al código
     const stateNameMap = {};
     Object.values(window._estadosAsistencia || {}).forEach(e => {
         stateNameMap[e.codigo] = e.nombre_display || e.codigo;
     });
-    // Fallbacks mínimos si la caché no cargó
     if (!stateNameMap['OK']) {
         Object.assign(stateNameMap, {
             'OK': 'OK', 'INASISTENCIA': 'INASISTENCIA',
@@ -5709,10 +5716,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             'ANOMALIA': 'ANOMALÍA (INCOMPLETA)'
         });
     }
-    // PENDIENTE nunca debe mostrarse — siempre mappear a ANOMALÍA visualmente
     stateNameMap['PENDIENTE'] = 'ANOMALÍA (JE INCOMPLETA)';
     
-    // Class mappings for badges
     const pillClassMap = {
         'OK': 'badge-state-success',
         'INASISTENCIA': 'badge-state-danger',
@@ -5725,7 +5730,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         'JORNADA_ESPECIAL': 'badge-state-info',
         'EXTRA': 'badge-state-info',
         'ANOMALIA': 'bg-dark text-white border-0',
-        'PENDIENTE': 'bg-dark text-white border-0'   // fallback defensivo → igual que ANOMALIA
+        'PENDIENTE': 'bg-dark text-white border-0'
     };
 
     let badgeHtml = '';
@@ -5734,19 +5739,13 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     if (est === 'ATR_SAD') {
         const b1 = `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-clock-fill me-1"></i>ATRASO</div>`;
         const b2 = `<div class="badge-status badge-state-info" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-box-arrow-left me-1"></i>SAL. ADEL. ${perSuffix}</div>`;
-        badgeHtml = `<div style="display:flex; flex-direction:column; align-items:flex-start; gap: 4px;">${b1}${b2}</div>`;
+        badgeHtml = `<div style="display:flex; flex-direction:column; align-items:flex-end; gap: 4px;">${b1}${b2}</div>`;
     } else {
         const fullName = stateNameMap[est] || (e.nomenclatura || est);
         const pillClass = pillClassMap[est] || 'badge-state-info';
         const icon = iconMap[est] || '';
         badgeHtml = `<div class="badge-status ${pillClass}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon}${fullName}${perSuffix}</div>`;
     }
-    
-    badgeHtml = `
-    <div style="display:flex; align-items:flex-start; justify-content:flex-start; gap:8px;">
-        <span style="color:var(--text-secondary, #64748b); font-weight:700; font-size:0.65rem; text-transform:uppercase; margin-top: 4px;">ESTADO:</span>
-        <div style="flex:1; display:flex; justify-content:flex-start; text-align:left;">${badgeHtml}</div>
-    </div>`;
     
     // Formatters
     const _fM = (m) => {
@@ -5769,7 +5768,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     if (e.minutos_salida_adelantada > 0) incidencias.push(`Salida anticipada por ${formatExactMinutesToTime(e.minutos_salida_adelantada)}`);
     if (e.minutos_deuda > 0 && e.minutos_atraso === 0 && e.minutos_salida_adelantada === 0) incidencias.push(`Deuda total de ${formatExactMinutesToTime(e.minutos_deuda)}`);
     if (e.tiene_permiso || e.tiene_permiso_hora || e.permiso_activo || e.minutos_permisos_detectados > 0) {
-        // Formato BD: "HH:MM:SS" → recortar a "HH:MM"
         const hIni  = e.hora_inicio_permiso  ? String(e.hora_inicio_permiso).substring(0,5)  : null;
         const hFin  = e.hora_termino_permiso ? String(e.hora_termino_permiso).substring(0,5) : null;
         const durMin = e.minutos_permisos_detectados || e.minutos_permiso_personal_deuda || 0;
@@ -5782,8 +5780,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             if (durMin > 0) permisoTxt += ` (${formatExactMinutesToTime(durMin)})`;
         } else if (durMin > 0) {
             permisoTxt = `Permiso de ${formatExactMinutesToTime(durMin)}`;
-        } else if (e.observaciones) {
-            permisoTxt = `Ausencia Justificada: ${e.observaciones}`;
         }
         incidencias.push(permisoTxt);
     }
@@ -5819,54 +5815,17 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
     // Colación Logic
     const colAuto = e.minutos_colacion_auto || 0;
-    const colReal = e.minutos_colacion || 0;
     const colApli = e.minutos_colacion || 0;
 
     let colRealText = '';
     if (e.minutos_colacion_real > 0) {
-        colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Marcas)</span>`;
+        colRealText = `<span style="font-size:0.55rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Marcas)</span>`;
     } else if (colApli > 0) {
-        colRealText = `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Auto)</span>`;
-    }
-
-    // Observaciones + evidencia de condonación
-    let obsHtml = '';
-    // Nota de evidencia de condonación (tiene prioridad visual, va al inicio de OBSERVACIONES)
-    if (e.deuda_condonada > 0) {
-        const tiposCondonacion = { 1: 'Salida Adelantada', 2: 'Atraso', 3: 'Atraso y Salida Adelantada' };
-        const tipoTexto = tiposCondonacion[e.deuda_condonada] || 'Deuda';
-        const notaCondonacion = `<div style="display:flex; align-items:center; gap:6px; font-size:0.7rem; color:#047857; font-weight:600;">
-            <i class="bi bi-check-circle-fill" style="color:#10b981; font-size:0.85rem;"></i>
-            Deuda condonada — ${tipoTexto}
-        </div>`;
-        obsHtml = `
-        <div style="background-color: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 8px; margin-top: 12px;">
-            <div style="color: #15803d; font-weight: 800; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 4px; text-transform: uppercase;">
-                ✓ PERDONAZO APLICADO
-            </div>
-            <div>${notaCondonacion}</div>
-            ${e.observaciones ? `<div style="margin-top:5px; color:#374151; font-size:0.7rem; line-height:1.4; border-top: 1px dashed #86efac; padding-top:5px;">${e.observaciones}</div>` : ''}
-        </div>`;
-    } else if (e.observaciones) {
-        const isAlert = e.observaciones.includes('[ALERTA SISTEMA');
-        const bg = isAlert ? 'var(--danger-light, #fef2f2)' : 'var(--light-bg, #f1f5f9)';
-        const border = isAlert ? 'var(--danger-color, #ef4444)' : 'var(--border-color, #e2e8f0)';
-        const textColor = isAlert ? 'var(--danger-color, #ef4444)' : 'var(--text-secondary, #64748b)';
-        const textMainColor = isAlert ? 'var(--danger-color, #dc2626)' : 'var(--text-primary, #1e293b)';
-        const titleText = isAlert ? '⚠️ ALERTA DE SISTEMA' : 'OBSERVACIONES';
-
-        obsHtml = `
-        <div style="background-color: ${bg}; border: 1px solid ${border}; border-radius: 6px; padding: 8px; margin-top: 12px;">
-            <div style="color: ${textColor}; font-weight: 800; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 4px; text-transform: uppercase;">
-                ${titleText}
-            </div>
-            <div style="color: ${textMainColor}; font-size: 0.7rem; line-height: 1.4; font-weight: ${isAlert ? '600' : 'normal'};">
-                ${e.observaciones}
-            </div>
-        </div>`;
+        colRealText = `<span style="font-size:0.55rem; color:var(--text-secondary, #64748b); font-family:'Inter',sans-serif; font-weight:normal;">(Auto)</span>`;
     }
 
     const shiftName = e.turno_nombre || (empInfo && empInfo.turno) || 'SIN PROGRAMACIÓN';
+    const cycleName = e.etiqueta_bloque || '--';
 
     let heBreakdownHtml = '';
     if (heBruta > 0) {
@@ -5884,7 +5843,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const esAncladoEntrada = e.observaciones && e.observaciones.includes("dentro del anclaje");
             if (hr_ent && ht_ent && !esAncladoEntrada) {
                 let diff = timeToMins(ht_ent) - timeToMins(hr_ent);
-                // Ajuste cruce de medianoche: si diff > 720 min (12h), restar 1440 (24h)
                 if (diff > 720) diff -= 1440;
                 if (diff < -720) diff += 1440;
                 if (diff > 0) {
@@ -5896,7 +5854,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const esAncladoSalida = e.observaciones && e.observaciones.includes("Salida dentro del anclaje");
             if (hr_sal && ht_sal && !esAncladoSalida) {
                 let diff = timeToMins(hr_sal) - timeToMins(ht_sal);
-                // Ajuste cruce de medianoche: si diff > 720 min (12h), restar 1440 (24h)
                 if (diff > 720) diff -= 1440;
                 if (diff < -720) diff += 1440;
                 if (diff > 0) {
@@ -5919,95 +5876,158 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         }
     }
 
+    // Calculate presence time (Permanencia)
+    const rawTimeToMins = (t) => {
+        if (!t) return 0;
+        const p = t.split(':');
+        const h = parseInt(p[0] || '0', 10);
+        const m = parseInt(p[1] || '0', 10);
+        const s = parseInt(p[2] || '0', 10);
+        return h * 60 + m + s / 60;
+    };
+
+    let permProgMins = 0;
+    if (e.hora_entrada_teorica && e.hora_salida_teorica) {
+        let diff = rawTimeToMins(e.hora_salida_teorica) - rawTimeToMins(e.hora_entrada_teorica);
+        if (diff < 0) diff += 1440;
+        permProgMins = diff;
+    }
+
+    let permRealMins = 0;
+    if (e.hora_entrada_real && e.hora_salida_real) {
+        let diff = rawTimeToMins(e.hora_salida_real) - rawTimeToMins(e.hora_entrada_real);
+        if (diff < 0) diff += 1440;
+        permRealMins = diff;
+    }
+
+    // Build Horas Extras Card (only if bruto or approved/autorizados exist)
+    let heCardHtml = '';
+    if (heBruta > 0 || heAprobada > 0) {
+        let heRows = '';
+        if (heBruta > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Bruta</span> ${valMins(heBruta, 'var(--success-color, #10b981)')}</div>`;
+        if (heAprobada > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Aprobada</span> ${valMins(heAprobada, 'var(--success-color, #10b981)')}</div>`;
+        if (hePendiente > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Pendiente</span> ${valMins(hePendiente, 'var(--success-color, #10b981)')}</div>`;
+        if (heRechazada > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Rechazada</span> ${valMins(heRechazada, 'var(--success-color, #10b981)')}</div>`;
+        heRows += `<div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(heTotal, 'var(--success-color, #10b981)')}</div>`;
+
+        heCardHtml = `
+        <div style="flex: 1; border: 1px solid rgba(16, 185, 129, 0.2); background-color: rgba(16, 185, 129, 0.05); border-radius: 6px; padding: 8px;">
+            <div style="color: var(--success-color, #10b981); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
+                <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> ${(est === 'EXTRA' || est === 'JORNADA_ESPECIAL') ? (stateNameMap[est] || 'HORAS EXTRAS') : 'HORAS EXTRAS'}
+            </div>
+            ${heRows}
+            ${heBreakdownHtml}
+        </div>`;
+    }
+
+    // Build Deuda Card (only if minutes_deuda > 0)
+    let deudaCardHtml = '';
+    if (!(e.deuda_condonada > 0 || !e.minutos_deuda || e.minutos_deuda <= 0)) {
+        let deudaRows = '';
+        if (e.minutos_atraso > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_atraso, 'var(--danger-color, #f43f5e)')}</div>`;
+        }
+        if (e.minutos_salida_adelantada > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_salida_adelantada, 'var(--danger-color, #f43f5e)')}</div>`;
+        }
+        if (e.minutos_exceso_colacion > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins(e.minutos_exceso_colacion, 'var(--danger-color, #f43f5e)')}</div>`;
+        }
+        if (e.minutos_permisos_detectados > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins(e.minutos_permisos_detectados, 'var(--danger-color, #f43f5e)')}</div>`;
+        }
+        deudaRows += `<div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Comp.</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>`;
+
+        deudaCardHtml = `
+        <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
+            <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
+                <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
+            </div>
+            ${deudaRows}
+        </div>`;
+    }
+
+    let cardsHtml = '';
+    if (heCardHtml || deudaCardHtml) {
+        cardsHtml = `
+        <div style="display: flex; gap: 10px;">
+            ${heCardHtml}
+            ${deudaCardHtml}
+        </div>`;
+    }
+
     const html = `
     <div style="width: 340px; font-family: 'Inter', sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 12px; border-radius: 6px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium);">
         
-        <!-- Header Principal (Apilado verticalmente) -->
+        <!-- Header Principal -->
         <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
             
             <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                 <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
             </div>
             
-            <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem; margin-bottom: 8px;">
-                ${dateFormatted}
-            </div>
-            
-            <div style="margin-bottom: 10px;">
-                ${badgeHtml}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem;">
+                    ${dateFormatted}
+                </div>
+                <div>
+                    ${badgeHtml}
+                </div>
             </div>
 
             <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
             <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase;">TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase;">CICLO: <span style="color:var(--text-primary, #1e293b);">${cycleName}</span></div>
             ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
             
         </div>
 
-        <!-- Tabla Principal -->
+        <!-- Tabla Principal (Desglose de cálculo de horas) -->
         <div style="margin-bottom: 12px;">
             <div style="display: flex; margin-bottom: 6px;">
-                <div style="width: 30%;"></div>
-                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6rem; letter-spacing: 0.5px;">PROGRAMADO</div>
-                <div style="width: 35%; text-align: center; color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.6rem; letter-spacing: 0.5px;">REAL</div>
+                <div style="width: 32%;"></div>
+                <div style="width: 34%; text-align: center; color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6rem; letter-spacing: 0.5px;">PROGRAMADO</div>
+                <div style="width: 34%; text-align: center; color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.6rem; letter-spacing: 0.5px;">REAL</div>
             </div>
             
+            <!-- Entrada -->
             <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
-                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Entrada</div>
-                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_entrada_teorica ? (e.hora_entrada_teorica.length === 5 ? e.hora_entrada_teorica + ':00' : e.hora_entrada_teorica) : '--:--:--'}</div>
-                <div style="width: 35%; text-align: center; color: ${e.alerta_atraso ? 'var(--warning-color, #f59e0b)' : 'var(--text-primary, #1e293b)'}; font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_entrada_real || '--:--:--'}</div>
+                <div style="width: 32%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Entrada</div>
+                <div style="width: 34%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_entrada_teorica ? (e.hora_entrada_teorica.length === 5 ? e.hora_entrada_teorica + ':00' : e.hora_entrada_teorica) : '--:--:--'}</div>
+                <div style="width: 34%; text-align: center; color: ${e.alerta_atraso ? 'var(--warning-color, #f59e0b)' : 'var(--text-primary, #1e293b)'}; font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_entrada_real || '--:--:--'}</div>
             </div>
+            <!-- Salida -->
             <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
-                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Salida</div>
-                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_salida_teorica ? (e.hora_salida_teorica.length === 5 ? e.hora_salida_teorica + ':00' : e.hora_salida_teorica) : '--:--:--'}</div>
-                <div style="width: 35%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_salida_real || '--:--:--'}</div>
+                <div style="width: 32%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Salida</div>
+                <div style="width: 34%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.hora_salida_teorica ? (e.hora_salida_teorica.length === 5 ? e.hora_salida_teorica + ':00' : e.hora_salida_teorica) : '--:--:--'}</div>
+                <div style="width: 34%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.hora_salida_real || '--:--:--'}</div>
             </div>
+            <!-- Permanencia -->
             <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
-                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">
-                    Colación ${colRealText ? `<span style="font-size:0.6rem; color:var(--text-secondary, #64748b); font-weight:normal; margin-left:2px;">${colRealText}</span>` : ''}
+                <div style="width: 32%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Permanencia</div>
+                <div style="width: 34%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${permProgMins > 0 ? _fM(permProgMins) : '--:--:--'}</div>
+                <div style="width: 34%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${permRealMins > 0 ? _fM(permRealMins) : '--:--:--'}</div>
+            </div>
+            <!-- Descuento Colación -->
+            <div style="display: flex; align-items: center; border-bottom: 1px dashed var(--border-color, #e2e8f0); padding: 4px 0;">
+                <div style="width: 32%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">
+                    Descuento Colación ${colRealText ? `<span style="font-size:0.55rem; color:var(--text-secondary, #64748b); font-weight:normal; margin-left:2px;">${colRealText}</span>` : ''}
                 </div>
-                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${colAuto > 0 ? _fM(colAuto) : '--:--:--'}</div>
-                <div style="width: 35%; text-align: center; color: var(--text-primary, #1e293b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${_fM(colApli)}</div>
+                <div style="width: 34%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${colAuto > 0 ? '-' + _fM(colAuto) : '--:--:--'}</div>
+                <div style="width: 34%; text-align: center; color: var(--danger-color, #f43f5e); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${colApli > 0 ? '-' + _fM(colApli) : '--:--:--'}</div>
             </div>
+            <!-- Horas Efectivas -->
             <div style="display: flex; align-items: center; padding: 4px 0;">
-                <div style="width: 30%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 500;">Horas</div>
-                <div style="width: 35%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace;">${e.horas_teoricas ? formatDecimalToTime(e.horas_teoricas) : '--:--:--'}</div>
-                <div style="width: 35%; text-align: center; color: ${hoursColor}; font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.horas_trabajadas ? formatDecimalToTime(e.horas_trabajadas) : '--:--:--'}</div>
+                <div style="width: 32%; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-weight: 700;">Horas Efectivas</div>
+                <div style="width: 34%; text-align: center; color: var(--text-secondary, #64748b); font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.horas_teoricas ? formatDecimalToTime(e.horas_teoricas) : '--:--:--'}</div>
+                <div style="width: 34%; text-align: center; color: ${hoursColor}; font-size: 0.75rem; font-family: monospace; font-weight: 700;">${e.horas_trabajadas ? formatDecimalToTime(e.horas_trabajadas) : '--:--:--'}</div>
             </div>
         </div>
 
         ${incidenciasHtml}
 
-        <!-- Bloques HE y Deuda -->
-        <div style="display: flex; gap: 10px;">
-            <!-- Horas Extras -->
-            <div style="flex: 1; border: 1px solid rgba(16, 185, 129, 0.2); background-color: rgba(16, 185, 129, 0.05); border-radius: 6px; padding: 8px;">
-                <div style="color: var(--success-color, #10b981); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
-                    <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> ${(est === 'EXTRA' || est === 'JORNADA_ESPECIAL') ? (stateNameMap[est] || 'HORAS EXTRAS') : 'HORAS EXTRAS'}
-                </div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Bruta</span> ${valMins(heBruta, 'var(--success-color, #10b981)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Aprobada</span> ${valMins(heAprobada, 'var(--success-color, #10b981)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Pendiente</span> ${valMins(hePendiente, 'var(--success-color, #10b981)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Rechazada</span> ${valMins(heRechazada, 'var(--success-color, #10b981)')}</div>
-                <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(heTotal, 'var(--success-color, #10b981)')}</div>
-                ${heBreakdownHtml}
-            </div>
-
-            <!-- Deuda: solo se renderiza si NO hay condonación activa y si REALMENTE existe deuda financiera -->
-            ${(e.deuda_condonada > 0 || !e.minutos_deuda || e.minutos_deuda <= 0) ? '' : `
-            <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
-                <div style="color: var(--danger-color, #f43f5e); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; margin-bottom: 8px;">
-                    <i class="bi bi-circle-fill me-1" style="font-size: 0.4rem; vertical-align: middle;"></i> DEUDA
-                </div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_atraso, 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_salida_adelantada, 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins((e.minutos_exceso_colacion || 0), 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins((e.minutos_permisos_detectados || 0), 'var(--danger-color, #f43f5e)')}</div>
-                <div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Comp.</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>
-            </div>`}
-        </div>
-
-        ${obsHtml}
+        ${cardsHtml}
     </div>
     `;
 
