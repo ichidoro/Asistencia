@@ -1313,20 +1313,20 @@
                         <div class="card-body p-3">
                             <div class="row g-3 align-items-end">
                                 <div class="col-lg-2 col-md-4" id="filtro-p4-container-buscar">
-                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar Empleado</label>
+                                    <label for="productos-4-search" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar Empleado</label>
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light border-end-0"><i class="bi bi-funnel text-muted"></i></span>
                                         <input type="text" id="productos-4-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="Productos4Module.refrescarVistaActiva()">
                                     </div>
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-sm-6" id="filtro-p4-container-area">
-                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-geo-alt me-1"></i>Área</label>
+                                    <label for="productos-4-filtro-area" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-geo-alt me-1"></i>Área</label>
                                     <select id="productos-4-filtro-area" class="form-select form-select-sm bg-light" onchange="Productos4Module.refrescarVistaActiva()">
                                         <option value="">Todas</option>
                                     </select>
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-sm-6">
-                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-calendar-event me-1"></i>Mes</label>
+                                    <label for="productos-4-filtro-mes" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-calendar-event me-1"></i>Mes</label>
                                     <select id="productos-4-filtro-mes" class="form-select form-select-sm bg-light">
                                         <option value="1">Enero</option>
                                         <option value="2">Febrero</option>
@@ -1343,7 +1343,7 @@
                                     </select>
                                 </div>
                                 <div class="col-lg-1 col-md-4 col-sm-6">
-                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-calendar3 me-1"></i>Año</label>
+                                    <label for="productos-4-filtro-anio" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-calendar3 me-1"></i>Año</label>
                                     <select id="productos-4-filtro-anio" class="form-select form-select-sm bg-light">
                                         <option value="2024">2024</option>
                                         <option value="2025">2025</option>
@@ -1353,7 +1353,7 @@
                                     </select>
                                 </div>
                                 <div class="col-lg-3 col-md-4" id="filtro-p4-container-estado">
-                                    <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-filter-circle me-1"></i>Filtrar Estado</label>
+                                    <label for="productos-4-filtro-estado" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-filter-circle me-1"></i>Filtrar Estado</label>
                                     <select id="productos-4-filtro-estado" class="form-select form-select-sm bg-light" onchange="Productos4Module.refrescarVistaActiva()">
                                         <option value="todos">Todos los Empleados</option>
                                         <option value="califica">Solo Habilitados / Califican</option>
