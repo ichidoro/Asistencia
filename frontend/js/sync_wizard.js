@@ -2865,19 +2865,21 @@ async function loadStep10EmployeesData() {
     
     window._wizardState.employeesFullData = [];
     
-    await Promise.all(employees.map(async (emp) => {
+    const results = await Promise.all(employees.map(async (emp) => {
         try {
             const resp = await fetch(`/api/empleados/${emp.id}/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
-                const fullEmp = await resp.json();
-                window._wizardState.employeesFullData.push(fullEmp);
+                return await resp.json();
             }
         } catch (e) {
             console.error('Error fetching employee details for step 10:', e);
         }
+        return null;
     }));
+    
+    window._wizardState.employeesFullData = results.filter(emp => emp !== null);
 }
 
 window.renderWizardStep10 = async function() {
