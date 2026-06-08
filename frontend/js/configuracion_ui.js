@@ -1671,6 +1671,8 @@ window.cargarCatalogoAreas = async function() {
             return;
         }
 
+        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
+
         container.innerHTML = areas.map(area => {
             const aliasHtml = area.alias.length > 0 
                 ? area.alias.map(al => `
@@ -1690,7 +1692,14 @@ window.cargarCatalogoAreas = async function() {
                     <div class="card h-100 border-0 shadow-sm">
                         <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center py-3">
                             <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-building me-2 text-primary"></i>${area.nombre}</h6>
-                            <span class="badge ${badgeCls} rounded-pill">${area.alias.length} errores</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge ${badgeCls} rounded-pill">${area.alias.length} errores</span>
+                                ${canEdit ? `
+                                    <button class="btn btn-sm btn-outline-danger border-0 p-1 lh-1" onclick="window.confirmDeleteArea(${area.id}, '${area.nombre.replace(/'/g, "\\'")}')" title="Eliminar Área">
+                                        <i class="bi bi-trash fs-6"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
                         <div class="card-body p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
                             ${aliasHtml}
@@ -1703,6 +1712,60 @@ window.cargarCatalogoAreas = async function() {
     } catch (error) {
         console.error(error);
         container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
+    }
+};
+
+window.confirmDeleteArea = function(areaId, areaNombre) {
+    if(typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: '¿Eliminar Área?',
+            html: `¿Está seguro de que desea eliminar el área <b>"${areaNombre}"</b>?<br><br><span class="text-danger small"><i class="bi bi-exclamation-triangle-fill"></i> Esta acción no se puede deshacer y fallará si el área contiene empleados activos o marcaciones en su historial.</span>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar área',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.deleteArea(areaId);
+            }
+        });
+    } else {
+        if(confirm(`¿Eliminar el área "${areaNombre}"?\n\nEsta acción no se puede deshacer y fallará si el área contiene empleados activos o marcaciones en su historial.`)) {
+            window.deleteArea(areaId);
+        }
+    }
+};
+
+window.deleteArea = async function(areaId) {
+    try {
+        const response = await fetch(`/api/configuracion/areas/${areaId}/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Error al eliminar el área");
+        }
+        
+        cargarCatalogoAreas();
+        
+        if(typeof showToast === 'function') {
+            showToast("Área eliminada exitosamente.", "success");
+        } else if(typeof Swal !== 'undefined') {
+            Swal.fire('Eliminada!', 'El área ha sido eliminada.', 'success');
+        }
+    } catch(error) {
+        console.error(error);
+        if(typeof Swal !== 'undefined') {
+            Swal.fire('Error al eliminar', error.message, 'error');
+        } else if(typeof showToast === 'function') {
+            showToast(error.message, "error");
+        } else {
+            alert(error.message);
+        }
     }
 };
 

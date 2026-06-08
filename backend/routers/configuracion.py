@@ -798,6 +798,88 @@ async def delete_area_alias(
         raise HTTPException(status_code=404, detail="Alias no encontrado")
     return
 
+@router.delete("/areas/{area_id}/", status_code=204)
+async def delete_area(
+    area_id: int,
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Eliminar un área principal aplicando restricciones de empleados activos y marcaciones."""
+    # 1. Verificar existencia del área
+    area = await db.fetch_one("SELECT * FROM areas WHERE id = ?", (area_id,))
+    if not area:
+        raise HTTPException(status_code=404, detail="El área no existe.")
+
+    # 2. Verificar si hay empleados activos asignados a esta área actualmente
+    emp_count = await db.fetch_one("SELECT COUNT(*) as count FROM empleados WHERE area_id = ?", (area_id,))
+    if emp_count and emp_count["count"] > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el área '{area['nombre']}' porque tiene {emp_count['count']} empleado(s) activo(s) asignado(s). Por favor reasígnelos antes de intentar eliminar."
+        )
+
+    # 3. Verificar si hay marcaciones crudas (logs_raw) asociadas a empleados (activos o históricos) durante su permanencia en esta área
+    logs_count = await db.fetch_one("""
+        SELECT COUNT(*) as count 
+        FROM logs_raw l
+        JOIN historial_areas ha ON l.empleado_id = ha.empleado_id
+        WHERE ha.area_id = ?
+          AND substr(l.fecha_hora, 1, 10) BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
+    """, (area_id,))
+    if logs_count and logs_count["count"] > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el área '{area['nombre']}' porque existen marcaciones crudas ({logs_count['count']}) asociadas a esta área en el historial."
+        )
+
+    # 4. Verificar si hay jornadas de asistencia procesadas (asistencias) asociadas a esta área en el historial
+    asist_count = await db.fetch_one("""
+        SELECT COUNT(*) as count
+        FROM asistencias a
+        JOIN historial_areas ha ON a.empleado_id = ha.empleado_id
+        WHERE ha.area_id = ?
+          AND a.fecha BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
+    """, (area_id,))
+    if asist_count and asist_count["count"] > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el área '{area['nombre']}' porque existen jornadas de asistencia procesadas ({asist_count['count']}) asociadas a esta área en el historial."
+        )
+
+    # 5. Verificar si hay registros de horas extras calculadas (horas_extras) asociados a esta área en el historial
+    he_count = await db.fetch_one("""
+        SELECT COUNT(*) as count
+        FROM horas_extras he
+        JOIN historial_areas ha ON he.empleado_id = ha.empleado_id
+        WHERE ha.area_id = ?
+          AND he.fecha BETWEEN ha.fecha_desde AND COALESCE(ha.fecha_hasta, '2099-12-31')
+    """, (area_id,))
+    if he_count and he_count["count"] > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el área '{area['nombre']}' porque existen registros de horas extras ({he_count['count']}) asociados a esta área en el historial."
+        )
+
+    # 6. Proceder con la eliminación
+    # Primero eliminar historial_areas (ya que no hay marcas asociadas a este area, es seguro limpiar su historial)
+    await db.execute("DELETE FROM historial_areas WHERE area_id = ?", (area_id,))
+    
+    # areas_alias, area_bonos, turno_areas se eliminarán por cascada en SQLite
+    await db.execute("DELETE FROM areas WHERE id = ?", (area_id,))
+
+    # Registrar en auditoría
+    await db.execute(
+        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+        (
+            current_user.user_id,
+            current_user.username,
+            "DELETE_AREA_MANUAL",
+            "Configuracion",
+            f"Eliminada área manualmente: '{area['nombre']}' (ID: {area_id})."
+        )
+    )
+    return
+
 # ============================================
 # CARGOS Y ALIAS (CATÁLOGO Y AUDITORÍA)
 # ============================================
