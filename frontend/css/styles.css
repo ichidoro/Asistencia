@@ -3688,4 +3688,54 @@ tr:hover .emp-name-cell {
 }
 #page-dashboard .card[style*="border-top"] {
     border-top-width: 4px !important;
+}
+
+/* Print styles for Porteria QR Codes */
+@media print {
+    body > *:not(#qr-print-template) {
+        display: none !important;
+    }
+    #qr-print-template, #qr-print-template * {
+        visibility: visible !important;
+        display: block !important;
+    }
+    #qr-print-template {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+    .print-card-6x6 {
+        width: 6cm !important;
+        height: 6cm !important;
+        border: 2px dashed #333 !important;
+        padding: 0.3cm !important;
+        margin: 0 auto !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        background: #fff !important;
+        color: #000 !important;
+        page-break-inside: avoid !important;
+    }
+    .print-card-6x6 img {
+        width: 3.5cm !important;
+        height: 3.5cm !important;
+    }
+    .print-card-6x6 .print-title {
+        font-size: 10pt !important;
+        font-weight: bold !important;
+        text-align: center !important;
+        margin: 0 !important;
+    }
+    .print-card-6x6 .print-subtitle {
+        font-size: 8pt !important;
+        font-family: monospace !important;
+        color: #555 !important;
+        margin: 0 !important;
+    }
 }

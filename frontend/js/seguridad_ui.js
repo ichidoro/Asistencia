@@ -81,6 +81,11 @@ const MAPA_UI_PERMISOS = {
     'productos_4.consolidar':       { module: '4 PRODUCTOS', action: 'Consolidar',       description: 'Ver consolidado global de productos propios (sin RLS)', permissions: ['productos_4.consolidar'] },
     'productos_4.entregar':         { module: '4 PRODUCTOS', action: 'Entregar',         description: 'Ver y registrar entregas de productos propios (sin RLS)', permissions: ['productos_4.entregar'] },
     'productos_4.catalogo':         { module: '4 PRODUCTOS', action: 'Catálogo',         description: 'Ver y gestionar el catálogo de productos propios en Configuración', permissions: ['productos_4.catalogo'] },
+
+    // ── MÓDULO PORTERÍA (3) ──
+    'porteria.ver':                 { module: 'PORTERÍA', action: 'Ver Historial',  description: 'Ver el historial de rondas nocturnas y fotos de hallazgos (Lectura)', permissions: ['porteria.ver'] },
+    'porteria.registrar':           { module: 'PORTERÍA', action: 'Registrar',      description: 'Registrar pasos por puntos de control y reportar hallazgos (Guardia)', permissions: ['porteria.registrar'] },
+    'porteria.editar':              { module: 'PORTERÍA', action: 'Editar / Configurar', description: 'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control', permissions: ['porteria.editar'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
@@ -471,6 +476,11 @@ function getPermissionDetails(permId) {
         'productos_4.consolidar':       { alert: 'Ubicación: Menú lateral / Tab Consolidado', flow: 'Ver consolidado global acumulado por producto (sin RLS).' },
         'productos_4.entregar':         { alert: 'Ubicación: Menú lateral / Tab Entrega Beneficio', flow: 'Ver listado y registrar entregas físicas de productos (sin RLS).' },
         'productos_4.catalogo':         { alert: 'Ubicación: Configuración / Catálogo Propio', flow: 'Ver y administrar el catálogo de productos de elaboración propia.' },
+
+        // Portería
+        'porteria.ver':                 { alert: 'Ubicación: Menú lateral / Portería', flow: 'Ver el historial de rondas nocturnas y fotos de hallazgos (Lectura).' },
+        'porteria.registrar':           { alert: 'Ubicación: Menú lateral / Portería', flow: 'Registrar pasos por puntos de control y reportar hallazgos (Guardia).' },
+        'porteria.editar':              { alert: 'Ubicación: Configuración / Catálogo de Hallazgos', flow: 'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control.' },
     };
     return details[permId] || null;
 }
@@ -496,7 +506,8 @@ function renderMatrizPermisos() {
         'MARCACIONES': '🕐',
         'REPORTES': '📊',
         'CONFIGURACIÓN': '⚙️',
-        '4 PRODUCTOS': '🎁'
+        '4 PRODUCTOS': '🎁',
+        'PORTERÍA': '🛡️'
     };
 
     // Render HTML

@@ -198,6 +198,11 @@ class SeguridadRepository:
                 ('productos_4.consolidar',       '4 Productos',    'Ver consolidado global de productos propios (sin RLS)'),
                 ('productos_4.entregar',         '4 Productos',    'Ver y registrar entregas de productos propios (sin RLS)'),
                 ('productos_4.catalogo',         '4 Productos',    'Ver y gestionar el catálogo de productos propios en Configuración'),
+
+                # ── Portería (3 permisos) ──
+                ('porteria.ver',                 'Portería',       'Ver el historial de rondas nocturnas y fotos de hallazgos'),
+                ('porteria.registrar',           'Portería',       'Registrar pasos por puntos de control y reportar hallazgos (Guardia)'),
+                ('porteria.editar',              'Portería',       'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control'),
             ]
 
             # --- MIGRACIÓN DE PERMISOS: productos_4 antiguos -> nuevos granulares ---

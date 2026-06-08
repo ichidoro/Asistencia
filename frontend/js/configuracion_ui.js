@@ -388,6 +388,25 @@ function initConfiguracionUI() {
         });
     }
 
+    // [NEW] Escuchar cambio a pestañas de Portería en Configuración
+    const hallazgosTabBtn = document.getElementById('catalogo-hallazgos-config-tab');
+    if (hallazgosTabBtn) {
+        hallazgosTabBtn.addEventListener('shown.bs.tab', () => {
+            if (typeof PorteriaModule !== 'undefined') {
+                PorteriaModule.initAdminTab();
+            }
+        });
+    }
+
+    const ubicacionesTabBtn = document.getElementById('catalogo-ubicaciones-config-tab');
+    if (ubicacionesTabBtn) {
+        ubicacionesTabBtn.addEventListener('shown.bs.tab', () => {
+            if (typeof PorteriaModule !== 'undefined') {
+                PorteriaModule.initUbicacionesTab();
+            }
+        });
+    }
+
     window._config_initialized = true;
 }
 
@@ -1825,6 +1844,7 @@ window.deleteAlias = async function(aliasId) {
         }
     }
 };
+
 
 // ==========================================
 // CATÁLOGO DE CARGOS Y ALIAS (AUDITORÍA)

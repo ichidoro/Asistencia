@@ -552,7 +552,8 @@ function _executeSwitchPage(pageName) {
     'calendario': 'Calendario Mensual',
     'reportes': 'Reportes y Estadísticas',
     'productos_4': '4 Productos',
-    'configuracion': 'Panel de Configuración'
+    'configuracion': 'Panel de Configuración',
+    'porteria': 'Portería y Control de Ronda'
   };
   document.getElementById('page-title').textContent = titles[pageName] || pageName;
 
@@ -577,6 +578,13 @@ function _executeSwitchPage(pageName) {
   } else if (pageName === 'productos_4') {
     console.log('🎁 Inicializando 4 Productos...');
     if (typeof Productos4Module !== 'undefined') Productos4Module.init();
+  } else if (pageName === 'porteria') {
+    console.log('🛡️ Inicializando Portería...');
+    if (typeof PorteriaModule !== 'undefined') {
+      PorteriaModule.actualizarInfoGuardia();
+      PorteriaModule.sincronizarLoteLocal(true);
+      PorteriaModule.cargarHistorialRondas();
+    }
   }
 }
 

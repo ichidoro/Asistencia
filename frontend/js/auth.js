@@ -67,6 +67,7 @@ const AuthService = {
                 user_id: data.user_id,
                 username: data.username,
                 rol_id: data.rol_id,
+                rol_nombre: data.rol_nombre,
                 alcance_global: data.alcance_global,
                 is_superuser: data.is_superuser || false,
                 areas: data.areas

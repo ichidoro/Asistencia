@@ -68,6 +68,7 @@ class Token(BaseModel):
     user_id: int
     username: str
     rol_id: int
+    rol_nombre: Optional[str] = None
     is_superuser: bool = False
     alcance_global: bool
     areas: List[str]

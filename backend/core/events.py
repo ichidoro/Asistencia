@@ -204,6 +204,11 @@ async def lifespan(app: FastAPI):
                 productos4_repo = Productos4Repository()
                 await productos4_repo.init_tables()
                 
+                # Inicializar tablas de Portería
+                from backend.repositories.porteria import PorteriaRepository
+                porteria_repo = PorteriaRepository(db)
+                await porteria_repo.init_tables()
+                
                 # Sincronizar/poblar tabla horas_extras con registros pendientes
                 from backend.repositories.hora_extra import HoraExtraRepository
                 he_repo = HoraExtraRepository(db)

@@ -179,6 +179,10 @@
                     <span class="icon">🎁</span>
                     <span>4 Productos</span>
                 </a>
+                <a href="#" class="sidebar-item" data-page="porteria" data-permiso="porteria.ver || porteria.registrar">
+                    <span class="icon">🛡️</span>
+                    <span>Portería</span>
+                </a>
                 <a href="#" class="sidebar-item" data-page="configuracion" data-permiso="configuracion.ver">
                     <span class="icon">⚙️</span>
                     <span>Configuración</span>
@@ -1408,6 +1412,181 @@
                     </div>
                 </div>
 
+                
+                <!-- PÁGINA: PORTERÍA -->
+                <div id="page-porteria" class="page">
+                    <div class="row mb-4">
+                        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <h2 class="fw-bold mb-1"><span class="me-2">🛡️</span>Portería y Control de Ronda</h2>
+                                <p class="text-muted mb-0">Módulo de control de rondas nocturnas perimetrales en planta.</p>
+                            </div>
+                            <!-- Indicador Offline/Sincronización -->
+                            <div id="porteria-sync-badge" class="d-flex align-items-center gap-2 px-3 py-2 rounded shadow-sm bg-success text-white">
+                                <span id="porteria-sync-indicator" class="status-dot bg-white"></span>
+                                <span id="porteria-sync-text" class="fw-bold small">En línea - Sin datos locales</span>
+                                <button id="porteria-btn-sync" class="btn btn-sm btn-light text-primary fw-bold ms-2 d-none" onclick="PorteriaModule.sincronizarLoteLocal()">
+                                    <i class="bi bi-cloud-arrow-up-fill me-1"></i>Sincronizar
+                                </button>
+                            </div>
+                        </div> <!-- Close col-12 d-flex -->
+                    </div> <!-- Close row mb-4 -->
+                    
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-white border-bottom-0 pt-3 pb-0">
+                            <ul class="nav nav-pills emp-nav-pills gap-2 flex-wrap" id="porteriaTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="rondas-tab" data-bs-toggle="tab" data-bs-target="#tab-rondas-nocturnas" type="button" role="tab">
+                                        <i class="bi bi-shield-shaded me-1"></i>Rondas Nocturnas
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="tab-content" id="porteriaTabsContent">
+                                <!-- TAB 1: RONDAS NOCTURNAS CONSOLIDADO -->
+                                <div class="tab-pane fade show active" id="tab-rondas-nocturnas" role="tabpanel">
+                                    <div class="row g-4">
+                                        <!-- COLUMNA IZQUIERDA: REGISTRO (Lector QR + Formulario) -->
+                                        <div class="col-lg-6" data-permiso="porteria.registrar" id="porteria-registrar-col">
+                                            <!-- Identificación del Guardia (Paso Inicial) -->
+                                            <div id="porteria-auth-guardia-container">
+                                                <div class="card border-0 shadow-sm text-center py-4" style="border-radius: 12px; background: #fafafa;">
+                                                    <div class="my-3 text-primary fs-1">
+                                                        <i class="bi bi-shield-check-fill"></i>
+                                                    </div>
+                                                    <h5 class="fw-bold text-dark">Identificación del Guardia</h5>
+                                                    <p class="text-muted small px-3">Por favor, confirma tu sesión activa para iniciar la ronda nocturna.</p>
+                                                    
+                                                    <div class="d-inline-flex flex-column align-items-center bg-white p-3 rounded border border-light shadow-sm my-2 mx-auto" style="min-width: 200px;">
+                                                        <span class="d-block fw-bold text-dark" id="porteria-guardia-nombre">👤 Cargando Guardia...</span>
+                                                        <span class="badge bg-primary mt-2" id="porteria-guardia-rol">Guardia</span>
+                                                    </div>
+                                                    
+                                                    <div class="mt-3">
+                                                        <button class="btn btn-primary fw-bold" onclick="PorteriaModule.iniciarRonda()">
+                                                            <i class="bi bi-play-fill me-1"></i>Iniciar Ronda
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Contenedor de Flujo de Ronda (Escáner + Formulario) - Se muestra al Iniciar Ronda -->
+                                            <div id="porteria-flujo-ronda-container" class="d-none">
+                                                <!-- Escáner -->
+                                                <div id="porteria-scanner-container" class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
+                                                    <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center">
+                                                        <h6 class="mb-0 fw-bold small"><i class="bi bi-qr-code-scan me-2"></i>Escáner de Puntos de Control</h6>
+                                                        <button class="btn btn-sm btn-outline-light py-0 px-2" onclick="PorteriaModule.cambiarCamara()" title="Cambiar Cámara">
+                                                            <i class="bi bi-camera-rotate fs-6"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="card-body p-0 bg-black position-relative d-flex align-items-center justify-content-center" style="min-height: 220px;">
+                                                        <div id="porteria-reader" class="w-100 h-100"></div>
+                                                    </div>
+                                                    <div class="card-footer bg-light py-1 text-center">
+                                                        <span id="porteria-scanner-status" class="small text-muted font-monospace" style="font-size: 0.8rem;">🎥 Esperando activación...</span>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Formulario -->
+                                                <div>
+                                                    <!-- Esperando Escaneo -->
+                                                    <div class="card border-0 shadow-sm text-center py-4" id="porteria-registro-punto-card" style="border-radius: 12px; min-height: 180px; background: #fafafa;">
+                                                        <div class="my-auto">
+                                                            <div class="fs-2 text-muted"><i class="bi bi-qr-code"></i></div>
+                                                            <h6 class="fw-bold text-dark mt-2">Esperando Escaneo QR</h6>
+                                                            <p class="text-muted small px-3 mb-0">Escanear código QR en el punto de control perimetral para registrar la ronda.</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Formulario de Anomalías -->
+                                                    <div class="card border-0 shadow-sm d-none" id="porteria-formulario-hallazgos-card" style="border-radius: 12px;">
+                                                        <div class="card-header bg-white border-bottom border-light py-2">
+                                                            <h6 class="mb-0 fw-bold text-dark small"><i class="bi bi-geo-alt-fill text-danger me-2"></i>Ubicación Detectada</h6>
+                                                        </div>
+                                                        <div class="card-body p-3">
+                                                            <div class="mb-3 text-center p-2 rounded border border-danger-subtle bg-danger-subtle bg-opacity-10">
+                                                                <h5 class="fw-bold mb-0 text-danger fs-6" id="porteria-form-ubicacion-nombre">UBICACIÓN EJEMPLO</h5>
+                                                                <span class="text-muted small font-monospace" id="porteria-form-ubicacion-codigo" style="font-size: 0.75rem;">Código: 001</span>
+                                                            </div>
+
+                                                            <div class="mb-3">
+                                                                <label for="porteria-form-hallazgo-select" class="form-label small fw-bold text-muted mb-1">Estado / Hallazgo</label>
+                                                                <select class="form-select form-select-sm" id="porteria-form-hallazgo-select" onchange="PorteriaModule.onSelectHallazgoCatalogo(this.value)">
+                                                                </select>
+                                                            </div>
+
+                                                            <div class="d-none" id="porteria-form-detalles-opcionales">
+                                                                <div class="mb-3">
+                                                                    <label for="porteria-foto-input" class="form-label small fw-bold text-muted mb-1">Evidencia Fotográfica (Obligatorio)</label>
+                                                                    <input class="form-control form-control-sm" type="file" id="porteria-foto-input" accept="image/*" capture="environment" onchange="PorteriaModule.procesarFotoCapturada(this)">
+                                                                </div>
+
+                                                                <div class="mb-3 d-none position-relative" id="porteria-preview-container">
+                                                                    <img id="porteria-foto-preview" src="" class="img-fluid rounded border shadow-sm" style="max-height: 150px; object-fit: cover;">
+                                                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2 rounded-circle" onclick="PorteriaModule.eliminarFotoCapturada()" title="Eliminar Foto">
+                                                                        <i class="bi bi-x"></i>
+                                                                    </button>
+                                                                </div>
+
+                                                                <div class="mb-3">
+                                                                    <label for="porteria-form-observacion" class="form-label small fw-bold text-muted mb-1">Observaciones</label>
+                                                                    <textarea class="form-control form-control-sm" id="porteria-form-observacion" rows="2" placeholder="Describa el hallazgo..."></textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="d-flex gap-2 mt-3">
+                                                                <button class="btn btn-sm btn-primary w-100 fw-bold" onclick="PorteriaModule.registrarPuntoControl()">
+                                                                    <i class="bi bi-check-circle me-1"></i>Registrar Punto
+                                                                </button>
+                                                                <button class="btn btn-sm btn-outline-secondary w-50" onclick="PorteriaModule.cancelarEscaneoPunto()">
+                                                                    Cancelar
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- COLUMNA DERECHA: HISTORIAL (Protegido por porteria.ver) -->
+                                        <div class="col-lg-6" data-permiso="porteria.ver" id="porteria-ver-col">
+                                            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; overflow: hidden;">
+                                                <div class="card-header bg-white border-bottom border-light py-2 d-flex justify-content-between align-items-center">
+                                                    <h6 class="mb-0 fw-bold text-dark small"><i class="bi bi-clock-history text-primary me-2"></i>Historial Reciente (Últimas 100 Rondas)</h6>
+                                                    <button class="btn btn-xs btn-light border py-0 px-2" onclick="PorteriaModule.cargarHistorialRondas()">
+                                                        <i class="bi bi-arrow-clockwise text-primary"></i> Actualizar
+                                                    </button>
+                                                </div>
+                                                <div class="table-responsive" style="max-height: 550px;">
+                                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                                                        <thead class="table-light sticky-top">
+                                                            <tr>
+                                                                <th>Fecha y Hora</th>
+                                                                <th>Ubicación</th>
+                                                                <th>Guardia</th>
+                                                                <th>Hallazgo / Estado</th>
+                                                                <th>Evidencia</th>
+                                                                <th>Sync</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="porteria-historial-tbody">
+                                                            <tr>
+                                                                <td colspan="6" class="text-center py-4 text-muted">No hay registros de rondas cargados.</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="page-configuracion" class="page">
                     <div class="card shadow-sm border-0">
                         <div class="card-header bg-white border-bottom-0 pt-3">
@@ -1485,6 +1664,18 @@
                                         data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo"
                                         onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()">🎁
                                         Productos Propios</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="catalogo-hallazgos-config-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-catalogo-hallazgos-config" type="button" role="tab" data-permiso="porteria.editar"
+                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()">🛡️
+                                        Catálogo Hallazgos</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="porteria-ubicaciones-config-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar"
+                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()">📍
+                                        Ubicación</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="sistema-config-tab" data-bs-toggle="tab"
@@ -1938,6 +2129,18 @@
                                 <div class="tab-pane fade" id="tab-productos-propios" role="tabpanel">
                                     <!-- Renders CRUD via JS -->
                                 </div>
+                                <!-- Tab Catálogo Hallazgos (Portería) -->
+                                <div class="tab-pane fade" id="tab-catalogo-hallazgos-config" role="tabpanel">
+                                    <div id="catalogo-hallazgos-container">
+                                        <!-- Cargado dinámicamente por PorteriaModule -->
+                                    </div>
+                                </div>
+                                <!-- Tab Ubicaciones (Portería) -->
+                                <div class="tab-pane fade" id="tab-porteria-ubicaciones" role="tabpanel">
+                                    <div id="porteria-ubicaciones-container">
+                                        <!-- Cargado dinámicamente por PorteriaModule -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1946,6 +2149,48 @@
             <!-- ============================================= -->
             <!-- SECCIÓN DE MODALES GLOBALES (RAÍZ DEL BODY) -->
             <!-- ============================================= -->
+
+            <!-- Modal Vista Previa e Impresión de QR (Portería) -->
+            <div id="modalVerQR" class="modal fade" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+                        <div class="modal-header bg-dark text-white border-0 py-3">
+                            <h5 class="modal-title fw-bold fs-6"><i class="bi bi-qr-code me-2"></i>Ubicación de Portería: Código QR</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-4 text-center">
+                            <div class="mb-3 text-muted small">
+                                Escanee este código QR para registrar la ronda nocturna en esta ubicación perimetral.
+                            </div>
+                            
+                            <!-- Contenedor del QR de visualización -->
+                            <div class="d-flex justify-content-center align-items-center bg-light p-4 rounded border border-light-subtle shadow-inner mb-4 mx-auto" style="width: 200px; height: 200px;" id="modal-qr-container">
+                                <div id="modal-qr-canvas"></div>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <h5 class="fw-bold mb-0 text-dark" id="modal-qr-ubicacion-nombre">UBICACIÓN EJEMPLO</h5>
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1 small font-monospace mt-1" id="modal-qr-ubicacion-codigo">Código: LOC001</span>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light border-0 py-3 d-flex justify-content-between">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            <button type="button" class="btn btn-sm btn-primary fw-bold px-3" onclick="PorteriaModule.imprimirQRCard()">
+                                <i class="bi bi-printer me-1"></i> Imprimir Tarjeta (6x6cm)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenedor para impresión de QR (oculto en pantalla, visible solo al imprimir) -->
+            <div id="qr-print-template" class="d-none">
+                <div class="print-card-6x6">
+                    <h5 class="print-title" id="qr-print-name">ÁREA</h5>
+                    <div id="qr-print-code"></div>
+                    <span class="print-subtitle" id="qr-print-code-text">CÓDIGO: 000</span>
+                </div>
+            </div>
 
             <!-- Modal Relleno Masivo (Magic Wand) -->
             <div id="modal-relleno-masivo" class="modal fade" tabindex="-1" aria-hidden="true">
@@ -4220,6 +4465,10 @@
             <!-- Consola de Seguridad y Cierre -->
             <script src="/static/js/seguridad_ui.js?v={{ startup_id }}" defer></script>
 
+            <!-- Módulo Portería y Control de Ronda -->
+            <script src="/static/js/libs/html5-qrcode.min.js" defer></script>
+            <script src="/static/js/libs/qrcode.min.js" defer></script>
+            <script src="/static/js/porteria_ui.js?v={{ startup_id }}" defer></script>
 
             <!-- Inicializador Principal -->
             <script src="/static/js/productos_4.js?v={{ startup_id }}" defer></script>

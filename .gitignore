@@ -290,6 +290,7 @@ secrets/
 *.key
 *.pem
 *.cert
+asistencia-13c58-*.json
 
 # ============================================
 # DEPLOYMENT
@@ -321,3 +322,6 @@ docker-compose.override.yml
 node_modules/
 package-lock.json
 yarn.lock
+
+# Scratch/
+scratch/

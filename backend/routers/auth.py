@@ -100,6 +100,7 @@ async def login_for_access_token(
         "user_id": user_data["id"],
         "username": user_data["username"],
         "rol_id": user_data["rol_id"],
+        "rol_nombre": user_data.get("rol_nombre"),
         "is_superuser": bool(user_data.get("is_superuser", 0)),
         "alcance_global": bool(user_data.get("alcance_global", 0)) or bool(user_data.get("is_superuser", 0)),
         "areas": areas
