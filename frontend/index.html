@@ -179,7 +179,7 @@
                     <span class="icon">🎁</span>
                     <span>4 Productos</span>
                 </a>
-                <a href="#" class="sidebar-item" data-page="porteria" data-permiso="porteria.ver || porteria.registrar">
+                <a href="#" class="sidebar-item" data-page="porteria" data-permiso="porteria.ver || porteria.registrar || porteria.rondas || porteria.llaves || porteria.art22 || porteria.proveedores || porteria.visitas">
                     <span class="icon">🛡️</span>
                     <span>Portería</span>
                 </a>
@@ -1435,11 +1435,34 @@
                     <div class="card shadow-sm border-0">
                         <div class="card-header bg-white border-bottom-0 pt-3 pb-0">
                             <ul class="nav nav-pills emp-nav-pills gap-2 flex-wrap" id="porteriaTabs" role="tablist">
-                                <li class="nav-item" role="presentation">
+                                <li class="nav-item" role="presentation" data-permiso="porteria.rondas">
                                     <button class="nav-link active" id="rondas-tab" data-bs-toggle="tab" data-bs-target="#tab-rondas-nocturnas" type="button" role="tab">
                                         <i class="bi bi-shield-shaded me-1"></i>Rondas Nocturnas
                                     </button>
                                 </li>
+                                <li class="nav-item" role="presentation" data-permiso="porteria.llaves">
+                                    <button class="nav-link" id="llaves-tab" data-bs-toggle="tab" data-bs-target="#tab-entrega-llaves" type="button" role="tab">
+                                        <i class="bi bi-key-fill me-1"></i>Entrega de Llaves
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation" data-permiso="porteria.art22">
+                                    <button class="nav-link" id="art22-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-art22" type="button" role="tab"
+                                        onclick="if(typeof Articulo22Module !== 'undefined') Articulo22Module.initTab()">
+                                        <i class="bi bi-file-earmark-text-fill me-1"></i>Ingreso Artículo 22
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation" data-permiso="porteria.proveedores">
+                                    <button class="nav-link" id="proveedores-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-proveedores" type="button" role="tab">
+                                        <i class="bi bi-truck me-1"></i>Ingreso Proveedores
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation" data-permiso="porteria.visitas">
+                                    <button class="nav-link" id="visitas-tab" data-bs-toggle="tab" data-bs-target="#tab-control-visitas" type="button" role="tab"
+                                        onclick="if(typeof VisitasModule !== 'undefined') VisitasModule.initTab()">
+                                        <i class="bi bi-person-badge-fill me-1"></i>Control de Visitas
+                                    </button>
+                                </li>
+
                             </ul>
                         </div>
                         <div class="card-body p-4">
@@ -1582,6 +1605,51 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- TAB 2: ENTREGA DE LLAVES -->
+                                <div class="tab-pane fade" id="tab-entrega-llaves" role="tabpanel">
+                                    <div class="text-center py-5">
+                                        <div class="mb-4">
+                                            <span style="font-size: 4rem;">🔑</span>
+                                        </div>
+                                        <h3 class="fw-bold text-dark mb-2">Entrega de Llaves</h3>
+                                        <p class="text-muted mb-4" style="max-width: 480px; margin: 0 auto;">Módulo de control y registro de entrega/devolución de llaves de planta, bodegas y oficinas.</p>
+                                        <span class="badge bg-warning text-dark px-3 py-2 fs-6">
+                                            <i class="bi bi-cone-striped me-1"></i>En Desarrollo
+                                        </span>
+                                        <p class="text-muted small mt-3">Este módulo estará disponible próximamente.</p>
+                                    </div>
+                                </div>
+
+                                <!-- TAB 3: INGRESO ARTÍCULO 22 -->
+                                <div class="tab-pane fade" id="tab-ingreso-art22" role="tabpanel">
+                                    <div id="art22-container">
+                                        <!-- Cargado dinámicamente por Articulo22Module -->
+                                    </div>
+                                </div>
+
+                                <!-- TAB 4: INGRESO PROVEEDORES -->
+                                <div class="tab-pane fade" id="tab-ingreso-proveedores" role="tabpanel">
+                                    <div class="text-center py-5">
+                                        <div class="mb-4">
+                                            <span style="font-size: 4rem;">🚚</span>
+                                        </div>
+                                        <h3 class="fw-bold text-dark mb-2">Ingreso Proveedores</h3>
+                                        <p class="text-muted mb-4" style="max-width: 480px; margin: 0 auto;">Control de ingreso y salida de proveedores con registro de vehículos, carga y documentación.</p>
+                                        <span class="badge bg-warning text-dark px-3 py-2 fs-6">
+                                            <i class="bi bi-cone-striped me-1"></i>En Desarrollo
+                                        </span>
+                                        <p class="text-muted small mt-3">Este módulo estará disponible próximamente.</p>
+                                    </div>
+                                </div>
+
+                                <!-- TAB 5: CONTROL DE VISITAS -->
+                                <div class="tab-pane fade" id="tab-control-visitas" role="tabpanel">
+                                    <div id="visitas-container">
+                                        <!-- Cargado dinámicamente por VisitasModule -->
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -4468,7 +4536,9 @@
             <!-- Módulo Portería y Control de Ronda -->
             <script src="/static/js/libs/html5-qrcode.min.js" defer></script>
             <script src="/static/js/libs/qrcode.min.js" defer></script>
-            <script src="/static/js/porteria_ui.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/porteria_ui.js?v={{ startup_id }}_v4" defer></script>
+    <script src="/static/js/articulo22_ui.js?v={{ startup_id }}_v1" defer></script>
+    <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v1" defer></script>
 
             <!-- Inicializador Principal -->
             <script src="/static/js/productos_4.js?v={{ startup_id }}" defer></script>

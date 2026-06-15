@@ -392,18 +392,23 @@ const PorteriaModule = (function () {
         console.log("🔍 Escaneo exitoso:", decodedText);
         
         // Detener cámara para procesar
-        if (html5QrCode) {
+        if (html5QrCode && html5QrCode.isScanning) {
             html5QrCode.stop().then(() => {
                 html5QrCode = null;
                 procesarCodigoEscaneado(decodedText);
             }).catch(e => {
                 console.error("Error al detener cámara:", e);
+                html5QrCode = null;
                 procesarCodigoEscaneado(decodedText);
             });
         } else {
+            html5QrCode = null;
             procesarCodigoEscaneado(decodedText);
         }
     }
+
+    // Exponer hook para testing automatizado
+    window.__simulateQrScan = onQrScanSuccess;
 
     function onQrScanError(err) {
         // Callback vacío para evitar spam en consola de errores normales de escaneo de cuadros
@@ -1182,6 +1187,13 @@ const PorteriaModule = (function () {
         if (!container) return;
 
         container.innerHTML = `
+            <style>
+                .qr-mini-box img, .qr-mini-box canvas {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: contain;
+                }
+            </style>
             <div class="row g-4">
                 <!-- Formulario de Configuración -->
                 <div class="col-lg-4">
@@ -1283,7 +1295,7 @@ const PorteriaModule = (function () {
                         <td class="fw-bold text-secondary font-monospace" style="width: 80px;">${c.codigo}</td>
                         <td class="fw-bold text-dark">${c.nombre}</td>
                         <td class="text-center py-1">
-                            <div id="qr-mini-${c.id}" class="d-inline-flex bg-white p-1 border rounded shadow-sm" style="width: 32px; height: 32px;"></div>
+                            <div id="qr-mini-${c.id}" class="qr-mini-box d-inline-flex bg-white p-1 border rounded shadow-sm" style="width: 32px; height: 32px;"></div>
                         </td>
                         <td>${badge}</td>
                         <td class="text-end">
@@ -1304,12 +1316,13 @@ const PorteriaModule = (function () {
             // Generar los QR minis en diferido
             list.forEach(c => {
                 const text = `${c.nombre.toUpperCase()} CODIGO ${c.codigo.toUpperCase()}`;
+                const cleanText = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ñ/gi, "n");
                 const container = document.getElementById(`qr-mini-${c.id}`);
                 if (container) {
                     new QRCode(container, {
-                        text: text,
-                        width: 24,
-                        height: 24,
+                        text: cleanText,
+                        width: 128,
+                        height: 128,
                         colorDark: "#000000",
                         colorLight: "#ffffff",
                         correctLevel: QRCode.CorrectLevel.M
@@ -1437,10 +1450,11 @@ const PorteriaModule = (function () {
 
     function abrirModalQRUbicacion(id, nombre, codigo) {
         const qrText = `${nombre.toUpperCase()} CODIGO ${codigo.toUpperCase()}`;
+        const cleanText = qrText.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ñ/gi, "n");
 
         // Actualizar textos en el modal
-        document.getElementById('modal-qr-area-nombre').innerText = nombre;
-        document.getElementById('modal-qr-area-codigo').innerText = `Código: ${codigo}`;
+        document.getElementById('modal-qr-ubicacion-nombre').innerText = nombre;
+        document.getElementById('modal-qr-ubicacion-codigo').innerText = `Código: ${codigo}`;
 
         // Limpiar contenedores de QR
         document.getElementById('modal-qr-container').innerHTML = '';
@@ -1448,7 +1462,7 @@ const PorteriaModule = (function () {
 
         // Generar QR para pantalla (modal)
         new QRCode(document.getElementById('modal-qr-container'), {
-            text: qrText,
+            text: cleanText,
             width: 130,
             height: 130,
             colorDark: "#000000",
@@ -1458,7 +1472,7 @@ const PorteriaModule = (function () {
 
         // Generar QR para impresión
         new QRCode(document.getElementById('qr-print-code'), {
-            text: qrText,
+            text: cleanText,
             width: 130,
             height: 130,
             colorDark: "#000000",

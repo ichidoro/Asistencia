@@ -7,6 +7,7 @@ import json
 
 class ConfiguracionRepository:
     _bonos_cache = None
+    _last_auto_heal_time = 0.0
 
     def __init__(self, db: Database):
         self.db = db
@@ -880,6 +881,12 @@ class ConfiguracionRepository:
 
     # --- PERIODOS RRHH ---
     async def _auto_heal_periodos(self):
+        import time
+        now = time.time()
+        if now - ConfiguracionRepository._last_auto_heal_time < 300.0:
+            return
+        ConfiguracionRepository._last_auto_heal_time = now
+        
         try:
             cerrados = await self.db.fetch_all("SELECT * FROM periodos_rrhh WHERE estado = 'cerrado'")
             for p in cerrados:
@@ -984,6 +991,7 @@ class ConfiguracionRepository:
         return await self.db.fetch_one("SELECT * FROM periodos_rrhh WHERE id = ?", (id,))
 
     async def create_periodo_rrhh(self, mes_cierre: str, fecha_inicio: str, fecha_fin: str, activo: int, estado: str) -> int:
+        ConfiguracionRepository._last_auto_heal_time = 0.0
         if activo == 1:
             await self.db.execute("UPDATE periodos_rrhh SET activo = 0")
         res = await self.db.execute(
@@ -993,6 +1001,7 @@ class ConfiguracionRepository:
         return res.lastrowid
 
     async def update_periodo_rrhh(self, id: int, mes_cierre: str, fecha_inicio: str, fecha_fin: str, activo: int, estado: str) -> bool:
+        ConfiguracionRepository._last_auto_heal_time = 0.0
         if activo == 1:
             await self.db.execute("UPDATE periodos_rrhh SET activo = 0 WHERE id != ?", (id,))
         res = await self.db.execute(
@@ -1002,10 +1011,12 @@ class ConfiguracionRepository:
         return res.rowcount > 0
 
     async def delete_periodo_rrhh(self, id: int) -> bool:
+        ConfiguracionRepository._last_auto_heal_time = 0.0
         res = await self.db.execute("DELETE FROM periodos_rrhh WHERE id = ?", (id,))
         return res.rowcount > 0
 
     async def set_periodo_rrhh_activo(self, id: int) -> bool:
+        ConfiguracionRepository._last_auto_heal_time = 0.0
         await self.db.execute("UPDATE periodos_rrhh SET activo = 0")
         res = await self.db.execute("UPDATE periodos_rrhh SET activo = 1 WHERE id = ?", (id,))
         return res.rowcount > 0

@@ -137,7 +137,18 @@ class TurnoRepository:
         # Acelera "WHERE empleado_id=? AND fecha_inicio<=? AND (fecha_fin IS NULL OR fecha_fin>=?)"
         # Sin esto, el motor hacía 3 lookups separados por cada día del periodo reprocesado.
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_asig_emp_rango ON asignacion_turnos(empleado_id, fecha_inicio, fecha_fin)")
-        
+
+        # [PLAN-v5] Migración: Campo semana_inicio en asignacion_turnos
+        # Permite a RRHH especificar en qué semana de rotación empieza el empleado.
+        # Sin este campo, el motor depende del fallback matemático (poco fiable el primer día).
+        cols_asig = set(await self.db.get_column_names("asignacion_turnos"))
+        if "semana_inicio" not in cols_asig:
+            try:
+                await self.db.execute("ALTER TABLE asignacion_turnos ADD COLUMN semana_inicio INTEGER")
+                logger.info("✨ Migración: Columna 'semana_inicio' agregada a asignacion_turnos")
+            except Exception as e:
+                logger.debug(f"[Migration] semana_inicio en asignacion_turnos: {e}")
+
         # [ELIMINADO] bolsa_horas_resumen — tabla fantasma sin INSERT, causa corrupción en Turso
 
         # 7. Tabla Asistencias (Marcaciones Procesadas)
@@ -729,12 +740,13 @@ class TurnoRepository:
             # 4. Crear nueva asignación (solo si no actualizamos in-place en 3.1)
             if insert_new:
                 sql_new = """
-                    INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin, semana_inicio)
+                    VALUES (?, ?, ?, ?, ?)
                 """
                 pending_ops.append((sql_new, (
                     asignacion.empleado_id, asignacion.turno_id, 
-                    asignacion.fecha_inicio, asignacion.fecha_fin
+                    asignacion.fecha_inicio, asignacion.fecha_fin,
+                    asignacion.semana_inicio
                 )))
 
             # 5. Ejecutar TODO en un solo Batch Atómico

@@ -1,5 +1,5 @@
 # ============================================
-# Aguacol Asistencia — Google Cloud Run
+# Aguacol Asistencia – Google Cloud Run
 # ============================================
 FROM python:3.13-slim
 

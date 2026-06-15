@@ -67,7 +67,7 @@ class AsistenciaRepository:
         eid = empleado_id['id'] if isinstance(empleado_id, dict) else empleado_id
         
         query = """
-            SELECT t.*, a.turno_id, a.id as asignacion_id, a.fecha_inicio as asignacion_desde
+            SELECT t.*, a.turno_id, a.id as asignacion_id, a.fecha_inicio as asignacion_desde, a.semana_inicio
             FROM turnos t
             JOIN asignacion_turnos a ON t.id = a.turno_id
             WHERE a.empleado_id = ? 

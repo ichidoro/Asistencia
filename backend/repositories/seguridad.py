@@ -199,10 +199,15 @@ class SeguridadRepository:
                 ('productos_4.entregar',         '4 Productos',    'Ver y registrar entregas de productos propios (sin RLS)'),
                 ('productos_4.catalogo',         '4 Productos',    'Ver y gestionar el catálogo de productos propios en Configuración'),
 
-                # ── Portería (3 permisos) ──
+                # ── Portería (8 permisos: 3 base + 5 pestañas) ──
                 ('porteria.ver',                 'Portería',       'Ver el historial de rondas nocturnas y fotos de hallazgos'),
                 ('porteria.registrar',           'Portería',       'Registrar pasos por puntos de control y reportar hallazgos (Guardia)'),
                 ('porteria.editar',              'Portería',       'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control'),
+                ('porteria.rondas',              'Portería',       'Pestaña Rondas Nocturnas → ver y consultar historial de rondas'),
+                ('porteria.llaves',              'Portería',       'Pestaña Entrega de Llaves → gestionar entrega y devolución'),
+                ('porteria.art22',               'Portería',       'Pestaña Artículo 22 → registrar ingreso/salida empleados excluidos'),
+                ('porteria.proveedores',         'Portería',       'Pestaña Proveedores → registrar ingreso/salida de proveedores'),
+                ('porteria.visitas',             'Portería',       'Pestaña Control de Visitas → registrar ingreso/salida de visitantes'),
             ]
 
             # --- MIGRACIÓN DE PERMISOS: productos_4 antiguos -> nuevos granulares ---

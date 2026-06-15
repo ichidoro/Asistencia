@@ -107,6 +107,7 @@ class AsignacionCreate(BaseModel):
     fecha_inicio: str # YYYY-MM-DD
     fecha_fin: Optional[str] = None # YYYY-MM-DD
     reemplazar: bool = False # Bandera para forzar sobrescritura
+    semana_inicio: Optional[int] = None  # [PLAN-v5] Semana de rotación inicial (1,2,3...)
 
 class AsignacionBulk(BaseModel):
     empleados_ids: List[int]
@@ -114,10 +115,12 @@ class AsignacionBulk(BaseModel):
     fecha_inicio: str # YYYY-MM-DD
     fecha_fin: Optional[str] = None # YYYY-MM-DD
     reemplazar: bool = False # Bandera para forzar sobrescritura
+    semana_inicio: Optional[int] = None  # [PLAN-v5] Semana de rotación inicial (1,2,3...)
 
 class AsignacionResponse(AsignacionCreate):
     id: int
     turno_nombre: Optional[str] = None
+    semana_inicio: Optional[int] = None
 
     class Config:
         from_attributes = True

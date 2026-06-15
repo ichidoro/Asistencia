@@ -29,7 +29,7 @@ from backend.core.database import db
 
 
 # Importar routers
-from backend.routers import empleados, sync, turnos, asistencia, configuracion, reportes, dashboard_api, startup, auth, seguridad, cierre, productos_4, porteria
+from backend.routers import empleados, sync, turnos, asistencia, configuracion, reportes, dashboard_api, startup, auth, seguridad, cierre, productos_4, porteria, articulo22, visitas
 from backend.core.sys_utils import kill_process_on_port
 
 
@@ -171,6 +171,8 @@ app.include_router(reportes.router, prefix="/api", tags=["reportes"])
 app.include_router(dashboard_api.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(productos_4.router, prefix="/api", tags=["4 Productos"])
 app.include_router(porteria.router, prefix="/api", tags=["Portería"])
+app.include_router(articulo22.router, prefix="/api", tags=["Artículo 22"])
+app.include_router(visitas.router, prefix="/api", tags=["Control de Visitas"])
 
 
 # ============================================

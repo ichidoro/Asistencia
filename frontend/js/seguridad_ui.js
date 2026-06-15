@@ -82,10 +82,15 @@ const MAPA_UI_PERMISOS = {
     'productos_4.entregar':         { module: '4 PRODUCTOS', action: 'Entregar',         description: 'Ver y registrar entregas de productos propios (sin RLS)', permissions: ['productos_4.entregar'] },
     'productos_4.catalogo':         { module: '4 PRODUCTOS', action: 'Catálogo',         description: 'Ver y gestionar el catálogo de productos propios en Configuración', permissions: ['productos_4.catalogo'] },
 
-    // ── MÓDULO PORTERÍA (3) ──
+    // ── MÓDULO PORTERÍA (8) ──
     'porteria.ver':                 { module: 'PORTERÍA', action: 'Ver Historial',  description: 'Ver el historial de rondas nocturnas y fotos de hallazgos (Lectura)', permissions: ['porteria.ver'] },
     'porteria.registrar':           { module: 'PORTERÍA', action: 'Registrar',      description: 'Registrar pasos por puntos de control y reportar hallazgos (Guardia)', permissions: ['porteria.registrar'] },
     'porteria.editar':              { module: 'PORTERÍA', action: 'Editar / Configurar', description: 'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control', permissions: ['porteria.editar'] },
+    'porteria.rondas':              { module: 'PORTERÍA', action: 'Pestaña Rondas',     description: 'Acceso a pestaña Rondas Nocturnas', permissions: ['porteria.rondas'] },
+    'porteria.llaves':              { module: 'PORTERÍA', action: 'Pestaña Llaves',     description: 'Acceso a pestaña Entrega de Llaves', permissions: ['porteria.llaves'] },
+    'porteria.art22':               { module: 'PORTERÍA', action: 'Pestaña Art. 22',    description: 'Acceso a pestaña Ingreso Artículo 22 (empleados excluidos)', permissions: ['porteria.art22'] },
+    'porteria.proveedores':         { module: 'PORTERÍA', action: 'Pestaña Proveedores',description: 'Acceso a pestaña Ingreso de Proveedores', permissions: ['porteria.proveedores'] },
+    'porteria.visitas':             { module: 'PORTERÍA', action: 'Pestaña Visitas',    description: 'Acceso a pestaña Control de Visitas (escaneo cédula)', permissions: ['porteria.visitas'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
