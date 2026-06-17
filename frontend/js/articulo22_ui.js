@@ -30,12 +30,19 @@ const Articulo22Module = (() => {
                 .art22-kpi .kpi-number { font-size: 2.25rem; font-weight: 800; line-height: 1; }
                 .art22-kpi .kpi-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.9; }
                 .art22-kpi .kpi-sub { font-size: 0.8rem; font-weight: 500; opacity: 0.8; margin-top: 2px; }
-                .art22-emp-row { display: flex; align-items: center; padding: 0.9rem 1rem; border-left: 4px solid transparent; transition: all 0.2s ease; }
-                .art22-emp-row:hover { background: linear-gradient(135deg, rgba(248,250,252,0.8), rgba(241,245,249,0.5)); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-                .art22-emp-row:not(:last-child) { border-bottom: 1px solid #f1f5f9; }
-                .art22-emp-row.estado-en_planta { border-left-color: #10b981; background: linear-gradient(90deg, rgba(209,250,229,0.15), transparent); }
-                .art22-emp-row.estado-fuera { border-left-color: #f43f5e; background: linear-gradient(90deg, rgba(255,228,230,0.15), transparent); }
-                .art22-emp-row.estado-sin_registro { border-left-color: #e2e8f0; }
+                .art22-emp-card { background: #fff; border-radius: 10px; margin: 6px 12px; padding: 0; border-left: 4px solid transparent; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; }
+                .art22-emp-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.07); transform: translateY(-1px); }
+                .art22-emp-card.estado-en_planta { border-left-color: #10b981; }
+                .art22-emp-card.estado-fuera { border-left-color: #f43f5e; }
+                .art22-emp-card.estado-sin_registro { border-left-color: #cbd5e1; }
+                .art22-card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px 16px; gap: 12px; }
+                .art22-card-identity { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+                .art22-card-info { min-width: 0; }
+                .art22-card-name { font-weight: 600; color: #1e293b; font-size: 0.85rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .art22-card-cargo { font-size: 0.72rem; color: #64748b; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .art22-card-metrics { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+                .art22-card-estadia { text-align: center; padding: 0 10px; }
+                .art22-card-timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 16px 12px 16px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.5); min-height: 32px; }
                 .art22-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #e2e8f0, #cbd5e1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: #475569; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
                 .art22-area-badge { display: inline-block; padding: 2px 8px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
                 .art22-mark { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
@@ -137,7 +144,7 @@ const Articulo22Module = (() => {
                         <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
                     </button>
                 </div>
-                <div id="art22-estado-body">
+                <div id="art22-estado-body" style="background:#f8fafc; padding:6px 0">
                     <div class="text-center py-5 text-muted">
                         <div class="spinner-border spinner-border-sm text-primary"></div> Cargando...
                     </div>
@@ -231,7 +238,7 @@ const Articulo22Module = (() => {
             ? (parts[0].trim()[0] || '') + (parts[1].trim()[0] || '')
             : (emp.nombre || '').substring(0,2);
 
-        // Marks timeline
+        // Marks timeline — compact dots on a horizontal line
         let marcasHtml = '';
         if (emp.marcas && emp.marcas.length > 0) {
             marcasHtml = emp.marcas.map((m, i) => {
@@ -240,7 +247,7 @@ const Articulo22Module = (() => {
                 const icon = isE ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
                 const label = isE ? 'E' : 'S';
                 const arrow = i < emp.marcas.length - 1 ? '<span class="art22-mark-arrow">→</span>' : '';
-                return `<span class="art22-mark ${cls}"><i class="bi ${icon}" style="font-size:0.65rem"></i>${m.hora.substring(0,5)} ${label}</span>${arrow}`;
+                return `<span class="art22-mark ${cls}"><i class="bi ${icon}" style="font-size:0.6rem"></i>${m.hora.substring(0,5)} ${label}</span>${arrow}`;
             }).join('');
         } else {
             marcasHtml = '<span style="font-size:0.78rem; color:#94a3b8; font-style:italic">Sin marcaciones hoy</span>';
@@ -261,29 +268,29 @@ const Articulo22Module = (() => {
         const btnIcon = proximaTipo === 'Entrada' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
 
         return `
-            <div class="art22-emp-row estado-${emp.estado}">
-                <div style="width:30%; display:flex; align-items:center; gap:12px; min-width:200px">
-                    <div class="art22-avatar">${initials.toUpperCase()}</div>
-                    <div>
-                        <div style="font-weight:600; color:#1e293b; font-size:0.85rem; line-height:1.2">${emp.nombre}</div>
-                        <div style="font-size:0.72rem; color:#64748b; margin-top:1px">${emp.cargo || ''}</div>
-                        <span class="art22-area-badge">${emp.area || ''}</span>
+            <div class="art22-emp-card estado-${emp.estado}">
+                <div class="art22-card-header">
+                    <div class="art22-card-identity">
+                        <div class="art22-avatar">${initials.toUpperCase()}</div>
+                        <div class="art22-card-info">
+                            <div class="art22-card-name">${emp.nombre}</div>
+                            <div class="art22-card-cargo">${emp.cargo || ''}</div>
+                            <span class="art22-area-badge">${emp.area || ''}</span>
+                        </div>
+                    </div>
+                    <div class="art22-card-metrics">
+                        <div class="art22-card-estadia">
+                            <div class="art22-estadia-label">Estadía</div>
+                            ${estadiaHtml}
+                        </div>
+                        <span class="art22-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
+                        <button class="${btnClass}" onclick="Articulo22Module.marcar(${emp.empleado_id})">
+                            ${proximaTipo} <i class="bi ${btnIcon}"></i>
+                        </button>
                     </div>
                 </div>
-                <div style="width:35%; display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:0 8px; min-width:200px">
+                <div class="art22-card-timeline">
                     ${marcasHtml}
-                </div>
-                <div style="width:12%; padding:0 12px; border-left:1px solid #f1f5f9; min-width:80px">
-                    <div class="art22-estadia-label">Estadía</div>
-                    ${estadiaHtml}
-                </div>
-                <div style="width:11%; text-align:center; min-width:90px">
-                    <span class="art22-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
-                </div>
-                <div style="width:12%; text-align:right; min-width:90px">
-                    <button class="${btnClass}" onclick="Articulo22Module.marcar(${emp.empleado_id})">
-                        ${proximaTipo} <i class="bi ${btnIcon}"></i>
-                    </button>
                 </div>
             </div>`;
     }

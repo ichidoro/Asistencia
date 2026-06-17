@@ -2432,61 +2432,39 @@
 }
 
 
-/* ─── ART22: Employee rows — card layout on mobile ─── */
+/* ─── ART22: Employee cards — stacked on mobile ─── */
 @media (max-width: 768px) {
-    /* Main row: wrap into a card layout */
-    .art22-emp-row {
-        flex-wrap: wrap !important;
+    .art22-emp-card {
+        margin: 6px 8px !important;
+        border-radius: 10px !important;
+    }
+
+    .art22-card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
         padding: 12px !important;
+        gap: 10px !important;
+    }
+
+    .art22-card-identity {
+        width: 100% !important;
+    }
+
+    .art22-card-metrics {
+        width: 100% !important;
+        justify-content: space-between !important;
         gap: 8px !important;
-        position: relative;
     }
 
-    /* Col 1: Name/avatar — full width */
-    .art22-emp-row > div:nth-child(1) {
-        width: 100% !important;
-        min-width: unset !important;
-        flex: 0 0 100% !important;
-    }
-
-    /* Col 2: Marcaciones — full width below name */
-    .art22-emp-row > div:nth-child(2) {
-        width: 100% !important;
-        min-width: unset !important;
-        flex: 0 0 100% !important;
-        padding: 6px 0 !important;
-    }
-
-    /* Col 3: Estadía — inline with status */
-    .art22-emp-row > div:nth-child(3) {
-        width: auto !important;
-        min-width: unset !important;
-        flex: 0 0 auto !important;
-        border-left: none !important;
-        padding: 0 8px 0 0 !important;
-    }
-
-    /* Col 4: Status pill — inline with estadía */
-    .art22-emp-row > div:nth-child(4) {
-        width: auto !important;
-        min-width: unset !important;
-        flex: 0 0 auto !important;
-        text-align: left !important;
-    }
-
-    /* Col 5: Action button — full width at bottom */
-    .art22-emp-row > div:nth-child(5) {
-        width: 100% !important;
-        min-width: unset !important;
-        flex: 0 0 100% !important;
-        text-align: left !important;
-        margin-top: 4px;
+    .art22-card-timeline {
+        padding: 8px 12px 10px 12px !important;
+        gap: 4px !important;
     }
 
     /* Entry/Exit buttons: full width, larger touch target */
     .art22-btn-entrada,
     .art22-btn-salida {
-        width: 100% !important;
+        width: auto !important;
         min-height: 44px !important;
         font-size: 0.85rem !important;
         padding: 10px 16px !important;
@@ -2495,6 +2473,7 @@
         justify-content: center !important;
         gap: 6px !important;
         border-radius: 8px !important;
+        flex: 1 !important;
     }
 
     /* Avatar: slightly smaller on mobile */
