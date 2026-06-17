@@ -204,38 +204,24 @@ async def get_estado_dia(
         # Cargar última marca anterior para heredabilidad de estado
         prev_mark = await repo.get_ultimo_registro_antes(fid, fecha)
         
-        # Determinar estado inicial a las 00:00:00
-        if prev_mark:
-            initial_state = "en_planta" if prev_mark["tipo"] == "ENTRADA" else "fuera"
+        # Determinar estado actual y última marca
+        if veh_marcas:
+            ultima_marca = veh_marcas[-1]
+            estado = "en_planta" if ultima_marca["tipo"] == "ENTRADA" else "fuera"
         else:
-            # Por defecto, si no hay marcas previas en la historia, se asume que inicia en planta
-            initial_state = "en_planta"
+            ultima_marca = None
+            if prev_mark:
+                estado = "en_planta" if prev_mark["tipo"] == "ENTRADA" else "fuera"
+            else:
+                # Por defecto, si no hay marcas en toda la historia, inicia en planta
+                estado = "en_planta"
 
-        # Construir lista extendida con marca virtual al inicio del día si aplica
-        full_marcas = []
-        if initial_state in ("en_planta", "fuera"):
-            virtual_tipo = "ENTRADA" if initial_state == "en_planta" else "SALIDA"
-            virtual_mark = {
-                "id": -1,
-                "flota_id": fid,
-                "tipo": virtual_tipo,
-                "fecha": fecha,
-                "hora": "00:00:00",
-                "registrado_por_id": None,
-                "registrado_por_nombre": "Sistema",
-                "observaciones": "Estado heredado del día anterior" if prev_mark else "Estado inicial por defecto",
-                "virtual": True
-            }
-            full_marcas.append(virtual_mark)
-        
-        full_marcas.extend(veh_marcas)
-
-        # Reconstruir datetimes cronológicos considerando el cruce de medianoche
+        # Reconstruir datetimes cronológicos considerando el cruce de medianoche (solo marcas reales del día)
         dts = []
-        for idx, m in enumerate(full_marcas):
+        for idx, m in enumerate(veh_marcas):
             dt = datetime.strptime(f"{m['fecha']} {m['hora']}", "%Y-%m-%d %H:%M:%S")
             if idx > 0:
-                prev_m = full_marcas[idx - 1]
+                prev_m = veh_marcas[idx - 1]
                 prev_dt = dts[idx - 1]
                 if m["fecha"] == prev_m["fecha"] and m["hora"] < prev_m["hora"]:
                     dt = dt + timedelta(days=1)
@@ -248,30 +234,28 @@ async def get_estado_dia(
         viaje_min = 0.0
         viajes_completados = 0
         
-        # Procesar pares de marcas cronológicamente
+        # Procesar pares de marcas cronológicamente del día
         i = 0
-        while i < len(full_marcas):
-            m = full_marcas[i]
+        while i < len(veh_marcas):
+            m = veh_marcas[i]
             dt_curr = dts[i]
             
             # Estadía (ENTRADA -> SALIDA)
             if m["tipo"] == "ENTRADA":
-                if i + 1 < len(full_marcas) and full_marcas[i+1]["tipo"] == "SALIDA":
+                if i + 1 < len(veh_marcas) and veh_marcas[i+1]["tipo"] == "SALIDA":
                     diff = (dts[i+1] - dt_curr).total_seconds() / 60.0
                     estadia_min += max(0.0, diff)
             
             # Viaje (SALIDA -> ENTRADA)
             elif m["tipo"] == "SALIDA":
-                if i + 1 < len(full_marcas) and full_marcas[i+1]["tipo"] == "ENTRADA":
+                if i + 1 < len(veh_marcas) and veh_marcas[i+1]["tipo"] == "ENTRADA":
                     diff = (dts[i+1] - dt_curr).total_seconds() / 60.0
                     viaje_min += max(0.0, diff)
                     viajes_completados += 1
             i += 1
             
-        # Evaluar sesión activa / abierta al final del periodo
-        ultima_marca = full_marcas[-1] if full_marcas else None
-        
-        if ultima_marca:
+        # Evaluar sesión activa / abierta al final del periodo (solo si hay marcas reales hoy)
+        if veh_marcas:
             dt_ultima = dts[-1]
             if es_hoy:
                 end_point = now
@@ -300,22 +284,17 @@ async def get_estado_dia(
         if es_hoy and ultima_marca and ultima_marca["tipo"] == "SALIDA":
             viaje_display += " ⏳"
 
-        # Estado visual
-        estado = "sin_registro"
-        if ultima_marca:
-            estado = "en_planta" if ultima_marca["tipo"] == "ENTRADA" else "fuera"
-
         # Obtener chofer activo para autocompletar si está "fuera" (en viaje/ruta)
         chofer_activo = None
-        if estado == "fuera" and ultima_marca:
+        if estado == "fuera":
             # Buscar el registro de salida real (ya sea hoy o el heredado de ayer)
             salida_real = None
-            for m in reversed(full_marcas):
+            for m in reversed(veh_marcas):
                 if m["tipo"] == "SALIDA":
                     salida_real = m
                     break
             
-            if not salida_real or salida_real.get("virtual"):
+            if not salida_real:
                 ultimo_global_marca = await repo.get_ultimo_registro_global(fid)
                 if ultimo_global_marca and ultimo_global_marca["tipo"] == "SALIDA":
                     salida_real = ultimo_global_marca
@@ -333,8 +312,8 @@ async def get_estado_dia(
             "area": veh["area_nombre"],
             "estado": estado,
             "marcas": veh_marcas,
-            "ultima_marca": ultima_marca["hora"] if (ultima_marca and not ultima_marca.get("virtual")) else (prev_mark["hora"] if prev_mark else None),
-            "ultima_marca_tipo": ultima_marca["tipo"] if ultima_marca else None,
+            "ultima_marca": ultima_marca["hora"] if ultima_marca else (prev_mark["hora"] if prev_mark else None),
+            "ultima_marca_tipo": ultima_marca["tipo"] if ultima_marca else (prev_mark["tipo"] if prev_mark else None),
             "estadia_total_min": round(estadia_min, 1),
             "estadia_display": estadia_display,
             "viaje_total_min": round(viaje_min, 1),
