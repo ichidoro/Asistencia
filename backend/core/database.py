@@ -68,16 +68,11 @@ class HybridDatabase:
         self.last_activity_time: float = 0.0
         self._realtime_sync_active: bool = False  # True después de enable_realtime_sync()
         
-        # Cloud Run: usar conexión directa a Turso (sin réplica local)
-        # El filesystem efímero de containers no soporta SQLite WAL correctamente.
-        # En desarrollo local (sin K_SERVICE), usamos Embedded Replica para máxima velocidad (0.1ms).
+        # SIEMPRE conectar directo a Turso Cloud — sin réplica local.
+        # Turso es la única fuente de verdad.
         if self.use_turso:
-            if os.environ.get("K_SERVICE"):
-                self._force_turso_only = True
-                logger.info("☁️ Cloud Run detectado → Modo NUBE PURA (sin réplica local)")
-            else:
-                self._force_turso_only = False
-                logger.info("🔌 Modo HÍBRIDO (Embedded Replica) habilitado para desarrollo local")
+            self._force_turso_only = True
+            logger.info("☁️ Modo NUBE PURA (Turso directo) — sin réplica local")
         
         
     def _get_lock(self, name: str) -> asyncio.Lock:
