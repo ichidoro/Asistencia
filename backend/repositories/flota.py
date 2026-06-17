@@ -165,6 +165,18 @@ class FlotaRepository:
         row = await self.db.fetch_one(query, (flota_id,))
         return dict(row) if row else None
 
+    async def get_ultimo_registro_antes(self, flota_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Obtiene la última marca registrada para un vehículo anterior a la fecha especificada"""
+        query = """
+            SELECT * FROM flota_registros 
+            WHERE flota_id = ? AND fecha < ? 
+            ORDER BY fecha DESC, hora DESC, id DESC 
+            LIMIT 1
+        """
+        row = await self.db.fetch_one(query, (flota_id, fecha))
+        return dict(row) if row else None
+
+
     async def marcar_movimiento(
         self, 
         flota_id: int, 

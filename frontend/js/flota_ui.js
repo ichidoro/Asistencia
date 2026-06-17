@@ -85,6 +85,66 @@ const FlotaModule = (() => {
                 text-transform: uppercase;
                 line-height: 1;
             }
+
+            /* Diseño de Marcas tipo Ticket Dividido */
+            .flota-mark-box {
+                display: inline-flex;
+                flex-direction: column;
+                width: 72px;
+                height: 40px;
+                border-radius: 6px;
+                overflow: hidden;
+                border: 1px solid #cbd5e1;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                text-align: center;
+                vertical-align: middle;
+                transition: all 0.2s;
+            }
+            .flota-mark-box:hover {
+                box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+                transform: translateY(-0.5px);
+            }
+            .flota-mark-box.entrada {
+                border-color: #6ee7b7;
+            }
+            .flota-mark-box.salida {
+                border-color: #fda4af;
+            }
+            .flota-mark-box .flota-mark-header {
+                font-size: 0.52rem;
+                font-weight: 800;
+                letter-spacing: 0.06em;
+                padding: 1.5px 0;
+                color: #ffffff;
+                text-transform: uppercase;
+                line-height: 1.2;
+            }
+            .flota-mark-box.entrada .flota-mark-header {
+                background-color: #10b981;
+            }
+            .flota-mark-box.salida .flota-mark-header {
+                background-color: #ef4444;
+            }
+            .flota-mark-box .flota-mark-time {
+                font-size: 0.78rem;
+                font-weight: 700;
+                color: #1e293b;
+                background-color: #ffffff;
+                padding: 2.5px 0;
+                flex-grow: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .flota-mark-arrow {
+                color: #94a3b8;
+                font-size: 0.85rem;
+                margin: 0 6px;
+                display: inline-flex;
+                align-items: center;
+                height: 40px;
+                vertical-align: middle;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -249,7 +309,7 @@ const FlotaModule = (() => {
                 <div class="col-md-4">
                     <div class="flota-kpi" style="background: linear-gradient(135deg, #f43f5e, #be123c)">
                         <i class="bi bi-compass-fill kpi-icon"></i>
-                        <div class="kpi-label">En Viaje</div>
+                        <div class="kpi-label">En Ruta</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="flota-stat-viaje">—</span>
                             <span class="kpi-sub">fuera de planta</span>
@@ -369,11 +429,16 @@ const FlotaModule = (() => {
         if (veh.marcas && veh.marcas.length > 0) {
             marcasHtml = veh.marcas.map((m, i) => {
                 const isE = m.tipo === 'ENTRADA';
-                const cls = isE ? 'flota-mark-e' : 'flota-mark-s';
-                const icon = isE ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
-                const label = isE ? 'E' : 'S';
-                const arrow = i < veh.marcas.length - 1 ? '<span class="flota-mark-arrow">→</span>' : '';
-                return `<span class="flota-mark ${cls}" title="Registrado por: ${m.registrado_por_nombre || 'Desconocido'}\nObservaciones: ${m.observaciones || 'Sin observaciones'}"><i class="bi ${icon}" style="font-size:0.6rem"></i>${m.hora.substring(0,5)} ${label}</span>${arrow}`;
+                const boxCls = isE ? 'entrada' : 'salida';
+                const label = isE ? 'RETORNO' : 'DESPACHO';
+                const timeStr = m.hora.substring(0, 5);
+                const arrow = i < veh.marcas.length - 1 ? '<span class="flota-mark-arrow"><i class="bi bi-chevron-right"></i></span>' : '';
+                return `
+                    <div class="flota-mark-box ${boxCls}" title="Registrado por: ${m.registrado_por_nombre || 'Desconocido'}\nObservaciones: ${m.observaciones || 'Sin observaciones'}">
+                        <div class="flota-mark-header">${label}</div>
+                        <div class="flota-mark-time">${timeStr}</div>
+                    </div>${arrow}
+                `;
             }).join('');
         } else {
             marcasHtml = '<span style="font-size:0.78rem; color:#94a3b8; font-style:italic">Sin movimientos hoy</span>';
@@ -390,12 +455,12 @@ const FlotaModule = (() => {
 
         // Badge de estado
         const statusClass = `flota-status-${veh.estado}`;
-        const statusLabel = veh.estado === 'en_planta' ? 'En Planta' : veh.estado === 'fuera' ? 'En Viaje' : 'Sin registro';
+        const statusLabel = veh.estado === 'en_planta' ? 'En Planta' : veh.estado === 'fuera' ? 'En Ruta' : 'Sin registro';
 
         // Acción
-        const proximaTipo = (veh.estado === 'en_planta') ? 'Salida' : 'Entrada';
-        const btnClass = proximaTipo === 'Entrada' ? 'flota-btn-entrada' : 'flota-btn-salida';
-        const btnIcon = proximaTipo === 'Entrada' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
+        const proximaTipo = (veh.estado === 'en_planta') ? 'A Entregar' : 'A Cargar';
+        const btnClass = proximaTipo === 'A Cargar' ? 'flota-btn-entrada' : 'flota-btn-salida';
+        const btnIcon = proximaTipo === 'A Cargar' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
 
         return `
             <div class="flota-card estado-${veh.estado}">
@@ -413,7 +478,7 @@ const FlotaModule = (() => {
                             ${estadiaHtml}
                         </div>
                         <div class="flota-card-metric-item">
-                            <div class="flota-val-label">En Viaje</div>
+                            <div class="flota-val-label">En Ruta</div>
                             ${viajeHtml}
                         </div>
                         <div class="flota-card-metric-item">
@@ -421,7 +486,7 @@ const FlotaModule = (() => {
                             <span class="flota-val-num">${veh.viajes_completados}</span>
                         </div>
                         <span class="flota-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
-                        <button class="${btnClass}" onclick="FlotaModule.marcar(${veh.id}, '${veh.patente}')">
+                        <button class="${btnClass}" onclick="FlotaModule.marcar(${veh.id}, '${veh.patente}', '${veh.chofer_activo || ''}')">
                             ${proximaTipo} <i class="bi ${btnIcon}"></i>
                         </button>
                     </div>
@@ -435,7 +500,7 @@ const FlotaModule = (() => {
     // ════════════════════════════════════════════════
     // MARCAR MOVIMIENTO (CON MODAL SWAL2)
     // ════════════════════════════════════════════════
-    async function marcar(flotaId, patente) {
+    async function marcar(flotaId, patente, choferActivo = '') {
         if (typeof Swal === 'undefined') {
             const obs = prompt("Ingrese observaciones / Chofer (Opcional):");
             if (obs === null) return; // canceló
@@ -450,7 +515,7 @@ const FlotaModule = (() => {
                 <div class="text-start">
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">Chofer del Vehículo</label>
-                        <input type="text" id="swal-flota-chofer" class="form-control" placeholder="Ej: Juan Gómez">
+                        <input type="text" id="swal-flota-chofer" class="form-control" placeholder="Ej: Juan Gómez" value="${choferActivo}">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">Observaciones / Kilometraje</label>
