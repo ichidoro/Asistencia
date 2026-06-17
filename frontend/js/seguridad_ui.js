@@ -64,7 +64,7 @@ const MAPA_UI_PERMISOS = {
     'reportes.reprocesar':  { module: 'REPORTES', action: 'Reprocesar',  description: 'Disparar motor de cálculo',            permissions: ['reportes.reprocesar'] },
     'reportes.sincronizar': { module: 'REPORTES', action: 'Sincronizar', description: 'Sincronizar BioAlba desde reportes',   permissions: ['reportes.sincronizar'] },
 
-    // ── MÓDULO CONFIGURACIÓN (10) ──
+    // ── MÓDULO CONFIGURACIÓN (11) ──
     'configuracion.ver':            { module: 'CONFIGURACIÓN', action: 'Ver',            description: 'Ver todas las pestañas de configuración',       permissions: ['configuracion.ver'] },
     'configuracion.horarios':       { module: 'CONFIGURACIÓN', action: 'Horarios',       description: 'Crear/editar/eliminar turnos',                  permissions: ['configuracion.horarios'] },
     'configuracion.bonos':          { module: 'CONFIGURACIÓN', action: 'Bonos',          description: 'Crear/editar/eliminar bonos y pagadores',       permissions: ['configuracion.bonos'] },
@@ -75,6 +75,7 @@ const MAPA_UI_PERMISOS = {
     'configuracion.seguridad':      { module: 'CONFIGURACIÓN', action: 'Seguridad',      description: 'Gestionar usuarios y roles ⚠️ Riesgo Máximo',   permissions: ['configuracion.seguridad'] },
     'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
     'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
+    'configuracion.flota':          { module: 'CONFIGURACIÓN', action: 'Pestaña Flota',     description: 'Gestionar vehículos de la flota (CRUD) de Aguacol', permissions: ['configuracion.flota'] },
 
     // ── MÓDULO 4 PRODUCTOS (4) ──
     'productos_4.asignar':          { module: '4 PRODUCTOS', action: 'Asignar',          description: 'Ver y asignar 4 Productos a empleados (con RLS de área)', permissions: ['productos_4.asignar'] },
@@ -82,7 +83,7 @@ const MAPA_UI_PERMISOS = {
     'productos_4.entregar':         { module: '4 PRODUCTOS', action: 'Entregar',         description: 'Ver y registrar entregas de productos propios (sin RLS)', permissions: ['productos_4.entregar'] },
     'productos_4.catalogo':         { module: '4 PRODUCTOS', action: 'Catálogo',         description: 'Ver y gestionar el catálogo de productos propios en Configuración', permissions: ['productos_4.catalogo'] },
 
-    // ── MÓDULO PORTERÍA (8) ──
+    // ── MÓDULO PORTERÍA (9) ──
     'porteria.ver':                 { module: 'PORTERÍA', action: 'Ver Historial',  description: 'Ver el historial de rondas nocturnas y fotos de hallazgos (Lectura)', permissions: ['porteria.ver'] },
     'porteria.registrar':           { module: 'PORTERÍA', action: 'Registrar',      description: 'Registrar pasos por puntos de control y reportar hallazgos (Guardia)', permissions: ['porteria.registrar'] },
     'porteria.editar':              { module: 'PORTERÍA', action: 'Editar / Configurar', description: 'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control', permissions: ['porteria.editar'] },
@@ -91,6 +92,7 @@ const MAPA_UI_PERMISOS = {
     'porteria.art22':               { module: 'PORTERÍA', action: 'Pestaña Art. 22',    description: 'Acceso a pestaña Ingreso Artículo 22 (empleados excluidos)', permissions: ['porteria.art22'] },
     'porteria.proveedores':         { module: 'PORTERÍA', action: 'Pestaña Proveedores',description: 'Acceso a pestaña Ingreso de Proveedores', permissions: ['porteria.proveedores'] },
     'porteria.visitas':             { module: 'PORTERÍA', action: 'Pestaña Visitas',    description: 'Acceso a pestaña Control de Visitas (escaneo cédula)', permissions: ['porteria.visitas'] },
+    'porteria.flota':               { module: 'PORTERÍA', action: 'Pestaña Flota',      description: 'Acceso a pestaña Flota Aguacol (control de pesaje/viajes)', permissions: ['porteria.flota'] },
 };
 
 // Modales persistentes (instancias Bootstrap)
@@ -475,6 +477,7 @@ function getPermissionDetails(permId) {
         'configuracion.estados':        { alert: 'Lógica de Negocio',     flow: 'Estados que clasifican cada marcación del sistema' },
         'configuracion.wizard':         { alert: 'Setup del Sistema',     flow: 'Wizard de inicialización que conecta BioAlba' },
         'configuracion.sistema':        { alert: 'Solo Admin',            flow: 'Diagnóstico de BD, modo de conexión y velocidad' },
+        'configuracion.flota':          { alert: 'Ubicación: Configuración / Flota Aguacol', flow: 'Administrar el catálogo de camiones/vehículos autorizados para pesaje/transporte.' },
 
         // 4 Productos
         'productos_4.asignar':          { alert: 'Ubicación: Menú lateral / Tab Asignación', flow: 'Visualizar planilla de habilitados y asignar productos a empleados (con RLS de área).' },
@@ -486,6 +489,7 @@ function getPermissionDetails(permId) {
         'porteria.ver':                 { alert: 'Ubicación: Menú lateral / Portería', flow: 'Ver el historial de rondas nocturnas y fotos de hallazgos (Lectura).' },
         'porteria.registrar':           { alert: 'Ubicación: Menú lateral / Portería', flow: 'Registrar pasos por puntos de control y reportar hallazgos (Guardia).' },
         'porteria.editar':              { alert: 'Ubicación: Configuración / Catálogo de Hallazgos', flow: 'Gestionar el catálogo de anomalías/hallazgos y configurar puntos de control.' },
+        'porteria.flota':               { alert: 'Ubicación: Menú lateral / Portería', flow: 'Registrar entradas, salidas, pesajes e historial de viajes de la flota de camiones.' },
     };
     return details[permId] || null;
 }
