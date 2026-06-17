@@ -66,11 +66,15 @@ const AuthService = {
             localStorage.setItem(this.USER_KEY, JSON.stringify({
                 user_id: data.user_id,
                 username: data.username,
+                nombre_completo: data.nombre_completo || '',
+                email: data.email || '',
                 rol_id: data.rol_id,
-                rol_nombre: data.rol_nombre,
+                rol_nombre: data.rol_nombre || '',
                 alcance_global: data.alcance_global,
                 is_superuser: data.is_superuser || false,
-                areas: data.areas
+                areas: data.areas,
+                ultimo_acceso: data.ultimo_acceso || '',
+                login_time: new Date().toISOString()
             }));
 
             return true;
@@ -190,16 +194,54 @@ const AuthService = {
                 return;
             }
 
-            // 1. Cargar datos en el Header (inmediato, no requiere permisos)
+            // 1. Cargar datos en el Header y Dropdown (inmediato, no requiere permisos)
             const usernameEl = document.getElementById('header-username');
-            const roleEl = document.getElementById('header-role');
 
             if (usernameEl) {
-                usernameEl.innerHTML = `<i class="fa-solid fa-user-circle me-1"></i> ${user.username} <i class="bi bi-caret-down-fill ms-1 small"></i>`;
-            }
-            if (roleEl) {
-                let roleBadge = user.alcance_global ? '<span class="badge bg-primary">Alcance Global</span>' : '<span class="badge bg-secondary">Zonal</span>';
-                roleEl.innerHTML = `Rol: ${roleBadge}`;
+                const initial = (user.username || '?')[0].toUpperCase();
+                // Header button
+                const avatarEl = document.getElementById('header-avatar');
+                const textEl = document.getElementById('header-user-text');
+                if (avatarEl) avatarEl.textContent = initial;
+                if (textEl) textEl.innerHTML = `${user.username} <i class="bi bi-caret-down-fill ms-1 small"></i>`;
+
+                // Dropdown profile card
+                const ddAvatar = document.getElementById('dropdown-avatar-lg');
+                const ddNombre = document.getElementById('dropdown-nombre');
+                const ddEmail = document.getElementById('dropdown-email');
+                const ddRol = document.getElementById('dropdown-rol');
+                const ddAreas = document.getElementById('dropdown-areas');
+                const ddUltimo = document.getElementById('dropdown-ultimo-acceso');
+
+                if (ddAvatar) ddAvatar.textContent = initial;
+                if (ddNombre) ddNombre.textContent = user.nombre_completo || user.username;
+                if (ddEmail) ddEmail.textContent = user.email || 'Sin correo configurado';
+
+                // Rol con badge
+                if (ddRol) {
+                    const alcance = user.alcance_global ? 'Alcance Global' : 'Zonal';
+                    ddRol.innerHTML = `${user.rol_nombre || 'Usuario'} <span class="badge ${user.alcance_global ? 'bg-primary' : 'bg-secondary'}" style="font-size:0.6rem; vertical-align:middle;">${alcance}</span>`;
+                }
+
+                // Áreas
+                if (ddAreas) {
+                    if (user.areas && user.areas.length > 0) {
+                        const areaNames = user.areas.map(a => a.nombre || a).join(', ');
+                        ddAreas.textContent = areaNames;
+                    } else if (user.alcance_global) {
+                        ddAreas.textContent = 'Todas (Global)';
+                    } else {
+                        ddAreas.textContent = 'No asignadas';
+                    }
+                }
+
+                // Último acceso
+                if (ddUltimo && user.ultimo_acceso) {
+                    try {
+                        const d = new Date(user.ultimo_acceso);
+                        ddUltimo.textContent = d.toLocaleString('es-CL', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+                    } catch { ddUltimo.textContent = user.ultimo_acceso; }
+                }
             }
 
             // 2. Refresco silencioso de permisos PRIMERO → luego aplicar blindaje

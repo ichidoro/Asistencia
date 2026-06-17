@@ -146,10 +146,9 @@ class AsistenciaService:
 
         if empleado_ids:
             # Modo batch-scoped: solo los empleados que tuvieron marcaciones nuevas
-            # GUARD activo=1: si un empleado se desactiva durante el sync (raro pero posible),
-            # no debe ser procesado aunque su ID ya esté en el set del batch.
+            # Incluye inactivos con fecha_salida (baja reciente) para procesar sus marcaciones pendientes.
             ph = ','.join('?' * len(empleado_ids))
-            q_emp = f"SELECT * FROM empleados WHERE id IN ({ph}) AND activo = 1 AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
+            q_emp = f"SELECT * FROM empleados WHERE id IN ({ph}) AND (activo = 1 OR (activo = 0 AND fecha_salida IS NOT NULL)) AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
             params_emp = list(empleado_ids)
         else:
             # Modo completo: todos los activos (comportamiento original)
@@ -3742,19 +3741,21 @@ class AsistenciaService:
         db = self.repository.db
 
         # Empleados: Solo aquellos con turno asignado vigente en el período.
-        # Regla de negocio DOBLE:
+        # Regla de negocio:
         #   1. Sin turno asignado → no aparece en la grilla.
-        #   2. Inactivo (activo=0) → no aparece en la grilla.
+        #   2. Activos siempre aparecen.
+        #   3. Inactivos (baja) aparecen si su fecha_salida cae dentro del período consultado
+        #      (tienen marcaciones válidas hasta esa fecha).
         q_emp = """
             SELECT DISTINCT e.*, ar.nombre as area
             FROM empleados e
             INNER JOIN asignacion_turnos ast ON e.id = ast.empleado_id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE e.activo = 1
+            WHERE (e.activo = 1 OR (e.activo = 0 AND e.fecha_salida IS NOT NULL AND e.fecha_salida >= ?))
               AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?)
         """
-        params_emp: list = [fecha_fin, fecha_inicio]
+        params_emp: list = [fecha_inicio, fecha_fin, fecha_inicio]
         if area and area != 'Todas':
             q_emp += " AND ar.nombre = ?"
             params_emp.append(area)

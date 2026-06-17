@@ -146,7 +146,8 @@ class EmpleadoRepository:
                 "decision_vencimiento": "TEXT",
                 "cargo_id": "INTEGER REFERENCES cargos(id)",
                 "es_manual": "INTEGER DEFAULT 0",
-                "excluido_asistencia": "INTEGER DEFAULT 0"
+                "excluido_asistencia": "INTEGER DEFAULT 0",
+                "autorizado_llaves": "INTEGER DEFAULT 0"
             }
 
             for col_name, col_def in new_columns.items():
@@ -210,8 +211,8 @@ class EmpleadoRepository:
             rut, nombre, apellido_paterno, apellido_materno,
             cargo, cargo_id, area_id, compania, email, telefono, genero, genero_id, activo,
             fecha_nacimiento, fecha_ingreso, fecha_salida, tipo_contrato, cant_contratos, decision_vencimiento,
-            es_manual, excluido_asistencia
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            es_manual, excluido_asistencia, autorizado_llaves
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         # Mapeo manual si viene solo genero (por compatibilidad)
@@ -249,7 +250,8 @@ class EmpleadoRepository:
             empleado.cant_contratos,
             empleado.decision_vencimiento,
             1 if empleado.es_manual else 0,
-            1 if empleado.excluido_asistencia else 0
+            1 if empleado.excluido_asistencia else 0,
+            empleado.autorizado_llaves
         ))
         
         empleado.id = cursor.lastrowid
@@ -697,6 +699,7 @@ class EmpleadoRepository:
             decision_vencimiento = ?,
             es_manual = ?,
             excluido_asistencia = ?,
+            autorizado_llaves = ?,
             updated_at = datetime('now')
         WHERE id = ?
         """
@@ -737,6 +740,7 @@ class EmpleadoRepository:
             empleado.decision_vencimiento,
             1 if empleado.es_manual else 0,
             1 if empleado.excluido_asistencia else 0,
+            empleado.autorizado_llaves,
             empleado_id
         ))
         
@@ -1019,5 +1023,6 @@ class EmpleadoRepository:
             decision_vencimiento=data.get("decision_vencimiento"),
             fecha_asignacion_turno=data.get("fecha_asignacion_turno"),
             es_manual=bool(data.get("es_manual", 0)),
-            excluido_asistencia=bool(data.get("excluido_asistencia", 0))
+            excluido_asistencia=bool(data.get("excluido_asistencia", 0)),
+            autorizado_llaves=int(data.get("autorizado_llaves", 0))
         )

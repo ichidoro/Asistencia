@@ -5,6 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="only light">
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aguacol">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/static/assets/img/icons/icon-192.png">
     <!-- Premium UI (Fase V11) -->
     <script src="/static/js/sweetalert2.all.min.js" defer></script>
 
@@ -17,9 +24,9 @@
     <!-- FontAwesome para siluetas de género -->
     <link rel="stylesheet" href="/static/css/all.min.css">
     <!-- Custom styles (MUST load after Bootstrap for proper override) -->
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css?v={{ startup_id }}">
     <!-- Mobile Responsive Overrides (must load after styles.css) -->
-    <link rel="stylesheet" href="/static/css/responsive.css">
+    <link rel="stylesheet" href="/static/css/responsive.css?v={{ startup_id }}">
 
     <!-- Módulo de Seguridad (Centralizado) -->
     <script src="/static/js/auth.js?v={{ startup_id }}"></script>
@@ -230,18 +237,56 @@
                         <span>Empleados</span>
                     </button>
                     <div class="user-menu dropdown">
-                        <span id="header-username" class="dropdown-toggle text-white fw-bold" data-bs-toggle="dropdown"
-                            aria-expanded="false" style="cursor:pointer;">
-                            👤 Cargando...
+                        <span id="header-username" class="dropdown-toggle fw-bold" data-bs-toggle="dropdown"
+                            aria-expanded="false" style="cursor:pointer; color:#fff; display:flex; align-items:center; gap:8px;">
+                            <span class="user-avatar-circle" id="header-avatar">?</span>
+                            <span class="d-none d-sm-inline" id="header-user-text">Cargando...</span>
                         </span>
-                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-2">
-                            <li><span class="dropdown-item-text text-muted small" id="header-role"></span></li>
-                            <li>
-                                <hr class="dropdown-divider">
-                            </li>
-                            <li><a class="dropdown-item text-danger fw-bold" href="#" onclick="AuthService.logout()"><i
-                                        class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión</a></li>
-                        </ul>
+                        <div class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-2 p-0" style="min-width:300px; border-radius:16px; overflow:hidden;">
+                            <!-- Header del perfil -->
+                            <div style="background:linear-gradient(135deg, var(--primary-color,#4f46e5) 0%, #7c3aed 100%); padding:20px; color:#fff;">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div style="width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); border:2px solid rgba(255,255,255,0.4); display:flex; align-items:center; justify-content:center; font-size:1.2rem; font-weight:800;" id="dropdown-avatar-lg">?</div>
+                                    <div>
+                                        <div class="fw-bold" style="font-size:0.95rem;" id="dropdown-nombre">Cargando...</div>
+                                        <div style="font-size:0.75rem; opacity:0.85;" id="dropdown-email">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Info del usuario -->
+                            <div style="padding:12px 16px; background:#f8fafc;">
+                                <div class="d-flex align-items-center gap-2 mb-2" style="font-size:0.78rem;">
+                                    <i class="bi bi-shield-check" style="color:var(--primary-color); font-size:1rem;"></i>
+                                    <span class="text-muted">Rol:</span>
+                                    <span class="fw-bold" id="dropdown-rol">—</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mb-2" style="font-size:0.78rem;">
+                                    <i class="bi bi-geo-alt" style="color:var(--primary-color); font-size:1rem;"></i>
+                                    <span class="text-muted">Áreas:</span>
+                                    <span class="fw-600" id="dropdown-areas" style="font-size:0.72rem;">—</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2" style="font-size:0.78rem;">
+                                    <i class="bi bi-clock-history" style="color:var(--primary-color); font-size:1rem;"></i>
+                                    <span class="text-muted">Último acceso:</span>
+                                    <span class="fw-600" id="dropdown-ultimo-acceso" style="font-size:0.72rem;">—</span>
+                                </div>
+                            </div>
+                            <hr class="my-0">
+                            <!-- Acciones -->
+                            <div style="padding:8px;">
+                                <a class="dropdown-item rounded-2 py-2 px-3" href="#" onclick="switchPage('configuracion'); return false;" style="font-size:0.82rem;">
+                                    <i class="bi bi-gear me-2" style="color:#64748b;"></i>Configuración
+                                </a>
+                            </div>
+                            <hr class="my-0">
+                            <!-- Footer: versión + cerrar sesión -->
+                            <div style="padding:10px 16px; background:#f8fafc;" class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:0.65rem; color:#94a3b8; font-weight:600;">v2.8 • Producción</span>
+                                <a class="btn btn-sm btn-outline-danger fw-bold" href="#" onclick="AuthService.logout()" style="font-size:0.72rem; border-radius:8px; padding:4px 14px;">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Salir
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -1441,7 +1486,7 @@
                                     </button>
                                 </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.llaves">
-                                    <button class="nav-link" id="llaves-tab" data-bs-toggle="tab" data-bs-target="#tab-entrega-llaves" type="button" role="tab">
+                                    <button class="nav-link" id="llaves-tab" data-bs-toggle="tab" data-bs-target="#tab-entrega-llaves" type="button" role="tab" onclick="if(typeof LlavesModule !== 'undefined') LlavesModule.initTab()">
                                         <i class="bi bi-key-fill me-1"></i>Entrega de Llaves
                                     </button>
                                 </li>
@@ -1608,16 +1653,8 @@
 
                                 <!-- TAB 2: ENTREGA DE LLAVES -->
                                 <div class="tab-pane fade" id="tab-entrega-llaves" role="tabpanel">
-                                    <div class="text-center py-5">
-                                        <div class="mb-4">
-                                            <span style="font-size: 4rem;">🔑</span>
-                                        </div>
-                                        <h3 class="fw-bold text-dark mb-2">Entrega de Llaves</h3>
-                                        <p class="text-muted mb-4" style="max-width: 480px; margin: 0 auto;">Módulo de control y registro de entrega/devolución de llaves de planta, bodegas y oficinas.</p>
-                                        <span class="badge bg-warning text-dark px-3 py-2 fs-6">
-                                            <i class="bi bi-cone-striped me-1"></i>En Desarrollo
-                                        </span>
-                                        <p class="text-muted small mt-3">Este módulo estará disponible próximamente.</p>
+                                    <div id="llaves-container">
+                                        <!-- Cargado dinámicamente por LlavesModule -->
                                     </div>
                                 </div>
 
@@ -2370,6 +2407,12 @@
                                             <div class="custom-control custom-switch">
                                                 <input type="checkbox" class="custom-control-input" id="input-excluido-asistencia">
                                                 <label class="custom-control-label font-weight-bold text-danger" for="input-excluido-asistencia">Excluido de Control de Asistencia (Art. 22)</label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group d-flex align-items-center" style="margin-left: 20px; padding-top: 10px;">
+                                            <div class="custom-control custom-switch">
+                                                <input type="checkbox" class="custom-control-input" id="input-autorizado-llaves">
+                                                <label class="custom-control-label font-weight-bold text-primary" for="input-autorizado-llaves">🔑 Autorizado para solicitar llaves</label>
                                             </div>
                                         </div>
                                     </div>
@@ -4538,7 +4581,9 @@
             <script src="/static/js/libs/qrcode.min.js" defer></script>
             <script src="/static/js/porteria_ui.js?v={{ startup_id }}_v4" defer></script>
     <script src="/static/js/articulo22_ui.js?v={{ startup_id }}_v1" defer></script>
-    <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v1" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
+    <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v2" defer></script>
+    <script src="/static/js/llaves_ui.js?v={{ startup_id }}_v1" defer></script>
 
             <!-- Inicializador Principal -->
             <script src="/static/js/productos_4.js?v={{ startup_id }}" defer></script>
@@ -4713,5 +4758,16 @@
     </div>
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 </body>
+
+<!-- PWA Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => console.log('✅ [PWA] Service Worker registrado:', reg.scope))
+            .catch(err => console.warn('⚠️ [PWA] Error registrando SW:', err));
+    });
+}
+</script>
 
 </html>

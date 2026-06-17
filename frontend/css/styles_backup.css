@@ -21,52 +21,52 @@
    invertir colores incluso cuando color-scheme dice "only light". */
 @media (prefers-color-scheme: dark) {
     :root {
-        --bg-color: #F7F9FC !important;
+        --bg-color: #f8fafc !important;
         --card-bg: #ffffff !important;
-        --border-color: #E2E8F0 !important;
-        --text-primary: #0F172A !important;
-        --text-secondary: #64748B !important;
+        --border-color: #e2e8f0 !important;
+        --text-primary: #1e293b !important;
+        --text-secondary: #64748b !important;
         color-scheme: only light !important;
     }
 
     html, body {
-        background-color: #F7F9FC !important;
-        color: #0F172A !important;
+        background-color: #f8fafc !important;
+        color: #1e293b !important;
     }
 
     /* Elementos estructurales */
     .header, .main-content, .content-area {
-        background-color: #F7F9FC !important;
-        color: #0F172A !important;
+        background-color: #f8fafc !important;
+        color: #1e293b !important;
     }
 
     /* Cards y contenedores */
     .card, .bg-white, .bento-card, .modal-content {
         background: #ffffff !important;
         background-color: #ffffff !important;
-        color: #0F172A !important;
+        color: #1e293b !important;
     }
 
     /* Tablas */
     .data-table, .data-table thead, .data-table th, .data-table td,
     .table, .table thead, .table th, .table td {
         background-color: inherit !important;
-        color: #0F172A !important;
+        color: #1e293b !important;
     }
     .data-table thead, .table thead {
-        background-color: #F7F9FC !important;
+        background-color: #f8fafc !important;
     }
 
     /* Formularios */
     input, select, textarea, .form-control, .form-select {
         background-color: #ffffff !important;
-        color: #0F172A !important;
-        border-color: #E2E8F0 !important;
+        color: #1e293b !important;
+        border-color: #d1d5db !important;
     }
 
     /* Textos */
-    .text-muted { color: #64748B !important; }
-    .text-dark { color: #0F172A !important; }
+    .text-muted { color: #64748b !important; }
+    .text-dark { color: #1e293b !important; }
     label, p, span, h1, h2, h3, h4, h5, h6, li, a { color: inherit !important; }
 
     /* Badges y pills */
@@ -75,49 +75,48 @@
     /* Dropdowns */
     .dropdown-menu, .dropdown-item {
         background-color: #ffffff !important;
-        color: #0F172A !important;
+        color: #1e293b !important;
     }
 
     /* Tooltips y popovers */
-    .tooltip-inner { background-color: #0F172A !important; color: #fff !important; }
+    .tooltip-inner { background-color: #1e293b !important; color: #fff !important; }
 
     /* Filtros y chips */
     .emp-filter-chip, .emp-search-group, .emp-filter-toolbar, .emp-stat-card {
         background-color: #ffffff !important;
-        color: #0F172A !important;
+        color: #1e293b !important;
     }
 
     /* Backgrounds utilitarios Bootstrap */
-    .bg-light { background-color: #F7F9FC !important; }
+    .bg-light { background-color: #f8fafc !important; }
     .bg-white { background-color: #ffffff !important; }
 
     /* Pagination */
     .page-link {
         background-color: #ffffff !important;
-        color: #0F172A !important;
-        border-color: #E2E8F0 !important;
+        color: #1e293b !important;
+        border-color: #d1d5db !important;
     }
 
     /* SweetAlert2 */
     .swal2-popup {
         background-color: #ffffff !important;
-        color: #0F172A !important;
+        color: #1e293b !important;
     }
 
     /* Wizard modal */
     #modal-sync-wizard .modal-content,
     #modal-sync-wizard .modal-body {
         background-color: #ffffff !important;
-        color: #0F172A !important;
+        color: #1e293b !important;
     }
 }
 
 :root {
-    /* 💎 Sleek Interface Color Palette */
-    --primary-color: #4F46E5;
+    /* 💎 Premium Color Palette (V4.7.2) */
+    --primary-color: #6366f1;
     /* Indigo Moderno */
-    --primary-hover: #4338CA;
-    --primary-light: rgba(79, 70, 229, 0.08);
+    --primary-hover: #4f46e5;
     --secondary-color: #94a3b8;
     --success-color: #10b981;
     /* Emerald / Vitalidad */
@@ -128,20 +127,20 @@
     --info-color: #0ea5e9;
     /* Sky / Info */
 
-    /* Layout Tokens — Sleek Interface */
+    /* Layout Tokens */
     --sidebar-width: 260px;
     --header-height: 70px;
-    --bg-color: #F7F9FC;
+    --bg-color: #f8fafc;
     --darker-bg: #0f172a;
     /* Fondo Sidebar BioAlba */
     --card-bg: #ffffff;
-    --border-color: #E2E8F0;
-    --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04);
-    --shadow-premium: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.04);
-    --radius-lg: 24px;
-    --radius-md: 16px;
+    --border-color: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-premium: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --radius-lg: 16px;
+    --radius-md: 12px;
 }
 
 * {
@@ -153,60 +152,25 @@
 
 body {
     background-color: var(--bg-color);
-    color: var(--text-primary);
+    color: var(--text-color);
     overflow-y: auto;
     overflow-x: hidden;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
-/* 🎨 Sleek Interface — Form Controls */
-.form-control, .form-select {
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    background: var(--card-bg);
-    transition: border-color 0.2s, box-shadow 0.2s;
-    font-size: 0.85rem;
-    padding: 10px 14px;
-}
-
-.form-control:focus, .form-select:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px var(--primary-light);
-    outline: none;
-}
-
-/* Search inputs — pill shape */
-input[type="search"], .search-input, [class*="search"] input {
-    border-radius: 999px;
-}
-
-/* Modal — Sleek corners */
-.modal-content {
-    border-radius: var(--radius-lg) !important;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.12) !important;
-}
-
-/* Scrollbar — thin, slate-themed */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-/* 🧊 Sleek Interface Cards — bordes finos, sin sombras pesadas */
+/* 🧊 Modern Analytics Cards */
 .card,
 .bg-white.p-3.rounded.shadow-sm {
-    border: 1px solid var(--border-color) !important;
-    border-radius: var(--radius-lg) !important;
-    box-shadow: var(--shadow-sm) !important;
-    background: var(--card-bg);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--border-soft) !important;
+    border-radius: 12px !important;
+    box-shadow: var(--shadow-premium) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Exclude modal-content from card hover transform (prevents modal interaction issues) */
 .card:hover:not(.modal-content) {
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.06), 0 0 0 1px var(--border-color) !important;
-    transform: translateY(-1px);
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.08) !important;
+    transform: translateY(-2px);
 }
 
 .main-content {
@@ -433,34 +397,31 @@ input[type="search"], .search-input, [class*="search"] input {
 .sidebar-item {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
-    margin: 2px 12px;
-    color: rgba(255, 255, 255, 0.6);
+    padding: 14px 24px;
+    color: rgba(255, 255, 255, 0.65);
     text-decoration: none;
-    transition: all 0.2s ease;
-    border-left: none;
-    border-radius: 12px;
-    font-size: 14px;
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+    font-size: 15px;
     font-weight: 500;
-    gap: 12px;
 }
 
 .sidebar-item:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
     color: white;
+    padding-left: 28px;
 }
 
 .sidebar-item.active {
-    background: var(--primary-color);
+    background: rgba(99, 102, 241, 0.15);
     color: white;
+    border-left-color: var(--primary-color);
     font-weight: 600;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
 }
 
 .sidebar-item .icon {
-    font-size: 18px;
-    width: 20px;
-    text-align: center;
+    font-size: 20px;
+    margin-right: 12px;
 }
 
 .sidebar-footer {
@@ -509,16 +470,16 @@ input[type="search"], .search-input, [class*="search"] input {
 
 /* === Header Principal (Premium FlexBox) === */
 .header {
-    background: var(--card-bg);
+    background: white;
     padding: 15px 32px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--border-color);
-    box-shadow: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
     position: sticky;
     top: 0;
-    z-index: 990;
+    z-index: 1000;
 }
 
 .header-left {
@@ -534,11 +495,11 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .header h2 {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--dark-bg);
     margin: 0;
-    letter-spacing: -0.3px;
+    letter-spacing: -0.5px;
 }
 
 /* Notificaciones y Sincronización */
@@ -776,16 +737,15 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .btn {
-    padding: 10px 20px;
+    padding: 12px 24px;
     border: none;
-    border-radius: 12px;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 500;
     display: flex;
     align-items: center;
     gap: 8px;
     transition: all 0.2s;
-    font-size: 0.85rem;
 }
 
 .btn-primary {

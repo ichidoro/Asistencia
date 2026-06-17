@@ -1369,6 +1369,10 @@ async function loadEmpleadoData(id) {
       switchArt22.checked = !!empleado.excluido_asistencia;
     }
 
+    // Switch de Llaves
+    const chkLlaves = document.getElementById('input-autorizado-llaves');
+    if (chkLlaves) chkLlaves.checked = !!empleado.autorizado_llaves;
+
     // Control de edición según origen (Manual vs Sincronizado)
     const isManual = !!empleado.es_manual;
     document.getElementById('input-nombre').disabled = !isManual;
@@ -1437,7 +1441,8 @@ async function saveEmpleado() {
         activo: activo,
         genero_id: generoId,
         genero: null,
-        excluido_asistencia: document.getElementById('input-excluido-asistencia')?.checked || false
+        excluido_asistencia: document.getElementById('input-excluido-asistencia')?.checked || false,
+        autorizado_llaves: document.getElementById('input-autorizado-llaves')?.checked || false
     };
 
     if (!currentEmpleadoId) {

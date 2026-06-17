@@ -29,7 +29,7 @@ from backend.core.database import db
 
 
 # Importar routers
-from backend.routers import empleados, sync, turnos, asistencia, configuracion, reportes, dashboard_api, startup, auth, seguridad, cierre, productos_4, porteria, articulo22, visitas
+from backend.routers import empleados, sync, turnos, asistencia, configuracion, reportes, dashboard_api, startup, auth, seguridad, cierre, productos_4, porteria, articulo22, visitas, llaves
 from backend.core.sys_utils import kill_process_on_port
 
 
@@ -173,6 +173,7 @@ app.include_router(productos_4.router, prefix="/api", tags=["4 Productos"])
 app.include_router(porteria.router, prefix="/api", tags=["Portería"])
 app.include_router(articulo22.router, prefix="/api", tags=["Artículo 22"])
 app.include_router(visitas.router, prefix="/api", tags=["Control de Visitas"])
+app.include_router(llaves.router, prefix="/api", tags=["Entrega de Llaves"])
 
 
 # ============================================
@@ -186,6 +187,44 @@ async def favicon():
     favicon_path = Path(__file__).parent.parent / "frontend" / "favicon.ico"
     if favicon_path.exists():
         return FileResponse(favicon_path)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.get("/manifest.json", include_in_schema=False)
+async def manifest():
+    manifest_path = Path(__file__).parent.parent / "frontend" / "manifest.json"
+    if manifest_path.exists():
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    sw_path = Path(__file__).parent.parent / "frontend" / "sw.js"
+    if sw_path.exists():
+        return FileResponse(sw_path, media_type="application/javascript",
+                          headers={"Service-Worker-Allowed": "/"})
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+# 🥚
+@app.get("/huevo_{n}.jpg", include_in_schema=False)
+@app.get("/huevo.jpg", include_in_schema=False)
+async def huevo_pascua(n: int = 1):
+    base = Path(__file__).parent.parent / "frontend"
+    img = base / f"huevo_{n}.jpg"
+    if img.exists():
+        return FileResponse(img, media_type="image/jpeg")
+    # Fallback a huevo_1
+    fallback = base / "huevo_1.jpg"
+    if fallback.exists():
+        return FileResponse(fallback, media_type="image/jpeg")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# 🎵
+@app.get("/cancion.mp3", include_in_schema=False)
+async def cancion_pascua():
+    base = Path(__file__).parent.parent / "frontend"
+    mp3 = base / "cancion.mp3"
+    if mp3.exists():
+        return FileResponse(mp3, media_type="audio/mpeg")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)

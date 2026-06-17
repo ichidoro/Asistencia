@@ -4,8 +4,16 @@ Empleados excluidos de control de asistencia (Art. 22 Código del Trabajo Chile)
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from loguru import logger
+
+from backend.core.config import settings
+
+def _now_chile():
+    """Retorna datetime naive en hora de Chile (respeta DST automáticamente)"""
+    tz = ZoneInfo(settings.TIMEZONE)  # "America/Santiago"
+    return datetime.now(tz).replace(tzinfo=None)
 
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
@@ -92,17 +100,27 @@ async def marcar_presencia(
         raise HTTPException(status_code=400, detail="Este empleado no tiene Artículo 22")
 
     # Fecha y hora actual (Chile)
-    now = datetime.now()
+    now = _now_chile()
     fecha_hoy = now.strftime("%Y-%m-%d")
     hora_actual = now.strftime("%H:%M:%S")
 
-    # Obtener última marca del día para auto-detectar tipo
+    # Obtener última marca GLOBAL del empleado (sin filtro de fecha)
+    # para detectar correctamente E/S en sesiones cross-midnight
     ultima = await db.fetch_one(
-        "SELECT tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha = ? ORDER BY hora DESC LIMIT 1",
-        (empleado_id, fecha_hoy)
+        "SELECT tipo, fecha FROM articulo22_registros WHERE empleado_id = ? ORDER BY fecha DESC, hora DESC LIMIT 1",
+        (empleado_id,)
     )
 
     nuevo_tipo = "E" if (not ultima or ultima["tipo"] == "S") else "S"
+
+    # Determinar fecha de registro:
+    # Si es Salida y la Entrada fue de otro día → guardar con fecha de la Entrada
+    # para mantener la sesión completa en el mismo día
+    if nuevo_tipo == "S" and ultima and ultima["fecha"] != fecha_hoy:
+        fecha_registro = ultima["fecha"]  # Cross-midnight: atribuir al día de entrada
+        logger.info(f"[ART22] Cross-midnight detectado: Salida de hoy atribuida a {fecha_registro}")
+    else:
+        fecha_registro = fecha_hoy
 
     # Registrar
     registrador = f"{current_user.nombre_completo}" if hasattr(current_user, 'nombre_completo') else (current_user.username or "Sistema")
@@ -111,7 +129,7 @@ async def marcar_presencia(
         """INSERT INTO articulo22_registros 
            (empleado_id, fecha, hora, tipo, registrado_por_id, registrado_por_nombre, observaciones)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (empleado_id, fecha_hoy, hora_actual, nuevo_tipo, 
+        (empleado_id, fecha_registro, hora_actual, nuevo_tipo, 
          current_user.user_id if hasattr(current_user, 'user_id') else None,
          registrador, observaciones)
     )
@@ -144,7 +162,7 @@ async def get_estado_dia(
     await _ensure_table(db)
 
     if not fecha:
-        fecha = datetime.now().strftime("%Y-%m-%d")
+        fecha = _now_chile().strftime("%Y-%m-%d")
 
     # Obtener empleados Art. 22
     empleados = await db.fetch_all("""
@@ -175,7 +193,7 @@ async def get_estado_dia(
 
     # Calcular estado por empleado
     resultado = []
-    now = datetime.now()
+    now = _now_chile()
     es_hoy = (fecha == now.strftime("%Y-%m-%d"))
 
     for emp in empleados:
@@ -216,6 +234,8 @@ async def get_estado_dia(
                 entrada_dt = datetime.strptime(f"{fecha} {m['hora']}", "%Y-%m-%d %H:%M:%S")
                 if i + 1 < len(emp_marcas) and emp_marcas[i + 1]["tipo"] == "S":
                     salida_dt = datetime.strptime(f"{fecha} {emp_marcas[i + 1]['hora']}", "%Y-%m-%d %H:%M:%S")
+                    if salida_dt < entrada_dt:
+                        salida_dt += timedelta(days=1)  # Cross-midnight
                     estadia_min += (salida_dt - entrada_dt).total_seconds() / 60
                     i += 2
                     continue
@@ -281,7 +301,7 @@ async def get_historial(
     await _ensure_table(db)
 
     if not hasta:
-        hasta = datetime.now().strftime("%Y-%m-%d")
+        hasta = _now_chile().strftime("%Y-%m-%d")
     if not desde:
         desde = (datetime.strptime(hasta, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
@@ -343,6 +363,8 @@ async def get_historial(
             if m["tipo"] == "E" and i + 1 < len(marcas_list) and marcas_list[i + 1]["tipo"] == "S":
                 e_dt = datetime.strptime(m["hora"], "%H:%M:%S")
                 s_dt = datetime.strptime(marcas_list[i + 1]["hora"], "%H:%M:%S")
+                if s_dt < e_dt:
+                    s_dt += timedelta(days=1)  # Cross-midnight
                 estadia_min += (s_dt - e_dt).total_seconds() / 60
                 i += 2
                 continue

@@ -99,11 +99,14 @@ async def login_for_access_token(
         "token_type": "bearer",
         "user_id": user_data["id"],
         "username": user_data["username"],
+        "nombre_completo": user_data.get("nombre_completo", ""),
+        "email": user_data.get("email", ""),
         "rol_id": user_data["rol_id"],
         "rol_nombre": user_data.get("rol_nombre"),
         "is_superuser": bool(user_data.get("is_superuser", 0)),
         "alcance_global": bool(user_data.get("alcance_global", 0)) or bool(user_data.get("is_superuser", 0)),
-        "areas": areas
+        "areas": areas,
+        "ultimo_acceso": str(user_data.get("ultimo_acceso", "")) if user_data.get("ultimo_acceso") else ""
     }
 
 @router.get("/me/", response_model=UsuarioResponse)

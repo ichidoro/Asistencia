@@ -4,7 +4,11 @@ Escaneo de cédula chilena (PDF417 + QR) vía Keyboard Wedge
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+CHILE_TZ = timezone(timedelta(hours=-4))
+def _now_chile():
+    return datetime.now(CHILE_TZ).replace(tzinfo=None)
 from loguru import logger
 import re
 
@@ -374,7 +378,7 @@ async def registrar_visita(
         parse_ok = False
 
     # Fecha y hora
-    now = datetime.now()
+    now = _now_chile()
     fecha_hoy = now.strftime("%Y-%m-%d")
     hora_actual = now.strftime("%H:%M:%S")
 
@@ -430,7 +434,7 @@ async def get_estado_dia(
     """Visitas del día actual con estado E/S."""
     await _ensure_table(db)
     if not fecha:
-        fecha = datetime.now().strftime("%Y-%m-%d")
+        fecha = _now_chile().strftime("%Y-%m-%d")
 
     rows = await db.fetch_all(
         """SELECT rut, nombre, empresa, motivo, area_destino, persona_contacto,
@@ -503,7 +507,7 @@ async def get_historial(
     """Historial de visitas con filtros."""
     await _ensure_table(db)
     if not hasta:
-        hasta = datetime.now().strftime("%Y-%m-%d")
+        hasta = _now_chile().strftime("%Y-%m-%d")
     if not desde:
         desde = (datetime.strptime(hasta, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 

@@ -1,0 +1,28 @@
+# gcloudignore — controla qué archivos se suben a Cloud Build
+# Basado en .dockerignore pero SIN excluir imágenes (.jpg, .png)
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+installer/
+data/local_db/
+logs/
+.env
+.git/
+.gitignore
+.gemini/
+*.exe
+*.msi
+*.db
+*.db-wal
+*.db-shm
+*.db-info
+app.lock
+app.pid
+node_modules/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+README.md
+asistencia-13c58-*.json

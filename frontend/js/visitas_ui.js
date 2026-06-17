@@ -1,7 +1,7 @@
 /**
  * Control de Visitas — Portería
- * Keyboard Wedge Integration para escaneo de cédula chilena
- * Auto-detect: PDF417 (antigua) + QR (nueva) + Manual
+ * Keyboard Wedge + Cámara OCR (MRZ) para escaneo de cédula chilena
+ * Auto-detect: PDF417 (antigua) + QR (nueva) + MRZ (cámara) + Manual
  */
 const VisitasModule = (() => {
     let _fechaActual = new Date().toISOString().slice(0, 10);
@@ -9,6 +9,11 @@ const VisitasModule = (() => {
     let _wedgeBuffer = '';
     let _wedgeTimer = null;
     const WEDGE_TIMEOUT_MS = 80; // Keyboard wedge escribe ~10-30 chars en <50ms
+
+    // ── Cámara MRZ ──
+    let _cameraStream = null;
+    let _ocrWorker = null;
+    let _ocrProcessing = false;
 
     // ════════════════════════════════════════════════
     // INIT
@@ -59,6 +64,20 @@ const VisitasModule = (() => {
                 .vis-hint { font-size:0.72rem; color:#94a3b8; margin-top:6px; }
                 .vis-pulse { animation: visPulse 2s infinite; }
                 @keyframes visPulse { 0%, 100% { opacity:1; } 50% { opacity:0.5; } }
+                .vis-camera-container { display:none; margin-top:1rem; position:relative; border-radius:12px; overflow:hidden; background:#000; max-height:50vh; }
+                .vis-camera-container.active { display:block; animation: visSlideIn 0.3s ease-out; }
+                .vis-camera-container video { width:100%; max-height:50vh; object-fit:cover; border-radius:12px; }
+                .vis-camera-guide { position:absolute; left:50%; bottom:22%; transform:translateX(-50%); width:90%; height:28%; border:2px solid rgba(99,102,241,0.8); border-radius:6px; pointer-events:none; box-shadow:0 0 0 2000px rgba(0,0,0,0.45); }
+                .vis-camera-guide-text { position:absolute; top:-28px; left:50%; transform:translateX(-50%); color:#fff; font-size:0.72rem; font-weight:600; background:rgba(99,102,241,0.85); padding:3px 12px; border-radius:999px; white-space:nowrap; }
+                .vis-camera-controls { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:5; }
+                .vis-camera-btn { border:none; border-radius:999px; padding:10px 24px; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.2s; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+                .vis-camera-btn:hover { transform:scale(1.05); }
+                .vis-camera-btn.capture { background:#6366f1; color:#fff; }
+                .vis-camera-btn.stop { background:#f43f5e; color:#fff; }
+                .vis-ocr-status { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:#fff; padding:6px 16px; border-radius:999px; font-size:0.78rem; font-weight:600; z-index:5; display:none; }
+                .vis-ocr-status.show { display:flex; align-items:center; gap:6px; }
+                .vis-ocr-spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:visSpin 0.8s linear infinite; }
+                @keyframes visSpin { to { transform:rotate(360deg); } }
             </style>
 
             <!-- ENCABEZADO -->
@@ -117,9 +136,14 @@ const VisitasModule = (() => {
                     <span class="vis-section-title">
                         <i class="bi bi-upc-scan" style="color:var(--primary-color)"></i>Escanear Cédula
                     </span>
-                    <button class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.toggleManual()">
-                        <i class="bi bi-keyboard me-1"></i>Ingreso Manual
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.iniciarCamara()">
+                            <i class="bi bi-camera-fill me-1"></i>Escanear con Cámara
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.toggleManual()">
+                            <i class="bi bi-keyboard me-1"></i>Ingreso Manual
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-4">
                     <div class="vis-scan-zone" id="vis-scan-zone">
@@ -131,6 +155,27 @@ const VisitasModule = (() => {
                             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                         <div class="vis-hint" id="vis-scan-hint">
                             <i class="bi bi-info-circle me-1"></i>El campo detecta automáticamente cuando el scanner termina de escribir
+                        </div>
+
+                        <!-- CÁMARA MRZ -->
+                        <div class="vis-camera-container" id="vis-camera-container">
+                            <div class="vis-ocr-status" id="vis-ocr-status">
+                                <div class="vis-ocr-spinner"></div>
+                                <span id="vis-ocr-text">Procesando OCR...</span>
+                            </div>
+                            <video id="vis-camera-video" autoplay playsinline muted></video>
+                            <div class="vis-camera-guide">
+                                <span class="vis-camera-guide-text">📋 Alinee las 3 líneas de la cédula aquí</span>
+                            </div>
+                            <div class="vis-camera-controls">
+                                <button class="vis-camera-btn capture" onclick="VisitasModule.capturarMRZ()">
+                                    <i class="bi bi-camera-fill"></i>Capturar
+                                </button>
+                                <button class="vis-camera-btn stop" onclick="VisitasModule.detenerCamara()">
+                                    <i class="bi bi-x-lg"></i>Cerrar
+                                </button>
+                            </div>
+                            <canvas id="vis-camera-canvas" style="display:none"></canvas>
                         </div>
                     </div>
 
@@ -396,7 +441,291 @@ const VisitasModule = (() => {
         }
     }
 
+    // ════════════════════════════════════════════════
+    // CÁMARA MRZ — OCR con Tesseract.js
+    // ════════════════════════════════════════════════
+    async function iniciarCamara() {
+        const container = document.getElementById('vis-camera-container');
+        const video = document.getElementById('vis-camera-video');
+        if (!container || !video) return;
+
+        // Cerrar cámara previa si existe
+        if (_cameraStream) detenerCamara();
+
+        try {
+            // Cámara trasera con resolución alta para leer MRZ
+            _cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    focusMode: { ideal: 'continuous' }
+                },
+                audio: false
+            });
+            video.srcObject = _cameraStream;
+            container.classList.add('active');
+            if (typeof showToast === 'function') showToast('📷 Cámara lista — posicione la cédula con las 3 líneas visibles', 'info');
+        } catch (err) {
+            console.error('Error accediendo a la cámara:', err);
+            if (typeof showToast === 'function') showToast('❌ No se pudo acceder a la cámara: ' + err.message, 'danger');
+        }
+    }
+
+    function detenerCamara() {
+        const container = document.getElementById('vis-camera-container');
+        const video = document.getElementById('vis-camera-video');
+        if (_cameraStream) {
+            _cameraStream.getTracks().forEach(t => t.stop());
+            _cameraStream = null;
+        }
+        if (video) video.srcObject = null;
+        container?.classList.remove('active');
+        _ocrProcessing = false;
+        const status = document.getElementById('vis-ocr-status');
+        status?.classList.remove('show');
+    }
+
+    async function capturarMRZ() {
+        if (_ocrProcessing) return;
+        _ocrProcessing = true;
+
+        const video = document.getElementById('vis-camera-video');
+        const canvas = document.getElementById('vis-camera-canvas');
+        const status = document.getElementById('vis-ocr-status');
+        const statusText = document.getElementById('vis-ocr-text');
+        if (!video || !canvas) return;
+
+        // Mostrar indicador de procesamiento
+        status?.classList.add('show');
+        statusText.textContent = 'Capturando imagen...';
+
+        // Capturar frame completo del video
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+
+        // Recortar solo la zona MRZ (parte inferior de la imagen, donde está la guía)
+        // La guía está en bottom:18%, height:22% → crop desde 60% al 100% del alto
+        const cropTop = Math.floor(vh * 0.55);
+        const cropHeight = vh - cropTop;
+
+        canvas.width = vw;
+        canvas.height = cropHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Mejorar contraste para OCR: fondo claro, texto oscuro
+        ctx.filter = 'contrast(1.8) grayscale(1)';
+        ctx.drawImage(video, 0, cropTop, vw, cropHeight, 0, 0, vw, cropHeight);
+        ctx.filter = 'none';
+
+        const imageData = canvas.toDataURL('image/png');
+
+        // OCR con Tesseract.js
+        statusText.textContent = 'Procesando OCR...';
+        try {
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('Tesseract.js no cargó. Verifique su conexión a internet.');
+            }
+
+            const result = await Tesseract.recognize(imageData, 'eng', {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        const pct = Math.round((m.progress || 0) * 100);
+                        statusText.textContent = `Leyendo texto... ${pct}%`;
+                    }
+                }
+            });
+
+            const textoOCR = result.data.text;
+            console.log('OCR raw:', textoOCR);
+
+            // Parsear MRZ del texto reconocido
+            const mrzData = _parsearMRZ(textoOCR);
+
+            if (mrzData) {
+                statusText.textContent = '✅ Cédula detectada!';
+                setTimeout(() => {
+                    detenerCamara();
+                    // Mostrar formulario con datos extraídos
+                    _mostrarFormulario({
+                        rut: mrzData.rut,
+                        nombre: mrzData.nombre,
+                        tipo_documento: 'MRZ',
+                        parse_ok: true,
+                        empresa: '',
+                        area_destino: '',
+                        persona_contacto: ''
+                    }, `MRZ:${textoOCR}`);
+                    if (typeof showToast === 'function') {
+                        showToast(`✅ RUT: ${mrzData.rut} — ${mrzData.nombre}`, 'success');
+                    }
+                }, 600);
+            } else {
+                statusText.textContent = '⚠️ No se detectó MRZ — intente de nuevo';
+                if (typeof showToast === 'function') showToast('⚠️ No se pudo leer la cédula. Reposicione e intente de nuevo.', 'warning');
+                _ocrProcessing = false;
+                setTimeout(() => status?.classList.remove('show'), 2500);
+            }
+        } catch (err) {
+            console.error('Error OCR:', err);
+            statusText.textContent = '❌ Error: ' + err.message;
+            if (typeof showToast === 'function') showToast('❌ Error procesando imagen: ' + err.message, 'danger');
+            _ocrProcessing = false;
+            setTimeout(() => status?.classList.remove('show'), 3000);
+        }
+    }
+
+    /**
+     * Parsea las 3 líneas MRZ (formato ICAO TD1) de la cédula chilena.
+     * 
+     * Línea 1: I<CHL[DocNum][Check][Optional]   (30 chars)
+     * Línea 2: [DOB 6][Check][Sex][Exp 6][Check][Nat 3][RUT en optional]  (30 chars)
+     * Línea 3: [APELLIDOS]<<[NOMBRES]  (30 chars)
+     * 
+     * Retorna: { rut, nombre } o null si no se detecta.
+     */
+    function _parsearMRZ(textoOCR) {
+        if (!textoOCR) return null;
+
+        // Limpiar texto: reemplazar caracteres OCR comunes por <
+        let texto = textoOCR
+            .replace(/[«»<‹›]/g, '<')
+            .replace(/[\r\n]+/g, '\n')
+            .trim();
+
+        // Buscar líneas que parezcan MRZ (chars alfanuméricos + <, ~30 chars)
+        const lineas = texto.split('\n')
+            .map(l => l.replace(/\s+/g, '').toUpperCase())
+            .filter(l => l.length >= 25 && /^[A-Z0-9<]{25,}$/.test(l));
+
+        console.log('MRZ líneas candidatas:', lineas);
+
+        // Necesitamos al menos 2 líneas (línea 2 para RUT, línea 3 para nombre)
+        // Identificar cada línea por su contenido
+        let linea1 = null, linea2 = null, linea3 = null;
+
+        for (const l of lineas) {
+            if (/^I[A-Z<]?CHL/.test(l) || /^INCHL/.test(l)) {
+                linea1 = l;
+            } else if (/CHL[0-9]/.test(l) && /^[0-9]/.test(l)) {
+                linea2 = l;
+            } else if (/<</.test(l) && /^[A-Z]/.test(l)) {
+                linea3 = l;
+            }
+        }
+
+        // Fallback: si tenemos 3 líneas consecutivas, asignar por orden
+        if ((!linea1 || !linea2 || !linea3) && lineas.length >= 3) {
+            const idx = lineas.findIndex(l => /^I[A-Z<]?CHL/.test(l) || /^INCHL/.test(l));
+            if (idx >= 0 && idx + 2 < lineas.length) {
+                linea1 = lineas[idx];
+                linea2 = lineas[idx + 1];
+                linea3 = lineas[idx + 2];
+            }
+        }
+
+        // Si tenemos al menos línea 2 y 3, podemos extraer datos
+        let rut = null;
+        let nombre = null;
+
+        // ── Extraer RUT de línea 2 ──
+        if (linea2 && linea2.length >= 28) {
+            // Posiciones 16-18 = nacionalidad (CHL)
+            // Posiciones 19-27 = RUT sin DV (hasta 9 dígitos)
+            // Posición 28 = separador (<)
+            // Posición 29 = DV
+            const chlIdx = linea2.indexOf('CHL', 14);
+            if (chlIdx >= 0) {
+                const afterCHL = linea2.substring(chlIdx + 3);
+                // Extraer dígitos del RUT + DV
+                const match = afterCHL.match(/^(\d{7,9})[<](\d|[A-Z])/);
+                if (match) {
+                    const cuerpo = match[1];
+                    let dv = match[2];
+                    // Validar DV
+                    const dvCalc = _calcularDV(parseInt(cuerpo));
+                    if (dvCalc !== null) {
+                        dv = dvCalc; // Usar DV calculado para mayor precisión
+                    }
+                    rut = _formatearRut(cuerpo, dv);
+                }
+            }
+        }
+
+        // Fallback: buscar patrón de RUT en cualquier línea
+        if (!rut) {
+            for (const l of lineas) {
+                const m = l.match(/(\d{7,9})[<](\d|[A-Z])/);
+                if (m) {
+                    const cuerpo = m[1];
+                    const dvCalc = _calcularDV(parseInt(cuerpo));
+                    rut = _formatearRut(cuerpo, dvCalc || m[2]);
+                    break;
+                }
+            }
+        }
+
+        // ── Extraer nombre de línea 3 ──
+        if (linea3) {
+            // Limpiar ruido OCR: los caracteres < de relleno a veces se leen como letras.
+            // Ej: "GONZALEZ<<ANTONIOFE<<<<<<" → el "FE" es ruido de "<<"
+            // Regla: fragmentos de 1-2 chars justo antes de 2+ < son ruido OCR.
+            let cleanLine = linea3
+                .replace(/([A-Z]{1,2})(<{2,})/g, '$2')  // "FE<<<" → "<<<" 
+                .replace(/<([A-Z]{1,2})(<{2,})/g, '<<$2'); // "<FE<<" → "<<<<<"
+
+            // Formato: APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2
+            const partes = cleanLine.split('<<').filter(Boolean);
+            if (partes.length >= 2) {
+                const apellidos = partes[0].replace(/</g, ' ').trim();
+                const nombres = partes.slice(1).join(' ').replace(/</g, ' ').trim();
+                nombre = `${nombres} ${apellidos}`;
+            } else if (partes.length === 1) {
+                nombre = partes[0].replace(/</g, ' ').trim();
+            }
+            // Limpieza final: eliminar fragmentos sueltos de 1-2 chars al final del nombre
+            if (nombre) {
+                nombre = nombre.replace(/\s+[A-Z]{1,2}$/i, '').trim();
+            }
+        }
+
+        if (rut) {
+            console.log(`MRZ parsed → RUT: ${rut}, Nombre: ${nombre || '(no detectado)'}`);
+            return { rut, nombre: nombre || '' };
+        }
+
+        return null;
+    }
+
+    /**
+     * Calcula el dígito verificador de un RUT chileno (módulo 11).
+     */
+    function _calcularDV(cuerpo) {
+        if (!cuerpo || cuerpo < 1000000) return null;
+        let suma = 0;
+        let mul = 2;
+        let rutStr = cuerpo.toString();
+        for (let i = rutStr.length - 1; i >= 0; i--) {
+            suma += parseInt(rutStr[i]) * mul;
+            mul = mul === 7 ? 2 : mul + 1;
+        }
+        const resto = 11 - (suma % 11);
+        if (resto === 11) return '0';
+        if (resto === 10) return 'K';
+        return resto.toString();
+    }
+
+    /**
+     * Formatea RUT: 12345678-9 → 12.345.678-9
+     */
+    function _formatearRut(cuerpo, dv) {
+        const c = cuerpo.toString();
+        const formatted = c.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return `${formatted}-${dv}`;
+    }
+
     function toggleManual() {
+        detenerCamara(); // Cerrar cámara si está abierta
         const resultCard = document.getElementById('vis-result-card');
         if (resultCard?.classList.contains('show')) {
             cancelarRegistro();
@@ -406,6 +735,7 @@ const VisitasModule = (() => {
     }
 
     function cancelarRegistro() {
+        detenerCamara();
         document.getElementById('vis-result-card')?.classList.remove('show');
         _resetScanZone();
     }
@@ -584,7 +914,10 @@ const VisitasModule = (() => {
         } catch (e) { tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error</td></tr>'; }
     }
 
-    function destroy() { if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; } }
+    function destroy() {
+        if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; }
+        detenerCamara();
+    }
 
-    return { initTab, cargarEstadoDia, cargarHistorial, registrarVisita, marcarVisitante, toggleManual, cancelarRegistro, destroy };
+    return { initTab, cargarEstadoDia, cargarHistorial, registrarVisita, marcarVisitante, toggleManual, cancelarRegistro, iniciarCamara, capturarMRZ, detenerCamara, destroy };
 })();

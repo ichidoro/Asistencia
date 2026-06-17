@@ -37,6 +37,7 @@ class Empleado:
     activo: bool = True
     es_manual: bool = False
     excluido_asistencia: Optional[bool] = None
+    autorizado_llaves: int = 0
     
     # Fechas
     fecha_nacimiento: Optional[str] = None  # Formato: YYYY-MM-DD
@@ -103,6 +104,7 @@ class Empleado:
             "activo": self.activo,
             "es_manual": self.es_manual,
             "excluido_asistencia": self.excluido_asistencia,
+            "autorizado_llaves": self.autorizado_llaves,
             "fecha_nacimiento": self.fecha_nacimiento,
             "fecha_ingreso": self.fecha_ingreso,
             "fecha_salida": self.fecha_salida,
@@ -136,6 +138,7 @@ class Empleado:
             activo=bool(data.get("activo", True)),
             es_manual=bool(data.get("es_manual", False)),
             excluido_asistencia=bool(data.get("excluido_asistencia", False)),
+            autorizado_llaves=int(data.get("autorizado_llaves", 0)),
             fecha_nacimiento=data.get("fecha_nacimiento"),
             fecha_ingreso=data.get("fecha_ingreso"),
             fecha_salida=data.get("fecha_salida"),

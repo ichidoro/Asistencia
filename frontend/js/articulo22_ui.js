@@ -3,7 +3,11 @@
  * Diseño Enterprise inspirado en Stitch/Linear/Stripe
  */
 const Articulo22Module = (() => {
-    let _fechaActual = new Date().toISOString().slice(0, 10);
+    // Fecha local del navegador (NO usar toISOString que convierte a UTC)
+    let _fechaActual = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    })();
     let _refreshInterval = null;
 
     // ════════════════════════════════════════════════
@@ -26,32 +30,35 @@ const Articulo22Module = (() => {
                 .art22-kpi .kpi-number { font-size: 2.25rem; font-weight: 800; line-height: 1; }
                 .art22-kpi .kpi-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.9; }
                 .art22-kpi .kpi-sub { font-size: 0.8rem; font-weight: 500; opacity: 0.8; margin-top: 2px; }
-                .art22-emp-row { display: flex; align-items: center; padding: 0.9rem 1rem; border-left: 4px solid transparent; transition: background 0.15s; }
-                .art22-emp-row:hover { background: #f8fafc; }
+                .art22-emp-row { display: flex; align-items: center; padding: 0.9rem 1rem; border-left: 4px solid transparent; transition: all 0.2s ease; }
+                .art22-emp-row:hover { background: linear-gradient(135deg, rgba(248,250,252,0.8), rgba(241,245,249,0.5)); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
                 .art22-emp-row:not(:last-child) { border-bottom: 1px solid #f1f5f9; }
-                .art22-emp-row.estado-en_planta { border-left-color: var(--success-color); }
-                .art22-emp-row.estado-fuera { border-left-color: var(--danger-color); }
+                .art22-emp-row.estado-en_planta { border-left-color: #10b981; background: linear-gradient(90deg, rgba(209,250,229,0.15), transparent); }
+                .art22-emp-row.estado-fuera { border-left-color: #f43f5e; background: linear-gradient(90deg, rgba(255,228,230,0.15), transparent); }
                 .art22-emp-row.estado-sin_registro { border-left-color: #e2e8f0; }
-                .art22-avatar { width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: #64748b; flex-shrink: 0; border: 1px solid #cbd5e1; }
+                .art22-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #e2e8f0, #cbd5e1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: #475569; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
                 .art22-area-badge { display: inline-block; padding: 2px 8px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
-                .art22-mark { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 5px; font-size: 0.72rem; font-weight: 600; }
-                .art22-mark-e { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-                .art22-mark-s { background: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; }
-                .art22-mark-arrow { color: #cbd5e1; font-size: 0.65rem; margin: 0 1px; }
+                .art22-mark { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                .art22-mark-e { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 1px solid #6ee7b7; }
+                .art22-mark-s { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #9f1239; border: 1px solid #fda4af; }
+                .art22-mark-arrow { color: #94a3b8; font-size: 0.7rem; margin: 0 2px; }
                 .art22-estadia-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
-                .art22-estadia-val { font-size: 0.9rem; font-weight: 700; color: #1e293b; }
-                .art22-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
-                .art22-status-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
-                .art22-status-en_planta { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-                .art22-status-en_planta .dot { background: #10b981; }
-                .art22-status-fuera { background: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; }
-                .art22-status-fuera .dot { background: #f43f5e; }
+                .art22-estadia-val { font-size: 0.95rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
+                .art22-status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+                .art22-status-pill .dot { width: 7px; height: 7px; border-radius: 50%; animation: art22-pulse 2s infinite; }
+                @keyframes art22-pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+                .art22-status-en_planta { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 1px solid #6ee7b7; }
+                .art22-status-en_planta .dot { background: #10b981; box-shadow: 0 0 4px rgba(16,185,129,0.5); }
+                .art22-status-fuera { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #9f1239; border: 1px solid #fda4af; }
+                .art22-status-fuera .dot { background: #f43f5e; box-shadow: 0 0 4px rgba(244,63,94,0.5); }
                 .art22-status-sin_registro { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-                .art22-status-sin_registro .dot { background: #94a3b8; }
-                .art22-btn-entrada { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; font-weight: 700; font-size: 0.75rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
-                .art22-btn-entrada:hover { background: #10b981; color: #fff; border-color: #10b981; }
-                .art22-btn-salida { background: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; font-weight: 700; font-size: 0.75rem; padding: 5px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
-                .art22-btn-salida:hover { background: #f43f5e; color: #fff; border-color: #f43f5e; }
+                .art22-status-sin_registro .dot { background: #94a3b8; animation: none; }
+                .art22-btn-entrada { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; font-weight: 700; font-size: 0.78rem; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(16,185,129,0.3); letter-spacing: 0.02em; }
+                .art22-btn-entrada:hover { background: linear-gradient(135deg, #059669, #047857); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
+                .art22-btn-entrada:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(16,185,129,0.3); }
+                .art22-btn-salida { background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; border: none; font-weight: 700; font-size: 0.78rem; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(244,63,94,0.3); letter-spacing: 0.02em; }
+                .art22-btn-salida:hover { background: linear-gradient(135deg, #e11d48, #be123c); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(244,63,94,0.4); }
+                .art22-btn-salida:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(244,63,94,0.3); }
                 .art22-section-header { background: rgba(248,250,252,0.5); padding: 0.9rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
                 .art22-section-title { font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
                 .art22-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
@@ -182,7 +189,7 @@ const Articulo22Module = (() => {
         const hasta = document.getElementById('art22-hist-hasta');
         const desde = document.getElementById('art22-hist-desde');
         if (hasta) hasta.value = _fechaActual;
-        if (desde) { const d = new Date(); d.setDate(d.getDate()-7); desde.value = d.toISOString().slice(0,10); }
+        if (desde) { const d = new Date(); d.setDate(d.getDate()-7); desde.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
         await cargarEstadoDia();
         if (_refreshInterval) clearInterval(_refreshInterval);

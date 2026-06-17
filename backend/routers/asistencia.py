@@ -107,7 +107,7 @@ async def get_auditoria_bloqueo(
             JOIN empleados e ON l.empleado_id = e.id
             JOIN historial_areas h ON e.id = h.empleado_id
             LEFT JOIN areas a_table ON h.area_id = a_table.id
-            WHERE h.es_actual = 1
+            WHERE h.es_actual = 1 AND e.activo = 1
               {area_filter}
               AND l.fecha_hora >= ? AND l.fecha_hora <= ?
               AND e.id NOT IN (
