@@ -10,10 +10,125 @@ const FlotaModule = (() => {
     let _refreshInterval = null;
     let _catalogoAreasCached = []; // Cache local para evitar llamadas repetidas
 
+    function injectStyles() {
+        if (document.getElementById('flota-module-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'flota-module-styles';
+        style.textContent = `
+            /* Placa Patente Chilena Estilo Premium */
+            .chilean-plate {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+                border: 2.2px solid #0f172a;
+                border-radius: 5px;
+                padding: 1px 10px;
+                min-width: 125px;
+                height: 38px;
+                box-shadow: inset 0 0 2px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.06);
+                position: relative;
+                user-select: none;
+                vertical-align: middle;
+            }
+            .chilean-plate::before {
+                content: '';
+                position: absolute;
+                top: 1.5px;
+                left: 1.5px;
+                right: 1.5px;
+                bottom: 1.5px;
+                border: 0.8px solid #94a3b8;
+                border-radius: 3px;
+                pointer-events: none;
+            }
+            .plate-letters, .plate-numbers {
+                font-family: 'Trebuchet MS', 'Impact', Arial, sans-serif;
+                font-weight: 850;
+                font-size: 1.25rem;
+                color: #0f172a;
+                letter-spacing: 0.8px;
+                line-height: 1;
+            }
+            .plate-shield {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: #e2e8f0;
+                border: 0.8px solid #94a3b8;
+                margin: 0 6px;
+                position: relative;
+                box-shadow: inset 0 1px 1px rgba(0,0,0,0.1);
+            }
+            .plate-shield::after {
+                content: '★';
+                font-size: 6.5px;
+                color: #475569;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+            .plate-country {
+                position: absolute;
+                bottom: 1.2px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-family: 'Inter', system-ui, sans-serif;
+                font-size: 0.38rem;
+                font-weight: 900;
+                color: #475569;
+                letter-spacing: 3px;
+                text-transform: uppercase;
+                line-height: 1;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function renderPlacaPatente(patente) {
+        const pat = String(patente).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let letters = '';
+        let numbers = '';
+        
+        if (pat.length === 6) {
+            if (/^[A-Z]{4}[0-9]{2}$/.test(pat)) {
+                letters = pat.substring(0, 2) + " " + pat.substring(2, 4);
+                numbers = pat.substring(4, 6);
+            } else if (/^[A-Z]{2}[0-9]{4}$/.test(pat)) {
+                letters = pat.substring(0, 2);
+                numbers = pat.substring(2, 4) + " " + pat.substring(4, 6);
+            } else if (/^[A-Z]{3}[0-9]{3}$/.test(pat)) {
+                letters = pat.substring(0, 3);
+                numbers = pat.substring(3, 6);
+            } else {
+                letters = pat.substring(0, 3);
+                numbers = pat.substring(3, 6);
+            }
+        } else {
+            const mid = Math.ceil(pat.length / 2);
+            letters = pat.substring(0, mid);
+            numbers = pat.substring(mid);
+        }
+        
+        return `
+            <div class="chilean-plate" title="${patente}">
+                <span class="plate-letters">${letters}</span>
+                <span class="plate-shield"></span>
+                <span class="plate-numbers">${numbers}</span>
+                <span class="plate-country">CHILE</span>
+            </div>
+        `;
+    }
+
     // ════════════════════════════════════════════════
     // INIT CONTROL TAB (PORTERÍA)
     // ════════════════════════════════════════════════
     async function initTab() {
+        injectStyles();
         const container = document.getElementById('flota-container');
         if (!container) return;
 
@@ -288,8 +403,8 @@ const FlotaModule = (() => {
                     <div class="flota-card-identity">
                         <div class="flota-avatar">🚚</div>
                         <div class="flota-card-info">
-                            <div class="flota-card-name">${veh.patente}</div>
-                            <span class="flota-area-badge">${veh.area}</span>
+                            <div class="flota-card-name">${renderPlacaPatente(veh.patente)}</div>
+                            <span class="flota-area-badge" style="margin-top: 5px;">${veh.area}</span>
                         </div>
                     </div>
                     <div class="flota-card-metrics">
@@ -462,6 +577,7 @@ const FlotaModule = (() => {
     // CONFIG TAB (ADMIN CRUD DE CAMIONES)
     // ════════════════════════════════════════════════
     async function initAdminTab() {
+        injectStyles();
         const container = document.getElementById('flota-config-container');
         if (!container) return;
 
@@ -526,7 +642,7 @@ const FlotaModule = (() => {
 
                 return `
                     <tr>
-                        <td class="ps-4 fw-bold text-dark font-monospace fs-5">${v.patente}</td>
+                        <td class="ps-4">${renderPlacaPatente(v.patente)}</td>
                         <td class="text-secondary fw-semibold">${v.area_nombre}</td>
                         <td class="text-muted small">${fechaFmt}</td>
                         <td>${statusBadge}</td>
