@@ -666,8 +666,9 @@ const FlotaModule = (() => {
     }
 
     async function abrirModalVehiculo(id = null, patente = '', areaId = null) {
-        // Cargar áreas con cache local
+        // Cargar áreas con cache local y vehículos activos para validación de duplicados
         let areas = [];
+        let vehiculosExistentes = [];
         try {
             if (_catalogoAreasCached.length > 0) {
                 areas = _catalogoAreasCached;
@@ -680,8 +681,16 @@ const FlotaModule = (() => {
                     _catalogoAreasCached = areas;
                 }
             }
+            
+            // Cargar maestro de vehículos para validación de duplicados en tiempo real
+            const resMaestro = await fetch('/api/flota/maestro/', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (resMaestro.ok) {
+                vehiculosExistentes = await resMaestro.json();
+            }
         } catch (error) {
-            console.error("Error al obtener áreas para catálogo:", error);
+            console.error("Error al obtener datos para catálogo:", error);
         }
 
         // Filtrar áreas que tengan aplica_flota == 1
@@ -710,6 +719,7 @@ const FlotaModule = (() => {
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">Patente del Vehículo</label>
                         <input type="text" id="swal-vehiculo-patente" class="form-control text-uppercase font-monospace" placeholder="Ej: ABCD12" value="${patente}">
+                        <div id="swal-vehiculo-patente-error" class="text-danger small mt-1 d-none" style="font-weight: 600;"></div>
                         <div class="form-text text-muted small">Forzado automáticamente a mayúsculas y sin espacios.</div>
                     </div>
                     <div class="mb-3">
@@ -723,6 +733,40 @@ const FlotaModule = (() => {
             showCancelButton: true,
             confirmButtonText: id ? 'Guardar Cambios' : 'Registrar',
             cancelButtonText: 'Cancelar',
+            didOpen: () => {
+                const inputPatente = document.getElementById('swal-vehiculo-patente');
+                const errorDiv = document.getElementById('swal-vehiculo-patente-error');
+                const confirmBtn = Swal.getConfirmButton();
+                
+                const validarPatenteRealtime = () => {
+                    const pat = inputPatente.value.replace(/\s+/g, '').toUpperCase();
+                    if (!pat) {
+                        errorDiv.classList.add('d-none');
+                        confirmBtn.disabled = false;
+                        return;
+                    }
+                    
+                    // Si estamos editando y coincide con la patente inicial
+                    if (id && pat === patente.toUpperCase().replace(/\s+/g, '')) {
+                        errorDiv.classList.add('d-none');
+                        confirmBtn.disabled = false;
+                        return;
+                    }
+                    
+                    const duplicado = vehiculosExistentes.find(v => v.patente === pat && v.id !== id);
+                    if (duplicado) {
+                        errorDiv.textContent = `⚠️ La patente ${pat} ya está registrada en: ${duplicado.area_nombre}.`;
+                        errorDiv.classList.remove('d-none');
+                        confirmBtn.disabled = true;
+                    } else {
+                        errorDiv.classList.add('d-none');
+                        confirmBtn.disabled = false;
+                    }
+                };
+                
+                inputPatente.addEventListener('input', validarPatenteRealtime);
+                inputPatente.addEventListener('change', validarPatenteRealtime);
+            },
             preConfirm: () => {
                 const pat = document.getElementById('swal-vehiculo-patente').value.strip ? document.getElementById('swal-vehiculo-patente').value.strip() : document.getElementById('swal-vehiculo-patente').value;
                 const area = document.getElementById('swal-vehiculo-area').value;
@@ -731,7 +775,17 @@ const FlotaModule = (() => {
                     Swal.showValidationMessage('La patente es requerida');
                     return false;
                 }
-                return { patente: pat.replace(/\s+/g, '').toUpperCase(), area_id: parseInt(area) };
+                
+                const cleanedPat = pat.replace(/\s+/g, '').toUpperCase();
+                
+                // Validación de duplicado final antes de enviar
+                const duplicado = vehiculosExistentes.find(v => v.patente === cleanedPat && v.id !== id);
+                if (duplicado) {
+                    Swal.showValidationMessage(`La patente ${cleanedPat} ya está registrada en: ${duplicado.area_nombre}`);
+                    return false;
+                }
+                
+                return { patente: cleanedPat, area_id: parseInt(area) };
             }
         }).then(async (result) => {
             if (result.isConfirmed) {
