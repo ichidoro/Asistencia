@@ -572,35 +572,8 @@ async def set_db_mode(
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission("superuser"))
 ):
-    """Cambiar modo de DB"""
-    mode = payload.get("mode") # "cloud" o "hybrid"
-    
-    # 1. Persistir localmente de forma asíncrona para que el boot lo vea
-    # Esto es CRUCIAL porque si estamos en modo 'cloud', db.execute NO escribe en el archivo local
-    try:
-        if hasattr(db, '_save_persistence_locally'):
-            await db._save_persistence_locally("db_operation_mode", mode)
-    except Exception as e:
-        logger.error(f"❌ Error persistiendo localmente: {e}")
-
-    # 2. Persistir en la nube (para que otros terminales sepan el estado si es necesario)
-    try:
-        await db.execute(
-            "INSERT OR REPLACE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
-            ("db_operation_mode", mode, "Modo de operación de base de datos (cloud/hybrid)")
-        )
-    except Exception as e:
-        logger.error(f"❌ Error persistiendo modo de DB en la nube: {e}")
-
-    # 3. Aplicar cambio en caliente
-    if mode == "cloud":
-        db._force_turso_only = True
-        logger.warning("🧪 CONFIGURACIÓN: Modo Nube Pura ACTIVADO")
-    else:
-        db._force_turso_only = False
-        logger.info("🧪 CONFIGURACIÓN: Modo Híbrido RESTAURADO")
-    
-    return {"status": "ok", "mode": mode}
+    """Modo Cloud es permanente — no se permite cambiar."""
+    return {"status": "ok", "mode": "cloud", "message": "Turso Cloud es el único modo permitido"}
 
 @router.post("/diagnostico/sync-speed/")
 async def set_sync_speed(

@@ -815,38 +815,16 @@ async def get_sync_logs(
 
 @router.post(
     "/admin/reset-replica/",
-    summary="Resetear réplica local de Turso",
-    description=(
-        "⚠️ ADMIN ONLY. Destruye y re-clona la réplica local desde Turso Cloud. "
-        "Úsalo solo cuando hay errores persistentes de Frame Mismatch. "
-        "El proceso tarda ~30 segundos mientras se descarga la réplica."
-    )
+    summary="No-op: No hay réplica local en modo Turso Cloud",
 )
 async def reset_turso_replica(
     current_user: SecurityContext = Depends(RequirePermission("configuracion.seguridad"))
 ) -> Dict[str, Any]:
-    """
-    Resetea la réplica local de Turso sin reiniciar el servidor.
-    
-    Elimina los archivos locales (.db, -wal, -shm, -info, .meta) y
-    reconecta para que libsql haga un full-clone desde Turso Cloud.
-    Solo disponible para usuarios con permiso configuracion.seguridad.
-    """
-    logger.warning(f"⚠️ Reset de réplica solicitado por usuario: {getattr(current_user, 'username', 'desconocido')}")
-    
-    try:
-        await db._auto_heal_sync_conflict()
-        return {
-            "status": "ok",
-            "message": "Réplica reseteada y re-sincronizada desde Turso Cloud.",
-            "detail": "La réplica local fue destruida y re-clonada exitosamente."
-        }
-    except Exception as e:
-        logger.error(f"❌ Error en reset de réplica: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error reseteando la réplica: {str(e)}"
-        )
+    """No-op: En modo Turso Cloud directo no existe réplica local que resetear."""
+    return {
+        "status": "ok",
+        "message": "No hay réplica local — Turso Cloud es la única fuente de verdad.",
+    }
 
 
 

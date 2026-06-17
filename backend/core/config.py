@@ -47,17 +47,10 @@ class Settings(BaseSettings):
     ]
     
     # ============================================
-    # TURSO DATABASE
+    # TURSO DATABASE (ÚNICA fuente de verdad)
     # ============================================
     TURSO_DATABASE_URL: str
     TURSO_AUTH_TOKEN: str
-    
-    # Embedded Replica (local)
-    LOCAL_DB_PATH: str = str(_WRITABLE_DIR / "data" / "local_db" / "asistencia_local.db")
-    
-    # Sync Configuration
-    TURSO_SYNC_URL: Optional[str] = None  # Si es diferente al DATABASE_URL
-    TURSO_SYNC_INTERVAL: int = 60  # Segundos entre syncs automáticos
     TURSO_ENCRYPTION_KEY: Optional[str] = None  # Opcional
     
     # ============================================
@@ -81,8 +74,7 @@ class Settings(BaseSettings):
     # PATHS
     # ============================================
     BASE_DIR: Path = _EXEC_DIR
-    DATA_DIR: Path = _WRITABLE_DIR / "data"
-    DOWNLOADS_DIR: Path = DATA_DIR / "downloads"
+    DOWNLOADS_DIR: Path = _WRITABLE_DIR / "downloads"
     LOGS_DIR: Path = _WRITABLE_DIR / "logs"
     TEMP_DIR: Path = _WRITABLE_DIR / "temp"
     
@@ -160,23 +152,15 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
         
         # Crear directorios si no existen
-        self.DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
         self.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # Si TURSO_SYNC_URL no está definido, usar TURSO_DATABASE_URL
-        if not self.TURSO_SYNC_URL:
-            self.TURSO_SYNC_URL = self.TURSO_DATABASE_URL
     
     @property
     def db_url(self) -> str:
         """URL para conectar a Turso"""
         return self.TURSO_DATABASE_URL
     
-    @property
-    def local_db_path_str(self) -> str:
-        """Path de la DB local como string"""
-        return str(self.LOCAL_DB_PATH)
+
     
     @property
     def log_file_path(self) -> Path:
@@ -217,7 +201,7 @@ if __name__ == "__main__":
     logger.info(f"Environment: {settings.APP_ENV}")
     logger.info(f"API: {settings.API_HOST}:{settings.API_PORT}")
     logger.info(f"Turso URL: {settings.TURSO_DATABASE_URL}")
-    logger.info(f"Local DB: {settings.LOCAL_DB_PATH}")
+    logger.info(f"DB: Turso Cloud (directo)")
     logger.info(f"Scraper: {'Enabled' if settings.SCRAPER_ENABLED else 'Disabled'}")
     logger.info(f"Base Dir: {settings.BASE_DIR}")
     logger.info("=" * 50)

@@ -1,37 +1,26 @@
 """
-Hybrid Database - Native Turso Embedded Replicas
-Usa el SDK oficial 'libsql' para sincronización nativa de bajo nivel (Frames).
+Turso Cloud Database â€” ConexiÃ³n directa a Turso Cloud.
+Turso es la ÃšNICA fuente de verdad. No se permite base de datos local.
 """
 
 import libsql
 import asyncio
-import os
-import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 from contextlib import asynccontextmanager
-from pathlib import Path
 from loguru import logger
 from datetime import datetime, date
 
 from .config import settings
 
 
-class HybridDatabase:
+class TursoDatabase:
     """
-    Database híbrida usando Turso LibSQL Native SDK:
-    - READS: De SQLite local (Embedded Replica) con latencia microsegundo.
-    - WRITES: Al Primary (Cloud). El SDK se encarga del ruteo.
-    - SYNC: Nativo vía conn.sync() usando la cuota de 'Sincronizaciones'.
+    Database Turso Cloud â€” ConexiÃ³n directa al servidor Turso.
+    Turso es la ÃšNICA fuente de verdad. No se permite base de datos local.
     """
     
-    def __init__(self, db_path: Optional[str] = None):
-        # Rutas de DB Local
-        if db_path:
-            self.db_path = Path(db_path)
-        else:
-            self.db_path = Path(settings.LOCAL_DB_PATH)
-            
+    def __init__(self):
         self.conn: Optional[libsql.Connection] = None
         
         # Turso Config
@@ -39,44 +28,37 @@ class HybridDatabase:
             settings.TURSO_DATABASE_URL and 
             ("libsql" in settings.TURSO_DATABASE_URL or "turso.io" in settings.TURSO_DATABASE_URL)
         )
+        
+        if not self.use_turso:
+            raise RuntimeError(
+                "TURSO_DATABASE_URL es obligatorio. "
+                "No se permite base de datos local. "
+                "Configura las variables de entorno TURSO_DATABASE_URL y TURSO_AUTH_TOKEN."
+            )
+        
         self.turso_url = settings.TURSO_DATABASE_URL
         self.turso_token = settings.TURSO_AUTH_TOKEN
         
         self._connected: bool = False
         self._last_sync: Optional[datetime] = None
-        self._force_turso_only = False
-        self._schema_cache: Dict[str, List[str]] = {}  # Caché para migraciones rápidas
+        self._force_turso_only = True  # Siempre True â€” Turso Cloud directo
+        self._schema_cache: Dict[str, List[str]] = {}  # CachÃ© para migraciones rÃ¡pidas
         self._in_transaction: bool = False  # Control de transacciones para batching
         self._reset_lock = asyncio.Lock()
         # Lock para serializar acceso concurrente al objeto self.conn.
-        # libsql (Rust) no es thread-safe para acceso simultáneo desde múltiples threads.
-        # El scheduler (sync) y los requests HTTP comparten self.conn → Race Condition → WalConflict.
-        # Este lock garantiza que solo una operación de escritura/sync accede a conn a la vez.
-        # IMPORTANTE: Las lecturas (SELECT) también se serializan porque libsql embedded replica
-        # hace auto-sync interno en cualquier cursor.execute(), incluyendo SELECT.
+        # libsql (Rust) no es thread-safe para acceso simultÃ¡neo desde mÃºltiples threads.
+        # Los requests HTTP comparten self.conn â†’ Race Condition posible.
+        # Este lock garantiza que solo una operaciÃ³n accede a conn a la vez.
         self._db_lock = asyncio.Lock()
-        # Semáforo para serializar syncs a Turso Cloud.
-        # execute_batch dispara fire-and-forget _push_to_cloud() en cada batch.
-        # Sin control, 49 batches simultáneos = 49 conn.sync() = 429 Too Many Requests.
-        # Con _sync_lock: solo 1 sync activo a la vez.
-        # Con _sync_pending: si ya hay uno corriendo, el nuevo se descarta (el scheduler
-        # lo reintentará en 30s, los datos están seguros en WAL local).
-        self._sync_lock = asyncio.Lock()
-        self._sync_pending: bool = False
-
-        self._bg_sync_task: Optional[asyncio.Task] = None
         self.last_activity_time: float = 0.0
-        self._realtime_sync_active: bool = False  # True después de enable_realtime_sync()
+        self._realtime_sync_active: bool = False
+        self._auto_heal_in_progress: bool = False
         
-        # SIEMPRE conectar directo a Turso Cloud — sin réplica local.
-        # Turso es la única fuente de verdad.
-        if self.use_turso:
-            self._force_turso_only = True
-            logger.info("☁️ Modo NUBE PURA (Turso directo) — sin réplica local")
+        logger.info("â˜ï¸ Modo NUBE PURA (Turso directo) â€” sin rÃ©plica local")
         
         
     def _get_lock(self, name: str) -> asyncio.Lock:
-        """Obtiene o recrea el lock asegurando que esté vinculado al event loop actual"""
+        """Obtiene o recrea el lock asegurando que estÃ© vinculado al event loop actual"""
         lock_var = f"_{name}"
         lock = getattr(self, lock_var)
         try:
@@ -86,7 +68,7 @@ class HybridDatabase:
             
         if hasattr(lock, '_loop') and lock._loop is not None:
             if lock._loop != loop:
-                logger.warning(f"🔄 Recreando {lock_var} porque el event loop actual cambió o es diferente")
+                logger.warning(f"ðŸ”„ Recreando {lock_var} porque el event loop actual cambiÃ³ o es diferente")
                 lock = asyncio.Lock()
                 setattr(self, lock_var, lock)
         return lock
@@ -99,12 +81,10 @@ class HybridDatabase:
     def reset_lock(self) -> asyncio.Lock:
         return self._get_lock('reset_lock')
 
-    @property
-    def sync_lock(self) -> asyncio.Lock:
-        return self._get_lock('sync_lock')
+
 
     async def connect(self, retry: bool = True) -> None:
-        """Establece la conexión nativa con Turso (Embedded Replica o Remote)"""
+        """Establece la conexiÃ³n nativa con Turso (Embedded Replica o Remote)"""
         if self._connected:
             return
             
@@ -115,343 +95,50 @@ class HybridDatabase:
             
     async def _connect_locked(self, retry: bool = True) -> None:
         try:
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            if self._force_turso_only and self.use_turso:
-                logger.warning("🚀 MODO NUBE PURA: Conectando directamente a Turso Cloud (Sin Réplica Local)")
-                self.conn = await asyncio.to_thread(
-                    libsql.connect, 
-                    database=self.turso_url, 
-                    auth_token=self.turso_token
-                )
-            else:
-                logger.info(f"🔌 Conectando a Embedded Replica: {self.db_path}")
-                try:
-                    if self.use_turso and self.turso_url:
-                        # Fase 1: Conectar con offline=True para startup seguro.
-                        # El sync a cloud lo maneja el APScheduler después de
-                        # que init_tables() complete. No se usa sync_interval nativo.
-                        self.conn = await asyncio.wait_for(
-                            asyncio.to_thread(
-                                libsql.connect,
-                                database=str(self.db_path),
-                                sync_url=self.turso_url,
-                                auth_token=self.turso_token,
-                                offline=True,
-                            ),
-                            timeout=60.0
-                        )
-                        logger.info("🔄 Conexión Turso Cloud (offline=True, sync manual durante startup)")
-                    else:
-                        self.conn = await asyncio.to_thread(
-                            libsql.connect,
-                            database=str(self.db_path)
-                        )
-                        logger.info("📁 Conexión local establecida (Turso Cloud deshabilitado o no configurado)")
-
-                except asyncio.TimeoutError:
-                    logger.warning("⏱️ Timeout de 60s al conectar con Turso Cloud. Reintentando una vez más...")
-                    try:
-                        self.conn = await asyncio.wait_for(
-                            asyncio.to_thread(
-                                libsql.connect,
-                                database=str(self.db_path),
-                                sync_url=self.turso_url,
-                                auth_token=self.turso_token,
-                                offline=True,
-                            ),
-                            timeout=60.0
-                        )
-                        logger.info("🔄 Conexión Turso Cloud (segundo intento, offline=True)")
-                    except Exception:
-                        logger.warning("⏱️ Segundo timeout. Entrando en modo LOCAL OFFLINE puro.")
-                        self.conn = await asyncio.to_thread(
-                            libsql.connect,
-                            database=str(self.db_path)
-                        )
-                        self._force_turso_only = True  # Marcar como offline temporal, no desactivar use_turso
-                except Exception as e:
-                    err_msg = str(e).lower()
-                    if (("invalid local state" in err_msg or "malformed" in err_msg or "local state is incorrect" in err_msg) and retry):
-                        logger.warning(f"🩹 Estado local inconsistente detectado. Eliminando DB local para re-sincronizar desde cloud...")
-                        # Liberar handles residuales en Python/Rust y esperar a que el OS desbloquee el archivo
-                        import gc
-                        gc.collect()
-                        await asyncio.sleep(1.0)
-                        
-                        # soft_only=False: borrar .db + aux. El servidor re-sincronizará
-                        # desde cloud (ya purgado).
-                        success = await self._cleanup_local_db_files(soft_only=False)
-                        if not success:
-                            logger.critical("🛑 Falló el cleanup del archivo DB principal (bloqueado). Abortando reconexión.")
-                            raise e
-                        
-                        return await self._connect_locked(retry=False)
-                    raise e
-
-            # Verificar salud del WAL local después de reconectar
-            wal_path = str(self.db_path) + "-wal"
-            if os.path.exists(wal_path):
-                wal_size = os.path.getsize(wal_path)
-                logger.info(f"📋 WAL local presente: {wal_size} bytes (frames pendientes posibles)")
-            else:
-                logger.info(f"📋 WAL local vacío — sync inicial traerá datos frescos del cloud")
-
-
+            logger.warning("ðŸš€ Conectando directamente a Turso Cloud")
+            self.conn = await asyncio.to_thread(
+                libsql.connect, 
+                database=self.turso_url, 
+                auth_token=self.turso_token
+            )
 
             self._connected = True
-            
-            # PRAGMAs de resiliencia y performance post-conexión
-            # FIX-CORRUPCION: Usar solo PRAGMAs seguros para embedded replicas Turso
-            if self._force_turso_only:
-                logger.info("☁️ Modo Nube Pura: Se omiten PRAGMAs locales (no soportados por Hrana)")
-                self._pragma_applied = False
-            else:
-                try:
-                    cursor = self.conn.cursor()
-                    cursor.execute("PRAGMA busy_timeout = 5000")        # 5s espera ante SQLITE_BUSY
-                    # WAL es el journal_mode recomendado por Turso para embedded replicas
-                    # (mvcc es experimental y no está documentado con sync de replicas)
-                    cursor.execute("PRAGMA journal_mode = WAL")
-                    # NORMAL es seguro con WAL mode (WAL ya protege contra crash)
-                    # FULL causaba overhead de fsync innecesario que ralentizaba writes
-                    cursor.execute("PRAGMA synchronous = NORMAL")
-                    cursor.execute("PRAGMA cache_size = -32000")         # 32MB page cache en RAM
-                    cursor.execute("PRAGMA temp_store = MEMORY")         # tablas temporales en RAM
-                    # FIX-CORRUPCION: mmap_size ELIMINADO — incompatible con embedded replicas
-                    # El mmap puede mantener páginas stale que no reflejan los cambios del sync
-                    self._pragma_applied = True
-                    logger.info("🛡️ PRAGMAs aplicados (busy_timeout=5000, WAL, synchronous=NORMAL, cache=32MB)")
-                except Exception as pragma_err:
-                    logger.warning(f"⚠️ PRAGMAs no aplicados (no crítico en modo Cloud): {pragma_err}")
+            logger.info("â˜ï¸ Modo Nube Pura: Se omiten PRAGMAs locales (no soportados por Hrana)")
+            self._pragma_applied = False
 
-            # Sync post-conexión:
-            # Si es la primera inicialización de la réplica (base de datos vacía), el sync es bloqueante.
-            # Si la DB local ya tiene datos, el sync inicial se ejecuta en segundo plano para no colgar el arranque del backend.
-            if hasattr(self.conn, 'sync') and self.use_turso and not self._force_turso_only:
-                is_empty = True
-                try:
-                    def _check_tables():
-                        cursor = self.conn.cursor()
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-                        return cursor.fetchall()
-                    tables = await asyncio.to_thread(_check_tables)
-                    if tables:
-                        is_empty = False
-                except Exception as check_err:
-                    logger.warning(f"⚠️ Error verificando tablas locales en connect: {check_err}")
-
-                # Siempre hacer sync bloqueante ANTES de que init_tables escriba.
-                # Si el sync se difiere, init_tables crea frame local 1 → Frame Mismatch
-                # contra el cloud que tiene 19859 frames.
-                try:
-                    sync_label = "DB vacía" if is_empty else "DB con tablas"
-                    logger.info(f"🔄 Sync inicial bloqueante ({sync_label}) — descargando datos de Turso Cloud...")
-                    async with self.db_lock:
-                        def _sync_and_checkpoint():
-                            """Sync + checkpoint en el MISMO thread para evitar WAL corrupto."""
-                            self.conn.sync()
-                            # TRUNCATE checkpoint: fusiona WAL en DB y borra el WAL.
-                            # PASSIVE deja el WAL de 4MB que libsql 0.1.11 no puede leer.
-                            cursor = self.conn.cursor()
-                            cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                        await asyncio.to_thread(_sync_and_checkpoint)
-                    self._last_sync = datetime.now()
-                    logger.info("☁️ Sync inicial completado — réplica local actualizada con datos de Turso")
-                except Exception as sync_err:
-                    err_msg = str(sync_err).lower()
-                    if "conflict" in err_msg or "frame" in err_msg or "mismatch" in err_msg or "larger than" in err_msg or "durable" in err_msg:
-                        logger.warning(f"⚠️ Frame Mismatch en sync inicial: {sync_err}. Iniciando auto-heal...")
-                        await self._auto_heal_sync_conflict()
-                    else:
-                        logger.warning(f"⚠️ Sync inicial falló: {sync_err}. Continuando con datos locales.")
-
-            logger.success(f"✅ Motor LibSQL conectado (Modo: {'Cloud' if self._force_turso_only else 'Hybrid'})")
+            logger.success("âœ… Motor LibSQL conectado (Modo: Cloud)")
 
         except Exception as e:
             if "maximum recursion depth exceeded" in str(e).lower():
-                logger.critical("🛑 Error de recursión crítica en conexión. Abortando para evitar crash.")
+                logger.critical("ðŸ›‘ Error de recursiÃ³n crÃ­tica en conexiÃ³n. Abortando para evitar crash.")
                 self._connected = False
                 return
-            logger.error(f"❌ Error de conexión LibSQL: {e}")
+            logger.error(f"âŒ Error de conexiÃ³n LibSQL: {e}")
             raise
 
     async def enable_realtime_sync(self, interval: int = 3) -> None:
-        """
-        Fase 2: Sube las tablas creadas por init_tables() a Turso Cloud.
-        
-        FIX-CORRUPCION: Ya NO reconecta (close+reconnect causaba corrupción).
-        Solo hace un sync manual para subir los cambios locales al cloud.
-        El sync periódico lo maneja exclusivamente el APScheduler.
-        """
-        if not self.use_turso or self._force_turso_only or self._realtime_sync_active:
-            return
-        
-        logger.info("🔄 Sincronizando tablas creadas a Turso Cloud...")
-        try:
-            # Sync único para subir las tablas creadas por init_tables()
-            if hasattr(self.conn, 'sync'):
-                async with self.db_lock:
-                    await asyncio.to_thread(self.conn.sync)
-                logger.info("☁️ Tablas sincronizadas a Turso Cloud")
-            
-            self._realtime_sync_active = True
-            logger.success("✅ Sync post-init completado — scheduler se encarga del sync periódico")
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "conflict" in err_msg or "frame" in err_msg or "mismatch" in err_msg:
-                logger.warning(f"⚠️ Frame Mismatch en sync post-init: {e}. Iniciando auto-heal...")
-                await self._auto_heal_sync_conflict()
-            else:
-                logger.warning(f"⚠️ Sync post-init falló: {e}. El scheduler reintentará.")
-            self._realtime_sync_active = True  # Marcar como activo para que el scheduler trabaje
+        """Marca sync como activo. En modo Turso Cloud directo no hay sync local."""
+        self._realtime_sync_active = True
+        logger.info("â˜ï¸ Turso Cloud directo â€” no se requiere sync local")
 
-
-    async def reset_local_db(self):
-        """Desconecta, limpia archivos locales y reconecta con control de concurrencia"""
-        async with self.reset_lock:
-            logger.warning("🔄 Iniciando proceso de RESET de base de datos local...")
-            
-            if self._connected and self.conn:
-                try:
-                    await asyncio.to_thread(self.conn.close)
-                except Exception:
-                    pass
-                self.conn = None
-                
-
-                
-            self._connected = False
-            import gc
-            gc.collect()
-            await asyncio.sleep(1.0)
-            
-            await self._cleanup_local_db_files(soft_only=False)  # Full reset: borra todo
-            await asyncio.sleep(0.5)
-            await self._connect_locked()
-            logger.success("✅ Reset local completado — reconectado desde Turso Cloud")
-
-    async def _cleanup_local_db_files(self, soft_only: bool = True) -> bool:
-        """
-        Limpia archivos de réplica local.
-        
-        soft_only=True (DEFAULT):  Solo archivos AUXILIARES (-wal, -shm, -info, .meta).
-                                    NUNCA toca el archivo .db principal.
-                                    Usar en recuperación de inconsistencias en connect().
-        
-        soft_only=False:           Limpieza total (incluye .db).
-                                    Solo usar en reset_local_db() explícito.
-        """
-        import glob
-        
-        local_dir = str(self.db_path.parent)
-        base = str(self.db_path)
-        
-        # Archivos auxiliares: siempre seguros de borrar (EXCEPTO .meta)
-        aux_patterns = [
-            base + "-wal",
-            base + "-shm",
-            base + "-info",
-        ]
-        
-        meta_pattern = base + ".meta"
-        
-        deleted = 0
-        
-        if not soft_only:
-            logger.warning("🗑️ Cleanup FULL: intentando eliminar .db + aux files")
-            # CRÍTICO: Si no podemos eliminar/renombrar .db, NO debemos eliminar .meta
-            if os.path.exists(base):
-                db_deleted = False
-                try:
-                    os.remove(base)
-                    deleted += 1
-                    logger.debug(f"🗑️ Eliminado: {os.path.basename(base)}")
-                    db_deleted = True
-                except PermissionError:
-                    corrupt_name = base + f".corrupt_{int(datetime.now().timestamp())}"
-                    try:
-                        os.rename(base, corrupt_name)
-                        deleted += 1
-                        logger.warning(f"🩹 Archivo bloqueado, movido a: {os.path.basename(corrupt_name)}")
-                        db_deleted = True
-                    except Exception as e2:
-                        logger.error(f"🚨 Error crítico limpiando {os.path.basename(base)}: {e2}")
-                        logger.critical("🛑 Abortando cleanup para NO desincronizar .db y .meta!")
-                        return False # Abortar limpieza para no romper la DB
-                
-                # Si falló por otra razón y no está marcado como eliminado
-                if not db_deleted and os.path.exists(base):
-                    logger.critical("🛑 No se pudo eliminar .db. Abortando cleanup.")
-                    return False
-            
-            patterns = aux_patterns + [meta_pattern]
-        else:
-            logger.debug("🧹 Cleanup SOFT: solo -wal/-shm/-info (DB y .meta preservados)")
-            patterns = aux_patterns
-            
-        # Archivos corrupt_* siempre elegibles
-        corrupt_pattern = os.path.join(local_dir, "*.corrupt_*")
-        patterns.extend(glob.glob(corrupt_pattern))
-        
-        for f in patterns:
-            if os.path.exists(f):
-                try:
-                    os.remove(f)
-                    deleted += 1
-                    logger.debug(f"🗑️ Eliminado: {os.path.basename(f)}")
-                except PermissionError:
-                    corrupt_name = f + f".corrupt_{int(datetime.now().timestamp())}"
-                    try:
-                        os.rename(f, corrupt_name)
-                        deleted += 1
-                        logger.warning(f"🩹 Archivo bloqueado, movido a: {os.path.basename(corrupt_name)}")
-                    except Exception as e2:
-                        logger.error(f"🚨 Error crítico limpiando {os.path.basename(f)}: {e2}")
-        
-        if deleted:
-            logger.info(f"🧹 Cleanup: {deleted} archivo(s) eliminados (soft={soft_only})")
-        return True
-
-    async def _load_persistence_before_connect(self):
-        """Intenta leer el modo de operación de la DB local antes de conectar el nuevo motor.
-        NOTA: No usa sqlite3 directo porque corrompe el LIBSQL_WAL del archivo .db.
-        El modo de operación se leerá después del connect() si es necesario.
-        """
-        # Modo legacy de leer ajustes eliminado — sqlite3 + libsql WAL son incompatibles.
-        # Si se necesita forzar cloud-only, hacerlo via variable de entorno o config.
-        pass
-
-    async def _save_persistence_locally(self, clave: str, valor: str):
-        """Guarda un ajuste en la DB usando la conexión libsql ya abierta.
-        NUNCA usa sqlite3 directo — incompatible con LIBSQL_WAL."""
+    async def save_setting(self, clave: str, valor: str):
+        """Guarda un ajuste en la DB Turso."""
         try:
             if not self._connected or not self.conn:
-                logger.warning(f"⚠️ No hay conexión activa para persistir ajuste {clave}")
+                logger.warning(f"âš ï¸ No hay conexiÃ³n activa para persistir ajuste {clave}")
                 return
             await self.execute(
                 "INSERT OR REPLACE INTO ajustes (clave, valor) VALUES (?, ?)",
                 (clave, str(valor))
             )
-            logger.debug(f"💾 Ajuste local persistido: {clave}={valor}")
+            logger.debug(f"ðŸ’¾ Ajuste persistido en Turso: {clave}={valor}")
         except Exception as e:
-            logger.error(f"⚠️ No se pudo persistir ajuste local {clave}: {e}")
+            logger.error(f"âš ï¸ No se pudo persistir ajuste {clave}: {e}")
 
     async def disconnect(self) -> None:
-        """Cerrar conexiones con sync final para persistir datos en Cloud"""
+        """Cerrar conexiÃ³n con Turso Cloud"""
         if not self._connected or not self.conn:
             return
-
-        # Sync final: empujar cualquier escritura pendiente a Turso Cloud
-        # ANTES de cerrar la conexión. Esto asegura que los datos locales
-        # (en WAL) se repliquen al Cloud y no se pierdan si algo externo
-        # limpia los archivos WAL antes del próximo startup.
-        if self.sync_supported:
-            try:
-                await asyncio.to_thread(self.conn.sync)
-                logger.info("🔄 Sync final completado (datos locales empujados a Cloud)")
-            except Exception as sync_err:
-                logger.warning(f"⚠️ Sync final falló: {sync_err} (datos podrían estar solo en WAL local)")
 
         try:
             await asyncio.to_thread(self.conn.close)
@@ -459,14 +146,12 @@ class HybridDatabase:
             pass  # Ignorar errores al cerrar
         self.conn = None
 
-
-
         self._connected = False
-        # Forzar liberación de handles del Rust backend en Windows
+        # Forzar liberaciÃ³n de handles del Rust backend en Windows
         import gc
         gc.collect()
         await asyncio.sleep(0.5)
-        logger.info("👋 Motor LibSQL desconectado")
+        logger.info("ðŸ‘‹ Motor LibSQL desconectado")
 
     def _is_wal_conflict(self, e: Exception) -> bool:
         """Detecta WAL conflicts de Turso Cloud (datos locales OK, sync pendiente)"""
@@ -475,13 +160,13 @@ class HybridDatabase:
 
     def _is_stream_error(self, e: Exception) -> bool:
         """Detecta errores de stream expirado de Turso Cloud (Hrana 404 stream not found).
-        Estos streams son cerrados por el servidor tras inactividad; la reconexión
-        debe ser inmediata — no tiene sentido esperar si el stream ya está muerto."""
+        Estos streams son cerrados por el servidor tras inactividad; la reconexiÃ³n
+        debe ser inmediata â€” no tiene sentido esperar si el stream ya estÃ¡ muerto."""
         msg = str(e).lower()
         return "stream not found" in msg or "status=404" in msg
 
     def _is_reconnect_error(self, e: Exception) -> bool:
-        """Determina si un error requiere cerrar y volver a abrir la conexión o un reset"""
+        """Determina si un error requiere cerrar y volver a abrir la conexiÃ³n o un reset"""
         msg = str(e).lower()
         reconnect_triggers = [
             "panic", "unwrap", "none", "libsql error",
@@ -504,7 +189,7 @@ class HybridDatabase:
 
     @asynccontextmanager
     async def transaction(self):
-        """Context manager para agrupar operaciones en una transacción atómica"""
+        """Context manager para agrupar operaciones en una transacciÃ³n atÃ³mica"""
         if not self._connected:
             await self.connect()
         
@@ -523,8 +208,8 @@ class HybridDatabase:
                 except Exception as commit_err:
                     err_msg = str(commit_err).lower()
                     if "walconflict" in err_msg or "wal frame" in err_msg:
-                        logger.warning(f"⚠️ WAL Conflict en commit (datos locales OK, sync pendiente): {commit_err}")
-                        return  # No re-raise — datos locales están a salvo
+                        logger.warning(f"âš ï¸ WAL Conflict en commit (datos locales OK, sync pendiente): {commit_err}")
+                        return  # No re-raise â€” datos locales estÃ¡n a salvo
                     raise
             
             await asyncio.to_thread(_commit)
@@ -585,19 +270,19 @@ class HybridDatabase:
                         raise panic_e
 
                 # FIX1: Serializar lecturas Y escrituras bajo _db_lock.
-                # Las lecturas sin lock competían con conn.sync() del scheduler, causando
-                # corrupción silenciosa del WAL. Ahora TODAS las operaciones son serializadas.
-                # Fase 1: Adquisición del lock con timeout de 10s
+                # Las lecturas sin lock competÃ­an con conn.sync() del scheduler, causando
+                # corrupciÃ³n silenciosa del WAL. Ahora TODAS las operaciones son serializadas.
+                # Fase 1: AdquisiciÃ³n del lock con timeout de 10s
                 try:
                     async with asyncio.timeout(10):
                         await self.db_lock.acquire()
                 except asyncio.TimeoutError:
-                    logger.warning(f"⏳ _db_lock timeout en EXECUTE (intento {attempt}/{max_retries}): {query[:60]}...")
+                    logger.warning(f"â³ _db_lock timeout en EXECUTE (intento {attempt}/{max_retries}): {query[:60]}...")
                     last_error = asyncio.TimeoutError("db_lock timeout")
                     await asyncio.sleep(0.5)
                     continue
 
-                # Fase 2: Ejecución bajo lock — reads y writes protegidos del scheduler
+                # Fase 2: EjecuciÃ³n bajo lock â€” reads y writes protegidos del scheduler
                 try:
                     status, error_obj = await asyncio.to_thread(_do_execute)
                 finally:
@@ -605,17 +290,17 @@ class HybridDatabase:
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
-                        logger.warning(f"⚠️ WAL residual post-lock en EXECUTE (retry {attempt}/{max_retries}): {query[:60]}...")
+                        logger.warning(f"âš ï¸ WAL residual post-lock en EXECUTE (retry {attempt}/{max_retries}): {query[:60]}...")
                         await asyncio.sleep(1)
                     elif error_obj and "malformed" in str(error_obj).lower():
-                        logger.warning(f"🧹 Corrupción detectada en EXECUTE: {error_obj}. Reconectando...")
+                        logger.warning(f"ðŸ§¹ CorrupciÃ³n detectada en EXECUTE: {error_obj}. Reconectando...")
                         self._connected = False
                         await asyncio.sleep(0.3)
                         await self.connect()
                     else:
-                        logger.warning(f"🔄 EXECUTE retry {attempt}/{max_retries}: {error_obj}")
+                        logger.warning(f"ðŸ”„ EXECUTE retry {attempt}/{max_retries}: {error_obj}")
                         self._connected = False
-                        # Stream expirado: reconectar inmediatamente (el stream ya está muerto)
+                        # Stream expirado: reconectar inmediatamente (el stream ya estÃ¡ muerto)
                         # Otros errores de red: backoff corto antes de reintentar
                         if not self._is_stream_error(error_obj):
                             await asyncio.sleep(0.3)
@@ -624,7 +309,7 @@ class HybridDatabase:
                     continue
 
                 if error_obj == "WAL_OK":
-                    logger.warning(f"⚠️ WAL residual (local OK): {query[:60]}...")
+                    logger.warning(f"âš ï¸ WAL residual (local OK): {query[:60]}...")
                     return status
 
                 return status
@@ -632,7 +317,7 @@ class HybridDatabase:
             except Exception as e:
                 err_msg = str(e).lower()
                 if "duplicate column name" in err_msg:
-                    logger.debug(f"ℹ️ SQL: Columna ya existe (Ignorado) | Query: {query[:50]}...")
+                    logger.debug(f"â„¹ï¸ SQL: Columna ya existe (Ignorado) | Query: {query[:50]}...")
                     class DummyCursor:
                         def __init__(self): self.lastrowid = None
                         def fetchall(self): return []
@@ -641,25 +326,25 @@ class HybridDatabase:
                     return DummyCursor()
 
                 if self._is_wal_conflict(e):
-                    logger.warning(f"⚠️ WAL residual outer (retry {attempt}/{max_retries}): {query[:60]}...")
+                    logger.warning(f"âš ï¸ WAL residual outer (retry {attempt}/{max_retries}): {query[:60]}...")
                     await asyncio.sleep(1)
                     last_error = e
                     continue
 
                 if self._is_reconnect_error(e) and attempt < max_retries:
-                    logger.warning(f"🔄 EXECUTE retry {attempt}/{max_retries}: {e}")
+                    logger.warning(f"ðŸ”„ EXECUTE retry {attempt}/{max_retries}: {e}")
                     self._connected = False
                     await asyncio.sleep(1)
                     await self.connect()
                     last_error = e
                     continue
 
-                logger.error(f"❌ Error SQL: {e} | Query: {query} | Params: {params}")
+                logger.error(f"âŒ Error SQL: {e} | Query: {query} | Params: {params}")
                 raise
 
         # Si agotamos reintentos
         if last_error and self._is_wal_conflict(last_error):
-            logger.warning(f"⚠️ WAL persistente (no fatal, datos locales OK): {query[:60]}...")
+            logger.warning(f"âš ï¸ WAL persistente (no fatal, datos locales OK): {query[:60]}...")
             class DummyCursor:
                 def __init__(self): self.lastrowid = None
                 def fetchall(self): return []
@@ -667,12 +352,12 @@ class HybridDatabase:
                 def close(self): pass
             return DummyCursor()
 
-        logger.error(f"❌ EXECUTE falló tras {max_retries} reintentos | Query: {query[:80]}")
+        logger.error(f"âŒ EXECUTE fallÃ³ tras {max_retries} reintentos | Query: {query[:80]}")
         if last_error:
             raise last_error
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
-        """Fetch all usando conexión única serializada por _db_lock"""
+        """Fetch all usando conexiÃ³n Ãºnica serializada por _db_lock"""
         self.last_activity_time = time.time()
         if not self._connected:
             await self.connect()
@@ -710,7 +395,7 @@ class HybridDatabase:
                     async with asyncio.timeout(10):
                         await lock_to_use.acquire()
                 except asyncio.TimeoutError:
-                    logger.warning(f"⏳ lock timeout en FETCH (intento {attempt}/{max_retries}): {query[:60]}...")
+                    logger.warning(f"â³ lock timeout en FETCH (intento {attempt}/{max_retries}): {query[:60]}...")
                     last_error = asyncio.TimeoutError("lock timeout")
                     await asyncio.sleep(0.1)
                     continue
@@ -722,16 +407,16 @@ class HybridDatabase:
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
-                        logger.warning(f"⚠️ WAL en FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
+                        logger.warning(f"âš ï¸ WAL en FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
                         await asyncio.sleep(0.1)
                     elif error_obj and "malformed" in str(error_obj).lower():
-                        logger.warning(f"🧹 Corrupción detectada en FETCH: {error_obj}. Reconectando...")
+                        logger.warning(f"ðŸ§¹ CorrupciÃ³n detectada en FETCH: {error_obj}. Reconectando...")
                         self._connected = False
                         await asyncio.sleep(0.3)
                         await self.connect()
                         conn_to_use = self.conn
                     else:
-                        logger.warning(f"🔄 FETCH retry {attempt}/{max_retries}: {error_obj}")
+                        logger.warning(f"ðŸ”„ FETCH retry {attempt}/{max_retries}: {error_obj}")
                         self._connected = False
                         if not self._is_stream_error(error_obj):
                             await asyncio.sleep(0.3)
@@ -744,13 +429,13 @@ class HybridDatabase:
 
             except Exception as e:
                 if self._is_wal_conflict(e):
-                    logger.warning(f"⚠️ WAL outer FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
+                    logger.warning(f"âš ï¸ WAL outer FETCH (retry {attempt}/{max_retries}): {query[:60]}...")
                     await asyncio.sleep(0.1)
                     last_error = e
                     continue
 
                 if self._is_reconnect_error(e) and attempt < max_retries:
-                    logger.warning(f"🔄 FETCH retry {attempt}/{max_retries}: {e}")
+                    logger.warning(f"ðŸ”„ FETCH retry {attempt}/{max_retries}: {e}")
                     self._connected = False
                     await asyncio.sleep(0.3)
                     await self.connect()
@@ -758,42 +443,42 @@ class HybridDatabase:
                     last_error = e
                     continue
 
-                logger.error(f"❌ Error FetchAll: {e} | Query: {query} | Params: {params}")
+                logger.error(f"âŒ Error FetchAll: {e} | Query: {query} | Params: {params}")
                 return []
 
         # Agotamos reintentos
         if last_error and self._is_wal_conflict(last_error):
-            logger.error(f"❌ WAL persistente en FETCH tras {max_retries} reintentos — proceso externo activo: {query[:60]}...")
-            raise RuntimeError("DB sync conflict — reintente en unos segundos")
+            logger.error(f"âŒ WAL persistente en FETCH tras {max_retries} reintentos â€” proceso externo activo: {query[:60]}...")
+            raise RuntimeError("DB sync conflict â€” reintente en unos segundos")
 
-        logger.error(f"❌ FETCH falló tras {max_retries} reintentos | Query: {query[:80]}")
+        logger.error(f"âŒ FETCH fallÃ³ tras {max_retries} reintentos | Query: {query[:80]}")
         return []
 
     async def fetch_one(self, query: str, params: Optional[Tuple] = None) -> Optional[Dict[str, Any]]:
-        """Fetch one con conversión a dict"""
+        """Fetch one con conversiÃ³n a dict"""
         rows = await self.fetch_all(query, params)
         return rows[0] if rows else None
 
     async def execute_batch(self, operations: List[Tuple[str, Optional[Union[tuple, list]]]], suppress_auto_sync: bool = False) -> None:
         """
-        Ejecuta múltiples sentencias en una transacción atómica.
+        Ejecuta mÃºltiples sentencias en una transacciÃ³n atÃ³mica.
 
         ARQUITECTURA DE DOS FASES:
-        ─────────────────────────────────────────────────────────────────────────
-        Fase 1 – Commit LOCAL (dentro del _db_lock, instantáneo ~ms):
+        â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        Fase 1 â€“ Commit LOCAL (dentro del _db_lock, instantÃ¡neo ~ms):
             conn.commit() escribe en el WAL de SQLite local. No hay round-trip
-            a la nube. El lock se libera inmediatamente después.
+            a la nube. El lock se libera inmediatamente despuÃ©s.
 
-        Fase 2 – Sync a TURSO CLOUD (fuera del _db_lock):
+        Fase 2 â€“ Sync a TURSO CLOUD (fuera del _db_lock):
             Si suppress_auto_sync=False (default): se lanza _push_to_cloud()
             como ensure_future (fire-and-forget).
-            Si suppress_auto_sync=True: NO se lanza el sync automático.
-            Usar cuando se ejecutarán múltiples execute_batch consecutivos
+            Si suppress_auto_sync=True: NO se lanza el sync automÃ¡tico.
+            Usar cuando se ejecutarÃ¡n mÃºltiples execute_batch consecutivos
             (ej: batch de N meses de BioAlba) para evitar que conn.sync()
-            de la iteración anterior compita con el cursor() de la siguiente
+            de la iteraciÃ³n anterior compita con el cursor() de la siguiente
             sobre el objeto libsql nativo. El caller es responsable de llamar
             sync_to_cloud_explicit() al terminar la secuencia completa.
-        ─────────────────────────────────────────────────────────────────────────
+        â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         """
         self.last_activity_time = time.time()
         if not self._connected:
@@ -805,14 +490,14 @@ class HybridDatabase:
         for attempt in range(1, max_retries + 1):
             try:
                 def _do_batch_local():
-                    """Solo commit LOCAL al WAL. No llama conn.sync(). Rápido: escritura en disco local, sin red."""
+                    """Solo commit LOCAL al WAL. No llama conn.sync(). RÃ¡pido: escritura en disco local, sin red."""
                     try:
                         if self.conn is None:
                             raise Exception("conn is None")
                         cursor = self.conn.cursor()
                         for query, params in operations:
                             cursor.execute(query, params or ())
-                        self.conn.commit()   # WAL local — instantáneo
+                        self.conn.commit()   # WAL local â€” instantÃ¡neo
                         return "OK", None
                     except Exception as inner_e:
                         try:
@@ -829,28 +514,28 @@ class HybridDatabase:
                             return "RECONNECT", Exception(f"Rust Panic: {panic_e}")
                         raise panic_e
 
-                # ── Adquisición del lock (máx 10s) ──────────────────────────
+                # â”€â”€ AdquisiciÃ³n del lock (mÃ¡x 10s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 try:
                     async with asyncio.timeout(10):
                         await self.db_lock.acquire()
                 except asyncio.TimeoutError:
-                    logger.warning(f"⏳ _db_lock timeout en BATCH (intento {attempt}/{max_retries})")
+                    logger.warning(f"â³ _db_lock timeout en BATCH (intento {attempt}/{max_retries})")
                     await asyncio.sleep(0.5)
                     continue
 
-                # ── Commit LOCAL dentro del lock ─────────────────────────────
+                # â”€â”€ Commit LOCAL dentro del lock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 try:
                     status, error_obj = await asyncio.to_thread(_do_batch_local)
                 finally:
-                    # Lock liberado ANTES del sync a la nube → desbloquea hot path
+                    # Lock liberado ANTES del sync a la nube â†’ desbloquea hot path
                     self.db_lock.release()
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
-                        logger.warning(f"⚠️ WAL en BATCH (retry {attempt}/{max_retries})")
+                        logger.warning(f"âš ï¸ WAL en BATCH (retry {attempt}/{max_retries})")
                         await asyncio.sleep(1)
                     else:
-                        logger.warning(f"🔄 BATCH retry {attempt}/{max_retries}: {error_obj}")
+                        logger.warning(f"ðŸ”„ BATCH retry {attempt}/{max_retries}: {error_obj}")
                         self._connected = False
                         if not self._is_stream_error(error_obj):
                             await asyncio.sleep(0.3)
@@ -858,56 +543,56 @@ class HybridDatabase:
                     last_error = error_obj
                     continue
 
-                # ── Sync a Turso Cloud ────────────────────────────────────────
+                # â”€â”€ Sync a Turso Cloud â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 # El sync a la nube lo hace EXCLUSIVAMENTE el APScheduler (sync_from_cloud).
-                # Disparar un conn.sync() fire-and-forget aquí causaba contención de mutex
-                # en el objeto libsql nativo: si el recálculo de asistencia llegaba
-                # milisegundos después, su thread también intentaba acceder a self.conn,
+                # Disparar un conn.sync() fire-and-forget aquÃ­ causaba contenciÃ³n de mutex
+                # en el objeto libsql nativo: si el recÃ¡lculo de asistencia llegaba
+                # milisegundos despuÃ©s, su thread tambiÃ©n intentaba acceder a self.conn,
                 # resultando en esperas de 200-600ms por el mutex interno de Rust.
-                # Los datos están seguros en el WAL local hasta el próximo ciclo del scheduler.
+                # Los datos estÃ¡n seguros en el WAL local hasta el prÃ³ximo ciclo del scheduler.
                 # suppress_auto_sync se mantiene por compatibilidad de firma con callers.
                 return
 
             except Exception as e:
                 if self._is_wal_conflict(e):
-                    logger.warning(f"⚠️ WAL outer BATCH (retry {attempt}/{max_retries})")
+                    logger.warning(f"âš ï¸ WAL outer BATCH (retry {attempt}/{max_retries})")
                     await asyncio.sleep(1)
                     last_error = e
                     continue
 
                 if self._is_reconnect_error(e) and attempt < max_retries:
-                    logger.warning(f"🔄 BATCH retry {attempt}/{max_retries}: {e}")
+                    logger.warning(f"ðŸ”„ BATCH retry {attempt}/{max_retries}: {e}")
                     self._connected = False
                     await asyncio.sleep(1)
                     await self.connect()
                     last_error = e
                     continue
 
-                logger.error(f"❌ Error BATCH: {e}")
+                logger.error(f"âŒ Error BATCH: {e}")
                 raise
 
-        logger.error(f"❌ BATCH falló tras {max_retries} reintentos")
+        logger.error(f"âŒ BATCH fallÃ³ tras {max_retries} reintentos")
         if last_error:
             raise last_error
 
     async def executemany(self, query: str, params_list: List[Union[tuple, list]], suppress_auto_sync: bool = False) -> None:
-        """Ejecuta la misma query con múltiples sets de parámetros."""
+        """Ejecuta la misma query con mÃºltiples sets de parÃ¡metros."""
         operations = [(query, params) for params in params_list]
         await self.execute_batch(operations, suppress_auto_sync=suppress_auto_sync)
 
     async def execute_script(self, script_sql: str) -> None:
         """
-        Ejecuta múltiples statements en UN SOLO round-trip a Turso Cloud.
+        Ejecuta mÃºltiples statements en UN SOLO round-trip a Turso Cloud.
 
-        Usar cuando se necesita ejecutar varios DELETEs, INSERTs o DDL sin parámetros
+        Usar cuando se necesita ejecutar varios DELETEs, INSERTs o DDL sin parÃ¡metros
         (ej: purgas de tablas, migraciones, seeds).
 
-        IMPORTANTE: executescript NO soporta parámetros (?, :name). Solo valores literales.
-        Para queries con parámetros usar execute_batch() en su lugar.
+        IMPORTANTE: executescript NO soporta parÃ¡metros (?, :name). Solo valores literales.
+        Para queries con parÃ¡metros usar execute_batch() en su lugar.
 
         Benchmark vs execute() en loop:
-          - execute() × 13 tablas  → 13 round-trips ≈ 17s
-          - execute_script() × 13  →  1 round-trip  ≈ 1-2s
+          - execute() Ã— 13 tablas  â†’ 13 round-trips â‰ˆ 17s
+          - execute_script() Ã— 13  â†’  1 round-trip  â‰ˆ 1-2s
         """
         if not self._connected:
             await self.connect()
@@ -940,49 +625,49 @@ class HybridDatabase:
                         async with self.db_lock:
                             status, error_obj = await asyncio.to_thread(_do_script)
                 except asyncio.TimeoutError:
-                    logger.warning(f"⏳ _db_lock timeout en SCRIPT (intento {attempt}/{max_retries})")
+                    logger.warning(f"â³ _db_lock timeout en SCRIPT (intento {attempt}/{max_retries})")
                     await asyncio.sleep(0.5)
                     continue
 
                 if status == "RECONNECT":
                     if error_obj and self._is_wal_conflict(error_obj):
-                        logger.warning(f"⚠️ WAL en SCRIPT (retry {attempt}/{max_retries})")
+                        logger.warning(f"âš ï¸ WAL en SCRIPT (retry {attempt}/{max_retries})")
                         await asyncio.sleep(1)
                     else:
-                        logger.warning(f"🔄 SCRIPT retry {attempt}/{max_retries}: {error_obj}")
+                        logger.warning(f"ðŸ”„ SCRIPT retry {attempt}/{max_retries}: {error_obj}")
                         self._connected = False
                         await asyncio.sleep(1)
                         await self.connect()
                     last_error = error_obj
                     continue
 
-                return  # Éxito
+                return  # Ã‰xito
 
             except Exception as e:
                 if self._is_wal_conflict(e):
-                    logger.warning(f"⚠️ WAL outer SCRIPT (retry {attempt}/{max_retries})")
+                    logger.warning(f"âš ï¸ WAL outer SCRIPT (retry {attempt}/{max_retries})")
                     await asyncio.sleep(1)
                     last_error = e
                     continue
 
                 if self._is_reconnect_error(e) and attempt < max_retries:
-                    logger.warning(f"🔄 SCRIPT retry {attempt}/{max_retries}: {e}")
+                    logger.warning(f"ðŸ”„ SCRIPT retry {attempt}/{max_retries}: {e}")
                     self._connected = False
                     await asyncio.sleep(1)
                     await self.connect()
                     last_error = e
                     continue
 
-                logger.error(f"❌ Error SCRIPT: {e}")
+                logger.error(f"âŒ Error SCRIPT: {e}")
                 raise
 
-        logger.error(f"❌ SCRIPT falló tras {max_retries} reintentos")
+        logger.error(f"âŒ SCRIPT fallÃ³ tras {max_retries} reintentos")
         if last_error:
             raise last_error
 
 
     async def get_column_names(self, table_name: str) -> List[str]:
-        """Obtiene lista de columnas de una tabla usando PRAGMA (Local rápido)"""
+        """Obtiene lista de columnas de una tabla usando PRAGMA (Local rÃ¡pido)"""
         if not self._connected: await self.connect()
 
         if table_name in self._schema_cache:
@@ -996,242 +681,24 @@ class HybridDatabase:
                 self._schema_cache[table_name] = cols
             return cols
         except Exception as e:
-            logger.error(f"❌ Error obteniendo columnas de {table_name}: {e}")
+            logger.error(f"âŒ Error obteniendo columnas de {table_name}: {e}")
             return []
 
     async def sync_from_cloud(self) -> None:
-        """Sincronización Nativa delegada a LibSQL (WAL concurrente, respeta _sync_lock)."""
-        if not self.sync_supported:
-            return
-
-        # Evitar sincronizar si el usuario ha estado activo recientemente (últimos 20 segundos)
-        # Esto previene que el bloqueo del VFS de LibSQL congele la aplicación durante el uso activo.
-        time_since_activity = time.time() - self.last_activity_time
-        if time_since_activity < 20.0:
-            logger.debug(f"⏸️ sync_from_cloud: usuario activo hace {time_since_activity:.1f}s, posponiendo sync")
-            return
-
-        # Si hay un batch en progreso, ceder el turno para no saturar I/O
-        if getattr(self, '_batch_in_progress', False):
-            logger.debug("⏸️ sync_from_cloud: batch en progreso, sincronización diferida")
-            return
-
-        # Si ya hay un sync en vuelo (push_to_cloud del execute_batch), descartamos este turno.
-        # El scheduler lo reintentará en el próximo intervalo. Los datos están seguros en WAL local.
-        if self.sync_lock.locked():
-            logger.debug("⏸️ sync_from_cloud: sync en vuelo, turno del scheduler descartado")
-            return
-
-        try:
-            async with self.sync_lock:
-                async with self.db_lock:
-                    _t0 = datetime.now()
-                    await asyncio.to_thread(self.conn.sync)
-                    _elapsed = (datetime.now() - _t0).total_seconds()
-                    self._last_sync = datetime.now()
-                    
-                    # FIX4: Checkpoint TRUNCATE — consolida y vacía el WAL completamente.
-                    # PASSIVE no espera readers y puede dejar el WAL sin consolidar.
-                    # TRUNCATE espera a que no haya readers y elimina los frames confirmados.
-                    try:
-                        def _do_checkpoint():
-                            cursor = self.conn.cursor()
-                            cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                            cursor.execute("PRAGMA journal_size_limit = 4194304")
-                        await asyncio.to_thread(_do_checkpoint)
-                    except Exception as cp_err:
-                        logger.warning(f"⚠️ Checkpoint post-sync falló: {cp_err}")
-                        
-                # Threshold en 35s: latencia Chile→USA con Turso Cloud es 30-60s esperado.
-                # Alertar solo cuando supera ese umbral indica un problema real de red.
-                if _elapsed > 35:
-                    logger.warning(f"⚠️ sync_from_cloud: sync lento ({_elapsed:.1f}s) — posible latencia con Turso Cloud")
-                else:
-                    logger.debug(f"☁️ sync_from_cloud: completado en {_elapsed:.2f}s")
-        except Exception as e:
-            err_msg = str(e)
-            if "status=429" in err_msg or "Too Many Requests" in err_msg:
-                logger.warning(f"⚠️ Sync nativo pospuesto: límite de concurrencia en Turso (429). Los datos están a salvo localmente.")
-            elif "walconflict" in err_msg.lower() or "wal frame" in err_msg.lower():
-                logger.debug(f"☁️ sync_from_cloud pospuesto (WAL conflict leve, resolvemos en prox iteración)")
-            else:
-                if "server returned a higher frame_no" in err_msg or "larger than what we sent" in err_msg:
-                    # Auto-heal en background para no bloquear el hilo de exception handling
-                    asyncio.create_task(self._auto_heal_sync_conflict())
-                else:
-                    logger.error(f"❌ Error en Sync nativo: {e}")
+        """No-op: En modo Turso Cloud directo no hay rÃ©plica local que sincronizar."""
+        return
 
     async def sync_to_cloud_explicit(self, max_retries: int = 3) -> bool:
-        """
-        Empuja el WAL local a Turso Cloud en un solo round-trip controlado.
-
-        Usar al final de una secuencia de execute_batch(suppress_auto_sync=True)
-        para consolidar N commits locales en 1 único conn.sync(), eliminando
-        la contención sobre el objeto libsql nativo entre batches consecutivos.
-
-        Implementa retry garantizado para asegurar que datos como INASISTENCIA o ATRASO
-        no se pierdan por un fallo transitorio de red.
-        """
-        if not self.sync_supported:
-            return True
-        
-        for attempt in range(1, max_retries + 1):
-            try:
-                t0 = asyncio.get_event_loop().time()
-                async with self.db_lock:
-                    await asyncio.to_thread(self.conn.sync)
-                    
-                    # FIX4: Checkpoint TRUNCATE — consolida y vacía el WAL completamente.
-                    try:
-                        def _do_checkpoint():
-                            cursor = self.conn.cursor()
-                            cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                            cursor.execute("PRAGMA journal_size_limit = 4194304")
-                        await asyncio.to_thread(_do_checkpoint)
-                    except Exception as cp_err:
-                        logger.warning(f"⚠️ Checkpoint explícito falló: {cp_err}")
-
-                elapsed_ms = int((asyncio.get_event_loop().time() - t0) * 1000)
-                self._last_sync = datetime.now()
-                logger.info(f"☁️ [Sync explícito] WAL -> Turso Cloud en {elapsed_ms}ms (intento {attempt})")
-                return True
-            except Exception as e:
-                err_msg = str(e).lower()
-                if "frame_no" in err_msg or "larger than" in err_msg:
-                    logger.critical(f"⚠️ sync_to_cloud_explicit falló por Frame Mismatch. Iniciando Auto-Healing.")
-                    asyncio.create_task(self._auto_heal_sync_conflict())
-                    return False
-                
-                if attempt < max_retries:
-                    wait = 2 ** attempt  # 2s, 4s, 8s
-                    logger.warning(f"⚠️ sync_to_cloud intento {attempt}/{max_retries} falló, retry en {wait}s: {e}")
-                    await asyncio.sleep(wait)
-                else:
-                    logger.error(f"🔴 sync_to_cloud AGOTÓ reintentos. Datos SOLO en WAL local (riesgo de pérdida): {e}")
-                    return False
-        return False
-
-    async def _auto_heal_sync_conflict(self) -> None:
-        """
-        Destruye y reconstruye la réplica local cuando libsql detecta un Frame Mismatch.
-
-        CAUSAS CONOCIDAS DEL FRAME MISMATCH:
-        - El servidor Turso Cloud avanzó sus frames (otra escritura directa al cloud,
-          rollback, o migración) mientras la réplica local estaba offline o desconectada.
-        - La réplica local tiene un .meta file apuntando a un frame que ya no existe.
-        
-        PROTOCOLO DE RECUPERACIÓN:
-        1. Cerrar la conexión libsql (libera el hilo de sync_interval).
-        2. Esperar 3s en Windows para que el OS libere los file handles del Rust backend.
-        3. Borrar TODOS los archivos locales, INCLUYENDO .meta (que guarda el frame pointer).
-        4. Reconectar: libsql hace un full-clone desde Turso Cloud desde frame 0.
-        """
-        # Guard: Evitar ejecuciones concurrentes o bucle infinito de auto-heal
-        if getattr(self, '_auto_heal_in_progress', False):
-            logger.warning("⏸️ Auto-heal ya en progreso, descartando solicitud duplicada")
-            return
-        self._auto_heal_in_progress = True
-        
-        logger.critical("🚨 Frame Mismatch con Turso Cloud! Iniciando auto-recuperación de réplica...")
-        try:
-            # 1. Cerrar conexión y anular referencia para liberar handles del Rust backend
-            if self.conn:
-                try:
-                    await asyncio.to_thread(self.conn.close)
-                    logger.info("🔌 Conexión libsql cerrada")
-                except Exception as close_err:
-                    logger.warning(f"⚠️ Error al cerrar conn (ignorado): {close_err}")
-                finally:
-                    self.conn = None
-                    self._connected = False
-
-
-
-            # 2. Forzar liberación de handles de Rust en Windows
-            #    El hilo de sync_interval de libsql puede tardar hasta 2-3s en soltar handles
-            import gc
-            gc.collect()
-            await asyncio.sleep(3.0)  # Espera crítica para Windows: libera file handles del OS
-            
-            # 3. Borrar TODOS los archivos de réplica local, INCLUYENDO .meta
-            #    .meta es el archivo que guarda el frame pointer — SIN borrarlo, el heal falla
-            db_path_str = str(self.db_path)
-            files_to_delete = [
-                db_path_str,            # .db  — base de datos local
-                db_path_str + "-wal",   # -wal — write-ahead log
-                db_path_str + "-shm",   # -shm — shared memory index del WAL
-                db_path_str + "-info",  # -info — FRAME POINTER (SDK Python de libsql)
-                db_path_str + ".meta",  # .meta — FRAME POINTER (versiones nuevas de libsql)
-            ]
-            
-            deleted = []
-            failed = []
-            for f in files_to_delete:
-                if os.path.exists(f):
-                    try:
-                        os.remove(f)
-                        deleted.append(os.path.basename(f))
-                        logger.info(f"🗑️ Eliminado: {os.path.basename(f)}")
-                    except PermissionError:
-                        # Último recurso: renombrar (libera el path, el handle se cierra al GC)
-                        corrupt_name = f + f".corrupt_{int(datetime.now().timestamp())}"
-                        try:
-                            os.rename(f, corrupt_name)
-                            deleted.append(os.path.basename(f) + "→.corrupt")
-                            logger.warning(f"🩹 Movido a backup: {os.path.basename(corrupt_name)}")
-                        except Exception as rename_err:
-                            failed.append(os.path.basename(f))
-                            logger.error(f"❌ No se pudo eliminar/renombrar {os.path.basename(f)}: {rename_err}")
-            
-            if failed:
-                logger.critical(
-                    f"🛑 Auto-heal PARCIAL: {len(deleted)} borrados, {len(failed)} bloqueados: {failed}. "
-                    "El .meta file puede persistir. Reinicia el servidor para completar la recuperación."
-                )
-            else:
-                logger.info(f"✅ Archivos eliminados: {', '.join(deleted)}")
-            
-            # 4. Reconectar — libsql hará full-clone desde Turso Cloud (frame 0)
-            logger.info("🔄 Reconectando y clonando réplica desde Turso Cloud...")
-            await asyncio.sleep(0.5)
-            await self.connect()
-            
-            # 5. Sync inmediato — OBLIGATORIO para bajar datos reales del cloud
-            #    Sin esto, _connect_locked difiere el sync y la UI carga vacía
-            if self.conn and hasattr(self.conn, 'sync'):
-                try:
-                    logger.info("🔄 Descargando datos desde Turso Cloud (sync post-heal)...")
-                    async with self.db_lock:
-                        await asyncio.wait_for(
-                            asyncio.to_thread(self.conn.sync),
-                            timeout=120.0
-                        )
-                    self._last_sync = datetime.now()
-                    logger.success("✅ Auto-recuperación exitosa. Datos descargados desde Turso Cloud.")
-                except Exception as sync_err:
-                    logger.warning(f"⚠️ Sync post-heal falló: {sync_err}. Los datos se descargarán en el próximo ciclo del scheduler.")
-            else:
-                logger.success("✅ Auto-recuperación exitosa. Réplica re-sincronizada desde la nube (frame 0).")
-            
-        except Exception as e:
-            logger.error(f"❌ Fallo en auto-recuperación: {e}")
-            # Intentar reconectar de todas formas para no dejar la DB sin conexión
-            try:
-                if not self._connected:
-                    await self.connect()
-            except Exception:
-                pass
-        finally:
-            self._auto_heal_in_progress = False
-
+        """No-op: En modo Turso Cloud directo las escrituras van directo al servidor."""
+        return True
 
 
     async def initialize_v2_sync(self) -> None:
-        """Mantiene compatibilidad de esquema (Stub para no romper código externo)"""
+        """Mantiene compatibilidad de esquema (Stub para no romper cÃ³digo externo)"""
         pass
 
     async def get_table_names(self) -> List[str]:
-        """Obtiene lista de tablas existentes (Local rápido)"""
+        """Obtiene lista de tablas existentes (Local rÃ¡pido)"""
         if not self._connected: await self.connect()
         query = "SELECT name FROM sqlite_master WHERE type='table'"
         cursor = await self.fetch_all(query)
@@ -1243,7 +710,7 @@ class HybridDatabase:
         return column_name in cols
 
     async def table_exists(self, table_name: str) -> bool:
-        """Verifica si una tabla existe localmente de forma instantánea usando sqlite_master"""
+        """Verifica si una tabla existe localmente de forma instantÃ¡nea usando sqlite_master"""
         if not self._connected: await self.connect()
         query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
         cursor = await self.fetch_one(query, (table_name,))
@@ -1251,8 +718,8 @@ class HybridDatabase:
 
     async def _execute_turso(self, query: str, params: Optional[Tuple] = None) -> Any:
         """
-        Ejecución directa para diagnóstico de la nube.
-        En modo Embedded Replica, LibSQL rutea automáticamente las escrituras a la nube.
+        EjecuciÃ³n directa para diagnÃ³stico de la nube.
+        En modo Embedded Replica, LibSQL rutea automÃ¡ticamente las escrituras a la nube.
         Para un health check, forzamos un sync para asegurar bidireccionalidad.
         """
         if not self._connected:
@@ -1263,13 +730,14 @@ class HybridDatabase:
                 await self.sync_from_cloud()
             return await self.execute(query, params)
         except Exception as e:
-            logger.error(f"❌ Fallo de comunicación directa con Turso: {e}")
+            logger.error(f"â Œ Fallo de comunicaciÃ³n directa con Turso: {e}")
             raise
 
     async def clear_schema_cache(self) -> None:
-        """Limpia el caché de esquemas para forzar re-lectura"""
+        """Limpia el cachÃ© de esquemas para forzar re-lectura"""
         self._schema_cache.clear()
-        logger.debug("🧹 Schema cache limpiado")
+        logger.debug("ðŸ§¹ Schema cache limpiado")
+
 
     async def health_check(self) -> Dict[str, Any]:
         """Verifica el estado de salud de la conexión"""
@@ -1296,24 +764,20 @@ class HybridDatabase:
 
     @property
     def sync_supported(self) -> bool:
-        return (
-            self._connected
-            and self.conn is not None
-            and self.use_turso
-            and not self._force_turso_only
-            and hasattr(self.conn, 'sync')
-        )
+        """Siempre False — no hay réplica local que sincronizar."""
+        return False
 
 
-# Alias de compatibilidad (código existente importa 'Database')
-Database = HybridDatabase
+# Alias de compatibilidad (código existente importa 'Database' o 'HybridDatabase')
+Database = TursoDatabase
+HybridDatabase = TursoDatabase
 
 # Singleton global
-db = HybridDatabase()
+db = TursoDatabase()
 
 
-async def get_db() -> HybridDatabase:
+async def get_db() -> TursoDatabase:
     """Dependency injection para FastAPI"""
     if not db._connected:
         await db.connect()
-    return db
+    return db

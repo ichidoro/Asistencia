@@ -123,10 +123,11 @@ def ensure_single_instance():
     import os
     import time
     
-    local_dir = os.path.join("data", "local_db")
-    os.makedirs(local_dir, exist_ok=True)
-    lock_path = os.path.join(local_dir, "app.lock")
-    pid_path = os.path.join(local_dir, "app.pid")
+    import tempfile
+    lock_dir = os.path.join(tempfile.gettempdir(), "asistencia")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_path = os.path.join(lock_dir, "app.lock")
+    pid_path = os.path.join(lock_dir, "app.pid")
     
     # Intentar abrir el archivo de bloqueo
     _lock_file = open(lock_path, "w")

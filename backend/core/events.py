@@ -122,36 +122,9 @@ async def lifespan(app: FastAPI):
         from backend.core.sys_utils import ensure_single_instance
         ensure_single_instance()
 
-        # 1. Limpieza PRE-CONEXIÓN: Solo archivos .corrupt_* residuales.
-        # ⚠️ NUNCA borrar .db-wal / .db-shm / .db-info / .db.meta:
-        #   - .db-wal contiene transacciones no checkpointed (datos reales)
-        #   - .db-shm es el índice del WAL (se regenera si falta, pero borrarlo
-        #     junto al WAL causa pérdida de datos)
-        #   - .db.meta contiene el frame pointer de sincronización de libsql
-        #   Borrar WAL/SHM desalinea el frame pointer del .meta, causando que
-        #   libsql crea estar actualizado cuando no lo está → datos perdidos.
-        #   libsql maneja su propio ciclo de vida WAL de forma nativa.
-        startup_manager.update(8, "Verificando estado local...")
-        try:
-            import os, glob
-            local_dir = os.path.join("data", "local_db")
-            if os.path.isdir(local_dir):
-                # Solo limpiar archivos de recuperación previos (.corrupt_*)
-                corrupt_files = glob.glob(os.path.join(local_dir, "*.corrupt_*"))
-                deleted = 0
-                for f in corrupt_files:
-                    try:
-                        os.remove(f)
-                        deleted += 1
-                        logger.debug(f"Cleanup: {os.path.basename(f)}")
-                    except Exception:
-                        pass
-                if deleted:
-                    logger.info(f"Cleanup: {deleted} archivo(s) .corrupt residuales eliminados")
-                else:
-                    logger.debug("Cleanup: sin archivos residuales")
-        except Exception as e:
-            logger.warning(f"Cleanup no critico: {e}")
+        # 1. (Limpieza local eliminada — Turso Cloud es la única fuente de verdad)
+        startup_manager.update(8, "Verificando conexión cloud...")
+
 
         # 2. Conectar a Database (descarga fresco desde Turso)
         startup_manager.update(10, "Conectando al motor de base de datos...")
@@ -273,16 +246,7 @@ async def lifespan(app: FastAPI):
                 # 4. Iniciar Sincronización Automática
                 if settings.SYNC_ENABLED:
                     logger.info(f"⏰ Iniciando Sync Scheduler (Intervalo: {settings.SYNC_INTERVAL_SECONDS}s)")
-                    scheduler.add_job(
-                        db.sync_from_cloud,
-                        'interval',
-                        seconds=settings.SYNC_INTERVAL_SECONDS,
-                        id='turso_sync',
-                        replace_existing=True,
-                        coalesce=True,
-                        max_instances=1,
-                        misfire_grace_time=60
-                    )
+                # turso_sync eliminado — en modo Cloud directo no hay réplica que sincronizar
                     # Rolling Window de feriados — intervalo relativo al inicio del servidor.
                     # No usa hora fija: si el servidor arranca a las 2 PM, dispara cada 12h
                     # desde ese momento. Independiente de si hay usuarios conectados.

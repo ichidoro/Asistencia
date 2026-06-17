@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ backend/
 COPY frontend/ frontend/
 
-# Crear directorios necesarios
-RUN mkdir -p data/downloads data/local_db logs
+# Crear directorios necesarios (sin local_db — Turso Cloud directo)
+RUN mkdir -p downloads logs
 
 # Puerto (Cloud Run define $PORT=8080)
 EXPOSE 8080

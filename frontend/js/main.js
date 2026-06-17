@@ -1772,7 +1772,7 @@ async function updateSystemStatus() {
       return true;  // ← OK: el intervalo puede crecer
     } else {
       dot.style.backgroundColor = '#f59e0b'; // Amber
-      text.textContent = 'Degradado (Solo Local)';
+      text.textContent = 'Conexión Degradada';
       dot.classList.add('status-offline');
       return false; // ← Degradado: mantener chequeo frecuente
     }
@@ -2593,21 +2593,8 @@ window.confirmarBaja = async function () {
     alert("Error de conexión al registrar baja.");
   }
 }
-// --- DIAGNÓSTICO (MODO SECRETO 7890) ---
-let secretSequence = "";
-document.addEventListener('keydown', (e) => {
-  // Solo permitimos números
-  if (e.key >= '0' && e.key <= '9') {
-    secretSequence += e.key;
-
-    if (secretSequence.endsWith("7890")) {
-      secretSequence = "";
-      openDiagnostico();
-    }
-    // Limpiar si es muy larga
-    if (secretSequence.length > 20) secretSequence = secretSequence.substring(10);
-  }
-});
+// --- DIAGNÓSTICO (deshabilitado — Turso Cloud es el único modo) ---
+// Listener 7890 y modal de diagnóstico eliminados.
 
 // ==========================================
 // HISTORIAL DE ÁREAS & VALIDACIÓN
@@ -2816,67 +2803,8 @@ window.executeConfirmarCambioArea = async function () {
   }
 }
 
-async function openDiagnostico() {
-  // Usar bootstrap global si está disponible
-  const modalDiagEl = document.getElementById('modal-diagnostico');
-  if (!modalDiagEl) return;
+// openDiagnostico y toggleDbMode eliminados — Turso Cloud es el único modo permitido.
 
-  const modalDiag = bootstrap.Modal.getOrCreateInstance(modalDiagEl);
-
-  // Cargar estado inicial
-  try {
-    const resp = await fetch('/api/configuracion/diagnostico/db-mode/');
-    const data = await resp.json();
-
-    const switchDb = document.getElementById('switch-db-mode');
-    const badgeDb = document.getElementById('badge-db-mode');
-
-    if (data.mode === 'cloud') {
-      switchDb.checked = true;
-      badgeDb.textContent = 'Modo Nube Pura';
-      badgeDb.className = 'badge bg-warning text-dark';
-    } else {
-      switchDb.checked = false;
-      badgeDb.textContent = 'Modo Híbrido';
-      badgeDb.className = 'badge bg-primary';
-    }
-
-  } catch (e) {
-    console.error("Error cargando modo diagnóstico", e);
-  }
-
-  modalDiagEl.removeAttribute('aria-hidden');
-  modalDiag.show();
-}
-
-window.toggleDbMode = async function () {
-  const isCloud = document.getElementById('switch-db-mode').checked;
-  const mode = isCloud ? 'cloud' : 'hybrid';
-
-  try {
-    const resp = await fetch('/api/configuracion/diagnostico/db-mode/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode })
-    });
-
-    if (resp.ok) {
-      const badgeDb = document.getElementById('badge-db-mode');
-      if (isCloud) {
-        badgeDb.textContent = 'Modo Nube Pura';
-        badgeDb.className = 'badge bg-warning text-dark';
-        alert("✅ CONFIGURACIÓN: Modo Nube Pura ACTIVADO (Lectura directa de Turso)");
-      } else {
-        badgeDb.textContent = 'Modo Híbrido';
-        badgeDb.className = 'badge bg-primary';
-        alert("✅ CONFIGURACIÓN: Modo Híbrido RESTAURADO (Lectura local veloz)");
-      }
-    }
-  } catch (e) {
-    console.error("Error cambiando modo DB", e);
-    alert("Error al cambiar modo de base de datos");
-  }
-}
 
 async function setSyncSpeed(speed) {
   try {
