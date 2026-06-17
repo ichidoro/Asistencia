@@ -37,7 +37,14 @@ async def get_maestro(
 ):
     """Obtener catálogo de vehículos activos"""
     repo = FlotaRepository(db)
-    return await repo.get_all_vehiculos()
+    vehiculos = await repo.get_all_vehiculos()
+    
+    # RLS de área
+    areas_permitidas = current_user.get_areas_filter()
+    if areas_permitidas is not None:
+        vehiculos = [v for v in vehiculos if v["area_nombre"] in areas_permitidas]
+        
+    return vehiculos
 
 @router.post("/maestro/", status_code=201)
 async def create_vehiculo(
@@ -52,6 +59,12 @@ async def create_vehiculo(
     if not patente or not area_id:
         raise HTTPException(status_code=400, detail="Patente y área son requeridas")
     
+    # RLS: Verificar acceso al área destino
+    area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+    if not area:
+        raise HTTPException(status_code=404, detail="El área seleccionada no existe")
+    current_user.verificar_acceso_area(area["nombre"], "crear vehículos en esta área")
+
     repo = FlotaRepository(db)
     try:
         v_id = await repo.create_vehiculo(patente, area_id)
@@ -81,6 +94,19 @@ async def update_vehiculo(
         raise HTTPException(status_code=400, detail="Patente y área son requeridas")
     
     repo = FlotaRepository(db)
+    vehiculo = await repo.get_vehiculo_by_id(v_id)
+    if not vehiculo:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    # RLS: Verificar acceso al área original del vehículo
+    current_user.verificar_acceso_area(vehiculo["area_nombre"], "editar este vehículo")
+
+    # RLS: Verificar acceso al área nueva de destino
+    nueva_area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+    if not nueva_area:
+        raise HTTPException(status_code=404, detail="El área seleccionada no existe")
+    current_user.verificar_acceso_area(nueva_area["nombre"], "asignar vehículos a esta área")
+
     try:
         ok = await repo.update_vehiculo(v_id, patente, area_id)
         if not ok:
@@ -108,6 +134,9 @@ async def delete_vehiculo(
     vehiculo = await repo.get_vehiculo_by_id(v_id)
     if not vehiculo:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    # RLS: Verificar acceso al área del vehículo
+    current_user.verificar_acceso_area(vehiculo["area_nombre"], "eliminar este vehículo")
     
     ok = await repo.delete_vehiculo(v_id)
     if ok:
@@ -148,6 +177,11 @@ async def get_estado_dia(
 
     # 1. Obtener todos los vehículos activos
     vehiculos = await repo.get_all_vehiculos(incluir_inactivos=False)
+    
+    # RLS de área
+    areas_permitidas = current_user.get_areas_filter()
+    if areas_permitidas is not None:
+        vehiculos = [v for v in vehiculos if v["area_nombre"] in areas_permitidas]
     
     # 2. Obtener todas las marcas registradas para esta fecha
     marcas = await repo.get_registros_dia(fecha)
@@ -292,6 +326,9 @@ async def marcar(
     if not vehiculo:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
+    # RLS: Verificar acceso al área del vehículo
+    current_user.verificar_acceso_area(vehiculo["area_nombre"], "este vehículo de la flota")
+
     # Fecha y hora actual (Chile)
     now = _now_chile()
     fecha_hoy = now.strftime("%Y-%m-%d")
@@ -344,6 +381,12 @@ async def get_historial(
     _perm = Depends(RequirePermission("porteria.flota"))
 ):
     """Obtener el historial de marcas con filtros y paginación"""
+    # RLS: verificar acceso si especificó un área
+    if area_id:
+        area_obj = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+        if area_obj:
+            current_user.verificar_acceso_area(area_obj["nombre"], "el área solicitada")
+
     repo = FlotaRepository(db)
     
     # Valores por defecto de fecha si faltan
@@ -354,11 +397,15 @@ async def get_historial(
         # Últimos 7 días por defecto
         desde = (now - timedelta(days=7)).strftime("%Y-%m-%d")
 
+    # Obtener áreas permitidas para RLS
+    areas_permitidas = current_user.get_areas_filter()
+
     return await repo.get_historial(
         desde=desde,
         hasta=hasta,
         area_id=area_id,
         patente=patente,
         page=page,
-        limit=limit
+        limit=limit,
+        areas_permitidas=areas_permitidas
     )

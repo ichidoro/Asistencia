@@ -207,7 +207,8 @@ class FlotaRepository:
         area_id: Optional[int] = None, 
         patente: Optional[str] = None,
         page: int = 1,
-        limit: int = 50
+        limit: int = 50,
+        areas_permitidas: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """Obtiene el historial filtrado y paginado de marcas"""
         where_clauses = ["r.fecha BETWEEN ? AND ?"]
@@ -222,6 +223,14 @@ class FlotaRepository:
             where_clauses.append("f.patente LIKE ?")
             params.append(f"%{cleaned_patente}%")
 
+        if areas_permitidas is not None:
+            if not areas_permitidas:
+                where_clauses.append("1=0")
+            else:
+                placeholders = ", ".join("?" for _ in areas_permitidas)
+                where_clauses.append(f"a.nombre IN ({placeholders})")
+                params.extend(areas_permitidas)
+
         where_sql = " AND ".join(where_clauses)
 
         # Contar total
@@ -229,6 +238,7 @@ class FlotaRepository:
             SELECT COUNT(*) as total 
             FROM flota_registros r
             JOIN flota_aguacol f ON r.flota_id = f.id
+            JOIN areas a ON f.area_id = a.id
             WHERE {where_sql}
         """
         count_row = await self.db.fetch_one(count_query, tuple(params))
