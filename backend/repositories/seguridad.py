@@ -192,6 +192,7 @@ class SeguridadRepository:
                 ('configuracion.seguridad',      'Configuración',  'Pestaña Seguridad -> gestionar usuarios, roles y ver auditoría'),
                 ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header -> Wizard de inicialización BioAlba'),
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
+                ('configuracion.flota',          'Configuración',  'Pestaña Flota Aguacol → gestionar vehículos de la flota (CRUD)'),
 
                 # ── 4 Productos (4 permisos granulares) ──
                 ('productos_4.asignar',          '4 Productos',    'Ver y asignar 4 Productos a empleados (con RLS de área)'),
@@ -208,6 +209,7 @@ class SeguridadRepository:
                 ('porteria.art22',               'Portería',       'Pestaña Artículo 22 → registrar ingreso/salida empleados excluidos'),
                 ('porteria.proveedores',         'Portería',       'Pestaña Proveedores → registrar ingreso/salida de proveedores'),
                 ('porteria.visitas',             'Portería',       'Pestaña Control de Visitas → registrar ingreso/salida de visitantes'),
+                ('porteria.flota',               'Portería',       'Pestaña Flota Aguacol → registrar ingreso/salida de camiones y vehículos'),
             ]
 
             # --- MIGRACIÓN DE PERMISOS: productos_4 antiguos -> nuevos granulares ---

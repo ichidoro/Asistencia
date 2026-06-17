@@ -853,6 +853,34 @@ async def delete_area(
     )
     return
 
+@router.patch("/areas/{area_id}/aplica-flota")
+async def patch_area_aplica_flota(
+    area_id: int,
+    data: Dict[str, Any],
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.editar"))
+):
+    """Activar/desactivar flag aplica_flota para un área"""
+    aplica_flota = 1 if data.get("aplica_flota") else 0
+    area = await db.fetch_one("SELECT nombre FROM areas WHERE id = ?", (area_id,))
+    if not area:
+        raise HTTPException(status_code=404, detail="El área no existe.")
+    
+    await db.execute("UPDATE areas SET aplica_flota = ? WHERE id = ?", (aplica_flota, area_id))
+    
+    # Registrar en auditoría
+    await db.execute(
+        "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+        (
+            current_user.user_id,
+            current_user.username,
+            "UPDATE_AREA_FLOTA",
+            "Configuracion",
+            f"Modificado flag aplica_flota para el área '{area['nombre']}' (ID: {area_id}) a {aplica_flota}."
+        )
+    )
+    return {"ok": True, "message": "Área actualizada exitosamente"}
+
 # ============================================
 # CARGOS Y ALIAS (CATÁLOGO Y AUDITORÍA)
 # ============================================

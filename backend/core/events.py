@@ -182,6 +182,11 @@ async def lifespan(app: FastAPI):
                 porteria_repo = PorteriaRepository(db)
                 await porteria_repo.init_tables()
                 
+                # Inicializar tablas de Flota Aguacol
+                from backend.repositories.flota import FlotaRepository
+                flota_repo = FlotaRepository(db)
+                await flota_repo.init_tables()
+                
                 # Sincronizar/poblar tabla horas_extras con registros pendientes
                 from backend.repositories.hora_extra import HoraExtraRepository
                 he_repo = HoraExtraRepository(db)

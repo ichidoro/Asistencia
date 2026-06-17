@@ -80,7 +80,7 @@ class AreaRepository:
         ]
         """
         query = """
-            SELECT a.id as area_id, a.nombre as area_nombre, 
+            SELECT a.id as area_id, a.nombre as area_nombre, a.aplica_flota as area_aplica_flota,
                    al.id as alias_id, al.alias as alias_nombre
             FROM areas a
             LEFT JOIN areas_alias al ON a.id = al.area_id
@@ -96,6 +96,7 @@ class AreaRepository:
                 areas_dict[area_id] = {
                     "id": area_id,
                     "nombre": row["area_nombre"],
+                    "aplica_flota": row["area_aplica_flota"] if ("area_aplica_flota" in row and row["area_aplica_flota"] is not None) else 0,
                     "alias": []
                 }
             

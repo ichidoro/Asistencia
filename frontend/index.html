@@ -1496,6 +1496,12 @@
                                         <i class="bi bi-file-earmark-text-fill me-1"></i>Ingreso Artículo 22
                                     </button>
                                 </li>
+                                <li class="nav-item" role="presentation" data-permiso="porteria.flota">
+                                    <button class="nav-link" id="flota-tab" data-bs-toggle="tab" data-bs-target="#tab-flota-aguacol" type="button" role="tab"
+                                        onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initTab()">
+                                        <i class="bi bi-truck me-1"></i>Flota Aguacol
+                                    </button>
+                                </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.proveedores">
                                     <button class="nav-link" id="proveedores-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-proveedores" type="button" role="tab">
                                         <i class="bi bi-truck me-1"></i>Ingreso Proveedores
@@ -1665,6 +1671,13 @@
                                     </div>
                                 </div>
 
+                                <!-- TAB: FLOTA AGUACOL -->
+                                <div class="tab-pane fade" id="tab-flota-aguacol" role="tabpanel">
+                                    <div id="flota-container">
+                                        <!-- Cargado dinámicamente por FlotaModule -->
+                                    </div>
+                                </div>
+
                                 <!-- TAB 4: INGRESO PROVEEDORES -->
                                 <div class="tab-pane fade" id="tab-ingreso-proveedores" role="tabpanel">
                                     <div class="text-center py-5">
@@ -1781,6 +1794,12 @@
                                         data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar"
                                         onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()">📍
                                         Ubicación</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold" id="flota-config-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tab-flota-config" type="button" role="tab" data-permiso="configuracion.flota"
+                                        onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initAdminTab()">🚛
+                                        Flota Aguacol</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="sistema-config-tab" data-bs-toggle="tab"
@@ -2244,6 +2263,13 @@
                                 <div class="tab-pane fade" id="tab-porteria-ubicaciones" role="tabpanel">
                                     <div id="porteria-ubicaciones-container">
                                         <!-- Cargado dinámicamente por PorteriaModule -->
+                                    </div>
+                                </div>
+
+                                <!-- Tab Flota Aguacol -->
+                                <div class="tab-pane fade" id="tab-flota-config" role="tabpanel">
+                                    <div id="flota-config-container">
+                                        <!-- Cargado dinámicamente por FlotaModule -->
                                     </div>
                                 </div>
                             </div>
@@ -4584,6 +4610,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
     <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v2" defer></script>
     <script src="/static/js/llaves_ui.js?v={{ startup_id }}_v1" defer></script>
+    <script src="/static/js/flota_ui.js?v={{ startup_id }}_v1" defer></script>
 
             <!-- Inicializador Principal -->
             <script src="/static/js/productos_4.js?v={{ startup_id }}" defer></script>

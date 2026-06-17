@@ -1723,6 +1723,12 @@ window.cargarCatalogoAreas = async function() {
                         <div class="card-body p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
                             ${aliasHtml}
                         </div>
+                        <div class="card-footer bg-white border-top border-light py-2 d-flex justify-content-between align-items-center">
+                            <span class="small text-muted fw-bold"><i class="bi bi-truck me-1"></i>Aplica Flota</span>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" id="switch-flota-${area.id}" ${area.aplica_flota ? 'checked' : ''} ${canEdit ? '' : 'disabled'} onchange="window.toggleAreaAplicaFlota(${area.id}, this.checked)">
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1731,6 +1737,36 @@ window.cargarCatalogoAreas = async function() {
     } catch (error) {
         console.error(error);
         container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
+    }
+};
+
+window.toggleAreaAplicaFlota = async function(areaId, checked) {
+    try {
+        const response = await fetch(`/api/configuracion/areas/${areaId}/aplica-flota`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ aplica_flota: checked ? 1 : 0 })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Error al actualizar la configuración de flota para el área");
+        }
+        
+        if(typeof showToast === 'function') {
+            showToast("Habilitación de flota actualizada para el área.", "success");
+        } else if(typeof window.showNotification === 'function') {
+            window.showNotification("Habilitación de flota actualizada para el área.", "success");
+        }
+    } catch(error) {
+        console.error(error);
+        alert("Error: " + error.message);
+        // Revertir switch
+        const el = document.getElementById(`switch-flota-${areaId}`);
+        if (el) el.checked = !checked;
     }
 };
 
