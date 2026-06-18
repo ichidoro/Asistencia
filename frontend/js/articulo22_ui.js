@@ -42,13 +42,21 @@ const Articulo22Module = (() => {
                 .art22-card-cargo { font-size: 0.72rem; color: #64748b; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                 .art22-card-metrics { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
                 .art22-card-estadia { text-align: center; padding: 0 10px; }
-                .art22-card-timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 16px 12px 16px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.5); min-height: 32px; }
+                .art22-card-timeline { position: relative; padding: 32px 24px 24px 24px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.5); min-height: 80px; }
+                .art22-timeline-24h-line { height: 4px; background: #cbd5e1; border-radius: 2px; position: relative; width: 100%; margin: 15px 0; }
+                .art22-timeline-bound { position: absolute; font-size: 0.6rem; font-weight: 700; color: #94a3b8; top: -18px; }
+                .art22-timeline-bound.start { left: 0; }
+                .art22-timeline-bound.end { right: 0; }
+                .art22-timeline-point { position: absolute; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+                .art22-timeline-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+                .art22-timeline-dot.e { background-color: #10b981; }
+                .art22-timeline-dot.s { background-color: #f43f5e; }
+                .art22-timeline-label { position: absolute; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; bottom: 12px; }
+                .art22-timeline-label.e { color: #059669; }
+                .art22-timeline-label.s { color: #e11d48; }
+                .art22-timeline-time { position: absolute; font-size: 0.68rem; font-weight: 700; color: #475569; top: 12px; white-space: nowrap; }
                 .art22-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #e2e8f0, #cbd5e1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: #475569; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
                 .art22-area-badge { display: inline-block; padding: 2px 8px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
-                .art22-mark { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-                .art22-mark-e { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 1px solid #6ee7b7; }
-                .art22-mark-s { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #9f1239; border: 1px solid #fda4af; }
-                .art22-mark-arrow { color: #94a3b8; font-size: 0.7rem; margin: 0 2px; }
                 .art22-estadia-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
                 .art22-estadia-val { font-size: 0.95rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
                 .art22-status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
@@ -241,16 +249,37 @@ const Articulo22Module = (() => {
         // Marks timeline — compact dots on a horizontal line
         let marcasHtml = '';
         if (emp.marcas && emp.marcas.length > 0) {
-            marcasHtml = emp.marcas.map((m, i) => {
-                const isE = m.tipo === 'E';
-                const cls = isE ? 'art22-mark-e' : 'art22-mark-s';
-                const icon = isE ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
-                const label = isE ? 'E' : 'S';
-                const arrow = i < emp.marcas.length - 1 ? '<span class="art22-mark-arrow">→</span>' : '';
-                return `<span class="art22-mark ${cls}"><i class="bi ${icon}" style="font-size:0.6rem"></i>${m.hora.substring(0,5)} ${label}</span>${arrow}`;
-            }).join('');
+            marcasHtml = `
+                <div class="art22-timeline-24h-line">
+                    <span class="art22-timeline-bound start">00:00</span>
+                    <span class="art22-timeline-bound end">24:00</span>
+                    ${emp.marcas.map(m => {
+                        const parts = m.hora.split(':');
+                        const minutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                        const pct = ((minutes / 1440) * 100).toFixed(2);
+                        const isE = m.tipo === 'E';
+                        const dotClass = isE ? 'e' : 's';
+                        const label = isE ? 'Entrada' : 'Salida';
+                        const labelClass = isE ? 'e' : 's';
+                        const timeStr = m.hora.substring(0, 5);
+                        return `
+                            <div class="art22-timeline-point" style="left: ${pct}%">
+                                <span class="art22-timeline-label ${labelClass}">${label}</span>
+                                <div class="art22-timeline-dot ${dotClass}"></div>
+                                <span class="art22-timeline-time">${timeStr}</span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
         } else {
-            marcasHtml = '<span style="font-size:0.78rem; color:#94a3b8; font-style:italic">Sin marcaciones hoy</span>';
+            marcasHtml = `
+                <div class="art22-timeline-24h-line" style="background:#e2e8f0; opacity: 0.6;">
+                    <span class="art22-timeline-bound start">00:00</span>
+                    <span class="art22-timeline-bound end">24:00</span>
+                </div>
+                <div class="text-center text-muted small w-100 py-1" style="font-size:0.74rem; font-style:italic">Sin marcaciones hoy</div>
+            `;
         }
 
         // Estadía

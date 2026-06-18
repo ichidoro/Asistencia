@@ -2457,8 +2457,8 @@
     }
 
     .art22-card-timeline {
-        padding: 8px 12px 10px 12px !important;
-        gap: 4px !important;
+        padding: 32px 16px 24px 16px !important;
+        min-height: 80px !important;
     }
 
     /* Entry/Exit buttons: full width, larger touch target */
