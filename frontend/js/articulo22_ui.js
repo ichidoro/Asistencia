@@ -284,7 +284,7 @@ const Articulo22Module = (() => {
                             ${estadiaHtml}
                         </div>
                         <span class="art22-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
-                        <button class="${btnClass}" onclick="Articulo22Module.marcar(${emp.empleado_id})">
+                        <button class="${btnClass}" onclick="Articulo22Module.marcar(${emp.empleado_id}, this)">
                             ${proximaTipo} <i class="bi ${btnIcon}"></i>
                         </button>
                     </div>
@@ -298,7 +298,13 @@ const Articulo22Module = (() => {
     // ════════════════════════════════════════════════
     // MARCAR
     // ════════════════════════════════════════════════
-    async function marcar(empleadoId) {
+    async function marcar(empleadoId, btn) {
+        let originalHtml = "";
+        if (btn) {
+            btn.disabled = true;
+            originalHtml = btn.innerHTML;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>`;
+        }
         try {
             const res = await fetch('/api/articulo22/marcar/', {
                 method: 'POST',
@@ -314,6 +320,10 @@ const Articulo22Module = (() => {
             await cargarEstadoDia();
         } catch (e) {
             console.error(e);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
             if (typeof Swal !== 'undefined') Swal.fire('Error', e.message, 'error');
         }
     }

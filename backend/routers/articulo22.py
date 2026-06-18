@@ -107,9 +107,29 @@ async def marcar_presencia(
     # Obtener última marca GLOBAL del empleado (sin filtro de fecha)
     # para detectar correctamente E/S en sesiones cross-midnight
     ultima = await db.fetch_one(
-        "SELECT tipo, fecha FROM articulo22_registros WHERE empleado_id = ? ORDER BY fecha DESC, hora DESC LIMIT 1",
+        "SELECT tipo, fecha, hora FROM articulo22_registros WHERE empleado_id = ? ORDER BY fecha DESC, hora DESC LIMIT 1",
         (empleado_id,)
     )
+
+    # Protección contra doble click / debounce en el backend (ej. 5 segundos)
+    if ultima:
+        try:
+            last_dt = datetime.strptime(f"{ultima['fecha']} {ultima['hora']}", "%Y-%m-%d %H:%M:%S")
+            time_diff = (now - last_dt).total_seconds()
+            if time_diff < 5:
+                logger.warning(f"[ART22] Ignorando marca duplicada para empleado {empleado_id} (diferencia: {time_diff}s)")
+                nombre_emp = f"{emp.get('apellido_paterno', '')} {emp.get('nombre', '')}"
+                tipo_label = "ENTRADA" if ultima["tipo"] == "E" else "SALIDA"
+                return {
+                    "ok": True,
+                    "tipo": ultima["tipo"],
+                    "tipo_label": tipo_label,
+                    "hora": ultima["hora"],
+                    "empleado_id": empleado_id,
+                    "nombre": nombre_emp
+                }
+        except Exception as ex:
+            logger.error(f"[ART22] Error comparando tiempos de duplicación: {ex}")
 
     nuevo_tipo = "E" if (not ultima or ultima["tipo"] == "S") else "S"
 
