@@ -217,152 +217,183 @@ const FlotaModule = (() => {
             }
             .flota-sidebar-item.active .truck-avatar-premium i {
                 color: #2563eb !important;
-            }
-
-            /* Línea de ruta interactiva */
-            .lane-route-track {
+            }            /* Línea de tiempo de Flota estilo Gantt */
+            .flota-gantt-container {
                 position: relative;
-                height: 160px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 0 100px;
+                padding: 68px 24px;
                 background-color: #fafbfc;
                 background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
                 background-size: 20px 20px;
                 border-radius: 16px;
                 margin: 24px 0 28px 0;
                 border: 1px solid #e2e8f0;
+                min-height: 154px;
             }
-            .route-line {
-                position: absolute;
-                top: 50%;
-                left: 132px;
-                right: 132px;
-                height: 6px;
-                background: #e2e8f0;
-                transform: translateY(-50%);
-                z-index: 1;
-                border-radius: 3px;
-                transition: all 0.5s ease;
-            }
-            .route-line.active-despacho {
-                background: linear-gradient(90deg, #10b981 0%, #e11d48 100%);
-                box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
-                height: 8px;
-            }
-            .route-line.inactive-planta {
-                background-image: linear-gradient(to right, #cbd5e1 50%, transparent 50%);
-                background-size: 10px 100%;
-                background-color: transparent;
-                height: 4px;
-            }
-            
-            .route-node {
+            .flota-gantt-backdrop {
                 position: relative;
-                z-index: 2;
-                background: #ffffff;
-                width: 64px;
-                height: 64px;
-                border-radius: 50%;
-                border: 3px solid #cbd5e1;
+                height: 22px;
+                width: 100%;
+                margin: 10px 0;
+            }
+            .flota-gantt-track {
+                height: 14px;
+                background: #e2e8f0;
+                border-radius: 7px;
+                position: absolute;
+                top: 2px;
+                left: 0;
+                width: 100%;
+                overflow: hidden;
                 display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-                font-size: 1.75rem;
+                box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
+                border: 1px solid #cbd5e1;
+            }
+            .flota-gantt-segment {
+                height: 100%;
+                position: absolute;
+                background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+                border-right: 1px solid rgba(255,255,255,0.2);
+                border-left: 1px solid rgba(255,255,255,0.2);
                 transition: all 0.3s ease;
             }
-            .route-node.node-planta.active {
-                border-color: #10b981;
-                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15), 0 4px 10px rgba(16, 185, 129, 0.2);
+            .flota-gantt-segment.ongoing {
+                background: repeating-linear-gradient(45deg, #10b981, #10b981 8px, #34d399 8px, #34d399 16px);
+                border-right: none;
             }
-            .route-node.node-despacho.active {
-                border-color: #e11d48;
-                box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.15), 0 4px 10px rgba(225, 29, 72, 0.2);
-            }
-            .node-caption {
+            .flota-gantt-grid-line {
                 position: absolute;
-                top: 72px;
-                font-family: 'Inter', system-ui, sans-serif;
-                font-size: 0.72rem;
+                top: 0;
+                bottom: 0;
+                width: 1px;
+                background: rgba(148, 163, 184, 0.15);
+                z-index: 1;
+            }
+            .flota-gantt-grid-label {
+                position: absolute;
+                font-size: 0.58rem;
                 font-weight: 700;
-                color: #475569;
-                text-transform: capitalize;
-                white-space: nowrap;
+                color: #94a3b8;
+                top: -16px;
+                transform: translateX(-50%);
+                font-family: 'JetBrains Mono', monospace;
             }
-            .route-node.active .node-caption {
-                color: #0f172a;
-                font-weight: 850;
+            @media (max-width: 768px) {
+                .flota-gantt-grid-label.h-sub {
+                    display: none !important;
+                }
             }
-
-            /* Camión Deslizable */
-            .route-truck-indicator {
+            .flota-gantt-marker {
                 position: absolute;
-                top: 50%;
-                left: 132px;
-                transform: translate(-50%, -50%);
+                top: 9px;
+                display: flex;
+                align-items: center;
                 z-index: 3;
+            }
+            .flota-gantt-marker.dir-down {
+                flex-direction: column;
+            }
+            .flota-gantt-marker.dir-up {
+                flex-direction: column-reverse;
+                transform: translateY(-100%);
+                margin-top: 10px;
+            }
+            .flota-gantt-dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                border: 2px solid #ffffff;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            }
+            .flota-gantt-dot.e {
+                background-color: #10b981;
+            }
+            .flota-gantt-dot.s {
+                background-color: #f43f5e;
+            }
+            .flota-gantt-marker-line {
+                width: 1.5px;
+                background-color: #cbd5e1;
+                z-index: 1;
+            }
+            .flota-gantt-marker.level-1 .flota-gantt-marker-line {
+                height: 10px;
+            }
+            .flota-gantt-marker.level-2 .flota-gantt-marker-line {
+                height: 22px;
+            }
+            .flota-gantt-marker.level-3 .flota-gantt-marker-line {
+                height: 34px;
+            }
+            .flota-gantt-bubble {
+                font-family: 'Inter', system-ui, -apple-system, sans-serif;
+                font-size: 0.62rem;
+                font-weight: 600;
+                white-space: nowrap;
+                padding: 4px 8px;
+                border-radius: 8px;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+                gap: 2px;
+                z-index: 2;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                transition: all 0.2s ease;
             }
-            .route-truck-indicator .truck-bubble {
-                width: 48px;
-                height: 48px;
-                background: #ffffff;
-                border: 2.5px solid #cbd5e1;
-                border-radius: 50%;
+            .flota-gantt-bubble.e {
+                background-color: rgba(240, 253, 244, 0.95);
+                color: #16a34a;
+                border: 1px solid rgba(134, 239, 172, 0.5);
+            }
+            .flota-gantt-bubble.s {
+                background-color: rgba(254, 242, 242, 0.95);
+                color: #dc2626;
+                border: 1px solid rgba(254, 202, 202, 0.5);
+            }
+            .flota-gantt-bubble .bubble-label {
+                font-size: 0.56rem;
+                font-weight: 500;
+                opacity: 0.85;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-                font-size: 1.45rem;
-                transition: all 0.8s;
+                gap: 4px;
             }
-            .estado-en_planta .route-truck-indicator {
-                left: 132px;
-            }
-            .estado-en_planta .route-truck-indicator .truck-bubble {
-                border-color: #10b981;
-                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
-            }
-            .estado-fuera .route-truck-indicator {
-                left: 50%;
-            }
-            .estado-fuera .route-truck-indicator .truck-bubble {
-                border-color: #3b82f6;
-                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-            }
-            
-            .route-truck-indicator .truck-badge-top {
-                position: absolute;
-                top: -24px;
-                font-size: 0.58rem;
-                font-weight: 850;
-                padding: 2px 7px;
-                border-radius: 30px;
-                white-space: nowrap;
-                color: #ffffff;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-                letter-spacing: 0.02em;
-            }
-            .estado-en_planta .route-truck-indicator .truck-badge-top {
-                background: #10b981;
-            }
-            .estado-fuera .route-truck-indicator .truck-badge-top {
-                background: #3b82f6;
-            }
-            .route-truck-indicator .truck-label-bottom {
-                position: absolute;
-                bottom: -24px;
+            .flota-gantt-bubble .bubble-time {
+                font-family: 'JetBrains Mono', monospace;
                 font-size: 0.72rem;
-                font-weight: 850;
-                color: #1e293b;
-                font-family: monospace;
-                white-space: nowrap;
+                font-weight: 700;
             }
+            .flota-gantt-pulse-ring {
+                position: absolute;
+                top: 9px;
+                transform: translate(-50%, -50%);
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                border: 2px solid #10b981;
+                animation: gantt-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+                pointer-events: none;
+                z-index: 2;
+            }
+            .flota-gantt-empty-text {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 0.72rem;
+                font-weight: 600;
+                color: #64748b;
+                font-style: italic;
+                z-index: 2;
+                pointer-events: none;
+            }
+            .flota-gantt-track.empty {
+                background: repeating-linear-gradient(-45deg, #f1f5f9, #f1f5f9 6px, #e2e8f0 6px, #e2e8f0 12px);
+                border: 1px dashed #cbd5e1;
+            }     }
 
             /* Relojes / Widgets */
             .mini-clock-widget {
@@ -871,24 +902,179 @@ const FlotaModule = (() => {
             return;
         }
 
-        // 3. Renderizar marcas del vehículo
-        let marcasHtml = '';
+        // 3. Renderizar marcas de la flota (Gantt style)
+        let timelineHtml = '';
         if (veh.marcas && veh.marcas.length > 0) {
-            marcasHtml = veh.marcas.map((m, i) => {
-                const isE = m.tipo === 'ENTRADA';
-                const boxCls = isE ? 'entrada' : 'salida';
-                const label = isE ? 'RETORNO' : 'DESPACHO';
-                const timeStr = m.hora.substring(0, 5);
-                const arrow = i < veh.marcas.length - 1 ? '<span class="flota-mark-arrow"><i class="bi bi-chevron-right"></i></span>' : '';
-                return `
-                    <div class="flota-mark-box ${boxCls}" title="Registrado por: ${m.registrado_por_nombre || 'Desconocido'}\nObservaciones: ${m.observaciones || 'Sin observaciones'}">
-                        <div class="flota-mark-header">${label}</div>
-                        <div class="flota-mark-time">${timeStr}</div>
-                    </div>${arrow}
-                `;
-            }).join('');
+            const segments = [];
+            let currentEntradaMinutes = null;
+
+            // Sort marks chronologically
+            const sortedMarcas = [...veh.marcas].sort((a, b) => a.hora.localeCompare(b.hora));
+
+            sortedMarcas.forEach(m => {
+                const parts = m.hora.split(':');
+                const minutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                if (m.tipo === 'ENTRADA') {
+                    if (currentEntradaMinutes === null) {
+                        currentEntradaMinutes = minutes;
+                    }
+                } else if (m.tipo === 'SALIDA') {
+                    if (currentEntradaMinutes !== null) {
+                        segments.push({ start: currentEntradaMinutes, end: minutes, ongoing: false });
+                        currentEntradaMinutes = null;
+                    } else {
+                        // Salida sin entrada previa hoy -> asumir dentro desde medianoche
+                        segments.push({ start: 0, end: minutes, ongoing: false });
+                    }
+                }
+            });
+
+            if (currentEntradaMinutes !== null) {
+                const todayStr = (() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                })();
+                let endMin = 1440;
+                let isOngoing = false;
+                if (_fechaActual === todayStr && veh.estado === 'en_planta') {
+                    const now = new Date();
+                    endMin = Math.min(now.getHours() * 60 + now.getMinutes(), 1440);
+                    isOngoing = true;
+                }
+                segments.push({ start: currentEntradaMinutes, end: endMin, ongoing: isOngoing });
+            }
+
+            const todayStr = (() => {
+                const d = new Date();
+                return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            })();
+            const isToday = (_fechaActual === todayStr);
+
+            timelineHtml = `
+                <div class="flota-gantt-backdrop">
+                    <!-- Regla de tiempo de fondo -->
+                    <span class="flota-gantt-grid-label h-main" style="left: 0%;">00:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 12.5%;">03:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 25%;">06:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 37.5%;">09:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 50%;">12:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 62.5%;">15:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 75%;">18:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 87.5%;">21:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 100%;">24:00</span>
+
+                    <!-- Pista Gantt -->
+                    <div class="flota-gantt-track">
+                        <div class="flota-gantt-grid-line" style="left: 12.5%;"></div>
+                        <div class="flota-gantt-grid-line" style="left: 25%;"></div>
+                        <div class="flota-gantt-grid-line" style="left: 37.5%;"></div>
+                        <div class="flota-gantt-grid-line" style="left: 50%;"></div>
+                        <div class="flota-gantt-grid-line" style="left: 62.5%;"></div>
+                        <div class="flota-gantt-grid-line" style="left: 75%;"></div>
+                        <div class="flota-gantt-grid-line" style="left: 87.5%;"></div>
+                        ${segments.map(seg => {
+                            const startPct = ((seg.start / 1440) * 100).toFixed(2);
+                            const widthPct = (((seg.end - seg.start) / 1440) * 100).toFixed(2);
+                            const cls = seg.ongoing ? 'ongoing' : '';
+                            return `<div class="flota-gantt-segment ${cls}" style="left: ${startPct}%; width: ${widthPct}%;"></div>`;
+                        }).join('')}
+                    </div>
+
+                    <!-- Hitos de marcaciones y pulso AHORA unificados -->
+                    ${(() => {
+                        const items = sortedMarcas.map(m => {
+                            const parts = m.hora.split(':');
+                            return {
+                                minutes: parseInt(parts[0]) * 60 + parseInt(parts[1]),
+                                label: m.tipo === 'ENTRADA' ? 'RETORNO' : 'DESPACHO',
+                                timeStr: m.hora.substring(0, 5),
+                                isAhora: false,
+                                tipo: m.tipo,
+                                regPor: m.registrado_por_nombre || 'Desconocido',
+                                obs: m.observaciones || ''
+                            };
+                        });
+
+                        if (isToday && veh.estado === 'en_planta') {
+                            const now = new Date();
+                            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                            items.push({
+                                minutes: nowMinutes,
+                                label: 'AHORA',
+                                timeStr: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+                                isAhora: true,
+                                tipo: 'ENTRADA'
+                            });
+                        }
+
+                        // Sort all items chronologically
+                        items.sort((a, b) => a.minutes - b.minutes);
+
+                        const heightClasses = ['level-1', 'level-2', 'level-3'];
+                        let upCount = 0;
+                        let downCount = 0;
+
+                        return items.map((item, index) => {
+                            const pct = ((item.minutes / 1440) * 100).toFixed(2);
+                            const cls = item.tipo === 'ENTRADA' ? 'e' : 's';
+                            const isUp = (item.tipo === 'ENTRADA');
+                            const dirCls = isUp ? 'dir-up' : 'dir-down';
+                            const heightCls = isUp ? heightClasses[upCount++ % 3] : heightClasses[downCount++ % 3];
+
+                            if (item.isAhora) {
+                                // Overlap protection
+                                const prevMark = items[index - 1];
+                                const hideAhoraBubble = prevMark && (item.minutes - prevMark.minutes) < 75;
+
+                                return `
+                                    <div class="flota-gantt-pulse-ring" style="left: ${pct}%"></div>
+                                    <div class="flota-gantt-marker ${dirCls} ${hideAhoraBubble ? '' : heightCls}" style="left: ${pct}%">
+                                        <div class="flota-gantt-dot e" style="background-color: #34d399; width: 8px; height: 8px; box-shadow: 0 0 8px #10b981;"></div>
+                                        ${hideAhoraBubble ? '' : `
+                                            <div class="flota-gantt-marker-line"></div>
+                                            <div class="flota-gantt-bubble e" style="background-color: rgba(6, 95, 70, 0.95); color: #ffffff; border: 1px solid rgba(16, 185, 129, 0.5);">
+                                                <span class="bubble-label" style="color: rgba(255,255,255,0.85);">AHORA</span>
+                                                <span class="bubble-time">${item.timeStr}</span>
+                                            </div>
+                                        `}
+                                    </div>
+                                `;
+                            } else {
+                                const titleAttr = `title="Registrado por: ${item.regPor}\nObservaciones: ${item.obs}"`;
+                                return `
+                                    <div class="flota-gantt-marker ${dirCls} ${heightCls}" style="left: ${pct}%" ${titleAttr}>
+                                        <div class="flota-gantt-dot ${cls}"></div>
+                                        <div class="flota-gantt-marker-line"></div>
+                                        <div class="flota-gantt-bubble ${cls}">
+                                            <span class="bubble-label"><i class="bi ${item.tipo === 'ENTRADA' ? 'bi-arrow-left-circle' : 'bi-box-arrow-right'}"></i> ${item.label}</span>
+                                            <span class="bubble-time">${item.timeStr}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }).join('');
+                    })()}
+                </div>
+            `;
         } else {
-            marcasHtml = '<span style="font-size:0.75rem; color:#94a3b8; font-style:italic">Sin movimientos registrados hoy</span>';
+            timelineHtml = `
+                <div class="flota-gantt-backdrop">
+                    <!-- Regla de tiempo de fondo -->
+                    <span class="flota-gantt-grid-label h-main" style="left: 0%;">00:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 12.5%;">03:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 25%;">06:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 37.5%;">09:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 50%;">12:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 62.5%;">15:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 75%;">18:00</span>
+                    <span class="flota-gantt-grid-label h-sub" style="left: 87.5%;">21:00</span>
+                    <span class="flota-gantt-grid-label h-main" style="left: 100%;">24:00</span>
+
+                    <div class="flota-gantt-track empty">
+                        <div class="flota-gantt-empty-text">Sin movimientos registrados hoy</div>
+                    </div>
+                </div>
+            `;
         }
 
         // Tiempos y Ticking
@@ -926,10 +1112,6 @@ const FlotaModule = (() => {
         const btnIcon = isEnPlanta ? 'bi-box-arrow-right' : 'bi-arrow-left-circle';
         const dbTipo = isEnPlanta ? 'SALIDA' : 'ENTRADA';
 
-        const activeNodePlanta = isEnPlanta ? 'active' : '';
-        const activeNodeDespacho = !isEnPlanta ? 'active' : '';
-        const activeRouteLine = !isEnPlanta ? 'active-despacho' : 'inactive-planta';
-
         let horaSalidaVal = veh.ciclo_salida_hora ? veh.ciclo_salida_hora.substring(0, 5) : 'Esperando...';
         let horaRetornoVal = veh.ciclo_retorno_hora ? veh.ciclo_retorno_hora.substring(0, 5) : (isEnPlanta ? 'En espera' : 'Esperando...');
         
@@ -953,21 +1135,8 @@ const FlotaModule = (() => {
                         </span>
                     </div>
 
-                    <div class="lane-route-track">
-                        <div class="route-line ${activeRouteLine}"></div>
-                        <div class="route-node node-planta active">
-                            <i class="bi bi-building" style="z-index: 2;"></i>
-                            <span class="node-caption">Planta</span>
-                        </div>
-                        <div class="route-node node-despacho ${activeNodeDespacho}">
-                            <i class="bi bi-shop" style="z-index: 2;"></i>
-                            <span class="node-caption">Despacho</span>
-                        </div>
-                        <div class="route-truck-indicator">
-                            <span class="truck-badge-top">${isEnPlanta ? 'EN PLANTA' : 'EN RUTA'}</span>
-                            <div class="truck-bubble"><i class="bi bi-truck"></i></div>
-                            <span class="truck-label-bottom">${veh.patente}</span>
-                        </div>
+                    <div class="flota-gantt-container">
+                        ${timelineHtml}
                     </div>
 
                     <div class="flota-dash-cards">
@@ -998,19 +1167,12 @@ const FlotaModule = (() => {
                     </div>
                 </div>
 
-                <!-- Botón de Acción y Línea de Tiempo (Abajo del Panel) -->
+                <!-- Botón de Acción -->
                 <div>
                     <div class="flota-action-btn-container">
                         <button class="flota-action-btn ${btnClass}" onclick="FlotaModule.marcar(${veh.id}, '${veh.patente}', '${veh.chofer_activo || ''}', '${dbTipo}')">
                             <i class="bi ${btnIcon}"></i> ${btnText}
                         </button>
-                    </div>
-
-                    <div class="mt-4 pt-3 border-top">
-                        <div class="small fw-bold text-muted mb-2 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">MOVIMIENTOS DE HOY</div>
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            ${marcasHtml}
-                        </div>
                     </div>
                 </div>
             </div>
