@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propuesta Visual - Consola de Flota Aguacol</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+    <!-- Google Fonts (Inter & JetBrains Mono) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;750;850&family=JetBrains+Mono:wght@500;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Simulación de la Barra Lateral Real de Aguacol */
+        .mock-sidebar {
+            width: 260px;
+            background-color: #111827;
+            color: #9ca3af;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .mock-sidebar .logo-section {
+            padding: 24px;
+            border-bottom: 1px solid #1f2937;
+            text-align: center;
+        }
+        .mock-sidebar .brand-title {
+            color: #ffffff;
+            font-weight: 850;
+            font-size: 1.2rem;
+            letter-spacing: 0.05em;
+        }
+        .mock-sidebar .nav-item {
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: #9ca3af;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .mock-sidebar .nav-item:hover {
+            color: #ffffff;
+            background-color: #1f2937;
+        }
+        .mock-sidebar .nav-item.active {
+            color: #ffffff;
+            background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
+        }
+
+        /* Panel Principal */
+        .mock-main-content {
+            flex-grow: 1;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        /* Contenedor del Módulo Flota */
+        .flota-container {
+            background-color: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            padding: 28px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+        }
+
+        /* Indicadores Superiores */
+        .stat-card {
+            border-radius: 12px;
+            padding: 16px 20px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 90px;
+        }
+        .stat-card.total {
+            background-color: #1e293b;
+        }
+        .stat-card.planta {
+            background-color: #10b981;
+        }
+        .stat-card.despacho {
+            background-color: #e11d48;
+        }
+        .stat-card .label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.8;
+        }
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 850;
+            margin-top: 4px;
+        }
+
+        /* Layout Dividido */
+        .flota-split-layout {
+            display: flex;
+            gap: 24px;
+            margin-top: 28px;
+            align-items: stretch;
+        }
+
+        /* Columna Izquierda (Lista de vehículos) */
+        .flota-sidebar-list {
+            width: 320px;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 520px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .flota-sidebar-item {
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1.5px solid #f1f5f9;
+            background: #ffffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .flota-sidebar-item:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+            transform: translateY(-1px);
+        }
+        .flota-sidebar-item.active {
+            background: #f8fafc;
+            border-color: #2563eb;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.05);
+        }
+
+        /* Avatar de Camión Premium */
+        .truck-avatar-premium {
+            width: 46px;
+            height: 46px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            overflow: hidden;
+            padding: 2px;
+            transition: all 0.2s;
+        }
+        .flota-sidebar-item.active .truck-avatar-premium {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        /* Patente Monoespaciada Premium */
+        .patente-premium {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: #0f172a;
+            letter-spacing: -0.01em;
+        }
+
+        /* Columna Derecha (Panel de Detalle) */
+        .flota-detail-panel {
+            flex-grow: 1;
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 520px;
+        }
+
+        /* Línea de Ruta Adaptada al Tema Claro */
+        .lane-route-track {
+            position: relative;
+            height: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 100px;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+            background-size: 20px 20px;
+            border-radius: 16px;
+            margin: 24px 0 28px 0;
+            border: 1px solid #e2e8f0;
+        }
+        .route-line {
+            position: absolute;
+            top: 50%;
+            left: 132px;
+            right: 132px;
+            height: 6px;
+            background: #e2e8f0;
+            transform: translateY(-50%);
+            z-index: 1;
+            border-radius: 3px;
+            transition: all 0.5s ease;
+        }
+        .route-line.active-despacho {
+            background: linear-gradient(90deg, #10b981 0%, #e11d48 100%);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+            height: 8px;
+        }
+        .route-line.inactive-planta {
+            background-image: linear-gradient(to right, #cbd5e1 50%, transparent 50%);
+            background-size: 10px 100%;
+            background-color: transparent;
+            height: 4px;
+        }
+
+        .route-node {
+            position: relative;
+            z-index: 2;
+            background: #ffffff;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 3px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+            color: #64748b;
+            font-size: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .route-node.node-planta.active {
+            border-color: #10b981;
+            color: #10b981;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+        }
+        .route-node.node-despacho.active {
+            border-color: #e11d48;
+            color: #e11d48;
+            box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.15);
+        }
+        .node-caption {
+            position: absolute;
+            top: 72px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+        }
+        .route-node.active .node-caption {
+            color: #0f172a;
+            font-weight: 850;
+        }
+
+        /* Indicador de Camión en Ruta */
+        .route-truck-indicator {
+            position: absolute;
+            top: 50%;
+            left: 132px;
+            transform: translate(-50%, -50%);
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .route-truck-indicator .truck-bubble {
+            width: 48px;
+            height: 48px;
+            background: #ffffff;
+            border: 2.5px solid #2563eb;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
+            font-size: 1.45rem;
+            color: #2563eb;
+            transition: all 0.8s;
+        }
+        .route-truck-indicator .truck-badge-top {
+            position: absolute;
+            top: -24px;
+            font-size: 0.58rem;
+            font-weight: 850;
+            padding: 2px 8px;
+            border-radius: 30px;
+            white-space: nowrap;
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            letter-spacing: 0.02em;
+        }
+        .route-truck-indicator .truck-label-bottom {
+            position: absolute;
+            bottom: -24px;
+            font-size: 0.72rem;
+            font-weight: 850;
+            color: #1e293b;
+            font-family: 'JetBrains Mono', monospace;
+            white-space: nowrap;
+        }
+
+        /* Tarjetas de Métricas */
+        .flota-dash-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 24px;
+            margin-bottom: 16px;
+        }
+        .flota-dash-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: transform 0.2s, box-shadow 0.2s;
+            min-height: 100px;
+        }
+        .flota-dash-card-label {
+            font-size: 0.68rem;
+            font-weight: 750;
+            color: #64748b;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .flota-dash-card-val {
+            font-size: 1.65rem;
+            font-weight: 850;
+            color: #0f172a;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .flota-dash-card-sub {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            font-weight: 500;
+            margin-top: 5px;
+        }
+
+        /* Botón de Acción Principal (Pill) */
+        .flota-action-btn-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-top: 24px;
+        }
+        .flota-action-btn {
+            width: 100%;
+            max-width: 420px;
+            height: 48px;
+            border-radius: 30px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 750;
+            color: #ffffff !important;
+            border: none !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.02em;
+        }
+        .flota-action-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Falsa Realista de la App -->
+    <div class="mock-sidebar">
+        <div class="logo-section">
+            <div class="brand-title">AGUACOL</div>
+            <div style="font-size: 0.6rem; letter-spacing: 0.1em; color: #4b5563; margin-top: 4px;">SISTEMA ASISTENCIA</div>
+        </div>
+        <div class="mt-4">
+            <a href="#" class="nav-item"><i class="bi bi-speedometer2"></i> <span>Dashboard</span></a>
+            <a href="#" class="nav-item"><i class="bi bi-people"></i> <span>Empleados</span></a>
+            <a href="#" class="nav-item"><i class="bi bi-clock"></i> <span>Marcaciones</span></a>
+            <a href="#" class="nav-item"><i class="bi bi-file-earmark-bar-graph"></i> <span>Reportes</span></a>
+            <a href="#" class="nav-item active"><i class="bi bi-shield-check"></i> <span>Portería</span></a>
+            <a href="#" class="nav-item"><i class="bi bi-gear"></i> <span>Configuración</span></a>
+        </div>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div class="mock-main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold text-dark mb-1">Portería y Control de Ronda</h2>
+                <p class="text-muted mb-0">Visualizador interactivo de rediseño de flota (Stitch Clear Mode)</p>
+            </div>
+            <div class="btn btn-outline-secondary btn-sm" onclick="window.location.reload()"><i class="bi bi-arrow-clockwise"></i> Recargar</div>
+        </div>
+
+        <!-- Módulo de Flota -->
+        <div class="flota-container">
+            <!-- Pestañas Superiores Simuladas -->
+            <ul class="nav nav-tabs border-bottom mb-4">
+                <li class="nav-link text-muted" style="cursor: not-allowed;">Rondas Nocturnas</li>
+                <li class="nav-link text-muted" style="cursor: not-allowed;">Entrega de Llaves</li>
+                <li class="nav-link active fw-bold text-primary" style="border-bottom-color: #ffffff;">Flota Aguacol</li>
+                <li class="nav-link text-muted" style="cursor: not-allowed;">Ingreso Proveedores</li>
+            </ul>
+
+            <!-- Indicadores -->
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="stat-card total">
+                        <span class="label">Total Flota</span>
+                        <span class="value">20 vehículos</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card planta">
+                        <span class="label">En Planta</span>
+                        <span class="value">17 cargando/descargando</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card despacho">
+                        <span class="label">En Despacho</span>
+                        <span class="value">3 en ruta</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layout Principal -->
+            <div class="flota-split-layout">
+                
+                <!-- Lista Izquierda -->
+                <div class="flota-sidebar-list">
+                    <div class="small fw-bold text-muted mb-2 px-1 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">UNIDADES EN PATIO</div>
+                    
+                    <!-- Vehículo 1 (Activo por defecto) -->
+                    <div class="flota-sidebar-item active" id="item-gvdd25" onclick="selectTruck('GVDD25', 'Volvo FMX 460', 'Carlos Ruiz', 'LOGÍSTICA', 'en_ruta', '21:43', '2h 48m 51s', 'https://lh3.googleusercontent.com/aida/AP1WRLsLA_K_e7c_Cirdh2vboL48mBoptRTqWAxxCgQCMGSArPFaosbOOKq9MxT288yctxuRRDxxtukLoQ94ZkGtXfEhXMfQOIrDbwjkFIhZW8Wizoyk8WrbGGt2NFDBqSQDFhQBdT8g9TOi5ggr7wMYxpAH1KWh2NN6XE-QSxt8eMHFKb44oGL0IPJHbNgGUAW_yYqD9imm3dSJS05HVl4ur2u03b0UGdNlrpDWu6bG0lbaEwtbcXMjmtCcMQ')">
+                        <div class="truck-avatar-premium">
+                            <img src="https://lh3.googleusercontent.com/aida/AP1WRLsLA_K_e7c_Cirdh2vboL48mBoptRTqWAxxCgQCMGSArPFaosbOOKq9MxT288yctxuRRDxxtukLoQ94ZkGtXfEhXMfQOIrDbwjkFIhZW8Wizoyk8WrbGGt2NFDBqSQDFhQBdT8g9TOi5ggr7wMYxpAH1KWh2NN6XE-QSxt8eMHFKb44oGL0IPJHbNgGUAW_yYqD9imm3dSJS05HVl4ur2u03b0UGdNlrpDWu6bG0lbaEwtbcXMjmtCcMQ" style="width: 100%; height: 100%; object-fit: contain;" alt="Volvo">
+                        </div>
+                        <div class="flex-grow-1 min-width-0 ms-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <span class="fw-bold text-muted" style="font-size: 0.7rem;">Volvo FMX 460</span>
+                                <span class="badge border bg-warning-subtle text-warning border-warning-subtle" style="font-size: 0.58rem;">EN RUTA</span>
+                            </div>
+                            <div class="patente-premium mb-1">GVDD25</div>
+                            <div class="d-flex align-items-center justify-content-between text-secondary" style="font-size: 0.68rem;">
+                                <span><i class="bi bi-person me-1"></i>Carlos Ruiz</span>
+                                <span class="badge bg-light text-secondary border" style="font-size: 0.58rem;">LOGÍSTICA</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vehículo 2 -->
+                    <div class="flota-sidebar-item" id="item-lcxk15" onclick="selectTruck('LCXK15', 'Scania G450 XT', 'Andrés Mora', 'OPERACIONES', 'en_ruta', '22:05', '1h 30m 12s', 'https://lh3.googleusercontent.com/aida/AP1WRLtmgPiDS_IHF24eGUg23vL50XEI09FiCm4kpyEtOB2dereLgBICxTgusF8wp8twOat0nrycr9VFlV0zpkslcd1DnEdS7A6jdKAoOJJI5AZznMsWJurBsoPrkNPBqN7m0iOkuxS2W8zzQhUDaedV9dCwhItqZEG0BeGWDWLI_B3DtUv1Li52nrtSCbxzdiSNJ6ymXS3jDCLLBjIGiRj5I16QmarmNzr5efNJ4xhyDhsNxU4tfwZESedibMM')">
+                        <div class="truck-avatar-premium">
+                            <img src="https://lh3.googleusercontent.com/aida/AP1WRLtmgPiDS_IHF24eGUg23vL50XEI09FiCm4kpyEtOB2dereLgBICxTgusF8wp8twOat0nrycr9VFlV0zpkslcd1DnEdS7A6jdKAoOJJI5AZznMsWJurBsoPrkNPBqN7m0iOkuxS2W8zzQhUDaedV9dCwhItqZEG0BeGWDWLI_B3DtUv1Li52nrtSCbxzdiSNJ6ymXS3jDCLLBjIGiRj5I16QmarmNzr5efNJ4xhyDhsNxU4tfwZESedibMM" style="width: 100%; height: 100%; object-fit: contain;" alt="Scania">
+                        </div>
+                        <div class="flex-grow-1 min-width-0 ms-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <span class="fw-bold text-muted" style="font-size: 0.7rem;">Scania G450 XT</span>
+                                <span class="badge border bg-warning-subtle text-warning border-warning-subtle" style="font-size: 0.58rem;">EN RUTA</span>
+                            </div>
+                            <div class="patente-premium mb-1">LCXK15</div>
+                            <div class="d-flex align-items-center justify-content-between text-secondary" style="font-size: 0.68rem;">
+                                <span><i class="bi bi-person me-1"></i>Andrés Mora</span>
+                                <span class="badge bg-light text-secondary border" style="font-size: 0.58rem;">OPERACIONES</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vehículo 3 -->
+                    <div class="flota-sidebar-item" id="item-lzpl35" onclick="selectTruck('LZPL35', 'Volvo FMX 460', 'Sin chofer', 'LOGÍSTICA', 'en_planta', '—', '4h 12m 05s', 'https://lh3.googleusercontent.com/aida/AP1WRLsLA_K_e7c_Cirdh2vboL48mBoptRTqWAxxCgQCMGSArPFaosbOOKq9MxT288yctxuRRDxxtukLoQ94ZkGtXfEhXMfQOIrDbwjkFIhZW8Wizoyk8WrbGGt2NFDBqSQDFhQBdT8g9TOi5ggr7wMYxpAH1KWh2NN6XE-QSxt8eMHFKb44oGL0IPJHbNgGUAW_yYqD9imm3dSJS05HVl4ur2u03b0UGdNlrpDWu6bG0lbaEwtbcXMjmtCcMQ')">
+                        <div class="truck-avatar-premium">
+                            <img src="https://lh3.googleusercontent.com/aida/AP1WRLsLA_K_e7c_Cirdh2vboL48mBoptRTqWAxxCgQCMGSArPFaosbOOKq9MxT288yctxuRRDxxtukLoQ94ZkGtXfEhXMfQOIrDbwjkFIhZW8Wizoyk8WrbGGt2NFDBqSQDFhQBdT8g9TOi5ggr7wMYxpAH1KWh2NN6XE-QSxt8eMHFKb44oGL0IPJHbNgGUAW_yYqD9imm3dSJS05HVl4ur2u03b0UGdNlrpDWu6bG0lbaEwtbcXMjmtCcMQ" style="width: 100%; height: 100%; object-fit: contain;" alt="Volvo">
+                        </div>
+                        <div class="flex-grow-1 min-width-0 ms-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <span class="fw-bold text-muted" style="font-size: 0.7rem;">Volvo FMX 460</span>
+                                <span class="badge border bg-success-subtle text-success border-success-subtle" style="font-size: 0.58rem;">EN PLANTA</span>
+                            </div>
+                            <div class="patente-premium mb-1">LZPL35</div>
+                            <div class="d-flex align-items-center justify-content-between text-secondary" style="font-size: 0.68rem;">
+                                <span><i class="bi bi-person me-1"></i>Sin chofer</span>
+                                <span class="badge bg-light text-secondary border" style="font-size: 0.58rem;">LOGÍSTICA</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detalle Vehículo Derecha -->
+                <div class="flota-detail-panel" id="detail-panel">
+                    <div>
+                        <!-- Header Detalle -->
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <div class="small fw-bold text-muted text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">Detalles del viaje</div>
+                                <h4 class="fw-extrabold mt-1 mb-0" id="detail-title" style="letter-spacing: -0.01em; font-weight: 850;">Secuencia de Viaje: Patente GVDD25</h4>
+                            </div>
+                            <span class="badge border px-3 py-1.5 fw-extrabold" id="detail-badge" style="font-size:0.7rem; border-radius:30px; letter-spacing:0.04em;">
+                                <span class="d-inline-block rounded-circle me-1" style="width:7px; height:7px; background: currentColor; vertical-align: middle;"></span>
+                                <span id="detail-badge-text">EN DESPACHO</span>
+                            </span>
+                        </div>
+
+                        <!-- Línea de Ruta -->
+                        <div class="lane-route-track" id="route-track-container">
+                            <div class="route-line active-despacho" id="route-line-element"></div>
+                            
+                            <div class="route-node node-planta active">
+                                <i class="bi bi-building" style="z-index: 2;"></i>
+                                <span class="node-caption">Planta</span>
+                            </div>
+                            <div class="route-node node-despacho" id="node-despacho-element">
+                                <i class="bi bi-shop" style="z-index: 2;"></i>
+                                <span class="node-caption">Despacho</span>
+                            </div>
+                            
+                            <div class="route-truck-indicator" id="truck-indicator">
+                                <span class="truck-badge-top" id="truck-badge-top-text">EN RUTA</span>
+                                <div class="truck-bubble"><i class="bi bi-truck"></i></div>
+                                <span class="truck-label-bottom" id="truck-label-bottom-text">GVDD25</span>
+                            </div>
+                        </div>
+
+                        <!-- Tarjetas de Métricas -->
+                        <div class="flota-dash-cards">
+                            <div class="flota-dash-card">
+                                <div>
+                                    <span class="flota-dash-card-label"><i class="bi bi-box-arrow-right text-primary me-1"></i> Hora de Salida</span>
+                                    <span class="flota-dash-card-val" id="val-salida">21:43</span>
+                                </div>
+                                <span class="flota-dash-card-sub">Entrada al ciclo de ruta</span>
+                            </div>
+                            <div class="flota-dash-card active-viaje" id="metric-center-card">
+                                <div>
+                                    <span class="flota-dash-card-label">
+                                        <i class="bi bi-stopwatch text-danger me-1" id="metric-center-icon"></i> 
+                                        <span id="metric-center-label">Tiempo Transcurrido</span>
+                                    </span>
+                                    <span class="flota-dash-card-val" id="val-center">2h 48m 51s</span>
+                                </div>
+                                <span class="flota-dash-card-sub">Precisión en segundos</span>
+                            </div>
+                            <div class="flota-dash-card">
+                                <div>
+                                    <span class="flota-dash-card-label"><i class="bi bi-arrow-left-circle text-success me-1"></i> Hora de Retorno</span>
+                                    <span class="flota-dash-card-val" id="val-retorno">En espera</span>
+                                </div>
+                                <span class="flota-dash-card-sub">Registra al presionar Retorno</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botón de Acción -->
+                    <div class="flota-action-btn-container">
+                        <button class="flota-action-btn" id="action-btn" onclick="alert('Marca de movimiento simulada con éxito')">
+                            <i class="bi bi-arrow-left-circle me-2"></i> REGISTRAR RETORNO
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Lógica de Interacción en Vivo -->
+    <script>
+        function selectTruck(patente, modelo, chofer, area, estado, horaSalida, tiempo, imgUrl) {
+            // 1. Cambiar item seleccionado en sidebar
+            document.querySelectorAll('.flota-sidebar-item').forEach(el => el.classList.remove('active'));
+            
+            // Buscar y activar el seleccionado
+            const idMap = { 'GVDD25': 'item-gvdd25', 'LCXK15': 'item-lcxk15', 'LZPL35': 'item-lzpl35' };
+            const activeItem = document.getElementById(idMap[patente]);
+            if (activeItem) activeItem.classList.add('active');
+
+            // 2. Cambiar contenidos del panel de detalles
+            document.getElementById('detail-title').textContent = 'Secuencia de Viaje: Patente ' + patente;
+            document.getElementById('truck-label-bottom-text').textContent = patente;
+            document.getElementById('val-salida').textContent = horaSalida;
+
+            const isPlanta = estado === 'en_planta';
+            const badge = document.getElementById('detail-badge');
+            const badgeText = document.getElementById('detail-badge-text');
+            const routeLine = document.getElementById('route-line-element');
+            const nodeDespacho = document.getElementById('node-despacho-element');
+            const truckIndicator = document.getElementById('truck-indicator');
+            const truckBadgeTop = document.getElementById('truck-badge-top-text');
+            const actionBtn = document.getElementById('action-btn');
+            
+            const centerCard = document.getElementById('metric-center-card');
+            const centerLabel = document.getElementById('metric-center-label');
+            const centerIcon = document.getElementById('metric-center-icon');
+            const valCenter = document.getElementById('val-center');
+            const valRetorno = document.getElementById('val-retorno');
+
+            if (isPlanta) {
+                // Estado En Planta
+                badge.className = "badge border px-3 py-1.5 fw-extrabold bg-success-subtle text-success border-success-subtle";
+                badgeText.textContent = "ESTACIONADO EN PLANTA";
+                
+                routeLine.className = "route-line inactive-planta";
+                nodeDespacho.classList.remove('active');
+                
+                truckIndicator.style.left = "132px";
+                truckBadgeTop.textContent = "EN PLANTA";
+                document.getElementById('route-track-container').className = "lane-route-track estado-en_planta";
+                
+                // Botón "A Despacho"
+                actionBtn.className = "flota-action-btn btn-a-despacho";
+                actionBtn.innerHTML = '<i class="bi bi-box-arrow-right me-2"></i> A DESPACHO';
+                
+                // Métricas
+                centerCard.className = "flota-dash-card active-estadia";
+                centerLabel.textContent = "Tiempo de Estadía";
+                centerIcon.className = "bi bi-hourglass-split text-success me-1";
+                valCenter.textContent = tiempo;
+                
+                // Buscar hora de retorno del histórico
+                valRetorno.textContent = "21:40";
+            } else {
+                // Estado En Ruta / Despacho
+                badge.className = "badge border px-3 py-1.5 fw-extrabold bg-warning-subtle text-warning border-warning-subtle";
+                badgeText.textContent = "EN DESPACHO";
+                
+                routeLine.className = "route-line active-despacho";
+                nodeDespacho.classList.add('active');
+                
+                truckIndicator.style.left = "50%";
+                truckBadgeTop.textContent = "EN RUTA";
+                document.getElementById('route-track-container').className = "lane-route-track estado-fuera";
+                
+                // Botón "Registrar Retorno"
+                actionBtn.className = "flota-action-btn btn-retorno";
+                actionBtn.innerHTML = '<i class="bi bi-arrow-left-circle me-2"></i> REGISTRAR RETORNO';
+                
+                // Métricas
+                centerCard.className = "flota-dash-card active-viaje";
+                centerLabel.textContent = "Tiempo Transcurrido";
+                centerIcon.className = "bi bi-stopwatch text-danger me-1";
+                valCenter.textContent = tiempo;
+                valRetorno.textContent = "En espera";
+            }
+        }
+    </script>
+</body>
+</html>
