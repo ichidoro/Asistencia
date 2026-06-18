@@ -834,7 +834,6 @@ const FlotaModule = (() => {
                 <div class="small fw-bold text-muted mb-2 px-1 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">UNIDADES EN PATIO</div>
                 ${_vehiculosCache.map(v => {
                     const isActive = v.id === _selectedVehiculoId ? 'active' : '';
-                    const mockModel = getMockVehiculoModel(v.patente);
                     const stateLabel = v.estado === 'en_planta' ? 'EN PLANTA' : 'EN RUTA';
                     const statePillClass = v.estado === 'en_planta' ? 'bg-success-subtle text-success border-success-subtle' : 'bg-warning-subtle text-warning border-warning-subtle';
                     const driverText = v.chofer_activo ? v.chofer_activo : 'Sin chofer';
