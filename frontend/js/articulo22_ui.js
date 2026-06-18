@@ -24,56 +24,70 @@ const Articulo22Module = (() => {
 
         container.innerHTML = `
             <style>
-                .art22-kpi { position: relative; overflow: hidden; border-radius: 12px; padding: 1.25rem 1.5rem; color: #fff; transition: transform 0.3s; }
-                .art22-kpi:hover { transform: translateY(-2px); }
+                .art22-kpi { position: relative; overflow: hidden; border-radius: 16px; padding: 1.25rem 1.5rem; color: #fff; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid rgba(255,255,255,0.1); }
+                .art22-kpi:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(0,0,0,0.15); }
                 .art22-kpi .kpi-icon { position: absolute; right: -10px; top: -10px; font-size: 5rem; opacity: 0.08; }
                 .art22-kpi .kpi-number { font-size: 2.25rem; font-weight: 800; line-height: 1; }
                 .art22-kpi .kpi-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.9; }
                 .art22-kpi .kpi-sub { font-size: 0.8rem; font-weight: 500; opacity: 0.8; margin-top: 2px; }
-                .art22-emp-card { background: #fff; border-radius: 10px; margin: 6px 12px; padding: 0; border-left: 4px solid transparent; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; }
-                .art22-emp-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.07); transform: translateY(-1px); }
+                #art22-estado-body { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 20px !important; background: #f8fafc; }
+                @media (min-width: 992px) { #art22-estado-body { grid-template-columns: 1fr 1fr; } }
+                .art22-emp-card { background: #ffffff; border-radius: 16px; margin: 0; padding: 0; border: 1px solid #e2e8f0; border-left: 5px solid #cbd5e1; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(0,0,0,0.02); overflow: hidden; }
+                .art22-emp-card:hover { box-shadow: 0 12px 24px -10px rgba(0,0,0,0.08); transform: translateY(-2px); border-color: #cbd5e1; }
                 .art22-emp-card.estado-en_planta { border-left-color: #10b981; }
                 .art22-emp-card.estado-fuera { border-left-color: #f43f5e; }
                 .art22-emp-card.estado-sin_registro { border-left-color: #cbd5e1; }
-                .art22-card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px 16px; gap: 12px; }
-                .art22-card-identity { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-                .art22-card-info { min-width: 0; }
-                .art22-card-name { font-weight: 600; color: #1e293b; font-size: 0.85rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .art22-card-cargo { font-size: 0.72rem; color: #64748b; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .art22-card-metrics { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-                .art22-card-estadia { text-align: center; padding: 0 10px; }
-                .art22-card-timeline { position: relative; padding: 32px 24px 24px 24px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.5); min-height: 80px; }
-                .art22-timeline-24h-line { height: 4px; background: #cbd5e1; border-radius: 2px; position: relative; width: 100%; margin: 15px 0; }
-                .art22-timeline-bound { position: absolute; font-size: 0.6rem; font-weight: 700; color: #94a3b8; top: -18px; }
-                .art22-timeline-bound.start { left: 0; }
-                .art22-timeline-bound.end { right: 0; }
-                .art22-timeline-point { position: absolute; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
-                .art22-timeline-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
-                .art22-timeline-dot.e { background-color: #10b981; }
-                .art22-timeline-dot.s { background-color: #f43f5e; }
-                .art22-timeline-label { position: absolute; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; bottom: 12px; }
-                .art22-timeline-label.e { color: #059669; }
-                .art22-timeline-label.s { color: #e11d48; }
-                .art22-timeline-time { position: absolute; font-size: 0.68rem; font-weight: 700; color: #475569; top: 12px; white-space: nowrap; }
-                .art22-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #e2e8f0, #cbd5e1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: #475569; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-                .art22-area-badge { display: inline-block; padding: 2px 8px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
+                .art22-card-header { display: flex; flex-direction: column; padding: 18px 20px 14px 20px; gap: 12px; }
+                .art22-card-top { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
+                .art22-card-identity { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+                .art22-card-info { min-width: 0; flex: 1; }
+                .art22-card-name { font-weight: 700; color: #0f172a; font-size: 0.9rem; line-height: 1.2; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .art22-card-cargo { font-size: 0.74rem; color: #64748b; margin-top: 2px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .art22-card-meta-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; width: 100%; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
+                .art22-card-estadia { display: flex; align-items: center; gap: 6px; }
+                .art22-gantt-container { position: relative; padding: 68px 24px 68px 24px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.65); min-height: 154px; }
+                .art22-gantt-backdrop { position: relative; height: 22px; width: 100%; margin: 10px 0; }
+                .art22-gantt-track { height: 14px; background: #e2e8f0; border-radius: 7px; position: absolute; top: 2px; left: 0; width: 100%; overflow: hidden; display: flex; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); border: 1px solid #cbd5e1; }
+                .art22-gantt-segment { height: 100%; position: absolute; background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-right: 1px solid rgba(255,255,255,0.2); border-left: 1px solid rgba(255,255,255,0.2); transition: all 0.3s ease; }
+                .art22-gantt-segment.ongoing { background: repeating-linear-gradient(45deg, #10b981, #10b981 8px, #34d399 8px, #34d399 16px); border-right: none; }
+                .art22-gantt-grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(148, 163, 184, 0.15); z-index: 1; }
+                .art22-gantt-grid-label { position: absolute; font-size: 0.58rem; font-weight: 700; color: #94a3b8; top: -16px; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; }
+                @media (max-width: 768px) { .art22-gantt-grid-label.h-sub { display: none !important; } }
+                .art22-gantt-marker { position: absolute; top: 9px; display: flex; align-items: center; z-index: 3; }
+                .art22-gantt-marker.dir-down { flex-direction: column; }
+                .art22-gantt-marker.dir-up { flex-direction: column-reverse; transform: translateY(-100%); margin-top: 10px; }
+                .art22-gantt-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+                .art22-gantt-dot.e { background-color: #10b981; }
+                .art22-gantt-dot.s { background-color: #f43f5e; }
+                .art22-gantt-marker-line { width: 1.5px; background-color: #cbd5e1; z-index: 1; }
+                .art22-gantt-marker.level-1 .art22-gantt-marker-line { height: 10px; }
+                .art22-gantt-marker.level-2 .art22-gantt-marker-line { height: 22px; }
+                .art22-gantt-marker.level-3 .art22-gantt-marker-line { height: 34px; }
+                .art22-gantt-bubble { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 0.62rem; font-weight: 600; white-space: nowrap; padding: 4px 8px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; z-index: 2; box-shadow: 0 4px 10px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: all 0.2s ease; }
+                .art22-gantt-bubble.e { background-color: rgba(240, 253, 244, 0.95); color: #16a34a; border: 1px solid rgba(134, 239, 172, 0.5); }
+                .art22-gantt-bubble.s { background-color: rgba(254, 242, 242, 0.95); color: #dc2626; border: 1px solid rgba(254, 202, 202, 0.5); }
+                .art22-gantt-bubble .bubble-label { font-size: 0.56rem; font-weight: 500; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.03em; display: flex; align-items: center; gap: 4px; }
+                .art22-gantt-bubble .bubble-time { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700; }
+                .art22-gantt-pulse-ring { position: absolute; top: 9px; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; border: 2px solid #10b981; animation: gantt-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite; pointer-events: none; z-index: 2; }
+                @keyframes gantt-ping { 75%, 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
+                .art22-gantt-empty-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 0.72rem; font-weight: 600; color: #64748b; font-style: italic; z-index: 2; pointer-events: none; }
+                .art22-gantt-track.empty { background: repeating-linear-gradient(-45deg, #f1f5f9, #f1f5f9 6px, #e2e8f0 6px, #e2e8f0 12px); border: 1px dashed #cbd5e1; }
+                .art22-avatar { width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, #f1f5f9, #e2e8f0); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.95rem; color: #475569; flex-shrink: 0; border: 1px solid #e2e8f0; }
+                .art22-area-badge { display: inline-block; padding: 2px 8px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.64rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 6px; }
                 .art22-estadia-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
                 .art22-estadia-val { font-size: 0.95rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
-                .art22-status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
-                .art22-status-pill .dot { width: 7px; height: 7px; border-radius: 50%; animation: art22-pulse 2s infinite; }
-                @keyframes art22-pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-                .art22-status-en_planta { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 1px solid #6ee7b7; }
-                .art22-status-en_planta .dot { background: #10b981; box-shadow: 0 0 4px rgba(16,185,129,0.5); }
-                .art22-status-fuera { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #9f1239; border: 1px solid #fda4af; }
-                .art22-status-fuera .dot { background: #f43f5e; box-shadow: 0 0 4px rgba(244,63,94,0.5); }
-                .art22-status-sin_registro { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-                .art22-status-sin_registro .dot { background: #94a3b8; animation: none; }
-                .art22-btn-entrada { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; font-weight: 700; font-size: 0.78rem; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(16,185,129,0.3); letter-spacing: 0.02em; }
-                .art22-btn-entrada:hover { background: linear-gradient(135deg, #059669, #047857); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
-                .art22-btn-entrada:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(16,185,129,0.3); }
-                .art22-btn-salida { background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; border: none; font-weight: 700; font-size: 0.78rem; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(244,63,94,0.3); letter-spacing: 0.02em; }
-                .art22-btn-salida:hover { background: linear-gradient(135deg, #e11d48, #be123c); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(244,63,94,0.4); }
-                .art22-btn-salida:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(244,63,94,0.3); }
+                .art22-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+                .art22-status-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+                .art22-status-en_planta { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+                .art22-status-en_planta .dot { background: #10b981; animation: art22-pulse 2s infinite; }
+                .art22-status-fuera { background: #ffe4e6; color: #9f1239; border: 1px solid #fda4af; }
+                .art22-status-fuera .dot { background: #f43f5e; }
+                .art22-status-sin_registro { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+                .art22-status-sin_registro .dot { background: #94a3b8; }
+                .art22-btn-entrada { background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; font-weight: 600; font-size: 0.74rem; padding: 6px 14px; border-radius: 8px; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 1px 2px rgba(22, 163, 74, 0.05); display: inline-flex; align-items: center; gap: 6px; }
+                .art22-btn-entrada:hover { background-color: #dcfce7; border-color: #86efac; color: #15803d; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.1); }
+                .art22-btn-salida { background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-weight: 600; font-size: 0.74rem; padding: 6px 14px; border-radius: 8px; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 1px 2px rgba(220, 38, 38, 0.05); display: inline-flex; align-items: center; gap: 6px; }
+                .art22-btn-salida:hover { background-color: #fee2e2; border-color: #fca5a5; color: #b91c1c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.1); }
                 .art22-section-header { background: rgba(248,250,252,0.5); padding: 0.9rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
                 .art22-section-title { font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
                 .art22-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
@@ -152,7 +166,7 @@ const Articulo22Module = (() => {
                         <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
                     </button>
                 </div>
-                <div id="art22-estado-body" style="background:#f8fafc; padding:6px 0">
+                <div id="art22-estado-body">
                     <div class="text-center py-5 text-muted">
                         <div class="spinner-border spinner-border-sm text-primary"></div> Cargando...
                     </div>
@@ -246,39 +260,181 @@ const Articulo22Module = (() => {
             ? (parts[0].trim()[0] || '') + (parts[1].trim()[0] || '')
             : (emp.nombre || '').substring(0,2);
 
-        // Marks timeline — compact dots on a horizontal line
+        // Marks timeline — Gantt style
         let marcasHtml = '';
         if (emp.marcas && emp.marcas.length > 0) {
+            const segments = [];
+            let currentEntradaMinutes = null;
+
+            // Sort marks by time to be absolutely sure
+            const sortedMarcas = [...emp.marcas].sort((a, b) => a.hora.localeCompare(b.hora));
+
+            sortedMarcas.forEach(m => {
+                const parts = m.hora.split(':');
+                const minutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                if (m.tipo === 'E') {
+                    if (currentEntradaMinutes === null) {
+                        currentEntradaMinutes = minutes;
+                    }
+                } else if (m.tipo === 'S') {
+                    if (currentEntradaMinutes !== null) {
+                        segments.push({ start: currentEntradaMinutes, end: minutes, ongoing: false });
+                        currentEntradaMinutes = null;
+                    } else {
+                        // Salida sin entrada previa hoy -> asumir dentro desde medianoche
+                        segments.push({ start: 0, end: minutes, ongoing: false });
+                    }
+                }
+            });
+
+            // If still inside at the end of marks list
+            if (currentEntradaMinutes !== null) {
+                const todayStr = (() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                })();
+                let endMin = 1440;
+                let isOngoing = false;
+                if (_fechaActual === todayStr && emp.estado === 'en_planta') {
+                    const now = new Date();
+                    endMin = Math.min(now.getHours() * 60 + now.getMinutes(), 1440);
+                    isOngoing = true;
+                }
+                segments.push({ start: currentEntradaMinutes, end: endMin, ongoing: isOngoing });
+            }
+
+            const nowPct = (() => {
+                const now = new Date();
+                return ((Math.min(now.getHours() * 60 + now.getMinutes(), 1440) / 1440) * 100).toFixed(2);
+            })();
+
+            const todayStr = (() => {
+                const d = new Date();
+                return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            })();
+            const isToday = (_fechaActual === todayStr);
+
             marcasHtml = `
-                <div class="art22-timeline-24h-line">
-                    <span class="art22-timeline-bound start">00:00</span>
-                    <span class="art22-timeline-bound end">24:00</span>
-                    ${emp.marcas.map(m => {
-                        const parts = m.hora.split(':');
-                        const minutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                        const pct = ((minutes / 1440) * 100).toFixed(2);
-                        const isE = m.tipo === 'E';
-                        const dotClass = isE ? 'e' : 's';
-                        const label = isE ? 'Entrada' : 'Salida';
-                        const labelClass = isE ? 'e' : 's';
-                        const timeStr = m.hora.substring(0, 5);
-                        return `
-                            <div class="art22-timeline-point" style="left: ${pct}%">
-                                <span class="art22-timeline-label ${labelClass}">${label}</span>
-                                <div class="art22-timeline-dot ${dotClass}"></div>
-                                <span class="art22-timeline-time">${timeStr}</span>
-                            </div>
-                        `;
-                    }).join('')}
+                <div class="art22-gantt-backdrop">
+                    <!-- Regla de tiempo de fondo -->
+                    <span class="art22-gantt-grid-label h-main" style="left: 0%;">00:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 12.5%;">03:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 25%;">06:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 37.5%;">09:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 50%;">12:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 62.5%;">15:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 75%;">18:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 87.5%;">21:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 100%;">24:00</span>
+
+                    <!-- Pista Gantt -->
+                    <div class="art22-gantt-track">
+                        <div class="art22-gantt-grid-line" style="left: 12.5%;"></div>
+                        <div class="art22-gantt-grid-line" style="left: 25%;"></div>
+                        <div class="art22-gantt-grid-line" style="left: 37.5%;"></div>
+                        <div class="art22-gantt-grid-line" style="left: 50%;"></div>
+                        <div class="art22-gantt-grid-line" style="left: 62.5%;"></div>
+                        <div class="art22-gantt-grid-line" style="left: 75%;"></div>
+                        <div class="art22-gantt-grid-line" style="left: 87.5%;"></div>
+                        ${segments.map(seg => {
+                            const startPct = ((seg.start / 1440) * 100).toFixed(2);
+                            const widthPct = (((seg.end - seg.start) / 1440) * 100).toFixed(2);
+                            const cls = seg.ongoing ? 'ongoing' : '';
+                            return `<div class="art22-gantt-segment ${cls}" style="left: ${startPct}%; width: ${widthPct}%;"></div>`;
+                        }).join('')}
+                    </div>
+
+                    <!-- Hitos de marcaciones y pulso AHORA unificados -->
+                    ${(() => {
+                        const items = sortedMarcas.map(m => {
+                            const parts = m.hora.split(':');
+                            return {
+                                minutes: parseInt(parts[0]) * 60 + parseInt(parts[1]),
+                                label: m.tipo === 'E' ? 'Entrada' : 'Salida',
+                                timeStr: m.hora.substring(0, 5),
+                                isAhora: false,
+                                tipo: m.tipo
+                            };
+                        });
+
+                        if (isToday && emp.estado === 'en_planta') {
+                            const now = new Date();
+                            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                            items.push({
+                                minutes: nowMinutes,
+                                label: 'AHORA',
+                                timeStr: '',
+                                isAhora: true,
+                                tipo: 'E'
+                            });
+                        }
+
+                        // Sort all items (punch marks + AHORA) chronologically
+                        items.sort((a, b) => a.minutes - b.minutes);
+
+                        const heightClasses = ['level-1', 'level-2', 'level-3'];
+                        let upCount = 0;
+                        let downCount = 0;
+
+                        return items.map((item, index) => {
+                            const pct = ((item.minutes / 1440) * 100).toFixed(2);
+                            const cls = item.tipo === 'E' ? 'e' : 's';
+                            const isUp = (item.tipo === 'E');
+                            const dirCls = isUp ? 'dir-up' : 'dir-down';
+                            const heightCls = isUp ? heightClasses[upCount++ % 3] : heightClasses[downCount++ % 3];
+
+                            if (item.isAhora) {
+                                // Overlap protection: calculate distance to previous mark
+                                const prevMark = items[index - 1];
+                                const hideAhoraBubble = prevMark && (item.minutes - prevMark.minutes) < 75;
+
+                                return `
+                                    <div class="art22-gantt-pulse-ring" style="left: ${pct}%"></div>
+                                    <div class="art22-gantt-marker ${dirCls} ${hideAhoraBubble ? '' : heightCls}" style="left: ${pct}%">
+                                        <div class="art22-gantt-dot e" style="background-color: #34d399; width: 8px; height: 8px; box-shadow: 0 0 8px #10b981;"></div>
+                                        ${hideAhoraBubble ? '' : `
+                                            <div class="art22-gantt-marker-line"></div>
+                                            <div class="art22-gantt-bubble e" style="background-color: rgba(6, 95, 70, 0.95); color: #ffffff; border: 1px solid rgba(16, 185, 129, 0.5);">
+                                                <span class="bubble-label" style="color: rgba(255,255,255,0.85);">AHORA</span>
+                                                <span class="bubble-time">${item.timeStr}</span>
+                                            </div>
+                                        `}
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div class="art22-gantt-marker ${dirCls} ${heightCls}" style="left: ${pct}%">
+                                        <div class="art22-gantt-dot ${cls}"></div>
+                                        <div class="art22-gantt-marker-line"></div>
+                                        <div class="art22-gantt-bubble ${cls}">
+                                            <span class="bubble-label"><i class="bi ${item.tipo === 'E' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right'}"></i> ${item.label}</span>
+                                            <span class="bubble-time">${item.timeStr}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }).join('');
+                    })()}
                 </div>
             `;
         } else {
             marcasHtml = `
-                <div class="art22-timeline-24h-line" style="background:#e2e8f0; opacity: 0.6;">
-                    <span class="art22-timeline-bound start">00:00</span>
-                    <span class="art22-timeline-bound end">24:00</span>
+                <div class="art22-gantt-backdrop" style="margin-bottom: 5px;">
+                    <!-- Regla de tiempo de fondo -->
+                    <span class="art22-gantt-grid-label h-main" style="left: 0%;">00:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 12.5%;">03:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 25%;">06:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 37.5%;">09:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 50%;">12:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 62.5%;">15:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 75%;">18:00</span>
+                    <span class="art22-gantt-grid-label h-sub" style="left: 87.5%;">21:00</span>
+                    <span class="art22-gantt-grid-label h-main" style="left: 100%;">24:00</span>
+
+                    <div class="art22-gantt-track empty">
+                        <div class="art22-gantt-empty-text">Sin registros de marcación hoy</div>
+                    </div>
                 </div>
-                <div class="text-center text-muted small w-100 py-1" style="font-size:0.74rem; font-style:italic">Sin marcaciones hoy</div>
             `;
         }
 
@@ -299,26 +455,28 @@ const Articulo22Module = (() => {
         return `
             <div class="art22-emp-card estado-${emp.estado}">
                 <div class="art22-card-header">
-                    <div class="art22-card-identity">
-                        <div class="art22-avatar">${initials.toUpperCase()}</div>
-                        <div class="art22-card-info">
-                            <div class="art22-card-name">${emp.nombre}</div>
-                            <div class="art22-card-cargo">${emp.cargo || ''}</div>
-                            <span class="art22-area-badge">${emp.area || ''}</span>
+                    <div class="art22-card-top">
+                        <div class="art22-card-identity">
+                            <div class="art22-avatar">${initials.toUpperCase()}</div>
+                            <div class="art22-card-info">
+                                <div class="art22-card-name">${emp.nombre}</div>
+                                <div class="art22-card-cargo">${emp.cargo || ''}</div>
+                            </div>
                         </div>
+                        <button class="${btnClass}" onclick="Articulo22Module.marcar(${emp.empleado_id}, this)">
+                            <i class="bi ${btnIcon} me-1"></i> ${proximaTipo}
+                        </button>
                     </div>
-                    <div class="art22-card-metrics">
+                    <div class="art22-card-meta-row">
+                        <span class="art22-area-badge" style="margin-top: 0;">${emp.area || ''}</span>
                         <div class="art22-card-estadia">
-                            <div class="art22-estadia-label">Estadía</div>
+                            <div class="art22-estadia-label">Estadía:</div>
                             ${estadiaHtml}
                         </div>
                         <span class="art22-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
-                        <button class="${btnClass}" onclick="Articulo22Module.marcar(${emp.empleado_id}, this)">
-                            ${proximaTipo} <i class="bi ${btnIcon}"></i>
-                        </button>
                     </div>
                 </div>
-                <div class="art22-card-timeline">
+                <div class="art22-gantt-container">
                     ${marcasHtml}
                 </div>
             </div>`;
