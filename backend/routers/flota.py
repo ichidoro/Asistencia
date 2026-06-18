@@ -305,6 +305,47 @@ async def get_estado_dia(
                 if match:
                     chofer_activo = match.group(1).strip()
 
+        # Obtener el último registro global para determinar el estado y ciclos
+        ultimo_global = await db.fetch_one(
+            """
+            SELECT id, tipo, fecha, hora 
+            FROM flota_registros 
+            WHERE flota_id = ? 
+            ORDER BY fecha DESC, id DESC 
+            LIMIT 1
+            """,
+            (fid,)
+        )
+        
+        ciclo_salida_hora = None
+        ciclo_salida_fecha = None
+        ciclo_retorno_hora = None
+        ciclo_retorno_fecha = None
+        
+        if ultimo_global:
+            if ultimo_global["tipo"] == "SALIDA":
+                # Vehículo fuera (en ruta), el último registro es la salida activa
+                ciclo_salida_hora = ultimo_global["hora"]
+                ciclo_salida_fecha = ultimo_global["fecha"]
+            else:
+                # Vehículo en planta, el último registro es el retorno
+                ciclo_retorno_hora = ultimo_global["hora"]
+                ciclo_retorno_fecha = ultimo_global["fecha"]
+                # Buscar la salida correspondiente (el último SALIDA antes de este ENTRADA)
+                salida_m = await db.fetch_one(
+                    """
+                    SELECT fecha, hora 
+                    FROM flota_registros 
+                    WHERE flota_id = ? AND tipo = 'SALIDA' AND id < ? 
+                    ORDER BY id DESC 
+                    LIMIT 1
+                    """,
+                    (fid, ultimo_global["id"])
+                )
+                if salida_m:
+                    ciclo_salida_hora = salida_m["hora"]
+                    ciclo_salida_fecha = salida_m["fecha"]
+
         resultado.append({
             "id": fid,
             "patente": veh["patente"],
@@ -319,7 +360,11 @@ async def get_estado_dia(
             "viaje_total_min": round(viaje_min, 1),
             "viaje_display": viaje_display,
             "viajes_completados": viajes_completados,
-            "chofer_activo": chofer_activo
+            "chofer_activo": chofer_activo,
+            "ciclo_salida_hora": ciclo_salida_hora,
+            "ciclo_salida_fecha": ciclo_salida_fecha,
+            "ciclo_retorno_hora": ciclo_retorno_hora,
+            "ciclo_retorno_fecha": ciclo_retorno_fecha
         })
 
     # Estadísticas resumidas

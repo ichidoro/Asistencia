@@ -396,3 +396,6 @@ if __name__ == "__main__":
         log_level=settings.LOG_LEVEL.lower(),
         access_log=True
     )
+
+# Recarga del servidor gatillada para cache-busting de flota_ui.js
+

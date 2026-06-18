@@ -159,7 +159,7 @@ class FlotaRepository:
         query = """
             SELECT * FROM flota_registros 
             WHERE flota_id = ? 
-            ORDER BY fecha DESC, hora DESC, id DESC 
+            ORDER BY fecha DESC, id DESC 
             LIMIT 1
         """
         row = await self.db.fetch_one(query, (flota_id,))
@@ -170,7 +170,7 @@ class FlotaRepository:
         query = """
             SELECT * FROM flota_registros 
             WHERE flota_id = ? AND fecha < ? 
-            ORDER BY fecha DESC, hora DESC, id DESC 
+            ORDER BY fecha DESC, id DESC 
             LIMIT 1
         """
         row = await self.db.fetch_one(query, (flota_id, fecha))

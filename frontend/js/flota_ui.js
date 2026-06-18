@@ -26,33 +26,22 @@ const FlotaModule = (() => {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-                border: 2px solid #0f172a;
+                background: #ffffff;
+                border: 2.5px solid #000000;
                 border-radius: 4px;
                 padding: 2px 8px;
-                min-width: 95px;
+                min-width: 100px;
                 height: 28px;
-                box-shadow: inset 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.05);
+                box-shadow: inset 0 0 0 1px #1d4ed8, 0 2px 4px rgba(0,0,0,0.08);
                 position: relative;
                 user-select: none;
                 vertical-align: middle;
             }
-            .chilean-plate::before {
-                content: '';
-                position: absolute;
-                top: 1px;
-                left: 1px;
-                right: 1px;
-                bottom: 1px;
-                border: 0.5px solid #94a3b8;
-                border-radius: 2px;
-                pointer-events: none;
-            }
             .plate-letters, .plate-numbers {
-                font-family: 'Trebuchet MS', 'Impact', Arial, sans-serif;
+                font-family: 'Trebuchet MS', Arial, sans-serif;
                 font-weight: 850;
-                font-size: 0.95rem;
-                color: #0f172a;
+                font-size: 0.92rem;
+                color: #111827;
                 letter-spacing: 0.5px;
                 line-height: 1;
             }
@@ -60,32 +49,30 @@ const FlotaModule = (() => {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 7px;
-                height: 7px;
+                width: 6px;
+                height: 6px;
                 border-radius: 50%;
-                background: #e2e8f0;
-                border: 0.5px solid #94a3b8;
-                margin: 0 4px;
+                background: #1d4ed8;
+                margin: 0 5px;
                 position: relative;
             }
             .plate-shield::after {
-                content: '★';
-                font-size: 5px;
-                color: #475569;
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
+                content: '';
+                display: block;
+                width: 2px;
+                height: 2px;
+                background: #ffffff;
+                border-radius: 50%;
             }
             .plate-country {
                 position: absolute;
-                bottom: 0.5px;
+                bottom: 1.5px;
                 left: 50%;
                 transform: translateX(-50%);
-                font-family: 'Inter', system-ui, sans-serif;
-                font-size: 0.3rem;
+                font-family: 'Inter', Arial, sans-serif;
+                font-size: 0.38rem;
                 font-weight: 900;
-                color: #475569;
+                color: #1d4ed8;
                 letter-spacing: 1.5px;
                 text-transform: uppercase;
                 line-height: 1;
@@ -206,21 +193,30 @@ const FlotaModule = (() => {
                 border-color: #3b82f6;
                 box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
             }
-            .truck-avatar {
+            .truck-avatar-premium {
                 width: 44px;
                 height: 44px;
                 background: #f8fafc;
                 border: 1px solid #e2e8f0;
-                border-radius: 10px;
+                border-radius: 8px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 flex-shrink: 0;
+                overflow: hidden;
+                padding: 2px;
                 transition: all 0.2s;
             }
-            .flota-sidebar-item.active .truck-avatar {
-                background: #e0f2fe;
-                border-color: #bae6fd;
+            .truck-avatar-premium i {
+                color: #64748b !important;
+                transition: color 0.2s;
+            }
+            .flota-sidebar-item.active .truck-avatar-premium {
+                background: #eff6ff;
+                border-color: #bfdbfe;
+            }
+            .flota-sidebar-item.active .truck-avatar-premium i {
+                color: #2563eb !important;
             }
 
             /* Línea de ruta interactiva */
@@ -828,13 +824,6 @@ const FlotaModule = (() => {
         renderSplitLayout();
     }
 
-    function getMockVehiculoModel(patente) {
-        const clean = String(patente).toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const sum = clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        const models = ["Scania R500", "Volvo FMX 460", "Mercedes Actros 2646", "Scania G450 XT", "MAN TGX 26.440"];
-        return models[sum % models.length];
-    }
-
     function renderSplitLayout() {
         const layout = document.getElementById('flota-split-layout');
         if (!layout) return;
@@ -852,16 +841,16 @@ const FlotaModule = (() => {
                     
                     return `
                         <div class="flota-sidebar-item ${isActive}" onclick="FlotaModule.selectVehiculo(${v.id})">
-                            <div class="truck-avatar">
-                                <span style="font-size: 1.25rem;">🚚</span>
+                            <div class="truck-avatar-premium">
+                                <i class="bi bi-truck" style="font-size: 1.25rem;"></i>
                             </div>
                             <div class="flex-grow-1 min-width-0 ms-3">
                                 <div class="d-flex align-items-center justify-content-between mb-1">
-                                    <span class="fw-bold text-muted" style="font-size: 0.7rem; letter-spacing: 0.02em;">${mockModel}</span>
+                                    <span class="fw-bold text-muted" style="font-size: 0.7rem; letter-spacing: 0.02em;">Unidad</span>
                                     <span class="badge border ${statePillClass}" style="font-size: 0.58rem; font-weight: 800; padding: 2px 6px;">${stateLabel}</span>
                                 </div>
-                                <div class="fw-extrabold text-dark font-monospace mb-1" style="font-size: 0.95rem; letter-spacing: 0.02em;">
-                                    ${v.patente}
+                                <div class="mb-2">
+                                    ${renderPlacaPatente(v.patente)}
                                 </div>
                                 <div class="d-flex align-items-center justify-content-between">
                                     <span class="text-secondary text-truncate" style="font-size: 0.68rem; font-weight: 500; max-width: 130px;" title="${driverText}">
@@ -942,28 +931,11 @@ const FlotaModule = (() => {
         const activeNodeDespacho = !isEnPlanta ? 'active' : '';
         const activeRouteLine = !isEnPlanta ? 'active-despacho' : 'inactive-planta';
 
-        let horaSalidaVal = 'Esperando...';
-        let horaRetornoVal = 'En espera';
-        let subTextSalida = 'Sin viaje activo';
-        let subTextRetorno = 'Pendiente de inicio';
-
-        if (veh.marcas && veh.marcas.length > 0) {
-            const salidas = veh.marcas.filter(m => m.tipo === 'SALIDA');
-            if (salidas.length > 0) {
-                horaSalidaVal = salidas[salidas.length - 1].hora.substring(0, 5);
-                subTextSalida = 'Entrada al ciclo de ruta';
-            }
-            if (isEnPlanta) {
-                const entradas = veh.marcas.filter(m => m.tipo === 'ENTRADA');
-                if (entradas.length > 0) {
-                    horaRetornoVal = entradas[entradas.length - 1].hora.substring(0, 5);
-                    subTextRetorno = 'Retornado exitosamente';
-                }
-            } else {
-                horaRetornoVal = 'Esperando...';
-                subTextRetorno = 'Registra al presionar Retorno';
-            }
-        }
+        let horaSalidaVal = veh.ciclo_salida_hora ? veh.ciclo_salida_hora.substring(0, 5) : 'Esperando...';
+        let horaRetornoVal = veh.ciclo_retorno_hora ? veh.ciclo_retorno_hora.substring(0, 5) : (isEnPlanta ? 'En espera' : 'Esperando...');
+        
+        let subTextSalida = veh.ciclo_salida_fecha ? `Despachado: ${veh.ciclo_salida_fecha}` : 'Sin viaje activo';
+        let subTextRetorno = veh.ciclo_retorno_fecha ? `Retornado: ${veh.ciclo_retorno_fecha}` : (isEnPlanta ? 'Pendiente de inicio' : 'Registra al presionar Retorno');
 
         const detailHtml = `
             <div class="flota-detail-panel estado-${veh.estado}">
@@ -971,7 +943,10 @@ const FlotaModule = (() => {
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <div class="small fw-bold text-muted text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">DETALLES DEL VIAJE</div>
-                            <h4 class="fw-extrabold text-dark mt-1 mb-0" style="letter-spacing: -0.01em;">Secuencia de Viaje: Patente ${veh.patente}</h4>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <span class="fw-bold text-dark" style="font-size: 1.05rem;">Secuencia de Viaje:</span>
+                                ${renderPlacaPatente(veh.patente)}
+                            </div>
                         </div>
                         <span class="badge border px-3 py-1.5 fw-extrabold ${statusBadgeClass}" style="font-size:0.7rem; border-radius:30px; letter-spacing:0.04em;">
                             <span class="d-inline-block rounded-circle me-1" style="width:7px; height:7px; background: currentColor; vertical-align: middle;"></span>
@@ -982,16 +957,16 @@ const FlotaModule = (() => {
                     <div class="lane-route-track">
                         <div class="route-line ${activeRouteLine}"></div>
                         <div class="route-node node-planta active">
-                            🏭
+                            <i class="bi bi-building" style="z-index: 2;"></i>
                             <span class="node-caption">Planta</span>
                         </div>
                         <div class="route-node node-despacho ${activeNodeDespacho}">
-                            🏪
+                            <i class="bi bi-shop" style="z-index: 2;"></i>
                             <span class="node-caption">Despacho</span>
                         </div>
                         <div class="route-truck-indicator">
                             <span class="truck-badge-top">${isEnPlanta ? 'EN PLANTA' : 'EN RUTA'}</span>
-                            <div class="truck-bubble">🚚</div>
+                            <div class="truck-bubble"><i class="bi bi-truck"></i></div>
                             <span class="truck-label-bottom">${veh.patente}</span>
                         </div>
                     </div>
@@ -1201,7 +1176,7 @@ const FlotaModule = (() => {
                 return `<tr>
                     <td style="font-weight:500; color:#475569; white-space:nowrap">${fechaFmt}</td>
                     <td style="color:#475569">${r.hora.substring(0,5)}</td>
-                    <td style="font-weight:700; color:#1e293b; letter-spacing:0.02em">${r.patente}</td>
+                    <td>${renderPlacaPatente(r.patente)}</td>
                     <td style="color:#64748b; font-size:0.78rem">${r.area_nombre}</td>
                     <td><span class="${labelClass} px-2 py-1">${r.tipo}</span></td>
                     <td style="color:#64748b">${r.registrado_por_nombre || 'Sistema'}</td>
