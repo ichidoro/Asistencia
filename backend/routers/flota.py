@@ -349,11 +349,13 @@ async def marcar(
 ):
     """
     Registrar una marca de entrada o salida para un vehículo.
-    Determina secuencialmente el tipo opuesto a la última marca global.
+    Soporta tipo explícito o determina secuencialmente el tipo opuesto a la última marca global.
     Resuelve sesiones cross-midnight unificando la fecha del fin de sesión a la del inicio.
     """
     flota_id = data.get("flota_id")
     observaciones = data.get("observaciones", "")
+    tipo_solicitado = data.get("tipo") # "SALIDA" o "ENTRADA"
+    
     if not flota_id:
         raise HTTPException(status_code=400, detail="flota_id requerido")
 
@@ -370,13 +372,26 @@ async def marcar(
     fecha_hoy = now.strftime("%Y-%m-%d")
     hora_actual = now.strftime("%H:%M:%S")
 
-    # Obtener última marca global del vehículo
+    # Determinar tipo
+    if tipo_solicitado:
+        if tipo_solicitado not in ["SALIDA", "ENTRADA"]:
+            raise HTTPException(status_code=400, detail="Tipo de marca inválido (debe ser SALIDA o ENTRADA)")
+        nuevo_tipo = tipo_solicitado
+    else:
+        # Obtener última marca global del vehículo
+        ultima = await repo.get_ultimo_registro_global(flota_id)
+        # Si no hay última, o si la última fue ENTRADA, el siguiente es SALIDA (A Despacho)
+        # Si la última fue SALIDA, el siguiente es ENTRADA (Retorno)
+        nuevo_tipo = "SALIDA" if (not ultima or ultima["tipo"] == "ENTRADA") else "ENTRADA"
+
+    # Obtener última marca para resolver cross-midnight
     ultima = await repo.get_ultimo_registro_global(flota_id)
-    nuevo_tipo = "ENTRADA" if (not ultima or ultima["tipo"] == "SALIDA") else "SALIDA"
 
     # Cross-Midnight: Si la última marca ocurrió en un día diferente a hoy,
-    # atribuimos esta nueva marca a la fecha de esa última marca
-    if ultima and ultima["fecha"] != fecha_hoy:
+    # atribuimos esta nueva marca a la fecha de esa última marca.
+    # Pero cuidado: solo si el nuevo tipo es el de cierre (ENTRADA) y la última marca fue apertura (SALIDA).
+    # Si estamos registrando una nueva apertura (SALIDA), debe ser con la fecha de hoy.
+    if nuevo_tipo == "ENTRADA" and ultima and ultima["tipo"] == "SALIDA" and ultima["fecha"] != fecha_hoy:
         fecha_registro = ultima["fecha"]
         logger.info(f"[FLOTA] Cross-midnight detectado para patente {vehiculo['patente']}: marca '{nuevo_tipo}' de hoy {fecha_hoy} atribuida a {fecha_registro}")
     else:
@@ -398,7 +413,7 @@ async def marcar(
     return {
         "ok": True,
         "tipo": nuevo_tipo,
-        "tipo_label": "ENTRADA" if nuevo_tipo == "ENTRADA" else "SALIDA",
+        "tipo_label": "DESPACHO" if nuevo_tipo == "SALIDA" else "RETORNO",
         "hora": hora_actual,
         "flota_id": flota_id,
         "patente": vehiculo["patente"]

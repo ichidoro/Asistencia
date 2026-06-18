@@ -8,12 +8,18 @@ const FlotaModule = (() => {
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     })();
     let _refreshInterval = null;
+    let _tickingInterval = null;
     let _catalogoAreasCached = []; // Cache local para evitar llamadas repetidas
+    let _selectedVehiculoId = null;
+    let _vehiculosCache = [];
 
     function injectStyles() {
-        if (document.getElementById('flota-module-styles')) return;
-        const style = document.createElement('style');
-        style.id = 'flota-module-styles';
+        let style = document.getElementById('flota-module-styles');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'flota-module-styles';
+            document.head.appendChild(style);
+        }
         style.textContent = `
             /* Placa Patente Chilena Estilo Premium */
             .chilean-plate {
@@ -21,12 +27,12 @@ const FlotaModule = (() => {
                 align-items: center;
                 justify-content: center;
                 background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-                border: 2.2px solid #0f172a;
-                border-radius: 5px;
-                padding: 1px 10px;
-                min-width: 125px;
-                height: 38px;
-                box-shadow: inset 0 0 2px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.06);
+                border: 2px solid #0f172a;
+                border-radius: 4px;
+                padding: 2px 8px;
+                min-width: 95px;
+                height: 28px;
+                box-shadow: inset 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.05);
                 position: relative;
                 user-select: none;
                 vertical-align: middle;
@@ -34,38 +40,37 @@ const FlotaModule = (() => {
             .chilean-plate::before {
                 content: '';
                 position: absolute;
-                top: 1.5px;
-                left: 1.5px;
-                right: 1.5px;
-                bottom: 1.5px;
-                border: 0.8px solid #94a3b8;
-                border-radius: 3px;
+                top: 1px;
+                left: 1px;
+                right: 1px;
+                bottom: 1px;
+                border: 0.5px solid #94a3b8;
+                border-radius: 2px;
                 pointer-events: none;
             }
             .plate-letters, .plate-numbers {
                 font-family: 'Trebuchet MS', 'Impact', Arial, sans-serif;
                 font-weight: 850;
-                font-size: 1.25rem;
+                font-size: 0.95rem;
                 color: #0f172a;
-                letter-spacing: 0.8px;
+                letter-spacing: 0.5px;
                 line-height: 1;
             }
             .plate-shield {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 10px;
-                height: 10px;
+                width: 7px;
+                height: 7px;
                 border-radius: 50%;
                 background: #e2e8f0;
-                border: 0.8px solid #94a3b8;
-                margin: 0 6px;
+                border: 0.5px solid #94a3b8;
+                margin: 0 4px;
                 position: relative;
-                box-shadow: inset 0 1px 1px rgba(0,0,0,0.1);
             }
             .plate-shield::after {
                 content: '★';
-                font-size: 6.5px;
+                font-size: 5px;
                 color: #475569;
                 position: absolute;
                 top: 50%;
@@ -74,47 +79,47 @@ const FlotaModule = (() => {
             }
             .plate-country {
                 position: absolute;
-                bottom: 1.2px;
+                bottom: 0.5px;
                 left: 50%;
                 transform: translateX(-50%);
                 font-family: 'Inter', system-ui, sans-serif;
-                font-size: 0.38rem;
+                font-size: 0.3rem;
                 font-weight: 900;
                 color: #475569;
-                letter-spacing: 3px;
+                letter-spacing: 1.5px;
                 text-transform: uppercase;
                 line-height: 1;
             }
 
-            /* Diseño de Marcas tipo Ticket Dividido */
+            /* Marcas de Movimientos */
             .flota-mark-box {
                 display: inline-flex;
                 flex-direction: column;
-                width: 72px;
-                height: 40px;
-                border-radius: 6px;
+                width: 76px;
+                height: 44px;
+                border-radius: 8px;
                 overflow: hidden;
                 border: 1px solid #cbd5e1;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                box-shadow: 0 1px 2px rgba(0,0,0,0.03);
                 text-align: center;
                 vertical-align: middle;
                 transition: all 0.2s;
             }
             .flota-mark-box:hover {
-                box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+                box-shadow: 0 3px 6px rgba(0,0,0,0.06);
                 transform: translateY(-0.5px);
             }
             .flota-mark-box.entrada {
-                border-color: #6ee7b7;
+                border-color: #a7f3d0;
             }
             .flota-mark-box.salida {
-                border-color: #fda4af;
+                border-color: #fecdd3;
             }
             .flota-mark-box .flota-mark-header {
-                font-size: 0.52rem;
-                font-weight: 800;
-                letter-spacing: 0.06em;
-                padding: 1.5px 0;
+                font-size: 0.55rem;
+                font-weight: 900;
+                letter-spacing: 0.05em;
+                padding: 2px 0;
                 color: #ffffff;
                 text-transform: uppercase;
                 line-height: 1.2;
@@ -123,30 +128,453 @@ const FlotaModule = (() => {
                 background-color: #10b981;
             }
             .flota-mark-box.salida .flota-mark-header {
-                background-color: #ef4444;
+                background-color: #e11d48;
             }
             .flota-mark-box .flota-mark-time {
-                font-size: 0.78rem;
-                font-weight: 700;
-                color: #1e293b;
+                font-size: 0.82rem;
+                font-weight: 800;
+                color: #0f172a;
                 background-color: #ffffff;
-                padding: 2.5px 0;
+                padding: 3px 0;
                 flex-grow: 1;
                 display: flex;
                 align-items: center;
                 justify-content: center;
             }
             .flota-mark-arrow {
-                color: #94a3b8;
-                font-size: 0.85rem;
-                margin: 0 6px;
+                color: #cbd5e1;
+                font-size: 0.95rem;
+                margin: 0 4px;
                 display: inline-flex;
                 align-items: center;
-                height: 40px;
+                height: 44px;
                 vertical-align: middle;
             }
+
+            /* Split Layout de Consola */
+            .flota-split-container {
+                display: flex;
+                gap: 24px;
+                align-items: stretch;
+            }
+            .flota-sidebar-list {
+                width: 320px;
+                background: #ffffff;
+                border-radius: 16px;
+                border: 1px solid #e2e8f0;
+                padding: 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                max-height: 580px;
+                overflow-y: auto;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.01);
+                flex-shrink: 0;
+            }
+            .flota-detail-panel {
+                flex-grow: 1;
+                background: #ffffff;
+                border-radius: 16px;
+                border: 1px solid #e2e8f0;
+                padding: 28px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.01);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                min-height: 580px;
+                position: relative;
+            }
+
+            /* Elemento de lista lateral - Cards Premium */
+            .flota-sidebar-item {
+                padding: 12px 14px;
+                border-radius: 12px;
+                border: 1.5px solid #f1f5f9;
+                background: #ffffff;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .flota-sidebar-item:hover {
+                border-color: #cbd5e1;
+                background: #fafbfc;
+                transform: translateY(-1px);
+            }
+            .flota-sidebar-item.active {
+                background: #f0f9ff;
+                border-color: #3b82f6;
+                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+            }
+            .truck-avatar {
+                width: 44px;
+                height: 44px;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                transition: all 0.2s;
+            }
+            .flota-sidebar-item.active .truck-avatar {
+                background: #e0f2fe;
+                border-color: #bae6fd;
+            }
+
+            /* Línea de ruta interactiva */
+            .lane-route-track {
+                position: relative;
+                height: 160px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 100px;
+                background-color: #fafbfc;
+                background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+                background-size: 20px 20px;
+                border-radius: 16px;
+                margin: 24px 0 28px 0;
+                border: 1px solid #e2e8f0;
+            }
+            .route-line {
+                position: absolute;
+                top: 50%;
+                left: 132px;
+                right: 132px;
+                height: 6px;
+                background: #e2e8f0;
+                transform: translateY(-50%);
+                z-index: 1;
+                border-radius: 3px;
+                transition: all 0.5s ease;
+            }
+            .route-line.active-despacho {
+                background: linear-gradient(90deg, #10b981 0%, #e11d48 100%);
+                box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+                height: 8px;
+            }
+            .route-line.inactive-planta {
+                background-image: linear-gradient(to right, #cbd5e1 50%, transparent 50%);
+                background-size: 10px 100%;
+                background-color: transparent;
+                height: 4px;
+            }
+            
+            .route-node {
+                position: relative;
+                z-index: 2;
+                background: #ffffff;
+                width: 64px;
+                height: 64px;
+                border-radius: 50%;
+                border: 3px solid #cbd5e1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+                font-size: 1.75rem;
+                transition: all 0.3s ease;
+            }
+            .route-node.node-planta.active {
+                border-color: #10b981;
+                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15), 0 4px 10px rgba(16, 185, 129, 0.2);
+            }
+            .route-node.node-despacho.active {
+                border-color: #e11d48;
+                box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.15), 0 4px 10px rgba(225, 29, 72, 0.2);
+            }
+            .node-caption {
+                position: absolute;
+                top: 72px;
+                font-family: 'Inter', system-ui, sans-serif;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #475569;
+                text-transform: capitalize;
+                white-space: nowrap;
+            }
+            .route-node.active .node-caption {
+                color: #0f172a;
+                font-weight: 850;
+            }
+
+            /* Camión Deslizable */
+            .route-truck-indicator {
+                position: absolute;
+                top: 50%;
+                left: 132px;
+                transform: translate(-50%, -50%);
+                z-index: 3;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+            }
+            .route-truck-indicator .truck-bubble {
+                width: 48px;
+                height: 48px;
+                background: #ffffff;
+                border: 2.5px solid #cbd5e1;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                font-size: 1.45rem;
+                transition: all 0.8s;
+            }
+            .estado-en_planta .route-truck-indicator {
+                left: 132px;
+            }
+            .estado-en_planta .route-truck-indicator .truck-bubble {
+                border-color: #10b981;
+                box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+            }
+            .estado-fuera .route-truck-indicator {
+                left: 50%;
+            }
+            .estado-fuera .route-truck-indicator .truck-bubble {
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            }
+            
+            .route-truck-indicator .truck-badge-top {
+                position: absolute;
+                top: -24px;
+                font-size: 0.58rem;
+                font-weight: 850;
+                padding: 2px 7px;
+                border-radius: 30px;
+                white-space: nowrap;
+                color: #ffffff;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+                letter-spacing: 0.02em;
+            }
+            .estado-en_planta .route-truck-indicator .truck-badge-top {
+                background: #10b981;
+            }
+            .estado-fuera .route-truck-indicator .truck-badge-top {
+                background: #3b82f6;
+            }
+            .route-truck-indicator .truck-label-bottom {
+                position: absolute;
+                bottom: -24px;
+                font-size: 0.72rem;
+                font-weight: 850;
+                color: #1e293b;
+                font-family: monospace;
+                white-space: nowrap;
+            }
+
+            /* Relojes / Widgets */
+            .mini-clock-widget {
+                position: relative;
+                width: 24px;
+                height: 24px;
+                border: 2px solid currentColor;
+                border-radius: 50%;
+                display: inline-block;
+                vertical-align: middle;
+                flex-shrink: 0;
+            }
+            .mini-clock-widget::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 4px;
+                height: 4px;
+                background: currentColor;
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+            }
+            .mini-clock-widget .hand {
+                position: absolute;
+                bottom: 50%;
+                left: 50%;
+                background: currentColor;
+                transform-origin: bottom center;
+                border-radius: 1px;
+            }
+            .mini-clock-widget .hour-hand {
+                width: 1.8px;
+                height: 6px;
+                animation: spinHour 12s linear infinite;
+            }
+            .mini-clock-widget .minute-hand {
+                width: 1px;
+                height: 9px;
+                animation: spinMinute 1.5s linear infinite;
+            }
+            
+            /* Stopwatch Widget Red */
+            .stopwatch-widget {
+                position: relative;
+                width: 26px;
+                height: 26px;
+                border: 2px solid #ef4444;
+                border-radius: 50%;
+                display: inline-block;
+                background: #fef2f2;
+                color: #ef4444;
+                vertical-align: middle;
+                flex-shrink: 0;
+            }
+            .stopwatch-widget::before {
+                content: '';
+                position: absolute;
+                top: -3.5px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 7px;
+                height: 2.2px;
+                background: #ef4444;
+                border-radius: 1px;
+            }
+            .stopwatch-widget::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 3.5px;
+                height: 3.5px;
+                background: #ef4444;
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+            }
+            .stopwatch-widget .hand {
+                position: absolute;
+                bottom: 50%;
+                left: 50%;
+                background: #ef4444;
+                transform-origin: bottom center;
+                width: 1.2px;
+                height: 8.5px;
+                animation: spinMinute 2s linear infinite;
+            }
+
+            @keyframes spinHour {
+                from { transform: translate(-50%, 0) rotate(0deg); }
+                to { transform: translate(-50%, 0) rotate(360deg); }
+            }
+            @keyframes spinMinute {
+                from { transform: translate(-50%, 0) rotate(0deg); }
+                to { transform: translate(-50%, 0) rotate(360deg); }
+            }
+
+            /* Dashboard Cards */
+            .flota-dash-cards {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 16px;
+                margin-top: 24px;
+                margin-bottom: 16px;
+            }
+            .flota-dash-card {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 16px 18px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+                transition: transform 0.2s, box-shadow 0.2s;
+                min-height: 100px;
+            }
+            .flota-dash-card:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.04);
+            }
+            .flota-dash-card-label {
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #64748b;
+                letter-spacing: 0.02em;
+                margin-bottom: 6px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .flota-dash-card-val {
+                font-size: 1.4rem;
+                font-weight: 850;
+                color: #0f172a;
+                line-height: 1.2;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .flota-dash-card-sub {
+                font-size: 0.65rem;
+                color: #94a3b8;
+                font-weight: 500;
+                margin-top: 5px;
+            }
+            .flota-dash-card.active-estadia {
+                border-color: #bbf7d0;
+                background: #f0fdf4;
+            }
+            .flota-dash-card.active-viaje {
+                border-color: #bfdbfe;
+                background: #eff6ff;
+            }
+
+            /* Botón de acción premium */
+            .flota-action-btn-container {
+                width: 100%;
+                display: flex;
+                justify-content: center;
+                margin-top: 24px;
+            }
+            .flota-action-btn {
+                width: 100%;
+                max-width: 420px;
+                height: 48px;
+                border-radius: 24px;
+                font-family: 'Inter', system-ui, sans-serif;
+                font-size: 0.9rem;
+                font-weight: 800;
+                color: #ffffff !important;
+                border: none !important;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                cursor: pointer;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+            .flota-action-btn.btn-a-despacho {
+                background: linear-gradient(135deg, #9f1239, #e11d48) !important;
+                box-shadow: 0 6px 18px rgba(225, 29, 72, 0.35) !important;
+            }
+            .flota-action-btn.btn-a-despacho:hover {
+                background: linear-gradient(135deg, #e11d48, #f43f5e) !important;
+                transform: translateY(-2px);
+                box-shadow: 0 8px 22px rgba(225, 29, 72, 0.45) !important;
+            }
+            .flota-action-btn.btn-a-despacho:active {
+                transform: translateY(0);
+                box-shadow: 0 4px 8px rgba(225, 29, 72, 0.25) !important;
+            }
+            .flota-action-btn.btn-retorno {
+                background: linear-gradient(135deg, #047857, #10b981) !important;
+                box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35) !important;
+            }
+            .flota-action-btn.btn-retorno:hover {
+                background: linear-gradient(135deg, #10b981, #34d399) !important;
+                transform: translateY(-2px);
+                box-shadow: 0 8px 22px rgba(16, 185, 129, 0.45) !important;
+            }
+            .flota-action-btn.btn-retorno:active {
+                transform: translateY(0);
+                box-shadow: 0 4px 8px rgba(16, 185, 129, 0.25) !important;
+            }
         `;
-        document.head.appendChild(style);
     }
 
     function renderPlacaPatente(patente) {
@@ -205,50 +633,6 @@ const FlotaModule = (() => {
                 .flota-kpi .kpi-number { font-size: 2.25rem; font-weight: 800; line-height: 1; }
                 .flota-kpi .kpi-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.9; }
                 .flota-kpi .kpi-sub { font-size: 0.8rem; font-weight: 500; opacity: 0.8; margin-top: 2px; }
-                
-                .flota-card { background: #fff; border-radius: 10px; margin: 6px 12px; padding: 0; border-left: 4px solid transparent; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; }
-                .flota-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.07); transform: translateY(-1px); }
-                .flota-card.estado-en_planta { border-left-color: #10b981; }
-                .flota-card.estado-fuera { border-left-color: #f43f5e; }
-                .flota-card.estado-sin_registro { border-left-color: #cbd5e1; }
-                
-                .flota-card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px 16px; gap: 12px; }
-                .flota-card-identity { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-                .flota-card-info { min-width: 0; }
-                .flota-card-name { font-weight: 700; color: #1e293b; font-size: 1.05rem; line-height: 1.2; letter-spacing: 0.05em; }
-                .flota-card-cargo { font-size: 0.72rem; color: #64748b; margin-top: 1px; }
-                .flota-card-metrics { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-                .flota-card-metric-item { text-align: center; padding: 0 8px; border-right: 1px solid #f1f5f9; }
-                .flota-card-metric-item:last-child { border-right: none; }
-                
-                .flota-card-timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 16px 12px 16px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.5); min-height: 32px; }
-                .flota-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: #fff; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-                .flota-area-badge { display: inline-block; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
-                
-                .flota-mark { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-                .flota-mark-e { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 1px solid #6ee7b7; }
-                .flota-mark-s { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #9f1239; border: 1px solid #fda4af; }
-                .flota-mark-arrow { color: #94a3b8; font-size: 0.7rem; margin: 0 2px; }
-                
-                .flota-val-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
-                .flota-val-num { font-size: 0.9rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
-                
-                .flota-status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
-                .flota-status-pill .dot { width: 7px; height: 7px; border-radius: 50%; animation: flota-pulse 2s infinite; }
-                @keyframes flota-pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-                .flota-status-en_planta { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 1px solid #6ee7b7; }
-                .flota-status-en_planta .dot { background: #10b981; box-shadow: 0 0 4px rgba(16,185,129,0.5); }
-                .flota-status-fuera { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #9f1239; border: 1px solid #fda4af; }
-                .flota-status-fuera .dot { background: #f43f5e; box-shadow: 0 0 4px rgba(244,63,94,0.5); }
-                .flota-status-sin_registro { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-                .flota-status-sin_registro .dot { background: #94a3b8; animation: none; }
-                
-                .flota-btn-entrada { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; font-weight: 700; font-size: 0.78rem; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(16,185,129,0.3); letter-spacing: 0.02em; }
-                .flota-btn-entrada:hover { background: linear-gradient(135deg, #059669, #047857); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
-                .flota-btn-entrada:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(16,185,129,0.3); }
-                .flota-btn-salida { background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; border: none; font-weight: 700; font-size: 0.78rem; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(244,63,94,0.3); letter-spacing: 0.02em; }
-                .flota-btn-salida:hover { background: linear-gradient(135deg, #e11d48, #be123c); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(244,63,94,0.4); }
-                .flota-btn-salida:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(244,63,94,0.3); }
                 
                 .flota-section-header { background: rgba(248,250,252,0.5); padding: 0.9rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
                 .flota-section-title { font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
@@ -309,7 +693,7 @@ const FlotaModule = (() => {
                 <div class="col-md-4">
                     <div class="flota-kpi" style="background: linear-gradient(135deg, #f43f5e, #be123c)">
                         <i class="bi bi-compass-fill kpi-icon"></i>
-                        <div class="kpi-label">En Ruta</div>
+                        <div class="kpi-label">En Despacho</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="flota-stat-viaje">—</span>
                             <span class="kpi-sub">fuera de planta</span>
@@ -318,19 +702,21 @@ const FlotaModule = (() => {
                 </div>
             </div>
 
-            <!-- ESTADO DEL DÍA -->
+            <!-- CONSOLA DE CONTROL DE FLOTA (DIVIDIDO) -->
             <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
                 <div class="flota-section-header">
                     <span class="flota-section-title">
-                        <i class="bi bi-list-check" style="color:#3b82f6"></i>Monitoreo de la Flota (Hoy)
+                        <i class="bi bi-list-check" style="color:#3b82f6"></i>Consola de Control de Flota
                     </span>
                     <button class="btn btn-sm text-primary fw-semibold" style="font-size:0.8rem" onclick="FlotaModule.cargarEstadoDia()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
                     </button>
                 </div>
-                <div id="flota-estado-body" style="background:#f8fafc; padding:6px 0">
-                    <div class="text-center py-5 text-muted">
-                        <div class="spinner-border spinner-border-sm text-primary"></div> Cargando...
+                <div class="card-body p-3" style="background:#f8fafc;">
+                    <div class="flota-split-container" id="flota-split-layout">
+                        <div class="text-center py-5 text-muted w-100">
+                            <div class="spinner-border spinner-border-sm text-primary"></div> Cargando Consola...
+                        </div>
                     </div>
                 </div>
             </div>
@@ -393,8 +779,14 @@ const FlotaModule = (() => {
         await cargarEstadoDia();
         if (_refreshInterval) clearInterval(_refreshInterval);
         _refreshInterval = setInterval(() => cargarEstadoDia(), 60000); // Autorefresh cada 60s
+        
+        if (_tickingInterval) clearInterval(_tickingInterval);
+        _tickingInterval = setInterval(() => tickLiveClocks(), 1000); // Actualización de segundos
     }
 
+    // ════════════════════════════════════════════════
+    // CARGAR ESTADO DEL DÍA (Hoy)
+    // ════════════════════════════════════════════════
     // ════════════════════════════════════════════════
     // CARGAR ESTADO DEL DÍA (Hoy)
     // ════════════════════════════════════════════════
@@ -410,21 +802,88 @@ const FlotaModule = (() => {
             document.getElementById('flota-stat-planta').textContent = data.stats.en_planta;
             document.getElementById('flota-stat-viaje').textContent = data.stats.en_viaje;
 
-            const body = document.getElementById('flota-estado-body');
-            if (!data.vehiculos.length) {
-                body.innerHTML = '<div class="text-center py-5 text-muted">No hay vehículos configurados en el catálogo de flota.</div>';
+            _vehiculosCache = data.vehiculos || [];
+
+            const layout = document.getElementById('flota-split-layout');
+            if (!_vehiculosCache.length) {
+                if (layout) layout.innerHTML = '<div class="text-center py-5 text-muted w-100">No hay vehículos configurados en el catálogo de flota.</div>';
                 return;
             }
-            body.innerHTML = data.vehiculos.map(veh => renderVehiculoCard(veh)).join('');
+
+            // Seleccionar el primer vehículo por defecto si no hay ninguno seleccionado o el seleccionado ya no existe
+            if (!_selectedVehiculoId || !_vehiculosCache.some(v => v.id === _selectedVehiculoId)) {
+                _selectedVehiculoId = _vehiculosCache[0].id;
+            }
+
+            renderSplitLayout();
         } catch (e) {
             console.error(e);
-            const body = document.getElementById('flota-estado-body');
-            if (body) body.innerHTML = '<div class="text-center py-5 text-danger fw-bold">Error al conectar con la base de datos central</div>';
+            const layout = document.getElementById('flota-split-layout');
+            if (layout) layout.innerHTML = '<div class="text-center py-5 text-danger fw-bold w-100">Error al conectar con la base de datos central</div>';
         }
     }
 
-    function renderVehiculoCard(veh) {
-        // Timeline de marcas cronológicas (ordenadas por id en el backend)
+    function selectVehiculo(id) {
+        _selectedVehiculoId = id;
+        renderSplitLayout();
+    }
+
+    function getMockVehiculoModel(patente) {
+        const clean = String(patente).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const sum = clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const models = ["Scania R500", "Volvo FMX 460", "Mercedes Actros 2646", "Scania G450 XT", "MAN TGX 26.440"];
+        return models[sum % models.length];
+    }
+
+    function renderSplitLayout() {
+        const layout = document.getElementById('flota-split-layout');
+        if (!layout) return;
+
+        // 1. Renderizar la columna izquierda (Lista de vehículos)
+        const sidebarHtml = `
+            <div class="flota-sidebar-list">
+                <div class="small fw-bold text-muted mb-2 px-1 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">UNIDADES EN PATIO</div>
+                ${_vehiculosCache.map(v => {
+                    const isActive = v.id === _selectedVehiculoId ? 'active' : '';
+                    const mockModel = getMockVehiculoModel(v.patente);
+                    const stateLabel = v.estado === 'en_planta' ? 'EN PLANTA' : 'EN RUTA';
+                    const statePillClass = v.estado === 'en_planta' ? 'bg-success-subtle text-success border-success-subtle' : 'bg-warning-subtle text-warning border-warning-subtle';
+                    const driverText = v.chofer_activo ? v.chofer_activo : 'Sin chofer';
+                    
+                    return `
+                        <div class="flota-sidebar-item ${isActive}" onclick="FlotaModule.selectVehiculo(${v.id})">
+                            <div class="truck-avatar">
+                                <span style="font-size: 1.25rem;">🚚</span>
+                            </div>
+                            <div class="flex-grow-1 min-width-0 ms-3">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <span class="fw-bold text-muted" style="font-size: 0.7rem; letter-spacing: 0.02em;">${mockModel}</span>
+                                    <span class="badge border ${statePillClass}" style="font-size: 0.58rem; font-weight: 800; padding: 2px 6px;">${stateLabel}</span>
+                                </div>
+                                <div class="fw-extrabold text-dark font-monospace mb-1" style="font-size: 0.95rem; letter-spacing: 0.02em;">
+                                    ${v.patente}
+                                </div>
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span class="text-secondary text-truncate" style="font-size: 0.68rem; font-weight: 500; max-width: 130px;" title="${driverText}">
+                                        <i class="bi bi-person me-0.5"></i>${driverText}
+                                    </span>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.58rem; padding: 1.5px 5px;">${v.area}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        // 2. Obtener el vehículo seleccionado
+        const veh = _vehiculosCache.find(v => v.id === _selectedVehiculoId) || _vehiculosCache[0];
+        if (!veh) {
+            layout.innerHTML = sidebarHtml + `<div class="flota-detail-panel justify-content-center align-items-center text-muted">Seleccione un vehículo de la lista.</div>`;
+            return;
+        }
+
+        // 3. Renderizar marcas del vehículo
         let marcasHtml = '';
         if (veh.marcas && veh.marcas.length > 0) {
             marcasHtml = veh.marcas.map((m, i) => {
@@ -441,70 +900,199 @@ const FlotaModule = (() => {
                 `;
             }).join('');
         } else {
-            marcasHtml = '<span style="font-size:0.78rem; color:#94a3b8; font-style:italic">Sin movimientos hoy</span>';
+            marcasHtml = '<span style="font-size:0.75rem; color:#94a3b8; font-style:italic">Sin movimientos registrados hoy</span>';
         }
 
-        // Tiempos
-        const estadiaHtml = veh.estadia_display !== '—'
-            ? `<span class="flota-val-num text-success">${veh.estadia_display}</span>`
-            : '<span style="color:#94a3b8">—</span>';
-            
-        const viajeHtml = veh.viaje_display !== '—'
-            ? `<span class="flota-val-num text-danger">${veh.viaje_display}</span>`
-            : '<span style="color:#94a3b8">—</span>';
+        // Tiempos y Ticking
+        const isEnPlanta = veh.estado === 'en_planta';
+        const activeClassEstadia = isEnPlanta ? 'live-ticking-estadia' : '';
+        const activeClassViaje = !isEnPlanta ? 'live-ticking-viaje' : '';
 
-        // Badge de estado
-        const statusClass = `flota-status-${veh.estado}`;
-        const statusLabel = veh.estado === 'en_planta' ? 'En Planta' : veh.estado === 'fuera' ? 'En Ruta' : 'Sin registro';
+        const clockWidgetEstadia = isEnPlanta 
+            ? `<div class="mini-clock-widget text-success me-2"><div class="hand hour-hand"></div><div class="hand minute-hand"></div></div>`
+            : '';
+        const clockWidgetViaje = !isEnPlanta 
+            ? `<div class="stopwatch-widget me-2"><div class="hand"></div></div>`
+            : '';
 
-        // Acción
-        const proximaTipo = (veh.estado === 'en_planta') ? 'A Entregar' : 'A Cargar';
-        const btnClass = proximaTipo === 'A Cargar' ? 'flota-btn-entrada' : 'flota-btn-salida';
-        const btnIcon = proximaTipo === 'A Cargar' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
+        const estadiaVal = veh.estadia_display !== '—' ? veh.estadia_display : '—';
+        const viajeVal = veh.viaje_display !== '—' ? veh.viaje_display : '—';
 
-        return `
-            <div class="flota-card estado-${veh.estado}">
-                <div class="flota-card-header">
-                    <div class="flota-card-identity">
-                        <div class="flota-avatar">🚚</div>
-                        <div class="flota-card-info">
-                            <div class="flota-card-name">${renderPlacaPatente(veh.patente)}</div>
-                            <span class="flota-area-badge" style="margin-top: 5px;">${veh.area}</span>
+        const estadiaHtml = `
+            <div class="flota-dash-card-val ${activeClassEstadia}" id="live-estadia-${veh.id}" data-base-min="${veh.estadia_total_min || 0}" data-start-ms="${new Date().getTime()}" data-active="${isEnPlanta ? 'true' : 'false'}">
+                ${clockWidgetEstadia}<span class="time-text">${estadiaVal}</span>
+            </div>
+        `;
+
+        const viajeHtml = `
+            <div class="flota-dash-card-val ${activeClassViaje}" id="live-viaje-${veh.id}" data-base-min="${veh.viaje_total_min || 0}" data-start-ms="${new Date().getTime()}" data-active="${!isEnPlanta ? 'true' : 'false'}">
+                ${clockWidgetViaje}<span class="time-text">${viajeVal}</span>
+            </div>
+        `;
+
+        const statusBadgeClass = isEnPlanta ? 'bg-success-subtle text-success border-success-subtle' : 'bg-warning-subtle text-warning border-warning-subtle';
+        const statusBadgeLabel = isEnPlanta ? 'ESTACIONADO EN PLANTA' : 'EN DESPACHO';
+
+        const btnText = isEnPlanta ? 'A DESPACHO' : 'REGISTRAR RETORNO';
+        const btnClass = isEnPlanta ? 'btn-a-despacho' : 'btn-retorno';
+        const btnIcon = isEnPlanta ? 'bi-box-arrow-right' : 'bi-arrow-left-circle';
+        const dbTipo = isEnPlanta ? 'SALIDA' : 'ENTRADA';
+
+        const activeNodePlanta = isEnPlanta ? 'active' : '';
+        const activeNodeDespacho = !isEnPlanta ? 'active' : '';
+        const activeRouteLine = !isEnPlanta ? 'active-despacho' : 'inactive-planta';
+
+        let horaSalidaVal = 'Esperando...';
+        let horaRetornoVal = 'En espera';
+        let subTextSalida = 'Sin viaje activo';
+        let subTextRetorno = 'Pendiente de inicio';
+
+        if (veh.marcas && veh.marcas.length > 0) {
+            const salidas = veh.marcas.filter(m => m.tipo === 'SALIDA');
+            if (salidas.length > 0) {
+                horaSalidaVal = salidas[salidas.length - 1].hora.substring(0, 5);
+                subTextSalida = 'Entrada al ciclo de ruta';
+            }
+            if (isEnPlanta) {
+                const entradas = veh.marcas.filter(m => m.tipo === 'ENTRADA');
+                if (entradas.length > 0) {
+                    horaRetornoVal = entradas[entradas.length - 1].hora.substring(0, 5);
+                    subTextRetorno = 'Retornado exitosamente';
+                }
+            } else {
+                horaRetornoVal = 'Esperando...';
+                subTextRetorno = 'Registra al presionar Retorno';
+            }
+        }
+
+        const detailHtml = `
+            <div class="flota-detail-panel estado-${veh.estado}">
+                <div>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <div class="small fw-bold text-muted text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">DETALLES DEL VIAJE</div>
+                            <h4 class="fw-extrabold text-dark mt-1 mb-0" style="letter-spacing: -0.01em;">Secuencia de Viaje: Patente ${veh.patente}</h4>
+                        </div>
+                        <span class="badge border px-3 py-1.5 fw-extrabold ${statusBadgeClass}" style="font-size:0.7rem; border-radius:30px; letter-spacing:0.04em;">
+                            <span class="d-inline-block rounded-circle me-1" style="width:7px; height:7px; background: currentColor; vertical-align: middle;"></span>
+                            ${statusBadgeLabel}
+                        </span>
+                    </div>
+
+                    <div class="lane-route-track">
+                        <div class="route-line ${activeRouteLine}"></div>
+                        <div class="route-node node-planta active">
+                            🏭
+                            <span class="node-caption">Planta</span>
+                        </div>
+                        <div class="route-node node-despacho ${activeNodeDespacho}">
+                            🏪
+                            <span class="node-caption">Despacho</span>
+                        </div>
+                        <div class="route-truck-indicator">
+                            <span class="truck-badge-top">${isEnPlanta ? 'EN PLANTA' : 'EN RUTA'}</span>
+                            <div class="truck-bubble">🚚</div>
+                            <span class="truck-label-bottom">${veh.patente}</span>
                         </div>
                     </div>
-                    <div class="flota-card-metrics">
-                        <div class="flota-card-metric-item">
-                            <div class="flota-val-label">Estadía Planta</div>
-                            ${estadiaHtml}
+
+                    <div class="flota-dash-cards">
+                        <div class="flota-dash-card">
+                            <div>
+                                <span class="flota-dash-card-label"><i class="bi bi-box-arrow-right text-primary"></i> HORA DE SALIDA</span>
+                                <span class="flota-dash-card-val">${horaSalidaVal}</span>
+                            </div>
+                            <span class="flota-dash-card-sub">${subTextSalida}</span>
                         </div>
-                        <div class="flota-card-metric-item">
-                            <div class="flota-val-label">En Ruta</div>
-                            ${viajeHtml}
+                        <div class="flota-dash-card ${isEnPlanta ? 'active-estadia' : 'active-viaje'}">
+                            <div>
+                                <span class="flota-dash-card-label">
+                                    <i class="bi bi-clock-history ${isEnPlanta ? 'text-success' : 'text-danger'}"></i> 
+                                    ${isEnPlanta ? 'TIEMPO DE ESTADÍA' : 'TIEMPO TRANSCURRIDO'}
+                                </span>
+                                ${isEnPlanta ? estadiaHtml : viajeHtml}
+                            </div>
+                            <span class="flota-dash-card-sub">Precisión en segundos</span>
                         </div>
-                        <div class="flota-card-metric-item">
-                            <div class="flota-val-label">Viajes</div>
-                            <span class="flota-val-num">${veh.viajes_completados}</span>
+                        <div class="flota-dash-card">
+                            <div>
+                                <span class="flota-dash-card-label"><i class="bi bi-arrow-left-circle text-success"></i> HORA DE RETORNO</span>
+                                <span class="flota-dash-card-val">${horaRetornoVal}</span>
+                            </div>
+                            <span class="flota-dash-card-sub">${subTextRetorno}</span>
                         </div>
-                        <span class="flota-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
-                        <button class="${btnClass}" onclick="FlotaModule.marcar(${veh.id}, '${veh.patente}', '${veh.chofer_activo || ''}')">
-                            ${proximaTipo} <i class="bi ${btnIcon}"></i>
+                    </div>
+                </div>
+
+                <!-- Botón de Acción y Línea de Tiempo (Abajo del Panel) -->
+                <div>
+                    <div class="flota-action-btn-container">
+                        <button class="flota-action-btn ${btnClass}" onclick="FlotaModule.marcar(${veh.id}, '${veh.patente}', '${veh.chofer_activo || ''}', '${dbTipo}')">
+                            <i class="bi ${btnIcon}"></i> ${btnText}
                         </button>
                     </div>
+
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="small fw-bold text-muted mb-2 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">MOVIMIENTOS DE HOY</div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            ${marcasHtml}
+                        </div>
+                    </div>
                 </div>
-                <div class="flota-card-timeline">
-                    ${marcasHtml}
-                </div>
-            </div>`;
+            </div>
+        `;
+
+        layout.innerHTML = sidebarHtml + detailHtml;
+    }
+
+    function tickLiveClocks() {
+        const nowMs = new Date().getTime();
+        
+        // Ticking Estadia (verde)
+        document.querySelectorAll('.live-ticking-estadia').forEach(el => {
+            if (el.getAttribute('data-active') === 'false') return;
+            const baseMin = parseFloat(el.getAttribute('data-base-min') || '0');
+            const startMs = parseFloat(el.getAttribute('data-start-ms') || '0');
+            const elapsedMin = (nowMs - startMs) / 60000.0;
+            const totalMin = baseMin + elapsedMin;
+            
+            const h = Math.floor(totalMin / 60);
+            const m = Math.floor(totalMin % 60);
+            const s = Math.floor((totalMin * 60) % 60);
+            
+            const timeTextEl = el.querySelector('.time-text');
+            if (timeTextEl) {
+                timeTextEl.textContent = `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+            }
+        });
+        
+        // Ticking Viaje (rojo)
+        document.querySelectorAll('.live-ticking-viaje').forEach(el => {
+            if (el.getAttribute('data-active') === 'false') return;
+            const baseMin = parseFloat(el.getAttribute('data-base-min') || '0');
+            const startMs = parseFloat(el.getAttribute('data-start-ms') || '0');
+            const elapsedMin = (nowMs - startMs) / 60000.0;
+            const totalMin = baseMin + elapsedMin;
+            
+            const h = Math.floor(totalMin / 60);
+            const m = Math.floor(totalMin % 60);
+            const s = Math.floor((totalMin * 60) % 60);
+            
+            const timeTextEl = el.querySelector('.time-text');
+            if (timeTextEl) {
+                timeTextEl.textContent = `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+            }
+        });
     }
 
     // ════════════════════════════════════════════════
     // MARCAR MOVIMIENTO (CON MODAL SWAL2)
     // ════════════════════════════════════════════════
-    async function marcar(flotaId, patente, choferActivo = '') {
+    async function marcar(flotaId, patente, choferActivo = '', tipoMarca = null) {
         if (typeof Swal === 'undefined') {
             const obs = prompt("Ingrese observaciones / Chofer (Opcional):");
             if (obs === null) return; // canceló
-            await ejecutarMarca(flotaId, obs);
+            await ejecutarMarca(flotaId, obs, tipoMarca);
             return;
         }
 
@@ -528,8 +1116,8 @@ const FlotaModule = (() => {
             confirmButtonText: 'Confirmar Marca',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
-                const chofer = document.getElementById('swal-flota-chofer').value.strip ? document.getElementById('swal-flota-chofer').value.strip() : document.getElementById('swal-flota-chofer').value;
-                const obs = document.getElementById('swal-flota-obs').value.strip ? document.getElementById('swal-flota-obs').value.strip() : document.getElementById('swal-flota-obs').value;
+                const chofer = document.getElementById('swal-flota-chofer').value.trim ? document.getElementById('swal-flota-chofer').value.trim() : document.getElementById('swal-flota-chofer').value;
+                const obs = document.getElementById('swal-flota-obs').value.trim ? document.getElementById('swal-flota-obs').value.trim() : document.getElementById('swal-flota-obs').value;
                 
                 let observacionesFinal = "";
                 if (chofer) observacionesFinal += `Chofer: ${chofer}. `;
@@ -538,12 +1126,12 @@ const FlotaModule = (() => {
             }
         }).then(async (result) => {
             if (result.isConfirmed) {
-                await ejecutarMarca(flotaId, result.value);
+                await ejecutarMarca(flotaId, result.value, tipoMarca);
             }
         });
     }
 
-    async function ejecutarMarca(flotaId, observaciones) {
+    async function ejecutarMarca(flotaId, observaciones, tipoMarca = null) {
         try {
             const res = await fetch('/api/flota/marcar/', {
                 method: 'POST',
@@ -551,7 +1139,7 @@ const FlotaModule = (() => {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`, 
                     'Content-Type': 'application/json' 
                 },
-                body: JSON.stringify({ flota_id: flotaId, observaciones: observaciones })
+                body: JSON.stringify({ flota_id: flotaId, observaciones: observaciones, tipo: tipoMarca })
             });
             if (!res.ok) {
                 const err = await res.json();
@@ -925,7 +1513,13 @@ const FlotaModule = (() => {
             clearInterval(_refreshInterval);
             _refreshInterval = null;
         }
+        if (_tickingInterval) {
+            clearInterval(_tickingInterval);
+            _tickingInterval = null;
+        }
         _catalogoAreasCached = [];
+        _vehiculosCache = [];
+        _selectedVehiculoId = null;
     }
 
     return { 
@@ -937,6 +1531,7 @@ const FlotaModule = (() => {
         cargarVehiculosAdmin, 
         abrirModalVehiculo, 
         eliminarVehiculo, 
-        destroy 
+        destroy,
+        selectVehiculo
     };
 })();
