@@ -362,50 +362,109 @@ const Articulo22Module = (() => {
                 /* Log container for bottom horizontal list */
                 .art22-log-container {
                     display: flex;
-                    flex-wrap: wrap;
                     align-items: center;
-                    gap: 6px;
-                    padding: 8px 12px;
-                    background: rgba(248, 250, 252, 0.7);
-                    border-radius: 10px;
-                    border: 1px solid #e2e8f0;
-                    margin-top: 20px;
+                    padding: 10px 14px;
+                    background: rgba(248, 250, 252, 0.45);
+                    border-radius: 12px;
+                    border: 1px solid rgba(226, 232, 240, 0.8);
+                    margin-top: 18px;
+                    overflow-x: auto;
+                    max-width: 100%;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .art22-log-container::-webkit-scrollbar {
+                    height: 4px;
+                }
+                .art22-log-container::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .art22-log-container::-webkit-scrollbar-thumb {
+                    background: #cbd5e1;
+                    border-radius: 2px;
                 }
                 .art22-log-title {
-                    font-size: 0.6rem;
-                    font-weight: 700;
+                    font-size: 0.58rem;
+                    font-weight: 800;
                     text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    color: #64748b;
-                    margin-right: 4px;
+                    letter-spacing: 0.08em;
+                    color: #475569;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                    margin-right: 12px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+                    flex-shrink: 0;
                 }
-                .art22-log-badge {
-                    display: inline-flex;
+                .art22-log-flow {
+                    display: flex;
                     align-items: center;
-                    gap: 4px;
-                    padding: 2.5px 7px;
-                    border-radius: 5px;
-                    font-size: 0.65rem;
-                    font-weight: 600;
-                    border: 1px solid transparent;
+                    gap: 0;
                 }
-                .art22-log-badge.e {
-                    background: #ecfdf5;
-                    color: #065f46;
-                    border-color: #a7f3d0;
+                .art22-log-step {
+                    display: flex;
+                    align-items: center;
+                    flex-shrink: 0;
                 }
-                .art22-log-badge.s {
-                    background: #fef2f2;
-                    color: #9f1239;
-                    border-color: #fecaca;
+                .art22-log-card {
+                    display: flex;
+                    flex-direction: column;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 4px 10px;
+                    min-width: 80px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                 }
-                .art22-log-badge .badge-dot {
-                    width: 5px;
-                    height: 5px;
+                .art22-log-card:hover {
+                    border-color: #cbd5e1;
+                    box-shadow: 0 3px 6px rgba(0,0,0,0.04);
+                    transform: translateY(-1px);
+                }
+                .art22-log-card.e {
+                    border-left: 3px solid #10b981;
+                }
+                .art22-log-card.s {
+                    border-left: 3px solid #f43f5e;
+                }
+                .art22-log-card-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                .art22-log-dot {
+                    width: 6px;
+                    height: 6px;
                     border-radius: 50%;
                 }
-                .art22-log-badge.e .badge-dot { background-color: #10b981; }
-                .art22-log-badge.s .badge-dot { background-color: #f43f5e; }
+                .art22-log-card.e .art22-log-dot { background-color: #10b981; }
+                .art22-log-card.s .art22-log-dot { background-color: #f43f5e; }
+                
+                .art22-log-time {
+                    font-family: 'JetBrains Mono', monospace;
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    color: #0f172a;
+                }
+                .art22-log-label {
+                    font-size: 0.52rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                    color: #64748b;
+                    margin-top: 1px;
+                }
+                .art22-log-connector {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #94a3b8;
+                    margin: 0 6px;
+                    font-size: 0.8rem;
+                    opacity: 0.6;
+                    flex-shrink: 0;
+                }
             </style>
 
             <!-- ENCABEZADO -->
@@ -695,20 +754,29 @@ const Articulo22Module = (() => {
             // Generate the horizontal log badges for today's marcas
             const logHtml = sortedMarcas.length > 0
                 ? `<div class="art22-log-container">
-                    <span class="art22-log-title">Marcaciones de Hoy:</span>
-                    ${sortedMarcas.map(m => {
-                        const typeCls = m.tipo === 'E' ? 'e' : 's';
-                        const typeIcon = m.tipo === 'E' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right';
-                        const typeLabel = m.tipo === 'E' ? 'Entrada' : 'Salida';
-                        return `
-                            <span class="art22-log-badge ${typeCls}">
-                                <span class="badge-dot"></span>
-                                <i class="bi ${typeIcon} me-1" style="font-size: 0.75rem;"></i>
-                                <span class="fw-bold">${m.hora.substring(0,5)}</span>
-                                <span style="font-size: 0.6rem; opacity: 0.8; margin-left: 2px;">${typeLabel}</span>
-                            </span>
-                        `;
-                    }).join('')}
+                    <span class="art22-log-title">Marcaciones de Hoy</span>
+                    <div class="art22-log-flow">
+                        ${sortedMarcas.map((m, idx) => {
+                            const typeCls = m.tipo === 'E' ? 'e' : 's';
+                            const typeLabel = m.tipo === 'E' ? 'Entrada' : 'Salida';
+                            const isLast = idx === sortedMarcas.length - 1;
+                            const connector = !isLast 
+                                ? `<div class="art22-log-connector"><i class="bi bi-chevron-right"></i></div>`
+                                : '';
+                            return `
+                                <div class="art22-log-step">
+                                    <div class="art22-log-card ${typeCls}">
+                                        <div class="art22-log-card-header">
+                                            <span class="art22-log-dot"></span>
+                                            <span class="art22-log-time">${m.hora.substring(0,5)}</span>
+                                        </div>
+                                        <span class="art22-log-label">${typeLabel}</span>
+                                    </div>
+                                    ${connector}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                    </div>`
                 : '';
 
