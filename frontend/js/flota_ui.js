@@ -12,6 +12,7 @@ const FlotaModule = (() => {
     let _catalogoAreasCached = []; // Cache local para evitar llamadas repetidas
     let _selectedVehiculoId = null;
     let _vehiculosCache = [];
+    let _selectedAreaFilter = 'ALL';
 
     function injectStyles() {
         let style = document.getElementById('flota-module-styles');
@@ -601,6 +602,40 @@ const FlotaModule = (() => {
                 transform: translateY(0);
                 box-shadow: 0 4px 8px rgba(16, 185, 129, 0.25) !important;
             }
+
+            /* Segmented Control / Switcher por Área */
+            .flota-segmented-control {
+                display: flex;
+                background: #f1f5f9;
+                border-radius: 10px;
+                padding: 3px;
+                border: 1px solid #e2e8f0;
+                margin-bottom: 12px;
+            }
+            .flota-segmented-button {
+                flex: 1;
+                border: none;
+                background: none;
+                font-size: 0.68rem;
+                font-weight: 700;
+                color: #64748b;
+                padding: 6px 4px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .flota-segmented-button:hover {
+                color: #0f172a;
+            }
+            .flota-segmented-button.active {
+                background: #ffffff;
+                color: #2563eb;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            }
         `;
     }
 
@@ -837,9 +872,18 @@ const FlotaModule = (() => {
                 return;
             }
 
-            // Seleccionar el primer vehículo por defecto si no hay ninguno seleccionado o el seleccionado ya no existe
-            if (!_selectedVehiculoId || !_vehiculosCache.some(v => v.id === _selectedVehiculoId)) {
-                _selectedVehiculoId = _vehiculosCache[0].id;
+            // Seleccionar el primer vehículo por defecto si no hay ninguno seleccionado o el seleccionado ya no existe en la vista filtrada
+            const filtered = _selectedAreaFilter === 'ALL'
+                ? _vehiculosCache
+                : _vehiculosCache.filter(v => v.area === _selectedAreaFilter);
+            
+            const activeList = filtered.length > 0 ? filtered : _vehiculosCache;
+            if (filtered.length === 0) {
+                _selectedAreaFilter = 'ALL';
+            }
+
+            if (!_selectedVehiculoId || !activeList.some(v => v.id === _selectedVehiculoId)) {
+                _selectedVehiculoId = activeList[0].id;
             }
 
             renderSplitLayout();
@@ -859,11 +903,39 @@ const FlotaModule = (() => {
         const layout = document.getElementById('flota-split-layout');
         if (!layout) return;
 
+        // Extract unique areas from the active fleet cache
+        const uniqueAreas = [...new Set(_vehiculosCache.map(v => v.area))].sort();
+        
+        let filterHtml = '';
+        if (uniqueAreas.length > 1) {
+            filterHtml = `
+                <div class="flota-segmented-control mb-3">
+                    <button class="flota-segmented-button ${_selectedAreaFilter === 'ALL' ? 'active' : ''}" onclick="FlotaModule.setAreaFilter('ALL')">
+                        Todos
+                    </button>
+                    ${uniqueAreas.map(area => {
+                        const isActive = _selectedAreaFilter === area ? 'active' : '';
+                        const displayArea = area.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.substring(1)).join(' ');
+                        return `
+                            <button class="flota-segmented-button ${isActive}" onclick="FlotaModule.setAreaFilter('${area}')" title="${area}">
+                                ${displayArea}
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        const filteredVehicles = _selectedAreaFilter === 'ALL'
+            ? _vehiculosCache
+            : _vehiculosCache.filter(v => v.area === _selectedAreaFilter);
+
         // 1. Renderizar la columna izquierda (Lista de vehículos)
         const sidebarHtml = `
             <div class="flota-sidebar-list">
                 <div class="small fw-bold text-muted mb-2 px-1 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">UNIDADES EN PATIO</div>
-                ${_vehiculosCache.map(v => {
+                ${filterHtml}
+                ${filteredVehicles.map(v => {
                     const isActive = v.id === _selectedVehiculoId ? 'active' : '';
                     const stateLabel = v.estado === 'en_planta' ? 'EN PLANTA' : 'EN RUTA';
                     const statePillClass = v.estado === 'en_planta' ? 'bg-success-subtle text-success border-success-subtle' : 'bg-warning-subtle text-warning border-warning-subtle';
@@ -896,7 +968,12 @@ const FlotaModule = (() => {
         `;
 
         // 2. Obtener el vehículo seleccionado
-        const veh = _vehiculosCache.find(v => v.id === _selectedVehiculoId) || _vehiculosCache[0];
+        let veh = filteredVehicles.find(v => v.id === _selectedVehiculoId);
+        if (!veh && filteredVehicles.length > 0) {
+            veh = filteredVehicles[0];
+            _selectedVehiculoId = veh.id;
+        }
+
         if (!veh) {
             layout.innerHTML = sidebarHtml + `<div class="flota-detail-panel justify-content-center align-items-center text-muted">Seleccione un vehículo de la lista.</div>`;
             return;
@@ -1644,6 +1721,22 @@ const FlotaModule = (() => {
         });
     }
 
+    function setAreaFilter(area) {
+        _selectedAreaFilter = area;
+        
+        // Auto-select first vehicle of filtered list if current selected is no longer visible
+        const filtered = _selectedAreaFilter === 'ALL'
+            ? _vehiculosCache
+            : _vehiculosCache.filter(v => v.area === _selectedAreaFilter);
+            
+        if (filtered.length > 0) {
+            if (!filtered.some(v => v.id === _selectedVehiculoId)) {
+                _selectedVehiculoId = filtered[0].id;
+            }
+        }
+        renderSplitLayout();
+    }
+
     function destroy() {
         if (_refreshInterval) {
             clearInterval(_refreshInterval);
@@ -1656,6 +1749,7 @@ const FlotaModule = (() => {
         _catalogoAreasCached = [];
         _vehiculosCache = [];
         _selectedVehiculoId = null;
+        _selectedAreaFilter = 'ALL';
     }
 
     return { 
@@ -1668,6 +1762,7 @@ const FlotaModule = (() => {
         abrirModalVehiculo, 
         eliminarVehiculo, 
         destroy,
-        selectVehiculo
+        selectVehiculo,
+        setAreaFilter
     };
 })();
