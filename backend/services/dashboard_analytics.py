@@ -284,6 +284,7 @@ class DashboardAnalytics:
                 {filters['asis_join']}
                 WHERE a.fecha >= ? AND a.fecha <= ? 
                 AND a.estado != 'NO_ACTIVO'
+                AND (a.horas_teoricas > 0 OR a.hora_entrada_real IS NOT NULL)
                 {filters['asis_cond']} {filters['horario_asis_cond']}
             """
             res_esperado = await self.db.fetch_one(query_esperado, tuple(params))
@@ -297,6 +298,7 @@ class DashboardAnalytics:
                 {filters['asis_join']}
                 WHERE a.fecha >= ? AND a.fecha <= ? 
                 AND a.estado != 'NO_ACTIVO'
+                AND (a.horas_teoricas > 0 OR a.hora_entrada_real IS NOT NULL)
                 {filters['asis_cond']} {filters['horario_asis_cond']}
                 GROUP BY a.fecha, a.estado, (a.hora_entrada_real IS NOT NULL)
                 ORDER BY a.fecha ASC
@@ -534,40 +536,44 @@ class DashboardAnalytics:
             query = f"""
                 SELECT 
                     a.estado as nombre,
-                    COALESCE(t.pagador, 'Descuento') as pagador,
                     COUNT(*) as qty
                 FROM asistencias a
                 JOIN empleados e ON a.empleado_id = e.id
-                LEFT JOIN justificacion_tipos t ON UPPER(a.estado) = UPPER(t.nombre)
                 {filters.get('asis_join', '')}
                 WHERE a.fecha >= ? AND a.fecha <= ?
-                AND (t.id IS NOT NULL OR a.estado = 'INASISTENCIA')
+                AND a.estado NOT IN ('OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'EN_CURSO', 'EXTRA', 'LIBRE', 'FERIADO', 'PENDIENTE', 'NO_ACTIVO')
                 {filters.get('asis_cond', '')} {filters.get('horario_asis_cond', '')}
-                GROUP BY a.estado, t.pagador
+                GROUP BY a.estado
             """
-            # Se usa lógica de rango normal para la tabla de asistencias
             params_range = [fecha_inicio, fecha_fin] + filters['params'] + filters['horario_params']
             res = await self.db.fetch_all(query, tuple(params_range))
-            desgloses = []
+            
+            inasistencias_qty = 0
+            vacaciones_qty = 0
+            licencias_qty = 0
+            permisos_qty = 0
+            
             for r in res:
                 tipo_nombre = str(r['nombre']).upper()
-                pagador_db = str(r['pagador']).upper()
+                qty = int(r['qty'])
                 
-                # Etiquetar según pagador real
-                if "EMPLEADOR" in pagador_db:
-                    tag = "Costo Empleador"
-                elif "SALUD" in pagador_db or "MUTUAL" in pagador_db or "ISL" in pagador_db or "FONASA" in pagador_db or "ISAPRE" in pagador_db:
-                    tag = "Costo Externo"
+                if "INASISTENCIA" in tipo_nombre or "FALTA" in tipo_nombre:
+                    inasistencias_qty += qty
+                elif "VACACIONES" in tipo_nombre:
+                    vacaciones_qty += qty
+                elif "LICENCIA" in tipo_nombre or "MUTUAL" in tipo_nombre:
+                    licencias_qty += qty
                 else:
-                    tag = "Descuento a Empleado"
-                    
-                desgloses.append({
-                    "tipo": tipo_nombre,
-                    "dias": int(r['qty']),
-                    "pagador": tag
-                })
+                    permisos_qty += qty
             
-            # Ordenar de mayor a menor según la cantidad de días
+            desgloses = [
+                {"tipo": "Inasistencia Injustificada", "dias": inasistencias_qty, "pagador": "Operativo"},
+                {"tipo": "Vacaciones", "dias": vacaciones_qty, "pagador": "Operativo"},
+                {"tipo": "Licencias Médicas", "dias": licencias_qty, "pagador": "Operativo"},
+                {"tipo": "Permisos Autorizados", "dias": permisos_qty, "pagador": "Operativo"},
+            ]
+            
+            desgloses = [d for d in desgloses if d["dias"] > 0]
             desgloses.sort(key=lambda x: x['dias'], reverse=True)
 
             return {
@@ -576,6 +582,147 @@ class DashboardAnalytics:
         except Exception as e:
             logger.error(f"Error _get_origen_ausentismo: {e}")
             return {"desglose": []}
+
+    async def _get_kpis_operacionales(self, fecha_inicio: str, fecha_fin: str, filters: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            params = [fecha_inicio, fecha_fin] + filters['params'] + filters['horario_params']
+            
+            query_kpis = f"""
+                SELECT 
+                    COUNT(CASE WHEN a.minutos_colacion_real > 0 THEN 1 END) as total_jornadas_colacion,
+                    SUM(CASE WHEN a.minutos_colacion_real > 0 AND a.minutos_exceso_colacion > 0 THEN 1 ELSE 0 END) as jornadas_con_exceso,
+                    AVG(CASE WHEN a.minutos_colacion_real > 0 THEN a.minutos_colacion_real END) as real_colacion_prom,
+                    AVG(CASE WHEN a.minutos_colacion_real > 0 THEN a.minutos_colacion END) as teorica_colacion_prom,
+                    SUM(CASE WHEN a.minutos_colacion_real > 0 THEN a.minutos_exceso_colacion ELSE 0 END) as total_exceso_min,
+                    
+                    SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) = 0 THEN a.minutos_deuda ELSE 0 END) as minutes_pending,
+                    SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN a.minutos_deuda ELSE 0 END) as minutes_condoned,
+                    SUM(a.minutos_permiso_personal_deuda) as minutes_permisos,
+                    
+                    SUM(CASE WHEN he.estado = 'APROBADO' THEN he.minutos_autorizados ELSE 0 END) as he_aprobadas_min,
+                    SUM(a.minutos_extra_bruto) as he_brutas_min,
+                    
+                    SUM(CASE WHEN he.estado = 'PENDIENTE' THEN 1 ELSE 0 END) as he_pendientes_solicitudes,
+                    SUM(CASE WHEN he.estado = 'PENDIENTE' THEN he.minutos_bruto ELSE 0 END) as he_pendientes_min
+                FROM asistencias a 
+                JOIN empleados e ON a.empleado_id = e.id
+                LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
+                {filters['asis_join']}
+                WHERE a.fecha >= ? AND a.fecha <= ? AND e.activo = 1
+                {filters['asis_cond']} {filters['horario_asis_cond']}
+            """
+            res = await self.db.fetch_one(query_kpis, tuple(params))
+            if not res:
+                return {
+                    "colacion": {"tasa_exceso": 0, "real_prom": 0, "teorico_prom": 0, "total_exceso_hrs": 0},
+                    "deuda": {"pendiente_hrs": 0, "condonada_hrs": 0, "permisos_hrs": 0},
+                    "horas_extras": {"tasa_aprobacion": 0, "pendientes_solicitudes": 0, "pendientes_hrs": 0}
+                }
+                
+            tot_col = res.get('total_jornadas_colacion', 0) or 0
+            exc_col = res.get('jornadas_con_exceso', 0) or 0
+            tasa_exceso = round((exc_col / tot_col * 100), 1) if tot_col > 0 else 0
+            
+            real_col_avg = round(res.get('real_colacion_prom', 0) or 0, 1)
+            teorica_col_avg = round(res.get('teorica_colacion_prom', 0) or 0, 1)
+            total_exceso_hrs = round((res.get('total_exceso_min', 0) or 0) / 60, 1)
+            
+            pendiente_hrs = round((res.get('minutes_pending', 0) or 0) / 60, 1)
+            condonada_hrs = round((res.get('minutes_condoned', 0) or 0) / 60, 1)
+            permisos_hrs = round((res.get('minutes_permisos', 0) or 0) / 60, 1)
+            
+            he_aprobadas = res.get('he_aprobadas_min', 0) or 0
+            he_brutas = res.get('he_brutas_min', 0) or 0
+            tasa_aprobacion = round((he_aprobadas / he_brutas * 100), 1) if he_brutas > 0 else 0
+            
+            he_pend_sol = res.get('he_pendientes_solicitudes', 0) or 0
+            he_pend_hrs = round((res.get('he_pendientes_min', 0) or 0) / 60, 1)
+            
+            return {
+                "colacion": {
+                    "tasa_exceso": tasa_exceso,
+                    "real_prom": real_col_avg,
+                    "teorico_prom": teorica_col_avg,
+                    "total_exceso_hrs": total_exceso_hrs
+                },
+                "deuda": {
+                    "pendiente_hrs": pendiente_hrs,
+                    "condonada_hrs": condonada_hrs,
+                    "permisos_hrs": permisos_hrs
+                },
+                "horas_extras": {
+                    "tasa_aprobacion": tasa_aprobacion,
+                    "pendientes_solicitudes": he_pend_sol,
+                    "pendientes_hrs": he_pend_hrs
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error in _get_kpis_operacionales: {e}")
+            return {
+                "colacion": {"tasa_exceso": 0, "real_prom": 0, "teorico_prom": 0, "total_exceso_hrs": 0},
+                "deuda": {"pendiente_hrs": 0, "condonada_hrs": 0, "permisos_hrs": 0},
+                "horas_extras": {"tasa_aprobacion": 0, "pendientes_solicitudes": 0, "pendientes_hrs": 0}
+            }
+
+    async def _get_cierres_pendientes(self, areas_permitidas: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        try:
+            periodos = await self.db.fetch_all(
+                "SELECT id, mes_cierre, fecha_inicio, fecha_fin, estado, activo FROM periodos_rrhh ORDER BY fecha_inicio DESC"
+            )
+            
+            pending_periods_list = []
+            
+            for p in periodos:
+                fecha_inicio = p['fecha_inicio']
+                fecha_fin = p['fecha_fin']
+                
+                # Áreas que tienen empleados activos en este periodo
+                active_areas_res = await self.db.fetch_all(
+                    """
+                    SELECT DISTINCT ar.nombre as area_nombre 
+                    FROM empleados e
+                    JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                        AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
+                    JOIN areas ar ON ha.area_id = ar.id
+                    WHERE e.activo = 1 AND ar.nombre IS NOT NULL
+                    """,
+                    (fecha_fin, fecha_inicio)
+                )
+                active_areas = [r['area_nombre'] for r in active_areas_res]
+                
+                # Áreas que ya cerraron este periodo
+                closed_areas_res = await self.db.fetch_all(
+                    "SELECT DISTINCT area FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL",
+                    (fecha_inicio, fecha_fin)
+                )
+                closed_areas = [r['area'] for r in closed_areas_res]
+                
+                pending_areas = [a for a in active_areas if a not in closed_areas]
+                
+                # RLS Filter
+                if areas_permitidas is not None and "TODAS" not in [a.upper() for a in areas_permitidas]:
+                    pending_areas = [a for a in pending_areas if a in areas_permitidas]
+                
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                is_past = fecha_fin < today_str
+                
+                if pending_areas and (is_past or p['activo'] == 1):
+                    pending_periods_list.append({
+                        "id": p["id"],
+                        "mes_cierre": p["mes_cierre"],
+                        "fecha_inicio": fecha_inicio,
+                        "fecha_fin": fecha_fin,
+                        "estado": p["estado"],
+                        "activo": p["activo"],
+                        "is_past": is_past,
+                        "areas_pendientes": pending_areas,
+                        "total_pendientes": len(pending_areas)
+                    })
+                    
+            return pending_periods_list
+        except Exception as e:
+            logger.error(f"Error in _get_cierres_pendientes: {e}")
+            return []
 
     async def _get_kpis_extra(self, fecha_inicio: str, fecha_fin: str, filters: Dict[str, Any]) -> Dict[str, float]:
         try:
@@ -843,7 +990,9 @@ class DashboardAnalytics:
             self._get_top_infractores(fecha_inicio, fecha_fin, filters),
             self._get_top_deudores(fecha_inicio, fecha_fin, filters),
             self._get_heatmap_area_dia(fecha_inicio, fecha_fin, filters),
-            self._get_embudo_productividad(fecha_inicio, fecha_fin, filters)
+            self._get_embudo_productividad(fecha_inicio, fecha_fin, filters),
+            self._get_kpis_operacionales(fecha_inicio, fecha_fin, filters),
+            self._get_cierres_pendientes(areas_permitidas=areas_permitidas)
         )
 
         return {
@@ -857,7 +1006,9 @@ class DashboardAnalytics:
             "top_infractores": results[7],
             "top_deudores": results[8],
             "heatmap_area_dia": results[9],
-            "embudo_productividad": results[10]
+            "embudo_productividad": results[10],
+            "kpis_operacionales": results[11],
+            "cierres_pendientes": results[12]
         }
 
     async def get_desviaciones_detalle(self, fecha_inicio: str, fecha_fin: str, tipo: str, motivo: Optional[str] = None, area: Optional[str] = None, horario: Optional[str] = None, areas_permitidas: Optional[List[str]] = None) -> List[Dict[str, Any]]:

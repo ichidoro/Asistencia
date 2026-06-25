@@ -4322,7 +4322,6 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
                 diasProgramados++;
                 const estadosJustificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION'];
                 const isJustificado = diCheck.estado && (
-                    diCheck.estado === 'JORNADA_ESPECIAL' ||
                     estadosJustificados.some(ej => diCheck.estado.toUpperCase().includes(ej)) ||
                     (diCheck.nomenclatura && diCheck.nomenclatura.trim() !== '')
                 );

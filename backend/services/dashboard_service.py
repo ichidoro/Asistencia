@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from loguru import logger
 from backend.core.database import db
 
@@ -343,5 +343,45 @@ class DashboardService:
         except Exception as e:
             logger.error(f"Error calculating period metrics: {e}")
             return {"kpis": {}, "motivos": [], "top_deudores": [], "top_he": []}
+
+    async def get_today_attendance_detail(self, area: Optional[str] = None, areas_permitidas: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Retorna el detalle de asistencia de hoy para el 'pulso en vivo'.
+        """
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+        
+        area_condition = ""
+        params = [today_str]
+        
+        if area:
+            area_condition = "AND ar.nombre = ?"
+            params.append(area)
+        elif areas_permitidas:
+            placeholders = ",".join(["?"] * len(areas_permitidas))
+            area_condition = f"AND ar.nombre IN ({placeholders})"
+            params.extend(areas_permitidas)
+            
+        query = f"""
+            SELECT 
+                e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno, ''), '') || ' ' || e.nombre as empleado,
+                COALESCE(ar.nombre, 'Sin Área') as area,
+                a.hora_entrada_teorica,
+                a.hora_entrada_real,
+                a.minutos_atraso,
+                a.estado
+            FROM asistencias a
+            JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE a.fecha = ? AND e.activo = 1 {area_condition}
+            ORDER BY a.hora_entrada_teorica ASC, e.apellido_paterno ASC
+        """
+        try:
+            rows = await self.db.fetch_all(query, tuple(params))
+            return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"Error in get_today_attendance_detail: {e}")
+            return []
 
 dashboard_service = DashboardService()

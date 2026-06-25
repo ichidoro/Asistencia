@@ -143,7 +143,7 @@ class ReportService:
                         
                         day_db = d.weekday()
                         turno_dias = emp.get("turno_dias", {})
-                        day_info = turno_dias.get(day_db, {})
+                        day_info = turno_dias.get(str(day_db), {}) or turno_dias.get(day_db, {})
                         is_structurally_libre = day_info.get("es_libre") == 1
                         
                         is_descanso = is_fer or is_structurally_libre or (di_check.get("estado") == 'LIBRE')
@@ -154,7 +154,6 @@ class ReportService:
                             di_estado = di_check.get("estado", "") or ""
                             di_nomen = di_check.get("nomenclatura", "") or ""
                             is_justificado = (
-                                di_estado == 'JORNADA_ESPECIAL' or 
                                 any(ej in di_estado.upper() for ej in estados_justificados) or
                                 bool(di_nomen)
                             )

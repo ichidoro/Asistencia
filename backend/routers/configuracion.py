@@ -671,8 +671,6 @@ async def seed_estados_asistencia(
         ('INASISTENCIA',      'INASISTENCIA',       'INA', 'El empleado no se presentó y no tiene marcas ni justificación.',             'badge-state-danger',   'bi-x-circle-fill',              1, 1,  2),
         ('ATRASO',            'ATRASO',             'ATR', 'El empleado llegó tarde respecto a su hora de entrada teórica.',             'badge-state-warning',  'bi-clock-fill',                 1, 1,  3),
         ('SALIDA_ADELANTADA', 'SALIDA ADELANTADA',  'SAL', 'El empleado se retiró antes de su hora de salida teórica.',                 'badge-state-info',     'bi-box-arrow-left',             1, 1,  4),
-        ('ATR_SAD',           'ATRASO + SAL. ADEL.','A+S', 'El empleado llegó tarde Y se fue antes. Combinación de ambos eventos.',      'badge-state-warning',  'bi-clock-fill',                 1, 1,  5),
-        ('PER_ATR',           'PERMISO + ATRASO',   'P+A', 'El empleado tiene permiso registrado y además llegó tarde.',                 'badge-state-warning',  'bi-clock-fill',                 1, 1,  6),
         ('EN_CURSO',          'EN TURNO',           'ENC', 'El empleado marcó entrada hoy y su turno aún no ha terminado.',              'badge-state-success',  'bi-play-circle-fill',           1, 1,  7),
         ('LIBRE',             'LIBRE',              'LIB', 'Día de descanso según el turno asignado. No es un día laboral.',             'badge-state-neutral',  'bi-cup-hot-fill',               1, 1,  8),
         ('FERIADO',           'FERIADO',            'FER', 'Día festivo legal en Chile. No es jornada laboral.',                         'badge-state-warning',  'bi-calendar-heart-fill',        1, 1,  9),

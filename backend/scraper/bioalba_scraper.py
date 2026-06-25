@@ -271,10 +271,51 @@ class BioAlbaScraper:
                 logger.debug(f"[BioAlba] Content-Type: {content_type}")
                 if "text/html" in content_type:
                     logger.error("❌ El servidor devolvió HTML en lugar de Excel (Posible error de sesión)")
+                    self.is_logged_in = False
                     return []
 
                 excel_data = await response.read()
                 logger.info(f"✅ Excel de logs descargado: {len(excel_data)} bytes")
+
+            # Validar tamaño mínimo del Excel de marcaciones (ej: 0 marcaciones debido a sesión expirada)
+            if len(excel_data) < 10000:
+                logger.warning(f"⚠️ Excel de logs sospechosamente pequeño ({len(excel_data)} bytes). "
+                              f"Posible sesión expirada o filtro residual. Intentando con sesión nueva...")
+                # Forzar re-login y reintentar UNA vez
+                self.is_logged_in = False
+                if self.session and not self.session.closed:
+                    await self.session.close()
+                self.session = None
+                
+                if not await self.ensure_logged_in():
+                    return []
+                
+                # Re-prime y re-descargar
+                cache_buster2 = int(_t.time()) + 1
+                filter_url2 = f"{self.base_url}/marcaciones?namerutcmp={rut_param}&bday-month={month_str}&_cb={cache_buster2}"
+                try:
+                    async with self.session.get(filter_url2) as resp2:
+                        logger.debug(f"🔄 Re-prime session logs: status={resp2.status}")
+                except Exception:
+                    pass
+                
+                download_url2 = f"{self.base_url}/marcacion/ver/excel?namerutcmp={rut_param}&bday-month={month_str}&_cb={cache_buster2}"
+                # Re-definir headers para el reintento
+                headers2 = {
+                    "Referer": filter_url2,
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                async with self.session.get(download_url2, headers=headers2) as response2:
+                    if response2.status != 200:
+                        logger.error(f"❌ Reintento logs fallido: {response2.status}")
+                        return []
+                    content_type2 = response2.headers.get("Content-Type", "")
+                    if "text/html" in content_type2:
+                        logger.error("❌ El servidor devolvió HTML en el reintento de Excel")
+                        self.is_logged_in = False
+                        return []
+                    excel_data = await response2.read()
+                    logger.info(f"✅ Reintento Excel de logs: {len(excel_data)} bytes")
 
             # Parsear
             marcaciones = self._parse_excel_marcaciones(excel_data, ruts_filter=ruts_set)

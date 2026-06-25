@@ -107,7 +107,7 @@ async def marcar_presencia(
     # Obtener última marca GLOBAL del empleado (sin filtro de fecha)
     # para detectar correctamente E/S en sesiones cross-midnight
     ultima = await db.fetch_one(
-        "SELECT tipo, fecha, hora FROM articulo22_registros WHERE empleado_id = ? ORDER BY fecha DESC, hora DESC LIMIT 1",
+        "SELECT tipo, fecha, hora FROM articulo22_registros WHERE empleado_id = ? ORDER BY id DESC LIMIT 1",
         (empleado_id,)
     )
 
@@ -199,7 +199,7 @@ async def get_estado_dia(
         """SELECT empleado_id, hora, tipo, registrado_por_nombre, observaciones
            FROM articulo22_registros
            WHERE fecha = ?
-           ORDER BY empleado_id, hora""",
+           ORDER BY empleado_id, id""",
         (fecha,)
     )
 
@@ -372,7 +372,7 @@ async def get_historial(
         r = dict(row)
         # Obtener marcas detalladas
         marcas = await db.fetch_all(
-            "SELECT hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha = ? ORDER BY hora",
+            "SELECT hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha = ? ORDER BY id",
             (r["empleado_id"], r["fecha"])
         )
         estadia_min = 0

@@ -129,3 +129,25 @@ async def get_dashboard_desviaciones_detalle(
         return {"status": "success", "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/pulse/detail/")
+async def get_dashboard_pulse_detail(
+    area: Optional[str] = Query("Todas"),
+    current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))
+):
+    """
+    Retorna el detalle de asistencia de hoy para el pulso en vivo con RLS.
+    """
+    areas_permitidas = current_user.areas if not current_user.alcance_global else None
+    
+    area_filter = area if area != "Todas" else None
+    if area_filter and not current_user.alcance_global:
+        if area_filter not in (current_user.areas or []):
+             raise HTTPException(status_code=403, detail="No tiene permisos para ver el área solicitada")
+
+    try:
+        data = await dashboard_service.get_today_attendance_detail(area_filter, areas_permitidas=areas_permitidas)
+        return {"status": "success", "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
