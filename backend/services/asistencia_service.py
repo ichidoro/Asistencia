@@ -2624,9 +2624,31 @@ class AsistenciaService:
                 for i in range(idx_inicio, len(marcas_disponibles)):
                     log = marcas_disponibles[i]
                     if log.get('fecha_hora', '').startswith(fecha):
+                        t_m = str(log.get('tipo', '') or '').strip().lower()
+
+                        # [ITS] Inferencia de Tipo Secuencial (Bolsa Flexible)
+                        # Si vemos dos Entradas consecutivas separadas por <= 14 horas, 
+                        # inferimos que la segunda es un error de dedo y debió ser Salida.
+                        if t_m in {'entrada', 'entry', 'e', 'in', '1'} and len(logs) > 0:
+                            prior_log = logs[-1]
+                            prior_tipo = str(prior_log.get('tipo', '') or '').strip().lower()
+                            if prior_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
+                                try:
+                                    prior_dt = datetime.strptime(prior_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                    curr_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                    if (curr_dt - prior_dt).total_seconds() / 3600.0 <= 14.0:
+                                        log_corregido = dict(log)
+                                        log_corregido['tipo'] = 'Salida'
+                                        log_corregido['_tipo_inferido'] = True
+                                        marcas_disponibles[i] = log_corregido
+                                        log = log_corregido
+                                        t_m = 'salida'
+                                except Exception:
+                                    pass
+
                         logs.append(log)
                         ultimo_idx = i
-                        t_m = str(log.get('tipo', '') or '').strip().lower()
+                        
                         if t_m in {'entrada', 'entry', 'e', 'in', '1'}:  # [DT-16b] '' removido — D8
                             balance += 1
                         elif t_m in {'salida', 'exit', 's', 'out', '2'}:
@@ -2646,7 +2668,27 @@ class AsistenciaService:
                             break
                             
                         t_m = str(log.get('tipo', '') or '').strip().lower()
-                        # Restricción 2: Si es el día siguiente y es una Entrada, detenerse (comienza una nueva jornada)
+                        
+                        # [ITS] Inferencia de Tipo Secuencial (Bolsa Flexible)
+                        # Aplica igual que arriba, pero cazando marcas que caen en el día siguiente de la bolsa.
+                        if t_m in {'entrada', 'entry', 'e', 'in', '1'} and len(logs) > 0:
+                            prior_log = logs[-1]
+                            prior_tipo = str(prior_log.get('tipo', '') or '').strip().lower()
+                            if prior_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
+                                try:
+                                    prior_dt = datetime.strptime(prior_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                    curr_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                    if (curr_dt - prior_dt).total_seconds() / 3600.0 <= 14.0:
+                                        log_corregido = dict(log)
+                                        log_corregido['tipo'] = 'Salida'
+                                        log_corregido['_tipo_inferido'] = True
+                                        marcas_disponibles[i] = log_corregido
+                                        log = log_corregido
+                                        t_m = 'salida'
+                                except Exception:
+                                    pass
+
+                        # Restricción 2: Si es el día siguiente y SIGUE SIENDO una Entrada (después del ITS), detenerse
                         if log_fecha == fecha_limite and t_m in {'entrada', 'entry', 'e', 'in', '1'}:
                             break
                             
