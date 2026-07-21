@@ -389,9 +389,11 @@ class CierreService:
                 JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                     AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
                 JOIN areas ar ON ha.area_id = ar.id
+                JOIN asignacion_turnos at ON e.id = at.empleado_id
+                    AND (? >= at.fecha_inicio AND (at.fecha_fin IS NULL OR at.fecha_fin = '' OR ? <= at.fecha_fin))
                 WHERE e.activo = 1 AND (e.excluido_asistencia IS NULL OR e.excluido_asistencia = 0)
                 """,
-                (fecha_fin, fecha_inicio)
+                (fecha_fin, fecha_inicio, fecha_fin, fecha_inicio)
             )
             active_areas = {r['nombre'] for r in active_areas_res if r['nombre']}
 
