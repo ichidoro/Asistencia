@@ -3985,10 +3985,11 @@ class AsistenciaService:
             res['estado'] = 'SALIDA_ADELANTADA'
         elif is_holiday or es_libre_dia:
             if turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
-                res['estado'] = 'OK'
                 if is_holiday:
-                    res['observaciones'] += 'Trabajo en feriado (Bolsa Flexible). '
+                    res['estado'] = 'JORNADA_ESPECIAL'
+                    res['observaciones'] += 'Trabajo en feriado. '
                 else:
+                    res['estado'] = 'OK'
                     res['observaciones'] += 'Trabajo en día libre (Bolsa Flexible). '
             else:
                 res['estado'] = 'JORNADA_ESPECIAL'
