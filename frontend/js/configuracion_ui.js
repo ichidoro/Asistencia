@@ -2165,6 +2165,8 @@ window.renderPeriodosRRHH = function(periodos) {
                     <th class="text-center">Cantidad días</th>
                     <th class="text-center">Estado Vigencia</th>
                     <th class="text-center">Estado Cierre</th>
+                    <th>Áreas Cerradas</th>
+                    <th>Áreas Pendientes</th>
                     <th class="text-center" style="width: 150px;">Acciones</th>
                 </tr>
             </thead>
@@ -2174,7 +2176,7 @@ window.renderPeriodosRRHH = function(periodos) {
     if (periodos.length === 0) {
         html += `
             <tr>
-                <td colspan="7" class="text-center text-muted py-4">
+                <td colspan="9" class="text-center text-muted py-4">
                     <div class="mb-2" style="font-size: 2rem;">📅</div>
                     No hay tramos de cierre configurados.
                 </td>
@@ -2211,6 +2213,12 @@ window.renderPeriodosRRHH = function(periodos) {
             const mes = parts[0] || '';
             const anio = parts[1] || (p.fecha_fin ? p.fecha_fin.split('-')[0] : new Date().getFullYear());
 
+            const closedAreasHtml = (p.areas_cerradas || []).map(a => `<span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1" style="font-size:0.75rem">${a}</span>`).join('');
+            const pendingAreasHtml = (p.areas_pendientes || []).map(a => `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1 mb-1" style="font-size:0.75rem">${a}</span>`).join('');
+
+            const finalClosedHtml = closedAreasHtml || '<span class="text-muted small">-</span>';
+            const finalPendingHtml = pendingAreasHtml || '<span class="badge bg-light text-muted border" style="font-size:0.75rem"><i class="bi bi-check-all me-1"></i>Ninguna</span>';
+
             html += `
                 <tr>
                     <td class="fw-bold">${mes}</td>
@@ -2220,6 +2228,8 @@ window.renderPeriodosRRHH = function(periodos) {
                     <td class="text-center fw-bold">${diffDays} días</td>
                     <td class="text-center">${vigenciaBadge}</td>
                     <td class="text-center">${estadoBadge}</td>
+                    <td style="max-width: 200px;">${finalClosedHtml}</td>
+                    <td style="max-width: 200px;">${finalPendingHtml}</td>
                     <td class="text-center">${actionButtons}</td>
                 </tr>
             `;

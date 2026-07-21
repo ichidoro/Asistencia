@@ -15,6 +15,8 @@ class PeriodoRRHHCreate(PeriodoRRHHBase):
 class PeriodoRRHHResponse(PeriodoRRHHBase):
     id: int
     created_at: datetime
+    areas_cerradas: Optional[list[str]] = []
+    areas_pendientes: Optional[list[str]] = []
 
     class Config:
         from_attributes = True

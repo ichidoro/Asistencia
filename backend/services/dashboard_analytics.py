@@ -673,10 +673,13 @@ class DashboardAnalytics:
             pending_periods_list = []
             
             for p in periodos:
+                if p['estado'] == 'cerrado':
+                    continue
+                    
                 fecha_inicio = p['fecha_inicio']
                 fecha_fin = p['fecha_fin']
                 
-                # Áreas que tienen empleados activos en este periodo
+                # Áreas que tienen empleados activos en este periodo (Regla V2)
                 active_areas_res = await self.db.fetch_all(
                     """
                     SELECT DISTINCT ar.nombre as area_nombre 
@@ -684,9 +687,11 @@ class DashboardAnalytics:
                     JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                         AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
                     JOIN areas ar ON ha.area_id = ar.id
-                    WHERE e.activo = 1 AND ar.nombre IS NOT NULL
+                    JOIN asignacion_turnos at ON e.id = at.empleado_id
+                        AND (? >= at.fecha_inicio AND (at.fecha_fin IS NULL OR at.fecha_fin = '' OR ? <= at.fecha_fin))
+                    WHERE e.activo = 1 AND ar.nombre IS NOT NULL AND (e.excluido_asistencia IS NULL OR e.excluido_asistencia = 0)
                     """,
-                    (fecha_fin, fecha_inicio)
+                    (fecha_fin, fecha_inicio, fecha_fin, fecha_inicio)
                 )
                 active_areas = [r['area_nombre'] for r in active_areas_res]
                 

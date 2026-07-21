@@ -948,7 +948,42 @@ class ConfiguracionRepository:
 
     async def get_all_periodos_rrhh(self) -> List[Dict[str, Any]]:
         await self._auto_heal_periodos()
-        return await self.db.fetch_all("SELECT * FROM periodos_rrhh ORDER BY fecha_inicio DESC")
+        periodos = await self.db.fetch_all("SELECT * FROM periodos_rrhh ORDER BY fecha_inicio DESC")
+        
+        results = []
+        for p in periodos:
+            p_dict = dict(p)
+            f_ini = p_dict["fecha_inicio"]
+            f_fin = p_dict["fecha_fin"]
+            
+            # Áreas activas (Regla V2)
+            active_res = await self.db.fetch_all(
+                """
+                SELECT DISTINCT ar.nombre FROM empleados e
+                JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                    AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
+                JOIN areas ar ON ha.area_id = ar.id
+                JOIN asignacion_turnos at ON e.id = at.empleado_id
+                    AND (? >= at.fecha_inicio AND (at.fecha_fin IS NULL OR at.fecha_fin = '' OR ? <= at.fecha_fin))
+                WHERE e.activo = 1 AND (e.excluido_asistencia IS NULL OR e.excluido_asistencia = 0)
+                """,
+                (f_fin, f_ini, f_fin, f_ini)
+            )
+            active_areas = {r['nombre'] for r in active_res if r['nombre']}
+            
+            # Áreas cerradas
+            closed_res = await self.db.fetch_all(
+                "SELECT DISTINCT area FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL",
+                (f_ini, f_fin)
+            )
+            closed_areas = {r['area'] for r in closed_res if r['area']}
+            
+            p_dict["areas_cerradas"] = sorted(list(closed_areas))
+            p_dict["areas_pendientes"] = sorted(list(active_areas - closed_areas))
+            
+            results.append(p_dict)
+            
+        return results
 
     async def get_periodo_rrhh_activo(self) -> Optional[Dict[str, Any]]:
         await self._auto_heal_periodos()
