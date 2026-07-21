@@ -2606,7 +2606,11 @@ class AsistenciaService:
                             puede_cruzar = True
                             break
 
-            if not puede_cruzar:
+            # [FIX] En Bolsa Flexible (is_bolsa), permitimos siempre el cruce de medianoche 
+            # de manera lógica, ignorando el flag estricto 'puede_cruzar'. La naturaleza
+            # de la bolsa flexible requiere cazar salidas que caigan de madrugada, y el bucle 
+            # de emparejamiento ya está protegido de cazar entradas de la siguiente jornada.
+            if not puede_cruzar and not is_bolsa:
                 marcas_disponibles = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
 
             marcas_hoy = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
