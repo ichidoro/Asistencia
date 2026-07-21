@@ -2,7 +2,7 @@
 // Versión mínima: cache de assets estáticos para instalabilidad.
 // No intercepta API calls para evitar datos obsoletos.
 
-const CACHE_NAME = 'aguacol-v15';
+const CACHE_NAME = 'aguacol-v16';
 const STATIC_ASSETS = [
   '/',
   '/static/css/bootstrap.min.css',
@@ -37,7 +37,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static assets
+// Fetch: network-first for API and page navigations, cache-first for static assets
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -46,7 +46,27 @@ self.addEventListener('fetch', (event) => {
     return; // Let browser handle normally
   }
 
-  // For static assets: try cache first, fall back to network
+  // Network-First for main page navigation (root '/' or '/index.html')
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok && event.request.method === 'GET') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // For other static assets (JS, CSS, images): try cache first, fall back to network
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

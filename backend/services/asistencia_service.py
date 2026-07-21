@@ -824,6 +824,8 @@ class AsistenciaService:
         results_to_delete = []
         he_to_save = []
         he_to_delete = []
+        je_to_save = []
+        je_to_delete = []
         marcas_consumidas = {}
         # En collect_only no hay checkpoints (el caller persiste todo al final).
         # En modo normal se hace checkpoint cada 50 días para limitar exposición al WAL.
@@ -1028,6 +1030,15 @@ class AsistenciaService:
                     else:
                         # Sin HE ni estado especial: eliminar registro previo (puede ser corrupto)
                         he_to_delete.append((empleado_id, fecha_str))
+                    # ── BATCH SAVE FOR JORNADAS ESPECIALES ──
+                    if '_jornada_especial' in result:
+                        je_to_save.append(result['_jornada_especial'])
+                    else:
+                        je_prev = jornadas_especiales_por_fecha.get(fecha_str)
+                        if je_prev and je_prev.get('estado') in ('EXTRA', 'RECHAZADA'):
+                            pass
+                        else:
+                            je_to_delete.append((empleado_id, fecha_str))
                     asistencias_map[fecha_str] = result
                 else:
                     existing = asistencias_map.get(fecha_str)
@@ -1035,6 +1046,11 @@ class AsistenciaService:
                         results_to_delete.append((empleado_id, fecha_str))
                         # No agregamos a stats['sin_cambio'] porque estamos eliminando el registro
                     he_to_delete.append((empleado_id, fecha_str))
+                    je_prev = jornadas_especiales_por_fecha.get(fecha_str)
+                    if je_prev and je_prev.get('estado') in ('EXTRA', 'RECHAZADA'):
+                        pass
+                    else:
+                        je_to_delete.append((empleado_id, fecha_str))
                 stats['procesados'] += 1
             except Exception as e:
                 logger.error(f"Error calculando asistencia empleado {empleado_id} fecha {fecha_str}: {e}")
@@ -1042,7 +1058,7 @@ class AsistenciaService:
 
             # ⚡ Checkpoint de seguridad: guardar batch parcial cada N días
             # Deshabilitado en collect_only (CHECKPOINT_INTERVAL=0 → modulo nunca es 0)
-            if not collect_only and (results_to_save or results_to_delete) and CHECKPOINT_INTERVAL > 0 and day_index % CHECKPOINT_INTERVAL == 0:
+            if not collect_only and (results_to_save or results_to_delete or je_to_save or je_to_delete) and CHECKPOINT_INTERVAL > 0 and day_index % CHECKPOINT_INTERVAL == 0:
                 try:
                     if results_to_save:
                         await self.repository.batch_upsert_asistencia(results_to_save, suppress_auto_sync=True)
@@ -1060,6 +1076,14 @@ class AsistenciaService:
                         for eid_del, f_str in he_to_delete:
                             await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
                         he_to_delete = []
+                    if je_to_save:
+                        for je_rec in je_to_save:
+                            await self.repository.upsert_jornada_especial(je_rec)
+                        je_to_save = []
+                    if je_to_delete:
+                        for eid_del, f_str in je_to_delete:
+                            await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (eid_del, f_str))
+                        je_to_delete = []
                 except Exception as e:
                     logger.error(f"Error en checkpoint batch (emp {empleado_id}): {e}")
 
@@ -1077,12 +1101,20 @@ class AsistenciaService:
             if job_id:
                 _complete_job(job_id, stats['procesados'], stats['errores'], t_total)
             # Retornar dict especial con los resultados crudos
-            return {'_collect': results_to_save, '_delete_collect': results_to_delete, '_he_collect': he_to_save, '_he_delete': he_to_delete, **stats}
+            return {
+                '_collect': results_to_save,
+                '_delete_collect': results_to_delete,
+                '_he_collect': he_to_save,
+                '_he_delete': he_to_delete,
+                '_je_collect': je_to_save,
+                '_je_delete': je_to_delete,
+                **stats
+            }
 
         # ⚡ BATCH FINAL: guardar todos los resultados restantes en UN SOLO commit local (WAL)
         # suppress_auto_sync=True: NO disparar conn.sync() aquí.
         # El caller (reproceso_masivo_async) hará 1 único sync_to_cloud_explicit() al final.
-        if not collect_only and (results_to_save or results_to_delete):
+        if not collect_only and (results_to_save or results_to_delete or je_to_save or je_to_delete):
             try:
                 t_save_start = _time()
                 if results_to_save:
@@ -1095,6 +1127,12 @@ class AsistenciaService:
                 if he_to_delete:
                     for eid_del, f_str in he_to_delete:
                         await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
+                if je_to_save:
+                    for je_rec in je_to_save:
+                        await self.repository.upsert_jornada_especial(je_rec)
+                if je_to_delete:
+                    for eid_del, f_str in je_to_delete:
+                        await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (eid_del, f_str))
                 t_save = int((_time() - t_save_start) * 1000)
                 logger.info(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
             except Exception as e:
@@ -1287,12 +1325,32 @@ class AsistenciaService:
         observaciones: Optional[str] = None,
     ) -> Dict[str, Any]:
         db = self.repository.db
+        asist = await self.repository.get_asistencia(empleado_id, fecha)
         
         # Buscar en jornadas_especiales primero
         jornada = await db.fetch_one(
             "SELECT * FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
             (empleado_id, fecha)
         )
+        
+        if not jornada:
+            # Fallback: intentamos ver si existe en la tabla de asistencias y es de tipo JORNADA_ESPECIAL o EXTRA
+            if asist and asist.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA'):
+                min_trab = int(asist.get('horas_trabajadas', 0) * 60) if 'horas_trabajadas' in asist and asist['horas_trabajadas'] > 0 else 0
+                j_record = {
+                    'empleado_id': empleado_id,
+                    'fecha': fecha,
+                    'hora_entrada': asist.get('hora_entrada_real'),
+                    'hora_salida': asist.get('hora_salida_real'),
+                    'minutos_trabajados': min_trab,
+                    'estado': asist.get('estado'),
+                    'observaciones': asist.get('observaciones') or ''
+                }
+                await self.repository.upsert_jornada_especial(j_record)
+                jornada = await db.fetch_one(
+                    "SELECT * FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                    (empleado_id, fecha)
+                )
         
         if not jornada:
             return {'error': 'No se encontró registro de jornada especial'}
@@ -1328,9 +1386,19 @@ class AsistenciaService:
                 'estado': estado_nuevo,
                 'observaciones': (jornada_dict.get('observaciones') or '') + f' [VALIDADO] {observaciones or ""}',
             }
+            
             # Al aprobar/rechazar, asistencias refleja el estado final de la JE
-            estado_asistencia = 'JORNADA_ESPECIAL' if accion == 'APROBAR' else 'INASISTENCIA'
-            estado_ret = 'APROBADO' if accion == 'APROBAR' else 'RECHAZADO'
+            # Si es día hábil ordinario (horas_teoricas > 0), al rechazar la JE preservamos el estado de asistencia
+            # para que el reprocesador posterior restaure el flujo ordinario completo con HE pendientes.
+            es_dia_habil = asist and float(asist.get('horas_teoricas') or 0.0) > 0.0
+            
+            if accion == 'APROBAR':
+                estado_asistencia = 'EXTRA'
+                estado_ret = 'APROBADO'
+            else:
+                estado_asistencia = asist.get('estado') if es_dia_habil else 'INASISTENCIA'
+                estado_ret = 'RECHAZADO'
+                
             minutos_ret = minutos_autorizados
 
         # Actualizar tabla jornadas_especiales
@@ -1434,7 +1502,7 @@ class AsistenciaService:
         else:
             is_closed = await self.is_fecha_cerrada_empleado(empleado_id, fecha)
             
-        if is_closed:
+        if is_closed and not force:
             logger.warning(f"🚫 Intento de procesar día cerrado: emp {empleado_id}, fecha {fecha}. Retornando registro existente.")
             return await self.repository.get_asistencia(empleado_id, fecha)
 
@@ -1683,13 +1751,138 @@ class AsistenciaService:
                     f"Corregidas {len(corregidas_ids)} marcas a alternancia cronológica por desbalance (E:{num_entradas} vs S:{num_salidas})"
                 )
 
-        # ── EXTRACCIÓN CRONOLÓGICA (Solo DINAMICO_FLEXIBLE) ─────────────────
+        # Inicializar variables para inyección final
+        emergencia_corta_detectada = None
+        jornada_adicional_observaciones = ""
+        
         tipo_prog = None
-        semana_inicio_cfg = None  # [PLAN-v5] Semana de rotación inicial
+        semana_inicio_cfg = None
         if asignacion:
             tipo_prog = asignacion.get('tipo_programacion')
             semana_inicio_cfg = asignacion.get('semana_inicio')
-            
+
+        # ── INTERCEPTOR DE SEGMENTACIÓN TEMPRANO DE EMERGENCIAS Y JORNADAS ADICIONALES ──
+        # Ejecutado al inicio para limpiar marcas_disponibles antes del matching rotativo y consumos
+        marcas_hoy = [m for m in marcas_disponibles if m.get('fecha_hora', '').startswith(fecha)]
+        if tipo_prog != 'FLEXIBLE_BOLSA' and marcas_hoy and len(marcas_hoy) >= 4 and len(marcas_hoy) % 2 == 0:
+            try:
+                row_gap = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_gap_horas'")
+                row_banda = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_banda_horas'")
+                row_limite = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_jornada_limite_horas'")
+                
+                gap_horas = float(row_gap['valor']) if row_gap else 4.0
+                banda_horas = float(row_banda['valor']) if row_banda else 2.0
+                limite_horas = float(row_limite['valor']) if row_limite else 3.0
+                
+                # Dividir marcas de hoy por el gap configurado
+                bloques = []
+                bloque_actual = []
+                for idx_log, log_item in enumerate(marcas_hoy):
+                    if idx_log == 0:
+                        bloque_actual.append(log_item)
+                        continue
+                    prev_log = marcas_hoy[idx_log - 1]
+                    prev_dt = datetime.strptime(prev_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    curr_dt = datetime.strptime(log_item['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    gap_hours_real = (curr_dt - prev_dt).total_seconds() / 3600.0
+                    
+                    _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+                    _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+                    prev_tipo = str(prev_log.get('tipo', '') or '').strip().lower()
+                    curr_tipo = str(log_item.get('tipo', '') or '').strip().lower()
+                    
+                    if prev_tipo in _TIPOS_S and curr_tipo in _TIPOS_E and gap_hours_real >= gap_horas:
+                        bloques.append(bloque_actual)
+                        bloque_actual = [log_item]
+                    else:
+                        bloque_actual.append(log_item)
+                if bloque_actual:
+                    bloques.append(bloque_actual)
+                    
+                if len(bloques) > 1:
+                    # Calcular la Envolvente Teórica Global del Día
+                    tid_asig = asignacion.get('turno_id') or asignacion.get('id')
+                    rows_td = await db.fetch_all("SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?", (tid_asig, dia_semana))
+                    td_posibles = [dict(r) for r in rows_td]
+                    turnos_activos = [t for t in td_posibles if not t.get('es_libre')]
+                    
+                    if turnos_activos:
+                        min_in_mins = 24 * 60
+                        max_out_mins = 0
+                        for t_cfg in turnos_activos:
+                            h_in = t_cfg['hora_entrada']
+                            h_out = t_cfg['hora_salida']
+                            in_mins = int(h_in[:2]) * 60 + int(h_in[3:5])
+                            out_mins = int(h_out[:2]) * 60 + int(h_out[3:5])
+                            if t_cfg.get('cruza_medianoche') or out_mins < in_mins:
+                                out_mins += 24 * 60
+                            if in_mins < min_in_mins:
+                                min_in_mins = in_mins
+                            if out_mins > max_out_mins:
+                                max_out_mins = out_mins
+                                
+                        # Clasificar cada bloque por solapamiento temporal con la envolvente
+                        bloques_ordinarios = []
+                        bloques_extras = []
+                        for b in bloques:
+                            b_ent = datetime.strptime(b[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                            b_sal = datetime.strptime(b[-1]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                            b_ent_mins = b_ent.hour * 60 + b_ent.minute
+                            b_sal_mins = b_sal.hour * 60 + b_sal.minute
+                            if b_sal.date() > b_ent.date():
+                                b_sal_mins += 24 * 60
+                                
+                            start_overlap = max(b_ent_mins, min_in_mins)
+                            end_overlap = min(b_sal_mins, max_out_mins)
+                            overlap_mins = max(0, end_overlap - start_overlap)
+                            
+                            if overlap_mins >= 30:
+                                bloques_ordinarios.append(b)
+                            else:
+                                bloques_extras.append(b)
+                                
+                        if not bloques_ordinarios:
+                            bloques_ordinarios = [bloques[0]]
+                            bloques_extras = bloques[1:]
+                            
+                        if bloques_extras:
+                            # 1. Limpiar marcas_disponibles para que el resto del motor no las vea
+                            extras_ids = {l['id'] for be in bloques_extras for l in be}
+                            marcas_disponibles = [m for m in marcas_disponibles if m['id'] not in extras_ids]
+                            
+                            # 2. Agregar los extras a consumidas_emp para protegerlos de arrastres futuros
+                            for eid_log in extras_ids:
+                                consumidas_emp.add(eid_log)
+                                
+                            # 3. Procesar los bloques extras para HE directas o Jornada Especial
+                            for be in bloques_extras:
+                                be_ent_dt = datetime.strptime(be[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                be_sal_dt = datetime.strptime(be[-1]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                duracion_extra_min = int((be_sal_dt - be_ent_dt).total_seconds() / 60)
+                                
+                                if (duracion_extra_min / 60.0) < limite_horas:
+                                    emergencia_corta_detectada = {
+                                        'minutos': duracion_extra_min,
+                                        'texto': f"[Llamado de Emergencia: {duracion_extra_min} min de {be[0]['fecha_hora'][11:16]} a {be[-1]['fecha_hora'][11:16]}]"
+                                    }
+                                    logger.info(f"⚡ [Emergencia Detectada Temprano] Emp {empleado_id} {fecha}: {duracion_extra_min} min.")
+                                else:
+                                    if save:
+                                        await self.repository.upsert_jornada_especial({
+                                            'empleado_id': empleado_id,
+                                            'fecha': fecha,
+                                            'hora_entrada': be[0]['fecha_hora'][11:],
+                                            'hora_salida': be[-1]['fecha_hora'][11:],
+                                            'minutos_trabajados': duracion_extra_min,
+                                            'estado': 'PENDIENTE',
+                                            'observaciones': f"Jornada adicional de la tarde segmentada automáticamente ({duracion_extra_min} min)."
+                                        })
+                                    jornada_adicional_observaciones = f"[Jornada Adicional Pendiente: {be[0]['fecha_hora'][11:16]} - {be[-1]['fecha_hora'][11:16]}] "
+                                    logger.info(f"💼 [Jornada Especial Adicional Temprano] Emp {empleado_id} {fecha}: {duracion_extra_min} min registrada como PENDIENTE.")
+            except Exception as ex_seg:
+                logger.error(f"⚠️ Error en interceptor de segmentación temprana de emergencias: {ex_seg}")
+
+        # ── EXTRACCIÓN CRONOLÓGICA (Solo DINAMICO_FLEXIBLE) ─────────────────
         block_inteligente = []
         if tipo_prog == 'DINAMICO_FLEXIBLE':
             # [DT-1] Algoritmo de balance: Consumir todas las marcas del día calendario actual.
@@ -2562,6 +2755,8 @@ class AsistenciaService:
         asist_actual = None
         if bulk_ctx:
             asist_actual = bulk_ctx.get('asistencias_hoy', {}).get(empleado_id)
+        else:
+            asist_actual = await self.repository.get_asistencia(empleado_id, fecha)
         
         # FASE 2 (Fix B1): Sourcing de last_state desde horas_extras con fallback a legacy
         he_previo = None
@@ -2628,6 +2823,14 @@ class AsistenciaService:
                 logger.info(f"🧹 Limpiando registro residual por recalculo: Emp {empleado_id} en {fecha}")
                 await self.repository.delete_asistencia(empleado_id, fecha)
             return None
+
+        # Aplicar resultados del interceptor de segmentación de emergencias
+        if resultado:
+            if emergencia_corta_detectada:
+                resultado['minutos_extra_bruto'] = resultado.get('minutos_extra_bruto', 0) + emergencia_corta_detectada['minutos']
+                resultado['observaciones'] = (resultado.get('observaciones') or '') + " " + emergencia_corta_detectada['texto']
+            if jornada_adicional_observaciones:
+                resultado['observaciones'] = (resultado.get('observaciones') or '') + " " + jornada_adicional_observaciones
 
         # ── INTERCEPTOR: DÍA COMPENSATORIO (Intercambio de Días 1x1) ───────────
         if bulk_ctx and 'intercambios' in bulk_ctx:
@@ -2716,7 +2919,7 @@ class AsistenciaService:
                 resultado['_he_minutos_autorizados'] = 0
 
         # ── INTERCEPTAR JORNADAS ESPECIALES ───────────────────────────────────
-        if save and resultado and resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA'):
+        if resultado and resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA'):
             ht = resultado.get('horas_teoricas')
             ht_val = float(ht) if ht is not None else 0.0
             
@@ -2733,7 +2936,14 @@ class AsistenciaService:
                 es_candidato = True
                 
             if es_candidato:
-                min_trab = int(resultado.get('horas_trabajadas', 0) * 60) if 'horas_trabajadas' in resultado and resultado['horas_trabajadas'] > 0 else resultado.get('minutos_extra_bruto', 0)
+                # [REGLA DE NEGOCIO]: Las jornadas especiales o extras no generan horas extras ordinarias ni deudas horarias
+                resultado['minutos_extra_bruto'] = 0.0
+                resultado['minutos_extra_autorizados'] = 0.0
+                resultado['minutos_deuda'] = 0.0
+                resultado['tiene_atraso'] = 0
+                resultado['tiene_salida_adelantada'] = 0
+
+                min_trab = int(resultado.get('horas_trabajadas', 0) * 60) if 'horas_trabajadas' in resultado and resultado['horas_trabajadas'] > 0 else 0
                 
                 # Fetch existing to check for manual validation
                 if bulk_ctx and 'jornadas_especiales' in bulk_ctx:
@@ -2765,7 +2975,10 @@ class AsistenciaService:
                     'estado': estado_je,
                     'observaciones': obs_je
                 }
-                await self.repository.upsert_jornada_especial(j_record)
+                if save:
+                    await self.repository.upsert_jornada_especial(j_record)
+                else:
+                    resultado['_jornada_especial'] = j_record
                 
                 # NOTA ARQUITECTURA: Ya no borramos los datos de "resultado" (hora_entrada_real, etc)
                 # para que "asistencias" se mantenga como la FUENTE DE VERDAD con el registro JORNADA_ESPECIAL completo.
@@ -2788,6 +3001,68 @@ class AsistenciaService:
         # ── ESCRITURA LEGACY (Paso E): asistencias (DESPUÉS de horas_extras) ──
         if save:
             await self.repository.upsert_asistencia(resultado)
+            
+            # ── NUEVA REGLA: Segmentar exceso de horas extras diarias en días hábiles ordinarios ──
+            try:
+                db = self.repository.db
+                ht_val = float(resultado.get('horas_teoricas') or 0.0)
+                est_asist = resultado.get('estado')
+                he_bruta = float(resultado.get('minutos_extra_bruto', 0.0))
+                
+                # Solo aplica en días hábiles programados (horas_teoricas > 0) y no en libres, feriados o inasistencias
+                if ht_val > 0.0 and est_asist not in ('LIBRE', 'FERIADO', 'INASISTENCIA') and he_bruta > 0.0:
+                    # 1. Obtener el límite máximo de horas extras del día desde ajustes (por defecto 240 min = 4 horas)
+                    row_max_he = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_max_extras_ordinarias_dia_habil'")
+                    max_he_minutos = float(row_max_he['valor']) if row_max_he else 240.0
+                    
+                    if he_bruta > max_he_minutos:
+                        # 2. Consultar si ya existe un registro previo de jornada especial
+                        je_prev = await db.fetch_one(
+                            "SELECT id, estado, observaciones FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                            (empleado_id, fecha)
+                        )
+                        
+                        # Si no existe jornada especial o está PENDIENTE, aplicamos segmentación del bloque completo
+                        if not je_prev or je_prev['estado'] == 'PENDIENTE':
+                            logger.info(
+                                f"🚨 [Exceso de HE Día Hábil] Emp {empleado_id} {fecha}: {he_bruta} min supera límite {max_he_minutos} min. "
+                                f"Transfiriendo el 100% del bloque a Jornada Especial Pendiente."
+                            )
+                            
+                            # Crear o actualizar la jornada especial pendiente asociada a esta asistencia
+                            await self.repository.upsert_jornada_especial({
+                                'empleado_id': empleado_id,
+                                'fecha': fecha,
+                                'hora_entrada': resultado.get('hora_entrada_real') or '14:00:00',
+                                'hora_salida': resultado.get('hora_salida_real') or '18:00:00',
+                                'minutos_trabajados': int(he_bruta),
+                                'estado': 'PENDIENTE',
+                                'observaciones': f"Jornada adicional por exceso de sobretiempo diario (Límite: {int(max_he_minutos)} min).",
+                                'asistencia_origen_id': resultado.get('id')
+                            })
+                            
+                            # Bajar a 0 las Horas Extras ordinarias del día y volver a guardar la asistencia
+                            resultado['minutos_extra_bruto'] = 0.0
+                            resultado['minutos_extra_autorizados'] = 0.0
+                            await self.repository.upsert_asistencia(resultado)
+                            
+                            # Limpiar de la tabla horas_extras el registro ordinario
+                            await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                            
+                        elif je_prev['estado'] == 'EXTRA':
+                            # Si ya está aprobada como EXTRA (jornada especial de la tarde),
+                            # la asistencia ordinaria de la mañana debe quedarse en 0 HE
+                            if float(resultado.get('minutos_extra_bruto', 0.0)) > 0.0:
+                                resultado['minutos_extra_bruto'] = 0.0
+                                resultado['minutos_extra_autorizados'] = 0.0
+                                await self.repository.upsert_asistencia(resultado)
+                                await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                                
+                        # Nota de arquitectura: Si je_prev['estado'] == 'RECHAZADA',
+                        # no hacemos nada. Dejamos que las horas extras brutos calculadas se mantengan
+                        # en la asistencia ordinaria del día (logrando el efecto de devolución del bloque completo).
+            except Exception as e_regla:
+                logger.error(f"⚠️ Error aplicando regla de exceso de HE en día hábil: {e_regla}")
 
         return resultado
 
@@ -3717,8 +3992,12 @@ class AsistenciaService:
                 res['estado'] = 'JORNADA_ESPECIAL'
                 res['observaciones'] += 'Trabajo en feriado. '
             else:
-                res['estado'] = 'JORNADA_ESPECIAL'
-                res['observaciones'] += 'Trabajo en día libre. '
+                if turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
+                    res['estado'] = 'OK'
+                    res['observaciones'] += 'Trabajo en día libre (Bolsa Flexible). '
+                else:
+                    res['estado'] = 'JORNADA_ESPECIAL'
+                    res['observaciones'] += 'Trabajo en día libre. '
         else:
             res['estado'] = 'OK'
 
@@ -4041,21 +4320,36 @@ class AsistenciaService:
                 je_estado = j['estado']
 
                 if f_str in matrix[eid]:
-                    # Solo EXTRA/RECHAZADA cambian el estado visual
+                    # Inyectar metadatos para renderizado de Celda Dividida (Split Cell) en el frontend
+                    matrix[eid][f_str]['jornada_adicional'] = {
+                        'id': j['id'],
+                        'estado': j['estado'],
+                        'hora_entrada': j['hora_entrada'],
+                        'hora_salida': j['hora_salida'],
+                        'minutos_trabajados': j['minutos_trabajados'],
+                        'observaciones': j.get('observaciones') or ''
+                    }
+                    
+                    # Conservar el estado ordinario a la izquierda. Si la JE está validada (EXTRA/RECHAZADA),
+                    # enriquecer o pisar según lógica tradicional
                     if je_estado in ESTADOS_JE_QUE_PISAN:
-                        matrix[eid][f_str]['estado'] = je_estado
-                    # Enriquecer horas reales SOLO si la JE las tiene definidas.
-                    # Si JE.hora_entrada es None, la marca biométrica de asistencias
-                    # se conserva — no se borra lo que el reloj registró.
-                    if j['hora_entrada'] is not None:
-                        matrix[eid][f_str]['hora_entrada_real'] = j['hora_entrada']
-                    if j['hora_salida'] is not None:
-                        matrix[eid][f_str]['hora_salida_real'] = j['hora_salida']
-                    matrix[eid][f_str]['minutos_extra_bruto'] = 0
-                    matrix[eid][f_str]['minutos_extra_autorizados'] = 0
-                    matrix[eid][f_str]['minutos_deuda'] = 0
-                    matrix[eid][f_str]['horas_trabajadas'] = (j['minutos_trabajados'] or 0) / 60.0
-                    matrix[eid][f_str]['observaciones'] = j.get('observaciones') or ''
+                        es_dia_habil = float(matrix[eid][f_str].get('horas_teoricas') or 0.0) > 0.0
+                        if es_dia_habil:
+                            # En día hábil ordinario, NO pisamos la asistencia ordinaria de la mañana.
+                            # Queremos conservar el estado ordinario a la izquierda (ej: OK, ATRASO, etc.)
+                            pass
+                        else:
+                            matrix[eid][f_str]['estado'] = je_estado
+                            # Enriquecer horas reales SOLO si la JE las tiene definidas.
+                            if j['hora_entrada'] is not None:
+                                matrix[eid][f_str]['hora_entrada_real'] = j['hora_entrada']
+                            if j['hora_salida'] is not None:
+                                matrix[eid][f_str]['hora_salida_real'] = j['hora_salida']
+                            matrix[eid][f_str]['minutos_extra_bruto'] = 0
+                            matrix[eid][f_str]['minutos_extra_autorizados'] = 0
+                            matrix[eid][f_str]['minutos_deuda'] = 0
+                            matrix[eid][f_str]['horas_trabajadas'] = (j['minutos_trabajados'] or 0) / 60.0
+                            matrix[eid][f_str]['observaciones'] = j.get('observaciones') or ''
                     # Nota: no existe rama else (JE sin asistencias).
                     # El motor siempre crea ambos registros juntos. Si faltara asistencias
                     # sería un bug de integridad que debe investigarse, no silenciarse.

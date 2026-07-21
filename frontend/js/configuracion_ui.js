@@ -1618,7 +1618,11 @@ window.loadAjustesSistema = async function() {
             'vencimiento_dias_alerta': 'ajuste-dias-alerta',
             'dias_alerta_bloqueante': 'ajuste-dias-bloqueante',
             'dia_cierre_rrhh': 'ajuste-dia-cierre',
-            'bioalba_dias_volatilidad': 'ajuste-dias-volatilidad'
+            'bioalba_dias_volatilidad': 'ajuste-dias-volatilidad',
+            'asistencia_emergencia_gap_horas': 'ajuste-emergencia-gap',
+            'asistencia_emergencia_banda_horas': 'ajuste-emergencia-banda',
+            'asistencia_emergencia_jornada_limite_horas': 'ajuste-emergencia-limite',
+            'asistencia_max_extras_ordinarias_dia_habil': 'ajuste-max-extras-dia-habil'
         };
 
         // Rellenar valores
@@ -1626,7 +1630,14 @@ window.loadAjustesSistema = async function() {
             const inputId = mapIds[a.clave];
             if (inputId) {
                 const el = document.getElementById(inputId);
-                if (el) el.value = a.valor;
+                if (el) {
+                    if (a.clave === 'asistencia_max_extras_ordinarias_dia_habil') {
+                        // En la DB se guarda en minutos, pero en la UI se muestra en horas
+                        el.value = (parseFloat(a.valor) / 60.0).toFixed(1);
+                    } else {
+                        el.value = a.valor;
+                    }
+                }
             }
         });
 
@@ -1646,12 +1657,23 @@ window.saveAjusteSistema = async function(clave, inputId) {
         return;
     }
 
+    let valorEnviar = valor;
+    if (clave === 'asistencia_max_extras_ordinarias_dia_habil') {
+        const hrs = parseFloat(valor);
+        if (isNaN(hrs) || hrs < 0) {
+            showToast("Ingrese un número de horas válido mayor o igual a 0", "error");
+            return;
+        }
+        // Convertir horas a minutos para almacenar en la DB
+        valorEnviar = String(Math.round(hrs * 60));
+    }
+
     // El backend espera int, así que enviaremos como número o string validable
     try {
         const response = await fetch(`${API_CONFIG}ajustes/${clave}/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(valor) // FastAPI `valor: str = Body(...)` lo recibirá
+            body: JSON.stringify(valorEnviar) // FastAPI lo recibirá
         });
 
         if (!response.ok) {

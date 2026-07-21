@@ -27,6 +27,7 @@ window.stateMarcacionesApp = window.stateMarcacionesApp || {
     isModoRRHH: true,
     fechaInicioRRHH: "",
     fechaFinRRHH: "",
+    usuarioModificoFechas: false,
     area: "",
     turnoId: "",
     empleadoId: "",
@@ -113,6 +114,10 @@ async function initMarcacionesUI() {
             if (activeResp.ok) {
                 const activePeriod = await activeResp.json();
                 if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
+                    if (stateMarcacionesApp.usuarioModificoFechas) {
+                        console.log("loadActivePeriodPromise: el usuario ya modificó las fechas manualmente. No sobreescribiendo.");
+                        return;
+                    }
                     stateMarcacionesApp.fechaInicioRRHH = activePeriod.fecha_inicio;
                     stateMarcacionesApp.fechaFinRRHH = activePeriod.fecha_fin;
                     console.log("Periodo activo RRHH cargado (async):", activePeriod);
@@ -135,6 +140,10 @@ async function initMarcacionesUI() {
             if (resp.ok) {
                 const ultimo = await resp.json();
                 if (ultimo && ultimo.fecha_fin) {
+                    if (stateMarcacionesApp.usuarioModificoFechas) {
+                        console.log("Fallback ultimo-cierre: el usuario ya modificó las fechas manualmente. No sobreescribiendo.");
+                        return;
+                    }
                     const lastFin = new Date(ultimo.fecha_fin);
                     lastFin.setDate(lastFin.getDate() + 1);
                     stateMarcacionesApp.fechaInicioRRHH = lastFin.toISOString().split('T')[0];
@@ -427,8 +436,13 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
 let _dependentFiltersDebounceTimer = null;
 
 function updateMarcacionesState(key, value) {
+    if (key === 'fechaInicioRRHH' || key === 'fechaFinRRHH') {
+        stateMarcacionesApp.usuarioModificoFechas = true;
+    }
+
     if (key === 'month' || key === 'year') {
         stateMarcacionesApp[key] = parseInt(value, 10);
+        stateMarcacionesApp.usuarioModificoFechas = false;
     } else {
         stateMarcacionesApp[key] = value;
     }
@@ -465,6 +479,10 @@ function updateMarcacionesState(key, value) {
         })
         .then(activePeriod => {
             if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
+                if (stateMarcacionesApp.usuarioModificoFechas) {
+                    console.log("updateMarcacionesState: el usuario ya modificó las fechas manualmente. No sobreescribiendo.");
+                    return;
+                }
                 stateMarcacionesApp.fechaInicioRRHH = activePeriod.fecha_inicio;
                 stateMarcacionesApp.fechaFinRRHH = activePeriod.fecha_fin;
                 console.log(`Periodo activo para ${areaName} cargado:`, activePeriod);
@@ -4514,7 +4532,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
         const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode, isFer);
         const tooltipData = _buildRichTooltipData(di, d, dt, feriadoDesc, isWE, emp);
-        return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer"
+        return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-bs-html="true"
@@ -5402,7 +5420,43 @@ function _analiticaCellBadge(di) {
         tooltipTitle = estadosCache[est].descripcion;
     }
 
-    const primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>`;
+    let primaryBadge = '';
+    if (di.jornada_adicional) {
+        const ja = di.jornada_adicional;
+        const class_izq = pillClass;
+        const label_izq = label;
+        
+        let class_der = 'badge-state-neutral';
+        let label_der = 'ESP';
+        let title_der = 'Jornada Especial Adicional';
+        
+        if (ja.estado === 'PENDIENTE') {
+            class_der = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
+            label_der = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
+            title_der = 'Jornada Adicional Pendiente de Aprobación';
+        } else if (ja.estado === 'EXTRA') {
+            class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
+            label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
+            title_der = 'Jornada Adicional Aprobada como Extra';
+        } else if (ja.estado === 'RECHAZADA') {
+            class_der = 'badge-state-danger';
+            label_der = 'REC';
+            title_der = 'Jornada Adicional Rechazada';
+        }
+        
+        primaryBadge = `
+        <div class="d-flex w-100 h-100" style="min-width: 52px; min-height: 22px; border-radius: 4px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); background-color: #fff;">
+            <div class="badge-status ${class_izq}" style="flex: 1; border-radius: 0; min-height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; line-height: 1.1; padding: 2px;" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}>
+                <span>${label_izq}</span>
+            </div>
+            <div style="width: 1px; background-color: rgba(0,0,0,0.12); align-self: stretch;"></div>
+            <div class="badge-status ${class_der}" style="flex: 1; border-radius: 0; min-height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; line-height: 1.1; padding: 2px;" title="${title_der}">
+                <span>${label_der}</span>
+            </div>
+        </div>`;
+    } else {
+        primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>`;
+    }
 
     // ── Badges secundarios según flags independientes ─────────────────────────
     // Solo se muestran si el flag es verdadero Y el estado primario no lo representa ya
@@ -5432,11 +5486,25 @@ function _analiticaCellBadge(di) {
         resultHtml = primaryBadge;
     }
 
-    if (di.observaciones && di.observaciones.includes('[ALERTA SISTEMA')) {
-        return `<div style="position:relative; display:inline-block; width:100%;">
-            ${resultHtml}
-            <div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>
-        </div>`;
+    const tieneEmergencia = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:');
+    const tieneAlertaSistema = di.observaciones && di.observaciones.includes('[ALERTA SISTEMA');
+    const tieneHE_Pendientes = di.minutos_extra_bruto > 0 && di.estado_he === 'PENDIENTE';
+
+    if (tieneEmergencia || tieneAlertaSistema || tieneHE_Pendientes) {
+        let wrapperHtml = `<div style="position:relative; display:inline-block; width:100%;">
+            ${resultHtml}`;
+        if (tieneEmergencia) {
+            wrapperHtml += `<div title="Llamado de Emergencia (Aprobado Directo)" style="position:absolute; top:-6px; left:-6px; font-size:0.75rem; color:#8b5cf6; z-index:10; filter:drop-shadow(0 0 2px rgba(139,92,246,0.5));"><i class="bi bi-lightning-charge-fill"></i></div>`;
+        }
+        if (tieneAlertaSistema) {
+            wrapperHtml += `<div title="Alerta de Sistema (Ver Tooltip)" style="position:absolute; top:-4px; right:-2px; width:12px; height:12px; background-color:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; border:2px solid white; z-index:10;"></div>`;
+        }
+        if (tieneHE_Pendientes) {
+            const rightOffset = tieneAlertaSistema ? '10px' : '-2px';
+            wrapperHtml += `<div title="Horas Extras Pendientes (${_fmtMin(di.minutos_extra_bruto)})" style="position:absolute; top:-4px; right:${rightOffset}; width:12px; height:12px; background-color:#f97316; border-radius:50%; box-shadow:0 0 6px #f97316; border:2px solid white; z-index:10;"></div>`;
+        }
+        wrapperHtml += `</div>`;
+        return wrapperHtml;
     }
     return resultHtml;
 }
@@ -5904,9 +5972,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     if (heBruta > 0 || heAprobada > 0) {
         let heRows = '';
         if (heBruta > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Bruta</span> ${valMins(heBruta, 'var(--success-color, #10b981)')}</div>`;
-        if (heAprobada > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Aprobada</span> ${valMins(heAprobada, 'var(--success-color, #10b981)')}</div>`;
-        if (hePendiente > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Pendiente</span> ${valMins(hePendiente, 'var(--success-color, #10b981)')}</div>`;
-        if (heRechazada > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Rechazada</span> ${valMins(heRechazada, 'var(--success-color, #10b981)')}</div>`;
+        if (heAprobada > 0) heRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(16, 185, 129, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Autorizada</span> ${valMins(heAprobada, 'var(--success-color, #10b981)')}</div>`;
         heRows += `<div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total</span> ${valMins(heTotal, 'var(--success-color, #10b981)')}</div>`;
 
         heCardHtml = `
@@ -5955,6 +6021,66 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         </div>`;
     }
 
+    // ── Bloque de Jornada Adicional o Llamados de Emergencia en Tooltip ──
+    let bloquesAdicionalesHtml = '';
+    
+    // 1. Mostrar Jornada Especial Adicional si está inyectada en el registro
+    if (e.jornada_adicional) {
+        const ja = e.jornada_adicional;
+        let estadoLabel = ja.estado;
+        let estadoColor = '#64748b'; // gris
+        let iconHtml = '<i class="bi bi-clock me-1"></i>';
+        
+        if (ja.estado === 'PENDIENTE') {
+            estadoLabel = 'PENDIENTE DE APROBACIÓN';
+            estadoColor = '#0284c7'; // celeste / azul
+            iconHtml = '<i class="bi bi-hourglass-split me-1"></i>';
+        } else if (ja.estado === 'EXTRA') {
+            estadoLabel = 'APROBADA COMO EXTRA';
+            estadoColor = '#16a34a'; // verde
+            iconHtml = '<i class="bi bi-check-circle-fill me-1"></i>';
+        } else if (ja.estado === 'RECHAZADA') {
+            estadoLabel = 'RECHAZADA';
+            estadoColor = '#dc2626'; // rojo
+            iconHtml = '<i class="bi bi-x-circle-fill me-1"></i>';
+        }
+        
+        const hEntJa = ja.hora_entrada ? ja.hora_entrada.substring(0, 5) : '--:--';
+        const hSalJa = ja.hora_salida ? ja.hora_salida.substring(0, 5) : '--:--';
+        const duracionJa = ja.minutos_trabajados ? formatExactMinutesToTime(ja.minutos_trabajados) : '--:--';
+        
+        bloquesAdicionalesHtml += `
+        <div style="border: 1px solid ${estadoColor}33; background-color: ${estadoColor}08; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
+            <div style="color: ${estadoColor}; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <span><i class="bi bi-calendar-plus me-1"></i> JORNADA ADICIONAL</span>
+                <span style="font-size: 0.58rem; background-color: ${estadoColor}1a; padding: 1px 6px; border-radius: 4px; border: 1px solid ${estadoColor}33; display: inline-flex; align-items: center; text-transform: uppercase;">${iconHtml}${estadoLabel}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-primary, #1e293b); font-family: monospace;">
+                <div>Entrada: <span style="font-weight:700;">${hEntJa}</span></div>
+                <div>Salida: <span style="font-weight:700;">${hSalJa}</span></div>
+                <div>Duración: <span style="font-weight:700; color: ${estadoColor};">${duracionJa}</span></div>
+            </div>
+        </div>`;
+    }
+    
+    // 2. Mostrar Llamado de Emergencia Corto si existe en observaciones
+    if (e.observaciones && e.observaciones.includes('[Llamado de Emergencia:')) {
+        const regex = /\[Llamado de Emergencia:\s*([^\]]+)\]/g;
+        let match;
+        while ((match = regex.exec(e.observaciones)) !== null) {
+            const contenido = match[1]; // ej: "38 min de 03:38 a 04:16"
+            bloquesAdicionalesHtml += `
+            <div style="border: 1px solid rgba(139, 92, 246, 0.3); background-color: rgba(139, 92, 246, 0.06); border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
+                <div style="color: #7c3aed; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+                    <i class="bi bi-lightning-charge-fill me-1"></i> LLAMADO DE EMERGENCIA
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text-primary, #1e293b); font-weight: 600; line-height: 1.3;">
+                    ${contenido}
+                </div>
+            </div>`;
+        }
+    }
+
     const html = `
     <div style="width: 340px; font-family: 'Inter', sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 12px; border-radius: 6px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium);">
         
@@ -5967,7 +6093,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem;">
-                    ${dateFormatted}
+                     ${dateFormatted}
                 </div>
                 <div>
                     ${badgeHtml}
@@ -6025,6 +6151,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         </div>
 
         ${incidenciasHtml}
+
+        ${bloquesAdicionalesHtml}
 
         ${cardsHtml}
     </div>

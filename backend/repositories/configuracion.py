@@ -213,6 +213,21 @@ class ConfiguracionRepository:
             except Exception as e_a:
                 logger.debug(f"Semilla ajustes: {e_a}")
 
+        # Asegurar semillas de emergencia dinámicas adicionales en actualizaciones
+        try:
+            semillas_emergencia = [
+                ("asistencia_emergencia_gap_horas", "4.0", "Horas de gap para segmentación de marcas de emergencia"),
+                ("asistencia_emergencia_banda_horas", "2.0", "Horas de holgura para la banda de tolerancia envolvente"),
+                ("asistencia_emergencia_jornada_limite_horas", "3.0", "Horas límite para calificar bloque como jornada especial en vez de horas extras directas"),
+                ("asistencia_max_extras_ordinarias_dia_habil", "240", "Minutos límite de horas extras ordinarias en día hábil antes de convertirse en especial (100% del bloque)")
+            ]
+            await self.db.executemany(
+                "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
+                semillas_emergencia
+            )
+        except Exception as e_se:
+            logger.warning(f"⚠️ Error al sembrar ajustes de emergencia: {e_se}")
+
         # 7. Tabla Historial de Cierres de Periodo (RRHH) [NEW]
         if not await self.db.table_exists("cierres_periodos"):
             await self.db.execute("""
@@ -245,6 +260,12 @@ class ConfiguracionRepository:
         await self.db.execute("""
             INSERT OR IGNORE INTO ajustes (clave, valor, descripcion)
             VALUES ('bioalba_dias_volatilidad', '7', 'Días de volatilidad para sincronización de marcaciones BioAlba')
+        """)
+
+        # Asegurar semilla de asistencia_max_extras_ordinarias_dia_habil si la tabla ya existía pero el valor no
+        await self.db.execute("""
+            INSERT OR IGNORE INTO ajustes (clave, valor, descripcion)
+            VALUES ('asistencia_max_extras_ordinarias_dia_habil', '240', 'Minutos límite de horas extras ordinarias en día hábil antes de convertirse en especial (100% del bloque)')
         """)
 
         # 7.1. Tabla Notificaciones Areas [NEW]

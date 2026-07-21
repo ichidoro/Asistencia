@@ -247,6 +247,11 @@ async def root(request: Request):
                 "request": request,
                 "version": settings.APP_VERSION,
                 "startup_id": STARTUP_ID
+            },
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
             }
         )
     
@@ -262,12 +267,28 @@ async def root(request: Request):
 @app.get("/login.html", tags=["Root"], include_in_schema=False)
 async def login_redirect(request: Request):
     """Permite el acceso a login.html desde el root"""
-    return templates.TemplateResponse("login.html", {"request": request, "version": settings.APP_VERSION, "startup_id": STARTUP_ID})
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "version": settings.APP_VERSION, "startup_id": STARTUP_ID},
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
 
 @app.get("/index.html", tags=["Root"], include_in_schema=False)
 async def index_redirect(request: Request):
     """Permite el acceso a index.html desde el root"""
-    return templates.TemplateResponse("index.html", {"request": request, "version": settings.APP_VERSION, "startup_id": STARTUP_ID})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "version": settings.APP_VERSION, "startup_id": STARTUP_ID},
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
 
 
 

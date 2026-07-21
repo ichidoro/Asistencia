@@ -155,7 +155,7 @@ class ReportService:
                             di_nomen = di_check.get("nomenclatura", "") or ""
                             is_justificado = (
                                 any(ej in di_estado.upper() for ej in estados_justificados) or
-                                bool(di_nomen)
+                                (bool(di_nomen) and str(di_nomen).strip().upper() != 'DEOP')
                             )
                             
                             if is_justificado:

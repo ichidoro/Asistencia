@@ -561,6 +561,10 @@ async def post_batch_sync(
 
             # ── Fase B-2: Calcular en memoria (collect_only=True, 0 writes a DB) ─
             all_results_to_save: list = []  # Acumula resultados de TODOS los empleados
+            all_he_to_save: list = []
+            all_he_to_delete: list = []
+            all_je_to_save: list = []
+            all_je_to_delete: list = []
 
             for emp_idx, item in enumerate(data.items):
                 jid = job_ids.get(item.empleado_id)
@@ -584,6 +588,10 @@ async def post_batch_sync(
                     )
                     collected = result.get('_collect', [])
                     all_results_to_save.extend(collected)
+                    all_he_to_save.extend(result.get('_he_collect', []))
+                    all_he_to_delete.extend(result.get('_he_delete', []))
+                    all_je_to_save.extend(result.get('_je_collect', []))
+                    all_je_to_delete.extend(result.get('_je_delete', []))
                     logger.info(
                         f"[⚡ Batch] {nombre}: {result.get('procesados',0)} días calculados, "
                         f"{len(collected)} a guardar, {result.get('sin_cambio',0)} sin cambio"
@@ -593,20 +601,38 @@ async def post_batch_sync(
                     _update_job(jid, status="error", error=str(emp_err))
 
             # ── Fase B-3: UN SOLO batch_upsert masivo para todos los empleados ──
-            if all_results_to_save:
+            if all_results_to_save or all_he_to_save or all_he_to_delete or all_je_to_save or all_je_to_delete:
                 for jid in job_ids.values():
                     _update_job(jid,
-                        phase_label=f"Guardando {len(all_results_to_save)} registros (1 commit para {total_emps} empleados)...",
+                        phase_label=f"Guardando registros en la base de datos...",
                         pct=93,
                     )
                 try:
                     import time as _time_mod
                     t_save = _time_mod.time()
-                    await service.repository.batch_upsert_asistencia(all_results_to_save)
+                    
+                    # 1. Guardar asistencias
+                    if all_results_to_save:
+                        await service.repository.batch_upsert_asistencia(all_results_to_save)
+                        
+                    # 2. Guardar y eliminar horas extras
+                    if all_he_to_save:
+                        await service.he_repo.batch_upsert(all_he_to_save, suppress_auto_sync=True)
+                    if all_he_to_delete:
+                        for eid_del, f_str in all_he_to_delete:
+                            await service.he_repo.delete_by_empleado_fecha(eid_del, f_str)
+                            
+                    # 3. Guardar y eliminar jornadas especiales
+                    if all_je_to_save:
+                        for je_rec in all_je_to_save:
+                            await service.repository.upsert_jornada_especial(je_rec)
+                    if all_je_to_delete:
+                        for eid_del, f_str in all_je_to_delete:
+                            await service.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (eid_del, f_str))
+                            
                     elapsed_save = int((_time_mod.time() - t_save) * 1000)
                     logger.info(
-                        f"[⚡ Batch] WAL local: {len(all_results_to_save)} registros asistencia listos "
-                        f"en {elapsed_save}ms"
+                        f"[⚡ Batch] WAL local: guardado completado en {elapsed_save}ms"
                     )
                 except Exception as save_err:
                     logger.error(f"❌ [Batch] Error en commit masivo: {save_err}. Intentando fallback por empleado...")
@@ -1307,6 +1333,8 @@ async def validar_jornada_endpoint(
                 )
 
         resultado = await service.validar_jornada(empleado_id, fecha, accion)
+        if isinstance(resultado, dict) and 'error' in resultado:
+            raise HTTPException(status_code=400, detail=resultado['error'])
         mensaje = "Jornada validada exitosamente" if accion == "APROBAR" else "Jornada rechazada exitosamente"
         return {
             "success": True, 

@@ -2247,6 +2247,52 @@
                                                 </div>
                                             </div>
                                         </div>
+
+                                        <!-- Tarjeta Jornadas Especiales y Emergencias -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border-0 shadow-sm">
+                                                <div class="card-header bg-white fw-bold py-3">
+                                                    <i class="bi bi-clock-fill text-danger me-2"></i>Jornadas Especiales y Emergencias
+                                                </div>
+                                                <div class="card-body">
+                                                    <!-- 1. Límite de Horas Extras Diarias en Día Hábil -->
+                                                    <div class="mb-3">
+                                                         <label for="ajuste-max-extras-dia-habil" class="form-label fw-bold small text-muted">Límite HE Diaria en Día Hábil (Horas)</label>
+                                                         <div class="input-group">
+                                                             <input type="number" step="0.5" class="form-control" id="ajuste-max-extras-dia-habil" min="0" max="12" placeholder="Ej: 4.0">
+                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_max_extras_ordinarias_dia_habil', 'ajuste-max-extras-dia-habil')" title="Guardar">
+                                                                 <i class="bi bi-save"></i>
+                                                             </button>
+                                                         </div>
+                                                         <div class="form-text">Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente.</div>
+                                                    </div>
+
+                                                    <!-- 2. Gap de Emergencia -->
+                                                    <div class="mb-3">
+                                                         <label for="ajuste-emergencia-gap" class="form-label fw-bold small text-muted">Gap de Emergencia (Horas)</label>
+                                                         <div class="input-group">
+                                                             <input type="number" step="0.5" class="form-control" id="ajuste-emergencia-gap" min="0" max="24" placeholder="Ej: 4.0">
+                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_emergencia_gap_horas', 'ajuste-emergencia-gap')" title="Guardar">
+                                                                 <i class="bi bi-save"></i>
+                                                             </button>
+                                                         </div>
+                                                         <div class="form-text">Horas mínimas de separación para la segmentación por marcas.</div>
+                                                    </div>
+
+                                                    <!-- 3. Límite de Duración para Llamado de Emergencia -->
+                                                    <div class="mb-0">
+                                                         <label for="ajuste-emergencia-limite" class="form-label fw-bold small text-muted">Duración Máx. Emergencia Corta</label>
+                                                         <div class="input-group">
+                                                             <input type="number" step="0.5" class="form-control" id="ajuste-emergencia-limite" min="0" max="12" placeholder="Ej: 3.0">
+                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_emergencia_jornada_limite_horas', 'ajuste-emergencia-limite')" title="Guardar">
+                                                                 <i class="bi bi-save"></i>
+                                                             </button>
+                                                         </div>
+                                                         <div class="form-text">Si la emergencia dura más de esto, se evalúa como Jornada Especial Pendiente.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <!-- Tab Productos Propios (Catálogo Beneficios) -->

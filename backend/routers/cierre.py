@@ -197,7 +197,7 @@ async def acta_resumen(
                 SUM(CASE WHEN a.estado IN ('ATRASO','SALIDA_ADELANTADA','ATR_SAD') THEN 1 ELSE 0 END) AS dias_con_novedad,
                 SUM(CASE WHEN a.estado = 'VACACIONES' THEN 1 ELSE 0 END)                             AS vacaciones,
                 SUM(CASE WHEN a.estado LIKE 'LICENCIA%' THEN 1 ELSE 0 END)                           AS licencias,
-                SUM(CASE WHEN a.estado = 'JORNADA_ESPECIAL' THEN 1 ELSE 0 END)                       AS jornadas_especiales,
+                SUM(CASE WHEN a.estado IN ('JORNADA_ESPECIAL', 'EXTRA') THEN 1 ELSE 0 END)          AS jornadas_especiales,
                 SUM(CASE WHEN a.estado = 'LIBRE' THEN 1 ELSE 0 END)                                  AS dias_libres_programados,
                 SUM(CASE WHEN a.estado = 'FERIADO' THEN 1 ELSE 0 END)                                AS dias_feriado,
                 SUM(CASE WHEN a.estado = 'INASISTENCIA' THEN 1 ELSE 0 END)                           AS inasistencias,
