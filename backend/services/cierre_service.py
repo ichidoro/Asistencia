@@ -389,7 +389,7 @@ class CierreService:
                 JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                     AND (? >= ha.fecha_desde AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR ? <= ha.fecha_hasta))
                 JOIN areas ar ON ha.area_id = ar.id
-                WHERE e.activo = 1
+                WHERE e.activo = 1 AND (e.excluido_asistencia IS NULL OR e.excluido_asistencia = 0)
                 """,
                 (fecha_fin, fecha_inicio)
             )

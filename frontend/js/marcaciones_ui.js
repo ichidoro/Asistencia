@@ -88,6 +88,7 @@ async function initMarcacionesUI() {
 
     // 1. Renderizar Estructura Base (Toolbar + Contenedor de Grilla) INMEDIATAMENTE
     renderMarcacionesToolbar(container);
+    cargarPeriodosEnToolbar();
 
     // Colocar un loading spinner en el contenedor de vistas de inmediato
     const viewContainer = document.getElementById('marcaciones-view-container');
@@ -127,6 +128,7 @@ async function initMarcacionesUI() {
                     const inputFin = document.getElementById('rrhh-fecha-fin');
                     if (inputInicio) inputInicio.value = activePeriod.fecha_inicio;
                     if (inputFin) inputFin.value = activePeriod.fecha_fin;
+                    if (window.syncPeriodoDropdownConFechas) window.syncPeriodoDropdownConFechas();
                     return;
                 }
             }
@@ -157,6 +159,7 @@ async function initMarcacionesUI() {
                     const inputFin = document.getElementById('rrhh-fecha-fin');
                     if (inputInicio) inputInicio.value = stateMarcacionesApp.fechaInicioRRHH;
                     if (inputFin) inputFin.value = stateMarcacionesApp.fechaFinRRHH;
+                    if (window.syncPeriodoDropdownConFechas) window.syncPeriodoDropdownConFechas();
                 }
             }
         } catch (e) {
@@ -286,8 +289,16 @@ function renderMarcacionesToolbar(container) {
         <!-- Toolbar de Filtros -->
         <div class="marcaciones-filter-bar">
             <div class="row g-2 align-items-end">
+                <!-- Filtro Período (NUEVO) -->
+                <div class="col-md-2">
+                    <label for="rrhh-periodo-select" class="form-label small fw-semibold text-muted mb-1">Período de Cierre</label>
+                    <select class="form-select form-select-sm" id="rrhh-periodo-select" onchange="window.cambiarPeriodoFiltro(this.value)" style="border-color:#c7d2fe">
+                        <option value="custom">-- Rango Personalizado --</option>
+                    </select>
+                </div>
+
                 <!-- Filtro Tiempo (Dinámico) -->
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div id="filter-time-rrhh">
                         <div class="d-flex gap-2">
                             <div class="flex-grow-1">
@@ -322,16 +333,16 @@ function renderMarcacionesToolbar(container) {
 
                 <!-- Empleado -->
                 <div class="col-md-2">
-                    <label for="marcacion-empleado" class="form-label small fw-semibold text-muted mb-1">Empleado</label>
+                    <label class="form-label small fw-semibold text-muted mb-1">Empleado</label>
                     <select class="form-select form-select-sm" id="marcacion-empleado" onchange="updateMarcacionesState('empleadoId', this.value)">
                         <option value="">-- Ver Todo el Equipo --</option>
                     </select>
                 </div>
 
                 <!-- Botón Ver -->
-                <div class="col-md-2">
-                    <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;">
-                        <i class="bi bi-search"></i> Ver
+                <div class="col-md-1">
+                    <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;" title="Ver">
+                        <i class="bi bi-search"></i>
                     </button>
                 </div>
             </div>
@@ -345,6 +356,96 @@ function renderMarcacionesToolbar(container) {
             </div>
         </div>
     `;
+}
+
+window.syncPeriodoDropdownConFechas = function() {
+    const select = document.getElementById('rrhh-periodo-select');
+    if (!select) return;
+    
+    const valToFind = `${stateMarcacionesApp.fechaInicioRRHH}|${stateMarcacionesApp.fechaFinRRHH}`;
+    let found = false;
+    for (let i = 0; i < select.options.length; i++) {
+        if (select.options[i].value === valToFind) {
+            select.selectedIndex = i;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        select.value = 'custom';
+    }
+    
+    const inputInicio = document.getElementById('rrhh-fecha-inicio');
+    const inputFin = document.getElementById('rrhh-fecha-fin');
+    if (inputInicio && inputFin) {
+        if (found) {
+            inputInicio.setAttribute('readonly', 'true');
+            inputFin.setAttribute('readonly', 'true');
+        } else {
+            inputInicio.removeAttribute('readonly');
+            inputFin.removeAttribute('readonly');
+        }
+    }
+};
+
+window.cambiarPeriodoFiltro = function(val) {
+    const inputInicio = document.getElementById('rrhh-fecha-inicio');
+    const inputFin = document.getElementById('rrhh-fecha-fin');
+    
+    if (val === 'custom') {
+        stateMarcacionesApp.usuarioModificoFechas = true;
+        if (inputInicio) inputInicio.removeAttribute('readonly');
+        if (inputFin) inputFin.removeAttribute('readonly');
+    } else {
+        const [fIni, fFin] = val.split('|');
+        stateMarcacionesApp.fechaInicioRRHH = fIni;
+        stateMarcacionesApp.fechaFinRRHH = fFin;
+        stateMarcacionesApp.usuarioModificoFechas = false;
+        
+        if (inputInicio) {
+            inputInicio.value = fIni;
+            inputInicio.setAttribute('readonly', 'true');
+        }
+        if (inputFin) {
+            inputFin.value = fFin;
+            inputFin.setAttribute('readonly', 'true');
+        }
+        
+        loadMarcacionesData();
+    }
+};
+
+async function cargarPeriodosEnToolbar() {
+    try {
+        const resp = await fetch('/api/configuracion/periodos/', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (resp.ok) {
+            const periodos = await resp.json();
+            const select = document.getElementById('rrhh-periodo-select');
+            if (select) {
+                select.innerHTML = '<option value="custom">-- Rango Personalizado --</option>';
+                
+                periodos.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = `${p.fecha_inicio}|${p.fecha_fin}`;
+                    
+                    let label = `${p.mes_cierre}`;
+                    if (p.estado === 'cerrado') {
+                        label += ' (Cerrado)';
+                    } else if (p.activo === 1 || p.activo === true) {
+                        label += ' (Vigente)';
+                    }
+                    option.textContent = label;
+                    select.appendChild(option);
+                });
+                
+                window.syncPeriodoDropdownConFechas();
+            }
+        }
+    } catch (e) {
+        console.error("Error al cargar periodos en toolbar:", e);
+    }
 }
 
 // ==========================================
@@ -438,9 +539,11 @@ let _dependentFiltersDebounceTimer = null;
 function updateMarcacionesState(key, value) {
     if (key === 'fechaInicioRRHH' || key === 'fechaFinRRHH') {
         stateMarcacionesApp.usuarioModificoFechas = true;
-    }
-
-    if (key === 'month' || key === 'year') {
+        stateMarcacionesApp[key] = value;
+        if (window.syncPeriodoDropdownConFechas) {
+            window.syncPeriodoDropdownConFechas();
+        }
+    } else if (key === 'month' || key === 'year') {
         stateMarcacionesApp[key] = parseInt(value, 10);
         stateMarcacionesApp.usuarioModificoFechas = false;
     } else {
@@ -491,6 +594,7 @@ function updateMarcacionesState(key, value) {
                 const inputFin = document.getElementById('rrhh-fecha-fin');
                 if (inputInicio) inputInicio.value = activePeriod.fecha_inicio;
                 if (inputFin) inputFin.value = activePeriod.fecha_fin;
+                if (window.syncPeriodoDropdownConFechas) window.syncPeriodoDropdownConFechas();
             }
         })
         .catch(e => {
@@ -3303,9 +3407,12 @@ async function openCierrePeriodoModal() {
             .filter(val => val !== "" && val !== "Todas");
     }
 
-    const vigentePeriodo = periodos.find(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
-    const fIni = vigentePeriodo ? vigentePeriodo.fecha_inicio : (stateMarcacionesApp.fechaInicioRRHH || "");
-    const fFin = vigentePeriodo ? vigentePeriodo.fecha_fin : (stateMarcacionesApp.fechaFinRRHH || "");
+    // Priorizar el período correspondiente a las fechas filtradas en la grilla principal
+    const periodFromGrid = periodos.find(p => p.fecha_inicio === stateMarcacionesApp.fechaInicioRRHH && p.fecha_fin === stateMarcacionesApp.fechaFinRRHH);
+    const vigentePeriodo = periodFromGrid || periodos.find(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
+    
+    const fIni = stateMarcacionesApp.fechaInicioRRHH || (vigentePeriodo ? vigentePeriodo.fecha_inicio : "");
+    const fFin = stateMarcacionesApp.fechaFinRRHH || (vigentePeriodo ? vigentePeriodo.fecha_fin : "");
     const area = (stateMarcacionesApp.area === 'Todas' || !stateMarcacionesApp.area) ? "" : stateMarcacionesApp.area;
 
     const html = `
@@ -3454,33 +3561,68 @@ function updateWizardTabs(step) {
     }
 }
 
-window.cierreWizardCambiarArea = function(val) {
+window.cierreWizardCambiarArea = async function(val) {
     window.cierreWizardState.area = val;
+    
+    if (val) {
+        try {
+            const resp = await fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(val)}/`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (resp.ok) {
+                const activePeriod = await resp.json();
+                if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
+                    window.cierreWizardState.fIni = activePeriod.fecha_inicio;
+                    window.cierreWizardState.fFin = activePeriod.fecha_fin;
+                }
+            }
+        } catch (e) {
+            console.error("Error al obtener periodo activo para el área en el wizard:", e);
+        }
+    }
+    
+    if (typeof renderWizardStep === 'function') {
+        renderWizardStep(0);
+    }
     actualizarInfoPeriodoEnWizard();
 };
 
-window.cierreWizardCargarPeriodo = function(val) {
-    if (!val) return;
-    const [fIni, fFin] = val.split('|');
-    
-    const inputIni = document.getElementById('cierre-wizard-fini');
-    const inputFin = document.getElementById('cierre-wizard-ffin');
-    if (inputIni) inputIni.value = fIni;
-    if (inputFin) inputFin.value = fFin;
-    
-    window.cierreWizardState.fIni = fIni;
-    window.cierreWizardState.fFin = fFin;
-    
-    actualizarInfoPeriodoEnWizard();
+window.cierreWizardSeleccionarPeriodo = function(val) {
+    if (val === 'custom') {
+        const inputIni = document.getElementById('cierre-wizard-fini');
+        const inputFin = document.getElementById('cierre-wizard-ffin');
+        if (inputIni) inputIni.removeAttribute('readonly');
+        if (inputFin) inputFin.removeAttribute('readonly');
+    } else {
+        const [fIni, fFin] = val.split('|');
+        window.cierreWizardState.fIni = fIni;
+        window.cierreWizardState.fFin = fFin;
+        
+        const inputIni = document.getElementById('cierre-wizard-fini');
+        const inputFin = document.getElementById('cierre-wizard-ffin');
+        if (inputIni) {
+            inputIni.value = fIni;
+            inputIni.setAttribute('readonly', 'true');
+        }
+        if (inputFin) {
+            inputFin.value = fFin;
+            inputFin.setAttribute('readonly', 'true');
+        }
+        
+        if (typeof renderWizardStep === 'function') {
+            renderWizardStep(0);
+        }
+        actualizarInfoPeriodoEnWizard();
+    }
 };
 
-window.cierreWizardCambiarFechas = function() {
+window.cierreWizardCambiarFechasManual = function() {
     window.cierreWizardState.fIni = document.getElementById('cierre-wizard-fini')?.value || "";
     window.cierreWizardState.fFin = document.getElementById('cierre-wizard-ffin')?.value || "";
     
-    const selectPeriodo = document.getElementById('cierre-wizard-periodo-select');
-    if (selectPeriodo) {
-        selectPeriodo.value = "";
+    const btnIniciar = document.getElementById('btn-cierre-wizard-iniciar');
+    if (btnIniciar) {
+        btnIniciar.disabled = (!window.cierreWizardState.fIni || !window.cierreWizardState.fFin);
     }
     
     actualizarInfoPeriodoEnWizard();
@@ -3630,8 +3772,17 @@ function renderWizardStep(step) {
     if (step === 0) {
         btnNext.style.display = 'none';
 
-        // Filtrar periodo vigente actual
-        const vigente = s.periodos.find(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
+        // Buscar el periodo que corresponde a las fechas configuradas en el wizard (s.fIni / s.fFin)
+        let vigente = s.periodos.find(p => p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin);
+        
+        // Fallback al periodo vigente activo de la DB si no coincide con ninguno
+        if (!vigente && (!s.fIni || !s.fFin)) {
+            vigente = s.periodos.find(p => p.estado === 'abierto' && (p.activo === 1 || p.activo === true));
+            if (vigente) {
+                s.fIni = vigente.fecha_inicio;
+                s.fFin = vigente.fecha_fin;
+            }
+        }
 
         // Opciones de área
         const areasOptions = s.areas.map(a => {
@@ -3639,26 +3790,51 @@ function renderWizardStep(step) {
             return `<option value="${a}" ${isSelected}>${a}</option>`;
         }).join('');
 
+        // Opciones de período
+        const periodosOptions = s.periodos.map(p => {
+            const isSelected = (p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin) ? 'selected' : '';
+            let label = `${p.mes_cierre}`;
+            if (p.estado === 'cerrado') label += ' (Cerrado)';
+            else if (p.activo === 1 || p.activo === true) label += ' (Vigente)';
+            return `<option value="${p.fecha_inicio}|${p.fecha_fin}" ${isSelected}>${label}</option>`;
+        }).join('');
+        
+        const isCustom = !s.periodos.some(p => p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin);
+
         let periodInfoHtml = '';
         if (vigente) {
-            // Asegurar que las fechas del wizard estén sincronizadas con el vigente
-            s.fIni = vigente.fecha_inicio;
-            s.fFin = vigente.fecha_fin;
-            
             const fIniFormateada = vigente.fecha_inicio.split('-').reverse().join('-');
             const fFinFormateada = vigente.fecha_fin.split('-').reverse().join('-');
             
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-success-subtle" style="border-left: 4px solid #10b981 !important;">
                     <label class="form-label fw-bold text-success small mb-2">
-                        <i class="bi bi-calendar-check-fill me-1"></i> 2. Período Vigente a Cerrar:
+                        <i class="bi bi-calendar-check-fill me-1"></i> Período a Cerrar:
                     </label>
                     <div class="fw-bold text-dark fs-5 mb-1">${vigente.mes_cierre}</div>
                     <div class="small text-muted mb-2">
                         <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
                     </div>
-                    <span class="badge bg-success-subtle text-success border border-success-subtle align-self-start">
-                        <i class="bi bi-unlock-fill me-1"></i> Período Abierto & Vigente
+                    ${vigente.estado === 'cerrado' 
+                        ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle align-self-start"><i class="bi bi-lock-fill me-1"></i> Período Cerrado</span>'
+                        : '<span class="badge bg-success-subtle text-success border border-success-subtle align-self-start"><i class="bi bi-unlock-fill me-1"></i> Período Abierto & Vigente</span>'
+                    }
+                </div>
+            `;
+        } else if (s.fIni && s.fFin) {
+            const fIniFormateada = s.fIni.split('-').reverse().join('-');
+            const fFinFormateada = s.fFin.split('-').reverse().join('-');
+            periodInfoHtml = `
+                <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-warning-subtle" style="border-left: 4px solid #f59e0b !important;">
+                    <label class="form-label fw-bold text-warning small mb-2">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Rango Personalizado:
+                    </label>
+                    <div class="fw-bold text-dark fs-6 mb-1">Rango Fuera de Calendario</div>
+                    <div class="small text-muted mb-2">
+                        <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
+                    </div>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle align-self-start">
+                        No oficial
                     </span>
                 </div>
             `;
@@ -3666,11 +3842,11 @@ function renderWizardStep(step) {
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-danger-subtle" style="border-left: 4px solid #ef4444 !important;">
                     <label class="form-label fw-bold text-danger small mb-2">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i> 2. Período a Cerrar:
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Período a Cerrar:
                     </label>
-                    <div class="text-danger fw-bold mb-2">No se encontró un Período Vigente</div>
+                    <div class="text-danger fw-bold mb-2">Período No Definido</div>
                     <p class="small text-muted mb-0">
-                        Debe configurar y marcar un tramo como **Vigente** en el panel de **Configuración > Tramos de Cierre** antes de continuar.
+                        Seleccione un período oficial o ingrese un rango de fechas válido.
                     </p>
                 </div>
             `;
@@ -3680,13 +3856,13 @@ function renderWizardStep(step) {
             <div class="py-2">
                 <h4 class="fw-bold text-dark mb-3"><i class="bi bi-gear-fill text-secondary me-2"></i> Configuración de Cierre de Período</h4>
                 <p class="text-muted small">
-                    Seleccione el área para iniciar la evaluación del cierre del período vigente. La grilla principal se filtrará automáticamente en el fondo al confirmar.
+                    Seleccione el área y el período o rango de fechas que desea evaluar para el cierre. Al continuar, se pre-evaluarán las anomalías y el estado del período.
                 </p>
                 
                 <div class="row g-3 mt-2">
-                    <!-- Selección de Área -->
+                    <!-- Selección de Área y Período -->
                     <div class="col-md-6">
-                        <div class="card border-0 shadow-sm p-3 h-100 bg-light">
+                        <div class="card border-0 shadow-sm p-3 bg-light mb-3">
                             <label for="cierre-wizard-area-select" class="form-label fw-bold text-secondary small mb-2">
                                 <i class="bi bi-geo-alt-fill text-danger me-1"></i> 1. Área a Cerrar:
                             </label>
@@ -3694,13 +3870,31 @@ function renderWizardStep(step) {
                                 <option value="">-- Seleccione un Área --</option>
                                 ${areasOptions}
                             </select>
-                            <div class="form-text text-muted small mt-2">
-                                El cierre se procesa por área. Solo se evaluarán los empleados pertenecientes a este grupo.
+                        </div>
+
+                        <div class="card border-0 shadow-sm p-3 bg-light">
+                            <label for="cierre-wizard-periodo-select" class="form-label fw-bold text-secondary small mb-2">
+                                <i class="bi bi-calendar-check text-primary me-1"></i> 2. Seleccionar Período:
+                            </label>
+                            <select class="form-select border-primary-subtle mb-3" id="cierre-wizard-periodo-select" onchange="cierreWizardSeleccionarPeriodo(this.value)">
+                                ${periodosOptions}
+                                <option value="custom" ${isCustom ? 'selected' : ''}>-- Rango Personalizado --</option>
+                            </select>
+
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-muted mb-1">Fecha Inicio</label>
+                                    <input type="date" class="form-control form-control-sm" id="cierre-wizard-fini" value="${s.fIni || ''}" ${!isCustom ? 'readonly' : ''} onchange="cierreWizardCambiarFechasManual()">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold text-muted mb-1">Fecha Fin</label>
+                                    <input type="date" class="form-control form-control-sm" id="cierre-wizard-ffin" value="${s.fFin || ''}" ${!isCustom ? 'readonly' : ''} onchange="cierreWizardCambiarFechasManual()">
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Período Vigente a Cerrar -->
+                    <!-- Resumen del Período -->
                     <div class="col-md-6">
                         ${periodInfoHtml}
                     </div>
@@ -3710,7 +3904,7 @@ function renderWizardStep(step) {
                 <div class="mt-4 text-end">
                     <button class="btn btn-warning fw-bold px-4 py-2 shadow-sm" 
                             id="btn-cierre-wizard-iniciar" 
-                            ${!vigente ? 'disabled' : ''} 
+                            ${(!s.fIni || !s.fFin) ? 'disabled' : ''} 
                             onclick="cierreWizardConfirmarParametros()">
                         <i class="bi bi-funnel-fill me-1"></i> Filtrar e Iniciar Pre-evaluación
                     </button>
@@ -5421,7 +5615,7 @@ function _analiticaCellBadge(di) {
     }
 
     let primaryBadge = '';
-    if (di.jornada_adicional) {
+    if (di.jornada_adicional && (di.horas_teoricas || 0) > 0) {
         const ja = di.jornada_adicional;
         const class_izq = pillClass;
         const label_izq = label;

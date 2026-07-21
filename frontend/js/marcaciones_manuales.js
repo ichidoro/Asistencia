@@ -157,10 +157,12 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     if (btnValidarJornada) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
-        // REGLA: solo mostrar cuando estado = JORNADA_ESPECIAL (ambas marcas completas).
-        // Si está en ANOMALIA → el supervisor debe agregar la marca faltante primero.
-        // El motor recalculará automáticamente a ESP cuando tenga las dos marcas.
-        if (asistJ && asistJ.estado === 'JORNADA_ESPECIAL') {
+        // REGLA: mostrar cuando el estado es JORNADA_ESPECIAL (ambas marcas completas)
+        // O cuando hay una jornada adicional pendiente o rechazada que el supervisor pueda gestionar.
+        const tieneJornadaAdicionalPendienteRechazada = asistJ && asistJ.jornada_adicional &&
+            (asistJ.jornada_adicional.estado === 'PENDIENTE' || asistJ.jornada_adicional.estado === 'RECHAZADA');
+            
+        if (asistJ && (asistJ.estado === 'JORNADA_ESPECIAL' || tieneJornadaAdicionalPendienteRechazada)) {
             btnValidarJornada.classList.remove('d-none');
         } else {
             btnValidarJornada.classList.add('d-none');
@@ -172,7 +174,10 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
         // Solo mostrar si el estado es EXTRA y es producto de una validación de jornada especial.
-        if (asistJ && asistJ.estado === 'EXTRA') {
+        // O si tiene una jornada adicional aprobada (estado EXTRA)
+        const tieneJornadaAdicionalAprobada = asistJ && asistJ.jornada_adicional && asistJ.jornada_adicional.estado === 'EXTRA';
+        
+        if (asistJ && (asistJ.estado === 'EXTRA' || tieneJornadaAdicionalAprobada)) {
             btnRevertirHE.classList.remove('d-none');
         } else {
             btnRevertirHE.classList.add('d-none');
