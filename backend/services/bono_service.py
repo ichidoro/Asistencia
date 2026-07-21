@@ -157,6 +157,11 @@ class BonoService:
             cargos_req = [c.strip().upper() for c in str(req_val).split(",")]
             return cargo_emp in cargos_req
 
+        # ── 0. Exclusión de empleados sin asistencia (Art 22) ──────────────
+        if empleado.get("excluido_asistencia"):
+            return {"aplica": False, "califica": False, "monto": 0,
+                    "motivo": "Excluido de asistencia (Art 22)"}
+
         # ── 1. Filtro estructural: cargo / contrato ────────────────────────
         regla_activa = None
         for regla in bono.get("reglas", []):

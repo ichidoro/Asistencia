@@ -135,7 +135,11 @@ class Productos4Service:
             califica_asistencia = True
             motivo_asistencia = "Cumple asistencia 100%."
             
-            if compromiso_bono and compromiso_bono.get("activo"):
+            if getattr(emp, "excluido_asistencia", 0):
+                # Empleados excluidos de asistencia (Art 22) califican por default en 4 productos
+                califica_asistencia = True
+                motivo_asistencia = "OK (Excluido de asistencia / Art 22)."
+            elif compromiso_bono and compromiso_bono.get("activo"):
                 import copy
                 # Modificar las reglas del bono en memoria para que aplique universalmente a cualquier cargo y contrato
                 compromiso_beneficio = copy.deepcopy(compromiso_bono)

@@ -1035,9 +1035,7 @@ class AsistenciaService:
                         je_to_save.append(result['_jornada_especial'])
                     else:
                         je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                        if je_prev and je_prev.get('estado') in ('EXTRA', 'RECHAZADA'):
-                            pass
-                        else:
+                        if je_prev:
                             je_to_delete.append((empleado_id, fecha_str))
                     asistencias_map[fecha_str] = result
                 else:
@@ -1047,9 +1045,7 @@ class AsistenciaService:
                         # No agregamos a stats['sin_cambio'] porque estamos eliminando el registro
                     he_to_delete.append((empleado_id, fecha_str))
                     je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                    if je_prev and je_prev.get('estado') in ('EXTRA', 'RECHAZADA'):
-                        pass
-                    else:
+                    if je_prev:
                         je_to_delete.append((empleado_id, fecha_str))
                 stats['procesados'] += 1
             except Exception as e:
@@ -3988,15 +3984,17 @@ class AsistenciaService:
         elif has_sad:
             res['estado'] = 'SALIDA_ADELANTADA'
         elif is_holiday or es_libre_dia:
-            if is_holiday:
-                res['estado'] = 'JORNADA_ESPECIAL'
-                res['observaciones'] += 'Trabajo en feriado. '
-            else:
-                if turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
-                    res['estado'] = 'OK'
-                    res['observaciones'] += 'Trabajo en día libre (Bolsa Flexible). '
+            if turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
+                res['estado'] = 'OK'
+                if is_holiday:
+                    res['observaciones'] += 'Trabajo en feriado (Bolsa Flexible). '
                 else:
-                    res['estado'] = 'JORNADA_ESPECIAL'
+                    res['observaciones'] += 'Trabajo en día libre (Bolsa Flexible). '
+            else:
+                res['estado'] = 'JORNADA_ESPECIAL'
+                if is_holiday:
+                    res['observaciones'] += 'Trabajo en feriado. '
+                else:
                     res['observaciones'] += 'Trabajo en día libre. '
         else:
             res['estado'] = 'OK'
@@ -4081,6 +4079,7 @@ class AsistenciaService:
             LEFT JOIN areas ar ON ha.area_id = ar.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
             WHERE a.fecha BETWEEN ? AND ?
+              AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
         """
         params: list = [fecha_inicio, fecha_fin]
         if area and area != 'Todas':
@@ -4139,6 +4138,7 @@ class AsistenciaService:
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE (e.activo = 1 OR (e.activo = 0 AND e.fecha_salida IS NOT NULL AND e.fecha_salida >= ?))
+              AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
               AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?)
         """
         params_emp: list = [fecha_inicio, fecha_fin, fecha_inicio]
