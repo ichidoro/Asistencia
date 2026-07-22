@@ -222,17 +222,15 @@ class BonoService:
             if fecha == "info":
                 continue
 
+            info = emp_matrix_data.get('info', {})
             estado        = (dia_data.get("estado") or "").upper()
             horas_teoricas = dia_data.get("horas_teoricas") or 0
-            es_bolsa      = (dia_data.get("tipo_programacion") == "FLEXIBLE_BOLSA")
-
-            # ¿Es un día laborable según el turno?
+            es_bolsa      = (info.get("tipo_programacion") == "FLEXIBLE_BOLSA")
             j_dia = next(
                 (j for j in justificaciones
                  if j["fecha_inicio"] <= fecha <= j["fecha_fin"]), None
             )
 
-            info = emp_matrix_data.get('info', {})
             turno_dias = info.get('turno_dias', {})
             try:
                 dia_semana = datetime.strptime(fecha, "%Y-%m-%d").weekday()
