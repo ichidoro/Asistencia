@@ -4471,6 +4471,11 @@ class AsistenciaService:
                             matrix[eid][f_str]['minutos_deuda'] = 0
                             matrix[eid][f_str]['horas_trabajadas'] = (j['minutos_trabajados'] or 0) / 60.0
                             matrix[eid][f_str]['observaciones'] = j.get('observaciones') or ''
+                    else:
+                        # Si la JE está PENDIENTE en un día sin turno ordinario efectivo (LIBRE),
+                        # asignar su estado visual como JORNADA_ESPECIAL para sustituir la etiqueta LIBRE
+                        if matrix[eid][f_str].get('estado') == 'LIBRE' or not matrix[eid][f_str].get('hora_entrada_real'):
+                            matrix[eid][f_str]['estado'] = 'JORNADA_ESPECIAL'
                     # Nota: no existe rama else (JE sin asistencias).
                     # El motor siempre crea ambos registros juntos. Si faltara asistencias
                     # sería un bug de integridad que debe investigarse, no silenciarse.
