@@ -5774,10 +5774,10 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
         }
     }
 
-    if (esFeriadoPuro && (!est || est === 'FERIADO')) {
+    if (esFeriadoPuro && (!est || est === 'FERIADO') && !di?.jornada_adicional) {
         return `<div class="badge-status badge-state-warning" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.65;"><span><i class="bi bi-calendar-heart-fill me-1"></i>FER</span></div>`;
     }
-    if (esLibrePuro && (!est || est === 'LIBRE')) {
+    if (esLibrePuro && (!est || est === 'LIBRE') && !di?.jornada_adicional) {
         return `<div class="badge-status badge-state-neutral" style="width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; opacity:0.55;"><span><i class="bi bi-cup-hot-fill me-1"></i>LIB</span></div>`;
     }
 
