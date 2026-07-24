@@ -5615,39 +5615,58 @@ function _analiticaCellBadge(di) {
     }
 
     let primaryBadge = '';
-    if (di.jornada_adicional && (di.horas_teoricas || 0) > 0) {
+    if (di.jornada_adicional) {
         const ja = di.jornada_adicional;
-        const class_izq = pillClass;
-        const label_izq = label;
-        
-        let class_der = 'badge-state-neutral';
-        let label_der = 'ESP';
-        let title_der = 'Jornada Especial Adicional';
-        
-        if (ja.estado === 'PENDIENTE') {
-            class_der = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
-            label_der = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
-            title_der = 'Jornada Adicional Pendiente de Aprobación';
-        } else if (ja.estado === 'EXTRA') {
-            class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
-            label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
-            title_der = 'Jornada Adicional Aprobada como Extra';
-        } else if (ja.estado === 'RECHAZADA') {
-            class_der = 'badge-state-danger';
-            label_der = 'REC';
-            title_der = 'Jornada Adicional Rechazada';
+        if ((di.horas_teoricas || 0) === 0 || est === 'LIBRE') {
+            let class_esp = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
+            let label_esp = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
+            let icon_esp = '<i class="bi bi-star-fill me-1"></i>';
+            let title_esp = 'Jornada Adicional Pendiente de Aprobación';
+            
+            if (ja.estado === 'EXTRA') {
+                class_esp = _getEstadoColor('EXTRA') || 'badge-state-info';
+                label_esp = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
+                title_esp = 'Jornada Adicional Aprobada como Extra';
+            } else if (ja.estado === 'RECHAZADA') {
+                class_esp = 'badge-state-danger';
+                label_esp = 'REC';
+                title_esp = 'Jornada Adicional Rechazada';
+            }
+
+            primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span>${icon_esp}${label_esp}</span></div>`;
+        } else {
+            const class_izq = pillClass;
+            const label_izq = label;
+            
+            let class_der = 'badge-state-neutral';
+            let label_der = 'ESP';
+            let title_der = 'Jornada Especial Adicional';
+            
+            if (ja.estado === 'PENDIENTE') {
+                class_der = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
+                label_der = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
+                title_der = 'Jornada Adicional Pendiente de Aprobación';
+            } else if (ja.estado === 'EXTRA') {
+                class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
+                label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
+                title_der = 'Jornada Adicional Aprobada como Extra';
+            } else if (ja.estado === 'RECHAZADA') {
+                class_der = 'badge-state-danger';
+                label_der = 'REC';
+                title_der = 'Jornada Adicional Rechazada';
+            }
+            
+            primaryBadge = `
+            <div class="d-flex w-100 h-100" style="min-width: 52px; min-height: 22px; border-radius: 4px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); background-color: #fff;">
+                <div class="badge-status ${class_izq}" style="flex: 1; border-radius: 0; min-height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; line-height: 1.1; padding: 2px;" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}>
+                    <span>${label_izq}</span>
+                </div>
+                <div style="width: 1px; background-color: rgba(0,0,0,0.12); align-self: stretch;"></div>
+                <div class="badge-status ${class_der}" style="flex: 1; border-radius: 0; min-height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; line-height: 1.1; padding: 2px;" title="${title_der}">
+                    <span>${label_der}</span>
+                </div>
+            </div>`;
         }
-        
-        primaryBadge = `
-        <div class="d-flex w-100 h-100" style="min-width: 52px; min-height: 22px; border-radius: 4px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); background-color: #fff;">
-            <div class="badge-status ${class_izq}" style="flex: 1; border-radius: 0; min-height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; line-height: 1.1; padding: 2px;" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}>
-                <span>${label_izq}</span>
-            </div>
-            <div style="width: 1px; background-color: rgba(0,0,0,0.12); align-self: stretch;"></div>
-            <div class="badge-status ${class_der}" style="flex: 1; border-radius: 0; min-height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; line-height: 1.1; padding: 2px;" title="${title_der}">
-                <span>${label_der}</span>
-            </div>
-        </div>`;
     } else {
         primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>`;
     }
