@@ -2647,7 +2647,8 @@ class AsistenciaService:
                 # Consumir marcas de este día calendario
                 for i in range(idx_inicio, len(marcas_disponibles)):
                     log = marcas_disponibles[i]
-                    if log.get('fecha_hora', '').startswith(fecha):
+                    log_fecha = log.get('fecha_hora', '')[:10]
+                    if log_fecha == fecha or (is_bolsa and i == idx_inicio):
                         t_m = str(log.get('tipo', '') or '').strip().lower()
 
                         # [ITS] Inferencia de Tipo Secuencial (Bolsa Flexible)
@@ -2677,6 +2678,15 @@ class AsistenciaService:
                             balance += 1
                         elif t_m in {'salida', 'exit', 's', 'out', '2'}:
                             balance -= 1
+
+                        # [FIX NOCTURNO BOLSA] Si la jornada ya cerró (balance == 0) y la marca siguiente es nocturna (>= 20:00),
+                        # la dejamos para la jornada del día siguiente (D+1).
+                        if is_bolsa and balance == 0 and i + 1 < len(marcas_disponibles):
+                            sig_mark = marcas_disponibles[i + 1]
+                            sig_hora = sig_mark.get('fecha_hora', '')[11:16]
+                            sig_tipo = str(sig_mark.get('tipo', '') or '').strip().lower()
+                            if sig_hora >= "20:00" and sig_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
+                                break
                     else:
                         break
                         
