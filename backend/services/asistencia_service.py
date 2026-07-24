@@ -3177,6 +3177,20 @@ class AsistenciaService:
             except Exception as e_regla:
                 logger.error(f"⚠️ Error aplicando regla de exceso de HE en día hábil: {e_regla}")
 
+        # Si existe una jornada especial registrada para esta fecha y la asistencia base era LIBRE,
+        # pisar el estado en la tabla asistencias a JORNADA_ESPECIAL
+        try:
+            je_check = await self.repository.db.fetch_one(
+                "SELECT id, estado FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                (empleado_id, fecha)
+            )
+            if je_check and resultado and resultado.get('estado') == 'LIBRE':
+                resultado['estado'] = 'JORNADA_ESPECIAL'
+                if save:
+                    await self.repository.upsert_asistencia(resultado)
+        except Exception as _e_je:
+            logger.error(f"Error superponiendo JORNADA_ESPECIAL en asistencia: {_e_je}")
+
         return resultado
 
     # ─────────────────────────────────────────────────────────────────────────
