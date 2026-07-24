@@ -5617,7 +5617,7 @@ function _analiticaCellBadge(di) {
     let primaryBadge = '';
     if (di.jornada_adicional) {
         const ja = di.jornada_adicional;
-        if ((di.horas_teoricas || 0) === 0 || est === 'LIBRE') {
+        if ((di.horas_teoricas || 0) === 0 || est === 'LIBRE' || est === 'JORNADA_ESPECIAL') {
             let class_esp = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
             let label_esp = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
             let icon_esp = '<i class="bi bi-star-fill me-1"></i>';
