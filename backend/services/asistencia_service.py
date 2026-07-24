@@ -1720,9 +1720,12 @@ class AsistenciaService:
         marcas_disponibles.sort(key=lambda x: x['fecha_hora'])
 
         # ── AUTO-FIX GENERALIZADO: Normalización Cronológica Par por Desbalance ──
-        # Si el número de marcas del día es par y existe desbalance entre E y S, alternar cronológicamente
+        # Si el número de marcas del día es par y existe desbalance entre E y S, alternar cronológicamente.
+        # EXCEPCIÓN: Se omite para FLEXIBLE_BOLSA porque la bolsa flexible maneja sus propias marcas cruzadas
+        # de madrugada y su propia inferencia ITS.
+        tipo_prog_check = asignacion.get('tipo_programacion') if asignacion else None
         marcas_hoy = [m for m in marcas_disponibles if m.get('fecha_hora', '')[:10] == fecha]
-        if marcas_hoy and len(marcas_hoy) % 2 == 0 and len(marcas_hoy) >= 2:
+        if tipo_prog_check != 'FLEXIBLE_BOLSA' and marcas_hoy and len(marcas_hoy) % 2 == 0 and len(marcas_hoy) >= 2:
             _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
             _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
             num_entradas = sum(1 for l in marcas_hoy if str(l.get('tipo', '') or '').strip().lower() in _TIPOS_E)
