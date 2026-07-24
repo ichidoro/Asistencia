@@ -6020,6 +6020,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         const b1 = `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-clock-fill me-1"></i>ATRASO</div>`;
         const b2 = `<div class="badge-status badge-state-info" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-box-arrow-left me-1"></i>SAL. ADEL. ${perSuffix}</div>`;
         badgeHtml = `<div style="display:flex; flex-direction:column; align-items:flex-end; gap: 4px;">${b1}${b2}</div>`;
+    } else if (e.jornada_adicional && (est === 'LIBRE' || est === 'JORNADA_ESPECIAL')) {
+        let label_je = e.jornada_adicional.estado === 'EXTRA' ? 'JORNADA EXTRA' : (e.jornada_adicional.estado === 'RECHAZADA' ? 'RECHAZADA' : 'JORNADA ESPECIAL');
+        let icon_je = e.jornada_adicional.estado === 'EXTRA' ? '<i class="bi bi-plus-circle-fill me-1"></i>' : (e.jornada_adicional.estado === 'RECHAZADA' ? '<i class="bi bi-x-circle-fill me-1"></i>' : '<i class="bi bi-star-fill me-1"></i>');
+        let class_je = e.jornada_adicional.estado === 'RECHAZADA' ? 'badge-state-danger' : 'badge-state-info';
+        badgeHtml = `<div class="badge-status ${class_je}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon_je}${label_je}${perSuffix}</div>`;
     } else {
         const fullName = stateNameMap[est] || (e.nomenclatura || est);
         const pillClass = pillClassMap[est] || 'badge-state-info';
