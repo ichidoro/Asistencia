@@ -1715,22 +1715,6 @@ class AsistenciaService:
                             if log['fecha_hora'] <= salida_je_ts:
                                 consumidas_emp.add(log.get('id'))
 
-        # Excluir de marcas disponibles cualquier marca que ya forme parte de una Jornada Especial asignada a hoy o ayer
-        jes_consumo = await db.fetch_all(
-            "SELECT hora_entrada, hora_salida FROM jornadas_especiales WHERE empleado_id = ? AND (fecha = ? OR fecha = ?)",
-            (empleado_id, fecha, ayer_str)
-        )
-        for je_item in jes_consumo:
-            h_ent_j = str(je_item['hora_entrada']) if je_item['hora_entrada'] else None
-            h_sal_j = str(je_item['hora_salida']) if je_item['hora_salida'] else None
-            if h_ent_j and h_sal_j:
-                for log in raw_logs:
-                    ts_log = log['fecha_hora']
-                    if ts_log.endswith(h_ent_j) or ts_log.endswith(h_sal_j):
-                        consumidas_emp.add(log.get('id'))
-                    elif h_sal_j < h_ent_j and ts_log[:10] == fecha and ts_log[11:] <= h_sal_j:
-                        consumidas_emp.add(log.get('id'))
-
         # Filtrar marcas disponibles (no consumidas)
         marcas_disponibles = [log for log in raw_logs if log.get('id') not in consumidas_emp]
         marcas_disponibles.sort(key=lambda x: x['fecha_hora'])
