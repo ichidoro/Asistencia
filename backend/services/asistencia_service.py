@@ -1762,7 +1762,15 @@ class AsistenciaService:
 
         # ── INTERCEPTOR DE SEGMENTACIÓN TEMPRANO DE EMERGENCIAS Y JORNADAS ADICIONALES ──
         # Ejecutado al inicio para limpiar marcas_disponibles antes del matching rotativo y consumos
-        marcas_hoy = [m for m in marcas_disponibles if m.get('fecha_hora', '').startswith(fecha)]
+        marcas_cand = [m for m in marcas_disponibles if m.get('fecha_hora', '').startswith(fecha)]
+        _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+        if len(marcas_cand) % 2 != 0:
+            last_m = marcas_cand[-1]
+            if str(last_m.get('tipo', '') or '').strip().lower() in _TIPOS_E:
+                sig_marcas = [m for m in marcas_disponibles if m['fecha_hora'] > last_m['fecha_hora']]
+                if sig_marcas:
+                    marcas_cand.append(sig_marcas[0])
+        marcas_hoy = marcas_cand
         if tipo_prog != 'FLEXIBLE_BOLSA' and marcas_hoy and len(marcas_hoy) >= 4 and len(marcas_hoy) % 2 == 0:
             try:
                 row_gap = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_gap_horas'")
@@ -1866,18 +1874,27 @@ class AsistenciaService:
                                     }
                                     logger.info(f"⚡ [Emergencia Detectada Temprano] Emp {empleado_id} {fecha}: {duracion_extra_min} min.")
                                 else:
+                                    # Si el bloque extra cruza medianoche y más del 50% de las horas caen al día siguiente (D+1), atribuir visualmente a D+1
+                                    fecha_be = fecha
+                                    if be_sal_dt.date() > be_ent_dt.date():
+                                        midnight_be = datetime.combine(be_sal_dt.date(), datetime.min.time())
+                                        mins_d1_be = (be_sal_dt - midnight_be).total_seconds() / 60.0
+                                        tot_mins_be = (be_sal_dt - be_ent_dt).total_seconds() / 60.0
+                                        if mins_d1_be > (tot_mins_be / 2.0):
+                                            fecha_be = be_sal_dt.strftime("%Y-%m-%d")
+
                                     if save:
                                         await self.repository.upsert_jornada_especial({
                                             'empleado_id': empleado_id,
-                                            'fecha': fecha,
+                                            'fecha': fecha_be,
                                             'hora_entrada': be[0]['fecha_hora'][11:],
                                             'hora_salida': be[-1]['fecha_hora'][11:],
                                             'minutos_trabajados': duracion_extra_min,
                                             'estado': 'PENDIENTE',
-                                            'observaciones': f"Jornada adicional de la tarde segmentada automáticamente ({duracion_extra_min} min)."
+                                            'observaciones': f"Jornada adicional segmentada automáticamente ({duracion_extra_min} min)."
                                         })
                                     jornada_adicional_observaciones = f"[Jornada Adicional Pendiente: {be[0]['fecha_hora'][11:16]} - {be[-1]['fecha_hora'][11:16]}] "
-                                    logger.info(f"💼 [Jornada Especial Adicional Temprano] Emp {empleado_id} {fecha}: {duracion_extra_min} min registrada como PENDIENTE.")
+                                    logger.info(f"💼 [Jornada Especial Adicional Temprano] Emp {empleado_id} {fecha} (Asignada a {fecha_be}): {duracion_extra_min} min registrada como PENDIENTE.")
             except Exception as ex_seg:
                 logger.error(f"⚠️ Error en interceptor de segmentación temprana de emergencias: {ex_seg}")
 
