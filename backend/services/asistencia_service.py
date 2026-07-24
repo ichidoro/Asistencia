@@ -2613,7 +2613,31 @@ class AsistenciaService:
             if not puede_cruzar and not is_bolsa:
                 marcas_disponibles = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
 
-            marcas_hoy = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
+            if is_bolsa:
+                # [REGLA DÍA PREPONDERANTE - BOLSA FLEXIBLE NOCTURNA]
+                # Si la primera marca disponible proviene de la noche del día anterior (>= 20:00),
+                # fue diferida para iniciar la jornada de HOY ('fecha').
+                # Si la marca de hoy ocurre a las >= 20:00, corresponde a la jornada de MAÑANA (D+1).
+                primer_disponible = marcas_disponibles[0] if marcas_disponibles else None
+                if primer_disponible:
+                    f_mark = primer_disponible.get('fecha_hora', '')[:10]
+                    h_mark = primer_disponible.get('fecha_hora', '')[11:16]
+                    t_mark = str(primer_disponible.get('tipo', '') or '').strip().lower()
+
+                    if f_mark < fecha and h_mark >= "20:00" and t_mark in {'entrada', 'entry', 'e', 'in', '1'}:
+                        marcas_hoy = [primer_disponible]
+                    elif f_mark == fecha:
+                        if h_mark >= "20:00" and t_mark in {'entrada', 'entry', 'e', 'in', '1'}:
+                            marcas_hoy = []
+                        else:
+                            marcas_hoy = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
+                    else:
+                        marcas_hoy = []
+                else:
+                    marcas_hoy = []
+            else:
+                marcas_hoy = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
+
             logs = []
             if marcas_hoy:
                 idx_inicio = marcas_disponibles.index(marcas_hoy[0])
