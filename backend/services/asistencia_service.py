@@ -2237,50 +2237,65 @@ class AsistenciaService:
                         else:
                             # ──── Matching normal (2+ marcas o sin arrastre) ────
                             first_log_dt = datetime.strptime(block_inteligente[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                            winner_sem = 1
-                            min_delta = None
+                            
+                            # Si el colaborador ya trae una semana de rotación activa y ese día es LIBRE en su semana activa,
+                            # verificar si las marcas son de trabajo en día libre (no un inicio de turno nocturno 21:00-23:59)
+                            _active_sem_cfg = bulk_ctx['turnos'].get(tid, {}).get(_last_sem_fix5, {}).get(dia_semana) if _last_sem_fix5 else None
+                            is_day_off_in_active_sem = _active_sem_cfg and _active_sem_cfg.get('es_libre')
+                            first_hour = first_log_dt.hour
+                            is_night_start = (first_hour >= 21)
 
-                            for num_semana_eval in range(1, total_sems + 1):
-                                sem_config = bulk_ctx['turnos'].get(tid, {}).get(num_semana_eval, {}).get(dia_semana)
-                                if not sem_config or sem_config.get('es_libre'):
-                                    continue
-                                
-                                ent_str = sem_config.get('hora_entrada')
-                                sal_str = sem_config.get('hora_salida')
-                                if not ent_str or not sal_str:
-                                    continue
+                            if is_day_off_in_active_sem and not is_night_start:
+                                winner_sem = _last_sem_fix5
+                                logger.info(
+                                    f"[FIX-DIA-LIBRE-ROTATIVO] emp={empleado_id} {fecha}: "
+                                    f"Día libre en semana activa ({_last_sem_fix5}). Mantiene sem={_last_sem_fix5} para evaluar Jornada Especial."
+                                )
+                            else:
+                                winner_sem = 1
+                                min_delta = None
+
+                                for num_semana_eval in range(1, total_sems + 1):
+                                    sem_config = bulk_ctx['turnos'].get(tid, {}).get(num_semana_eval, {}).get(dia_semana)
+                                    if not sem_config or sem_config.get('es_libre'):
+                                        continue
                                     
-                                diff_seconds = 0
-                                has_in = False
-                                has_out = False
-                                for log in block_inteligente:
-                                    log_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                                    if log['tipo'] == 'Entrada' and not has_in:
-                                        t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
-                                        diff_in = abs((log_dt - t_in_dt).total_seconds())
-                                        diff_in = min(diff_in, 86400 - diff_in)
-                                        diff_seconds += diff_in
-                                        has_in = True
-                                    elif log['tipo'] == 'Salida' and not has_out:
-                                        t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
-                                        if sem_config.get('cruza_medianoche'):
-                                            t_out_dt += timedelta(days=1)
-                                        diff_out = abs((log_dt - t_out_dt).total_seconds())
-                                        diff_out = min(diff_out, 86400 - diff_out)
-                                        diff_seconds += diff_out
-                                        has_out = True
+                                    ent_str = sem_config.get('hora_entrada')
+                                    sal_str = sem_config.get('hora_salida')
+                                    if not ent_str or not sal_str:
+                                        continue
                                         
-                                if not has_in and not has_out:
-                                    diff_seconds = float('inf')
+                                    diff_seconds = 0
+                                    has_in = False
+                                    has_out = False
+                                    for log in block_inteligente:
+                                        log_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                                        if log['tipo'] == 'Entrada' and not has_in:
+                                            t_in_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str}:00", "%Y-%m-%d %H:%M:%S")
+                                            diff_in = abs((log_dt - t_in_dt).total_seconds())
+                                            diff_in = min(diff_in, 86400 - diff_in)
+                                            diff_seconds += diff_in
+                                            has_in = True
+                                        elif log['tipo'] == 'Salida' and not has_out:
+                                            t_out_dt = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {sal_str}:00", "%Y-%m-%d %H:%M:%S")
+                                            if sem_config.get('cruza_medianoche'):
+                                                t_out_dt += timedelta(days=1)
+                                            diff_out = abs((log_dt - t_out_dt).total_seconds())
+                                            diff_out = min(diff_out, 86400 - diff_out)
+                                            diff_seconds += diff_out
+                                            has_out = True
+                                            
+                                    if not has_in and not has_out:
+                                        diff_seconds = float('inf')
 
-                                if min_delta is None or diff_seconds < min_delta:
-                                    logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_seconds}. NEW MIN_DELTA!")
-                                    min_delta = diff_seconds
-                                    winner_sem = num_semana_eval
-                                else:
-                                    logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_seconds}. (min is {min_delta})")
+                                    if min_delta is None or diff_seconds < min_delta:
+                                        logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_seconds}. NEW MIN_DELTA!")
+                                        min_delta = diff_seconds
+                                        winner_sem = num_semana_eval
+                                    else:
+                                        logger.info(f"DIA {fecha} Emp {empleado_id}: Eval Sem {num_semana_eval} -> diff={diff_seconds}. (min is {min_delta})")
 
-                            logger.info(f"DIA {fecha} Emp {empleado_id}: WINNER_SEM FINALLY CHOSEN: {winner_sem}")
+                                logger.info(f"DIA {fecha} Emp {empleado_id}: WINNER_SEM FINALLY CHOSEN: {winner_sem}")
 
                         semana_ganadora = winner_sem
                         config_dia = bulk_ctx['turnos'].get(tid, {}).get(winner_sem, {}).get(dia_semana)
