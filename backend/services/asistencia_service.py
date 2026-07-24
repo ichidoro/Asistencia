@@ -3223,7 +3223,10 @@ class AsistenciaService:
                 break
 
         # ── FERIADO ────────────────────────────────────────────────────────────
-        if is_holiday:
+        # Si existe una justificación válida para el día con sobreescribe_feriados = 1 (ej: Licencia Común/Mutual),
+        # la justificación tiene prioridad absoluta sobre el Feriado.
+        just_sobreescribe_feriado = bool(justificacion_dia and justificacion_dia.get('sobreescribe_feriados'))
+        if is_holiday and not just_sobreescribe_feriado:
             res['estado'] = 'FERIADO'
             res['observaciones'] = 'Feriado Nacional (Proyección automática)'
             # Si hay marcas en feriado → JORNADA_ESPECIAL (tratado más abajo)
