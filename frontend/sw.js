@@ -2,7 +2,7 @@
 // Versión mínima: cache de assets estáticos para instalabilidad.
 // No intercepta API calls para evitar datos obsoletos.
 
-const CACHE_NAME = 'aguacol-v16';
+const CACHE_NAME = 'aguacol-v17-flush';
 const STATIC_ASSETS = [
   '/',
   '/static/css/bootstrap.min.css',
@@ -16,38 +16,32 @@ const STATIC_ASSETS = [
 
 // Install: pre-cache shell assets
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Pre-caching shell assets');
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: purge all old caches immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+        keys.map((k) => caches.delete(k))
       )
     )
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for API and page navigations, cache-first for static assets
+// Fetch: Network-first for ALL requests to ensure fresh JS/CSS/API updates
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Never cache API calls or auth endpoints
   if (url.pathname.startsWith('/api/') || url.pathname.includes('login')) {
-    return; // Let browser handle normally
+    return;
   }
 
-  // Network-First for main page navigation (root '/' or '/index.html')
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+  // Network-First for JS and CSS files to guarantee fresh code
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -66,20 +60,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For other static assets (JS, CSS, images): try cache first, fall back to network
+  // Cache-first fallback only for static images/fonts
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache successful GET requests for static resources
-        if (response.ok && event.request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone);
-          });
-        }
-        return response;
-      });
+      return fetch(event.request);
     })
   );
 });
