@@ -894,7 +894,7 @@ class EmpleadoRepository:
         Implementa RLS para limitar la lista a las áreas permitidas del supervisor.
         """
         query = """
-            SELECT e.id, 
+            SELECT DISTINCT e.id, 
                    (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
                    e.rut, COALESCE(a_hist.nombre, a_emp.nombre) as area, e.activo
             FROM empleados e

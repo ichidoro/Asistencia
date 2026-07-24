@@ -1202,7 +1202,7 @@ async def get_filters_data(
             extra_cond += f" AND a.nombre IN ({ph})"
             params_emp.extend(areas_permitidas)
         emp_rows = await db.fetch_all(f"""
-            SELECT e.id,
+            SELECT DISTINCT e.id,
                    (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
                    e.rut, a.nombre as area, e.activo
             FROM empleados e
