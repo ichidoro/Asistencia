@@ -291,7 +291,13 @@ async def post_asignacion_individual(
     try:
         db = service.repository.db
 
-        # 1. Insertar asignación de turno (operación rápida)
+        # 1. Soft-Close: Cerrar asignación previa activa (si existe) justo el día anterior
+        await db.execute(
+            "UPDATE asignacion_turnos SET fecha_fin = date(?, '-1 day') WHERE empleado_id = ? AND (fecha_fin IS NULL OR fecha_fin >= ?) AND fecha_inicio < ?",
+            (data.fecha, data.empleado_id, data.fecha, data.fecha)
+        )
+
+        # 2. Insertar nueva asignación de turno
         await db.execute(
             "INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, NULL)",
             (data.empleado_id, data.turno_id, data.fecha)
