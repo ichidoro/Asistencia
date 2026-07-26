@@ -1685,7 +1685,7 @@ class AsistenciaService:
                 'minutos_salida_adelantada': 0,
                 'estado': 'VIAJE_LARGO',
                 'observaciones': obs,
-                'turno_asignado_id': asignacion.get('turno_id') if asignacion else None,
+                'turno_asignado_id': (asignacion.get('turno_id') or asignacion.get('id')) if asignacion else None,
                 'marcas_consumidas_ids': m_ids,
             }
             if save:
@@ -4431,7 +4431,7 @@ class AsistenciaService:
 
         asistencias = [dict(a) for a in asist_rows]
         if turno_id:
-            asistencias = [a for a in asistencias if a.get('turno_asignado_id') == turno_id]
+            asistencias = [a for a in asistencias if a.get('turno_asignado_id') == turno_id or (a.get('turno_asignado_id') is None and a.get('estado') == 'VIAJE_LARGO')]
 
         jornadas_especiales = [dict(j) for j in jornadas_rows]
 
