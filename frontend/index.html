@@ -4497,7 +4497,93 @@
                 </div>
             </div>
 
+            <!-- Modal de Configuración de Viaje Largo -->
+            <div class="modal fade" id="modalViajeLargo" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0" style="border-radius:20px; overflow:hidden;">
+                        <div class="modal-header border-0 text-white py-3 px-4" style="background: linear-gradient(135deg, #0f172a 0%, #3b82f6 100%);">
+                            <div class="d-flex align-items-center gap-3 w-100">
+                                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;">
+                                    <i class="bi bi-truck text-white" style="font-size:1.1rem;"></i>
+                                </div>
+                                <div>
+                                    <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Registrar Viaje Largo</h6>
+                                    <div class="text-white-50" style="font-size:0.75rem;">Bolsa Flexible - Unificación de Anomalías</div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                            </div>
+                        </div>
+                        <div class="modal-body p-4" style="background:#f8fafc;">
+                            <input type="hidden" id="vl-emp-id">
+                            <input type="hidden" id="vl-fecha-ini">
+                            <input type="hidden" id="vl-log-entrada-id">
+
+                            <!-- Visual Timeline -->
+                            <div class="p-3 mb-3 bg-white rounded-3 border shadow-sm">
+                                <div class="fw-bold text-dark mb-2" style="font-size:0.85rem;"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Línea de Tiempo del Viaje</div>
+                                <div class="d-flex align-items-center justify-content-between p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;">
+                                    <div>
+                                        <div class="text-muted" style="font-size:0.7rem;">SALIDA DE PLANTA (INICIO)</div>
+                                        <div class="fw-bold text-primary" style="font-size:0.85rem;" id="vl-txt-inicio">--</div>
+                                    </div>
+                                    <span class="badge bg-primary" id="vl-txt-duracion">0h</span>
+                                </div>
+                                <div class="my-2 text-center text-muted" style="font-size:0.8rem;"><i class="bi bi-arrow-down-short"></i></div>
+                                <div>
+                                    <label class="form-label fw-bold text-dark mb-1" style="font-size:0.78rem;">RETORNO A PLANTA (TÉRMINO)</label>
+                                    <select class="form-select form-select-sm" id="vl-select-retorno" onchange="window.updateViajeLargoCalculos()"></select>
+                                </div>
+                            </div>
+
+                            <!-- Route Form -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Ciudad Origen</label>
+                                    <input type="text" class="form-control form-control-sm" id="vl-ciudad-origen" value="Planta Aguacol">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">📍 Ciudad Destino <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-sm" id="vl-ciudad-destino" placeholder="Ej: Antofagasta, Concepción">
+                                </div>
+                            </div>
+
+                            <!-- Hours Form -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">⏱️ Hrs. Manejo <span class="text-danger">*</span></label>
+                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos()">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">🛌 Hrs. Descanso</label>
+                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;">💰 Acreditar Bolsa</label>
+                                    <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0">
+                                </div>
+                            </div>
+
+                            <!-- Obs -->
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Observaciones / Motivo</label>
+                                <textarea class="form-control form-control-sm" id="vl-observaciones" rows="2" placeholder="Notas sobre la ruta o despacho..."></textarea>
+                            </div>
+
+                            <!-- Banner alert -->
+                            <div class="alert alert-info py-2 px-3 mb-0" style="font-size:0.72rem;border-radius:10px;" id="vl-alert-info">
+                                <i class="bi bi-info-circle-fill me-1"></i> Se eliminarán las falsas inasistencias en ruta y se acreditarán las horas de manejo en la Bolsa Flexible.
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0 p-3 bg-white">
+                            <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-sm btn-primary px-4 fw-bold" onclick="window.submitViajeLargo()"><i class="bi bi-check-lg me-1"></i> Guardar Viaje Largo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Modal para Validación de Jornada Especial -->
+
             <div id="modal-validacion-jornada" class="modal fade" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content shadow-lg border-0" style="border-radius:16px; overflow:hidden;">
