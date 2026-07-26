@@ -1367,19 +1367,52 @@ async function proceedToViajeLargo() {
     }
 }
 
-function updateViajeLargoCalculos() {
+function updateViajeLargoCalculos(sourceField) {
     const selectRet = document.getElementById('vl-select-retorno');
     if (!selectRet) return;
     const opt = selectRet.options[selectRet.selectedIndex];
     if (!opt) return;
 
-    const horasTrans = opt.getAttribute('data-horas') || '0';
-    document.getElementById('vl-txt-duracion').innerText = `${horasTrans}h reloj`;
+    const totalReloj = parseFloat(opt.getAttribute('data-horas')) || 0;
+    document.getElementById('vl-txt-duracion').innerText = `${totalReloj.toFixed(1)}h reloj`;
 
-    // Si el usuario no ha puesto horas reconocidas, poner por defecto las horas de manejo
-    const hManejo = parseFloat(document.getElementById('vl-hrs-manejo').value) || 0;
-    if (hManejo > 0) {
-        document.getElementById('vl-hrs-reconocidas').value = hManejo.toFixed(1);
+    const elManejo = document.getElementById('vl-hrs-manejo');
+    const elDescanso = document.getElementById('vl-hrs-descanso');
+    const elReconocidas = document.getElementById('vl-hrs-reconocidas');
+
+    if (!elManejo || !elDescanso || !elReconocidas) return;
+
+    let hManejo = parseFloat(elManejo.value);
+    let hDescanso = parseFloat(elDescanso.value);
+
+    if (sourceField === 'descanso') {
+        if (!isNaN(hDescanso) && totalReloj > 0) {
+            hManejo = Math.max(0, totalReloj - hDescanso);
+            elManejo.value = hManejo.toFixed(1);
+            elReconocidas.value = hManejo.toFixed(1);
+        }
+    } else if (sourceField === 'manejo') {
+        if (!isNaN(hManejo) && totalReloj > 0) {
+            hDescanso = Math.max(0, totalReloj - hManejo);
+            elDescanso.value = hDescanso.toFixed(1);
+            elReconocidas.value = hManejo.toFixed(1);
+        }
+    } else {
+        // Al cambiar el combo de retorno o cargar la modal:
+        if (!isNaN(hDescanso) && hDescanso > 0 && totalReloj > 0) {
+            hManejo = Math.max(0, totalReloj - hDescanso);
+            elManejo.value = hManejo.toFixed(1);
+            elReconocidas.value = hManejo.toFixed(1);
+        } else if (!isNaN(hManejo) && hManejo > 0 && totalReloj > 0) {
+            hDescanso = Math.max(0, totalReloj - hManejo);
+            elDescanso.value = hDescanso.toFixed(1);
+            elReconocidas.value = hManejo.toFixed(1);
+        } else if (totalReloj > 0 && isNaN(hManejo) && isNaN(hDescanso)) {
+            // Inicialización por defecto cuando los campos están vacíos
+            elManejo.value = totalReloj.toFixed(1);
+            elDescanso.value = '0.0';
+            elReconocidas.value = totalReloj.toFixed(1);
+        }
     }
 }
 

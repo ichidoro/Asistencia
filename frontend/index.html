@@ -4551,17 +4551,18 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
                                     <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">⏱️ Hrs. Manejo <span class="text-danger">*</span></label>
-                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos()">
+                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('manejo')">
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">🛌 Hrs. Descanso</label>
-                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0">
+                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0" oninput="window.updateViajeLargoCalculos('descanso')">
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;">💰 Acreditar Bolsa</label>
                                     <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0">
                                 </div>
                             </div>
+
 
                             <!-- Obs -->
                             <div class="mb-3">
