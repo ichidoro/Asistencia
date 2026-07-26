@@ -4,9 +4,11 @@ Endpoints para procesar y consultar asistencia
 """
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks
+from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from loguru import logger
+
 
 from backend.services.asistencia_service import AsistenciaService
 from backend.services.bono_service import BonoService
