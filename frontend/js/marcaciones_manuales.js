@@ -1488,10 +1488,8 @@ async function submitViajeLargo() {
             if (modal) modal.hide();
         }
 
-        // Refrescar grilla
-        if (typeof window.reloadSingleEmployeeRow === 'function') {
-            window.reloadSingleEmployeeRow(empId);
-        } else if (typeof window.loadMarcacionesData === 'function') {
+        // Refrescar grilla completa para actualizar acumulados, bolsa y badges de viaje
+        if (typeof window.loadMarcacionesData === 'function') {
             window.loadMarcacionesData();
         }
 

@@ -1175,7 +1175,7 @@ function calcularMetricasEmpleado(data) {
         if (a.justificacion || a.nomenclatura) justificacionesCount++;
         if (a.tiene_permiso_hora || a.permiso_activo) permisosCount++;
         
-        if (['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'].includes(a.estado)) {
+        if (['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA', 'VIAJE_LARGO'].includes(a.estado)) {
             diasTrabajados++;
         }
 
@@ -5791,7 +5791,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
         return '';
     }
     
-    const hasEff = ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO'].includes(est);
+    const hasEff = ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO','VIAJE_LARGO'].includes(est);
 
     let resultHtml = '';
 
@@ -5987,7 +5987,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         'JORNADA_ESPECIAL': '<i class="bi bi-star-fill me-1"></i>',
         'EXTRA': '<i class="bi bi-plus-circle-fill me-1"></i>',
         'ANOMALIA': '<i class="bi bi-exclamation-triangle-fill me-1"></i>',
-        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>'
+        'PENDIENTE': '<i class="bi bi-exclamation-triangle-fill me-1"></i>',
+        'VIAJE_LARGO': '<i class="bi bi-truck me-1"></i>'
     };
     
     const stateNameMap = {};
@@ -5999,10 +6000,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             'OK': 'OK', 'INASISTENCIA': 'INASISTENCIA',
             'SALIDA_ADELANTADA': 'SALIDA ADELANTADA', 'EN_CURSO': 'EN TURNO',
             'JORNADA_ESPECIAL': 'JORNADA ESPECIAL', 'EXTRA': 'JORNADA EXTRA',
-            'ANOMALIA': 'ANOMALÍA (INCOMPLETA)'
+            'ANOMALIA': 'ANOMALÍA (INCOMPLETA)', 'VIAJE_LARGO': 'VIAJE LARGO'
         });
     }
     stateNameMap['PENDIENTE'] = 'ANOMALÍA (JE INCOMPLETA)';
+    stateNameMap['VIAJE_LARGO'] = 'VIAJE LARGO';
     
     const pillClassMap = {
         'OK': 'badge-state-success',
@@ -6016,7 +6018,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         'JORNADA_ESPECIAL': 'badge-state-info',
         'EXTRA': 'badge-state-info',
         'ANOMALIA': 'bg-dark text-white border-0',
-        'PENDIENTE': 'bg-dark text-white border-0'
+        'PENDIENTE': 'bg-dark text-white border-0',
+        'VIAJE_LARGO': 'bg-info text-dark font-monospace fw-bold'
     };
 
     let badgeHtml = '';
