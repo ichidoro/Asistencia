@@ -2276,3 +2276,156 @@ async def delete_compensacion(
         
     return {"success": True, "message": "Compensación eliminada y asistencia recalculada"}
 
+
+# ─────────────────────────────────────────────────────────────────────────
+# ENDPOINTS VIAJES LARGOS (BOLSA FLEXIBLE)
+# ─────────────────────────────────────────────────────────────────────────
+
+class ViajeLargoCreateRequest(BaseModel):
+    empleado_id: int
+    fecha_inicio: str
+    fecha_fin: str
+    log_entrada_id: int
+    log_salida_id: int
+    ciudad_origen: str = "Planta Aguacol"
+    ciudad_destino: str
+    horas_manejo_efectivas: float
+    horas_descanso: float
+    horas_reconocidas_totales: float
+    observaciones: Optional[str] = ""
+
+@router.get("/viajes-largos/candidatos-retorno/")
+async def get_candidatos_retorno_viaje(
+    empleado_id: int,
+    fecha_inicio: str,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Busca marcaciones candidatas de retorno para un empleado desde fecha_inicio hasta 5 días después."""
+    db = service.repository.db
+    from datetime import datetime, timedelta
+    dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+    dt_fin = dt_ini + timedelta(days=5)
+    f_fin_str = dt_fin.strftime("%Y-%m-%d 23:59:59")
+    f_ini_str = f"{fecha_inicio} 00:00:00"
+
+    logs = await db.fetch_all("""
+        SELECT id, fecha_hora, tipo, equipo, observaciones
+        FROM logs_raw
+        WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ?
+        ORDER BY fecha_hora ASC
+    """, (empleado_id, f_ini_str, f_fin_str))
+
+    # Formatear candidato list
+    candidatos = []
+    for l in logs:
+        # Calcular diferencia en horas
+        l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+        ini_first_dt = datetime.strptime(f"{fecha_inicio} 00:00:00", "%Y-%m-%d %H:%M:%S")
+        diff_hours = round((l_dt - ini_first_dt).total_seconds() / 3600.0, 1)
+        candidatos.append({
+            "id": l['id'],
+            "fecha_hora": l['fecha_hora'],
+            "fecha": l['fecha_hora'][:10],
+            "hora": l['fecha_hora'][11:19],
+            "tipo": l['tipo'],
+            "equipo": l['equipo'],
+            "horas_transcurridas": diff_hours
+        })
+
+    return {"success": True, "candidatos": candidatos}
+
+
+@router.post("/viajes-largos/")
+async def create_viaje_largo(
+    req: ViajeLargoCreateRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Registra un viaje largo unificando dos marcaciones y recalcula el período de asistencia."""
+    db = service.repository.db
+    
+    # 1. RLS
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(req.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    # 2. Cierre check
+    if await service.repository.check_rango_cerrado(req.fecha_inicio, req.fecha_fin, req.empleado_id):
+        raise HTTPException(status_code=403, detail="El rango seleccionado se encuentra en un período cerrado.")
+
+    # 3. Obtener marcas para guardar fecha_hora_inicio y fecha_hora_fin exactas
+    log_in = await db.fetch_one("SELECT fecha_hora FROM logs_raw WHERE id = ?", (req.log_entrada_id,))
+    log_out = await db.fetch_one("SELECT fecha_hora FROM logs_raw WHERE id = ?", (req.log_salida_id,))
+    
+    if not log_in or not log_out:
+        raise HTTPException(status_code=400, detail="No se encontraron las marcaciones especificadas en logs_raw.")
+
+    data = {
+        'empleado_id': req.empleado_id,
+        'fecha_inicio': req.fecha_inicio,
+        'fecha_fin': req.fecha_fin,
+        'log_entrada_id': req.log_entrada_id,
+        'log_salida_id': req.log_salida_id,
+        'fecha_hora_inicio': log_in['fecha_hora'],
+        'fecha_hora_fin': log_out['fecha_hora'],
+        'ciudad_origen': req.ciudad_origen or 'Planta Aguacol',
+        'ciudad_destino': req.ciudad_destino,
+        'horas_manejo_efectivas': req.horas_manejo_efectivas,
+        'horas_descanso': req.horas_descanso,
+        'horas_reconocidas_totales': req.horas_reconocidas_totales,
+        'observaciones': req.observaciones,
+        'creado_por_id': current_user.user_id
+    }
+
+    viaje_id = await service.repository.create_viaje_largo(data)
+
+    # 4. Reprocesar el rango de fechas
+    await service.reprocesar_periodo_empleado(
+        empleado_id=req.empleado_id,
+        fecha_inicio=req.fecha_inicio,
+        fecha_fin=req.fecha_fin,
+        force=True
+    )
+
+    # Auditoría
+    try:
+        await db.execute("""
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+            VALUES (?, ?, ?, ?, ?)
+        """, (current_user.user_id, current_user.username, 'CREATE_VIAJE_LARGO', 'Marcaciones',
+              f"Viaje Largo ID {viaje_id} ({req.ciudad_origen} -> {req.ciudad_destino}): Emp {req.empleado_id} del {req.fecha_inicio} al {req.fecha_fin}"))
+    except Exception as e:
+        logger.warning(f"Error registrando auditoría viaje largo: {e}")
+
+    return {
+        "success": True,
+        "message": f"Viaje Largo a {req.ciudad_destino} registrado exitosamente.",
+        "viaje_id": viaje_id
+    }
+
+
+@router.delete("/viajes-largos/{viaje_id}/")
+async def delete_viaje_largo(
+    viaje_id: int,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Elimina un registro de viaje largo y restaura los días al estado natural."""
+    viaje = await service.repository.delete_viaje_largo(viaje_id)
+    if not viaje:
+        raise HTTPException(status_code=404, detail="Viaje Largo no encontrado")
+
+    # Reprocesar período
+    await service.reprocesar_periodo_empleado(
+        empleado_id=viaje['empleado_id'],
+        fecha_inicio=viaje['fecha_inicio'],
+        fecha_fin=viaje['fecha_fin'],
+        force=True
+    )
+
+    return {"success": True, "message": "Viaje Largo eliminado y días restaurados."}
+
+

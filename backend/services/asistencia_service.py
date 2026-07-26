@@ -1639,6 +1639,60 @@ class AsistenciaService:
         is_holiday = fecha in feriados_dict
         is_weekend = dia_semana >= 5  # 5=Sat, 6=Sun
 
+        # ── VERIFICAR VIAJE LARGO ACTIVO (BOLSA FLEXIBLE) ─────────────────────
+        viaje_largo = await self.repository.get_viaje_largo_activo(empleado_id, fecha)
+        if viaje_largo:
+            c_orig = viaje_largo.get('ciudad_origen', 'Planta Aguacol')
+            c_dest = viaje_largo.get('ciudad_destino', '')
+            h_man = viaje_largo.get('horas_manejo_efectivas', 0.0)
+            h_desc = viaje_largo.get('horas_descanso', 0.0)
+            h_tot = viaje_largo.get('horas_reconocidas_totales', 0.0)
+            
+            f_ini = viaje_largo['fecha_inicio']
+            f_fin = viaje_largo['fecha_fin']
+            
+            if fecha == f_ini:
+                h_in = viaje_largo['fecha_hora_inicio'][11:19]
+                h_out = None
+                h_trab = h_tot
+                m_ids = f"[{viaje_largo['log_entrada_id']}]"
+                obs = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_man}h manejo, {h_desc}h descanso."
+            elif f_ini < fecha < f_fin:
+                h_in = None
+                h_out = None
+                h_trab = 0.0
+                m_ids = '[]'
+                obs = f"🚛 VIAJE LARGO EN RUTA ({c_orig} -> {c_dest})"
+            else:  # fecha == f_fin
+                h_in = None
+                h_out = viaje_largo['fecha_hora_fin'][11:19]
+                h_trab = 0.0
+                m_ids = f"[{viaje_largo['log_salida_id']}]"
+                obs = f"🚛 RETORNO VIAJE LARGO ({c_dest} -> {c_orig})"
+                
+            viaje_record = {
+                'empleado_id': empleado_id,
+                'fecha': fecha,
+                'hora_entrada_teorica': None,
+                'hora_salida_teorica': None,
+                'hora_entrada_real': h_in,
+                'hora_salida_real': h_out,
+                'minutos_atraso': 0,
+                'minutos_colacion': 0,
+                'horas_trabajadas': h_trab,
+                'minutos_deuda': 0,
+                'minutos_extra_bruto': 0,
+                'minutos_salida_adelantada': 0,
+                'estado': 'VIAJE_LARGO',
+                'observaciones': obs,
+                'turno_asignado_id': asignacion.get('turno_id') if asignacion else None,
+                'marcas_consumidas_ids': m_ids,
+            }
+            if save:
+                await self.repository.upsert_asistencia(viaje_record)
+            return viaje_record
+
+
         # 3.1. Asistencia de ayer
         ayer_str = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
         if bulk_ctx:

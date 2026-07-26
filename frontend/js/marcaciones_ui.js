@@ -5570,6 +5570,10 @@ function _analiticaCellBadge(di) {
         'badge-inasistencia-compensada-he', 
         '<i class="bi bi-clock-history me-1"></i>C.HE'
     ];
+    badgeMap['VIAJE_LARGO'] = [
+        'bg-info text-dark font-monospace fw-bold', 
+        '<i class="bi bi-truck me-1"></i>VIAJE'
+    ];
 
     // Fallback hardcodeado (si la caché aún no cargó)
     if (Object.keys(badgeMap).length === 0) {
@@ -5583,6 +5587,7 @@ function _analiticaCellBadge(di) {
             'PERMISO':          ['badge-state-info',     '<i class="bi bi-person-check-fill me-1"></i>PER'],
             'EXTRA':            ['badge-state-info',     '<i class="bi bi-plus-circle-fill me-1"></i>EXT'],
             'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
+            'VIAJE_LARGO':      ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'],
             'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
             'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR'],
             'INASISTENCIA_COMPENSADA_INTERCAMBIO': ['badge-compensatorio', '<i class="bi bi-arrow-left-right me-1"></i>COMP'],
@@ -5590,6 +5595,7 @@ function _analiticaCellBadge(di) {
             'JORNADA_COMPENSATORIA':   ['badge-compensatorio',           '<i class="bi bi-arrow-left-right me-1"></i>COMP']
         });
     }
+
 
     const stdBadgeStyle = "width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; flex-direction:column; line-height:1.1;";
 

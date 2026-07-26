@@ -671,4 +671,67 @@ class AsistenciaRepository:
         query = "DELETE FROM compensaciones_he_inasistencia WHERE id = ?"
         await self.db.execute(query, (compensacion_id,))
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # VIAJES LARGOS (BOLSA FLEXIBLE)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def create_viaje_largo(self, data: Dict[str, Any]) -> int:
+        """Crea un registro de viaje largo."""
+        query = """
+            INSERT INTO viajes_largos (
+                empleado_id, fecha_inicio, fecha_fin, log_entrada_id, log_salida_id,
+                fecha_hora_inicio, fecha_hora_fin, ciudad_origen, ciudad_destino,
+                horas_manejo_efectivas, horas_descanso, horas_reconocidas_totales,
+                observaciones, creado_por_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        params = (
+            data['empleado_id'],
+            data['fecha_inicio'],
+            data['fecha_fin'],
+            data['log_entrada_id'],
+            data['log_salida_id'],
+            data['fecha_hora_inicio'],
+            data['fecha_hora_fin'],
+            data.get('ciudad_origen', 'Planta Aguacol'),
+            data['ciudad_destino'],
+            data['horas_manejo_efectivas'],
+            data['horas_descanso'],
+            data['horas_reconocidas_totales'],
+            data.get('observaciones', ''),
+            data.get('creado_por_id')
+        )
+        cursor = await self.db.execute(query, params)
+        return cursor.lastrowid
+
+    async def get_viaje_largo_activo(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Busca si existe un viaje largo activo que cubra una fecha específica para un empleado."""
+        query = """
+            SELECT * FROM viajes_largos
+            WHERE empleado_id = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+            ORDER BY id DESC LIMIT 1
+        """
+        return await self.db.fetch_one(query, (empleado_id, fecha, fecha))
+
+    async def get_viajes_largos_periodo(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """Obtiene la lista de viajes largos de un empleado en un rango de fechas."""
+        query = """
+            SELECT * FROM viajes_largos
+            WHERE empleado_id = ? AND (
+                (fecha_inicio BETWEEN ? AND ?) OR 
+                (fecha_fin BETWEEN ? AND ?) OR 
+                (fecha_inicio <= ? AND fecha_fin >= ?)
+            )
+            ORDER BY fecha_inicio ASC
+        """
+        return await self.db.fetch_all(query, (empleado_id, fecha_inicio, fecha_fin, fecha_inicio, fecha_fin, fecha_inicio, fecha_fin))
+
+    async def delete_viaje_largo(self, viaje_id: int) -> Optional[Dict[str, Any]]:
+        """Elimina un registro de viaje largo por ID y retorna los datos eliminados para reprocesamiento."""
+        viaje = await self.db.fetch_one("SELECT * FROM viajes_largos WHERE id = ?", (viaje_id,))
+        if viaje:
+            await self.db.execute("DELETE FROM viajes_largos WHERE id = ?", (viaje_id,))
+        return viaje
+
+
 
