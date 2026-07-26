@@ -1272,38 +1272,62 @@ async function executePerdonazoMasivo() {
 // ─────────────────────────────────────────────────────────────────────────
 // FUNCIONES VIAJE LARGO (BOLSA FLEXIBLE)
 // ─────────────────────────────────────────────────────────────────────────
+function getViajeLargoAuthToken() {
+    if (typeof AuthService !== 'undefined' && typeof AuthService.getToken === 'function') {
+        const t = AuthService.getToken();
+        if (t) return t;
+    }
+    return localStorage.getItem('access_token') || localStorage.getItem('token') || window.AuthToken || '';
+}
+
 async function proceedToViajeLargo() {
-    closeAsistenciaActionModal();
     const empId = marcacionesManualesState.currentEmpId;
     const dateStr = marcacionesManualesState.currentDate;
     const empNombre = marcacionesManualesState.currentEmpNombre;
 
-    document.getElementById('vl-emp-id').value = empId;
-    document.getElementById('vl-fecha-ini').value = dateStr;
-
-    // Reset campos
-    document.getElementById('vl-ciudad-destino').value = '';
-    document.getElementById('vl-hrs-manejo').value = '';
-    document.getElementById('vl-hrs-descanso').value = '';
-    document.getElementById('vl-hrs-reconocidas').value = '';
-    document.getElementById('vl-observaciones').value = '';
+    const token = getViajeLargoAuthToken();
+    if (!token) {
+        alert("Sesión no válida o expirada. Por favor reinicie sesión.");
+        return;
+    }
 
     try {
         // Cargar candidatos de retorno desde el backend
         const resp = await fetch(`/api/asistencia/viajes-largos/candidatos-retorno/?empleado_id=${empId}&fecha_inicio=${dateStr}`, {
-            headers: { 'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('token')}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
-        if (!resp.ok) throw new Error("Error cargando lista de candidatos");
+
+        if (!resp.ok) {
+            const errJson = await resp.json().catch(() => ({ detail: resp.statusText }));
+            throw new Error(errJson.detail || `Error HTTP ${resp.status}`);
+        }
+
         const data = await resp.json();
-        
         const candidatos = data.candidatos || [];
-        const selectRet = document.getElementById('vl-select-retorno');
-        selectRet.innerHTML = '';
 
         if (candidatos.length === 0) {
-            alert("No se encontraron marcaciones en los días siguientes para unir este viaje.");
+            alert("No se encontraron marcaciones registradas para iniciar o unir este viaje. Si el empleado olvidó marcar, use 'Ingreso Manual' primero.");
             return;
         }
+
+        // Cerrar modal de decisiones únicamente cuando la carga de candidatos sea exitosa
+        closeAsistenciaActionModal();
+
+        document.getElementById('vl-emp-id').value = empId;
+        document.getElementById('vl-fecha-ini').value = dateStr;
+
+        // Reset campos
+        document.getElementById('vl-ciudad-destino').value = '';
+        document.getElementById('vl-hrs-manejo').value = '';
+        document.getElementById('vl-hrs-descanso').value = '';
+        document.getElementById('vl-hrs-reconocidas').value = '';
+        document.getElementById('vl-observaciones').value = '';
+
+        const selectRet = document.getElementById('vl-select-retorno');
+        selectRet.innerHTML = '';
 
         // El primer log es el de inicio (salida a viaje)
         const logInicio = candidatos[0];
@@ -1325,15 +1349,21 @@ async function proceedToViajeLargo() {
 
         window.updateViajeLargoCalculos();
 
-        // Mostrar Modal Viaje Largo
-        const el = document.getElementById('modalViajeLargo');
-        if (el) {
-            const modal = new bootstrap.Modal(el);
-            modal.show();
-        }
+        // Mostrar Modal Viaje Largo con retardo seguro para evitar choques con el backdrop de Bootstrap
+        setTimeout(() => {
+            const el = document.getElementById('modalViajeLargo');
+            if (el) {
+                let modal = bootstrap.Modal.getInstance(el);
+                if (!modal) {
+                    modal = new bootstrap.Modal(el, { backdrop: 'static', keyboard: true });
+                }
+                modal.show();
+            }
+        }, 150);
+
     } catch (e) {
         console.error("Error abriendo Viaje Largo:", e);
-        alert("Error cargando datos del viaje largo: " + e.message);
+        alert("Error al obtener marcaciones para Viaje Largo: " + e.message);
     }
 }
 
@@ -1393,18 +1423,20 @@ async function submitViajeLargo() {
         observaciones: observaciones
     };
 
+    const token = getViajeLargoAuthToken();
+
     try {
         const resp = await fetch('/api/asistencia/viajes-largos/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('token')}`
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify(payload)
         });
 
         if (!resp.ok) {
-            const err = await resp.json();
+            const err = await resp.json().catch(() => ({ detail: resp.statusText }));
             throw new Error(err.detail || "Error registrando viaje largo");
         }
 
@@ -1439,4 +1471,5 @@ async function submitViajeLargo() {
 window.proceedToViajeLargo = proceedToViajeLargo;
 window.updateViajeLargoCalculos = updateViajeLargoCalculos;
 window.submitViajeLargo = submitViajeLargo;
+
 
