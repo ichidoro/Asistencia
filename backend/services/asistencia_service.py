@@ -2785,13 +2785,12 @@ class AsistenciaService:
                         elif t_m in {'salida', 'exit', 's', 'out', '2'}:
                             balance -= 1
 
-                        # [FIX NOCTURNO BOLSA] Si la jornada ya cerró (balance == 0) y la marca siguiente es nocturna (>= 20:00),
-                        # la dejamos para la jornada del día siguiente (D+1).
+                        # [FIX BOLSA FLEXIBLE] Si la jornada ya cerró (balance == 0) y la marca siguiente es una nueva Entrada,
+                        # la dejamos para ser tratada como anomalía o inicio de ruta/viaje largo.
                         if is_bolsa and balance == 0 and i + 1 < len(marcas_disponibles):
                             sig_mark = marcas_disponibles[i + 1]
-                            sig_hora = sig_mark.get('fecha_hora', '')[11:16]
                             sig_tipo = str(sig_mark.get('tipo', '') or '').strip().lower()
-                            if sig_hora >= "20:00" and sig_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
+                            if sig_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
                                 break
                     else:
                         break
@@ -4562,6 +4561,21 @@ class AsistenciaService:
                     # Nota: no existe rama else (JE sin asistencias).
                     # El motor siempre crea ambos registros juntos. Si faltara asistencias
                     # sería un bug de integridad que debe investigarse, no silenciarse.
+
+        # Superponer viajes_largos para adjuntar objeto viaje_largo a las celdas del primer día
+        q_vl = f"""
+            SELECT * FROM viajes_largos
+            WHERE empleado_id IN ({emp_ph})
+              AND fecha_inicio <= ? AND fecha_fin >= ?
+        """
+        vl_rows = await db.fetch_all(q_vl, tuple(emp_ids) + (fecha_fin, fecha_inicio))
+        for vl in vl_rows:
+            v_dict = dict(vl)
+            eid = v_dict['empleado_id']
+            f_ini_vl = v_dict['fecha_inicio']
+            if eid in matrix and f_ini_vl in matrix[eid]:
+                matrix[eid][f_ini_vl]['viaje_largo'] = v_dict
+                matrix[eid][f_ini_vl]['tiene_viaje_largo'] = 1
 
 
         # Proyectar feriados no procesados

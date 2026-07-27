@@ -2303,7 +2303,7 @@ async def get_candidatos_retorno_viaje(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
-    """Busca marcaciones candidatas de retorno para un empleado desde fecha_inicio hasta 5 días después."""
+    """Busca marcaciones candidatas de inicio y retorno libres/anómalas para un empleado desde fecha_inicio hasta 5 días después."""
     db = service.repository.db
     from datetime import datetime, timedelta
     dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
@@ -2311,6 +2311,28 @@ async def get_candidatos_retorno_viaje(
     f_fin_str = dt_fin.strftime("%Y-%m-%d 23:59:59")
     f_ini_str = f"{fecha_inicio} 00:00:00"
 
+    # 1. Obterner marcaciones consumidas en viajes_largos existentes
+    vls = await db.fetch_all("SELECT log_entrada_id, log_salida_id FROM viajes_largos WHERE empleado_id = ?", (empleado_id,))
+    viaje_consumed_ids = set()
+    for v in vls:
+        if v['log_entrada_id']: viaje_consumed_ids.add(int(v['log_entrada_id']))
+        if v['log_salida_id']: viaje_consumed_ids.add(int(v['log_salida_id']))
+
+    # 2. Obtener anclajes de turnos OK ordinarios (hora_entrada_real u hora_salida_real)
+    asists_ok = await db.fetch_all("""
+        SELECT fecha, hora_entrada_real, hora_salida_real FROM asistencias
+        WHERE empleado_id = ? AND estado IN ('OK', 'LICENCIA', 'VACACIONES', 'PERMISO')
+          AND fecha BETWEEN ? AND ?
+    """, (empleado_id, fecha_inicio, dt_fin.strftime("%Y-%m-%d")))
+    
+    ok_anchors = set()
+    for a in asists_ok:
+        if a['hora_entrada_real']:
+            ok_anchors.add(f"{a['fecha']} {a['hora_entrada_real']}")
+        if a['hora_salida_real']:
+            ok_anchors.add(f"{a['fecha']} {a['hora_salida_real']}")
+
+    # 3. Consultar marcaciones crudas en logs_raw
     logs = await db.fetch_all("""
         SELECT id, fecha_hora, tipo, equipo, observaciones
         FROM logs_raw
@@ -2318,24 +2340,50 @@ async def get_candidatos_retorno_viaje(
         ORDER BY fecha_hora ASC
     """, (empleado_id, f_ini_str, f_fin_str))
 
-    # Formatear candidato list
+    candidatos_inicio = []
+    candidatos_retorno = []
     candidatos = []
+    
     for l in logs:
-        # Calcular diferencia en horas
-        l_dt = datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-        ini_first_dt = datetime.strptime(f"{fecha_inicio} 00:00:00", "%Y-%m-%d %H:%M:%S")
-        diff_hours = round((l_dt - ini_first_dt).total_seconds() / 3600.0, 1)
-        candidatos.append({
-            "id": l['id'],
-            "fecha_hora": l['fecha_hora'],
-            "fecha": l['fecha_hora'][:10],
-            "hora": l['fecha_hora'][11:19],
+        lid = int(l['id'])
+        f_hora = l['fecha_hora']
+        
+        # Descartar marcaciones ocupadas en viajes o que sean el anclaje directo de un turno OK
+        is_consumed = (lid in viaje_consumed_ids) or (f_hora in ok_anchors)
+        
+        l_dt = datetime.strptime(f_hora, "%Y-%m-%d %H:%M:%S")
+        diff_hours = round((l_dt - dt_ini).total_seconds() / 3600.0, 1)
+        item = {
+            "id": lid,
+            "fecha_hora": f_hora,
+            "fecha": f_hora[:10],
+            "hora": f_hora[11:19],
             "tipo": l['tipo'],
             "equipo": l['equipo'],
-            "horas_transcurridas": diff_hours
-        })
+            "horas_transcurridas": diff_hours,
+            "consumida": is_consumed
+        }
+        
+        candidatos.append(item)
+        if not is_consumed:
+            if l['tipo'] == 'Entrada':
+                candidatos_inicio.append(item)
+            else:
+                candidatos_retorno.append(item)
 
-    return {"success": True, "candidatos": candidatos}
+    # Si no hay libres puras de entrada, incluir la primera marcación como fallback
+    if not candidatos_inicio and candidatos:
+        candidatos_inicio.append(candidatos[0])
+    if not candidatos_retorno and candidatos:
+        candidatos_retorno = candidatos[1:]
+
+    return {
+        "success": True, 
+        "candidatos": candidatos,
+        "candidatos_inicio": candidatos_inicio,
+        "candidatos_retorno": candidatos_retorno
+    }
+
 
 
 @router.post("/viajes-largos/")

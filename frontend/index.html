@@ -4521,12 +4521,12 @@
                             <!-- Visual Timeline -->
                             <div class="p-3 mb-3 bg-white rounded-3 border shadow-sm">
                                 <div class="fw-bold text-dark mb-2" style="font-size:0.85rem;"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Línea de Tiempo del Viaje</div>
-                                <div class="d-flex align-items-center justify-content-between p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;">
-                                    <div>
-                                        <div class="text-muted" style="font-size:0.7rem;">SALIDA DE PLANTA (INICIO)</div>
-                                        <div class="fw-bold text-primary" style="font-size:0.85rem;" id="vl-txt-inicio">--</div>
+                                <div class="mb-2 p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <label class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">SALIDA DE PLANTA (INICIO)</label>
+                                        <span class="badge bg-primary" id="vl-txt-duracion">0h</span>
                                     </div>
-                                    <span class="badge bg-primary" id="vl-txt-duracion">0h</span>
+                                    <select class="form-select form-select-sm" id="vl-select-inicio" onchange="window.updateViajeLargoCandidatosRetorno()"></select>
                                 </div>
                                 <div class="my-2 text-center text-muted" style="font-size:0.8rem;"><i class="bi bi-arrow-down-short"></i></div>
                                 <div>

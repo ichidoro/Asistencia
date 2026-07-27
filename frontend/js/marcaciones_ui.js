@@ -5693,6 +5693,14 @@ function _analiticaCellBadge(di) {
         const [pc, pl] = badgeMap['PERMISO'] || ['badge-state-info', '<i class="bi bi-calendar-check-fill me-1"></i>PER'];
         extraBadges.push(`<div class="badge-status ${pc}" style="${stdBadgeStyle}"><span>${pl}</span></div>`);
     }
+    if ((di.tiene_anomalia || di.alerta_anomalia) && est !== 'ANOMALIA') {
+        const [anc, anl] = badgeMap['ANOMALIA'] || ['badge-state-dark', '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'];
+        extraBadges.push(`<div class="badge-status ${anc}" style="${stdBadgeStyle}" title="Marcación Anómala / Libre en el día"><span>${anl}</span></div>`);
+    }
+    if ((di.viaje_largo || di.tiene_viaje_largo) && est !== 'VIAJE_LARGO') {
+        const [vc, vl] = badgeMap['VIAJE_LARGO'] || ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'];
+        extraBadges.push(`<div class="badge-status ${vc}" style="${stdBadgeStyle}" title="Viaje Largo en Ruta registrado"><span>${vl}</span></div>`);
+    }
 
     // Si hay badges adicionales → contenedor columna; si no → badge simple
     let resultHtml = '';

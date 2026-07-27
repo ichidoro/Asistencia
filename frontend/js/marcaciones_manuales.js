@@ -1292,7 +1292,7 @@ async function proceedToViajeLargo() {
     }
 
     try {
-        // Cargar candidatos de retorno desde el backend
+        // Cargar candidatos de inicio y retorno desde el backend
         const resp = await fetch(`/api/asistencia/viajes-largos/candidatos-retorno/?empleado_id=${empId}&fecha_inicio=${dateStr}`, {
             headers: { 
                 'Authorization': `Bearer ${token}`,
@@ -1306,12 +1306,18 @@ async function proceedToViajeLargo() {
         }
 
         const data = await resp.json();
-        const candidatos = data.candidatos || [];
+        const candidatosAll = data.candidatos || [];
+        const candInicio = (data.candidatos_inicio && data.candidatos_inicio.length > 0) ? data.candidatos_inicio : candidatosAll;
+        const candRetorno = (data.candidatos_retorno && data.candidatos_retorno.length > 0) ? data.candidatos_retorno : candidatosAll;
 
-        if (candidatos.length === 0) {
+        if (candidatosAll.length === 0) {
             alert("No se encontraron marcaciones registradas para iniciar o unir este viaje. Si el empleado olvidó marcar, use 'Ingreso Manual' primero.");
             return;
         }
+
+        // Guardar lista completa en window para actualización dinámica
+        window._vl_candidatos_all = candidatosAll;
+        window._vl_candidatos_retorno = candRetorno;
 
         // Cerrar modal de decisiones únicamente cuando la carga de candidatos sea exitosa
         closeAsistenciaActionModal();
@@ -1326,28 +1332,19 @@ async function proceedToViajeLargo() {
         document.getElementById('vl-hrs-reconocidas').value = '';
         document.getElementById('vl-observaciones').value = '';
 
-        const selectRet = document.getElementById('vl-select-retorno');
-        selectRet.innerHTML = '';
-
-        // El primer log es el de inicio (salida a viaje)
-        const logInicio = candidatos[0];
-        document.getElementById('vl-log-entrada-id').value = logInicio.id;
-        document.getElementById('vl-txt-inicio').innerText = `${logInicio.fecha_hora} (${logInicio.tipo} ${logInicio.equipo || ''})`;
-
-        // El resto son candidatos de retorno
-        let htmlOpts = '';
-        for (let i = 1; i < candidatos.length; i++) {
-            const c = candidatos[i];
-            htmlOpts += `<option value="${c.id}" data-fecha="${c.fecha}" data-horas="${c.horas_transcurridas}">${c.fecha_hora} — ${c.tipo} (${c.horas_transcurridas}h transcurridas)</option>`;
+        // Poblar Selector INICIO (#vl-select-inicio)
+        const selectIni = document.getElementById('vl-select-inicio');
+        selectIni.innerHTML = '';
+        let htmlOptsIni = '';
+        for (let i = 0; i < candInicio.length; i++) {
+            const c = candInicio[i];
+            const tagStr = c.consumida ? '(Turno Ordinario)' : '(Anomalía Libre)';
+            htmlOptsIni += `<option value="${c.id}" data-fecha-hora="${c.fecha_hora}">${c.fecha_hora} — ${c.tipo} ${tagStr}</option>`;
         }
+        selectIni.innerHTML = htmlOptsIni;
 
-        if (!htmlOpts) {
-            htmlOpts = `<option value="${logInicio.id}" data-fecha="${logInicio.fecha}" data-horas="0">${logInicio.fecha_hora} (Misma marcación)</option>`;
-        }
-
-        selectRet.innerHTML = htmlOpts;
-
-        window.updateViajeLargoCalculos();
+        // Poblar Selector RETORNO (#vl-select-retorno) dinámicamente según Inicio seleccionado
+        window.updateViajeLargoCandidatosRetorno();
 
         // Mostrar Modal Viaje Largo con retardo seguro para evitar choques con el backdrop de Bootstrap
         setTimeout(() => {
@@ -1367,11 +1364,56 @@ async function proceedToViajeLargo() {
     }
 }
 
+window.updateViajeLargoCandidatosRetorno = function() {
+    const selectIni = document.getElementById('vl-select-inicio');
+    const selectRet = document.getElementById('vl-select-retorno');
+    if (!selectIni || !selectRet) return;
+
+    const optIni = selectIni.options[selectIni.selectedIndex];
+    if (!optIni) return;
+
+    const fhIniStr = optIni.getAttribute('data-fecha-hora');
+    const dtIni = new Date(fhIniStr.replace(' ', 'T'));
+    document.getElementById('vl-log-entrada-id').value = optIni.value;
+
+    const candRetorno = window._vl_candidatos_retorno || window._vl_candidatos_all || [];
+    let htmlOptsRet = '';
+
+    for (let i = 0; i < candRetorno.length; i++) {
+        const c = candRetorno[i];
+        const dtRet = new Date(c.fecha_hora.replace(' ', 'T'));
+        if (dtRet > dtIni) {
+            const diffHours = ((dtRet - dtIni) / (1000 * 3600)).toFixed(1);
+            const tagStr = c.consumida ? '(Consumida)' : '(Anomalía Libre)';
+            htmlOptsRet += `<option value="${c.id}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}">${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
+        }
+    }
+
+    if (!htmlOptsRet) {
+        // Fallback: si no hay candidata posterior pura, mostrar todas
+        const candAll = window._vl_candidatos_all || [];
+        for (let i = 0; i < candAll.length; i++) {
+            const c = candAll[i];
+            if (c.id != optIni.value) {
+                const dtRet = new Date(c.fecha_hora.replace(' ', 'T'));
+                const diffHours = Math.max(0, ((dtRet - dtIni) / (1000 * 3600))).toFixed(1);
+                htmlOptsRet += `<option value="${c.id}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}">${c.fecha_hora} — ${c.tipo} (${diffHours}h transcurridas)</option>`;
+            }
+        }
+    }
+
+    selectRet.innerHTML = htmlOptsRet;
+    window.updateViajeLargoCalculos();
+};
+
 function updateViajeLargoCalculos(sourceField) {
     const selectRet = document.getElementById('vl-select-retorno');
     if (!selectRet) return;
     const opt = selectRet.options[selectRet.selectedIndex];
-    if (!opt) return;
+    if (!opt) {
+        document.getElementById('vl-txt-duracion').innerText = '0.0h';
+        return;
+    }
 
     const totalReloj = parseFloat(opt.getAttribute('data-horas')) || 0;
     document.getElementById('vl-txt-duracion').innerText = `${totalReloj.toFixed(1)}h reloj`;
@@ -1398,21 +1440,10 @@ function updateViajeLargoCalculos(sourceField) {
             elReconocidas.value = hManejo.toFixed(1);
         }
     } else {
-        // Al cambiar el combo de retorno o cargar la modal:
-        if (!isNaN(hDescanso) && hDescanso > 0 && totalReloj > 0) {
-            hManejo = Math.max(0, totalReloj - hDescanso);
-            elManejo.value = hManejo.toFixed(1);
-            elReconocidas.value = hManejo.toFixed(1);
-        } else if (!isNaN(hManejo) && hManejo > 0 && totalReloj > 0) {
-            hDescanso = Math.max(0, totalReloj - hManejo);
-            elDescanso.value = hDescanso.toFixed(1);
-            elReconocidas.value = hManejo.toFixed(1);
-        } else if (totalReloj > 0 && isNaN(hManejo) && isNaN(hDescanso)) {
-            // Inicialización por defecto cuando los campos están vacíos
-            elManejo.value = totalReloj.toFixed(1);
-            elDescanso.value = '0.0';
-            elReconocidas.value = totalReloj.toFixed(1);
-        }
+        // Inicializar por defecto con el totalReloj
+        elManejo.value = totalReloj.toFixed(1);
+        elDescanso.value = '0.0';
+        elReconocidas.value = totalReloj.toFixed(1);
     }
 }
 
