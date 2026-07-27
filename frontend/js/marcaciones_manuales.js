@@ -1325,12 +1325,25 @@ async function proceedToViajeLargo() {
         document.getElementById('vl-emp-id').value = empId;
         document.getElementById('vl-fecha-ini').value = dateStr;
 
-        // Reset campos
-        document.getElementById('vl-ciudad-destino').value = '';
-        document.getElementById('vl-hrs-manejo').value = '';
-        document.getElementById('vl-hrs-descanso').value = '';
-        document.getElementById('vl-hrs-reconocidas').value = '';
-        document.getElementById('vl-observaciones').value = '';
+        // Obtener viaje_largo existente de la matriz (si ya fue registrado previamente)
+        const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
+        const vlExistente = asistJ ? (asistJ.viaje_largo || null) : null;
+
+        if (vlExistente) {
+            document.getElementById('vl-ciudad-destino').value = vlExistente.ciudad_destino || '';
+            document.getElementById('vl-hrs-manejo').value = vlExistente.horas_manejo_efectivas != null ? vlExistente.horas_manejo_efectivas : '';
+            document.getElementById('vl-hrs-descanso').value = vlExistente.horas_descanso != null ? vlExistente.horas_descanso : '';
+            document.getElementById('vl-hrs-reconocidas').value = vlExistente.horas_reconocidas_totales != null ? vlExistente.horas_reconocidas_totales : '';
+            document.getElementById('vl-observaciones').value = vlExistente.observaciones || '';
+        } else {
+            // Reset campos para nuevo viaje
+            document.getElementById('vl-ciudad-destino').value = '';
+            document.getElementById('vl-hrs-manejo').value = '';
+            document.getElementById('vl-hrs-descanso').value = '';
+            document.getElementById('vl-hrs-reconocidas').value = '';
+            document.getElementById('vl-observaciones').value = '';
+        }
 
         // Poblar Selector INICIO (#vl-select-inicio)
         const selectIni = document.getElementById('vl-select-inicio');
@@ -1339,12 +1352,13 @@ async function proceedToViajeLargo() {
         for (let i = 0; i < candInicio.length; i++) {
             const c = candInicio[i];
             const tagStr = c.consumida ? '(Turno Ordinario)' : '(Anomalía Libre)';
-            htmlOptsIni += `<option value="${c.id}" data-fecha-hora="${c.fecha_hora}">${c.fecha_hora} — ${c.tipo} ${tagStr}</option>`;
+            const isSel = (vlExistente && vlExistente.log_entrada_id == c.id) ? 'selected' : '';
+            htmlOptsIni += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" ${isSel}>${c.fecha_hora} — ${c.tipo} ${tagStr}</option>`;
         }
         selectIni.innerHTML = htmlOptsIni;
 
         // Poblar Selector RETORNO (#vl-select-retorno) dinámicamente según Inicio seleccionado
-        window.updateViajeLargoCandidatosRetorno();
+        window.updateViajeLargoCandidatosRetorno(vlExistente ? vlExistente.log_salida_id : null);
 
         // Mostrar Modal Viaje Largo con retardo seguro para evitar choques con el backdrop de Bootstrap
         setTimeout(() => {
@@ -1364,7 +1378,7 @@ async function proceedToViajeLargo() {
     }
 }
 
-window.updateViajeLargoCandidatosRetorno = function() {
+window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
     const selectIni = document.getElementById('vl-select-inicio');
     const selectRet = document.getElementById('vl-select-retorno');
     if (!selectIni || !selectRet) return;
@@ -1385,7 +1399,8 @@ window.updateViajeLargoCandidatosRetorno = function() {
         if (dtRet > dtIni) {
             const diffHours = ((dtRet - dtIni) / (1000 * 3600)).toFixed(1);
             const tagStr = c.consumida ? '(Consumida)' : '(Anomalía Libre)';
-            htmlOptsRet += `<option value="${c.id}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}">${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
+            const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : '';
+            htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
         }
     }
 
@@ -1397,7 +1412,8 @@ window.updateViajeLargoCandidatosRetorno = function() {
             if (c.id != optIni.value) {
                 const dtRet = new Date(c.fecha_hora.replace(' ', 'T'));
                 const diffHours = Math.max(0, ((dtRet - dtIni) / (1000 * 3600))).toFixed(1);
-                htmlOptsRet += `<option value="${c.id}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}">${c.fecha_hora} — ${c.tipo} (${diffHours}h transcurridas)</option>`;
+                const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : '';
+                htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${c.fecha_hora} — ${c.tipo} (${diffHours}h transcurridas)</option>`;
             }
         }
     }
@@ -1408,7 +1424,7 @@ window.updateViajeLargoCandidatosRetorno = function() {
 
 function updateViajeLargoCalculos(sourceField) {
     const selectRet = document.getElementById('vl-select-retorno');
-    if (!selectRet) return;
+    if (!selectRet || selectRet.selectedIndex < 0) return;
     const opt = selectRet.options[selectRet.selectedIndex];
     if (!opt) {
         document.getElementById('vl-txt-duracion').innerText = '0.0h';
@@ -1440,10 +1456,12 @@ function updateViajeLargoCalculos(sourceField) {
             elReconocidas.value = hManejo.toFixed(1);
         }
     } else {
-        // Inicializar por defecto con el totalReloj
-        elManejo.value = totalReloj.toFixed(1);
-        elDescanso.value = '0.0';
-        elReconocidas.value = totalReloj.toFixed(1);
+        // Inicializar por defecto con el totalReloj SOLO si no hay un valor ingresado/cargado previamente
+        if (!elManejo.value || isNaN(parseFloat(elManejo.value))) {
+            elManejo.value = totalReloj.toFixed(1);
+            elDescanso.value = '0.0';
+            elReconocidas.value = totalReloj.toFixed(1);
+        }
     }
 }
 
@@ -1453,9 +1471,11 @@ async function submitViajeLargo() {
     const logEntradaId = parseInt(document.getElementById('vl-log-entrada-id').value);
     
     const selectRet = document.getElementById('vl-select-retorno');
-    const optRet = selectRet ? selectRet.options[selectRet.selectedIndex] : null;
+    const optRet = (selectRet && selectRet.selectedIndex >= 0) ? selectRet.options[selectRet.selectedIndex] : null;
     const logSalidaId = selectRet ? parseInt(selectRet.value) : 0;
-    const fechaFin = optRet ? optRet.getAttribute('data-fecha') : fechaIni;
+    
+    const optRetFh = optRet ? optRet.getAttribute('data-fecha-hora') : null;
+    const fechaFin = (optRet && optRet.getAttribute('data-fecha')) ? optRet.getAttribute('data-fecha') : (optRetFh ? optRetFh.substring(0, 10) : fechaIni);
 
     const ciudadOrigen = document.getElementById('vl-ciudad-origen').value.trim() || 'Planta Aguacol';
     const ciudadDestino = document.getElementById('vl-ciudad-destino').value.trim();
@@ -1501,7 +1521,15 @@ async function submitViajeLargo() {
 
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-            throw new Error(err.detail || "Error registrando viaje largo");
+            let errMsg = "Error registrando viaje largo";
+            if (typeof err.detail === 'string') {
+                errMsg = err.detail;
+            } else if (Array.isArray(err.detail)) {
+                errMsg = err.detail.map(d => `${d.loc ? d.loc.join('.') : ''}: ${d.msg}`).join('\n');
+            } else if (typeof err.detail === 'object') {
+                errMsg = JSON.stringify(err.detail);
+            }
+            throw new Error(errMsg);
         }
 
         const resData = await resp.json();

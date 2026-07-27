@@ -4577,6 +4577,37 @@ class AsistenciaService:
                 matrix[eid][f_ini_vl]['viaje_largo'] = v_dict
                 matrix[eid][f_ini_vl]['tiene_viaje_largo'] = 1
 
+        # Superponer alertas de marcaciones anómalas/libres no consumidas (para mostrar badge ANO junto a OK)
+        import json as _json
+        q_unconsumed_logs = f"""
+            SELECT id, empleado_id, date(fecha_hora) AS fecha FROM logs_raw
+            WHERE empleado_id IN ({ids_ph})
+              AND date(fecha_hora) >= date(?) AND date(fecha_hora) <= date(?)
+        """
+        raw_logs_period = await db.fetch_all(q_unconsumed_logs, tuple(emp_ids) + (fecha_inicio, fecha_fin))
+        
+        consumed_punch_ids = set()
+        for vl in vl_rows:
+            if vl['log_entrada_id']: consumed_punch_ids.add(int(vl['log_entrada_id']))
+            if vl['log_salida_id']: consumed_punch_ids.add(int(vl['log_salida_id']))
+        for a in asistencias:
+            m_ids_str = a.get('marcas_consumidas_ids')
+            if m_ids_str:
+                try:
+                    for x in _json.loads(m_ids_str):
+                        consumed_punch_ids.add(int(x))
+                except Exception:
+                    pass
+
+        for l in raw_logs_period:
+            lid = int(l['id'])
+            if lid not in consumed_punch_ids:
+                eid = l['empleado_id']
+                f_log = l['fecha']
+                if eid in matrix and f_log in matrix[eid]:
+                    matrix[eid][f_log]['tiene_anomalia'] = 1
+                    matrix[eid][f_log]['alerta_anomalia'] = 1
+
 
         # Proyectar feriados no procesados
         from datetime import datetime as _dt, timedelta as _td
