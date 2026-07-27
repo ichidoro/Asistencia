@@ -4565,7 +4565,7 @@ class AsistenciaService:
         # Superponer viajes_largos para adjuntar objeto viaje_largo a las celdas del primer día
         q_vl = f"""
             SELECT * FROM viajes_largos
-            WHERE empleado_id IN ({emp_ph})
+            WHERE empleado_id IN ({ids_ph})
               AND fecha_inicio <= ? AND fecha_fin >= ?
         """
         vl_rows = await db.fetch_all(q_vl, tuple(emp_ids) + (fecha_fin, fecha_inicio))
