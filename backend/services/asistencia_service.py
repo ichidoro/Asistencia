@@ -4291,6 +4291,16 @@ class AsistenciaService:
         # ── TIPO DE DÍA (diurno / nocturno / bolsa) ────────────────────────────
         is_bolsa = turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA'
 
+        # ── ALINEACIÓN DE FECHA DE MARCACIONES REASIGNADAS ────────────────────
+        # Si las marcaciones físicas proceden de una fecha distinta a "fecha" (debido a reasignación de turno),
+        # desplazar las fechas en tiempos_proc para coincidir con la jornada evaluada "fecha".
+        if len(tiempos_proc) > 0:
+            target_date = datetime.strptime(fecha, "%Y-%m-%d").date()
+            p0_date = tiempos_proc[0].date()
+            if p0_date != target_date:
+                day_delta = (target_date - p0_date).days
+                tiempos_proc = [t + timedelta(days=day_delta) for t in tiempos_proc]
+
         # ── CÁLCULO DE DIFERENCIAS (atraso, salida adelantada, extras) ────────
         diff_ent = 0  # minutos de atraso (positivo = tarde)
         diff_sal = 0  # minutos de salida adelantada (positivo = se fue antes)
