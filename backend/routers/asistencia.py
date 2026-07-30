@@ -2562,7 +2562,14 @@ async def reasignar_turno_endpoint(
     current_user.verificar_acceso_area(emp.area, "este empleado")
 
     # Exclusión Bolsa Flexible
-    if emp.tipo_programacion == 'FLEXIBLE_BOLSA':
+    t_row = await db.fetch_one("""
+        SELECT t.tipo_programacion 
+        FROM asignacion_turnos at
+        JOIN turnos t ON at.turno_id = t.id
+        WHERE at.empleado_id = ?
+        ORDER BY at.fecha_inicio DESC LIMIT 1
+    """, (req.empleado_id,))
+    if t_row and t_row.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
         raise HTTPException(status_code=400, detail="La reasignación de turno no está permitida para trabajadores en Bolsa Flexible.")
 
     # Cierre check
