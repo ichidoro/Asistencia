@@ -2874,18 +2874,8 @@ class AsistenciaService:
                 if hora_inicio >= '21:00':
                     is_holiday = True
             else:
-                # Turno diurno/tarde: truncar salida a las 21:00
-                salida_str = str(config_dia.get('hora_salida', '00:00'))[:5]
-                if salida_str > '21:00':
-                    # config_dia = dict(config_dia)  # copia para no mutar el origen del bulk_ctx (ya copiado)
-                    config_dia['hora_salida'] = '21:00'
-                    if config_dia.get('hora_entrada'):
-                        t_ent = datetime.strptime(str(config_dia['hora_entrada'])[:5], "%H:%M")
-                        t_sal = datetime.strptime('21:00', "%H:%M")
-                        minutos_trabajo = (t_sal - t_ent).seconds / 60
-                        if config_dia.get('descuento_colacion_auto'):
-                            minutos_trabajo -= float(config_dia.get('minutos_colacion_auto', 0))
-                        config_dia['horas_teoricas'] = max(0.0, minutos_trabajo / 60.0)
+                # Turnos diurnos/tarde mantienen su horario de salida programado de la plantilla/malla.
+                pass
 
         # ── LEY CHILE: Turno nocturno que INICIA en festivo (criterio mayoría de horas) ───
         # [BUSINESS_RULE: MAYORÍA DE HORAS NOCTURNAS EN FESTIVO]
