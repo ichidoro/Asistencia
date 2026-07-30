@@ -72,11 +72,16 @@ async function populateDashboardFilters() {
         // Solo va a la red si es la primera vez en esta sesión.
         const [areasResult, turnosResult] = await Promise.allSettled([
             (async () => {
-                if (window._cachedAreas) return { areas: window._cachedAreas };
-                const r = await fetch('/api/empleados/stats/');
+                if (window._cachedAreas && window._cachedAreas.length > 0) return { areas: window._cachedAreas };
+                const token = localStorage.getItem('token');
+                const r = await fetch('/api/empleados/stats/', {
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                });
                 if (!r.ok) return {};
                 const stats = await r.json();
-                window._cachedAreas = stats.areas || [];
+                if (stats.areas && stats.areas.length > 0) {
+                    window._cachedAreas = stats.areas;
+                }
                 return stats;
             })(),
             fetch('/api/turnos/')

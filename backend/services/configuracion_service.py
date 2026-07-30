@@ -370,8 +370,8 @@ class ConfiguracionService:
             return False
 
         # 2. Validar período cerrado (rango viejo Y nuevo)
-        await self._validar_periodo_cerrado(old['fecha_inicio'], old['fecha_fin'])
-        await self._validar_periodo_cerrado(str(j.fecha_inicio), str(j.fecha_fin))
+        await self._validar_periodo_cerrado(old['fecha_inicio'], old['fecha_fin'], j.empleado_id)
+        await self._validar_periodo_cerrado(str(j.fecha_inicio), str(j.fecha_fin), j.empleado_id)
 
         # 3. Validar solapamiento con otras justificaciones del mismo empleado
         await self._validar_solapamiento(j.empleado_id, justificacion_id,
@@ -398,7 +398,7 @@ class ConfiguracionService:
             return False
 
         # 2. Validar período cerrado
-        await self._validar_periodo_cerrado(existing['fecha_inicio'], existing['fecha_fin'])
+        await self._validar_periodo_cerrado(existing['fecha_inicio'], existing['fecha_fin'], existing['empleado_id'])
 
         # 3. Borrar
         deleted = await self.repository.delete_justificacion(justificacion_id)
@@ -529,15 +529,14 @@ class ConfiguracionService:
                      f"libres_turno={dias_libres_set}, feriados={len(feriados_set)}, resultado={count}")
         return count
 
-    async def _validar_periodo_cerrado(self, fecha_inicio: str, fecha_fin: str):
-        """Lanza HTTPException si las fechas caen en un período cerrado por RRHH"""
+    async def _validar_periodo_cerrado(self, fecha_inicio: str, fecha_fin: str, empleado_id: Optional[int] = None):
+        """Lanza HTTPException si las fechas caen en un período cerrado por RRHH para el área del empleado"""
         from fastapi import HTTPException
+        from backend.repositories.asistencia import AsistenciaRepository
         try:
-            cierre = await self.repository.db.fetch_one("""
-                SELECT id FROM cierres_periodos
-                WHERE date(fecha_inicio) <= date(?) AND date(fecha_fin) >= date(?)
-            """, (str(fecha_fin), str(fecha_inicio)))
-            if cierre:
+            asist_repo = AsistenciaRepository(self.repository.db)
+            is_closed = await asist_repo.check_rango_cerrado(fecha_inicio, fecha_fin, empleado_id)
+            if is_closed:
                 raise HTTPException(400,
                     "No se puede modificar: la justificación cae en un período cerrado por RRHH")
         except HTTPException:

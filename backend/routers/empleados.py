@@ -23,7 +23,7 @@ from backend.schemas.empleado import (
 from backend.repositories.configuracion import ConfiguracionRepository
 from backend.services.configuracion_service import ConfiguracionService
 from backend.services.notification_service import NotificationService
-from backend.core.security import SecurityContext, RequirePermission
+from backend.core.security import SecurityContext, RequirePermission, get_current_user
 
 
 #==================================
@@ -348,7 +348,7 @@ async def obtener_matriz_bonos(
 )
 async def obtener_metadatos(
     service: EmpleadoService = Depends(get_empleado_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
+    current_user: SecurityContext = Depends(get_current_user)
 ):
     """
     Obtener metadatos para filtros.
@@ -368,7 +368,7 @@ async def obtener_metadatos(
 )
 async def estadisticas_empleados(
     service: EmpleadoService = Depends(get_empleado_service),
-    current_user: SecurityContext = Depends(RequirePermission("empleados.ver"))
+    current_user: SecurityContext = Depends(get_current_user)
 ):
     """
     Obtener estadísticas de empleados.

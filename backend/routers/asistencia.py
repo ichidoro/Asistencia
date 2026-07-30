@@ -29,7 +29,9 @@ from backend.schemas.asistencia import (
     CondonarDeudaRequest,
     IntercambioCreate,
     CompensacionCreate,
+    ReasignarTurnoRequest,
 )
+
 
 router = APIRouter(
     prefix="/asistencia",
@@ -1418,14 +1420,17 @@ async def aprobar_horas_extra_batch(
 async def agregar_marcacion_manual(
     empleado_id: int,
     fecha: str,
-    hora: str,
-    tipo: str = Query(..., pattern="^(Entrada|Salida)$"),
+    hora: Optional[str] = None,
+    tipo: Optional[str] = Query(None, pattern="^(Entrada|Salida)$"),
+    hora_entrada: Optional[str] = None,
+    hora_salida: Optional[str] = None,
     observaciones: Optional[str] = None,
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
     """
-    Agrega una marcación manual y reprocesa la asistencia con RLS.
+    Agrega marcación(es) manual(es) y reprocesa la asistencia del día en una sola transacción.
+    Acepta (hora + tipo) para 1 marca, o (hora_entrada + hora_salida) para ambas en 1 sola llamada.
     """
     # RLS: Verificar pertenencia
     emp_repo = EmpleadoRepository(service.repository.db)
@@ -1440,33 +1445,44 @@ async def agregar_marcacion_manual(
          raise HTTPException(status_code=403, detail="El periodo de esta fecha se encuentra cerrado y no admite modificaciones.")
 
     try:
-        # 1. Insertar en logs_raw (con hash para respetar barrera anti-duplicados)
         import hashlib
-        if hora.count(':') == 1:
-            fecha_hora = f"{fecha} {hora}:00"
-        else:
-            fecha_hora = f"{fecha} {hora}"
-            
-        emp_data = await emp_repo.get_by_id(empleado_id)
-        rut = emp_data.rut if emp_data else str(empleado_id)
-        raw_string = f"{rut}|{fecha_hora}|{tipo or ''}"
-        hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
+        db = service.repository.db
+        rut = emp.rut if emp and emp.rut else str(empleado_id)
+        obs_str = observaciones or "Marcación manual"
+
+        marcas_a_insertar = []
+        if hora_entrada:
+            fh_ent = f"{fecha} {hora_entrada}:00" if hora_entrada.count(':') == 1 else f"{fecha} {hora_entrada}"
+            marcas_a_insertar.append((fh_ent, "Entrada"))
+        if hora_salida:
+            fh_sal = f"{fecha} {hora_salida}:00" if hora_salida.count(':') == 1 else f"{fecha} {hora_salida}"
+            marcas_a_insertar.append((fh_sal, "Salida"))
+        if not hora_entrada and not hora_salida and hora and tipo:
+            fh_single = f"{fecha} {hora}:00" if hora.count(':') == 1 else f"{fecha} {hora}"
+            marcas_a_insertar.append((fh_single, tipo))
+
+        if not marcas_a_insertar:
+            raise HTTPException(status_code=400, detail="Debe proporcionar 'hora' y 'tipo' o bien 'hora_entrada' / 'hora_salida'")
 
         query = """
             INSERT OR IGNORE INTO logs_raw (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original)
             VALUES (?, ?, ?, 1, ?, ?)
         """
-        db = service.repository.db
-        await db.execute(query, (empleado_id, fecha_hora, tipo, observaciones or "Marcación manual", hash_val))
+        for fh, t in marcas_a_insertar:
+            raw_string = f"{rut}|{fh}|{t}"
+            hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
+            await db.execute(query, (empleado_id, fh, t, obs_str, hash_val))
         
-        # 2. Reprocesar asistencia del día
+        # 2. Reprocesar asistencia del día UNA SOLA VEZ
         resultado = await service.procesar_empleado_dia(empleado_id, fecha, save=True)
         
         return {
             "success": True,
-            "mensaje": "Marcación manual agregada y asistencia reprocesada",
+            "mensaje": f"Se agregaron {len(marcas_a_insertar)} marcaciones manuales y se reprocesó la asistencia",
             "asistencia": resultado
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2186,15 +2202,23 @@ async def create_compensacion(
     if not periodo:
         raise HTTPException(status_code=400, detail="No se encontró un periodo para la fecha de inasistencia.")
 
-    # Validar que tenga saldo suficiente en la bolsa
+    # Validar que tenga saldo suficiente en la bolsa (o aplicar compensación parcial si cubre >= 90%)
     bolsa = await service.repository.get_bolsa_he_disponible(
         data.empleado_id, periodo["fecha_inicio"], periodo["fecha_fin"]
     )
     if data.minutos > bolsa["minutos_disponibles"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Saldo insuficiente de horas extras en la bolsa del periodo (Disponible: {bolsa['minutos_disponibles']} min)."
-        )
+        if bolsa["minutos_disponibles"] > 0 and (bolsa["minutos_disponibles"] / data.minutos) >= 0.90:
+            logger.info(
+                f"Aplicando compensación parcial automática: solicitados {data.minutos} min, "
+                f"disponibles {bolsa['minutos_disponibles']} min "
+                f"({(bolsa['minutos_disponibles'] / data.minutos) * 100:.1f}% cobertura)"
+            )
+            data.minutos = round(bolsa["minutos_disponibles"], 2)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Saldo insuficiente de horas extras en la bolsa del periodo (Disponible: {bolsa['minutos_disponibles']} min)."
+            )
 
     # Registrar la compensación
     payload = {
@@ -2303,11 +2327,11 @@ async def get_candidatos_retorno_viaje(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
-    """Busca marcaciones candidatas de inicio y retorno libres/anómalas para un empleado desde fecha_inicio hasta 5 días después."""
+    """Busca marcaciones candidatas de inicio y retorno libres/anómalas para un empleado desde fecha_inicio hasta 20 días después."""
     db = service.repository.db
     from datetime import datetime, timedelta
     dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-    dt_fin = dt_ini + timedelta(days=5)
+    dt_fin = dt_ini + timedelta(days=20)
     f_fin_str = dt_fin.strftime("%Y-%m-%d 23:59:59")
     f_ini_str = f"{fecha_inicio} 00:00:00"
 
@@ -2477,5 +2501,108 @@ async def delete_viaje_largo(
     )
 
     return {"success": True, "message": "Viaje Largo eliminado y días restaurados."}
+
+
+@router.get("/inasistencias-disponibles/{empleado_id}/")
+async def get_inasistencias_disponibles(
+    empleado_id: int,
+    fecha_origen: Optional[str] = Query(None, description="AAAA-MM-DD"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Retorna las fechas con INASISTENCIA limpia dentro del período activo para un empleado."""
+    db = service.repository.db
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    # Obtener asistencias en estado INASISTENCIA o FALTA
+    rows = await db.fetch_all("""
+        SELECT a.fecha, a.estado, a.observaciones
+        FROM asistencias a
+        WHERE a.empleado_id = ?
+          AND a.estado IN ('INASISTENCIA', 'FALTA')
+          AND (a.marcas_consumidas_ids IS NULL OR a.marcas_consumidas_ids = '[]')
+          AND a.fecha != ?
+        ORDER BY a.fecha ASC
+    """, (empleado_id, fecha_origen or ''))
+
+    clean_dates = []
+    for r in rows:
+        f_str = r['fecha']
+        # Verificar que no tenga Licencias/Vacaciones activas
+        just = await db.fetch_one("""
+            SELECT id FROM justificaciones
+            WHERE empleado_id = ? AND ? BETWEEN fecha_inicio AND fecha_fin AND estado = 'APROBADA'
+        """, (empleado_id, f_str))
+        if not just:
+            clean_dates.append({
+                'fecha': f_str,
+                'estado': r['estado'],
+                'observaciones': r['observaciones']
+            })
+
+    return {"success": True, "inasistencias": clean_dates}
+
+
+@router.post("/reasignar-turno/")
+async def reasignar_turno_endpoint(
+    req: ReasignarTurnoRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Reasigna el paquete completo de marcaciones de fecha_origen a fecha_destino."""
+    db = service.repository.db
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(req.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    # Exclusión Bolsa Flexible
+    if emp.tipo_programacion == 'FLEXIBLE_BOLSA':
+        raise HTTPException(status_code=400, detail="La reasignación de turno no está permitida para trabajadores en Bolsa Flexible.")
+
+    # Cierre check
+    f_min = min(req.fecha_origen, req.fecha_destino)
+    f_max = max(req.fecha_origen, req.fecha_destino)
+    if await service.repository.check_rango_cerrado(f_min, f_max, req.empleado_id):
+        if not current_user.is_superuser:
+            raise HTTPException(status_code=403, detail="Las fechas seleccionadas pertenecen a un período sellado por RRHH. Requiere perfil SuperAdmin.")
+
+    try:
+        res = await service.reasignar_bloque_turno(
+            empleado_id=req.empleado_id,
+            fecha_origen=req.fecha_origen,
+            fecha_destino=req.fecha_destino,
+            motivo=req.motivo
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error reasignando turno: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno reasignando turno: {str(e)}")
+
+    # Registrar auditoría DT
+    try:
+        await db.execute("""
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+            VALUES (?, ?, 'REASIGNAR_TURNO', 'Marcaciones', ?)
+        """, (
+            current_user.user_id,
+            current_user.username,
+            f"Reasignación de turno Emp {req.empleado_id}: Mapeado bloque de {req.fecha_origen} a {req.fecha_destino}. Motivo: {req.motivo}"
+        ))
+    except Exception as ae:
+        logger.warning(f"Error registrando auditoría reasignación: {ae}")
+
+    return {
+        "success": True,
+        "message": f"Turno reasignado exitosamente del {req.fecha_origen} al {req.fecha_destino}.",
+        "data": res
+    }
+
 
 

@@ -591,7 +591,10 @@ function _executeSwitchPage(pageName) {
 // API Functions
 async function loadStats() {
   try {
-    const response = await fetch(`${API_BASE_URL}/empleados/stats/`);
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}/empleados/stats/`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
     const stats = await response.json();
 
     document.getElementById('stat-total').textContent = stats.total;

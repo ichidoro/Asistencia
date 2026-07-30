@@ -4400,6 +4400,22 @@
                                     </div>
                                 </button>
 
+                                <!-- Reasignar / Mover Turno Nocturno -->
+                                <button id="btn-reasignar-turno"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToReasignarTurno()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #f59e0b;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef3c7;border-radius:10px;">
+                                            <i class="bi bi-arrow-right-square" style="font-size:1rem;color:#d97706;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Reasignar / Mover Turno</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Mover marcaciones nocturnas a inasistencia</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
+
                                 <!-- Separator for contextual actions -->
                                 <hr class="my-1" style="border-color:#f1f5f9;">
 
@@ -4497,7 +4513,54 @@
                 </div>
             </div>
 
+            <!-- Modal Selector de Inasistencias Limpias para Reasignación -->
+            <div class="modal fade" id="modalSelectorInasistencias" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0" style="border-radius:20px; overflow:hidden;">
+                        <div class="modal-header border-0 text-white py-3 px-4" style="background: linear-gradient(135deg, #0f172a 0%, #0284c7 100%);">
+                            <div class="d-flex align-items-center gap-3 w-100">
+                                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;">
+                                    <i class="bi bi-arrow-left-right text-white" style="font-size:1.1rem;"></i>
+                                </div>
+                                <div>
+                                    <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Reasignar Turno a Inasistencia</h6>
+                                    <div class="text-white-50" style="font-size:0.75rem;">Seleccionar fecha destino con Inasistencia limpia</div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                            </div>
+                        </div>
+                        <div class="modal-body p-4" style="background:#f8fafc;">
+                            <div class="alert alert-info border-0 shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center gap-2" style="font-size:0.78rem;">
+                                <i class="bi bi-info-circle-fill text-info fs-5"></i>
+                                <div>
+                                    Seleccione la fecha de <strong>Inasistencia</strong> a la cual desea trasladar la presencia del día <span id="reasignar-origen-lbl" class="fw-bold"></span>.
+                                </div>
+                            </div>
+                            <div id="container-inasistencias-list" class="list-group shadow-sm rounded-3 mb-3" style="max-height:260px; overflow-y:auto;">
+                                <div class="text-center py-4 text-muted">
+                                    <span class="spinner-border spinner-border-sm me-2"></span> Buscando inasistencias disponibles...
+                                </div>
+                            </div>
+                            <div id="reasignar-resumen-box" class="card border-0 bg-white shadow-sm p-3 rounded-3 d-none">
+                                <div class="fw-bold text-dark mb-1" style="font-size:0.82rem;"><i class="bi bi-check-circle-fill text-success me-1"></i> Resumen de Impacto:</div>
+                                <div class="small text-muted" style="font-size:0.76rem; line-height:1.4;">
+                                    • <strong>Fecha Origen (<span id="summary-origen-date"></span>):</strong> Pasará a estado <span class="badge bg-secondary-subtle text-secondary">LIBRE</span> (0.0 hrs).<br>
+                                    • <strong>Fecha Destino (<span id="summary-target-date"></span>):</strong> Absorberá el turno trabajado y pasará a <span class="badge bg-primary-subtle text-primary">CUMPLIDO / OK</span> (Inasistencia Eliminada).
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0 pb-3 px-4" style="background:#f8fafc;">
+                            <button type="button" class="btn btn-sm btn-light text-muted px-4" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" id="btn-confirmar-reasignacion" class="btn btn-sm btn-primary px-4 fw-bold shadow-sm" disabled onclick="ejecutarReasignacionTurno()">
+                                <i class="bi bi-send-check-fill me-1"></i> Confirmar Reasignación
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Modal de Configuración de Viaje Largo -->
+
             <div class="modal fade" id="modalViajeLargo" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-md modal-dialog-centered">
                     <div class="modal-content shadow-lg border-0" style="border-radius:20px; overflow:hidden;">

@@ -7,13 +7,17 @@ const API_ASISTENCIA = '/api/asistencia/';
 // Fix #B/#E: Caché global de áreas — compartido entre Reportes, Dashboard y Empleados.
 // Se invalida cuando se agrega/edita un área.
 window._cachedAreas = window._cachedAreas || null;
-async function getAreasCache() {
-    if (window._cachedAreas) return window._cachedAreas;
+async function getAreasCache(forceRefresh = false) {
+    if (window._cachedAreas && window._cachedAreas.length > 0 && !forceRefresh) return window._cachedAreas;
     try {
-        const r = await fetch('/api/empleados/stats/');
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const r = await fetch('/api/empleados/stats/', { headers });
         if (r.ok) {
             const stats = await r.json();
-            window._cachedAreas = stats.areas || [];
+            if (stats.areas && stats.areas.length > 0) {
+                window._cachedAreas = stats.areas;
+            }
         }
     } catch (e) {
         console.warn('Error cargando áreas:', e);

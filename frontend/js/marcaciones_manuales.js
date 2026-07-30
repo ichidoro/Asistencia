@@ -204,12 +204,29 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
+    // --- NUEVO: MOSTRAR/OCULTAR BOTÓN REASIGNAR / MOVER TURNO ---
+    const btnReasignarTurno = document.getElementById('btn-reasignar-turno');
+    if (btnReasignarTurno) {
+        const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
+        const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
+        const isNotBolsa = (!empInfo || empInfo.tipo_programacion !== 'FLEXIBLE_BOLSA');
+        
+        // REGLA: Mostrar si el día tiene marcaciones registradas y NO es Bolsa Flexible
+        const tieneMarcas = asistJ && (asistJ.hora_entrada_real || (asistJ.marcas_consumidas_ids && asistJ.marcas_consumidas_ids !== '[]'));
 
+        if (isNotBolsa && tieneMarcas) {
+            btnReasignarTurno.classList.remove('d-none');
+        } else {
+            btnReasignarTurno.classList.add('d-none');
+        }
+    }
 
     if (marcacionesManualesState.decisionInstance) {
         marcacionesManualesState.decisionInstance.show();
     }
 }
+
 
 function closeAsistenciaActionModal() {
     if (marcacionesManualesState.decisionInstance) {
@@ -257,6 +274,164 @@ function proceedToValidation() {
         console.error("Función openValidationModal no encontrada.");
     }
 }
+
+// --- NUEVO: REASIGNACIÓN MANUAL DE TURNO NOCTURNO A INASISTENCIA ---
+let selectedFechaDestinoReasignar = null;
+
+async function proceedToReasignarTurno() {
+    closeAsistenciaActionModal();
+    const empId = marcacionesManualesState.currentEmpId;
+    const dateStr = marcacionesManualesState.currentDate;
+    
+    // Set labels
+    const lblOrigen = document.getElementById('reasignar-origen-lbl');
+    if (lblOrigen) lblOrigen.textContent = dateStr;
+    const summaryOrigen = document.getElementById('summary-origen-date');
+    if (summaryOrigen) summaryOrigen.textContent = dateStr;
+
+    // Reset list and button
+    const container = document.getElementById('container-inasistencias-list');
+    const resBox = document.getElementById('reasignar-resumen-box');
+    const btnConfirm = document.getElementById('btn-confirmar-reasignacion');
+    if (resBox) resBox.classList.add('d-none');
+    if (btnConfirm) btnConfirm.disabled = true;
+    selectedFechaDestinoReasignar = null;
+
+    if (container) {
+        container.innerHTML = '<div class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span> Buscando inasistencias disponibles...</div>';
+    }
+
+    const modalEl = document.getElementById('modalSelectorInasistencias');
+    let modalInst = bootstrap.Modal.getInstance(modalEl);
+    if (!modalInst) {
+        modalInst = new bootstrap.Modal(modalEl);
+    }
+    modalInst.show();
+
+    // Fetch inasistencias limpias
+    try {
+        const resp = await fetch(`/api/asistencia/inasistencias-disponibles/${empId}/?fecha_origen=${dateStr}`);
+        if (!resp.ok) throw new Error("Error consultando inasistencias.");
+        const data = await resp.json();
+        
+        if (!data.inasistencias || data.inasistencias.length === 0) {
+            container.innerHTML = `
+                <div class="p-3 text-center text-muted">
+                    <i class="bi bi-exclamation-triangle text-warning fs-4 d-block mb-1"></i>
+                    No se encontraron fechas de Inasistencia limpia disponibles en este período para el empleado.
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        data.inasistencias.forEach(item => {
+            html += `
+                <button type="button" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 inasistencia-opt-item"
+                    onclick="selectFechaDestino('${item.fecha}', this)">
+                    <div>
+                        <div class="fw-bold text-dark" style="font-size:0.88rem;"><i class="bi bi-calendar-event me-2 text-primary"></i> ${item.fecha}</div>
+                        <div class="small text-muted" style="font-size:0.75rem;">Estado: <span class="badge bg-danger-subtle text-danger">${item.estado}</span> ${item.observaciones ? '(' + item.observaciones + ')' : ''}</div>
+                    </div>
+                    <i class="bi bi-circle text-secondary radio-icon" style="font-size:1.1rem;"></i>
+                </button>
+            `;
+        });
+        container.innerHTML = html;
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<div class="p-3 text-center text-danger">Error al cargar inasistencias: ${e.message}</div>`;
+    }
+}
+
+function selectFechaDestino(fecha, element) {
+    selectedFechaDestinoReasignar = fecha;
+    const btnConfirm = document.getElementById('btn-confirmar-reasignacion');
+    if (btnConfirm) btnConfirm.disabled = false;
+
+    const summaryTarget = document.getElementById('summary-target-date');
+    if (summaryTarget) summaryTarget.textContent = fecha;
+
+    const resBox = document.getElementById('reasignar-resumen-box');
+    if (resBox) resBox.classList.remove('d-none');
+
+    // Highlight selected item
+    document.querySelectorAll('.inasistencia-opt-item').forEach(el => {
+        el.classList.remove('active', 'border-primary');
+        const icon = el.querySelector('.radio-icon');
+        if (icon) {
+            icon.className = 'bi bi-circle text-secondary radio-icon';
+        }
+    });
+
+    if (element) {
+        element.classList.add('active', 'border-primary');
+        const icon = element.querySelector('.radio-icon');
+        if (icon) {
+            icon.className = 'bi bi-check-circle-fill text-primary radio-icon';
+        }
+    }
+}
+
+async function ejecutarReasignacionTurno() {
+    if (!selectedFechaDestinoReasignar) return;
+
+    const empId = marcacionesManualesState.currentEmpId;
+    const fechaOrigen = marcacionesManualesState.currentDate;
+
+    const btnConfirm = document.getElementById('btn-confirmar-reasignacion');
+    if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Procesando...';
+    }
+
+    try {
+        const resp = await fetch('/api/asistencia/reasignar-turno/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                empleado_id: parseInt(empId),
+                fecha_origen: fechaOrigen,
+                fecha_destino: selectedFechaDestinoReasignar,
+                motivo: 'Reasignación manual de turno por Supervisor'
+            })
+        });
+
+        const resData = await resp.json();
+        if (!resp.ok) {
+            throw new Error(resData.detail || "Error al reasignar el turno.");
+        }
+
+        // Success
+        const modalEl = document.getElementById('modalSelectorInasistencias');
+        const modalInst = bootstrap.Modal.getInstance(modalEl);
+        if (modalInst) modalInst.hide();
+
+        if (typeof showToast === 'function') {
+            showToast(resData.message || "Turno reasignado exitosamente.", "success");
+        } else {
+            alert(resData.message || "Turno reasignado exitosamente.");
+        }
+
+        // Refresh UI
+        if (typeof window.reloadSingleEmployeeRow === 'function') {
+            window.reloadSingleEmployeeRow(empId);
+        } else if (typeof loadMarcacionesData === 'function') {
+            loadMarcacionesData();
+        }
+    } catch (err) {
+        console.error(err);
+        alert(`Error: ${err.message}`);
+    } finally {
+        if (btnConfirm) {
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = '<i class="bi bi-send-check-fill me-1"></i> Confirmar Reasignación';
+        }
+    }
+}
+window.proceedToReasignarTurno = proceedToReasignarTurno;
+window.selectFechaDestino = selectFechaDestino;
+window.ejecutarReasignacionTurno = ejecutarReasignacionTurno;
 
 
 
@@ -647,11 +822,19 @@ async function saveManualEntry() {
 
     const promises = [];
 
-    // Preparar Request Entrada
-    if (nuevaEntrada) {
+    // Preparar Request de Marcación Manual (Entrada / Salida o Ambas juntas)
+    if (nuevaEntrada && nuevaSalida) {
+        let urlBoth = `/api/asistencia/marcaciones/manual/?empleado_id=${empId}&fecha=${encodeURIComponent(dateStr)}&hora_entrada=${encodeURIComponent(nuevaEntrada)}&hora_salida=${encodeURIComponent(nuevaSalida)}`;
+        if (obs) urlBoth += `&observaciones=${encodeURIComponent(obs)}`;
+        promises.push(fetch(urlBoth, { method: 'POST' }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Entrada y Salida' }))));
+    } else if (nuevaEntrada) {
         let urlEnt = `/api/asistencia/marcaciones/manual/?empleado_id=${empId}&fecha=${encodeURIComponent(dateStr)}&hora=${encodeURIComponent(nuevaEntrada)}&tipo=Entrada`;
         if (obs) urlEnt += `&observaciones=${encodeURIComponent(obs)}`;
         promises.push(fetch(urlEnt, { method: 'POST' }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Entrada' }))));
+    } else if (nuevaSalida) {
+        let urlSal = `/api/asistencia/marcaciones/manual/?empleado_id=${empId}&fecha=${encodeURIComponent(dateStr)}&hora=${encodeURIComponent(nuevaSalida)}&tipo=Salida`;
+        if (obs) urlSal += `&observaciones=${encodeURIComponent(obs)}`;
+        promises.push(fetch(urlSal, { method: 'POST' }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Salida' }))));
     }
 
     // Preparar Request Tramos (Bolsa Flexible)
@@ -668,11 +851,6 @@ async function saveManualEntry() {
                 })
             }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Tramos Bolsa' })))
         );
-    }
-    if (nuevaSalida) {
-        let urlSal = `/api/asistencia/marcaciones/manual/?empleado_id=${empId}&fecha=${encodeURIComponent(dateStr)}&hora=${encodeURIComponent(nuevaSalida)}&tipo=Salida`;
-        if (obs) urlSal += `&observaciones=${encodeURIComponent(obs)}`;
-        promises.push(fetch(urlSal, { method: 'POST' }).then(r => r.json().then(data => ({ status: r.status, body: data, type: 'Salida' }))));
     }
 
     try {

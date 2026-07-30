@@ -168,10 +168,11 @@ const Productos4Module = {
         try {
             let areas = [];
             if (typeof getAreasCache === 'function') {
-                areas = await getAreasCache();
+                areas = await getAreasCache(true);
             } else {
+                const token = localStorage.getItem('token');
                 const r = await fetch('/api/empleados/stats/', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                 });
                 if (r.ok) {
                     const stats = await r.json();
@@ -179,17 +180,23 @@ const Productos4Module = {
                 }
             }
 
-            // Guardar lista de todas las áreas para el Consolidado tabular
-            this.areasList = areas.map(a => a.area);
-            this.areasList.sort();
+            // Mapear nombres de áreas tolerando objetos {area: "..."} o cadenas simples
+            const areaNames = areas.map(a => (typeof a === 'object' ? a.area : a)).filter(Boolean);
+            areaNames.sort();
 
-            selectArea.innerHTML = '<option value="">Todas las Áreas</option>' +
-                areas.map(a => `<option value="${a.area}">${a.area}</option>`).join('');
+            this.areasList = areaNames;
 
-            // RLS: si el usuario solo tiene una área asignada, la preseleccionamos y bloqueamos
-            if (areas.length === 1) {
-                selectArea.value = areas[0].area;
-                selectArea.setAttribute('disabled', 'true');
+            if (areaNames.length > 0) {
+                const curVal = selectArea.value;
+                selectArea.innerHTML = '<option value="">Todas las Áreas</option>' +
+                    areaNames.map(a => `<option value="${a}">${a}</option>`).join('');
+                selectArea.value = curVal;
+
+                // RLS: si el usuario solo tiene una área asignada, la preseleccionamos y bloqueamos
+                if (areaNames.length === 1) {
+                    selectArea.value = areaNames[0];
+                    selectArea.setAttribute('disabled', 'true');
+                }
             }
         } catch (e) {
             console.error("Error cargando filtro de áreas en 4 Productos:", e);
@@ -1052,6 +1059,18 @@ const Productos4Module = {
     renderizarEntrega(entregas) {
         const content = document.getElementById('productos-4-entrega-content');
         if (!content) return;
+
+        // Auto-poblar el filtro de área con las áreas presentes en las entregas si está vacío
+        const selectArea = document.getElementById('productos-4-filtro-area');
+        if (selectArea && selectArea.options.length <= 1 && Array.isArray(entregas) && entregas.length > 0) {
+            const uniqueAreas = [...new Set(entregas.map(e => e.area).filter(Boolean))].sort();
+            if (uniqueAreas.length > 0) {
+                const curVal = selectArea.value;
+                selectArea.innerHTML = '<option value="">Todas las Áreas</option>' +
+                    uniqueAreas.map(a => `<option value="${a}">${a}</option>`).join('');
+                selectArea.value = curVal;
+            }
+        }
 
         const searchInput = document.getElementById('productos-4-search');
         const q = searchInput ? searchInput.value.toLowerCase().trim() : '';

@@ -287,18 +287,25 @@ window.registrarCompensacionHE = async function() {
         return;
     }
 
-    // Validar contra bolsa disponible
+    // Validar contra bolsa disponible (Soporte de Compensación Parcial si cubre >= 90%)
     const container = document.getElementById('compensar-he-bolsa-badge-container');
     const minsDisp = parseFloat(container.dataset.minutosDisponibles || 0);
+    let minutosACompensar = minutos;
+
     if (minutos > minsDisp) {
-        Swal.fire({ icon: 'warning', title: 'Saldo Insuficiente', text: `No cuenta con suficientes horas extras en la bolsa del periodo. Requerido: ${tiempo} (${Math.round(minutos)} min) · Disponible: ${formatMinutesReadable(minsDisp)}.` });
-        return;
+        if (minsDisp > 0 && (minsDisp / minutos) >= 0.90) {
+            minutosACompensar = minsDisp;
+            obs = (obs ? obs + ' | ' : '') + `Compensación Parcial (${formatMinutesReadable(minsDisp)} aplicados)`;
+        } else {
+            Swal.fire({ icon: 'warning', title: 'Saldo Insuficiente', text: `No cuenta con suficientes horas extras en la bolsa del periodo. Requerido: ${tiempo} (${Math.round(minutos)} min) · Disponible: ${formatMinutesReadable(minsDisp)}.` });
+            return;
+        }
     }
 
     const payload = {
         empleado_id: parseInt(empleadoId, 10),
         fecha_inasistencia: fechaInasistencia,
-        minutos: minutos,
+        minutos: minutosACompensar,
         observaciones: obs
     };
 

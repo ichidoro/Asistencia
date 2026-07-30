@@ -47,7 +47,10 @@ async function loadAsignacionesAreas() {
     if (!areaSelect) return;
 
     try {
-        const resp = await fetch('/api/empleados/stats/'); // Reutilizamos para traer áreas
+        const token = localStorage.getItem('token');
+        const resp = await fetch('/api/empleados/stats/', {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (resp.ok) {
             const data = await resp.json();
             if (data.areas) {

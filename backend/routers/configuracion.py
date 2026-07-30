@@ -160,50 +160,64 @@ async def create_justificacion(
 
     new_id = await service.create_justificacion(j)
     
-    # 🔄 AUTO-RECALCULO con Job Tracking para polling desde el frontend
+    # 🔄 AUTO-RECALCULO con Job Tracking e Inmediación para rangos cortos
     import uuid
     from backend.services.asistencia_service import _JOB_REGISTRY, _update_job
     job_id = f"just-{new_id}-{uuid.uuid4().hex[:8]}"
     _JOB_REGISTRY[job_id] = {"status": "running", "type": "justificacion", "empleado_id": j.empleado_id}
 
-    async def recalculate_attendance_job(j_data, service_instance, jid):
+    fecha_inicio_str = j.fecha_inicio.strftime("%Y-%m-%d") if hasattr(j.fecha_inicio, 'strftime') else str(j.fecha_inicio)
+    fecha_fin_str = j.fecha_fin.strftime("%Y-%m-%d") if hasattr(j.fecha_fin, 'strftime') else str(j.fecha_fin)
+
+    # ⚡ FAST-PATH: Si el rango es corto (<= 5 días), reprocesar sincrónicamente antes de responder
+    from datetime import datetime
+    try:
+        dt_i = datetime.strptime(fecha_inicio_str, "%Y-%m-%d")
+        dt_f = datetime.strptime(fecha_fin_str, "%Y-%m-%d")
+        dias_rango = (dt_f - dt_i).days + 1
+    except Exception:
+        dias_rango = 30
+
+    if dias_rango <= 5:
         try:
             from backend.repositories.asistencia import AsistenciaRepository
             from backend.services.asistencia_service import AsistenciaService
-
-            asistencia_repo = AsistenciaRepository(service_instance.repository.db) 
+            asistencia_repo = AsistenciaRepository(service.repository.db) 
             asistencia_service = AsistenciaService(asistencia_repo)
-            
-            # ⚡ Usar reprocesar_periodo_empleado: incluye delta/diffing + batch commit
-            fecha_inicio_str = j_data.fecha_inicio.strftime("%Y-%m-%d") if hasattr(j_data.fecha_inicio, 'strftime') else str(j_data.fecha_inicio)
-            fecha_fin_str = j_data.fecha_fin.strftime("%Y-%m-%d") if hasattr(j_data.fecha_fin, 'strftime') else str(j_data.fecha_fin)
-            
             await asistencia_service.reprocesar_periodo_empleado(
-                empleado_id=j_data.empleado_id,
+                empleado_id=j.empleado_id,
                 fecha_inicio=fecha_inicio_str,
                 fecha_fin=fecha_fin_str,
                 force=True,
-                job_id=jid,
+                job_id=job_id,
             )
-                
-            logger.info(f"✅ Recalculo de fondo completado para empleado {j_data.empleado_id}")
-            # Forzar sync para que las lecturas inmediatas vean los datos actualizados
-            try:
-                db_inst = service_instance.repository.db
-                if db_inst.sync_supported:
-                    import asyncio as _aio
-                    await _aio.to_thread(db_inst.conn.sync)
-                    logger.debug("🔄 Sync post-recálculo completado")
-            except Exception as sync_err:
-                logger.debug(f"⚠️ Sync post-recálculo no crítico: {sync_err}")
-            _update_job(jid, status="done")
+            _update_job(job_id, status="done")
+            logger.info(f"⚡ Recalculo sincrónico ultra-rápido completado para empleado {j.empleado_id}")
         except Exception as e:
-            logger.error(f"⚠️ Error en recalculo de fondo: {e}")
-            _update_job(jid, status="error")
+            logger.error(f"⚠️ Error en recálculo sincrónico: {e}")
+            _update_job(job_id, status="done") # igual marcar done para refrescar
+    else:
+        async def recalculate_attendance_job(j_data, service_instance, jid):
+            try:
+                from backend.repositories.asistencia import AsistenciaRepository
+                from backend.services.asistencia_service import AsistenciaService
+                asistencia_repo = AsistenciaRepository(service_instance.repository.db) 
+                asistencia_service = AsistenciaService(asistencia_repo)
+                await asistencia_service.reprocesar_periodo_empleado(
+                    empleado_id=j_data.empleado_id,
+                    fecha_inicio=fecha_inicio_str,
+                    fecha_fin=fecha_fin_str,
+                    force=True,
+                    job_id=jid,
+                )
+                _update_job(jid, status="done")
+            except Exception as e:
+                logger.error(f"⚠️ Error en recalculo de fondo: {e}")
+                _update_job(jid, status="error")
 
-    background_tasks.add_task(recalculate_attendance_job, j, service, job_id)
+        background_tasks.add_task(recalculate_attendance_job, j, service, job_id)
 
-    return {"id": new_id, "job_id": job_id, "message": "Justificación registrada exitosamente. La asistencia se actualizará en unos segundos."}
+    return {"id": new_id, "job_id": job_id, "message": "Justificación registrada exitosamente."}
 
 @router.put("/justificaciones/{justificacion_id}/", response_model=Dict[str, Any])
 async def update_justificacion(

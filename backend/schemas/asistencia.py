@@ -59,3 +59,10 @@ class CompensacionCreate(BaseModel):
     minutos: float
     observaciones: Optional[str] = None
 
+class ReasignarTurnoRequest(BaseModel):
+    empleado_id: int
+    fecha_origen: str
+    fecha_destino: str
+    motivo: Optional[str] = "Reasignación de turno por operativa de terreno"
+
+

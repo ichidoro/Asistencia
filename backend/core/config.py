@@ -49,16 +49,16 @@ class Settings(BaseSettings):
     # ============================================
     # TURSO DATABASE (ÚNICA fuente de verdad)
     # ============================================
-    TURSO_DATABASE_URL: str
-    TURSO_AUTH_TOKEN: str
+    TURSO_DATABASE_URL: str = "libsql://aguacol-ichidoro.aws-us-east-1.turso.io"
+    TURSO_AUTH_TOKEN: str = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODAwMjM1MzUsImlkIjoiMDE5ZTcxYWItOGYwMS03NWVkLWJmMDMtMDExZjk5MjE3ZWM4IiwicmlkIjoiZmE1OTYxZWYtNDEwOS00MTY1LTkwMzMtNzA4YmI5MzNiNjkwIn0.S3g__Bhy2on3tw8xzTugeFaGR-gNlz5D0Mcg-DAStaJQ_83qgLmllMZy-n5WjANJz-oTNok6h75XY1bHCmQJDg"
     TURSO_ENCRYPTION_KEY: Optional[str] = None  # Opcional
     
     # ============================================
     # CONTROL ASISTENCIA (SCRAPER)
     # ============================================
     CONTROL_ASISTENCIA_URL: str = "https://bioalba1.controlasistencia.cl"
-    CONTROL_ASISTENCIA_USER: str
-    CONTROL_ASISTENCIA_PASSWORD: str
+    CONTROL_ASISTENCIA_USER: str = "aguacol"
+    CONTROL_ASISTENCIA_PASSWORD: str = "123456"
     
     # Scraping Configuration
     SCRAPER_ENABLED: bool = True

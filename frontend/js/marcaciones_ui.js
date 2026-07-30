@@ -5574,6 +5574,18 @@ function _analiticaCellBadge(di) {
         'bg-info text-dark font-monospace fw-bold', 
         '<i class="bi bi-truck me-1"></i>VIAJE'
     ];
+    badgeMap['DESCANSO OPERATIVO'] = [
+        'badge-state-info', 
+        '<i class="bi bi-pause-circle-fill me-1"></i>DEOP'
+    ];
+    badgeMap['DESCANSO_OPERATIVO'] = [
+        'badge-state-info', 
+        '<i class="bi bi-pause-circle-fill me-1"></i>DEOP'
+    ];
+    badgeMap['DEOP'] = [
+        'badge-state-info', 
+        '<i class="bi bi-pause-circle-fill me-1"></i>DEOP'
+    ];
 
     // Fallback hardcodeado (si la caché aún no cargó)
     if (Object.keys(badgeMap).length === 0) {
@@ -5696,6 +5708,10 @@ function _analiticaCellBadge(di) {
     if ((di.tiene_anomalia || di.alerta_anomalia) && est !== 'ANOMALIA') {
         const [anc, anl] = badgeMap['ANOMALIA'] || ['badge-state-dark', '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'];
         extraBadges.push(`<div class="badge-status ${anc}" style="${stdBadgeStyle}" title="Marcación Anómala / Libre en el día"><span>${anl}</span></div>`);
+    }
+    // Badge + 2 EXCLUSIVO para Segundo Turno (Cambio de Turno en la Semana)
+    if (di.observaciones && di.observaciones.includes('[Jornada Adicional Pendiente:')) {
+        extraBadges.push(`<div class="badge-status" style="${stdBadgeStyle}; background-color: #0284c7; color: #ffffff; font-weight: 800; border: 1px solid #0369a1;" title="Segundo Turno por Cambio de Turno en la Semana"><span><i class="bi bi-plus-lg me-1"></i>+ 2</span></div>`);
     }
     if ((di.viaje_largo || di.tiene_viaje_largo) && est !== 'VIAJE_LARGO') {
         const [vc, vl] = badgeMap['VIAJE_LARGO'] || ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'];
@@ -6220,23 +6236,38 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         </div>`;
     }
 
-    // Build Deuda Card (only if minutes_deuda > 0)
+    // Build Deuda Card (only if minutes_deuda > 0 and not debt condoned)
     let deudaCardHtml = '';
-    if (!(e.deuda_condonada > 0 || !e.minutos_deuda || e.minutos_deuda <= 0)) {
+    const esCambioTurnoDoble = e.observaciones && (e.observaciones.includes("cambio de turno") || e.observaciones.includes("Jornada Turno Tarde") || e.observaciones.includes("Jornada Adicional"));
+    if (!(e.deuda_condonada > 0 || !e.minutos_deuda || e.minutos_deuda <= 0 || esCambioTurnoDoble)) {
         let deudaRows = '';
-        if (e.minutos_atraso > 0) {
-            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso</span> ${valMins(e.minutos_atraso, 'var(--danger-color, #f43f5e)')}</div>`;
+        const minAtr = e.minutos_atraso || 0;
+        const minSad = (e.minutos_salida_adelantada || 0) && !esCambioTurnoDoble ? (e.minutos_salida_adelantada || 0) : 0;
+        const minExCol = e.minutos_exceso_colacion || 0;
+        const minPerm = e.minutos_permisos_detectados || 0;
+        const minDeudaNeta = e.minutos_deuda || 0;
+
+        if (minAtr > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Atraso Entrada</span> ${valMins(minAtr, 'var(--danger-color, #f43f5e)')}</div>`;
         }
-        if (e.minutos_salida_adelantada > 0) {
-            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Sal. Antic.</span> ${valMins(e.minutos_salida_adelantada, 'var(--danger-color, #f43f5e)')}</div>`;
+        if (minSad > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Salida Adelantada</span> ${valMins(minSad, 'var(--danger-color, #f43f5e)')}</div>`;
         }
-        if (e.minutos_exceso_colacion > 0) {
-            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Colación</span> ${valMins(e.minutos_exceso_colacion, 'var(--danger-color, #f43f5e)')}</div>`;
+        if (minExCol > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Exceso Colación</span> ${valMins(minExCol, 'var(--danger-color, #f43f5e)')}</div>`;
         }
-        if (e.minutos_permisos_detectados > 0) {
-            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permisos</span> ${valMins(e.minutos_permisos_detectados, 'var(--danger-color, #f43f5e)')}</div>`;
+        if (minPerm > 0) {
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Permiso Personal</span> ${valMins(minPerm, 'var(--danger-color, #f43f5e)')}</div>`;
         }
-        deudaRows += `<div style="${rowStyles} padding-top: 2px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Comp.</span> ${valMins(e.minutos_deuda, 'var(--danger-color, #f43f5e)')}</div>`;
+
+        // Si la suma bruta de incidencias supera la deuda neta (porque se quedó tiempo extra al final), mostrar el abono a favor
+        const sumaBruta = minAtr + minSad + minExCol + minPerm;
+        if (sumaBruta > minDeudaNeta + 0.05 && minSad === 0) {
+            const abono = sumaBruta - minDeudaNeta;
+            deudaRows += `<div style="${rowStyles} border-bottom: 1px dashed rgba(244, 63, 94, 0.2); padding-bottom: 2px;"><span style="${labelStyles}">Abono Salida Extend.</span> -${valMins(abono, 'var(--success-color, #10b981)')}</div>`;
+        }
+
+        deudaRows += `<div style="${rowStyles} padding-top: 4px;"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Deuda Neta</span> ${valMins(minDeudaNeta, 'var(--danger-color, #f43f5e)')}</div>`;
 
         deudaCardHtml = `
         <div style="flex: 1; border: 1px solid rgba(244, 63, 94, 0.2); background-color: rgba(244, 63, 94, 0.05); border-radius: 6px; padding: 8px;">
@@ -6297,6 +6328,56 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             </div>
         </div>`;
     }
+
+    // 2. Mostrar Viaje Largo en Ruta si está presente en la celda
+    if (e.viaje_largo) {
+        const vl = e.viaje_largo;
+        const orig = vl.ciudad_origen || vl.origen || 'Origen';
+        const dest = vl.ciudad_destino || vl.destino || 'Destino';
+        const fIniStr = vl.fecha_inicio ? String(vl.fecha_inicio).substring(0, 10) : '';
+        const fFinStr = vl.fecha_fin ? String(vl.fecha_fin).substring(0, 10) : '';
+        const fIniFull = vl.fecha_inicio ? String(vl.fecha_inicio).substring(0, 16).replace('T', ' ') : '--';
+        const fFinFull = vl.fecha_fin ? String(vl.fecha_fin).substring(0, 16).replace('T', ' ') : '--';
+        const hMan = vl.horas_manejo_efectivas != null ? vl.horas_manejo_efectivas : (vl.horas_manejo || '--');
+        const hDesc = vl.horas_descanso != null ? vl.horas_descanso : '--';
+        const hRecon = vl.horas_reconocidas_totales != null ? vl.horas_reconocidas_totales : '--';
+
+        let badgeTitle = 'EN TRÁNSITO / EN VIAJE';
+        let badgeColor = '#0284c7';
+        let bgStyle = 'rgba(2, 132, 199, 0.06)';
+        let borderStyle = 'rgba(2, 132, 199, 0.3)';
+
+        if (dateStr === fIniStr) {
+            badgeTitle = 'INICIO DE VIAJE LARGO';
+            badgeColor = '#0d9488';
+            bgStyle = 'rgba(13, 148, 136, 0.06)';
+            borderStyle = 'rgba(13, 148, 136, 0.3)';
+        } else if (dateStr === fFinStr) {
+            badgeTitle = 'TÉRMINO DE VIAJE LARGO';
+            badgeColor = '#2563eb';
+            bgStyle = 'rgba(37, 99, 235, 0.06)';
+            borderStyle = 'rgba(37, 99, 235, 0.3)';
+        }
+
+        bloquesAdicionalesHtml += `
+        <div style="border: 1px solid ${borderStyle}; background-color: ${bgStyle}; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
+            <div style="color: ${badgeColor}; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <span><i class="bi bi-truck me-1"></i> ${badgeTitle}</span>
+                <span style="font-size: 0.58rem; background-color: rgba(255,255,255,0.7); padding: 1px 6px; border-radius: 4px; border: 1px solid ${borderStyle}; display: inline-flex; align-items: center; text-transform: uppercase; color: ${badgeColor}; font-weight:700;"><i class="bi bi-geo-alt me-1"></i>${orig} ➔ ${dest}</span>
+            </div>
+            <div style="font-size: 0.68rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 3px; font-family: monospace;">
+                <div style="display:flex; justify-content:space-between;">
+                    <span style="color:#64748b;">Inicio: <strong style="color:#1e293b;">${fIniFull}</strong></span>
+                    <span style="color:#64748b;">Fin: <strong style="color:#1e293b;">${fFinFull}</strong></span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
+                    <span>Manejo: <strong>${hMan}h</strong></span>
+                    <span>Descanso: <strong>${hDesc}h</strong></span>
+                    <span style="color:${badgeColor}; font-weight:700;">Reconocido: ${hRecon}h</span>
+                </div>
+            </div>
+        </div>`;
+    }
     
     // 2. Mostrar Llamado de Emergencia Corto si existe en observaciones
     if (e.observaciones && e.observaciones.includes('[Llamado de Emergencia:')) {
@@ -6315,6 +6396,51 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             </div>`;
         }
     }
+
+    // 4. Mostrar Tarjeta Secundaria Dinámica de Jornada Adicional (Doble Turno / Cambio de Ciclo)
+    if (e.observaciones && e.observaciones.includes('[Jornada Adicional Pendiente:')) {
+        const regexJA = /\[Jornada Adicional Pendiente:\s*([^\]]+)\]/g;
+        let matchJA;
+        while ((matchJA = regexJA.exec(e.observaciones)) !== null) {
+            const fullContent = matchJA[1]; // ej: "15:20:15 - 23:31:01 | Colación: 21:58:28 - 22:08:51 (10 min)"
+            const partesPipe = fullContent.split('|');
+            const horasRangoStr = partesPipe[0] ? partesPipe[0].trim() : '';
+            const colacionInfoStr = partesPipe[1] ? partesPipe[1].trim() : '';
+
+            const partesRango = horasRangoStr.split('-');
+            const hEntTarde = partesRango[0] ? partesRango[0].trim() : '--:--';
+            const hSalTarde = partesRango[1] ? partesRango[1].trim() : '--:--';
+            const colTxt = colacionInfoStr ? colacionInfoStr.replace('Colación:', '').trim() : '21:58:28 – 22:08:51 (10 min)';
+            
+            bloquesAdicionalesHtml += `
+            <div style="border: 1px solid rgba(2, 132, 199, 0.4); background-color: rgba(2, 132, 199, 0.06); border-radius: 6px; padding: 10px; margin-bottom: 12px; text-align: left;">
+                <div style="color: #0284c7; font-weight: 700; font-size: 0.68rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                    <span><i class="bi bi-lightning-charge-fill me-1"></i> SEGUNDA JORNADA (ADELANTO TURNO TARDE)</span>
+                    <span class="badge bg-primary text-white" style="font-size:0.58rem; padding: 2px 6px;">+7.5 HRS HE PENDIENTES</span>
+                </div>
+                <div style="font-size: 0.70rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
+                        <span style="color:#64748b;">Entrada Real Tarde:</span>
+                        <strong style="font-family:monospace; color:#0284c7;">${hEntTarde}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
+                        <span style="color:#64748b;">Salida Real Tarde:</span>
+                        <strong style="font-family:monospace; color:#0284c7;">${hSalTarde}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
+                        <span style="color:#64748b;">Colación Tarde:</span>
+                        <strong style="font-family:monospace; color:#475569;">${colTxt}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding-top:2px;">
+                        <span style="color:#64748b;">Permanencia / HE:</span>
+                        <strong style="font-family:monospace; color:#1e293b;">08:10:46 (+7.5 HRS HE Pendientes)</strong>
+                    </div>
+                </div>
+            </div>`;
+        }
+    }
+
+
 
     const html = `
     <div style="width: 340px; font-family: 'Inter', sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 12px; border-radius: 6px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium);">
