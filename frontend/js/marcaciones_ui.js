@@ -6454,7 +6454,6 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 </div>
             </div>`;
         }
-        }
     }
 
 
