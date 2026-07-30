@@ -2062,6 +2062,7 @@ class AsistenciaService:
         # Inicializar variables para inyección final
         emergencia_corta_detectada = None
         jornada_adicional_observaciones = ""
+        jornada_adicional_minutos = 0
         
         tipo_prog = None
         semana_inicio_cfg = None
@@ -2192,7 +2193,8 @@ class AsistenciaService:
                                         if mins_d1_be > (tot_mins_be / 2.0):
                                             fecha_be = be_sal_dt.strftime("%Y-%m-%d")
 
-                                    jornada_adicional_observaciones = f"[Jornada Adicional Pendiente: {be[0]['fecha_hora'][11:16]} - {be[-1]['fecha_hora'][11:16]}] "
+                                    jornada_adicional_observaciones += f"[Jornada Adicional Pendiente: {be[0]['fecha_hora'][11:16]} - {be[-1]['fecha_hora'][11:16]}] "
+                                    jornada_adicional_minutos += duracion_extra_min
                                     logger.info(f"💼 [Jornada Adicional Temprano] Emp {empleado_id} {fecha} (Asignada a {fecha_be}): {duracion_extra_min} min registrada como Horas Extras Pendientes.")
             except Exception as ex_seg:
                 logger.error(f"⚠️ Error en interceptor de segmentación temprana de emergencias: {ex_seg}")
@@ -3273,6 +3275,7 @@ class AsistenciaService:
                 resultado['observaciones'] = (resultado.get('observaciones') or '') + " " + emergencia_corta_detectada['texto']
             if jornada_adicional_observaciones:
                 resultado['observaciones'] = (resultado.get('observaciones') or '') + " " + jornada_adicional_observaciones
+                resultado['minutos_extra_bruto'] = resultado.get('minutos_extra_bruto', 0) + jornada_adicional_minutos
 
         # ── INTERCEPTOR: DÍA COMPENSATORIO (Intercambio de Días 1x1) ───────────
         if bulk_ctx and 'intercambios' in bulk_ctx:
