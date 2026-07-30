@@ -6410,33 +6410,50 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const partesRango = horasRangoStr.split('-');
             const hEntTarde = partesRango[0] ? partesRango[0].trim() : '--:--';
             const hSalTarde = partesRango[1] ? partesRango[1].trim() : '--:--';
-            const colTxt = colacionInfoStr ? colacionInfoStr.replace('Colación:', '').trim() : '21:58:28 – 22:08:51 (10 min)';
+            const colTxt = colacionInfoStr ? colacionInfoStr.replace('Colación:', '').trim() : '-';
+            
+            let durHrsBadge = "+7.0 HRS HE PENDIENTES";
+            let permFormatted = "07:02:00";
+            if (hEntTarde && hSalTarde && hEntTarde !== '--:--' && hSalTarde !== '--:--') {
+                const t1 = typeof _parseHora === 'function' ? _parseHora(hEntTarde) : null;
+                const t2 = typeof _parseHora === 'function' ? _parseHora(hSalTarde) : null;
+                if (t1 !== null && t2 !== null) {
+                    let diffSec = t2 - t1;
+                    if (diffSec < 0) diffSec += 86400;
+                    const diffMin = diffSec / 60;
+                    const hrs = (diffMin / 60).toFixed(1);
+                    durHrsBadge = `+${hrs} HRS HE PENDIENTES`;
+                    permFormatted = typeof _fmtMin === 'function' ? _fmtMin(diffMin) : `${diffMin} min`;
+                }
+            }
             
             bloquesAdicionalesHtml += `
             <div style="border: 1px solid rgba(2, 132, 199, 0.4); background-color: rgba(2, 132, 199, 0.06); border-radius: 6px; padding: 10px; margin-bottom: 12px; text-align: left;">
                 <div style="color: #0284c7; font-weight: 700; font-size: 0.68rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                    <span><i class="bi bi-lightning-charge-fill me-1"></i> SEGUNDA JORNADA (ADELANTO TURNO TARDE)</span>
-                    <span class="badge bg-primary text-white" style="font-size:0.58rem; padding: 2px 6px;">+7.5 HRS HE PENDIENTES</span>
+                    <span><i class="bi bi-lightning-charge-fill me-1"></i> JORNADA ADICIONAL (+2)</span>
+                    <span class="badge bg-primary text-white" style="font-size:0.58rem; padding: 2px 6px;">${durHrsBadge}</span>
                 </div>
                 <div style="font-size: 0.70rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 4px;">
                     <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
-                        <span style="color:#64748b;">Entrada Real Tarde:</span>
+                        <span style="color:#64748b;">Entrada Real Adicional:</span>
                         <strong style="font-family:monospace; color:#0284c7;">${hEntTarde}</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
-                        <span style="color:#64748b;">Salida Real Tarde:</span>
+                        <span style="color:#64748b;">Salida Real Adicional:</span>
                         <strong style="font-family:monospace; color:#0284c7;">${hSalTarde}</strong>
                     </div>
+                    ${colTxt && colTxt !== '-' ? `
                     <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
-                        <span style="color:#64748b;">Colación Tarde:</span>
+                        <span style="color:#64748b;">Colación:</span>
                         <strong style="font-family:monospace; color:#475569;">${colTxt}</strong>
-                    </div>
+                    </div>` : ''}
                     <div style="display:flex; justify-content:space-between; padding-top:2px;">
                         <span style="color:#64748b;">Permanencia / HE:</span>
-                        <strong style="font-family:monospace; color:#1e293b;">08:10:46 (+7.5 HRS HE Pendientes)</strong>
+                        <strong style="font-family:monospace; color:#1e293b;">${permFormatted} (${durHrsBadge})</strong>
                     </div>
                 </div>
             </div>`;
+        }
         }
     }
 
