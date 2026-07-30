@@ -249,8 +249,11 @@ class BonoService:
                 )
             else:
                 es_laborable_turno = (
-                    (horas_teoricas > 0) or
-                    (j_dia is not None and not es_libre_turno and not es_feriado)
+                    estado not in ESTADOS_NO_LABORABLES
+                    and (
+                        (horas_teoricas > 0) or
+                        (j_dia is not None and not es_libre_turno and not es_feriado)
+                    )
                 )
 
             if not es_laborable_turno:
