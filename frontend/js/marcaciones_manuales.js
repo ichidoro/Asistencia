@@ -204,18 +204,14 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
-    // --- NUEVO: MOSTRAR/OCULTAR BOTÓN REASIGNAR / MOVER TURNO ---
+    // --- MOSTRAR/OCULTAR BOTÓN REASIGNAR / MOVER TURNO ---
     const btnReasignarTurno = document.getElementById('btn-reasignar-turno');
     if (btnReasignarTurno) {
-        const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
-        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
         const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
         const isNotBolsa = (!empInfo || empInfo.tipo_programacion !== 'FLEXIBLE_BOLSA');
         
-        // REGLA: Mostrar si el día tiene marcaciones registradas y NO es Bolsa Flexible
-        const tieneMarcas = asistJ && (asistJ.hora_entrada_real || (asistJ.marcas_consumidas_ids && asistJ.marcas_consumidas_ids !== '[]'));
-
-        if (isNotBolsa && tieneMarcas) {
+        // Mostrar siempre para empleados con turno agendado (no bolsa flexible)
+        if (isNotBolsa) {
             btnReasignarTurno.classList.remove('d-none');
         } else {
             btnReasignarTurno.classList.add('d-none');
