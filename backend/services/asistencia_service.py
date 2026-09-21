@@ -20,6 +20,12 @@ from loguru import logger
 from backend.core.config import settings
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.empleado import EmpleadoRepository
+from backend.services.quantum_matrix_engine import (
+    QuantumPhaseTopology,
+    TensorMarkDeduplicator,
+    MultiPointScheduleSolver,
+    QUBOEnergyOptimizer
+)
 from asyncio import Lock
 
 CHILE_TZ = ZoneInfo(settings.TIMEZONE)
@@ -3706,8 +3712,8 @@ class AsistenciaService:
                 res['hora_inicio_permiso'] = permisos_puros[0][0].strftime("%H:%M:%S")
                 res['hora_termino_permiso'] = permisos_puros[-1][1].strftime("%H:%M:%S")
 
-        # Clasificar logs disponibles
-        logs_sorted = sorted(logs, key=lambda l: l.get('fecha_hora', ''))
+        # Clasificar logs disponibles con filtro cuántico de decoherencia
+        logs_sorted = TensorMarkDeduplicator.deduplicate_and_sort(logs)
 
         entrada_real = None
         salida_real  = None
@@ -3880,17 +3886,16 @@ class AsistenciaService:
 
 
             if not auto_fixed and dt_entrada is not None:
-                # ── ANCLAJE DE ENTRADA ────────────────────────────────────────
-                # Solo afecta el CÁLCULO de horas pagadas (tiempos_proc).
-                # La hora visible en grilla (entrada_real) siempre es la marca física.
-                # Regla: si la anticipación está DENTRO del anclaje configurado
-                # → no se paga la espera, el cálculo inicia desde h_ent_teorica.
-                # Si la anticipación supera el anclaje → se paga desde la hora real.
+                # ── ANCLAJE DE ENTRADA CON TOPOLOGÍA DE FASE ───────────────────
+                phase_ent_t = QuantumPhaseTopology.time_to_phase(h_ent_teorica)
+                phase_ent_r = QuantumPhaseTopology.time_to_phase(dt_entrada)
+                delta_ent = QuantumPhaseTopology.circular_distance(phase_ent_t, phase_ent_r)
+
                 if (not entrada_inferida
-                        and dt_entrada < h_ent_teorica
-                        and dt_salida_fin is not None
-                        and dt_salida_fin > h_ent_teorica):
-                    anticipacion_min = (h_ent_teorica - dt_entrada).total_seconds() / 60
+                        and delta_ent < 0
+                        and abs(delta_ent) <= 360.0
+                        and dt_salida_fin is not None):
+                    anticipacion_min = abs(delta_ent)
                     if anticipacion_min <= anclaje_min:
                         dt_entrada_calculo = h_ent_teorica
                         res['observaciones'] += (
@@ -4294,15 +4299,25 @@ class AsistenciaService:
                 day_delta = (target_date - p0_date).days
                 tiempos_proc = [t + timedelta(days=day_delta) for t in tiempos_proc]
 
-        # ── CÁLCULO DE DIFERENCIAS (atraso, salida adelantada, extras) ────────
+        # ── CÁLCULO CUÁNTICO DE DIFERENCIAS (atraso, salida adelantada, extras) ────────
         diff_ent = 0  # minutos de atraso (positivo = tarde)
         diff_sal = 0  # minutos de salida adelantada (positivo = se fue antes)
 
         if h_ent_teorica and len(tiempos_proc) > 0:
-            diff_ent = (tiempos_proc[0] - h_ent_teorica).total_seconds() / 60
+            if es_nocturno:
+                phase_ent_t = QuantumPhaseTopology.time_to_phase(h_ent_teorica)
+                phase_ent_r = QuantumPhaseTopology.time_to_phase(tiempos_proc[0])
+                diff_ent = QuantumPhaseTopology.circular_distance(phase_ent_t, phase_ent_r)
+            else:
+                diff_ent = (tiempos_proc[0] - h_ent_teorica).total_seconds() / 60
 
         if h_sal_teorica and len(tiempos_proc) >= 2:
-            diff_sal = (h_sal_teorica - tiempos_proc[-1]).total_seconds() / 60
+            if es_nocturno:
+                phase_sal_t = QuantumPhaseTopology.time_to_phase(h_sal_teorica)
+                phase_sal_r = QuantumPhaseTopology.time_to_phase(tiempos_proc[-1])
+                diff_sal = QuantumPhaseTopology.circular_distance(phase_sal_r, phase_sal_t)
+            else:
+                diff_sal = (h_sal_teorica - tiempos_proc[-1]).total_seconds() / 60
 
 
 

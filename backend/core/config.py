@@ -16,7 +16,6 @@ _ENV_FILE = str(_EXEC_DIR / ".env")
 _WRITABLE_DIR = _EXEC_DIR
 
 
-
 class Settings(BaseSettings):
     """
     Configuración de la aplicación usando Pydantic Settings.
@@ -30,6 +29,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "4.7.2"
     APP_ENV: str = "development"  # development, production, testing
     DEBUG: bool = True
+    TIMEZONE: str = "America/Santiago"
     
     # ============================================
     # API
@@ -38,12 +38,17 @@ class Settings(BaseSettings):
     API_PORT: int = int(os.environ.get("PORT", 8000))  # Cloud Run define PORT
     API_RELOAD: bool = True  # Solo en development
     
-    # CORS
+    # CORS (Permitir todos los puertos locales para el frontend de reclamos)
     CORS_ORIGINS: List[str] = [
+        "*",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
-        "http://localhost:3000",  # Si usas React u otro frontend
-        "https://*.run.app",     # Google Cloud Run
+        "http://localhost:8099",
+        "http://127.0.0.1:8099",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500"
     ]
     
     # ============================================
@@ -82,126 +87,21 @@ class Settings(BaseSettings):
     # LOGGING
     # ============================================
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-    LOG_FORMAT: str = "json"  # json, text
-    LOG_FILE: str = "app.log"
-    
-    # ============================================
-    # WEBSOCKET
-    # ============================================
-    WS_PING_INTERVAL: int = 30  # Segundos
-    WS_PING_TIMEOUT: int = 10   # Segundos
-    WS_MAX_CONNECTIONS: int = 100
-    
-    # ============================================
-    # SECURITY
-    # ============================================
-    SECRET_KEY: str = "change-this-in-production-to-a-random-secret-key"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    CRON_SECRET: str = "mi-super-secreto-compartido-para-sincronizacion-auto-123"
-
-    
-    # ============================================
-    # TAREAS PROGRAMADAS
-    # ============================================
-    SYNC_ENABLED: bool = True
-    SYNC_INTERVAL_SECONDS: int = 120  # Sync cada 2 min — único actor. Sin fire-and-forget por-write (evita mutex contention en libsql).
-    
-    BACKUP_ENABLED: bool = True
-    BACKUP_INTERVAL_HOURS: int = 24
-    BACKUP_RETENTION_DAYS: int = 30
-    
-    # ============================================
-    # NOTIFICACIONES (Opcional)
-    # ============================================
-    SMTP_SERVER: Optional[str] = None
-    SMTP_PORT: int = 587
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-    EMAIL_FROM: Optional[str] = None
-    
-    # ============================================
-    # FEATURES FLAGS
-    # ============================================
-    FEATURE_HORAS_EXTRAS: bool = True
-    FEATURE_REPORTES_AVANZADOS: bool = True
-    FEATURE_NOTIFICACIONES_EMAIL: bool = False
-    FEATURE_EXPORTAR_PDF: bool = True
-    
-    # ============================================
-    # TIMEZONE
-    # ============================================
-    TIMEZONE: str = "America/Santiago"  # Chile
-    
-    # ============================================
-    # TESTING
-    # ============================================
-    TESTING: bool = False
-    
-    # ============================================
-    # PYDANTIC CONFIG
-    # ============================================
-    model_config = SettingsConfigDict(
-        env_file=_ENV_FILE,
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra="ignore"  # Ignorar variables extra del .env
-    )
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-        # Crear directorios si no existen
-        self.DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        self.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    @property
-    def db_url(self) -> str:
-        """URL para conectar a Turso"""
-        return self.TURSO_DATABASE_URL
-    
-
+    LOG_ROTATION: str = "10 MB"
+    LOG_RETENTION: str = "30 days"
     
     @property
     def log_file_path(self) -> Path:
-        """Path completo del archivo de log"""
-        return self.LOGS_DIR / self.LOG_FILE
+        """Ruta al archivo de log principal"""
+        self.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        return self.LOGS_DIR / "app.log"
     
-    @property
-    def is_development(self) -> bool:
-        """Check si está en development"""
-        return self.APP_ENV == "development"
-    
-    @property
-    def is_production(self) -> bool:
-        """Check si está en production"""
-        return self.APP_ENV == "production"
-    
-    @property
-    def is_testing(self) -> bool:
-        """Check si está en testing"""
-        return self.TESTING or self.APP_ENV == "testing"
-    
-    @property
-    def is_cloud(self) -> bool:
-        """Detecta si corre en Google Cloud Run (K_SERVICE es auto-set por Cloud Run)"""
-        return bool(os.environ.get("K_SERVICE"))
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE,
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
 
-# Instancia global de settings
+# Instancia global de configuración
 settings = Settings()
-
-
-# Helper para debug
-if __name__ == "__main__":
-    from loguru import logger
-    logger.info("🔧 Configuración del Sistema")
-    logger.info("=" * 50)
-    logger.info(f"App: {settings.APP_NAME} v{settings.APP_VERSION}")
-    logger.info(f"Environment: {settings.APP_ENV}")
-    logger.info(f"API: {settings.API_HOST}:{settings.API_PORT}")
-    logger.info(f"Turso URL: {settings.TURSO_DATABASE_URL}")
-    logger.info(f"DB: Turso Cloud (directo)")
-    logger.info(f"Scraper: {'Enabled' if settings.SCRAPER_ENABLED else 'Disabled'}")
-    logger.info(f"Base Dir: {settings.BASE_DIR}")
-    logger.info("=" * 50)
