@@ -1608,7 +1608,18 @@ const Productos4Module = {
             }
         }
 
-        container.innerHTML = html;
+        let fechaBadge = '';
+        if (this.periodoEstado && this.periodoEstado.fecha_inicio && this.periodoEstado.fecha_fin) {
+            const fIni = this.periodoEstado.fecha_inicio.split('-').reverse().join('/');
+            const fFin = this.periodoEstado.fecha_fin.split('-').reverse().join('/');
+            fechaBadge = `
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle d-inline-flex align-items-center px-3 py-2 rounded-pill fw-bold me-1">
+                    <i class="bi bi-calendar-range me-1.5"></i> Ciclo RRHH: ${fIni} al ${fFin}
+                </span>
+            `;
+        }
+
+        container.innerHTML = fechaBadge + html;
 
         // Inicializar tooltips
         if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {

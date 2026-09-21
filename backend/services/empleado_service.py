@@ -208,6 +208,14 @@ class EmpleadoService:
 
         # 2. Consultar repositorio (Con limpieza proactiva de decisiones huérfanas)
         await self.repository.db.execute("UPDATE empleados SET decision_vencimiento = NULL WHERE decision_vencimiento IN ('RENOVAR', 'INDEFINIDO')")
+        
+        # 2.1 Auto-completar bajas programadas cuya fecha de salida ya se cumplió
+        bajas_cumplidas = await self.repository.auto_cerrar_bajas_cumplidas()
+        if bajas_cumplidas:
+            logger.info(f"✨ Auto-cierre: {len(bajas_cumplidas)} empleado(s) con baja programada cumplida desactivados automáticamente.")
+            for emp_baja in bajas_cumplidas:
+                await self._clean_ghost_data(emp_baja['id'], emp_baja['fecha_salida'])
+
         empleados = await self.repository.get_upcoming_expirations(dias_normal, areas=areas_permitidas)
         
         # 3. Marcar y retornar como dicts para el frontend

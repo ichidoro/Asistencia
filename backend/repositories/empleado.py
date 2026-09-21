@@ -540,6 +540,30 @@ class EmpleadoRepository:
         results = await self.db.fetch_all(query)
         return [row['area'] for row in results]
 
+    async def auto_cerrar_bajas_cumplidas(self) -> List[dict]:
+        """
+        Desactiva automáticamente (activo = 0) a los empleados con decisión de NO_RENOVAR
+        o baja cuya fecha_salida ya se cumplió (fecha_salida <= date.today()).
+        Retorna la lista de empleados desactivados para limpieza de turnos/asistencias.
+        """
+        import datetime
+        today = datetime.date.today().isoformat()
+        query_select = """
+            SELECT id, fecha_salida FROM empleados
+            WHERE activo = 1
+              AND fecha_salida IS NOT NULL
+              AND fecha_salida <= ?
+              AND (decision_vencimiento LIKE 'NO_RENOVAR%' OR decision_vencimiento LIKE 'BAJA%')
+        """
+        rows = await self.db.fetch_all(query_select, (today,))
+        if rows:
+            ids = [r['id'] for r in rows]
+            placeholders = ",".join(["?"] * len(ids))
+            query_update = f"UPDATE empleados SET activo = 0 WHERE id IN ({placeholders})"
+            await self.db.execute(query_update, tuple(ids))
+            return [dict(r) for r in rows]
+        return []
+
     async def get_upcoming_expirations(self, days: int = 30, areas: Optional[List[str]] = None) -> List[Empleado]:
         """
         Obtener empleados con contratos próximos a vencer con RLS.

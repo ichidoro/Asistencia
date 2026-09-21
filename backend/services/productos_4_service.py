@@ -18,22 +18,48 @@ class Productos4Service:
         self.emp_repo = EmpleadoRepository(db)
         self.config_repo = ConfiguracionRepository(db)
 
+    async def get_fechas_periodo_rrhh(self, mes: int, anio: int) -> Tuple[str, str]:
+        """
+        Obtiene las fechas de inicio y fin del periodo de cierre RRHH para un mes/año dado.
+        Busca primero en la tabla `periodos_rrhh`. Si no existe, calcula dinámicamente con dia_cierre_rrhh.
+        """
+        target_mes_str = f"{anio:04d}-{mes:02d}-%"
+        row = await self.db.fetch_one(
+            "SELECT fecha_inicio, fecha_fin FROM periodos_rrhh WHERE fecha_fin LIKE ? ORDER BY id DESC LIMIT 1",
+            (target_mes_str,)
+        )
+        if row and row.get("fecha_inicio") and row.get("fecha_fin"):
+            return row["fecha_inicio"], row["fecha_fin"]
+
+        # Fallback dinámico usando dia_cierre_rrhh (default 25)
+        try:
+            row_dc = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'dia_cierre_rrhh'")
+            dia_cierre = int(row_dc["valor"]) if row_dc else 25
+        except Exception:
+            dia_cierre = 25
+
+        dia_inicio = dia_cierre + 1
+        fecha_fin = f"{anio:04d}-{mes:02d}-{dia_cierre:02d}"
+        if mes == 1:
+            fecha_inicio = f"{anio - 1:04d}-12-{dia_inicio:02d}"
+        else:
+            fecha_inicio = f"{anio:04d}-{mes - 1:02d}-{dia_inicio:02d}"
+
+        return fecha_inicio, fecha_fin
+
     async def evaluar_beneficio_empleados(self, mes: int, anio: int, areas: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
         Evalua a todos los empleados activos del periodo actual, opcionalmente filtrados por areas (RLS).
         Retorna la lista de empleados indicando si califican o estan bloqueados con su motivo.
         """
-        logger.info(f"📋 [Productos4Service] Evaluando calificacion de 4 Productos para {anio}-{mes:02d}. Areas: {areas}")
+        fecha_inicio, fecha_fin = await self.get_fechas_periodo_rrhh(mes, anio)
+        logger.info(f"📋 [Productos4Service] Evaluando calificación de 4 Productos para {anio}-{mes:02d} (Periodo RRHH: {fecha_inicio} a {fecha_fin}). Áreas: {areas}")
         
         # 1. Cargar todos los empleados activos filtrados por area si se especifica
         # Nota: Usamos skip=0, limit=1000 para cargar planilla activa de forma eficiente
         empleados = await self.emp_repo.get_all(activo=True, limit=1000, areas=areas)
         
         # 2. Cargar contexto de asistencia masivo (optimizado) para evitar N+1
-        fecha_inicio = f"{anio}-{mes:02d}-01"
-        last_day = calendar.monthrange(anio, mes)[1]
-        fecha_fin = f"{anio}-{mes:02d}-{last_day:02d}"
-        
         asistencias_raw = await self.db.fetch_all(
             "SELECT * FROM asistencias WHERE fecha BETWEEN ? AND ?",
             (fecha_inicio, fecha_fin),
@@ -52,7 +78,9 @@ class Productos4Service:
         )
         
         asist_service = AsistenciaService(AsistenciaRepository(self.db))
-        matrix_res = await asist_service.get_matrix_data_with_projections(mes, anio)
+        matrix_res = await asist_service.get_matrix_data_with_projections(
+            mes, anio, fecha_inicio_override=fecha_inicio, fecha_fin_override=fecha_fin
+        )
         matrix_data = matrix_res.get("matrix", {})
         
         # 3. Cargar el Bono de Compromiso y evaluar asistencia
@@ -406,6 +434,8 @@ class Productos4Service:
         - 'blocked_previous': Si el periodo anterior tiene asignaciones y no esta cerrado.
         - 'open': Si esta abierto y se puede operar.
         """
+        fecha_inicio, fecha_fin = await self.get_fechas_periodo_rrhh(mes, anio)
+
         # 1. ¿Está el periodo actual cerrado?
         is_closed = await self.repo.is_period_closed(mes, anio)
         if is_closed:
@@ -413,6 +443,8 @@ class Productos4Service:
                 "status": "closed",
                 "mes": mes,
                 "anio": anio,
+                "fecha_inicio": fecha_inicio,
+                "fecha_fin": fecha_fin,
                 "mensaje": f"El período {anio}-{mes:02d} se encuentra cerrado para asignación."
             }
 
@@ -433,6 +465,8 @@ class Productos4Service:
                     "status": "blocked_previous",
                     "mes": mes,
                     "anio": anio,
+                    "fecha_inicio": fecha_inicio,
+                    "fecha_fin": fecha_fin,
                     "prev_mes": prev_mes,
                     "prev_anio": prev_anio,
                     "mensaje": f"No se pueden realizar asignaciones en {anio}-{mes:02d} hasta que el período anterior ({prev_anio}-{prev_mes:02d}) esté CERRADO."
@@ -443,6 +477,8 @@ class Productos4Service:
             "status": "open",
             "mes": mes,
             "anio": anio,
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin,
             "mensaje": "El período está abierto."
         }
 

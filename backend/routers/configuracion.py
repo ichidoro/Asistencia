@@ -440,6 +440,14 @@ async def get_email_rrhh(
     """Obtener ajuste específico de email RRHH para evitar 307"""
     return await service.get_ajuste("email_notificaciones_rrhh")
 
+@router.get("/ajustes/email_notificaciones_cierre_rrhh/")
+async def get_email_cierre_rrhh(
+    service: ConfiguracionService = Depends(get_config_service),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver"))
+):
+    """Obtener ajuste específico de email exclusivo para Cierres de Mes"""
+    return await service.get_ajuste("email_notificaciones_cierre_rrhh")
+
 @router.get("/ajustes/")
 async def get_all_ajustes(
     service: ConfiguracionService = Depends(get_config_service),

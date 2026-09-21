@@ -602,7 +602,7 @@ class ConfiguracionService:
         return await self.repository.delete_notificaciones_area(area)
 
     async def get_destinatarios_rrhh(self, area: str = None) -> List[str]:
-        """Combina los correos globales con los específicos del área (si se provee)"""
+        """Combina los correos globales con los específicos del área (si se provee) para notificaciones generales (contratos, justificaciones)"""
         recipients = set()
         
         # 1. Globales (Ajustes)
@@ -613,6 +613,34 @@ class ConfiguracionService:
                     recipients.add(r.strip())
                     
         # 2. Por Área (Si aplica)
+        if area:
+            area_str = await self.get_notificaciones_area(area)
+            if area_str:
+                for r in area_str.split(","):
+                    if r.strip():
+                        recipients.add(r.strip())
+                        
+        return list(recipients)
+
+    async def get_destinatarios_cierre(self, area: str = None) -> List[str]:
+        """Combina los correos globales (a los que les llega todo), los exclusivos de cierre y los específicos del área para el Cierre de Mes"""
+        recipients = set()
+        
+        # 1. Globales (Ajustes) - Reciben todo (contratos, justificaciones y cierres)
+        global_str = await self.get_ajuste("email_notificaciones_rrhh", "")
+        if global_str:
+            for r in global_str.split(","):
+                if r.strip():
+                    recipients.add(r.strip())
+                    
+        # 2. Exclusivos de Cierre (Ajustes) - Reciben ÚNICAMENTE el cierre de mes
+        cierre_str = await self.get_ajuste("email_notificaciones_cierre_rrhh", "")
+        if cierre_str:
+            for r in cierre_str.split(","):
+                if r.strip():
+                    recipients.add(r.strip())
+                    
+        # 3. Por Área (Si aplica)
         if area:
             area_str = await self.get_notificaciones_area(area)
             if area_str:

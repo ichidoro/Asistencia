@@ -92,6 +92,7 @@ async function saveTurno() {
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
+        permite_viajes_largos: (formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA' && document.getElementById('chkPermiteViajesLargos') && document.getElementById('chkPermiteViajesLargos').checked) ? 1 : 0,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         activo: formData.get('activo') !== 'false',
         dias: []
@@ -236,10 +237,34 @@ async function deleteTurno(id) {
     }
 }
 
+function ensureViajesLargosSwitch() {
+    const divLineaFicticia = document.getElementById('divLineaFicticia');
+    if (divLineaFicticia && !document.getElementById('divPermiteViajesLargos')) {
+        const divCol = document.createElement('div');
+        divCol.className = 'col-12 mt-2';
+        divCol.id = 'divPermiteViajesLargos';
+        divCol.innerHTML = `
+            <div class="card border-info bg-info bg-opacity-10 p-2">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
+                    <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
+                        🚛 Habilitar Viajes Largos y Rutas Nocturnas Continuas (Art. 25 bis)
+                    </label>
+                    <div class="form-text small text-muted">
+                        Activa el reconocimiento de turnos nocturnos continuos (≥ 20:00), dobles jornadas en el mismo día y la unión de retornos de ruta de días posteriores.
+                    </div>
+                </div>
+            </div>
+        `;
+        divLineaFicticia.appendChild(divCol);
+    }
+}
+
 // ==========================================
 // UI HELPERS
 // ==========================================
 async function openModalHorario(id = null) {
+    ensureViajesLargosSwitch();
     currentTurnoId = id;
     const modalTitle = document.getElementById('modalTurnoLabel');
     const form = document.getElementById('formTurno');
@@ -269,6 +294,9 @@ async function openModalHorario(id = null) {
 
             const inputMetaBol = document.getElementById('input-meta-bolsa');
             if (inputMetaBol) inputMetaBol.value = turno.tipo_programacion === 'FLEXIBLE_BOLSA' ? (turno.meta_horas_semanales || "") : "";
+
+            const chkViajes = document.getElementById('chkPermiteViajesLargos');
+            if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
 
             const chkColacion = document.getElementById('chkColacion');
             chkColacion.checked = turno.descuento_colacion_auto;
@@ -508,13 +536,16 @@ function renderHorariosUI() {
         // [FIX] Asegurar que el modal viva fuera de main-content para no ser destruido en re-renders
         // Si el modal ya fue inyectado previamente (fuera del main-content), lo reutilizamos
         const existingModal = document.getElementById('modalTurno');
-        if (!existingModal) {
-            // Crear el modal e insertarlo directamente en body (no en main-content)
-            const modalWrapper = document.createElement('div');
-            modalWrapper.innerHTML = renderModalHtml();
-            document.body.appendChild(modalWrapper.firstElementChild);
+        if (existingModal) {
+            existingModal.remove();
+        }
+        // Crear el modal e insertarlo directamente en body (no en main-content)
+        const modalWrapper = document.createElement('div');
+        modalWrapper.innerHTML = renderModalHtml();
+        document.body.appendChild(modalWrapper.firstElementChild);
             
-            const newlyCreatedModal = document.getElementById('modalTurno');
+        const newlyCreatedModal = document.getElementById('modalTurno');
+        if (newlyCreatedModal) {
             newlyCreatedModal.addEventListener('hidden.bs.modal', function() {
                 if (!window._isSavingTurno && window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
                     Swal.fire({
@@ -1104,6 +1135,19 @@ function renderModalHtml() {
                                 </div>
                                 <div class="form-text small text-primary">Para Art. 25 BIS en Chile, usualmente son 176 o 180 horas al mes.</div>
                             </div>
+                            <div class="col-12 mt-2" id="divPermiteViajesLargos">
+                                <div class="card border-info bg-info bg-opacity-10 p-2">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
+                                        <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
+                                            🚚 Habilitar Gestión de Viajes Largos en Ruta (Art. 25 bis)
+                                        </label>
+                                        <div class="form-text small text-muted">
+                                            Permite vincular marcaciones de salida a ruta con retornos de días posteriores y acreditar horas en la bolsa mensual.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <h6>Reglas de Asistencia</h6>
@@ -1369,6 +1413,10 @@ function handleTipoProgramacionChange() {
     const tipo = tipoSelect.value;
     const isFlexible = tipo === 'FLEXIBLE_BOLSA';
     const isRotativo = tipo === 'DINAMICO_FLEXIBLE';
+
+    if (isFlexible) {
+        ensureViajesLargosSwitch();
+    }
 
     // Visibilidad del bloque de Hora Ficticia: sólo visible en modo Bolsa Flexible
     const divLineaFicticia = document.getElementById('divLineaFicticia');
