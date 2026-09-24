@@ -92,6 +92,7 @@ async function saveTurno() {
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
+        permite_viajes_largos: !!document.getElementById('chk-permite-viajes-largos')?.checked,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         activo: formData.get('activo') !== 'false',
         dias: []
@@ -270,6 +271,9 @@ async function openModalHorario(id = null) {
             const inputMetaBol = document.getElementById('input-meta-bolsa');
             if (inputMetaBol) inputMetaBol.value = turno.tipo_programacion === 'FLEXIBLE_BOLSA' ? (turno.meta_horas_semanales || "") : "";
 
+            const chkViajesLargos = document.getElementById('chk-permite-viajes-largos');
+            if (chkViajesLargos) chkViajesLargos.checked = Boolean(turno.permite_viajes_largos);
+
             const chkColacion = document.getElementById('chkColacion');
             chkColacion.checked = turno.descuento_colacion_auto;
             document.getElementById('numColacion').value = turno.minutos_colacion_auto || "";
@@ -332,6 +336,8 @@ async function openModalHorario(id = null) {
         const umbralInput = document.getElementById('umbralColacion');
         if (umbralInput) umbralInput.value = "0";
         toggleColacionInput();
+        const chkViajesLargos = document.getElementById('chk-permite-viajes-largos');
+        if (chkViajesLargos) chkViajesLargos.checked = false;
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
         handleTipoProgramacionChange();
@@ -1103,6 +1109,19 @@ function renderModalHtml() {
                                     <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
                                 </div>
                                 <div class="form-text small text-primary">Para Art. 25 BIS en Chile, usualmente son 176 o 180 horas al mes.</div>
+                            </div>
+                            <div class="col-12 border-start border-success border-4 ps-3 mt-3 pt-2">
+                                <div class="form-check form-switch fs-6 mb-1">
+                                    <input class="form-check-input" type="checkbox" id="chk-permite-viajes-largos" name="permite_viajes_largos">
+                                    <label class="form-check-label fw-bold text-dark" for="chk-permite-viajes-largos">
+                                        Horario con Viajes Largos Interurbanos (Art. 25 BIS)
+                                    </label>
+                                </div>
+                                <div class="form-text small text-muted">
+                                    <strong>Activado:</strong> Choferes/acompañantes de larga distancia con bitácoras de ruta y viajes de varios días.
+                                    <br>
+                                    <strong>Desactivado:</strong> Bolsa Flexible Normal / Local con marcación presencial directa en reloj control y emparejamiento automático de jornadas nocturnas entre días consecutivos.
+                                </div>
                             </div>
                         </div>
 

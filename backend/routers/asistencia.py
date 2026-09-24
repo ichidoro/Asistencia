@@ -1465,13 +1465,13 @@ async def agregar_marcacion_manual(
             raise HTTPException(status_code=400, detail="Debe proporcionar 'hora' y 'tipo' o bien 'hora_entrada' / 'hora_salida'")
 
         query = """
-            INSERT OR IGNORE INTO logs_raw (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original)
-            VALUES (?, ?, ?, 1, ?, ?)
+            INSERT OR IGNORE INTO logs_raw (empleado_id, rut, fecha_hora, tipo, manual, observaciones, hash_original)
+            VALUES (?, ?, ?, ?, 1, ?, ?)
         """
         for fh, t in marcas_a_insertar:
             raw_string = f"{rut}|{fh}|{t}"
             hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
-            await db.execute(query, (empleado_id, fh, t, obs_str, hash_val))
+            await db.execute(query, (empleado_id, rut, fh, t, obs_str, hash_val))
         
         # 2. Reprocesar asistencia del día UNA SOLA VEZ
         resultado = await service.procesar_empleado_dia(empleado_id, fecha, save=True)

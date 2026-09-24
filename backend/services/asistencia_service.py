@@ -24,7 +24,8 @@ from backend.services.quantum_matrix_engine import (
     QuantumPhaseTopology,
     TensorMarkDeduplicator,
     MultiPointScheduleSolver,
-    QUBOEnergyOptimizer
+    QUBOEnergyOptimizer,
+    QuantumMatrixEngine
 )
 from asyncio import Lock
 
@@ -235,6 +236,7 @@ class AsistenciaService:
                 'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
+                'permite_viajes_largos',
             ]
 
             # Construir dict {turno_id: {campo: valor}} desde los datos de asig_rows
@@ -793,6 +795,7 @@ class AsistenciaService:
                 'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
+                'permite_viajes_largos',
             ]
             for td in td_rows:
                 tid = td['turno_id']
@@ -1155,7 +1158,7 @@ class AsistenciaService:
                         # Sin HE ni estado especial: eliminar registro previo (puede ser corrupto)
                         he_to_delete.append((empleado_id, fecha_str))
                     # ── BATCH SAVE FOR JORNADAS ESPECIALES ──
-                    if '_jornada_especial' in result:
+                    if result.get('_jornada_especial'):
                         je_to_save.append(result['_jornada_especial'])
                     else:
                         je_prev = jornadas_especiales_por_fecha.get(fecha_str)
@@ -2039,8 +2042,9 @@ class AsistenciaService:
         # EXCEPCIÓN: Se omite para FLEXIBLE_BOLSA porque la bolsa flexible maneja sus propias marcas cruzadas
         # de madrugada y su propia inferencia ITS.
         tipo_prog_check = asignacion.get('tipo_programacion') if asignacion else None
+        es_bolsa_vl = bool(asignacion and tipo_prog_check == 'FLEXIBLE_BOLSA' and asignacion.get('permite_viajes_largos'))
         marcas_hoy = [m for m in marcas_disponibles if m.get('fecha_hora', '')[:10] == fecha]
-        if tipo_prog_check != 'FLEXIBLE_BOLSA' and marcas_hoy and len(marcas_hoy) % 2 == 0 and len(marcas_hoy) >= 2:
+        if not es_bolsa_vl and marcas_hoy and len(marcas_hoy) % 2 == 0 and len(marcas_hoy) >= 2:
             _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
             _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
             num_entradas = sum(1 for l in marcas_hoy if str(l.get('tipo', '') or '').strip().lower() in _TIPOS_E)
@@ -2087,7 +2091,7 @@ class AsistenciaService:
                 if sig_marcas:
                     marcas_cand.append(sig_marcas[0])
         marcas_hoy = marcas_cand
-        if tipo_prog != 'FLEXIBLE_BOLSA' and marcas_hoy and len(marcas_hoy) >= 4 and len(marcas_hoy) % 2 == 0:
+        if not es_bolsa_vl and marcas_hoy and len(marcas_hoy) >= 4 and len(marcas_hoy) % 2 == 0:
             try:
                 row_gap = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_gap_horas'")
                 row_banda = await db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_banda_horas'")
@@ -2214,7 +2218,7 @@ class AsistenciaService:
             block_inteligente = [l for l in marcas_disponibles if str(l.get('id')) in self_m_ids_str]
             for l in block_inteligente:
                 if l.get('id'): consumidas_emp.add(l.get('id'))
-        elif tipo_prog == 'DINAMICO_FLEXIBLE':
+        elif tipo_prog in ('DINAMICO_FLEXIBLE', 'FLEXIBLE_BOLSA'):
 
             # [DT-1] Algoritmo de balance: Consumir todas las marcas del día calendario actual.
             # Si al finalizar el día el balance es > 0 (Ej: turno nocturno), seguir consumiendo
@@ -2257,6 +2261,28 @@ class AsistenciaService:
                                         f"marcada como residual (antes de min_hora_entrada={_min_he_seed}min)"
                                     )
 
+            # ── LIMPIEZA UNIVERSAL DE SALIDA RESIDUAL EN MADRUGADA (< 06:00 AM) ──
+            # Si la primera marca disponible del día es una Salida en la madrugada y el empleado
+            # tiene marcas posteriores hoy (o turno que inicia más tarde), es un residuo de la noche anterior.
+            _m_dia_primera = next(
+                (l for l in marcas_disponibles if l.get('fecha_hora', '')[:10] == fecha),
+                None
+            )
+            if _m_dia_primera:
+                _p_tipo = str(_m_dia_primera.get('tipo', '') or '').strip().lower()
+                _p_h = int(_m_dia_primera.get('fecha_hora', '')[11:13] or '99')
+                _hay_posteriores = any(
+                    l.get('fecha_hora', '')[:10] == fecha and l.get('id') != _m_dia_primera.get('id')
+                    for l in marcas_disponibles
+                )
+                if _p_tipo in _TIPOS_S and _p_h < 6 and _hay_posteriores:
+                    consumidas_emp.add(_m_dia_primera.get('id'))
+                    marcas_disponibles = [l for l in marcas_disponibles if l.get('id') not in consumidas_emp]
+                    logger.info(
+                        f"[SALIDA RESIDUAL MADRUGADA CONSUMIDA] Emp {empleado_id} {fecha}: "
+                        f"Marca {_m_dia_primera.get('id')} ({_m_dia_primera['fecha_hora']}) consumida como residual de noche previa"
+                    )
+
             if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL' and self_m_ids and marcas_disponibles:
                 ancla = marcas_disponibles[0]
             else:
@@ -2270,7 +2296,9 @@ class AsistenciaService:
             if ancla:
                 # Determine if the current day's shift can cross midnight
                 puede_cruzar = False
-                if asignacion:
+                if tipo_prog == 'FLEXIBLE_BOLSA':
+                    puede_cruzar = True
+                elif asignacion:
                     tid = asignacion.get('turno_id') or asignacion['id']
                     if bulk_ctx:
                         turnos_dict = bulk_ctx.get('turnos', {}).get(tid, {})
@@ -2820,18 +2848,33 @@ class AsistenciaService:
                 and not config_dia.get('cruza_medianoche_2')
                 and not is_day_off_night
                 and block_inteligente):
-            marcas_otros_dias = [m for m in block_inteligente
-                                 if not m['fecha_hora'].startswith(fecha)]
-            if marcas_otros_dias:
+            
+            # Verificar si el turno es de tarde (entrada >= 13:00) y la marca de mañana es una salida en la madrugada (< 04:00)
+            h_ent_cfg = config_dia.get('hora_entrada') or ''
+            primera_m_h = block_inteligente[0]['fecha_hora'][11:13] if block_inteligente else '00'
+            es_turno_tarde = (int(h_ent_cfg[:2]) >= 13 if len(h_ent_cfg) >= 2 else False) or (int(primera_m_h) >= 13)
+
+            marcas_a_devolver = []
+            for m in block_inteligente:
+                if not m['fecha_hora'].startswith(fecha):
+                    m_tipo = str(m.get('tipo', '') or '').strip().lower()
+                    m_hora = int(m['fecha_hora'][11:13]) if len(m['fecha_hora']) >= 13 else 99
+                    # Si es turno de tarde y es una salida antes de las 04:00 AM del día siguiente, es el cierre legítimo de la tarde
+                    if es_turno_tarde and m_tipo in ('salida', 'exit', 's', 'out', '2') and m_hora < 4:
+                        continue  # RETENER: Es la salida legítima que cruzó medianoche
+                    marcas_a_devolver.append(m)
+
+            if marcas_a_devolver:
                 logger.info(
                     f"⚙️ [Fix puede_cruzar] Emp {empleado_id} {fecha}: "
                     f"sem_ganadora={semana_ganadora} NO cruza medianoche. "
-                    f"Devolviendo {len(marcas_otros_dias)} marca(s) de otros días."
+                    f"Devolviendo {len(marcas_a_devolver)} marca(s) de otros días."
                 )
-                for m in marcas_otros_dias:
+                for m in marcas_a_devolver:
                     block_inteligente.remove(m)
                     consumidas_emp.discard(m.get('id'))
-                puede_cruzar = False
+                if not any(not m['fecha_hora'].startswith(fecha) for m in block_inteligente):
+                    puede_cruzar = False
 
         # ── SELECCIÓN DE OPCIÓN PARA DINAMICO_FLEXIBLE ───────────────────────
         if config_dia:
@@ -2934,166 +2977,8 @@ class AsistenciaService:
         # ── LOGS PARA ESTE DÍA ────────────────────────────────────────────────
         is_bolsa = tipo_prog == 'FLEXIBLE_BOLSA'
         
-        if tipo_prog == 'DINAMICO_FLEXIBLE':
+        if tipo_prog in ('DINAMICO_FLEXIBLE', 'FLEXIBLE_BOLSA'):
             logs = block_inteligente
-        elif is_bolsa:
-            # Bolsa Flexible Inteligente: empareja Entradas con Salidas sin importar el día, pero respetando cruce_medianoche dinámico
-            puede_cruzar = False
-            if asignacion:
-                tid = asignacion.get('turno_id') or asignacion['id']
-                if bulk_ctx:
-                    turnos_dict = bulk_ctx.get('turnos', {}).get(tid, {})
-                    for sem, sem_dict in turnos_dict.items():
-                        cfg = sem_dict.get(dia_semana)
-                        if cfg and (cfg.get('cruza_medianoche') or cfg.get('cruza_medianoche_2')):
-                            puede_cruzar = True
-                            break
-                else:
-                    rows = await db.fetch_all(
-                        "SELECT cruza_medianoche, cruza_medianoche_2 FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
-                        (tid, dia_semana)
-                    )
-                    for r in rows:
-                        if r['cruza_medianoche'] or r['cruza_medianoche_2']:
-                            puede_cruzar = True
-                            break
-
-            # [FIX] En Bolsa Flexible (is_bolsa), permitimos siempre el cruce de medianoche 
-            # de manera lógica, ignorando el flag estricto 'puede_cruzar'. La naturaleza
-            # de la bolsa flexible requiere cazar salidas que caigan de madrugada, y el bucle 
-            # de emparejamiento ya está protegido de cazar entradas de la siguiente jornada.
-            if not puede_cruzar and not is_bolsa:
-                marcas_disponibles = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
-
-            if is_bolsa:
-                # [REGLA DÍA PREPONDERANTE - BOLSA FLEXIBLE NOCTURNA]
-                # Filtrar marcas disponibles ignorando marcas colgadas de días anteriores a ayer
-                ayer_str = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
-                marcas_validas = [l for l in marcas_disponibles if l.get('fecha_hora', '')[:10] >= ayer_str]
-                primer_disponible = marcas_validas[0] if marcas_validas else None
-
-                if primer_disponible:
-                    f_mark = primer_disponible.get('fecha_hora', '')[:10]
-                    h_mark = primer_disponible.get('fecha_hora', '')[11:16]
-                    t_mark = str(primer_disponible.get('tipo', '') or '').strip().lower()
-
-                    if f_mark == ayer_str and h_mark >= "20:00" and t_mark in {'entrada', 'entry', 'e', 'in', '1'}:
-                        marcas_hoy = [primer_disponible]
-                    elif f_mark == fecha:
-                        if h_mark >= "20:00" and t_mark in {'entrada', 'entry', 'e', 'in', '1'}:
-                            marcas_hoy = []
-                        else:
-                            marcas_hoy = [l for l in marcas_validas if l.get('fecha_hora', '').startswith(fecha)]
-                    else:
-                        marcas_hoy = [l for l in marcas_validas if l.get('fecha_hora', '').startswith(fecha)]
-                else:
-                    marcas_hoy = []
-            else:
-                marcas_hoy = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
-
-            logs = []
-            if marcas_hoy:
-                idx_inicio = marcas_disponibles.index(marcas_hoy[0])
-                balance = 0
-                ultimo_idx = -1
-                
-                # Consumir marcas de este día calendario
-                for i in range(idx_inicio, len(marcas_disponibles)):
-                    log = marcas_disponibles[i]
-                    log_fecha = log.get('fecha_hora', '')[:10]
-                    if log_fecha == fecha or (is_bolsa and i == idx_inicio):
-                        t_m = str(log.get('tipo', '') or '').strip().lower()
-
-                        # [ITS] Inferencia de Tipo Secuencial (Bolsa Flexible)
-                        # Si vemos dos Entradas consecutivas separadas por <= 14 horas, 
-                        # inferimos que la segunda es un error de dedo y debió ser Salida.
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1'} and len(logs) > 0:
-                            prior_log = logs[-1]
-                            prior_tipo = str(prior_log.get('tipo', '') or '').strip().lower()
-                            if prior_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
-                                try:
-                                    prior_dt = datetime.strptime(prior_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                                    curr_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                                    if (curr_dt - prior_dt).total_seconds() / 3600.0 <= 14.0:
-                                        log_corregido = dict(log)
-                                        log_corregido['tipo'] = 'Salida'
-                                        log_corregido['_tipo_inferido'] = True
-                                        marcas_disponibles[i] = log_corregido
-                                        log = log_corregido
-                                        t_m = 'salida'
-                                    else:
-                                        # Transcurrieron más de 14h entre dos Entradas consecutivas.
-                                        # La jornada previa finalizó sin Salida (Anomalía) y esta marca es el inicio del nuevo turno.
-                                        break
-                                except Exception:
-                                    pass
-
-                        logs.append(log)
-                        ultimo_idx = i
-                        
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1'}:  # [DT-16b] '' removido — D8
-                            balance += 1
-                        elif t_m in {'salida', 'exit', 's', 'out', '2'}:
-                            balance -= 1
-
-                        # [FIX BOLSA FLEXIBLE] Si la jornada ya cerró (balance == 0) y la marca siguiente es una nueva Entrada,
-                        # la dejamos para ser tratada como anomalía o inicio de ruta/viaje largo.
-                        if is_bolsa and balance == 0 and i + 1 < len(marcas_disponibles):
-                            sig_mark = marcas_disponibles[i + 1]
-                            sig_tipo = str(sig_mark.get('tipo', '') or '').strip().lower()
-                            if sig_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
-                                break
-                    else:
-                        break
-                        
-                # Si quedó una Entrada sin Salida, seguir consumiendo hasta cerrar el bloque (límite dinámico de calendario)
-                if balance > 0 and ultimo_idx != -1 and logs:
-                    fecha_limite = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
-                    for i in range(ultimo_idx + 1, len(marcas_disponibles)):
-                        log = marcas_disponibles[i]
-                        log_fecha = log['fecha_hora'][:10]
-                        
-                        # Restricción 1: No cruzar más allá del día D+1
-                        if log_fecha > fecha_limite:
-                            break
-                            
-                        t_m = str(log.get('tipo', '') or '').strip().lower()
-                        
-                        # [ITS] Inferencia de Tipo Secuencial (Bolsa Flexible)
-                        # Aplica igual que arriba, pero cazando marcas que caen en el día siguiente de la bolsa.
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1'} and len(logs) > 0:
-                            prior_log = logs[-1]
-                            prior_tipo = str(prior_log.get('tipo', '') or '').strip().lower()
-                            if prior_tipo in {'entrada', 'entry', 'e', 'in', '1'}:
-                                try:
-                                    prior_dt = datetime.strptime(prior_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                                    curr_dt = datetime.strptime(log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                                    if (curr_dt - prior_dt).total_seconds() / 3600.0 <= 14.0:
-                                        log_corregido = dict(log)
-                                        log_corregido['tipo'] = 'Salida'
-                                        log_corregido['_tipo_inferido'] = True
-                                        marcas_disponibles[i] = log_corregido
-                                        log = log_corregido
-                                        t_m = 'salida'
-                                    else:
-                                        # Transcurrieron más de 14h entre dos Entradas consecutivas.
-                                        # La jornada previa finalizó sin Salida (Anomalía) y esta marca es el inicio del nuevo turno.
-                                        break
-                                except Exception:
-                                    pass
-
-                        # Restricción 2: Si es el día siguiente y SIGUE SIENDO una Entrada (después del ITS), detenerse
-                        if log_fecha == fecha_limite and t_m in {'entrada', 'entry', 'e', 'in', '1'}:
-                            break
-                            
-                        logs.append(log)
-                        if t_m in {'entrada', 'entry', 'e', 'in', '1'}:
-                            balance += 1
-                        elif t_m in {'salida', 'exit', 's', 'out', '2'}:
-                            balance -= 1
-
-                        if balance <= 0:
-                            break
         else:
             # REGLA FUNDAMENTAL: Los días que NO son jornada de trabajo (libres, feriados)
             # NO pueden apropiarse de marcas de turnos futuros.
@@ -3167,9 +3052,51 @@ class AsistenciaService:
                 # Solo marcas que caen físicamente en este día calendario
                 logs = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
             else:
-                # Turnos diurnos: SOLO marcas del día calendario actual
-                # Evita que un día sin marcas adyacentes robe marcas de días adyacentes
+                # Turnos diurnos: marcas del día calendario actual
                 logs = [l for l in marcas_disponibles if l.get('fecha_hora', '').startswith(fecha)]
+
+            # ── HORIZONTE ASIMÉTRICO CUÁNTICO: Turnos de Tarde / Noche que extienden a madrugada ──
+            _TIPOS_S_CHK = {'salida', 'exit', 's', 'out', '2'}
+            _TIPOS_E_CHK = {'entrada', 'entry', 'e', 'in', '1'}
+            
+            # Filtro de salida residual temprana en T (00:00 - 05:00) si hoy empieza en la tarde/mañana
+            if logs and len(logs) > 1:
+                p_m = logs[0]
+                p_tipo = str(p_m.get('tipo', '') or '').strip().lower()
+                p_hora = p_m.get('fecha_hora', '')[11:13]
+                if p_tipo in _TIPOS_S_CHK and p_hora and int(p_hora) < 6:
+                    consumidas_emp.add(p_m.get('id'))
+                    logs = logs[1:]
+
+            if logs:
+                h_ent_cfg_chk = config_dia.get('hora_entrada') if config_dia else None
+                h_sal_cfg_chk = config_dia.get('hora_salida') if config_dia else None
+                cruza_med_chk = bool(config_dia.get('cruza_medianoche')) if config_dia else False
+                is_tarde_o_noche = QuantumPhaseTopology.is_evening_or_night_shift(h_ent_cfg_chk, h_sal_cfg_chk, cruza_medianoche=cruza_med_chk)
+                if not is_tarde_o_noche:
+                    # Chequear si la primera marca real es de tarde (>= 13:00)
+                    prim_fh = logs[0].get('fecha_hora', '')[11:13]
+                    if prim_fh and int(prim_fh) >= 13:
+                        is_tarde_o_noche = True
+
+                if is_tarde_o_noche:
+                    tiene_salida_en_t = any(str(l.get('tipo', '') or '').strip().lower() in _TIPOS_S_CHK for l in logs)
+                    if not tiene_salida_en_t:
+                        manana_str = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                        salida_madrugada = next(
+                            (l for l in marcas_disponibles 
+                             if l.get('fecha_hora', '').startswith(manana_str) 
+                             and int(l.get('fecha_hora', '')[11:13] or '99') < 5
+                             and str(l.get('tipo', '') or '').strip().lower() in _TIPOS_S_CHK),
+                            None
+                        )
+                        if salida_madrugada and salida_madrugada not in logs:
+                            logs.append(salida_madrugada)
+                            consumidas_emp.add(salida_madrugada.get('id'))
+                            logger.info(
+                                f"[HORIZONTE ASIMÉTRICO] Emp {empleado_id} en {fecha}: "
+                                f"Capturada salida en madrugada {salida_madrugada['fecha_hora']} como cierre de turno tarde"
+                            )
 
         # First assignment para validación de TRABAJO SIN TURNO
         if bulk_ctx:
@@ -3243,21 +3170,28 @@ class AsistenciaService:
             # ──── FIX 7 DESACTIVADO: La regla base debe dejar la inasistencia por horario agendado
             # para que el usuario pueda reasignar explícitamente desde la modal si corresponde.
 
-            resultado = self._calculate_attendance(
-                emp_id=empleado_id,
+            resultado = QuantumMatrixEngine.solve_attendance_day(
                 fecha=fecha,
-                turno=asignacion or {},
-                config_dia=config_dia,
-                logs=logs,
-                justificaciones=justificaciones,
-                bonos_asignados=bonos_asignados,
+                empleado_id=empleado_id,
+                logs=logs or [],
+                turno_config=asignacion or {},
+                dia_config=config_dia,
                 is_holiday=is_holiday or is_holiday_original,
-                is_weekend=is_weekend,
-                last_state=last_state,
-                esta_en_ruta=esta_en_ruta,
-                active_vl_inicio=active_vl_inicio,
-                active_vl_fin=active_vl_fin,
+                justificaciones=justificaciones,
+                global_ajustes=bulk_ctx.get('global_ajustes') if bulk_ctx else None,
+                consumidas_previas=None,
+                viaje_largo_info=active_vl_inicio or active_vl_fin or viaje_largo,
             )
+
+            if resultado:
+                resultado['empleado_id'] = empleado_id
+                resultado['fecha'] = fecha
+                resultado['turno_asignado_id'] = (asignacion.get('id') or asignacion.get('turno_id')) if asignacion else None
+                resultado['hora_entrada_teorica'] = config_dia.get('hora_entrada') if config_dia else None
+                resultado['hora_salida_teorica'] = config_dia.get('hora_salida') if config_dia else None
+                resultado['horas_teoricas'] = float(config_dia.get('horas_teoricas', 0.0) or 0.0) if config_dia else 0.0
+                resultado['origen'] = 'SISTEMA'
+                resultado['num_semana_ganadora'] = semana_ganadora
 
         if resultado is None:
             if save and asist_actual:
@@ -3485,1087 +3419,6 @@ class AsistenciaService:
             logger.error(f"Error superponiendo JORNADA_ESPECIAL en asistencia: {_e_je}")
 
         return resultado
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # _CALCULATE_ATTENDANCE — EL MOTOR REAL
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _calculate_attendance(
-        self,
-        emp_id: int,
-        fecha: str,
-        turno: Dict,
-        config_dia: Optional[Dict],
-        logs: List[Dict],
-        justificaciones: List[Dict],
-        bonos_asignados: List[Dict],
-        is_holiday: bool,
-        is_weekend: bool,
-        last_state: Optional[str] = None,
-        esta_en_ruta: bool = False,
-        active_vl_inicio: Optional[Dict] = None,
-        active_vl_fin: Optional[Dict] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Implementa la lógica de redondeo y cálculo.
-
-        REGLAS FUNDAMENTALES:
-          - Las marcas se consumen en orden cronológico estricto (ya filtradas por consumidas_emp).
-          - NO se usan ventanas temporales para encontrar marcas.
-          - El tipo BioAlba (Entrada/Salida) manda.
-          - El anclaje (entrada/salida) solo afecta el CÁLCULO de horas pagadas,
-            nunca la búsqueda o consumo de marcas.
-          - Una marca consumida no vuelve a usarse jamás.
-        """
-        dt = datetime.strptime(fecha, "%Y-%m-%d")
-
-        # ── ESTRUCTURA BASE DEL RESULTADO ────────────────────────────────────
-        res = {
-            'empleado_id': emp_id,
-            'fecha': fecha,
-            'turno_asignado_id': turno.get('id'),
-            'hora_entrada_teorica': None,
-            'hora_salida_teorica': None,
-            'horas_teoricas': None,
-            'hora_entrada_real': None,
-            'hora_salida_real': None,
-            'minutos_atraso': 0,
-            'minutos_colacion': 0,
-            'minutos_colacion_real': 0,
-            'horas_trabajadas': 0.0,
-            'minutos_deuda': 0,
-            'minutos_extra_bruto': 0,
-            'minutos_salida_adelantada': 0,
-            'estado': None,
-            'observaciones': '',
-        }
-
-        # ── BONOS ─────────────────────────────────────────────────────────────
-        if bonos_asignados:
-            nombres_bonos = ', '.join(b.get('bono_nombre', '') for b in bonos_asignados)
-            res['observaciones'] += f"Bonos: {nombres_bonos}. "
-
-        # ── JUSTIFICACIONES ───────────────────────────────────────────────────
-        should_apply_just = False
-        justificacion_dia = None
-        justificaciones_dia = [
-            j for j in (justificaciones or [])
-            if j.get('fecha_inicio', '') <= fecha <= j.get('fecha_fin', '')
-        ]
-
-        if justificaciones_dia:
-            justificacion_dia = justificaciones_dia[0]
-            should_apply_just = True
-
-        # Licencias corridas (dias_corridos)
-        licencia_corrida = None
-        for j in (justificaciones or []):
-            if j.get('dias_corridos') and j.get('fecha_inicio', '') <= fecha <= j.get('fecha_fin', ''):
-                licencia_corrida = j
-                break
-
-        # ── FERIADO ────────────────────────────────────────────────────────────
-        # Si existe una justificación válida para el día con sobreescribe_feriados = 1 (ej: Licencia Común/Mutual),
-        # la justificación tiene prioridad absoluta sobre el Feriado.
-        just_sobreescribe_feriado = bool(justificacion_dia and justificacion_dia.get('sobreescribe_feriados'))
-        if is_holiday and not just_sobreescribe_feriado:
-            res['estado'] = 'FERIADO'
-            res['observaciones'] = 'Feriado Nacional (Proyección automática)'
-            # Si hay marcas en feriado → JORNADA_ESPECIAL (tratado más abajo)
-            if not logs:
-                return res
-
-        # ── JUSTIFICACIÓN (licencia, vacaciones, etc.) ─────────────────────────
-        if should_apply_just and justificacion_dia:
-            j = justificacion_dia
-            # ── FILTRO DÍAS HÁBILES: Si no es corrido, respetar días libres del turno ──
-            es_dia_libre_turno = bool(config_dia and config_dia.get('es_libre'))
-            if not j.get('dias_corridos') and es_dia_libre_turno:
-                should_apply_just = False
-                # No aplicar justificación en día libre → flujo normal lo marcará LIBRE
-            else:
-                tipo_nombre = j.get('tipo_nombre', 'Sin detalle').upper()
-                # Mapeo dinámico: el estado es el nombre de la justificación
-                res['estado'] = tipo_nombre
-                res['justificacion_id'] = j.get('id')
-                if j.get('tipo_nomenclatura'):
-                    res['nomenclatura'] = j.get('tipo_nomenclatura').upper()
-                
-                con_goce = j.get('con_goce_sueldo', True)
-                genera_deuda = j.get('genera_deuda_horaria', False)
-                obs = tipo_nombre
-                if not con_goce:
-                    obs += ' (Sin Goce)'
-                else:
-                    obs += ' (Con Goce de Sueldo)'
-                if genera_deuda and config_dia:
-                    minutos_teoricos = int((config_dia.get('horas_teoricas', 0) or 0) * 60)
-                    obs += f' [GENERA DEUDA]'
-                    res['minutos_deuda'] = minutos_teoricos
-                    res['minutos_permiso_personal_deuda'] = minutos_teoricos
-                res['observaciones'] = obs
-                if not logs:
-                    return res
-
-        # ── SIN TURNO ASIGNADO ─────────────────────────────────────────────────
-        if not config_dia and not asignacion_valida(turno):
-            if logs:
-                h_entrada = logs[0]['fecha_hora'][11:16] if logs else None
-
-                res['hora_entrada_real'] = h_entrada
-                res['estado'] = 'ANOMALIA'
-                res['observaciones'] = 'TRABAJO SIN TURNO ASIGNADO. '
-                return res
-            # Sin turno y sin marcas: no hay nada que registrar
-            if not is_holiday and not is_weekend:
-                return None
-            return None
-
-        # ── CONFIG DÍA ────────────────────────────────────────────────────────
-        redondeo = int(config_dia.get('redondeo_minutos', 0) or 0) if config_dia else 0
-        anclaje_min     = int((config_dia or {}).get('anclaje_entrada_minutos') or
-                              turno.get('anclaje_entrada_minutos', 0) or 0) if turno else 0  # [DT-12]
-        anclaje_sal_min = int((config_dia or {}).get('anclaje_salida_minutos') or
-                              turno.get('anclaje_salida_minutos', 0) or 0) if turno else 0   # [DT-12]
-        h_ent_teorica = None
-        h_sal_teorica = None
-
-        # Si es día libre (es_libre=True), NO usar motor nocturno aunque cruza_medianoche=1
-        # Un día libre no debe capturar marcas del día siguiente
-        es_libre_dia = bool(config_dia and config_dia.get('es_libre'))
-        es_nocturno = bool(config_dia and config_dia.get('cruza_medianoche') and not es_libre_dia)
-
-        # Force es_nocturno if logs explicitly contain overnight punches (e.g. entry >= 18:00 or spans overnight)
-        if logs and not es_nocturno:
-            ts_sorted = sorted([l.get('fecha_hora', '') for l in logs if l.get('fecha_hora')])
-            if ts_sorted:
-                try:
-                    first_h = int(ts_sorted[0][11:13]) if len(ts_sorted[0]) >= 13 else 0
-                    last_dt = ts_sorted[-1][:10]
-                    first_dt = ts_sorted[0][:10]
-                    if first_h >= 18 or first_dt != last_dt:
-                        es_nocturno = True
-                except Exception:
-                    pass
-
-
-        if config_dia:
-            if config_dia.get('hora_entrada'):
-                h_ent_teorica = datetime.strptime(f"{fecha} {config_dia['hora_entrada']}", "%Y-%m-%d %H:%M")
-                res['hora_entrada_teorica'] = config_dia['hora_entrada']
-            if config_dia.get('hora_salida'):
-                h_sal_teorica = datetime.strptime(f"{fecha} {config_dia['hora_salida']}", "%Y-%m-%d %H:%M")
-                res['hora_salida_teorica'] = config_dia['hora_salida']
-                if es_nocturno and h_sal_teorica and h_ent_teorica and h_sal_teorica < h_ent_teorica:
-                    h_sal_teorica += timedelta(days=1)
-            if config_dia.get('horas_teoricas'):
-                res['horas_teoricas'] = float(config_dia['horas_teoricas'])
-
-        # ── TIPOS BIOALBA ──────────────────────────────────────────────────────
-        TIPOS_ENTRADA = {'entrada', 'entry', 'e', 'in', '1'}
-        TIPOS_SALIDA  = {'salida', 'exit', 's', 'out', '2'}
-
-        def tipo_mark(log):
-            return str(log.get('tipo', '') or '').strip().lower()
-
-        def _procesar_pares_intermedios(salidas_int, entradas_int):
-            pares = []
-            for s_int, e_int in zip(salidas_int, entradas_int):
-                if e_int > s_int:
-                    pares.append((s_int, e_int, (e_int - s_int).total_seconds() / 60))
-            if not pares:
-                return
-
-            min_auto = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
-            min_normal = int(config_dia.get('minutos_colacion', 0) or 0) if config_dia else 0
-            target_col = min_auto if min_auto > 0 else min_normal
-
-            mejor_par = None
-            if len(pares) == 1:
-                mejor_par = pares[0]
-            elif target_col > 0:
-                menor_diff = float('inf')
-                for p in pares:
-                    diff = abs(p[2] - target_col)
-                    if diff < menor_diff:
-                        menor_diff = diff
-                        mejor_par = p
-            else:
-                mejor_par = max(pares, key=lambda x: x[2])
-
-            minutos_permisos = 0
-            if mejor_par:
-                res['minutos_colacion_real'] = int(round(mejor_par[2]))
-                res['hora_salida_colacion'] = mejor_par[0].strftime("%H:%M:%S")
-                res['hora_entrada_colacion'] = mejor_par[1].strftime("%H:%M:%S")
-
-            permisos_puros = []
-            for p in pares:
-                if p != mejor_par:
-                    minutos_permisos += p[2]
-                    permisos_puros.append(p)
-
-            if minutos_permisos > 0:
-                res['minutos_permisos_detectados'] = int(minutos_permisos)
-                res['minutos_permiso_personal_deuda'] = res.get('minutos_permiso_personal_deuda', 0) + int(minutos_permisos)
-                res['observaciones'] += f"Permiso detectado en reloj ({int(minutos_permisos)} min). "
-                res['hora_inicio_permiso'] = permisos_puros[0][0].strftime("%H:%M:%S")
-                res['hora_termino_permiso'] = permisos_puros[-1][1].strftime("%H:%M:%S")
-
-        # Clasificar logs disponibles con filtro cuántico de decoherencia
-        logs_sorted = TensorMarkDeduplicator.deduplicate_and_sort(logs)
-
-        entrada_real = None
-        salida_real  = None
-        tiempos_proc = []
-
-        # ── INASISTENCIA / LIBRE / FERIADO (sin marcas) ─────────────────────
-        if not logs_sorted:
-            if is_holiday:
-                return res  # FERIADO ya seteado arriba
-            if es_libre_dia:
-                res['estado'] = 'LIBRE'
-                return res
-            # BOLSA FLEXIBLE: si ya pasó la hora_limite_ficticia → INASISTENCIA
-            # Si aún no pasó → celda vacía (None), se evaluará más tarde.
-            # Nota: is_bolsa se calcula aquí directamente porque la variable del scope
-            # externo no está disponible dentro de _calculate_attendance aún.
-            _es_bolsa_aqui = turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA' if turno else False
-            if _es_bolsa_aqui:
-                hora_limite_ficticia = turno.get('hora_limite_ficticia') if turno else None
-                if hora_limite_ficticia and fecha == _get_now_local().strftime("%Y-%m-%d"):
-                    try:
-                        limite_dt = datetime.strptime(f"{fecha} {hora_limite_ficticia}", "%Y-%m-%d %H:%M")
-                        if _get_now_local() < limite_dt:
-                            return None  # Aún no llegó la hora límite, celda vacía
-                    except Exception as e:
-                        logger.error(f"Error parseando hora_limite_ficticia '{hora_limite_ficticia}' para fecha {fecha}: {e}")
-                        res['observaciones'] = f"{res.get('observaciones', '')} ⚠️ [ALERTA SISTEMA: Error parsing hora límite]".strip()
-                elif fecha > _get_now_local().strftime("%Y-%m-%d"):
-                    return None  # Fecha futura, celda vacía
-                res['estado'] = 'INASISTENCIA'
-                res['observaciones'] = 'Inasistencia detectada (Bolsa Flexible sin marcas)'
-                logger.info(
-                    f"📋 INASISTENCIA: emp={emp_id} fecha={fecha} "
-                    f"logs_count={len(logs)} "
-                    f"turno={turno.get('nombre') if turno else 'N/A'} "
-                    f"tipo_prog={turno.get('tipo_programacion') if turno else 'N/A'}"
-                )
-                return res
-            if config_dia:
-                # Determinar la hora de entrada teórica más tardía de entre las alternativas para evitar inasistencias prematuras:
-                horas_entrada_candidatas = []
-                if config_dia.get('hora_entrada'):
-                    horas_entrada_candidatas.append(config_dia.get('hora_entrada'))
-                if config_dia.get('hora_entrada_2'):
-                    horas_entrada_candidatas.append(config_dia.get('hora_entrada_2'))
-
-                if horas_entrada_candidatas:
-                    entrada_mas_tardio_str = max(horas_entrada_candidatas)
-                    if len(entrada_mas_tardio_str) > 5:
-                        entrada_mas_tardio_str = entrada_mas_tardio_str[:5]
-                    try:
-                        limite_dt = datetime.strptime(f"{fecha} {entrada_mas_tardio_str}", "%Y-%m-%d %H:%M")
-                        hora_limite_alerta = limite_dt + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                        
-                        if _get_now_local() < hora_limite_alerta:
-                            return None
-                    except Exception as e:
-                        logger.error(f"Error parseando hora_entrada límite '{entrada_mas_tardio_str}': {e}")
-                        if h_ent_teorica:
-                            hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                            if _get_now_local() < hora_limite_alerta:
-                                return None
-                elif h_ent_teorica:
-                    hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                    if _get_now_local() < hora_limite_alerta:
-                        return None
-
-                res['estado'] = 'INASISTENCIA'
-                res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
-                logger.info(
-                    f"📋 INASISTENCIA: emp={emp_id} fecha={fecha} "
-                    f"logs_count={len(logs)} "
-                    f"turno={turno.get('nombre') if turno else 'N/A'} "
-                    f"config_dia={'hábil' if config_dia else 'MISSING'}"
-                )
-                return res
-            return None
-
-        # ── TURNO NOCTURNO ────────────────────────────────────────────────────
-        if es_nocturno and h_ent_teorica and h_sal_teorica:
-            # CONSUMO PURO: usar todos los logs disponibles en orden cronológico.
-            # Confiar en el tipo BioAlba. Sin ventanas.
-            entradas = [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                        for l in logs_sorted if tipo_mark(l) in TIPOS_ENTRADA]
-            salidas  = [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                        for l in logs_sorted if tipo_mark(l) in TIPOS_SALIDA]
-
-            dt_entrada = None
-            dt_salida_fin = None
-            entrada_inferida = False
-            auto_fixed = False
-
-            if entradas:
-                dt_entrada = entradas[0][0]
-
-                # ── FALLBACK POSICIONAL: tipos invertidos (nocturno) ──────────
-                primera_salida_noc = salidas[0][0] if salidas else None
-                if primera_salida_noc and dt_entrada > primera_salida_noc:
-                    todos_noc2 = sorted(
-                        [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                         for l in logs_sorted],
-                        key=lambda x: x[0]
-                    )
-                    if len(todos_noc2) >= 2:
-                        dt_entrada    = todos_noc2[0][0]
-                        dt_salida_fin = todos_noc2[-1][0]
-                        entrada_real  = dt_entrada.strftime("%H:%M:%S")
-                        salida_real   = dt_salida_fin.strftime("%H:%M:%S")
-                        res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
-                        if len(todos_noc2) >= 4:
-                            sal_int = [t[0] for t in todos_noc2[1:-1:2]]
-                            ent_int = [t[0] for t in todos_noc2[2:-1:2]]
-                            _procesar_pares_intermedios(sal_int, ent_int)
-                        dt_entrada_calculo = dt_entrada
-                        tiempos_proc = [
-                            self._apply_rounding(dt_entrada_calculo, redondeo),
-                            self._apply_rounding(dt_salida_fin, redondeo)
-                        ]
-                        auto_fixed = True
-                else:
-                    # flujo normal nocturno
-                    salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
-                    if salidas_post:
-                        dt_salida_fin = salidas_post[-1][0]
-                    elif len(entradas) > 1:
-                        cand_salida = entradas[-1][0]
-                        if (cand_salida - dt_entrada).total_seconds() / 3600.0 <= 14.0:
-                            dt_salida_fin = cand_salida
-                            entradas = entradas[:-1]
-                            res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Ultima marca tratada como Salida. "
-                        else:
-                            dt_salida_fin = None
-                    else:
-                        dt_salida_fin = None
-
-                    # COLACION Y PERMISOS (marcas intermedias nocturno)
-                    if len(salidas_post) >= 2 and len(entradas) >= 2:
-                        salidas_intermedias = [s[0] for s in salidas_post[:-1]]
-                        entradas_intermedias = [e[0] for e in entradas[1:]]
-                        _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
-
-            elif salidas:
-                # Sin entradas tipificadas: fallback posicional si hay >= 2 marcas.
-                # Cubre el caso de "error de dedo" (marco Salida como primera marca).
-                todos_noc = sorted(
-                    [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                     for l in logs_sorted],
-                    key=lambda x: x[0]
-                )
-                if len(todos_noc) >= 2:
-                    dt_entrada    = todos_noc[0][0]
-                    dt_salida_fin = todos_noc[-1][0]
-                    entrada_real  = dt_entrada.strftime("%H:%M:%S")
-                    salida_real   = dt_salida_fin.strftime("%H:%M:%S")
-                    res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
-                    # Extraer intermedias para colacion
-                    if len(todos_noc) >= 4:
-                        sal_int = [t[0] for t in todos_noc[1:-1:2]]
-                        ent_int = [t[0] for t in todos_noc[2:-1:2]]
-                        _procesar_pares_intermedios(sal_int, ent_int)
-                    dt_entrada_calculo = dt_entrada
-                    tiempos_proc = [
-                        self._apply_rounding(dt_entrada_calculo, redondeo),
-                        self._apply_rounding(dt_salida_fin, redondeo)
-                    ]
-                    auto_fixed = True
-                else:
-                    # Solo 1 marca: borde frio (entrada antes del sync)
-                    dt_salida_fin = salidas[0][0]
-
-
-            if not auto_fixed and dt_entrada is not None:
-                # ── ANCLAJE DE ENTRADA CON TOPOLOGÍA DE FASE ───────────────────
-                phase_ent_t = QuantumPhaseTopology.time_to_phase(h_ent_teorica)
-                phase_ent_r = QuantumPhaseTopology.time_to_phase(dt_entrada)
-                delta_ent = QuantumPhaseTopology.circular_distance(phase_ent_t, phase_ent_r)
-
-                if (not entrada_inferida
-                        and delta_ent < 0
-                        and abs(delta_ent) <= 360.0
-                        and dt_salida_fin is not None):
-                    anticipacion_min = abs(delta_ent)
-                    if anticipacion_min <= anclaje_min:
-                        dt_entrada_calculo = h_ent_teorica
-                        res['observaciones'] += (
-                            f"Llegada anticipada {dt_entrada.strftime('%H:%M')} "
-                            f"(dentro del anclaje, pago desde {h_ent_teorica.strftime('%H:%M')}). "
-                        )
-                    else:
-                        dt_entrada_calculo = dt_entrada
-                        res['observaciones'] += (
-                            f"Llegada anticipada {dt_entrada.strftime('%H:%M')} "
-                            f"({int(anticipacion_min)} min, fuera del anclaje de {anclaje_min} min). "
-                        )
-                else:
-                    dt_entrada_calculo = dt_entrada
-
-                entrada_real = dt_entrada.strftime("%H:%M:%S")
-                salida_real  = dt_salida_fin.strftime("%H:%M:%S") if dt_salida_fin else None
-
-                tiempos_proc = [self._apply_rounding(dt_entrada_calculo, redondeo)]
-                if dt_salida_fin:
-                    tiempos_proc.append(self._apply_rounding(dt_salida_fin, redondeo))
-
-                logger.debug(
-                    f"[NOCTURNO] Emp {emp_id} {fecha}: "
-                    f"Entrada={entrada_real}{'(inf)' if entrada_inferida else ''} "
-                    f"Salida={salida_real}"
-                )
-            elif not auto_fixed and dt_salida_fin is not None:
-                # Caso: Hay salida pero no hay entrada (ni siquiera inferida)
-                entrada_real = None
-                salida_real  = dt_salida_fin.strftime("%H:%M:%S")
-                tiempos_proc = []
-            elif not auto_fixed:
-                # Sin marcas en absoluto para este turno nocturno
-                entrada_real = None
-                salida_real  = None
-                tiempos_proc = []
-
-        else:
-            # ── TURNO DIURNO ──────────────────────────────────────────────────
-            # Mismo principio: consumo estricto, confiar en tipos BioAlba.
-            entradas = [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                        for l in logs_sorted if tipo_mark(l) in TIPOS_ENTRADA]
-            salidas  = [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                        for l in logs_sorted if tipo_mark(l) in TIPOS_SALIDA]
-
-            dt_entrada = None
-            dt_salida_fin = None
-            entrada_inferida = False
-            auto_fixed = False
-
-            if entradas:
-                dt_entrada = entradas[0][0]
-
-                # ── FALLBACK POSICIONAL: tipos invertidos ──────────────────────
-                # Si la primera entrada es POSTERIOR a la primera salida, significa
-                # que el empleado marco Salida al llegar (error de dedo).
-                # En ese caso ignoramos los tipos y usamos posicion cronologica:
-                # primera marca = entrada, ultima marca = salida.
-                primera_salida = salidas[0][0] if salidas else None
-                if primera_salida and dt_entrada > primera_salida:
-                    todos_diu = sorted(
-                        [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                         for l in logs_sorted],
-                        key=lambda x: x[0]
-                    )
-                    if len(todos_diu) >= 2:
-                        dt_entrada    = todos_diu[0][0]
-                        dt_salida_fin = todos_diu[-1][0]
-                        entrada_real  = dt_entrada.strftime("%H:%M:%S")
-                        salida_real   = dt_salida_fin.strftime("%H:%M:%S")
-                        res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
-                        if len(todos_diu) >= 4:
-                            sal_int = [t[0] for t in todos_diu[1:-1:2]]
-                            ent_int = [t[0] for t in todos_diu[2:-1:2]]
-                            _procesar_pares_intermedios(sal_int, ent_int)
-                        dt_entrada_calculo = dt_entrada
-                        tiempos_proc = [
-                            self._apply_rounding(dt_entrada_calculo, redondeo),
-                            self._apply_rounding(dt_salida_fin, redondeo)
-                        ]
-                        auto_fixed = True
-                else:
-                    # ── FLUJO NORMAL ──────────────────────────────────────────
-                    # ULTIMA salida despues de la entrada
-                    salidas_post = [(dt_s, l) for dt_s, l in salidas if dt_s > dt_entrada]
-                    if salidas_post:
-                        dt_salida_fin = salidas_post[-1][0]
-                    elif len(entradas) > 1:
-                        cand_salida = entradas[-1][0]
-                        if (cand_salida - dt_entrada).total_seconds() / 3600.0 <= 14.0:
-                            dt_salida_fin = cand_salida
-                            entradas = entradas[:-1]
-                            res['observaciones'] = res.get('observaciones', '') + "[Auto-Fix] Ultima marca tratada como Salida. "
-                        else:
-                            dt_salida_fin = None
-                    else:
-                        dt_salida_fin = None
-
-                    # ── COLACION Y PERMISOS REALES (marcas intermedias diurno) ────
-                    if len(salidas_post) >= 2 and len(entradas) >= 2:
-                        salidas_intermedias = [s[0] for s in salidas_post[:-1]]
-                        entradas_intermedias = [e[0] for e in entradas[1:]]
-                        _procesar_pares_intermedios(salidas_intermedias, entradas_intermedias)
-            elif salidas:
-                # Sin entradas tipificadas: fallback posicional si hay >= 2 marcas.
-                # Cubre el caso de "error de dedo" (marco Salida como primera marca).
-                todos_diu = sorted(
-                    [(datetime.strptime(l['fecha_hora'], "%Y-%m-%d %H:%M:%S"), l)
-                     for l in logs_sorted],
-                    key=lambda x: x[0]
-                )
-                if len(todos_diu) >= 2:
-                    dt_entrada    = todos_diu[0][0]
-                    dt_salida_fin = todos_diu[-1][0]
-                    entrada_real  = dt_entrada.strftime("%H:%M:%S")
-                    salida_real   = dt_salida_fin.strftime("%H:%M:%S")
-                    res['observaciones'] += "[Auto-Fix] Tipos invertidos - posicion cronologica. "
-                    # Extraer intermedias para colacion
-                    if len(todos_diu) >= 4:
-                        sal_int = [t[0] for t in todos_diu[1:-1:2]]
-                        ent_int = [t[0] for t in todos_diu[2:-1:2]]
-                        _procesar_pares_intermedios(sal_int, ent_int)
-                    dt_entrada_calculo = dt_entrada
-                    tiempos_proc = [
-                        self._apply_rounding(dt_entrada_calculo, redondeo),
-                        self._apply_rounding(dt_salida_fin, redondeo)
-                    ]
-                else:
-                    # Solo 1 marca: borde frio
-                    dt_salida_fin = salidas[0][0]
-
-
-            if not auto_fixed and dt_entrada is not None:
-                # Anclaje entrada diurno: mismo principio que nocturno.
-                # Dentro del anclaje → pago desde h_ent_teorica.
-                # Fuera del anclaje → pago desde la hora real.
-                if (not entrada_inferida
-                        and h_ent_teorica
-                        and dt_entrada < h_ent_teorica
-                        and dt_salida_fin is not None
-                        and (not h_sal_teorica or dt_salida_fin > h_ent_teorica)):
-                    anticipacion_min = (h_ent_teorica - dt_entrada).total_seconds() / 60
-                    if anticipacion_min <= anclaje_min:
-                        dt_entrada_calculo = h_ent_teorica
-                        res['observaciones'] += (
-                            f"Llegada anticipada {dt_entrada.strftime('%H:%M')} "
-                            f"(dentro del anclaje, pago desde {h_ent_teorica.strftime('%H:%M')}). "
-                        )
-                    else:
-                        dt_entrada_calculo = dt_entrada
-                        res['observaciones'] += (
-                            f"Llegada anticipada {dt_entrada.strftime('%H:%M')} "
-                            f"({int(anticipacion_min)} min, fuera del anclaje de {anclaje_min} min). "
-                        )
-                else:
-                    dt_entrada_calculo = dt_entrada
-
-                entrada_real = dt_entrada.strftime("%H:%M:%S")
-                salida_real  = dt_salida_fin.strftime("%H:%M:%S") if dt_salida_fin else None
-
-                tiempos_proc = [self._apply_rounding(dt_entrada_calculo, redondeo)]
-                if dt_salida_fin:
-                    tiempos_proc.append(self._apply_rounding(dt_salida_fin, redondeo))
-            elif not auto_fixed and dt_salida_fin is not None:
-                entrada_real = None
-                salida_real  = dt_salida_fin.strftime("%H:%M:%S")
-                tiempos_proc = []
-
-        # ── ANCLAJE DE SALIDA ─────────────────────────────────────────────────
-        # Si el empleado salió DENTRO del margen post-turno configurado (anclaje_sal_min),
-        # se ancla a h_sal_teorica para no contar esos minutos extras como trabajados.
-        # Si salió mucho después (overtime real) o antes (adelantada), se respeta la marca.
-        logger.info(
-            f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | "
-            f"anclaje_sal_min={anclaje_sal_min}, h_sal_teorica={h_sal_teorica}, "
-            f"len(tiempos_proc)={len(tiempos_proc)}, "
-            f"tiempos_proc[-1]={tiempos_proc[-1] if len(tiempos_proc) >= 2 else 'N/A'}, "
-            f"config_dia.anclaje_salida={config_dia.get('anclaje_salida_minutos') if config_dia else 'NO_CONFIG'}, "
-            f"turno.anclaje_salida={turno.get('anclaje_salida_minutos', 'NOT_FOUND') if turno else 'NO_TURNO'}"
-        )
-        if anclaje_sal_min > 0 and h_sal_teorica and len(tiempos_proc) >= 2:
-            dt_salida_real = tiempos_proc[-1]
-            diff_salida = (dt_salida_real - h_sal_teorica).total_seconds() / 60
-            logger.info(
-                f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | "
-                f"EVALUANDO: diff_salida={diff_salida:.2f} min, "
-                f"condicion 0<{diff_salida:.2f}<={anclaje_sal_min}: {0 < diff_salida <= anclaje_sal_min}"
-            )
-            if 0 < diff_salida <= anclaje_sal_min:
-                tiempos_proc[-1] = h_sal_teorica
-                res['observaciones'] += f"Salida dentro del anclaje ({int(diff_salida)} min post-turno, pagado hasta {h_sal_teorica.strftime('%H:%M')}). "
-                logger.info(f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | ✅ ANCLAJE APLICADO → salida truncada a {h_sal_teorica.strftime('%H:%M')}")
-            else:
-                logger.info(f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | ❌ ANCLAJE NO APLICADO (diff fuera de rango)")
-        else:
-            reasons = []
-            if anclaje_sal_min <= 0: reasons.append(f"anclaje_sal_min={anclaje_sal_min}<=0")
-            if not h_sal_teorica: reasons.append("h_sal_teorica=None")
-            if len(tiempos_proc) < 2: reasons.append(f"len(tiempos_proc)={len(tiempos_proc)}<2")
-            logger.info(f"[ANCLAJE-SAL-DEBUG] emp={emp_id} fecha={fecha} | ⛔ BLOQUE NO ENTRADO: {', '.join(reasons)}")
-
-        # ── ACTUALIZAR RESULTADO CON ENTRADA/SALIDA ───────────────────────────
-        res['hora_entrada_real'] = entrada_real
-        res['hora_salida_real']  = salida_real
-
-
-
-        # ── SIN ENTRADA → estados especiales ──────────────────────────────────
-        if not entrada_real:
-            if config_dia:
-                if es_libre_dia or is_holiday:
-                    res['estado'] = 'ANOMALIA'
-                    res['observaciones'] = 'Solo una marcación (falta entrada en día libre/feriado).'
-                    return res
-                    
-                if h_ent_teorica:
-                    hora_limite_alerta = h_ent_teorica + timedelta(minutes=int(turno.get('anclaje_entrada_minutos', 0) or 0))
-                    if _get_now_local() < hora_limite_alerta:
-                        return None
-                
-                if salida_real:
-                    res['estado'] = 'ANOMALIA'
-                    res['observaciones'] = 'Solo una marcación (falta entrada).'
-                else:
-                    res['estado'] = 'INASISTENCIA'
-                    res['observaciones'] = 'Inasistencia detectada (Día hábil sin marcas)'
-                    logger.info(
-                        f"📋 INASISTENCIA: emp={emp_id} fecha={fecha} "
-                        f"logs_count={len(logs)} "
-                        f"turno={turno.get('nombre') if turno else 'N/A'} "
-                        f"config_dia={'hábil' if config_dia else 'MISSING'}"
-                    )
-            else:
-                if salida_real:
-                    res['estado'] = 'ANOMALIA'
-                    res['observaciones'] = 'Solo una marcación (falta entrada en día libre/no configurado).'
-            return res
-
-        # ── EN CURSO (Evaluación Dinámica y Segura) ───────────────────────────
-        fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
-        now_local = _get_now_local()
-        hoy_dt = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        es_hoy_o_futuro = (fecha_dt >= hoy_dt)
-        es_nocturno = bool(config_dia and config_dia.get('cruza_medianoche') and not es_libre_dia)
-        
-        # Para turnos nocturnos, la jornada de "ayer" sigue activa en la mañana de hoy
-        es_turno_activo = es_hoy_o_futuro or (es_nocturno and fecha_dt == hoy_dt - timedelta(days=1))
-        
-        # Recuperar parámetros dinámicos de base de datos
-        ventana_min = int(turno.get('ventana_en_curso_minutos', 0) or 0) if turno else 0
-        if ventana_min <= 0:
-            ventana_min = 180  # Fallback de 3 horas
-
-        min_auto = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
-        min_normal = int(config_dia.get('minutos_colacion', 0) or 0) if config_dia else 0
-        colacion_minutos = min_auto if min_auto > 0 else (min_normal if min_normal > 0 else 60)
-        if colacion_minutos <= 0:
-            colacion_minutos = 60
-
-        tolerancia_exceso = int(turno.get('tolerancia_exceso_colacion_minutos', 0) or 0) if turno else 0
-        buffer_colacion_min = colacion_minutos + tolerancia_exceso + 60
-
-        en_curso_por_hora = False
-        if es_turno_activo:
-            if h_sal_teorica:
-                limite_ventana = h_sal_teorica + timedelta(minutes=ventana_min)
-                if now_local < limite_ventana:
-                    en_curso_por_hora = True
-            else:
-                # Bolsa Flexible
-                fin_dia = datetime.combine(fecha_dt, datetime.max.time())
-                if now_local < fin_dia + timedelta(minutes=ventana_min):
-                    en_curso_por_hora = True
-
-        sigue_en_curso = False
-        if en_curso_por_hora:
-            if not salida_real:
-                # Si no tiene salida real registrada, está definitivamente en curso
-                sigue_en_curso = True
-            else:
-                # Si tiene marca de salida, evaluar si es almuerzo/pausa o salida definitiva
-                logs_cron = sorted(logs, key=lambda l: l.get('fecha_hora', ''))
-                if logs_cron:
-                    ultimo_log = logs_cron[-1]
-                    tipo_ultimo = tipo_mark(ultimo_log)
-                    
-                    if tipo_ultimo in TIPOS_ENTRADA:
-                        # Regla A: Última marca es Entrada -> Sigue en curso
-                        sigue_en_curso = True
-                    elif tipo_ultimo in TIPOS_SALIDA:
-                        # Regla B: Última marca es Salida
-                        entradas_count = sum(1 for l in logs_cron if tipo_mark(l) in TIPOS_ENTRADA)
-                        salidas_count = sum(1 for l in logs_cron if tipo_mark(l) in TIPOS_SALIDA)
-                        
-                        if entradas_count >= 2 and salidas_count >= 2:
-                            # Ya tomó almuerzo y volvió a marcar salida -> Salida definitiva
-                            sigue_en_curso = False
-                        else:
-                            # Evaluar el tiempo transcurrido desde la salida
-                            hora_ultimo = datetime.strptime(ultimo_log['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                            minutos_desde_salida = (now_local - hora_ultimo).total_seconds() / 60.0
-                            
-                            if minutos_desde_salida < buffer_colacion_min:
-                                # ¿Está cerca de la hora de salida teórica (últimos 30 minutos)?
-                                if h_sal_teorica and (h_sal_teorica - hora_ultimo).total_seconds() / 60 <= 30:
-                                    sigue_en_curso = False
-                                else:
-                                    sigue_en_curso = True
-                            else:
-                                sigue_en_curso = False
-
-        if sigue_en_curso:
-            res['estado'] = 'EN_CURSO'
-            res['observaciones'] += 'Jornada en curso (falta salida).'
-            return res
-
-        # Si no está en curso pero no hay salida en absoluto, es inasistencia/anomalía
-        if not salida_real:
-            # Si no es hoy y ya pasó el límite de en curso
-            if es_libre_dia or is_holiday:
-                res['estado'] = 'ANOMALIA'
-                res['observaciones'] += 'Solo una marcación (falta salida en día libre/feriado). '
-                return res
-
-            # Sin salida y ya pasó el tiempo → ANOMALIA para día normal
-            res['estado'] = 'ANOMALIA'
-            res['observaciones'] += 'Solo una marcación (falta salida).'
-            return res
-
-        # Ignorar diferencias de segundos (menos de 60 segundos) respecto a la teoría para evitar deuda e incidencias
-        if len(tiempos_proc) > 0 and h_ent_teorica:
-            diff_ent_sec = (tiempos_proc[0] - h_ent_teorica).total_seconds()
-            if 0 < diff_ent_sec < 60:
-                tiempos_proc[0] = h_ent_teorica
-
-        if len(tiempos_proc) >= 2 and h_sal_teorica:
-            diff_sal_sec = (h_sal_teorica - tiempos_proc[-1]).total_seconds()
-            if 0 < diff_sal_sec < 60:
-                tiempos_proc[-1] = h_sal_teorica
-
-        # ── CÁLCULO DE HORAS ───────────────────────────────────────────────────
-        if len(tiempos_proc) >= 2:
-            r_ent = tiempos_proc[0]
-            r_sal = tiempos_proc[-1]
-            horas_trabajadas = (r_sal - r_ent).total_seconds() / 3600.0
-
-            minutos_colacion = 0
-            colacion_flag = config_dia.get('descuento_colacion_auto') if config_dia else None
-            minutos_colacion_permitidos = int(config_dia.get('minutos_colacion_auto', 0) or 0) if config_dia else 0
-            umbral_horas = float(config_dia.get('umbral_horas_colacion', 0.0) or 0.0) if config_dia else 0.0
-            res['minutos_colacion_auto'] = minutos_colacion_permitidos
-
-            # Si hay marcas intermedias (colación real), usamos ese tiempo.
-            # DT-3: El tiempo real medido es la fuente de verdad (sin MAX)
-            if res.get('minutos_colacion_real', 0) > 0:
-                # Si la colación real es inferior a la programada y descuento_colacion_auto está habilitado,
-                # descontamos la programada (piso) para no generar horas extras indebidas.
-                if config_dia and int(colacion_flag or 0):
-                    minutos_colacion = max(res['minutos_colacion_real'], minutos_colacion_permitidos)
-                else:
-                    minutos_colacion = res['minutos_colacion_real']
-            else:
-                # Si no hay marcas intermedias, aplicamos el descuento automático si está configurado
-                if config_dia and int(colacion_flag or 0):
-                    if umbral_horas > 0 and horas_trabajadas < umbral_horas:
-                        logger.info(f"Omite colación auto: Horas trabajadas ({horas_trabajadas:.2f}) < Umbral ({umbral_horas:.2f})")
-                        minutos_colacion = 0
-                    else:
-                        minutos_colacion = minutos_colacion_permitidos
-                        if minutos_colacion > 0:
-                            mitad_jornada = r_ent + (r_sal - r_ent) / 2
-                            inicio_colacion_auto = mitad_jornada - timedelta(minutes=minutos_colacion / 2)
-                            fin_colacion_auto = mitad_jornada + timedelta(minutes=minutos_colacion / 2)
-                            res['hora_salida_colacion'] = inicio_colacion_auto.strftime("%H:%M:%S")
-                            res['hora_entrada_colacion'] = fin_colacion_auto.strftime("%H:%M:%S")
-
-            res['minutos_exceso_colacion'] = max(0, minutos_colacion - minutos_colacion_permitidos)
-            
-            # Descontar colación y permisos detectados por biometría
-            minutos_permisos = res.get('minutos_permisos_detectados', 0)
-            horas_trabajadas -= (minutos_colacion + minutos_permisos) / 60.0
-            
-            res['minutos_colacion'] = minutos_colacion
-            res['horas_trabajadas'] = round(max(horas_trabajadas, 0), 4)
-        else:
-            horas_trabajadas = 0.0
-            res['horas_trabajadas'] = 0.0
-            res['minutos_exceso_colacion'] = 0
-
-        # ── TIPO DE DÍA (diurno / nocturno / bolsa) ────────────────────────────
-        is_bolsa = turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA'
-
-        # ── ALINEACIÓN DE FECHA DE MARCACIONES REASIGNADAS ────────────────────
-        # Si las marcaciones físicas proceden de una fecha distinta a "fecha" (debido a reasignación de turno),
-        # desplazar las fechas en tiempos_proc para coincidir con la jornada evaluada "fecha".
-        if len(tiempos_proc) > 0:
-            target_date = datetime.strptime(fecha, "%Y-%m-%d").date()
-            p0_date = tiempos_proc[0].date()
-            if p0_date != target_date:
-                day_delta = (target_date - p0_date).days
-                tiempos_proc = [t + timedelta(days=day_delta) for t in tiempos_proc]
-
-        # ── CÁLCULO CUÁNTICO DE DIFERENCIAS (atraso, salida adelantada, extras) ────────
-        diff_ent = 0  # minutos de atraso (positivo = tarde)
-        diff_sal = 0  # minutos de salida adelantada (positivo = se fue antes)
-
-        if h_ent_teorica and len(tiempos_proc) > 0:
-            if es_nocturno:
-                phase_ent_t = QuantumPhaseTopology.time_to_phase(h_ent_teorica)
-                phase_ent_r = QuantumPhaseTopology.time_to_phase(tiempos_proc[0])
-                diff_ent = QuantumPhaseTopology.circular_distance(phase_ent_t, phase_ent_r)
-            else:
-                diff_ent = (tiempos_proc[0] - h_ent_teorica).total_seconds() / 60
-
-        if h_sal_teorica and len(tiempos_proc) >= 2:
-            if es_nocturno:
-                phase_sal_t = QuantumPhaseTopology.time_to_phase(h_sal_teorica)
-                phase_sal_r = QuantumPhaseTopology.time_to_phase(tiempos_proc[-1])
-                diff_sal = QuantumPhaseTopology.circular_distance(phase_sal_r, phase_sal_t)
-            else:
-                diff_sal = (h_sal_teorica - tiempos_proc[-1]).total_seconds() / 60
-
-
-
-        tolerancia_retraso = int(turno.get('tolerancia_retraso_descuento', 0) or 0) if turno else 0
-        tolerancia_alerta = int(turno.get('tolerancia_retraso_alerta', 0) or 0) if turno else 0
-
-        # Horas extra brutas y Deuda de tiempo total (Lógica Financiera Pura - Modelo Doble Eje)
-        ht = config_dia.get('horas_teoricas') if config_dia else None
-        horas_teoricas = float(ht) if ht is not None else 0.0  # [DT-11] 8.0 → 0.0: D6 nunca asume horas teóricas
-        min_teoricos = float(horas_teoricas * 60)
-        
-        # Si es feriado o libre, NO exigimos horas teóricas
-        if is_holiday or es_libre_dia:
-            min_teoricos = 0.0
-            res['horas_teoricas'] = 0.0
-            
-        min_trabajados = float(horas_trabajadas * 60)
-        
-        # En el modelo de doble eje, las extras son estrictamente el excedente de las horas teóricas.
-        # En días libres o feriados (Jornada Especial) las horas trabajadas NO son Horas Extras.
-        if is_bolsa or is_holiday or es_libre_dia:
-            minutos_extra_bruto = 0.0
-        else:
-            minutos_extra_bruto = max(0, min_trabajados - min_teoricos)
-        res['minutos_extra_bruto'] = minutos_extra_bruto
-        
-
-        # Usar valor exacto (sin truncar a minutos enteros) para precisión matemática y trazabilidad perfecta
-        # FIX: Ignorar diferencias menores a 1 minuto (menos de 60 segundos)
-        diff_ent_exacto = diff_ent if diff_ent >= 1.0 else 0.0
-        diff_sal_exacto = diff_sal if diff_sal >= 1.0 else 0.0
-
-        if diff_ent_exacto > tolerancia_retraso:
-            # Atraso como incidencia disciplinaria (no se borra si compensó con extras)
-            res['minutos_atraso'] = diff_ent_exacto
-        elif diff_ent_exacto > tolerancia_alerta:
-            # DT-2: Alerta visual de retraso sin incidencia disciplinaria
-            res['alerta_atraso'] = True
-
-        if diff_sal_exacto > 0:
-            res['minutos_salida_adelantada'] = diff_sal_exacto
-
-        # ── PERMISOS POR HORA ──────────────────────────────────────────────────
-        permisos_hora = [j for j in (justificaciones or []) if j.get('tiene_permiso_hora')]
-        minutos_permiso_deuda = 0
-        if permisos_hora:
-            for p in permisos_hora:
-                if p.get('permiso_activo'):
-                    res['observaciones'] += f" [PERMISO ACTIVO: {p.get('tipo_nombre', '')}]"
-                    h_ini_j = p.get('hora_inicio')
-                    h_fin_j = p.get('hora_fin')
-                    if h_ini_j and h_fin_j:
-                        try:
-                            ini_dt = datetime.strptime(f"{fecha} {h_ini_j}", "%Y-%m-%d %H:%M")
-                            fin_dt = datetime.strptime(f"{fecha} {h_fin_j}", "%Y-%m-%d %H:%M")
-                            min_j = int((fin_dt - ini_dt).total_seconds() / 60)
-                            if not p.get('genera_deuda_horaria', False):
-                                minutos_permiso_deuda += min_j
-                            else:
-                                res['minutos_permiso_personal_deuda'] = res.get('minutos_permiso_personal_deuda', 0) + min_j
-                        except Exception as e:
-                            logger.error(f"Error procesando permiso para fecha {fecha}: {e}")
-                            res['observaciones'] += f" ⚠️ [ALERTA SISTEMA: Error leyendo horas de permiso]"
-
-        # Permisos abiertos (sin hora de fin — licencias en curso)
-        permisos_abiertos = [j for j in (justificaciones or []) if not j.get('tiene_permiso_hora') and j.get('permiso_activo')]
-        for p in permisos_abiertos:
-            res['observaciones'] += f" [PERMISO ABIERTO: {p.get('tipo_nombre', '')}]"
-
-        # ── SALDO META (Deuda / Extra) ─────────────────────────────────────────
-        if is_bolsa:
-            # En FLEXIBLE_BOLSA, la deuda diaria es 0, delegando el cálculo financiero al ciclo semanal/mensual
-            # Además, se anulan las incidencias disciplinarias diarias (atrasos y salidas adelantadas)
-            minutos_deuda = 0
-            res['minutos_atraso'] = 0
-            res['minutos_salida_adelantada'] = 0
-            res['alerta_atraso'] = False
-            hubo_sad_fisico = False
-            diff_ent = 0
-            diff_sal_exacto = 0
-            if minutos_permiso_deuda > 0:
-                res['observaciones'] += 'Saldo neutralizado por permiso. '
-        elif is_holiday or es_libre_dia:
-            # En días libres o feriados (Jornada Especial), la deuda horaria es siempre 0.
-            minutos_deuda = 0
-            res['minutos_atraso'] = 0
-            res['minutos_salida_adelantada'] = 0
-        else:
-            # Para todos los demás turnos (Fijos, Rotativos), la deuda se basa en el volumen no cumplido (Doble Eje)
-            minutos_deuda = max(0, min_teoricos - min_trabajados)
-            if minutos_permiso_deuda > 0:
-                minutos_deuda = max(0, minutos_deuda - minutos_permiso_deuda)
-
-        res['minutos_deuda'] = minutos_deuda
-
-        # ── DETERMINACIÓN DE ESTADO FINAL ─────────────────────────────────────
-        minutos_reales_brutos = int(horas_trabajadas * 60)
-        
-        # [DT-15] Capturar SAD físico ANTES de la lógica financiera — D7 estricto (P1 aprobado)
-        # hubo_sad_fisico = hubo marca de salida antes de la hora teórica
-        # Este flag es independiente de si hay deuda o no. Eje Disciplinario != Eje Financiero.
-        hubo_sad_fisico = res.get('minutos_salida_adelantada', 0) > 0
-
-        # Una salida adelantada solo cambia el ESTADO (para efectos de deuda) si genera deuda diaria,
-        # o si estamos en bolsa (donde la deuda diaria es 0 pero la salida física antes de hora es incidencia
-        # a menos que supere la meta diaria)
-        has_sad = False
-        if hubo_sad_fisico:
-            if is_bolsa:
-                has_sad = True
-            else:
-                # [DT-15] NO borrar minutos_salida_adelantada cuando no hay deuda.
-                # Los minutos se preservan para reportes del Eje Disciplinario.
-                has_sad = minutos_deuda > 0
-
-        has_permiso = res.get('minutos_permisos_detectados', 0) > 0 or res.get('minutos_permiso_personal_deuda', 0) > 0
-
-        # ── Flags independientes (métricas separadas) ─────────────────────────
-        # Cada flag puede ser True sin depender del otro.
-        # Estadísticas: "cuántos llegaron tarde" = COUNT WHERE tiene_atraso=1
-        #               "cuántos salieron antes"  = COUNT WHERE tiene_salida_adelantada=1
-        res['tiene_atraso']             = 1 if diff_ent_exacto > tolerancia_retraso else 0
-        # [DT-15] tiene_salida_adelantada usa hubo_sad_fisico (no has_sad) — D7 estricto
-        # El flag es 1 si hubo SAD físico, independientemente de si hay deuda financiera.
-        # Permite reportes como "cuántos empleados salieron antes" sin mezclar con deuda.
-        res['tiene_salida_adelantada']  = 1 if hubo_sad_fisico else 0
-        res['tiene_permiso']            = 1 if has_permiso else 0
-
-        # ── Estado PRIMARIO del día (jerarquía de gravedad) ──────────────────
-        # El estado es uno solo; los flags adicionales completan el cuadro.
-        # [REGLA NEGOCIO ESP]: Feriado y Día Libre con marcaciones se clasifican como JORNADA_ESPECIAL
-        # con prioridad sobre ATRASO / SALIDA_ADELANTADA (no existe horario rígido teórico en días libres/feriados).
-        if has_permiso:
-            res['estado'] = 'PERMISO'
-        elif is_holiday or (locals().get('is_holiday_original', False)) or es_libre_dia:
-            has_work_punches = bool(entrada_real or (logs and len(logs) > 0))
-            if has_work_punches:
-                res['estado'] = 'JORNADA_ESPECIAL'
-                res['tiene_atraso'] = 0
-                res['tiene_salida_adelantada'] = 0
-                res['minutos_atraso'] = 0
-                res['minutos_salida_adelantada'] = 0
-                res['minutos_deuda'] = 0
-                if horas_trabajadas > 0 and (res.get('minutos_extra_bruto', 0) == 0):
-                    res['minutos_extra_bruto'] = round(horas_trabajadas * 60, 2)
-                tag_desc = 'Trabajo en feriado (Jornada Especial). ' if is_holiday else 'Trabajo en día libre (Jornada Especial). '
-                if tag_desc not in res.get('observaciones', ''):
-                    res['observaciones'] += tag_desc
-            else:
-                res['estado'] = 'FERIADO' if is_holiday else 'LIBRE'
-        elif diff_ent_exacto > tolerancia_retraso:
-            res['estado'] = 'ATRASO'
-        elif has_sad:
-            res['estado'] = 'SALIDA_ADELANTADA'
-        else:
-            res['estado'] = 'OK'
-
-        # Turno cortado (turno especial de horas reducidas)
-        if config_dia and config_dia.get('es_turno_cortado'):
-            if res['estado'] == 'OK':
-                h_real_proc = horas_trabajadas
-                if h_real_proc < (horas_teoricas * 0.85):
-                    res['estado'] = 'SALIDA_ADELANTADA'
-
-        if minutos_deuda > 0 and res['estado'] == 'OK':
-            res['observaciones'] += f"Deuda Acumulada: -{minutos_deuda} min. "
-
-        # ── LÓGICA BOLSA FLEXIBLE: Suprimir deudas diarias ───────────────────
-        if turno and turno.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
-            if res.get('estado') in ('ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'):
-                res['estado'] = 'OK'
-            res['tiene_atraso'] = 0
-            res['tiene_salida_adelantada'] = 0
-            res['minutos_atraso'] = 0
-            res['minutos_salida_adelantada'] = 0
-            res['minutos_deuda'] = 0
-
-        # ── JORNADA ESPECIAL: Suprimir deudas de atraso / salida adelantada ──
-        if res.get('estado') == 'JORNADA_ESPECIAL':
-            res['minutos_deuda'] = 0.0
-            res['minutos_atraso'] = 0.0
-            res['minutos_salida_adelantada'] = 0.0
-            res['tiene_atraso'] = 0
-            res['tiene_salida_adelantada'] = 0
-
-        # Enforce mutual exclusivity of debt and overtime (business rule)
-        if res.get('minutos_deuda', 0) > 0:
-            res['minutos_extra_bruto'] = 0.0
-        elif res.get('minutos_extra_bruto', 0) > 0:
-            res['minutos_deuda'] = 0.0
-
-        if active_vl_inicio:
-            c_orig = active_vl_inicio.get('ciudad_origen', 'Planta Aguacol')
-            c_dest = active_vl_inicio.get('ciudad_destino', '')
-            h_man = active_vl_inicio.get('horas_manejo_efectivas', 0.0)
-            h_desc = active_vl_inicio.get('horas_descanso', 0.0)
-            h_tot = active_vl_inicio.get('horas_reconocidas_totales', 0.0)
-            
-            res['horas_trabajadas'] = round(float(res.get('horas_trabajadas') or 0.0) + float(h_tot), 4)
-            
-            m_ids_list = []
-            if res.get('marcas_consumidas_ids'):
-                try:
-                    import json as _json
-                    m_ids_list = _json.loads(res['marcas_consumidas_ids'])
-                except Exception:
-                    pass
-            if active_vl_inicio.get('log_entrada_id') and active_vl_inicio['log_entrada_id'] not in m_ids_list:
-                m_ids_list.append(active_vl_inicio['log_entrada_id'])
-            import json as _json
-            res['marcas_consumidas_ids'] = _json.dumps(m_ids_list)
-            
-            obs_vl = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_man}h manejo, {h_desc}h descanso."
-            res['observaciones'] = ((res.get('observaciones') or '') + f" {obs_vl}").strip()
-            
-            if res.get('estado') in {'INASISTENCIA', 'LIBRE'}:
-                res['estado'] = 'OK'
-
-        if active_vl_fin:
-            c_orig = active_vl_fin.get('ciudad_origen', 'Planta Aguacol')
-            c_dest = active_vl_fin.get('ciudad_destino', '')
-            vl_exit_id = active_vl_fin.get('log_salida_id')
-            
-            m_ids_list = []
-            if res.get('marcas_consumidas_ids'):
-                try:
-                    import json as _json
-                    m_ids_list = _json.loads(res['marcas_consumidas_ids'])
-                except Exception:
-                    pass
-            if vl_exit_id and int(vl_exit_id) not in m_ids_list:
-                m_ids_list.append(int(vl_exit_id))
-            import json as _json
-            res['marcas_consumidas_ids'] = _json.dumps(m_ids_list)
-            
-            obs_vl = f"🚛 RETORNO VIAJE LARGO ({c_dest} -> {c_orig})"
-            res['observaciones'] = ((res.get('observaciones') or '') + f" {obs_vl}").strip()
-            
-        if should_apply_just and justificacion_dia:
-            t_nom = (justificacion_dia.get('tipo_nombre') or '').strip().upper()
-            t_nom_abbr = (justificacion_dia.get('tipo_nomenclatura') or '').strip().upper()
-            if t_nom:
-                res['estado'] = t_nom
-                if t_nom_abbr:
-                    res['nomenclatura'] = t_nom_abbr
-                res['justificacion_id'] = justificacion_dia.get('id')
-
-        return res
 
     # ─────────────────────────────────────────────────────────────────────────
     # MATRIZ / DATOS DE GRILLA

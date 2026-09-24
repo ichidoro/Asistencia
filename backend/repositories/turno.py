@@ -53,6 +53,7 @@ class TurnoRepository:
             ("rotacion_secuencial",                 "BOOLEAN DEFAULT 1"),
             ("semana_fallback_sin_marcas",          "INTEGER DEFAULT 1"),
             ("activo",                              "BOOLEAN DEFAULT 1"),
+            ("permite_viajes_largos",               "INTEGER DEFAULT 0"),
         ]
         for col, defn in migraciones_turnos:
             if col not in cols_turnos:
@@ -439,8 +440,8 @@ class TurnoRepository:
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
-                    activo
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    activo, permite_viajes_largos
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
@@ -450,7 +451,8 @@ class TurnoRepository:
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
                 1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas,
-                1 if turno.activo else 0
+                1 if turno.activo else 0,
+                1 if turno.permite_viajes_largos else 0
             )
             
             cursor = await self.db.execute(sql_turno, params_turno)
@@ -936,7 +938,7 @@ class TurnoRepository:
                     redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?, es_turno_cortado=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, tolerancia_exceso_colacion_minutos=?,
-                    turno_padre_id=?, fecha_vigencia=?, activo=?
+                    turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?
                 WHERE id=?
             """
             params = (
@@ -947,6 +949,7 @@ class TurnoRepository:
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
                 1 if turno.activo else 0,
+                1 if turno.permite_viajes_largos else 0,
                 turno_id
             )
             await self.db.execute(sql_update, params)

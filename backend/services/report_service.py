@@ -188,7 +188,7 @@ class ReportService:
                         
                     trab = round((di.get("horas_trabajadas") or 0.0) * 60)
                     di_estado = di.get("estado") or ""
-                    is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA']
+                    is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
                     
                     if not es_bolsa and not is_esp:
                         acum_semanal += trab
@@ -270,7 +270,7 @@ class ReportService:
                             he_apr += (di.get("minutos_extra_autorizados") or 0)
                         elif di.get("estado_he") == 'RECHAZADO':
                             he_rec += (di.get("minutos_extra_bruto") or 0)
-                        elif (di.get("minutos_extra_bruto") or 0) > 0:
+                        elif (di.get("minutos_extra_bruto") or 0) >= 1.0:
                             he_pend += (di.get("minutos_extra_bruto") or 0)
                     # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
                     # igual que en el frontend (marcaciones_ui.js línea 4266)

@@ -84,17 +84,82 @@ class Settings(BaseSettings):
     TEMP_DIR: Path = _WRITABLE_DIR / "temp"
     
     # ============================================
+    # SECURITY & AUTH
+    # ============================================
+    SECRET_KEY: str = "f6f0eba50b84406b6a1c7903dd4eb123f22fb97584020c5174878494b0a6dcbd"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 días
+    CRON_SECRET: str = "mi-super-secreto-compartido-para-sincronizacion-auto-123"
+    
+    # ============================================
+    # WEBSOCKET
+    # ============================================
+    WS_PING_INTERVAL: int = 30
+    WS_PING_TIMEOUT: int = 10
+    WS_MAX_CONNECTIONS: int = 100
+    
+    # ============================================
+    # TAREAS PROGRAMADAS
+    # ============================================
+    SYNC_ENABLED: bool = True
+    SYNC_INTERVAL_SECONDS: int = 120
+    BACKUP_ENABLED: bool = True
+    BACKUP_INTERVAL_HOURS: int = 24
+    BACKUP_RETENTION_DAYS: int = 30
+    
+    # ============================================
+    # NOTIFICACIONES EMAIL
+    # ============================================
+    FEATURE_NOTIFICACIONES_EMAIL: bool = True
+    SMTP_SERVER: Optional[str] = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = "operaciones.aguacol.spa@gmail.com"
+    SMTP_PASSWORD: Optional[str] = "erff ayax grfd umvj"
+    EMAIL_FROM: Optional[str] = "operaciones.aguacol.spa@gmail.com"
+    
+    # ============================================
+    # FEATURES & EXPORT
+    # ============================================
+    FEATURE_HORAS_EXTRAS: bool = True
+    FEATURE_REPORTES_AVANZADOS: bool = True
+    FEATURE_EXPORTAR_PDF: bool = True
+    TESTING: bool = False
+    
+    # ============================================
+    # GOOGLE DRIVE & PORTERIA
+    # ============================================
+    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = "1Y3YeLP9l1O5IZdLVlvCDqUjfLRehv_Rp"
+    GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH: Optional[str] = "asistencia-13c58-230b9fe62f70.json"
+    
+    # ============================================
     # LOGGING
     # ============================================
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     LOG_ROTATION: str = "10 MB"
     LOG_RETENTION: str = "30 days"
+    LOG_FILE: str = "app.log"
     
+    @property
+    def db_url(self) -> str:
+        return self.TURSO_DATABASE_URL
+
     @property
     def log_file_path(self) -> Path:
         """Ruta al archivo de log principal"""
         self.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        return self.LOGS_DIR / "app.log"
+        return self.LOGS_DIR / self.LOG_FILE
+        
+    @property
+    def is_development(self) -> bool:
+        return self.APP_ENV == "development"
+        
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV == "production"
+        
+    @property
+    def is_cloud(self) -> bool:
+        return bool(os.environ.get("K_SERVICE"))
     
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,

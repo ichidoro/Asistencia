@@ -176,7 +176,8 @@ class DashboardService:
                 LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
                 LEFT JOIN areas ar ON ha.area_id = ar.id
                 WHERE a.fecha >= ? AND a.fecha <= ? 
-                AND a.minutos_extra_bruto > 0
+                AND a.minutos_extra_bruto >= 1.0
+                AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'INASISTENCIA')
                 AND e.activo = 1 {area_condition}
             """
             he_result = await self.db.fetch_one(query_he_funnel, tuple(params))

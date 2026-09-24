@@ -51,6 +51,7 @@ class CierreService:
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE he.fecha BETWEEN ? AND ?
               AND he.estado = 'PENDIENTE'
+              AND he.minutos_bruto >= 1.0
             {filtro_area}
             ORDER BY e.apellido_paterno, he.fecha
         """

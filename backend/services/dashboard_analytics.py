@@ -515,7 +515,8 @@ class DashboardAnalytics:
                 LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
                 {filters['asis_join']}
                 WHERE a.fecha >= ? AND a.fecha <= ? 
-                AND a.minutos_extra_bruto > 0
+                AND a.minutos_extra_bruto >= 1.0
+                AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'INASISTENCIA')
                 AND e.activo = 1 
                 {filters['asis_cond']} {filters['horario_asis_cond']}
             """

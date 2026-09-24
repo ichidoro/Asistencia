@@ -2056,6 +2056,11 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         }
     }
 
+    if (empData && empData.info && empData.info.tipo_programacion === 'FLEXIBLE_BOLSA') {
+        showToast(`${empNombre} tiene Turno Bolsa Flexible (180h). Su balance se gestiona en la columna Bolsa Flexible al cierre mensual.`, 'info');
+        return;
+    }
+
     // 1. Determinar el rango de fechas dinámico
     let dates = [];
     if (stateMarcacionesApp.data && stateMarcacionesApp.data.periodo) {
@@ -2075,11 +2080,11 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         if (!di) return;
 
         // Excluir días especiales para que no se sumen a la bolsa de HE normales
-        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA';
+        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
         // Campo correcto: minutos_extra_bruto (usado en renderVistaAnalitica línea 2331)
         const brutoPotencial = isEsp ? 0 : (di.minutos_extra_bruto || 0);
         
-        if (brutoPotencial > 0) {
+        if (brutoPotencial >= 1.0) {
             const dt = new Date(dateStr + 'T00:00:00');
             
             // --- CÁLCULO DE ORIGEN/CONTEXTO DE HORAS EXTRAS ---
@@ -2149,7 +2154,8 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
 
     // Calcular totales
     const totalBruto = diasHE.reduce((s, d) => s + d.bruto, 0);
-    const totalAprobado = diasHE.reduce((s, d) => s + d.autorizados, 0);
+    const totalAprobado = diasHE.filter(d => d.estado === 'APROBADO').reduce((s, d) => s + (d.autorizados || d.bruto), 0);
+    const totalPendiente = diasHE.filter(d => d.estado === 'PENDIENTE').reduce((s, d) => s + d.bruto, 0);
 
     if (diasHE.length === 0) {
         showToast(`${empNombre} no tiene horas extra detectadas en el periodo.`, 'info');
@@ -2204,7 +2210,9 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 <span class="mx-2">·</span>
                                 <span class="fw-semibold">${diasHE.length}</span> días con HE
                                 <span class="mx-2">·</span>
-                                Total: <span class="fw-bold text-primary">${formatMinutesToHHMM(totalBruto)}</span>
+                                Pendiente: <span class="fw-bold text-warning">${formatMinutesToHHMM(totalPendiente)}</span>
+                                <span class="mx-2">·</span>
+                                Total Período: <span class="fw-bold text-primary">${formatMinutesToHHMM(totalBruto)}</span>
                             </p>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -4576,7 +4584,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         if (esBolsa) { di._esBolsa = true; di._metaMinBolsa = metaMin; }
 
         const trab = Math.round((di.horas_trabajadas||0)*60);
-        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA';
+        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
         
         if (!esBolsa && !isEsp) {
             acumSemanal += trab;
@@ -4645,25 +4653,39 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             di._metaMinBolsa = metaMin;
         }
 
-        if (!isEsp) {
+        if (!isEsp && !esBolsa) {
             if (di.estado_he === 'APROBADO') {
                 const apr = di.minutos_extra_autorizados || 0;
                 he_apr += apr;
             } else if (di.estado_he === 'RECHAZADO') {
                 he_rec += (di.minutos_extra_bruto || 0);
-            } else if ((di.minutos_extra_bruto || 0) > 0) {
+            } else if ((di.minutos_extra_bruto || 0) >= 1.0) {
                 he_pend += (di.minutos_extra_bruto || 0);
             }
         }
         he_compensado += (di.minutos_compensados_he || 0);
     });
 
+    if (esBolsa) {
+        he_pend = 0;
+        he_apr = 0;
+        he_rec = 0;
+        he_bruto = Math.max(0, acumBolsa - metaMin);
+        d_tot = 0;
+        min_atr = 0;
+        min_sad = 0;
+        min_col = 0;
+        min_per = 0;
+        cnt_atr = 0;
+        cnt_sad = 0;
+    }
+
     he_bruto = Math.round(he_bruto * 10000) / 10000;
     he_apr = Math.round(he_apr * 10000) / 10000;
     he_rec = Math.round(he_rec * 10000) / 10000;
     he_pend = Math.round(he_pend * 10000) / 10000;
 
-    const saldo = he_apr - d_tot - he_compensado;
+    const saldo = esBolsa ? 0 : (he_apr - d_tot - he_compensado);
     const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null; 
     return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
              cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
@@ -4735,7 +4757,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                 </td>`;
     }).join('');
 
-    const hasHE = r.he_pend > 0;
+    const hasHE = !r.esBolsa && r.he_pend > 0;
     const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
 
     const getStickyLeftLocal = (key, subIndex = 0) => window.getStickyLeft(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
@@ -4757,17 +4779,17 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 4)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
         <td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', 5)}px;${getStickyWidthStyleLocal('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b;left:${getStickyLeftLocal('incidencias')}px;${getStickyWidthStyleLocal('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
         ${showHE ? `
-        <td class="text-center align-middle tabular-nums text-warning fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeftLocal('he', 0)}px;${getStickyWidthStyleLocal('he')}">${r.he_pend>0?_fmtMin(r.he_pend):''}</td>
-        <td class="text-center align-middle tabular-nums text-success fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 1)}px;${getStickyWidthStyleLocal('he')}">${r.he_apr>0?_fmtMin(r.he_apr):''}</td>
-        <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 2)}px;${getStickyWidthStyleLocal('he')}">${r.he_rec>0?_fmtMin(r.he_rec):''}</td>
-        <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 3)}px;${getStickyWidthStyleLocal('he')}">${r.he_bruto>0?_fmtMin(r.he_bruto):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeftLocal('he')}px;${getStickyWidthStyleLocal('he')}">${r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):''}</td>`}
+        <td class="text-center align-middle tabular-nums text-warning fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeftLocal('he', 0)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_pend>0?_fmtMin(r.he_pend):'')}</td>
+        <td class="text-center align-middle tabular-nums text-success fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 1)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_apr>0?_fmtMin(r.he_apr):'')}</td>
+        <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 2)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_rec>0?_fmtMin(r.he_rec):'')}</td>
+        <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 3)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_bruto>0?_fmtMin(r.he_bruto):'')}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeftLocal('he')}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):'')}</td>`}
         ${showDeudas ? `
-        <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_col>0?_fmtMin(r.min_col):''}</td>
-        <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_per>0?_fmtMin(r.min_per):''}</td>
-        <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_atr>0?_fmtMin(r.min_atr):''}</td>
-        <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${r.min_sad>0?_fmtMin(r.min_sad):''}</td>
-        <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${r.d_tot>0?_fmtMin(r.d_tot):''}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}">${r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):''}</td>`}
-        <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#f9fafb;font-size:0.8rem;left:${getStickyLeftLocal('saldo')}px;${getStickyWidthStyleLocal('saldo')}">${sPrefix}${_fmtMin(Math.abs(r.saldo))}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_col>0?_fmtMin(r.min_col):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_per>0?_fmtMin(r.min_per):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_atr>0?_fmtMin(r.min_atr):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_sad>0?_fmtMin(r.min_sad):'')}</td>
+        <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.d_tot>0?_fmtMin(r.d_tot):'')}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):'')}</td>`}
+        <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#f9fafb;font-size:0.8rem;left:${getStickyLeftLocal('saldo')}px;${getStickyWidthStyleLocal('saldo')}">${r.esBolsa ? '—' : `${sPrefix}${_fmtMin(Math.abs(r.saldo))}`}</td>
         ${(hayBolsa) ? (
             showSaldoMeta
                 ? (r.esBolsa
@@ -5731,7 +5753,7 @@ function _analiticaCellBadge(di) {
 
     const tieneEmergencia = di.observaciones && di.observaciones.includes('[Llamado de Emergencia:');
     const tieneAlertaSistema = di.observaciones && di.observaciones.includes('[ALERTA SISTEMA');
-    const tieneHE_Pendientes = di.minutos_extra_bruto > 0 && di.estado_he === 'PENDIENTE';
+    const tieneHE_Pendientes = !di._esBolsa && di.minutos_extra_bruto > 0 && di.estado_he === 'PENDIENTE';
 
     if (tieneEmergencia || tieneAlertaSistema || tieneHE_Pendientes) {
         let wrapperHtml = `<div style="position:relative; display:inline-block; width:100%;">
