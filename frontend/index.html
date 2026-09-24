@@ -4599,7 +4599,7 @@
                                 <div class="fw-bold text-dark mb-2" style="font-size:0.85rem;"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Línea de Tiempo del Viaje</div>
                                 <div class="mb-2 p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;">
                                     <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <label class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">SALIDA DE PLANTA (INICIO)</label>
+                                        <label for="vl-select-inicio" class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">SALIDA DE PLANTA (INICIO)</label>
                                         <span class="badge bg-primary" id="vl-txt-duracion">0h</span>
                                     </div>
                                     <select class="form-select form-select-sm" id="vl-select-inicio" onchange="window.updateViajeLargoCandidatosRetorno()"></select>
@@ -4607,7 +4607,7 @@
                                 <div class="my-2 text-center text-muted" style="font-size:0.8rem;"><i class="bi bi-arrow-down-short"></i></div>
                                 <div>
                                     <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <label class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">RETORNO A PLANTA (TÉRMINO)</label>
+                                        <label for="vl-select-retorno" class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">RETORNO A PLANTA (TÉRMINO)</label>
                                     </div>
                                     <div id="vl-container-select-retorno">
                                         <select class="form-select form-select-sm" id="vl-select-retorno" onchange="window.updateViajeLargoCalculos()"></select>
@@ -4623,11 +4623,11 @@
                                     <div id="vl-box-retorno-manual" class="mt-2 p-2 rounded bg-light border shadow-xs" style="display:none;">
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <label class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">📅 Fecha Retorno <span class="text-danger">*</span></label>
+                                                <label for="vl-manual-retorno-fecha" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">📅 Fecha Retorno <span class="text-danger">*</span></label>
                                                 <input type="date" class="form-control form-control-sm" id="vl-manual-retorno-fecha" onchange="window.updateViajeLargoCalculos()">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">⏰ Hora Retorno <span class="text-danger">*</span></label>
+                                                <label for="vl-manual-retorno-hora" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">⏰ Hora Retorno <span class="text-danger">*</span></label>
                                                 <input type="time" step="1" class="form-control form-control-sm" id="vl-manual-retorno-hora" onchange="window.updateViajeLargoCalculos()">
                                             </div>
                                         </div>
@@ -4639,11 +4639,11 @@
                             <!-- Route Form -->
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
-                                    <label class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Ciudad Origen</label>
+                                    <label for="vl-ciudad-origen" class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Ciudad Origen</label>
                                     <input type="text" class="form-control form-control-sm bg-light" id="vl-ciudad-origen" value="San Fernando (Planta Aguacol)" readonly>
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">📍 Ciudad Destino <span class="text-danger">*</span></label>
+                                    <label for="vl-ciudad-destino" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">📍 Ciudad Destino <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control form-control-sm" id="vl-ciudad-destino" list="vl-ciudades-chile" placeholder="Ej: La Serena, Concepción..." oninput="window.onViajeLargoDestinoChange()">
                                     <datalist id="vl-ciudades-chile">
                                         <option value="Arica">Arica (~2.190 km)</option>
@@ -4703,22 +4703,22 @@
                             <!-- Hours Form -->
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
-                                    <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">⏱️ Hrs. Manejo <span class="text-danger">*</span></label>
+                                    <label for="vl-hrs-manejo" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">⏱️ Hrs. Manejo <span class="text-danger">*</span></label>
                                     <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('manejo')">
                                 </div>
                                 <div class="col-4">
-                                    <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">🛌 Hrs. Descanso</label>
+                                    <label for="vl-hrs-descanso" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">🛌 Hrs. Descanso</label>
                                     <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0" oninput="window.updateViajeLargoCalculos('descanso')">
                                 </div>
                                 <div class="col-4">
-                                    <label class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;">💰 Acreditar Bolsa</label>
+                                    <label for="vl-hrs-reconocidas" class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;">💰 Acreditar Bolsa</label>
                                     <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('reconocidas')">
                                 </div>
                             </div>
 
                             <!-- Obs -->
                             <div class="mb-3">
-                                <label class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Observaciones / Motivo</label>
+                                <label for="vl-observaciones" class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Observaciones / Motivo</label>
                                 <textarea class="form-control form-control-sm" id="vl-observaciones" rows="2" placeholder="Notas sobre la ruta o despacho..."></textarea>
                             </div>
 

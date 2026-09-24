@@ -326,7 +326,7 @@ function renderMarcacionesToolbar(container) {
 
                 <!-- Empleado -->
                 <div class="col-md-2">
-                    <label class="form-label small fw-semibold text-muted mb-1">Empleado</label>
+                    <label for="marcacion-empleado" class="form-label small fw-semibold text-muted mb-1">Empleado</label>
                     <select class="form-select form-select-sm" id="marcacion-empleado" onchange="updateMarcacionesState('empleadoId', this.value)">
                         <option value="">-- Ver Todo el Equipo --</option>
                     </select>
@@ -992,12 +992,12 @@ function openSyncMarcacionesModal() {
                         <!-- Rango de fechas -->
                         <div class="row g-2 mb-3">
                             <div class="col">
-                                <label class="form-label small fw-semibold mb-1">Desde</label>
+                                <label for="sync-areas-fecha-inicio" class="form-label small fw-semibold mb-1">Desde</label>
                                 <input type="date" class="form-control form-control-sm" id="sync-areas-fecha-inicio"
                                        value="${fInicio}">
                             </div>
                             <div class="col">
-                                <label class="form-label small fw-semibold mb-1">Hasta</label>
+                                <label for="sync-areas-fecha-fin" class="form-label small fw-semibold mb-1">Hasta</label>
                                 <input type="date" class="form-control form-control-sm" id="sync-areas-fecha-fin"
                                        value="${fFin}">
                             </div>
@@ -1277,7 +1277,7 @@ function renderReporteEmpleado(data, container) {
                     <h6 class="mb-0 fw-bold">Visor de Reporte Consolidado (Oficial)</h6>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <label class="small text-muted mb-0 fw-bold text-nowrap">Papel:</label>
+                    <label for="pdf-format-select" class="small text-muted mb-0 fw-bold text-nowrap">Papel:</label>
                     <select id="pdf-format-select" class="form-select form-select-sm shadow-sm" style="width: 130px;" onchange="updateVisorPDF(false)">
                         <option value="a4" selected>A4</option>
                         <option value="letter">Carta (Letter)</option>
@@ -3819,9 +3819,9 @@ function renderWizardStep(step) {
             
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-success-subtle" style="border-left: 4px solid #10b981 !important;">
-                    <label class="form-label fw-bold text-success small mb-2">
+                    <div class="fw-bold text-success small mb-2">
                         <i class="bi bi-calendar-check-fill me-1"></i> Período a Cerrar:
-                    </label>
+                    </div>
                     <div class="fw-bold text-dark fs-5 mb-1">${vigente.mes_cierre}</div>
                     <div class="small text-muted mb-2">
                         <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
@@ -3837,9 +3837,9 @@ function renderWizardStep(step) {
             const fFinFormateada = s.fFin.split('-').reverse().join('-');
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-warning-subtle" style="border-left: 4px solid #f59e0b !important;">
-                    <label class="form-label fw-bold text-warning small mb-2">
+                    <div class="fw-bold text-warning small mb-2">
                         <i class="bi bi-exclamation-triangle-fill me-1"></i> Rango Personalizado:
-                    </label>
+                    </div>
                     <div class="fw-bold text-dark fs-6 mb-1">Rango Fuera de Calendario</div>
                     <div class="small text-muted mb-2">
                         <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
@@ -3852,9 +3852,9 @@ function renderWizardStep(step) {
         } else {
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-danger-subtle" style="border-left: 4px solid #ef4444 !important;">
-                    <label class="form-label fw-bold text-danger small mb-2">
+                    <div class="fw-bold text-danger small mb-2">
                         <i class="bi bi-exclamation-triangle-fill me-1"></i> Período a Cerrar:
-                    </label>
+                    </div>
                     <div class="text-danger fw-bold mb-2">Período No Definido</div>
                     <p class="small text-muted mb-0">
                         Seleccione un período oficial o ingrese un rango de fechas válido.
@@ -3894,11 +3894,11 @@ function renderWizardStep(step) {
 
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <label class="form-label small fw-semibold text-muted mb-1">Fecha Inicio</label>
+                                    <label for="cierre-wizard-fini" class="form-label small fw-semibold text-muted mb-1">Fecha Inicio</label>
                                     <input type="date" class="form-control form-control-sm" id="cierre-wizard-fini" value="${s.fIni || ''}" ${!isCustom ? 'readonly' : ''} onchange="cierreWizardCambiarFechasManual()">
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label small fw-semibold text-muted mb-1">Fecha Fin</label>
+                                    <label for="cierre-wizard-ffin" class="form-label small fw-semibold text-muted mb-1">Fecha Fin</label>
                                     <input type="date" class="form-control form-control-sm" id="cierre-wizard-ffin" value="${s.fFin || ''}" ${!isCustom ? 'readonly' : ''} onchange="cierreWizardCambiarFechasManual()">
                                 </div>
                             </div>

@@ -192,21 +192,21 @@ const VisitasModule = (() => {
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">RUT</label>
+                                <label for="vis-rut" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">RUT</label>
                                 <input type="text" class="form-control form-control-sm fw-bold" id="vis-rut" style="font-size:1rem">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Nombre</label>
+                                <label for="vis-nombre" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Nombre</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-nombre">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Empresa</label>
+                                <label for="vis-empresa" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Empresa</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-empresa">
                             </div>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Motivo</label>
+                                <label for="vis-motivo" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Motivo</label>
                                 <select class="form-select form-select-sm" id="vis-motivo">
                                     <option value="">Seleccionar...</option>
                                     <option value="Reunión">Reunión</option>
@@ -218,21 +218,21 @@ const VisitasModule = (() => {
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Área destino</label>
+                                <label for="vis-area" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Área destino</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-area">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Contacto interno</label>
+                                <label for="vis-contacto" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Contacto interno</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-contacto">
                             </div>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Patente vehículo</label>
+                                <label for="vis-patente" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Patente vehículo</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-patente" placeholder="Opcional">
                             </div>
                             <div class="col-md-8">
-                                <label class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Observaciones</label>
+                                <label for="vis-obs" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Observaciones</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-obs" placeholder="Opcional">
                             </div>
                         </div>
@@ -265,9 +265,9 @@ const VisitasModule = (() => {
                         <i class="bi bi-clock-history" style="color:var(--primary-color)"></i>Historial
                     </span>
                     <div class="d-flex align-items-center gap-2" style="background:#f8fafc; padding:6px 10px; border-radius:8px; border:1px solid #f1f5f9">
-                        <label style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Desde</label>
+                        <label for="vis-hist-desde" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Desde</label>
                         <input type="date" class="form-control form-control-sm" id="vis-hist-desde" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width:140px">
-                        <label style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Hasta</label>
+                        <label for="vis-hist-hasta" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Hasta</label>
                         <input type="date" class="form-control form-control-sm" id="vis-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width:140px">
                         <button class="btn btn-sm btn-primary fw-bold" onclick="VisitasModule.cargarHistorial()" style="border-radius:6px; font-size:0.8rem; white-space:nowrap">
                             <i class="bi bi-search me-1"></i>Consultar

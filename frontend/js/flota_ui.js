@@ -791,15 +791,15 @@ const FlotaModule = (() => {
                     </span>
                     <div class="flota-filter-bar">
                         <div class="d-flex align-items-center gap-2">
-                            <label>Desde</label>
+                            <label for="flota-hist-desde">Desde</label>
                             <input type="date" class="form-control form-control-sm" id="flota-hist-desde" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <label>Hasta</label>
+                            <label for="flota-hist-hasta">Hasta</label>
                             <input type="date" class="form-control form-control-sm" id="flota-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <label>Buscar Patente</label>
+                            <label for="flota-hist-patente">Buscar Patente</label>
                             <input type="text" class="form-control form-control-sm" id="flota-hist-patente" placeholder="ABCD12" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width: 100px;">
                         </div>
                         <button class="btn btn-sm btn-primary fw-bold px-3" onclick="FlotaModule.cargarHistorial()" style="border-radius:6px; font-size:0.8rem">
@@ -1315,11 +1315,11 @@ const FlotaModule = (() => {
             html: `
                 <div class="text-start">
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Chofer del Vehículo</label>
+                        <label for="swal-flota-chofer" class="form-label small fw-bold text-muted">Chofer del Vehículo</label>
                         <input type="text" id="swal-flota-chofer" class="form-control" placeholder="Ej: Juan Gómez" value="${choferActivo}">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Observaciones / Kilometraje</label>
+                        <label for="swal-flota-obs" class="form-label small fw-bold text-muted">Observaciones / Kilometraje</label>
                         <textarea id="swal-flota-obs" class="form-control" rows="2" placeholder="Ej: Kilometraje: 125,400. Carga completa."></textarea>
                     </div>
                 </div>
@@ -1583,13 +1583,13 @@ const FlotaModule = (() => {
             html: `
                 <div class="text-start">
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Patente del Vehículo</label>
+                        <label for="swal-vehiculo-patente" class="form-label small fw-bold text-muted">Patente del Vehículo</label>
                         <input type="text" id="swal-vehiculo-patente" class="form-control text-uppercase font-monospace" placeholder="Ej: ABCD12" value="${patente}">
                         <div id="swal-vehiculo-patente-error" class="text-danger small mt-1 d-none" style="font-weight: 600;"></div>
                         <div class="form-text text-muted small">Forzado automáticamente a mayúsculas y sin espacios.</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Área de la Empresa</label>
+                        <label for="swal-vehiculo-area" class="form-label small fw-bold text-muted">Área de la Empresa</label>
                         <select id="swal-vehiculo-area" class="form-select">
                             ${optionsHtml}
                         </select>

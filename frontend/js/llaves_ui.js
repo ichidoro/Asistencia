@@ -169,9 +169,9 @@ const LlavesModule = (() => {
                 title: `🔑 Entregar: ${llaveNombre}`,
                 html: `
                     <div style="text-align:left">
-                        <label class="form-label fw-bold">Empleado autorizado:</label>
+                        <label for="swal-empleado" class="form-label fw-bold">Empleado autorizado:</label>
                         <select id="swal-empleado" class="form-select">${optsHtml}</select>
-                        <label class="form-label fw-bold mt-3">Observaciones:</label>
+                        <label for="swal-obs" class="form-label fw-bold mt-3">Observaciones:</label>
                         <input id="swal-obs" class="form-control" placeholder="Opcional">
                     </div>
                 `,
@@ -207,7 +207,7 @@ const LlavesModule = (() => {
     async function confirmarDevolucion(llaveId, llaveNombre, empleadoId, empleadoNombre) {
         const result = await Swal.fire({
             title: '¿Confirmar devolución?',
-            html: `<div style="text-align:left"><p><strong>🔑 ${llaveNombre}</strong></p><p>👤 ${empleadoNombre}</p><label class="form-label mt-2">Observaciones:</label><input id="swal-obs-dev" class="form-control" placeholder="Opcional"></div>`,
+            html: `<div style="text-align:left"><p><strong>🔑 ${llaveNombre}</strong></p><p>👤 ${empleadoNombre}</p><label for="swal-obs-dev" class="form-label mt-2">Observaciones:</label><input id="swal-obs-dev" class="form-control" placeholder="Opcional"></div>`,
             showCancelButton: true,
             confirmButtonText: 'Confirmar Devolución',
             cancelButtonText: 'Cancelar',

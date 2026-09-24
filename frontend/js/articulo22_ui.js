@@ -547,11 +547,11 @@ const Articulo22Module = (() => {
                     </span>
                     <div class="art22-filter-bar">
                         <div class="d-flex align-items-center gap-2">
-                            <label>Desde</label>
+                            <label for="art22-hist-desde">Desde</label>
                             <input type="date" class="form-control form-control-sm" id="art22-hist-desde" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <label>Hasta</label>
+                            <label for="art22-hist-hasta">Hasta</label>
                             <input type="date" class="form-control form-control-sm" id="art22-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
                         </div>
                         <button class="btn btn-sm btn-primary fw-bold px-3" onclick="Articulo22Module.cargarHistorial()" style="border-radius:6px; font-size:0.8rem">
