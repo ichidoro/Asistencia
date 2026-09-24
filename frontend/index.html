@@ -1959,8 +1959,8 @@
                                                     <h5 class="fw-bold mb-4">📧 Notificaciones por Correo Electrónico
                                                     </h5>
                                                     <p class="text-muted small mb-4">Configura las direcciones de correo
-                                                        de Recursos Humanos que recibirán avisos automáticos sobre
-                                                        renovaciones de contrato y nuevas justificaciones.</p>
+                                                        de Recursos Humanos y Gerencia que recibirán avisos automáticos sobre
+                                                        renovaciones de contrato, nuevas justificaciones y cierres de periodo.</p>
 
                                                     <div class="mb-4">
                                                         <label for="email-notificaciones-rrhh"
@@ -1972,7 +1972,20 @@
                                                                 class="form-control"
                                                                 placeholder="rrhh@empresa.com, jefe@empresa.com">
                                                         </div>
-                                                        <small class="text-muted">Estos correos reciben TODAS las notificaciones de la empresa.</small>
+                                                        <small class="text-muted">Estos correos reciben TODAS las notificaciones de la empresa (contratos, justificaciones y cierres).</small>
+                                                    </div>
+
+                                                    <div class="mb-4">
+                                                        <label for="email-notificaciones-cierre-rrhh"
+                                                            class="form-label fw-bold">Destinatarios Exclusivos Cierres de Mes</label>
+                                                        <div class="input-group">
+                                                            <span class="input-group-text"><i
+                                                                    class="bi bi-file-earmark-lock"></i></span>
+                                                            <input type="text" id="email-notificaciones-cierre-rrhh"
+                                                                class="form-control"
+                                                                placeholder="gerencia@empresa.com, finanzas@empresa.com">
+                                                        </div>
+                                                        <small class="text-muted">Estos correos reciben ÚNICAMENTE el correo oficial de Cierre de Mes (con el reporte Excel adjunto).</small>
                                                     </div>
 
                                                     <div class="d-grid mb-5">
@@ -4593,20 +4606,97 @@
                                 </div>
                                 <div class="my-2 text-center text-muted" style="font-size:0.8rem;"><i class="bi bi-arrow-down-short"></i></div>
                                 <div>
-                                    <label class="form-label fw-bold text-dark mb-1" style="font-size:0.78rem;">RETORNO A PLANTA (TÉRMINO)</label>
-                                    <select class="form-select form-select-sm" id="vl-select-retorno" onchange="window.updateViajeLargoCalculos()"></select>
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <label class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">RETORNO A PLANTA (TÉRMINO)</label>
+                                    </div>
+                                    <div id="vl-container-select-retorno">
+                                        <select class="form-select form-select-sm" id="vl-select-retorno" onchange="window.updateViajeLargoCalculos()"></select>
+                                    </div>
+                                    
+                                    <!-- Toggle para Registro Manual de Retorno si el chofer olvidó marcar -->
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="vl-check-retorno-manual" onchange="window.toggleViajeLargoRetornoManual()">
+                                        <label class="form-check-label fw-semibold text-primary" for="vl-check-retorno-manual" style="font-size:0.78rem; cursor:pointer;">
+                                            <i class="bi bi-pencil-square me-1"></i> El chofer olvidó marcar retorno (Ingreso Manual)
+                                        </label>
+                                    </div>
+                                    <div id="vl-box-retorno-manual" class="mt-2 p-2 rounded bg-light border shadow-xs" style="display:none;">
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <label class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">📅 Fecha Retorno <span class="text-danger">*</span></label>
+                                                <input type="date" class="form-control form-control-sm" id="vl-manual-retorno-fecha" onchange="window.updateViajeLargoCalculos()">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">⏰ Hora Retorno <span class="text-danger">*</span></label>
+                                                <input type="time" step="1" class="form-control form-control-sm" id="vl-manual-retorno-hora" onchange="window.updateViajeLargoCalculos()">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted d-block mt-1" style="font-size:0.7rem;">Se creará automáticamente la marcación de salida y se unirá al viaje.</small>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Route Form -->
-                            <div class="row g-2 mb-3">
+                            <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Ciudad Origen</label>
-                                    <input type="text" class="form-control form-control-sm" id="vl-ciudad-origen" value="Planta Aguacol">
+                                    <input type="text" class="form-control form-control-sm bg-light" id="vl-ciudad-origen" value="San Fernando (Planta Aguacol)" readonly>
                                 </div>
                                 <div class="col-6">
                                     <label class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">📍 Ciudad Destino <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control form-control-sm" id="vl-ciudad-destino" placeholder="Ej: Antofagasta, Concepción">
+                                    <input type="text" class="form-control form-control-sm" id="vl-ciudad-destino" list="vl-ciudades-chile" placeholder="Ej: La Serena, Concepción..." oninput="window.onViajeLargoDestinoChange()">
+                                    <datalist id="vl-ciudades-chile">
+                                        <option value="Arica">Arica (~2.190 km)</option>
+                                        <option value="Iquique">Iquique (~1.900 km)</option>
+                                        <option value="Antofagasta">Antofagasta (~1.500 km)</option>
+                                        <option value="Calama">Calama (~1.680 km)</option>
+                                        <option value="Copiapó">Copiapó (~940 km)</option>
+                                        <option value="Vallenar">Vallenar (~790 km)</option>
+                                        <option value="La Serena">La Serena (~610 km)</option>
+                                        <option value="Coquimbo">Coquimbo (~610 km)</option>
+                                        <option value="Ovalle">Ovalle (~550 km)</option>
+                                        <option value="Illapel">Illapel (~430 km)</option>
+                                        <option value="Los Vilos">Los Vilos (~360 km)</option>
+                                        <option value="Valparaíso">Valparaíso (~250 km)</option>
+                                        <option value="Viña del Mar">Viña del Mar (~250 km)</option>
+                                        <option value="San Antonio">San Antonio (~160 km)</option>
+                                        <option value="Santiago">Santiago (RM) (~140 km)</option>
+                                        <option value="Rancagua">Rancagua (~55 km)</option>
+                                        <option value="Curicó">Curicó (~55 km)</option>
+                                        <option value="Talca">Talca (~115 km)</option>
+                                        <option value="Linares">Linares (~165 km)</option>
+                                        <option value="Parral">Parral (~210 km)</option>
+                                        <option value="Chillán">Chillán (~270 km)</option>
+                                        <option value="Concepción">Concepción (~370 km)</option>
+                                        <option value="Talcahuano">Talcahuano (~370 km)</option>
+                                        <option value="Los Ángeles">Los Ángeles (~380 km)</option>
+                                        <option value="Temuco">Temuco (~540 km)</option>
+                                        <option value="Villarrica">Villarrica (~620 km)</option>
+                                        <option value="Pucón">Pucón (~620 km)</option>
+                                        <option value="Valdivia">Valdivia (~710 km)</option>
+                                        <option value="Osorno">Osorno (~790 km)</option>
+                                        <option value="Puerto Montt">Puerto Montt (~890 km)</option>
+                                        <option value="Puerto Varas">Puerto Varas (~890 km)</option>
+                                        <option value="Castro">Castro (Chiloé) (~980 km)</option>
+                                        <option value="Ancud">Ancud (Chiloé) (~950 km)</option>
+                                        <option value="Coyhaique">Coyhaique (~1.550 km)</option>
+                                        <option value="Punta Arenas">Punta Arenas (~2.850 km)</option>
+                                    </datalist>
+                                </div>
+                            </div>
+
+                            <!-- Banner de Referencia de Distancia y Sugerencia de Manejo/Descanso -->
+                            <div id="vl-sugerencia-ruta-card" class="p-2 mb-3 rounded border shadow-xs" style="background:#f0fdf4; border-color:#bbf7d0; display:none;">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <div class="fw-bold text-success" style="font-size:0.76rem;" id="vl-ruta-distancia-txt">
+                                        <i class="bi bi-geo-alt-fill me-1"></i> San Fernando ➔ La Serena: ~610 km
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size:0.72rem; border-radius:6px;" onclick="window.aplicarSugerenciaRuta()">
+                                        <i class="bi bi-magic me-1"></i> Aplicar Sugerencia
+                                    </button>
+                                </div>
+                                <div class="text-secondary" style="font-size:0.72rem;" id="vl-ruta-estimado-txt">
+                                    Estimado Transporte: ~18.0h manejo / ~27.5h descanso
                                 </div>
                             </div>
 
@@ -4622,10 +4712,9 @@
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;">💰 Acreditar Bolsa</label>
-                                    <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0">
+                                    <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('reconocidas')">
                                 </div>
                             </div>
-
 
                             <!-- Obs -->
                             <div class="mb-3">
@@ -4793,19 +4882,19 @@
             <script src="/static/js/bootstrap.bundle.min.js" defer></script>
 
             <!-- Componentes de UI (Orden de dependencia) -->
-            <script src="/static/js/startup_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/horarios.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/asistencia.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/configuracion_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/calendario_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/contratos_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/alerts_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/reincorporacion_ui.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/justificaciones_individuales.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/marcaciones_manuales.js?v={{ startup_id }}_v11" defer></script>
-            <script src="/static/js/marcaciones_ui.js?v={{ startup_id }}_v11" defer></script>
+            <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/horarios.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/asistencia.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/configuracion_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/calendario_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/reincorporacion_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/justificaciones_individuales.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/marcaciones_manuales.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/marcaciones_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/perdonazo_panel.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/intercambios_panel.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/compensaciones_he_panel.js?v={{ startup_id }}" defer></script>

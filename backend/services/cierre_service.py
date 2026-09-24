@@ -471,7 +471,7 @@ class CierreService:
                 
                 config_repo = ConfiguracionRepository(self.db)
                 config_service = ConfiguracionService(config_repo)
-                recipients = await config_service.get_destinatarios_rrhh(area)
+                recipients = await config_service.get_destinatarios_cierre(area)
                 
                 if recipients:
                     logger.info(f"📧 Enviando email de notificación de cierre a {recipients}...")

@@ -30,6 +30,7 @@ from backend.schemas.asistencia import (
     IntercambioCreate,
     CompensacionCreate,
     ReasignarTurnoRequest,
+    ViajeLargoCreate,
 )
 
 
@@ -963,8 +964,15 @@ async def get_last_change(
         {rls_filter}
     """, params)
 
+    raw_row = await db.fetch_one("SELECT MAX(id) as max_raw_id, COUNT(*) as count_raw FROM logs_raw")
+    max_raw = raw_row['max_raw_id'] if raw_row and raw_row['max_raw_id'] else 0
+    count_raw = raw_row['count_raw'] if raw_row and raw_row['count_raw'] else 0
+
+    last_asist_up = row["last_update"] if row and row["last_update"] else ""
+    combined_update = f"{last_asist_up}|raw_{max_raw}_{count_raw}"
+
     result = {
-        "last_update": row["last_update"] if row else None,
+        "last_update": combined_update,
         "total_records": row["total_records"] if row else 0,
         "cache_key": cache_key,
     }
@@ -2310,9 +2318,11 @@ async def delete_compensacion(
 class ViajeLargoCreateRequest(BaseModel):
     empleado_id: int
     fecha_inicio: str
-    fecha_fin: str
+    fecha_fin: Optional[str] = None
     log_entrada_id: int
-    log_salida_id: int
+    log_salida_id: Optional[int] = None
+    fecha_retorno_manual: Optional[str] = None
+    hora_retorno_manual: Optional[str] = None
     ciudad_origen: str = "Planta Aguacol"
     ciudad_destino: str
     horas_manejo_efectivas: float
@@ -2327,43 +2337,104 @@ async def get_candidatos_retorno_viaje(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
-    """Busca marcaciones candidatas de inicio y retorno libres/anómalas para un empleado desde fecha_inicio hasta 20 días después."""
+    """
+    Busca marcaciones candidatas de inicio y retorno para un viaje largo (Art. 25 bis).
+    APLICA EXCLUSIVAMENTE A TURNOS DE BOLSA FLEXIBLE CON VIAJES LARGOS HABILITADOS.
+    Filtra inteligentemente solo salidas compatibles y anomalías/retornos de ruta,
+    excluyendo jornadas ordinarias cerradas en planta para no confundir al usuario.
+    """
     db = service.repository.db
     from datetime import datetime, timedelta
-    dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-    dt_fin = dt_ini + timedelta(days=20)
-    f_fin_str = dt_fin.strftime("%Y-%m-%d 23:59:59")
-    f_ini_str = f"{fecha_inicio} 00:00:00"
-
-    # 1. Obterner marcaciones consumidas en viajes_largos existentes
-    vls = await db.fetch_all("SELECT log_entrada_id, log_salida_id FROM viajes_largos WHERE empleado_id = ?", (empleado_id,))
-    viaje_consumed_ids = set()
-    for v in vls:
-        if v['log_entrada_id']: viaje_consumed_ids.add(int(v['log_entrada_id']))
-        if v['log_salida_id']: viaje_consumed_ids.add(int(v['log_salida_id']))
-
-    # 2. Obtener anclajes de turnos OK ordinarios (hora_entrada_real u hora_salida_real)
-    asists_ok = await db.fetch_all("""
-        SELECT fecha, hora_entrada_real, hora_salida_real FROM asistencias
-        WHERE empleado_id = ? AND estado IN ('OK', 'LICENCIA', 'VACACIONES', 'PERMISO')
-          AND fecha BETWEEN ? AND ?
-    """, (empleado_id, fecha_inicio, dt_fin.strftime("%Y-%m-%d")))
+    import json
     
-    ok_anchors = set()
-    for a in asists_ok:
-        if a['hora_entrada_real']:
-            ok_anchors.add(f"{a['fecha']} {a['hora_entrada_real']}")
-        if a['hora_salida_real']:
-            ok_anchors.add(f"{a['fecha']} {a['hora_salida_real']}")
+    # 0. Candado estricto: Validar que el turno permita viajes largos
+    asig = await db.fetch_one("""
+        SELECT t.id, t.nombre, t.tipo_programacion, t.permite_viajes_largos
+        FROM asignacion_turnos at
+        JOIN turnos t ON at.turno_id = t.id
+        WHERE at.empleado_id = ? AND at.fecha_inicio <= ? AND (at.fecha_fin IS NULL OR at.fecha_fin >= ?)
+        ORDER BY at.fecha_inicio DESC
+    """, (empleado_id, fecha_inicio, fecha_inicio))
+    
+    if not asig or asig.get('tipo_programacion') != 'FLEXIBLE_BOLSA' or not (asig.get('permite_viajes_largos') == 1 or str(asig.get('permite_viajes_largos')) == '1'):
+        raise HTTPException(
+            status_code=400, 
+            detail="Esta funcionalidad aplica exclusivamente a turnos de Bolsa Flexible con Viajes Largos habilitados."
+        )
 
-    # 3. Consultar marcaciones crudas en logs_raw
+    # 1. Traer logs raw desde la fecha de inicio hasta 15 días posteriores
+    dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+    dt_max = dt_ini + timedelta(days=15)
+    f_max_str = dt_max.strftime("%Y-%m-%d")
+
     logs = await db.fetch_all("""
-        SELECT id, fecha_hora, tipo, equipo, observaciones
+        SELECT id, fecha_hora, tipo, equipo
         FROM logs_raw
-        WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ?
+        WHERE empleado_id = ? 
+          AND fecha_hora >= ? 
+          AND fecha_hora <= ?
         ORDER BY fecha_hora ASC
-    """, (empleado_id, f_ini_str, f_fin_str))
+    """, (empleado_id, f"{fecha_inicio} 00:00:00", f"{f_max_str} 23:59:59"))
 
+    # 2. Buscar si ya existe un viaje registrado para este empleado en esta fecha
+    viaje_existente = await db.fetch_one("""
+        SELECT id, fecha_inicio, fecha_fin, log_entrada_id, log_salida_id,
+               ciudad_origen, ciudad_destino, horas_manejo_efectivas,
+               horas_descanso, horas_reconocidas_totales, observaciones
+        FROM viajes_largos
+        WHERE empleado_id = ? AND (fecha_inicio = ? OR (fecha_inicio <= ? AND fecha_fin >= ?))
+        ORDER BY id DESC LIMIT 1
+    """, (empleado_id, fecha_inicio, fecha_inicio, fecha_inicio))
+
+    current_vl_id = viaje_existente['id'] if viaje_existente else 0
+    current_in_id = int(viaje_existente['log_entrada_id']) if (viaje_existente and viaje_existente.get('log_entrada_id')) else 0
+    current_out_id = int(viaje_existente['log_salida_id']) if (viaje_existente and viaje_existente.get('log_salida_id')) else 0
+
+    # Obtener marcas consumidas por OTROS viajes para no re-ofrecerlas
+    viajes_otros = await db.fetch_all("""
+        SELECT log_entrada_id, log_salida_id
+        FROM viajes_largos
+        WHERE empleado_id = ? AND id != ?
+    """, (empleado_id, current_vl_id))
+    
+    viaje_consumed_ids = set()
+    for v in viajes_otros:
+        if v.get('log_entrada_id'): viaje_consumed_ids.add(int(v['log_entrada_id']))
+        if v.get('log_salida_id'): viaje_consumed_ids.add(int(v['log_salida_id']))
+
+    # 3. Consultar la tabla de asistencias del período para identificar retornos de ruta detectados
+    # y excluir salidas que pertenezcan a turnos ordinarios cerrados en planta
+    asist_periodo = await db.fetch_all("""
+        SELECT fecha, estado, observaciones, marcas_consumidas_ids
+        FROM asistencias
+        WHERE empleado_id = ? AND fecha >= ? AND fecha <= ?
+    """, (empleado_id, fecha_inicio, f_max_str))
+
+    marcas_retorno_detectadas = set()
+    marcas_ordinarias_cerradas = set()
+
+    for a in asist_periodo:
+        obs = str(a.get('observaciones') or '')
+        c_ids_str = a.get('marcas_consumidas_ids')
+        if not c_ids_str:
+            continue
+        try:
+            c_ids = json.loads(c_ids_str) if isinstance(c_ids_str, str) else c_ids_str
+            if not isinstance(c_ids, list):
+                c_ids = []
+        except Exception:
+            c_ids = []
+
+        if "Retorno de Ruta Detectado" in obs or a.get('estado') == 'ANOMALIA':
+            for cid in c_ids:
+                marcas_retorno_detectadas.add(int(cid))
+        elif a.get('estado') == 'OK':
+            for cid in c_ids:
+                # No excluir la marca de retorno si pertenece al viaje_existente
+                if int(cid) != current_out_id:
+                    marcas_ordinarias_cerradas.add(int(cid))
+
+    _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
     candidatos_inicio = []
     candidatos_retorno = []
     candidatos = []
@@ -2371,12 +2442,28 @@ async def get_candidatos_retorno_viaje(
     for l in logs:
         lid = int(l['id'])
         f_hora = l['fecha_hora']
-        
-        # Descartar marcaciones ocupadas en viajes o que sean el anclaje directo de un turno OK
-        is_consumed = (lid in viaje_consumed_ids) or (f_hora in ok_anchors)
+        t_m = str(l.get('tipo', '') or '').strip().lower()
+        is_consumed = (lid in viaje_consumed_ids)
         
         l_dt = datetime.strptime(f_hora, "%Y-%m-%d %H:%M:%S")
         diff_hours = round((l_dt - dt_ini).total_seconds() / 3600.0, 1)
+        
+        es_actual_in = (lid == current_in_id)
+        es_actual_out = (lid == current_out_id)
+        es_retorno_detectado = (lid in marcas_retorno_detectadas)
+        es_salida = (t_m in _TIPOS_S)
+        es_ordinaria = (lid in marcas_ordinarias_cerradas)
+
+        tag_str = "(Anomalía Libre)"
+        if es_actual_in or es_actual_out:
+            tag_str = "[Marcación Registrada del Viaje]"
+        elif es_retorno_detectado:
+            tag_str = "[Retorno de Ruta Detectado - RECOMENDADO]"
+        elif es_ordinaria:
+            tag_str = "(Turno Ordinario Planta)"
+        elif es_salida:
+            tag_str = "(Salida Huérfana / Fin de Ruta)"
+
         item = {
             "id": lid,
             "fecha_hora": f_hora,
@@ -2385,27 +2472,35 @@ async def get_candidatos_retorno_viaje(
             "tipo": l['tipo'],
             "equipo": l['equipo'],
             "horas_transcurridas": diff_hours,
-            "consumida": is_consumed
+            "consumida": is_consumed,
+            "recomendado": es_actual_out or es_retorno_detectado,
+            "es_actual": es_actual_in or es_actual_out,
+            "tag": tag_str
         }
         
         candidatos.append(item)
         if not is_consumed:
-            if l['tipo'] == 'Entrada':
+            # Marcas de inicio
+            if es_actual_in or f_hora.startswith(fecha_inicio):
                 candidatos_inicio.append(item)
-            else:
+            # Marcas de retorno: salidas o retornos detectados que NO sean de turnos ordinarios cerrados
+            if es_actual_out or (not f_hora.startswith(fecha_inicio) and (es_retorno_detectado or (es_salida and not es_ordinaria))):
                 candidatos_retorno.append(item)
 
-    # Si no hay libres puras de entrada, incluir la primera marcación como fallback
+    # Si no hay candidatos específicos de inicio, incluir todas las del primer día
     if not candidatos_inicio and candidatos:
-        candidatos_inicio.append(candidatos[0])
+        candidatos_inicio = [c for c in candidatos if not c['consumida'] and c['fecha'] == fecha_inicio] or [candidatos[0]]
+    
+    # Fallback suave solo si la lista de retorno quedó vacía
     if not candidatos_retorno and candidatos:
-        candidatos_retorno = candidatos[1:]
+        candidatos_retorno = [c for c in candidatos if not c['consumida'] and c['fecha'] > fecha_inicio and str(c['tipo']).lower() in _TIPOS_S] or candidatos[1:]
 
     return {
         "success": True, 
         "candidatos": candidatos,
         "candidatos_inicio": candidatos_inicio,
-        "candidatos_retorno": candidatos_retorno
+        "candidatos_retorno": candidatos_retorno,
+        "viaje_existente": viaje_existente
     }
 
 
@@ -2416,7 +2511,7 @@ async def create_viaje_largo(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
-    """Registra un viaje largo unificando dos marcaciones y recalcula el período de asistencia."""
+    """Registra un viaje largo unificando dos marcaciones (o creando marcación de retorno manual) y recalcula el período de asistencia."""
     db = service.repository.db
     
     # 1. RLS
@@ -2426,11 +2521,54 @@ async def create_viaje_largo(
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
     current_user.verificar_acceso_area(emp.area, "este empleado")
 
-    # 2. Cierre check
+    # 2. Si no viene log_salida_id pero viene retorno_manual -> Crear la marcación manual en logs_raw
+    if (not req.log_salida_id or req.log_salida_id == 0) and req.fecha_retorno_manual and req.hora_retorno_manual:
+        import hashlib
+        hora_fmt = req.hora_retorno_manual.strip()
+        if len(hora_fmt) == 5:
+            hora_fmt += ":00"
+        fecha_hora_retorno = f"{req.fecha_retorno_manual} {hora_fmt}"
+        
+        rut_val = emp.rut if emp and emp.rut else str(req.empleado_id)
+        raw_string = f"{rut_val}|{fecha_hora_retorno}|Salida"
+        hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
+
+        # Insertar marca de salida manual en logs_raw
+        await db.execute("""
+            INSERT OR IGNORE INTO logs_raw (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original)
+            VALUES (?, ?, 'Salida', 1, 'Retorno de viaje largo (Ingreso Manual)', ?)
+        """, (req.empleado_id, fecha_hora_retorno, hash_val))
+        
+        created_log = await db.fetch_one("""
+            SELECT id FROM logs_raw 
+            WHERE empleado_id = ? AND fecha_hora = ? AND tipo = 'Salida'
+            ORDER BY id DESC LIMIT 1
+        """, (req.empleado_id, fecha_hora_retorno))
+        
+        if created_log:
+            req.log_salida_id = created_log['id']
+            
+        req.fecha_fin = req.fecha_retorno_manual
+
+    if not req.fecha_fin:
+        req.fecha_fin = req.fecha_inicio
+
+    # 3. Cierre check
     if await service.repository.check_rango_cerrado(req.fecha_inicio, req.fecha_fin, req.empleado_id):
         raise HTTPException(status_code=403, detail="El rango seleccionado se encuentra en un período cerrado.")
 
-    # 3. Obtener marcas para guardar fecha_hora_inicio y fecha_hora_fin exactas
+    # 4. Validar que el viaje no se solape con justificaciones existentes (Descanso Operativo, Licencia, Vacaciones)
+    just_intermedia = await db.fetch_one("""
+        SELECT id, tipo_id, fecha_inicio, fecha_fin FROM justificaciones
+        WHERE empleado_id = ? AND fecha_inicio > ? AND fecha_inicio < ?
+    """, (req.empleado_id, req.fecha_inicio, req.fecha_fin))
+    if just_intermedia:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No es posible registrar el viaje hasta el {req.fecha_fin} porque existe un descanso/justificación programado el {just_intermedia['fecha_inicio']}."
+        )
+
+    # 5. Obtener marcas para guardar fecha_hora_inicio y fecha_hora_fin exactas
     log_in = await db.fetch_one("SELECT fecha_hora FROM logs_raw WHERE id = ?", (req.log_entrada_id,))
     log_out = await db.fetch_one("SELECT fecha_hora FROM logs_raw WHERE id = ?", (req.log_salida_id,))
     
@@ -2454,7 +2592,32 @@ async def create_viaje_largo(
         'creado_por_id': current_user.user_id
     }
 
-    viaje_id = await service.repository.create_viaje_largo(data)
+    # 6. Blindaje Anti-Duplicados: si ya existe un viaje para esta entrada o fecha, actualizar en lugar de insertar
+    existing_vl = await db.fetch_one("""
+        SELECT id FROM viajes_largos 
+        WHERE empleado_id = ? AND (log_entrada_id = ? OR fecha_inicio = ?)
+        ORDER BY id DESC LIMIT 1
+    """, (req.empleado_id, req.log_entrada_id, req.fecha_inicio))
+
+    if existing_vl:
+        viaje_id = existing_vl['id']
+        await db.execute("""
+            UPDATE viajes_largos
+            SET fecha_inicio = ?, fecha_fin = ?, log_entrada_id = ?, log_salida_id = ?,
+                fecha_hora_inicio = ?, fecha_hora_fin = ?, ciudad_origen = ?,
+                ciudad_destino = ?, horas_manejo_efectivas = ?, horas_descanso = ?,
+                horas_reconocidas_totales = ?, observaciones = ?, creado_por_id = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        """, (
+            data['fecha_inicio'], data['fecha_fin'], data['log_entrada_id'], data['log_salida_id'],
+            data['fecha_hora_inicio'], data['fecha_hora_fin'], data['ciudad_origen'],
+            data['ciudad_destino'], data['horas_manejo_efectivas'], data['horas_descanso'],
+            data['horas_reconocidas_totales'], data['observaciones'], data['creado_por_id'],
+            viaje_id
+        ))
+    else:
+        viaje_id = await service.repository.create_viaje_largo(data)
 
     # 4. Reprocesar el rango de fechas
     await service.reprocesar_periodo_empleado(
@@ -2501,6 +2664,27 @@ async def delete_viaje_largo(
     )
 
     return {"success": True, "message": "Viaje Largo eliminado y días restaurados."}
+
+
+class ReprocesarPeriodoRequest(BaseModel):
+    empleado_id: int
+    fecha_inicio: str
+    fecha_fin: str
+
+@router.post("/reprocesar-periodo-empleado/")
+async def post_reprocesar_periodo_empleado(
+    req: ReprocesarPeriodoRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Reprocesa el período completo de un empleado persistiendo los resultados en DB."""
+    stats = await service.reprocesar_periodo_empleado(
+        empleado_id=req.empleado_id,
+        fecha_inicio=req.fecha_inicio,
+        fecha_fin=req.fecha_fin,
+        force=True
+    )
+    return {"success": True, "stats": stats}
 
 
 @router.get("/inasistencias-disponibles/{empleado_id}/")
@@ -2610,6 +2794,166 @@ async def reasignar_turno_endpoint(
         "message": f"Turno reasignado exitosamente del {req.fecha_origen} al {req.fecha_destino}.",
         "data": res
     }
+
+
+# ==========================================
+# GESTIÓN DE VIAJES LARGOS (Art. 25 bis)
+# ==========================================
+
+@router.post("/viaje-largo/")
+@router.post("/viajes-largos/")
+async def create_viaje_largo_endpoint(
+    data: ViajeLargoCreate,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Registra un Viaje Largo en ruta para choferes en Bolsa Flexible habilitados."""
+    db = service.repository.db
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(data.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    # Verificar que el turno del empleado tenga permitido viajes largos
+    turno_actual = await service.repository.get_turno_activo(data.empleado_id, data.fecha_inicio)
+    if not turno_actual or turno_actual.get('tipo_programacion') != 'FLEXIBLE_BOLSA' or not turno_actual.get('permite_viajes_largos'):
+        raise HTTPException(
+            status_code=400,
+            detail="El colaborador no tiene asignado un turno de Bolsa Flexible con gestión de viajes largos habilitada."
+        )
+
+    # Verificar períodos cerrados
+    if await service.repository.check_rango_cerrado(data.fecha_inicio, data.fecha_fin, data.empleado_id):
+        raise HTTPException(status_code=403, detail="El rango de fechas del viaje se encuentra en un período cerrado.")
+
+    # Validar solapamiento con otros viajes largos
+    existente = await db.fetch_one("""
+        SELECT id FROM viajes_largos
+        WHERE empleado_id = ?
+          AND (
+            (fecha_inicio <= ? AND fecha_fin >= ?) OR
+            (fecha_inicio <= ? AND fecha_fin >= ?) OR
+            (fecha_inicio >= ? AND fecha_fin <= ?)
+          )
+    """, (data.empleado_id, data.fecha_inicio, data.fecha_inicio, data.fecha_fin, data.fecha_fin, data.fecha_inicio, data.fecha_fin))
+    if existente:
+        raise HTTPException(status_code=400, detail="El empleado ya tiene un viaje largo registrado en esas fechas.")
+
+    tot_horas = data.horas_reconocidas_totales
+    if tot_horas is None:
+        tot_horas = data.horas_manejo_efectivas
+
+    payload = {
+        'empleado_id': data.empleado_id,
+        'fecha_inicio': data.fecha_inicio,
+        'fecha_fin': data.fecha_fin,
+        'log_entrada_id': data.log_entrada_id,
+        'log_salida_id': data.log_salida_id,
+        'fecha_hora_inicio': data.fecha_hora_inicio,
+        'fecha_hora_fin': data.fecha_hora_fin,
+        'ciudad_origen': data.ciudad_origen or 'Planta Aguacol',
+        'ciudad_destino': data.ciudad_destino,
+        'horas_manejo_efectivas': data.horas_manejo_efectivas,
+        'horas_descanso': data.horas_descanso,
+        'horas_reconocidas_totales': tot_horas,
+        'observaciones': data.observaciones or '',
+        'creado_por_id': current_user.user_id
+    }
+
+    viaje_id = await service.repository.create_viaje_largo(payload)
+
+    # Reprocesar únicamente el período del viaje para el chofer
+    await service.reprocesar_periodo_empleado(
+        empleado_id=data.empleado_id,
+        fecha_inicio=data.fecha_inicio,
+        fecha_fin=data.fecha_fin,
+        force=True
+    )
+
+    # Auditoría
+    try:
+        await db.execute("""
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+            VALUES (?, ?, 'CREAR_VIAJE_LARGO', 'Marcaciones', ?)
+        """, (
+            current_user.user_id,
+            current_user.username,
+            f"Registrado viaje largo ID {viaje_id} para Emp {data.empleado_id} ({data.fecha_inicio} al {data.fecha_fin}, Destino: {data.ciudad_destino}, Horas: {data.horas_manejo_efectivas}h)"
+        ))
+    except Exception as ae:
+        logger.warning(f"Error auditoría viaje largo: {ae}")
+
+    return {"success": True, "message": "Viaje largo registrado y asistencias actualizadas", "viaje_id": viaje_id}
+
+
+@router.delete("/viaje-largo/{viaje_id}/")
+@router.delete("/viajes-largos/{viaje_id}/")
+async def delete_viaje_largo_endpoint(
+    viaje_id: int,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Elimina un viaje largo y devuelve los días de asistencia a su cálculo original."""
+    db = service.repository.db
+    viaje = await db.fetch_one("SELECT * FROM viajes_largos WHERE id = ?", (viaje_id,))
+    if not viaje:
+        raise HTTPException(status_code=404, detail="Viaje largo no encontrado")
+
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(viaje['empleado_id'])
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    if await service.repository.check_rango_cerrado(viaje['fecha_inicio'], viaje['fecha_fin'], viaje['empleado_id']):
+        raise HTTPException(status_code=403, detail="El viaje pertenece a un período cerrado.")
+
+    deleted = await service.repository.delete_viaje_largo(viaje_id)
+
+    # Reprocesar el rango para devolver al estado natural
+    await service.reprocesar_periodo_empleado(
+        empleado_id=viaje['empleado_id'],
+        fecha_inicio=viaje['fecha_inicio'],
+        fecha_fin=viaje['fecha_fin'],
+        force=True
+    )
+
+    # Auditoría
+    try:
+        await db.execute("""
+            INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+            VALUES (?, ?, 'ELIMINAR_VIAJE_LARGO', 'Marcaciones', ?)
+        """, (
+            current_user.user_id,
+            current_user.username,
+            f"Eliminado viaje largo ID {viaje_id} para Emp {viaje['empleado_id']} ({viaje['fecha_inicio']} al {viaje['fecha_fin']})"
+        ))
+    except Exception as ae:
+        logger.warning(f"Error auditoría eliminar viaje largo: {ae}")
+
+    return {"success": True, "message": "Viaje largo eliminado y asistencias restauradas"}
+
+
+@router.get("/viajes-largos/empleado/{empleado_id}/")
+async def get_viajes_largos_empleado(
+    empleado_id: int,
+    fecha_inicio: str = Query(..., description="Fecha inicio YYYY-MM-DD"),
+    fecha_fin: str = Query(..., description="Fecha fin YYYY-MM-DD"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.ver", "marcaciones.editar"]))
+):
+    """Lista los viajes largos de un empleado en un rango de fechas."""
+    db = service.repository.db
+    emp_repo = EmpleadoRepository(db)
+    emp = await emp_repo.get_by_id(empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    viajes = await service.repository.get_viajes_largos_periodo(empleado_id, fecha_inicio, fecha_fin)
+    return {"success": True, "data": viajes}
+
 
 
 

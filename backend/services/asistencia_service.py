@@ -11,6 +11,7 @@ REGLAS DE NEGOCIO FUNDAMENTALES:
   5. El tipo BioAlba (Entrada/Salida) es la fuente de verdad para la clasificación.
 """
 import asyncio
+import json
 import math
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
@@ -793,7 +794,7 @@ class AsistenciaService:
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
                 'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
-                'tipo_programacion', 'nombre',
+                'tipo_programacion', 'nombre', 'permite_viajes_largos',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'permite_viajes_largos',
             ]
@@ -1176,8 +1177,10 @@ class AsistenciaService:
                         je_to_delete.append((empleado_id, fecha_str))
                 stats['procesados'] += 1
             except Exception as e:
-                logger.error(f"Error calculando asistencia empleado {empleado_id} fecha {fecha_str}: {e}")
+                import traceback
+                logger.error(f"Error calculando asistencia empleado {empleado_id} fecha {fecha_str}: {e}\n{traceback.format_exc()}")
                 stats['errores'] += 1
+                stats.setdefault('error_list', []).append(f"{fecha_str}: {str(e)}")
 
             # ⚡ Checkpoint de seguridad: guardar batch parcial cada N días
             # Deshabilitado en collect_only (CHECKPOINT_INTERVAL=0 → modulo nunca es 0)
@@ -1654,6 +1657,54 @@ class AsistenciaService:
             f_ingreso = self._parse_date(emp_info.get('fecha_ingreso'))
             f_salida = self._parse_date(emp_info.get('fecha_salida'))
 
+            # Validación 0: Fecha posterior a la baja / término de contrato
+            if f_salida and fecha_dt > f_salida:
+                if bulk_ctx:
+                    logs_emp = bulk_ctx.get('logs', {}).get(empleado_id, [])
+                    tiene_marcas = any(str(l.get('fecha_hora', '')).startswith(fecha) for l in logs_emp)
+                else:
+                    marcas_raw = await db.fetch_all(
+                        "SELECT id FROM logs_raw WHERE empleado_id = ? AND fecha_hora LIKE ?",
+                        (empleado_id, f"{fecha}%")
+                    )
+                    tiene_marcas = bool(marcas_raw)
+
+                if tiene_marcas:
+                    logger.warning(
+                        f"🚨 ANOMALÍA: Empleado {empleado_id} marcó asistencia el {fecha} "
+                        f"posterior a su fecha de baja ({f_salida.strftime('%Y-%m-%d')})."
+                    )
+                    anomalia_record = {
+                        'empleado_id': empleado_id,
+                        'fecha': fecha,
+                        'turno_asignado_id': None,
+                        'hora_entrada_teorica': None,
+                        'hora_salida_teorica': None,
+                        'horas_teoricas': None,
+                        'hora_entrada_real': None,
+                        'hora_salida_real': None,
+                        'minutos_atraso': 0,
+                        'minutos_colacion': 0,
+                        'horas_trabajadas': 0,
+                        'minutos_deuda': 0,
+                        'minutos_extra_bruto': 0,
+                        'minutos_salida_adelantada': 0,
+                        'estado': 'ANOMALIA_CONTRATO_VENCIDO',
+                        'observaciones': f"Marcación registrada posterior a fecha de baja ({f_salida.strftime('%Y-%m-%d')}). Requiere revisión de RRHH.",
+                        'turno_asignado_id': None,
+                    }
+                    if save:
+                        await self.repository.upsert_asistencia(anomalia_record)
+                    return anomalia_record
+                else:
+                    # Posterior a la baja y sin marcas: descartar día y limpiar residuos
+                    if save:
+                        asist_del = await self.repository.get_asistencia(empleado_id, fecha)
+                        if asist_del:
+                            await self.repository.delete_asistencia(empleado_id, fecha)
+                        await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                    return None
+
             if bulk_ctx:
                 periodos = bulk_ctx.get('periodos_empleo', {}).get(empleado_id, [])
             else:
@@ -1674,7 +1725,8 @@ class AsistenciaService:
             # Solo alerta si hay marcas pero no hay período
             if not esta_en_periodo and periodos:
                 if bulk_ctx:
-                    tiene_marcas = bool(bulk_ctx.get('logs', {}).get(empleado_id))
+                    logs_emp = bulk_ctx.get('logs', {}).get(empleado_id, [])
+                    tiene_marcas = any(str(l.get('fecha_hora', '')).startswith(fecha) for l in logs_emp)
                 else:
                     marcas_raw = await db.fetch_all(
                         "SELECT id FROM logs_raw WHERE empleado_id = ? AND fecha_hora LIKE ?",
@@ -1709,6 +1761,14 @@ class AsistenciaService:
                     if save:
                         await self.repository.upsert_asistencia(anomalia_record)
                     return anomalia_record
+                else:
+                    # Sin contrato y sin marcas: no generar asistencia
+                    if save:
+                        asist_del = await self.repository.get_asistencia(empleado_id, fecha)
+                        if asist_del:
+                            await self.repository.delete_asistencia(empleado_id, fecha)
+                        await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                    return None
 
         # 1. Obtener Primera Asignación (para validación de TRABAJO SIN TURNO)
         if bulk_ctx:
@@ -1723,7 +1783,8 @@ class AsistenciaService:
         # [REGLA DE NEGOCIO - CORRECCION]: No marcar inasistencia antes de la primera asignación de turno
         # Para saber si hay marcas, usamos un boolean rápido antes de consultar los raw_logs
         if bulk_ctx:
-            marcas_disponibles = bool(bulk_ctx.get('logs', {}).get(empleado_id))
+            logs_emp = bulk_ctx.get('logs', {}).get(empleado_id, [])
+            marcas_disponibles = any(str(l.get('fecha_hora', '')).startswith(fecha) for l in logs_emp)
         else:
             raw_tmp = await db.fetch_one(
                 "SELECT id FROM logs_raw WHERE empleado_id = ? AND fecha_hora LIKE ? LIMIT 1",
@@ -1790,7 +1851,6 @@ class AsistenciaService:
 
         if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL' and asist_row_manual.get('marcas_consumidas_ids'):
             try:
-                import json
                 self_m_ids = json.loads(asist_row_manual['marcas_consumidas_ids'])
                 for smid in self_m_ids:
                     if smid: consumidas_emp.discard(int(smid))
@@ -1816,10 +1876,14 @@ class AsistenciaService:
 
 
 
-        # ── VERIFICAR VIAJE LARGO ACTIVO (BOLSA FLEXIBLE) ─────────────────────
+        # ── VERIFICAR VIAJE LARGO ACTIVO (BOLSA FLEXIBLE + CANDADO permite_viajes_largos) ─
         active_vl_inicio = None
         active_vl_fin = None
-        viaje_largo = await self.repository.get_viaje_largo_activo(empleado_id, fecha)
+        salida_madrugada_aislada = None
+        viaje_largo = None
+        is_pvl = bool(asignacion and (asignacion.get('permite_viajes_largos') == 1 or str(asignacion.get('permite_viajes_largos')) in ('1', 'true', 'True') or asignacion.get('permite_viajes_largos') is True))
+        if asignacion and asignacion.get('tipo_programacion') == 'FLEXIBLE_BOLSA' and is_pvl:
+            viaje_largo = await self.repository.get_viaje_largo_activo(empleado_id, fecha)
         if viaje_largo:
             c_orig = viaje_largo.get('ciudad_origen', 'Planta Aguacol')
             c_dest = viaje_largo.get('ciudad_destino', '')
@@ -1833,57 +1897,94 @@ class AsistenciaService:
             vl_exit_id = viaje_largo.get('log_salida_id')
             
             if fecha == f_ini:
-                # En el primer día del viaje, excluimos marcaciones de viaje.
+                # Consumir todas las marcas del día de inicio de viaje largo
+                all_day_logs = [l for l in raw_logs if l.get('fecha_hora', '')[:10] == fecha]
+                for l in all_day_logs:
+                    consumidas_emp.add(int(l['id']))
                 if vl_entry_id: consumidas_emp.add(int(vl_entry_id))
                 if vl_exit_id: consumidas_emp.add(int(vl_exit_id))
                 
-                other_logs = [l for l in raw_logs if l.get('fecha_hora', '')[:10] == fecha and int(l['id']) not in consumidas_emp]
-                if other_logs:
-                    # El conductor trabajó un turno ordinario en la mañana ANTES de iniciar el viaje
-                    active_vl_inicio = viaje_largo
-                else:
-                    # No hay turno ordinario previo: generar registro de inicio de viaje largo
-                    h_in = viaje_largo['fecha_hora_inicio'][11:19] if viaje_largo.get('fecha_hora_inicio') else None
-                    h_out = None
-                    h_trab = viaje_largo.get('horas_reconocidas_totales', 0.0)
-                    m_ids = f"[{vl_entry_id}]" if vl_entry_id else '[]'
-                    obs = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_man}h manejo, {h_desc}h descanso."
-                    
-                    viaje_record = {
-                        'empleado_id': empleado_id,
-                        'fecha': fecha,
-                        'hora_entrada_teorica': None,
-                        'hora_salida_teorica': None,
-                        'hora_entrada_real': h_in,
-                        'hora_salida_real': h_out,
-                        'minutos_atraso': 0,
-                        'minutos_colacion': 0,
-                        'horas_trabajadas': h_trab,
-                        'minutos_deuda': 0,
-                        'minutos_extra_bruto': 0,
-                        'minutos_salida_adelantada': 0,
-                        'estado': 'VIAJE_LARGO',
-                        'observaciones': obs,
-                        'turno_asignado_id': (asignacion.get('turno_id') or asignacion.get('id')) if asignacion else None,
-                        'marcas_consumidas_ids': m_ids,
-                    }
-                    if save:
-                        await self.repository.upsert_asistencia(viaje_record)
-                    return viaje_record
-            elif fecha == f_fin:
-                # En el día de retorno del viaje, excluimos la marcación de salida del viaje.
-                if vl_exit_id: consumidas_emp.add(int(vl_exit_id))
+                _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+                _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+                ents_dia = [l for l in all_day_logs if str(l.get('tipo', '')).strip().lower() in _TIPOS_E]
+                sals_dia = [l for l in all_day_logs if str(l.get('tipo', '')).strip().lower() in _TIPOS_S]
                 
-                # Verificamos si hay marcaciones adicionales para este empleado en la fecha
-                other_logs = [l for l in raw_logs if l.get('fecha_hora', '')[:10] == fecha and int(l['id']) not in consumidas_emp]
-                if other_logs:
-                    # El empleado trabajó un turno ordinario después de retornar del viaje
-                    active_vl_fin = viaje_largo
-                else:
-                    h_in = None
-                    h_out = viaje_largo['fecha_hora_fin'][11:19] if viaje_largo.get('fecha_hora_fin') else None
-                    h_trab = 0.0
-                    m_ids = f"[{vl_exit_id}]" if vl_exit_id else '[]'
+                h_plant = 0.0
+                h_in = viaje_largo.get('fecha_hora_inicio', '')[11:19] if viaje_largo.get('fecha_hora_inicio') else None
+                h_out = None
+                
+                if ents_dia and sals_dia:
+                    dt_e1 = datetime.strptime(ents_dia[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    dt_s1 = datetime.strptime(sals_dia[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
+                    if dt_s1 > dt_e1:
+                        h_plant = max(0.0, (dt_s1 - dt_e1).total_seconds() / 3600.0)
+                        h_in = dt_e1.strftime("%H:%M:%S")
+                        h_out = dt_s1.strftime("%H:%M:%S")
+                elif ents_dia:
+                    h_in = ents_dia[0]['fecha_hora'][11:19]
+                
+                h_trab = round(float(h_tot or 0.0) + h_plant, 2)
+                m_ids = json.dumps([l['id'] for l in all_day_logs]) if all_day_logs else (f"[{vl_entry_id}]" if vl_entry_id else '[]')
+                obs = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_man}h manejo, {h_desc}h descanso."
+                if h_plant > 0:
+                    obs += f" (+ Turno Planta: {h_plant:.1f}h)"
+                
+                # REGLA DE NEGOCIO: Si hubo turno ordinario en planta, el estado primario es OK (para Split [OK|VIAJE])
+                estado_dia = 'OK' if h_plant > 0 else 'VIAJE_LARGO'
+                
+                viaje_record = {
+                    'empleado_id': empleado_id,
+                    'fecha': fecha,
+                    'hora_entrada_teorica': None,
+                    'hora_salida_teorica': None,
+                    'hora_entrada_real': h_in,
+                    'hora_salida_real': h_out,
+                    'minutos_atraso': 0,
+                    'minutos_colacion': 0,
+                    'horas_trabajadas': h_trab,
+                    'minutos_deuda': 0,
+                    'minutos_extra_bruto': 0,
+                    'minutos_salida_adelantada': 0,
+                    'tiene_anomalia': 0,
+                    'alerta_anomalia': 0,
+                    'estado': estado_dia,
+                    'observaciones': obs,
+                    'turno_asignado_id': (asignacion.get('turno_id') or asignacion.get('id')) if asignacion else None,
+                    'marcas_consumidas_ids': m_ids,
+                }
+                if save:
+                    await self.repository.upsert_asistencia(viaje_record)
+                return viaje_record
+            elif fecha == f_fin:
+                _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+                _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+                
+                dt_fin_max = viaje_largo.get('fecha_hora_fin') or f"{fecha} 23:59:59"
+                
+                # Consumir únicamente las marcas que pertenecen al retorno del viaje largo (Salida de retorno)
+                # Cualquier Entrada posterior en la misma fecha queda 100% disponible para el siguiente turno
+                logs_retorno = [
+                    l for l in raw_logs 
+                    if l.get('fecha_hora', '').startswith(fecha) 
+                    and l.get('fecha_hora', '') <= dt_fin_max 
+                    and str(l.get('tipo', '')).strip().lower() in _TIPOS_S
+                ]
+                for l in logs_retorno:
+                    consumidas_emp.add(int(l['id']))
+                if vl_exit_id: 
+                    consumidas_emp.add(int(vl_exit_id))
+                
+                h_out = logs_retorno[0]['fecha_hora'][11:19] if logs_retorno else (viaje_largo.get('fecha_hora_fin', '')[11:19] if viaje_largo.get('fecha_hora_fin') else None)
+                
+                # Verificar si hay marcas posteriores para un turno local en este mismo día
+                marcas_locales = [
+                    l for l in raw_logs
+                    if l.get('fecha_hora', '').startswith(fecha)
+                    and int(l['id']) not in consumidas_emp
+                ]
+                
+                if not marcas_locales:
+                    m_ids = json.dumps([l['id'] for l in logs_retorno]) if logs_retorno else (f"[{vl_exit_id}]" if vl_exit_id else '[]')
                     obs = f"🚛 RETORNO VIAJE LARGO ({c_dest} -> {c_orig})"
                     
                     viaje_record = {
@@ -1891,14 +1992,16 @@ class AsistenciaService:
                         'fecha': fecha,
                         'hora_entrada_teorica': None,
                         'hora_salida_teorica': None,
-                        'hora_entrada_real': h_in,
+                        'hora_entrada_real': None,
                         'hora_salida_real': h_out,
                         'minutos_atraso': 0,
                         'minutos_colacion': 0,
-                        'horas_trabajadas': h_trab,
+                        'horas_trabajadas': 0.0,
                         'minutos_deuda': 0,
                         'minutos_extra_bruto': 0,
                         'minutos_salida_adelantada': 0,
+                        'tiene_anomalia': 0,
+                        'alerta_anomalia': 0,
                         'estado': 'VIAJE_LARGO',
                         'observaciones': obs,
                         'turno_asignado_id': (asignacion.get('turno_id') or asignacion.get('id')) if asignacion else None,
@@ -1907,6 +2010,9 @@ class AsistenciaService:
                     if save:
                         await self.repository.upsert_asistencia(viaje_record)
                     return viaje_record
+                else:
+                    # Hay turno local posterior (ej: 10:22 -> 12:10). Continuar para procesarlo normalmente.
+                    pass
             else:
                 # Días intermedios en ruta (f_ini < fecha < f_fin)
                 h_in = None
@@ -1956,19 +2062,6 @@ class AsistenciaService:
             marcas_ayer_json = asist_ayer.get('marcas_consumidas_ids')
             if marcas_ayer_json and marcas_ayer_json != '[]':
                 try:
-                    import json
-                    ids_ayer = json.loads(marcas_ayer_json)
-                    for id_ayer in ids_ayer:
-                        consumidas_emp.add(id_ayer)
-                except Exception as e:
-                    pass
-
-        # Siembra (DT-10): Utilizar marcas_consumidas_ids en lugar de heurística de timestamps
-        if not consumidas_emp and asist_ayer:
-            marcas_ayer_json = asist_ayer.get('marcas_consumidas_ids')
-            if marcas_ayer_json and marcas_ayer_json != '[]':
-                try:
-                    import json
                     ids_ayer = json.loads(marcas_ayer_json)
                     for id_ayer in ids_ayer:
                         consumidas_emp.add(id_ayer)
@@ -2076,9 +2169,16 @@ class AsistenciaService:
         
         tipo_prog = None
         semana_inicio_cfg = None
+        is_bolsa = False
+        is_bolsa_viajes_largos = False
         if asignacion:
             tipo_prog = asignacion.get('tipo_programacion')
             semana_inicio_cfg = asignacion.get('semana_inicio')
+            is_bolsa = (tipo_prog == 'FLEXIBLE_BOLSA')
+            is_bolsa_viajes_largos = bool(
+                is_bolsa and
+                (asignacion.get('permite_viajes_largos') == 1 or asignacion.get('permite_viajes_largos') is True or str(asignacion.get('permite_viajes_largos')) == '1')
+            )
 
         # ── INTERCEPTOR DE SEGMENTACIÓN TEMPRANO DE EMERGENCIAS Y JORNADAS ADICIONALES ──
         # Ejecutado al inicio para limpiar marcas_disponibles antes del matching rotativo y consumos
@@ -3260,9 +3360,6 @@ class AsistenciaService:
                 m_auth_previo = resultado.get('_log_id_entrada')
                 if m_auth_previo:
                     ids_consumidos.append(m_auth_previo)
-                    consumidas_emp.add(m_auth_previo)
-
-            import json
             resultado['marcas_consumidas_ids'] = json.dumps(ids_consumidos)
 
         # ── INTERCEPTAR JORNADAS ESPECIALES ───────────────────────────────────
@@ -3275,7 +3372,13 @@ class AsistenciaService:
                 (empleado_id, fecha)
             )
 
-        has_validated_je = bool(je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'JORNADA_ESPECIAL')))
+        has_validated_je = bool(
+            je_prev and (
+                '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
+                or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+            )
+        )
 
         # ── FASE 2 (Fix B2): PRESERVACIÓN DE DECISIONES HUMANAS ───────────────
         # Fuente primaria: horas_extras (nueva tabla)
@@ -3311,9 +3414,12 @@ class AsistenciaService:
             ht = resultado.get('horas_teoricas')
             ht_val = float(ht) if ht is not None else 0.0
             
+            is_bolsa = bool(asignacion and asignacion.get('tipo_programacion') == 'FLEXIBLE_BOLSA')
             es_candidato = False
             
-            if ht_val == 0.0 or has_validated_je:
+            if is_bolsa:
+                es_candidato = False
+            elif ht_val == 0.0 or has_validated_je:
                 # Feriado, Día Libre o JE Validada por usuario
                 es_candidato = True
             elif ht_val > 0.0 and resultado.get('estado') == 'EXTRA' and ('Cambio de turno irregular' in (resultado.get('observaciones') or '') or 'Turno de seguridad' in (resultado.get('observaciones') or '')):
@@ -3336,7 +3442,7 @@ class AsistenciaService:
                 estado_je = resultado.get('estado')
                 obs_je = resultado.get('observaciones') or ''
                 
-                if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'JORNADA_ESPECIAL')):
+                if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')):
                     estado_je = je_prev['estado']
                     if estado_je == 'PENDIENTE':
                         estado_je = 'JORNADA_ESPECIAL'
@@ -3361,6 +3467,13 @@ class AsistenciaService:
                 
                 # NOTA ARQUITECTURA: Ya no borramos los datos de "resultado" (hora_entrada_real, etc)
                 # para que "asistencias" se mantenga como la FUENTE DE VERDAD con el registro JORNADA_ESPECIAL completo.
+            else:
+                # Si el día es hábil ordinario (ht_val > 0) y no es JE validada, limpiar propuesta huérfana
+                if save and je_prev and not has_validated_je:
+                    await self.repository.db.execute(
+                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
+                        (empleado_id, fecha)
+                    )
 
         # ── FASE 2 (Paso D): DOBLE ESCRITURA A horas_extras ───────────────────
         # Fix 3: Post-interceptor JE. Si fue interceptado, minutos_extra_bruto ya es 0
@@ -3407,14 +3520,16 @@ class AsistenciaService:
         # Si existe una jornada especial registrada para esta fecha y la asistencia base era LIBRE,
         # pisar el estado en la tabla asistencias a JORNADA_ESPECIAL
         try:
-            je_check = await self.repository.db.fetch_one(
-                "SELECT id, estado FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
-                (empleado_id, fecha)
-            )
-            if je_check and resultado and resultado.get('estado') == 'LIBRE':
-                resultado['estado'] = 'JORNADA_ESPECIAL'
-                if save:
-                    await self.repository.upsert_asistencia(resultado)
+            ht_val_check = float(resultado.get('horas_teoricas') or 0.0)
+            if ht_val_check == 0.0:
+                je_check = await self.repository.db.fetch_one(
+                    "SELECT id, estado FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                    (empleado_id, fecha)
+                )
+                if je_check and resultado and resultado.get('estado') == 'LIBRE':
+                    resultado['estado'] = 'JORNADA_ESPECIAL'
+                    if save:
+                        await self.repository.upsert_asistencia(resultado)
         except Exception as _e_je:
             logger.error(f"Error superponiendo JORNADA_ESPECIAL en asistencia: {_e_je}")
 
@@ -3592,7 +3707,7 @@ class AsistenciaService:
         """
         
         q_asig = f"""
-            SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.nombre as turno_nombre
+            SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.permite_viajes_largos, t.nombre as turno_nombre
             FROM asignacion_turnos a
             JOIN turnos t ON a.turno_id = t.id
             WHERE a.empleado_id IN ({ids_ph})
@@ -3684,6 +3799,7 @@ class AsistenciaService:
             if t_info:
                 emp['meta_horas_semanales'] = t_info.get('meta_horas_semanales') or 45.0
                 emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'DINAMICO_FLEXIBLE'
+                emp['permite_viajes_largos'] = t_info.get('permite_viajes_largos') or 0
                 emp['turno'] = t_info.get('turno_nombre')
                 t_id = t_info.get('turno_id')
                 emp['primer_dia_semana_turno'] = primer_dia_por_turno.get(t_id, 1)  # default Lunes
@@ -3691,10 +3807,24 @@ class AsistenciaService:
             matrix[eid] = {'info': emp}
 
 
+        hoy_str = _get_now_local().strftime("%Y-%m-%d")
+
         for a in asistencias:
             eid = a['empleado_id']
             if eid in matrix:
-                matrix[eid][a['fecha']] = a
+                f_asist = a.get('fecha')
+                # [FIX EN_CURSO DIAS PASADOS]: Un día pasado NUNCA puede permanecer en EN_CURSO
+                # a menos que sea un turno nocturno activo de ayer durante su ventana matutina.
+                if a.get('estado') == 'EN_CURSO' and f_asist and f_asist < hoy_str:
+                    if a.get('hora_entrada_real') and a.get('hora_salida_real'):
+                        a['estado'] = 'ATRASO' if a.get('tiene_atraso') else 'OK'
+                    elif a.get('hora_entrada_real') and not a.get('hora_salida_real'):
+                        a['estado'] = 'ANOMALIA'
+                        a['observaciones'] = (a.get('observaciones') or '').replace('Jornada en curso (falta salida).', 'Solo una marcación (falta salida).')
+                    elif not a.get('hora_entrada_real'):
+                        a['estado'] = 'INASISTENCIA'
+
+                matrix[eid][f_asist] = a
 
         # Superponer jornadas especiales — enriquecer marcas, NO pisar asistencias.estado
         # Tabla jornadas_especiales.estado es un estado INTERNO de flujo de validación:
@@ -3709,6 +3839,9 @@ class AsistenciaService:
         for j in jornadas_especiales:
             eid = j['empleado_id']
             if eid in matrix:
+                is_emp_bolsa = (matrix[eid].get('info', {}).get('tipo_programacion') == 'FLEXIBLE_BOLSA')
+                if is_emp_bolsa:
+                    continue
                 f_str = j['fecha']
                 je_estado = j['estado']
 
@@ -3765,27 +3898,62 @@ class AsistenciaService:
             f_ini_vl = v_dict['fecha_inicio']
             f_fin_vl = v_dict['fecha_fin']
             if eid in matrix:
-                # Superponer el objeto viaje_largo en TODOS los días que abarca el viaje
-                from datetime import datetime, timedelta
                 try:
                     d_cur = datetime.strptime(f_ini_vl[:10], '%Y-%m-%d')
                     d_end = datetime.strptime(f_fin_vl[:10], '%Y-%m-%d')
+
+                    # Chequear si cruza domingos o feriados
+                    tiene_feriado_en_ruta = False
+                    tiene_domingo_en_ruta = False
+                    d_chk = d_cur
+                    while d_chk <= d_end:
+                        ds_c = d_chk.strftime('%Y-%m-%d')
+                        if ds_c in feriados_dict:
+                            tiene_feriado_en_ruta = True
+                        if d_chk.weekday() == 6:
+                            tiene_domingo_en_ruta = True
+                        d_chk += timedelta(days=1)
+
+                    v_dict['feriado_en_ruta'] = tiene_feriado_en_ruta
+                    v_dict['domingo_en_ruta'] = tiene_domingo_en_ruta
+
+                    # Evaluar descanso post-viaje en el día de retorno
+                    ds_fin = d_end.strftime('%Y-%m-%d')
+                    if ds_fin in matrix[eid]:
+                        cell_retorno = matrix[eid][ds_fin]
+                        h_salida_vl = v_dict['fecha_fin'][11:16] if (v_dict.get('fecha_fin') and len(v_dict['fecha_fin']) > 10) else None
+                        h_ent_local = cell_retorno.get('hora_entrada_real')
+                        if h_salida_vl and h_ent_local:
+                            try:
+                                dt_ret = datetime.strptime(f"{ds_fin} {h_salida_vl[:5]}", "%Y-%m-%d %H:%M")
+                                dt_ent = datetime.strptime(f"{ds_fin} {h_ent_local[:5]}", "%Y-%m-%d %H:%M")
+                                if dt_ent > dt_ret:
+                                    diff_descanso = round((dt_ent - dt_ret).total_seconds() / 3600.0, 1)
+                                    v_dict['descanso_post_viaje_horas'] = diff_descanso
+                                    if diff_descanso < 8.0:
+                                        v_dict['alerta_descanso_post_viaje'] = True
+                                    else:
+                                        v_dict['cumple_descanso_post_viaje'] = True
+                            except Exception:
+                                pass
+
                     while d_cur <= d_end:
                         ds = d_cur.strftime('%Y-%m-%d')
                         if ds in matrix[eid]:
-                            matrix[eid][ds]['viaje_largo'] = v_dict
-                            matrix[eid][ds]['tiene_viaje_largo'] = 1
+                            cell = matrix[eid][ds]
+                            cell['viaje_largo'] = v_dict
+                            cell['tiene_viaje_largo'] = 1
+                            cell['tiene_anomalia'] = 0
+                            cell['alerta_anomalia'] = 0
+                            if cell.get('estado') in ('ANOMALIA', 'INASISTENCIA', 'PENDIENTE', None):
+                                cell['estado'] = 'VIAJE_LARGO'
                         d_cur += timedelta(days=1)
                 except Exception:
                     pass
 
-
-
-
         # Proyectar feriados no procesados
-        from datetime import datetime as _dt, timedelta as _td
-        cur = _dt.strptime(fecha_inicio, "%Y-%m-%d")
-        fin_dt = _dt.strptime(fecha_fin, "%Y-%m-%d")
+        cur = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        fin_dt = datetime.strptime(fecha_fin, "%Y-%m-%d")
         while cur <= fin_dt:
             f_str = cur.strftime("%Y-%m-%d")
             if f_str in feriados_dict:
@@ -3800,7 +3968,7 @@ class AsistenciaService:
                             'hora_salida_real': None,
                             'horas_trabajadas': 0,
                         }
-            cur += _td(days=1)
+            cur += timedelta(days=1)
 
         # Justificaciones del período (precargadas concurrentemente arriba)
         justificaciones = [dict(j) for j in just_rows]
@@ -3810,20 +3978,44 @@ class AsistenciaService:
             eid = just.get('empleado_id')
             if eid in matrix:
                 try:
-                    cur_dt = _dt.strptime(just['fecha_inicio'][:10], "%Y-%m-%d")
-                    end_dt = _dt.strptime(just['fecha_fin'][:10], "%Y-%m-%d")
+                    cur_dt = datetime.strptime(just['fecha_inicio'][:10], "%Y-%m-%d")
+                    end_dt = datetime.strptime(just['fecha_fin'][:10], "%Y-%m-%d")
                     nomen = (just.get('tipo_nomenclatura') or just.get('nomenclatura') or 'DEOP').upper()
                     t_nombre = (just.get('tipo_nombre') or just.get('nombre') or 'DESCANSO OPERATIVO').upper()
+                    es_corrido = bool(just.get('dias_corridos'))
+                    sobreescribe_fer = bool(just.get('sobreescribe_feriados'))
+                    emp_td = matrix[eid].get('info', {}).get('turno_dias', {})
+
                     while cur_dt <= end_dt:
                         f_str = cur_dt.strftime("%Y-%m-%d")
                         if f_str in matrix[eid]:
                             cell = matrix[eid][f_str]
-                            cell['justificacion_id'] = just.get('id')
-                            cell['justificacion'] = just
-                            cell['nomenclatura'] = nomen
-                            # Si el estado es OK, INASISTENCIA, PENDIENTE o ANOMALIA, forzar el estado de la justificación
-                            cell['estado'] = t_nombre
-                        cur_dt += _td(days=1)
+                            is_fer = (f_str in feriados_dict) or cell.get('estado') == 'FERIADO'
+                            weekday_db = cur_dt.weekday()  # 0=Lun .. 6=Dom
+                            td_cfg = emp_td.get(str(weekday_db)) or emp_td.get(weekday_db) or {}
+                            is_struct_libre = bool(td_cfg.get('es_libre'))
+                            is_cell_libre = (cell.get('estado') == 'LIBRE')
+                            has_work_punches = bool(cell.get('hora_entrada_real') or cell.get('hora_salida_real'))
+
+                            # Si es feriado y la justificación NO sobreescribe feriados -> Mantener FERIADO
+                            if is_fer and not sobreescribe_fer:
+                                if not has_work_punches:
+                                    cell['estado'] = 'FERIADO'
+                                    cell['observaciones'] = feriados_dict.get(f_str, 'Feriado Nacional')
+                                    cell.pop('justificacion_id', None)
+                                    cell.pop('nomenclatura', None)
+                            # Si es día libre (estructural o en celda) sin marcas y la justificación NO es por días corridos -> Mantener LIBRE
+                            elif (is_struct_libre or is_cell_libre) and not es_corrido and not has_work_punches:
+                                cell['estado'] = 'LIBRE'
+                                cell['observaciones'] = 'Día Libre de Turno'
+                                cell.pop('justificacion_id', None)
+                                cell.pop('nomenclatura', None)
+                            else:
+                                cell['justificacion_id'] = just.get('id')
+                                cell['justificacion'] = just
+                                cell['nomenclatura'] = nomen
+                                cell['estado'] = t_nombre
+                        cur_dt += timedelta(days=1)
                 except Exception as _exc:
                     logger.debug(f"[Matrix] Error inyectando justificacion: {_exc}")
 

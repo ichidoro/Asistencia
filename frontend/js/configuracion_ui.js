@@ -1394,6 +1394,7 @@ window.togglePagador = async function (id, nuevoEstado) {
 // ==========================================
 async function loadEmailSettings() {
     const emailRRHH = document.getElementById('email-notificaciones-rrhh');
+    const emailCierreRRHH = document.getElementById('email-notificaciones-cierre-rrhh');
     if (emailRRHH) {
         try {
             const res = await fetch(`${API_CONFIG}ajustes/email_notificaciones_rrhh/`);
@@ -1402,28 +1403,50 @@ async function loadEmailSettings() {
                 emailRRHH.value = data || '';
             }
         } catch (e) {
-            console.error("Error cargando email de notificaciones", e);
+            console.error("Error cargando email de notificaciones globales", e);
+        }
+    }
+    if (emailCierreRRHH) {
+        try {
+            const res = await fetch(`${API_CONFIG}ajustes/email_notificaciones_cierre_rrhh/`);
+            if (res.ok) {
+                const data = await res.json();
+                emailCierreRRHH.value = data || '';
+            }
+        } catch (e) {
+            console.error("Error cargando email de notificaciones de cierre", e);
         }
     }
 }
 
 window.saveGlobalAjustes = async function () {
     const emailRRHH = document.getElementById('email-notificaciones-rrhh');
-    if (!emailRRHH) return;
+    const emailCierreRRHH = document.getElementById('email-notificaciones-cierre-rrhh');
+    if (!emailRRHH && !emailCierreRRHH) return;
 
     const btn = document.querySelector('#tab-correo .btn-primary');
     if (btn) btn.disabled = true;
 
     try {
-        const response = await fetch(`${API_CONFIG}ajustes/email_notificaciones_rrhh/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(emailRRHH.value.trim())
-        });
+        if (emailRRHH) {
+            const response = await fetch(`${API_CONFIG}ajustes/email_notificaciones_rrhh/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(emailRRHH.value.trim())
+            });
+            if (!response.ok) throw new Error("Error al guardar correos globales");
+        }
 
-        if (!response.ok) throw new Error("Error al guardar");
+        if (emailCierreRRHH) {
+            const responseCierre = await fetch(`${API_CONFIG}ajustes/email_notificaciones_cierre_rrhh/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(emailCierreRRHH.value.trim())
+            });
+            if (!responseCierre.ok) throw new Error("Error al guardar correos exclusivos de cierre");
+        }
 
-        showToast("Proceso Exitoso", "success");
+        showToast("Ajustes globales de correo guardados exitosamente", "success");
     } catch (e) {
         alert("Error: " + e.message);
     } finally {

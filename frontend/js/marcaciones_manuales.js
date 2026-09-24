@@ -192,12 +192,12 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         
         // Obtener info del turno del empleado
         const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
-        const isBolsa = (empInfo && (empInfo.tipo_programacion === 'FLEXIBLE_BOLSA' || (empInfo.area_nombre && empInfo.area_nombre.toUpperCase().includes('LOGISTICA'))));
+        const permiteViajes = Boolean(empInfo && (empInfo.permite_viajes_largos === 1 || empInfo.permite_viajes_largos === true));
         
-        // REGLA: Mostrar solo si es Bolsa Flexible / Logística Y la celda tiene ANOMALIA o marcación registrada
-        const tieneMarcaOAnomalia = asistJ && (asistJ.estado === 'ANOMALIA' || asistJ.hora_entrada_real || asistJ.hora_salida_real || (asistJ.marcas_consumidas_ids && asistJ.marcas_consumidas_ids !== '[]'));
+        // REGLA: Mostrar solo si el turno tiene explícitamente permite_viajes_largos activo Y la celda tiene ANOMALIA o marcación
+        const tieneMarcaOAnomalia = asistJ && (asistJ.estado === 'ANOMALIA' || asistJ.tiene_anomalia || asistJ.alerta_anomalia || asistJ.hora_entrada_real || asistJ.hora_salida_real || (asistJ.marcas_consumidas_ids && asistJ.marcas_consumidas_ids !== '[]'));
 
-        if (isBolsa && tieneMarcaOAnomalia) {
+        if (permiteViajes && tieneMarcaOAnomalia) {
             btnViajeLargo.classList.remove('d-none');
         } else {
             btnViajeLargo.classList.add('d-none');
@@ -1454,7 +1454,7 @@ function getViajeLargoAuthToken() {
     return localStorage.getItem('access_token') || localStorage.getItem('token') || window.AuthToken || '';
 }
 
-async function proceedToViajeLargo() {
+async function proceedToViajeLargo(customStartId, customRetId) {
     const empId = marcacionesManualesState.currentEmpId;
     const dateStr = marcacionesManualesState.currentDate;
     const empNombre = marcacionesManualesState.currentEmpNombre;
@@ -1499,10 +1499,13 @@ async function proceedToViajeLargo() {
         document.getElementById('vl-emp-id').value = empId;
         document.getElementById('vl-fecha-ini').value = dateStr;
 
-        // Obtener viaje_largo existente de la matriz (si ya fue registrado previamente)
+        // Obtener viaje_largo existente de la respuesta o de la matriz
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
-        const vlExistente = asistJ ? (asistJ.viaje_largo || null) : null;
+        const vlExistente = data.viaje_existente || (asistJ ? (asistJ.viaje_largo || null) : null);
+
+        const effectiveStartId = customStartId || (vlExistente ? vlExistente.log_entrada_id : null);
+        const effectiveRetId = customRetId || (vlExistente ? vlExistente.log_salida_id : null);
 
         if (vlExistente) {
             document.getElementById('vl-ciudad-destino').value = vlExistente.ciudad_destino || '';
@@ -1519,6 +1522,20 @@ async function proceedToViajeLargo() {
             document.getElementById('vl-observaciones').value = '';
         }
 
+        // Resetear toggle de retorno manual
+        const checkRetManual = document.getElementById('vl-check-retorno-manual');
+        const boxRetManual = document.getElementById('vl-box-retorno-manual');
+        const contSelectRet = document.getElementById('vl-container-select-retorno');
+        if (checkRetManual) checkRetManual.checked = false;
+        if (boxRetManual) boxRetManual.style.display = 'none';
+        if (contSelectRet) contSelectRet.style.display = 'block';
+        
+        // Reset campos retorno manual
+        const inRetFecha = document.getElementById('vl-manual-retorno-fecha');
+        const inRetHora = document.getElementById('vl-manual-retorno-hora');
+        if (inRetFecha) inRetFecha.value = '';
+        if (inRetHora) inRetHora.value = '';
+
         // Poblar Selector INICIO (#vl-select-inicio)
         const selectIni = document.getElementById('vl-select-inicio');
         selectIni.innerHTML = '';
@@ -1526,13 +1543,23 @@ async function proceedToViajeLargo() {
         for (let i = 0; i < candInicio.length; i++) {
             const c = candInicio[i];
             const tagStr = c.consumida ? '(Turno Ordinario)' : '(Anomalía Libre)';
-            const isSel = (vlExistente && vlExistente.log_entrada_id == c.id) ? 'selected' : '';
+            const isSel = (effectiveStartId && effectiveStartId == c.id) ? 'selected' : (!effectiveStartId && i === 0 ? 'selected' : '');
             htmlOptsIni += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" ${isSel}>${c.fecha_hora} — ${c.tipo} ${tagStr}</option>`;
         }
         selectIni.innerHTML = htmlOptsIni;
 
         // Poblar Selector RETORNO (#vl-select-retorno) dinámicamente según Inicio seleccionado
-        window.updateViajeLargoCandidatosRetorno(vlExistente ? vlExistente.log_salida_id : null);
+        window.updateViajeLargoCandidatosRetorno(effectiveRetId);
+        
+        // Si no hay candidatos de retorno disponibles, activar retorno manual automáticamente
+        if (candRetorno.length === 0 || selectIni.options.length === 0) {
+            if (checkRetManual) {
+                checkRetManual.checked = true;
+                window.toggleViajeLargoRetornoManual();
+            }
+        }
+        
+        window.onViajeLargoDestinoChange();
 
         // Mostrar Modal Viaje Largo con retardo seguro para evitar choques con el backdrop de Bootstrap
         setTimeout(() => {
@@ -1551,6 +1578,43 @@ async function proceedToViajeLargo() {
         alert("Error al obtener marcaciones para Viaje Largo: " + e.message);
     }
 }
+
+window.toggleViajeLargoRetornoManual = function() {
+    const isManual = document.getElementById('vl-check-retorno-manual')?.checked;
+    const boxRetManual = document.getElementById('vl-box-retorno-manual');
+    const contSelectRet = document.getElementById('vl-container-select-retorno');
+    const inRetFecha = document.getElementById('vl-manual-retorno-fecha');
+    const inRetHora = document.getElementById('vl-manual-retorno-hora');
+    const fechaIni = document.getElementById('vl-fecha-ini')?.value;
+
+    if (isManual) {
+        if (boxRetManual) boxRetManual.style.display = 'block';
+        if (contSelectRet) contSelectRet.style.display = 'none';
+        if (inRetFecha && !inRetFecha.value && fechaIni) {
+            // Sugerir fecha fin como día siguiente o subsiguiente
+            const d = new Date(fechaIni + 'T00:00:00');
+            d.setDate(d.getDate() + 2);
+            inRetFecha.value = d.toISOString().substring(0, 10);
+        }
+        if (inRetHora && !inRetHora.value) {
+            inRetHora.value = '01:45:00';
+        }
+    } else {
+        if (boxRetManual) boxRetManual.style.display = 'none';
+        if (contSelectRet) contSelectRet.style.display = 'block';
+    }
+    window.updateViajeLargoCalculos();
+};
+
+async function proceedToViajeLargoConSugerencia(empId, dateStr, startLogId, retLogId) {
+    marcacionesManualesState.currentEmpId = empId;
+    marcacionesManualesState.currentDate = dateStr;
+    const empMatrix = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+    const info = empMatrix && empMatrix.info ? empMatrix.info : null;
+    marcacionesManualesState.currentEmpNombre = info ? `${info.nombre} ${info.apellido_paterno}` : `Empleado ${empId}`;
+    await proceedToViajeLargo(startLogId, retLogId);
+}
+window.proceedToViajeLargoConSugerencia = proceedToViajeLargoConSugerencia;
 
 window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
     const selectIni = document.getElementById('vl-select-inicio');
@@ -1572,9 +1636,10 @@ window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
         const dtRet = new Date(c.fecha_hora.replace(' ', 'T'));
         if (dtRet > dtIni) {
             const diffHours = ((dtRet - dtIni) / (1000 * 3600)).toFixed(1);
-            const tagStr = c.consumida ? '(Consumida)' : '(Anomalía Libre)';
-            const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : '';
-            htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
+            const tagStr = c.tag || (c.consumida ? '(Consumida)' : '(Anomalía Libre)');
+            const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : (!preselectedRetId && (c.recomendado || i === 0) ? 'selected' : '');
+            const starIcon = c.recomendado ? '⭐ ' : '';
+            htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${starIcon}${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
         }
     }
 
@@ -1597,38 +1662,66 @@ window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
 };
 
 function updateViajeLargoCalculos(sourceField) {
-    const selectRet = document.getElementById('vl-select-retorno');
-    if (!selectRet || selectRet.selectedIndex < 0) return;
-    const opt = selectRet.options[selectRet.selectedIndex];
-    if (!opt) {
-        document.getElementById('vl-txt-duracion').innerText = '0.0h';
-        return;
+    const isManual = document.getElementById('vl-check-retorno-manual')?.checked;
+    let totalReloj = 0;
+
+    const selectIni = document.getElementById('vl-select-inicio');
+    const optIni = selectIni && selectIni.selectedIndex >= 0 ? selectIni.options[selectIni.selectedIndex] : null;
+    const fhIniStr = optIni ? optIni.getAttribute('data-fecha-hora') : null;
+
+    if (isManual) {
+        const inRetFecha = document.getElementById('vl-manual-retorno-fecha')?.value;
+        const inRetHora = document.getElementById('vl-manual-retorno-hora')?.value;
+        if (fhIniStr && inRetFecha && inRetHora) {
+            const dtIni = new Date(fhIniStr.replace(' ', 'T'));
+            const dtRet = new Date(`${inRetFecha}T${inRetHora.length === 5 ? inRetHora + ':00' : inRetHora}`);
+            if (dtRet > dtIni) {
+                totalReloj = (dtRet - dtIni) / (1000 * 3600);
+            }
+        }
+    } else {
+        const selectRet = document.getElementById('vl-select-retorno');
+        if (selectRet && selectRet.selectedIndex >= 0) {
+            const opt = selectRet.options[selectRet.selectedIndex];
+            if (opt) {
+                totalReloj = parseFloat(opt.getAttribute('data-horas')) || 0;
+            }
+        }
     }
 
-    const totalReloj = parseFloat(opt.getAttribute('data-horas')) || 0;
     document.getElementById('vl-txt-duracion').innerText = `${totalReloj.toFixed(1)}h reloj`;
 
     const elManejo = document.getElementById('vl-hrs-manejo');
     const elDescanso = document.getElementById('vl-hrs-descanso');
     const elReconocidas = document.getElementById('vl-hrs-reconocidas');
 
-    if (!elManejo || !elDescanso || !elReconocidas) return;
-
     let hManejo = parseFloat(elManejo.value);
     let hDescanso = parseFloat(elDescanso.value);
 
     if (sourceField === 'descanso') {
-        if (!isNaN(hDescanso) && totalReloj > 0) {
+        if (elDescanso.value.trim() === '') {
+            // Si el usuario vacía el descanso, el manejo vuelve al 100% de las horas reloj
+            hManejo = totalReloj;
+            elManejo.value = hManejo.toFixed(1);
+            elReconocidas.value = hManejo.toFixed(1);
+        } else if (!isNaN(hDescanso) && totalReloj >= 0) {
             hManejo = Math.max(0, totalReloj - hDescanso);
             elManejo.value = hManejo.toFixed(1);
             elReconocidas.value = hManejo.toFixed(1);
         }
     } else if (sourceField === 'manejo') {
-        if (!isNaN(hManejo) && totalReloj > 0) {
+        if (elManejo.value.trim() === '') {
+            // Si el usuario vacía el manejo, el descanso absorbe el total reloj
+            hDescanso = totalReloj;
+            elDescanso.value = hDescanso.toFixed(1);
+            elReconocidas.value = '0.0';
+        } else if (!isNaN(hManejo) && totalReloj >= 0) {
             hDescanso = Math.max(0, totalReloj - hManejo);
             elDescanso.value = hDescanso.toFixed(1);
             elReconocidas.value = hManejo.toFixed(1);
         }
+    } else if (sourceField === 'reconocidas') {
+        // El usuario ajusta directamente la acreditación especial a la bolsa
     } else {
         // Inicializar por defecto con el totalReloj SOLO si no hay un valor ingresado/cargado previamente
         if (!elManejo.value || isNaN(parseFloat(elManejo.value))) {
@@ -1637,19 +1730,226 @@ function updateViajeLargoCalculos(sourceField) {
             elReconocidas.value = totalReloj.toFixed(1);
         }
     }
+
+    // Actualizar sugerencias y alertas de ruta
+    window.onViajeLargoDestinoChange();
+    if (typeof window.evaluarAlertasContextualesViajeLargo === 'function') {
+        window.evaluarAlertasContextualesViajeLargo();
+    }
 }
+
+// ── CATÁLOGO DE DISTANCIAS VIALES DESDE SAN FERNANDO (CHILE) ──────────────
+const DISTANCIAS_CHILE_SAN_FERNANDO = {
+    "arica": { nombre: "Arica", km_ida: 2190, vel_prom: 65, horas_descarga: 4 },
+    "iquique": { nombre: "Iquique", km_ida: 1900, vel_prom: 65, horas_descarga: 4 },
+    "antofagasta": { nombre: "Antofagasta", km_ida: 1500, vel_prom: 68, horas_descarga: 4 },
+    "calama": { nombre: "Calama", km_ida: 1680, vel_prom: 68, horas_descarga: 4 },
+    "copiapo": { nombre: "Copiapó", km_ida: 940, vel_prom: 70, horas_descarga: 3 },
+    "vallenar": { nombre: "Vallenar", km_ida: 790, vel_prom: 70, horas_descarga: 3 },
+    "la serena": { nombre: "La Serena / Coquimbo", km_ida: 610, vel_prom: 70, horas_descarga: 3 },
+    "coquimbo": { nombre: "Coquimbo / La Serena", km_ida: 610, vel_prom: 70, horas_descarga: 3 },
+    "ovalle": { nombre: "Ovalle", km_ida: 550, vel_prom: 68, horas_descarga: 2.5 },
+    "illapel": { nombre: "Illapel", km_ida: 430, vel_prom: 68, horas_descarga: 2 },
+    "los vilos": { nombre: "Los Vilos", km_ida: 360, vel_prom: 70, horas_descarga: 2 },
+    "valparaiso": { nombre: "Valparaíso / Viña del Mar", km_ida: 250, vel_prom: 68, horas_descarga: 2 },
+    "vina del mar": { nombre: "Viña del Mar / Valparaíso", km_ida: 250, vel_prom: 68, horas_descarga: 2 },
+    "san antonio": { nombre: "San Antonio", km_ida: 160, vel_prom: 65, horas_descarga: 2 },
+    "santiago": { nombre: "Santiago (RM)", km_ida: 140, vel_prom: 65, horas_descarga: 2 },
+    "rancagua": { nombre: "Rancagua", km_ida: 55, vel_prom: 60, horas_descarga: 1.5 },
+    "curico": { nombre: "Curicó", km_ida: 55, vel_prom: 65, horas_descarga: 1.5 },
+    "talca": { nombre: "Talca", km_ida: 115, vel_prom: 70, horas_descarga: 2 },
+    "linares": { nombre: "Linares", km_ida: 165, vel_prom: 70, horas_descarga: 2 },
+    "parral": { nombre: "Parral", km_ida: 210, vel_prom: 70, horas_descarga: 2 },
+    "chillan": { nombre: "Chillán", km_ida: 270, vel_prom: 70, horas_descarga: 2 },
+    "concepcion": { nombre: "Concepción / Talcahuano", km_ida: 370, vel_prom: 70, horas_descarga: 3 },
+    "talcahuano": { nombre: "Talcahuano / Concepción", km_ida: 370, vel_prom: 70, horas_descarga: 3 },
+    "los angeles": { nombre: "Los Ángeles", km_ida: 380, vel_prom: 70, horas_descarga: 2.5 },
+    "temuco": { nombre: "Temuco", km_ida: 540, vel_prom: 70, horas_descarga: 3 },
+    "villarrica": { nombre: "Villarrica / Pucón", km_ida: 620, vel_prom: 68, horas_descarga: 2.5 },
+    "pucon": { nombre: "Pucón / Villarrica", km_ida: 620, vel_prom: 68, horas_descarga: 2.5 },
+    "valdivia": { nombre: "Valdivia", km_ida: 710, vel_prom: 70, horas_descarga: 3 },
+    "osorno": { nombre: "Osorno", km_ida: 790, vel_prom: 70, horas_descarga: 3 },
+    "puerto montt": { nombre: "Puerto Montt / Pto. Varas", km_ida: 890, vel_prom: 70, horas_descarga: 3 },
+    "puerto varas": { nombre: "Puerto Varas / Pto. Montt", km_ida: 890, vel_prom: 70, horas_descarga: 3 },
+    "castro": { nombre: "Castro (Chiloé)", km_ida: 980, vel_prom: 65, horas_descarga: 4 },
+    "ancud": { nombre: "Ancud (Chiloé)", km_ida: 950, vel_prom: 65, horas_descarga: 4 },
+    "coyhaique": { nombre: "Coyhaique", km_ida: 1550, vel_prom: 60, horas_descarga: 5 },
+    "punta arenas": { nombre: "Punta Arenas", km_ida: 2850, vel_prom: 65, horas_descarga: 6 }
+};
+
+window.buscarRutaInfo = function(destinoRaw) {
+    if (!destinoRaw) return null;
+    const cleanStr = String(destinoRaw).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    for (const [k, v] of Object.entries(DISTANCIAS_CHILE_SAN_FERNANDO)) {
+        const kClean = k.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (cleanStr.includes(kClean) || kClean.includes(cleanStr)) {
+            return v;
+        }
+    }
+    return null;
+};
+
+window.onViajeLargoDestinoChange = function() {
+    const inputDest = document.getElementById('vl-ciudad-destino');
+    const cardSug = document.getElementById('vl-sugerencia-ruta-card');
+    const txtDist = document.getElementById('vl-ruta-distancia-txt');
+    const txtEst = document.getElementById('vl-ruta-estimado-txt');
+    if (!inputDest || !cardSug) return;
+
+    const val = inputDest.value.trim();
+    if (!val) {
+        cardSug.style.display = 'none';
+        return;
+    }
+
+    const selectRet = document.getElementById('vl-select-retorno');
+    const optRet = selectRet && selectRet.selectedIndex >= 0 ? selectRet.options[selectRet.selectedIndex] : null;
+    const totalReloj = optRet ? (parseFloat(optRet.getAttribute('data-horas')) || 0) : 0;
+
+    const ruta = window.buscarRutaInfo(val);
+    if (ruta) {
+        const kmTotal = ruta.km_ida * 2;
+        const horasManejoPuras = (kmTotal / ruta.vel_prom);
+        let horasManejoSugeridas = Math.round((horasManejoPuras + (ruta.horas_descarga || 2)) * 2) / 2;
+        
+        if (totalReloj > 0 && horasManejoSugeridas > totalReloj) {
+            horasManejoSugeridas = Math.min(totalReloj, Math.max(8.0, Math.round((totalReloj * 0.45) * 2) / 2));
+        }
+        
+        const horasDescansoSugeridas = totalReloj > 0 ? Math.max(0, Math.round((totalReloj - horasManejoSugeridas) * 2) / 2) : 0;
+
+        cardSug.style.display = 'block';
+        txtDist.innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i> San Fernando ➔ ${ruta.nombre}: <strong>~${ruta.km_ida.toLocaleString()} km</strong> (Ida y Vuelta: <strong>~${kmTotal.toLocaleString()} km</strong>)`;
+        txtEst.innerHTML = `⏱️ Estimado Transporte: <strong>${horasManejoSugeridas.toFixed(1)}h</strong> manejo / servicio (${ruta.vel_prom} km/h) &nbsp;|&nbsp; 🛌 <strong>${horasDescansoSugeridas.toFixed(1)}h</strong> descanso sugerido`;
+        
+        window._vl_sug_manejo = horasManejoSugeridas;
+        window._vl_sug_descanso = horasDescansoSugeridas;
+    } else {
+        if (totalReloj > 0) {
+            const hManejoProp = Math.round((totalReloj * 0.45) * 2) / 2;
+            const hDescProp = Math.max(0, Math.round((totalReloj - hManejoProp) * 2) / 2);
+            cardSug.style.display = 'block';
+            txtDist.innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i> San Fernando ➔ ${val} (Destino Personalizado)`;
+            txtEst.innerHTML = `⏱️ Proporción Estándar Transporte: <strong>${hManejoProp.toFixed(1)}h</strong> manejo (~45%) &nbsp;|&nbsp; 🛌 <strong>${hDescProp.toFixed(1)}h</strong> descanso (~55%)`;
+            window._vl_sug_manejo = hManejoProp;
+            window._vl_sug_descanso = hDescProp;
+        } else {
+            cardSug.style.display = 'none';
+        }
+    }
+    window.evaluarAlertasContextualesViajeLargo();
+};
+
+window.evaluarAlertasContextualesViajeLargo = function() {
+    const cardAlerta = document.getElementById('vl-alerta-contextual');
+    const icoAlerta = document.getElementById('vl-alerta-icono');
+    const titAlerta = document.getElementById('vl-alerta-titulo');
+    const cpoAlerta = document.getElementById('vl-alerta-cuerpo');
+    if (!cardAlerta || !icoAlerta || !titAlerta || !cpoAlerta) return;
+
+    const selectRet = document.getElementById('vl-select-retorno');
+    const optRet = selectRet && selectRet.selectedIndex >= 0 ? selectRet.options[selectRet.selectedIndex] : null;
+    const totalReloj = optRet ? (parseFloat(optRet.getAttribute('data-horas')) || 0) : 0;
+
+    const elManejo = document.getElementById('vl-hrs-manejo');
+    const elDescanso = document.getElementById('vl-hrs-descanso');
+    const hManejo = elManejo ? (parseFloat(elManejo.value) || 0) : 0;
+    const hDescanso = elDescanso ? (parseFloat(elDescanso.value) || 0) : 0;
+
+    const inputDest = document.getElementById('vl-ciudad-destino');
+    const destVal = inputDest ? inputDest.value.trim() : '';
+    const ruta = window.buscarRutaInfo(destVal);
+
+    if (totalReloj >= 20 && hDescanso >= 0.65 * totalReloj) {
+        const pct = Math.round((hDescanso / totalReloj) * 100);
+        cardAlerta.style.display = 'block';
+        cardAlerta.style.background = '#fffbeb';
+        cardAlerta.style.borderColor = '#fde68a';
+        icoAlerta.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning"></i>`;
+        titAlerta.className = 'fw-bold text-warning-emphasis';
+        titAlerta.innerText = `Aviso: Tiempo Detenido Elevado (${pct}% del viaje)`;
+        cpoAlerta.innerText = `Para los kilómetros de esta ruta, el camión estuvo detenido ${hDescanso.toFixed(1)}h de las ${totalReloj.toFixed(1)}h reloj. Posibles causas: Espera prolongada en andén de cliente, pernoctaciones en cabina o ruta con entregas intermedias.`;
+    } else if (totalReloj >= 24 && hDescanso < (totalReloj / 24.0) * 7.5) {
+        const reqMin = ((totalReloj / 24.0) * 8.0).toFixed(1);
+        cardAlerta.style.display = 'block';
+        cardAlerta.style.background = '#fef2f2';
+        cardAlerta.style.borderColor = '#fecaca';
+        icoAlerta.innerHTML = `<i class="bi bi-slash-circle-fill text-danger"></i>`;
+        titAlerta.className = 'fw-bold text-danger';
+        titAlerta.innerText = `Alerta Legal Art. 25 bis: Descanso Reducido`;
+        cpoAlerta.innerText = `Por normativa laboral, un viaje de ${totalReloj.toFixed(1)}h requiere un descanso acumulado mínimo de al menos ${reqMin}h (8h por cada 24h). Verifique registros de descanso antes del cierre.`;
+    } else if (ruta && hManejo > 0) {
+        const kmTotal = ruta.km_ida * 2;
+        const vel = kmTotal / hManejo;
+        if (vel > 85) {
+            cardAlerta.style.display = 'block';
+            cardAlerta.style.background = '#eff6ff';
+            cardAlerta.style.borderColor = '#bfdbfe';
+            icoAlerta.innerHTML = `<i class="bi bi-info-circle-fill text-primary"></i>`;
+            titAlerta.className = 'fw-bold text-primary';
+            titAlerta.innerText = `Información: Velocidad Promedio Elevada (~${Math.round(vel)} km/h)`;
+            cpoAlerta.innerText = `La velocidad calculada para los ${kmTotal} km supera el promedio habitual de camiones de carga pesada con acoplado.`;
+        } else {
+            cardAlerta.style.display = 'none';
+        }
+    } else {
+        cardAlerta.style.display = 'none';
+    }
+};
+
+window.aplicarSugerenciaRuta = function() {
+    if (window._vl_sug_manejo != null && window._vl_sug_descanso != null) {
+        document.getElementById('vl-hrs-manejo').value = window._vl_sug_manejo.toFixed(1);
+        document.getElementById('vl-hrs-descanso').value = window._vl_sug_descanso.toFixed(1);
+        document.getElementById('vl-hrs-reconocidas').value = window._vl_sug_manejo.toFixed(1);
+
+        // Auto-completar observaciones técnicas
+        const inputDest = document.getElementById('vl-ciudad-destino');
+        const destVal = inputDest ? inputDest.value.trim() : 'Destino';
+        const ruta = window.buscarRutaInfo(destVal);
+        const nomRuta = ruta ? ruta.nombre : destVal;
+        const kmStr = ruta ? `~${(ruta.km_ida * 2).toLocaleString()} km I/V` : '';
+        const obsEl = document.getElementById('vl-observaciones');
+        if (obsEl && !obsEl.value) {
+            obsEl.value = `Ruta San Fernando ➔ ${nomRuta} (${kmStr}). Estimación Art. 25 bis: ~${window._vl_sug_manejo.toFixed(1)}h conducción/servicio + ~${window._vl_sug_descanso.toFixed(1)}h descanso/esperas en ruta.`;
+        }
+        window.evaluarAlertasContextualesViajeLargo();
+    }
+};
 
 async function submitViajeLargo() {
     const empId = parseInt(document.getElementById('vl-emp-id').value);
     const fechaIni = document.getElementById('vl-fecha-ini').value;
     const logEntradaId = parseInt(document.getElementById('vl-log-entrada-id').value);
-    
-    const selectRet = document.getElementById('vl-select-retorno');
-    const optRet = (selectRet && selectRet.selectedIndex >= 0) ? selectRet.options[selectRet.selectedIndex] : null;
-    const logSalidaId = selectRet ? parseInt(selectRet.value) : 0;
-    
-    const optRetFh = optRet ? optRet.getAttribute('data-fecha-hora') : null;
-    const fechaFin = (optRet && optRet.getAttribute('data-fecha')) ? optRet.getAttribute('data-fecha') : (optRetFh ? optRetFh.substring(0, 10) : fechaIni);
+
+    const isManualRetorno = document.getElementById('vl-check-retorno-manual')?.checked;
+    let fechaRetornoManual = null;
+    let horaRetornoManual = null;
+
+    let logSalidaId = null;
+    let fechaFin = fechaIni;
+
+    if (isManualRetorno) {
+        fechaRetornoManual = document.getElementById('vl-manual-retorno-fecha')?.value;
+        horaRetornoManual = document.getElementById('vl-manual-retorno-hora')?.value;
+        if (!fechaRetornoManual || !horaRetornoManual) {
+            alert("Por favor ingrese la Fecha y Hora del Retorno Manual.");
+            return;
+        }
+        fechaFin = fechaRetornoManual;
+        logSalidaId = null;
+    } else {
+        const selectRet = document.getElementById('vl-select-retorno');
+        const optRet = (selectRet && selectRet.selectedIndex >= 0) ? selectRet.options[selectRet.selectedIndex] : null;
+        logSalidaId = selectRet ? parseInt(selectRet.value) : null;
+        const optRetFh = optRet ? optRet.getAttribute('data-fecha-hora') : null;
+        fechaFin = (optRet && optRet.getAttribute('data-fecha')) ? optRet.getAttribute('data-fecha') : (optRetFh ? optRetFh.substring(0, 10) : fechaIni);
+        
+        if (!logSalidaId) {
+            alert("Por favor seleccione una marcación de retorno o active 'El chofer olvidó marcar retorno'.");
+            return;
+        }
+    }
 
     const ciudadOrigen = document.getElementById('vl-ciudad-origen').value.trim() || 'Planta Aguacol';
     const ciudadDestino = document.getElementById('vl-ciudad-destino').value.trim();
@@ -1673,6 +1973,8 @@ async function submitViajeLargo() {
         fecha_fin: fechaFin,
         log_entrada_id: logEntradaId,
         log_salida_id: logSalidaId,
+        fecha_retorno_manual: fechaRetornoManual,
+        hora_retorno_manual: horaRetornoManual,
         ciudad_origen: ciudadOrigen,
         ciudad_destino: ciudadDestino,
         horas_manejo_efectivas: hrsManejo,
