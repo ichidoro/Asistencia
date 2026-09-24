@@ -234,7 +234,7 @@ class AsistenciaService:
                 'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
-                'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
+                'redondeo_minutos', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'permite_viajes_largos',
@@ -793,10 +793,9 @@ class AsistenciaService:
                 'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
-                'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
+                'redondeo_minutos', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre', 'permite_viajes_largos',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
-                'permite_viajes_largos',
             ]
             for td in td_rows:
                 tid = td['turno_id']
@@ -2404,16 +2403,16 @@ class AsistenciaService:
                         turnos_dict = bulk_ctx.get('turnos', {}).get(tid, {})
                         for sem, sem_dict in turnos_dict.items():
                             cfg = sem_dict.get(dia_semana)
-                            if cfg and (cfg.get('cruza_medianoche') or cfg.get('cruza_medianoche_2')):
+                            if cfg and cfg.get('cruza_medianoche'):
                                 puede_cruzar = True
                                 break
                     else:
                         rows = await db.fetch_all(
-                            "SELECT cruza_medianoche, cruza_medianoche_2 FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
+                            "SELECT cruza_medianoche FROM turno_dias WHERE turno_id = ? AND dia_semana = ?",
                             (tid, dia_semana)
                         )
                         for r in rows:
-                            if r['cruza_medianoche'] or r['cruza_medianoche_2']:
+                            if r['cruza_medianoche']:
                                 puede_cruzar = True
                                 break
 
@@ -2931,7 +2930,7 @@ class AsistenciaService:
                             'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion', 'umbral_horas_colacion',
                             'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                             'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
-                            'redondeo_minutos', 'es_turno_cortado', 'meta_horas_semanales',
+                            'redondeo_minutos', 'meta_horas_semanales',
                             'tipo_programacion', 'nombre',
                             'ventana_en_curso_minutos', 'tolerancia_exceso_colacion_minutos',
                             'rotacion_secuencial', 'semana_fallback_sin_marcas'
@@ -2945,7 +2944,6 @@ class AsistenciaService:
         is_day_off_night = bool(config_dia and config_dia.get('es_libre') and block_inteligente and int(block_inteligente[0]['fecha_hora'][11:13]) >= 21)
         if (tipo_prog == 'DINAMICO_FLEXIBLE' and puede_cruzar
                 and config_dia and not config_dia.get('cruza_medianoche')
-                and not config_dia.get('cruza_medianoche_2')
                 and not is_day_off_night
                 and block_inteligente):
             
@@ -2976,31 +2974,9 @@ class AsistenciaService:
                 if not any(not m['fecha_hora'].startswith(fecha) for m in block_inteligente):
                     puede_cruzar = False
 
-        # ── SELECCIÓN DE OPCIÓN PARA DINAMICO_FLEXIBLE ───────────────────────
+        # ── EXTRACCIÓN DE PROPIEDADES BASE ────────────────────────────────────
         if config_dia:
             config_dia = dict(config_dia)  # Copia para no mutar el origen del bulk_ctx
-            if tipo_prog == 'DINAMICO_FLEXIBLE' and config_dia.get('hora_entrada_2') and config_dia.get('hora_salida_2') and block_inteligente:
-                first_log_dt = datetime.strptime(block_inteligente[0]['fecha_hora'], "%Y-%m-%d %H:%M:%S")
-                ent_str_1 = config_dia.get('hora_entrada')
-                ent_str_2 = config_dia.get('hora_entrada_2')
-                
-                if ent_str_1 and ent_str_2:
-                    t_in_dt_1 = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str_1}:00", "%Y-%m-%d %H:%M:%S")
-                    t_in_dt_2 = datetime.strptime(f"{first_log_dt.strftime('%Y-%m-%d')} {ent_str_2}:00", "%Y-%m-%d %H:%M:%S")
-                    
-                    diff_1 = abs((first_log_dt - t_in_dt_1).total_seconds())
-                    diff_2 = abs((first_log_dt - t_in_dt_2).total_seconds())
-                    
-                    diff_1 = min(diff_1, 86400 - diff_1)
-                    diff_2 = min(diff_2, 86400 - diff_2)
-                    
-                    if diff_2 < diff_1:
-                        config_dia['hora_entrada'] = config_dia['hora_entrada_2']
-                        config_dia['hora_salida'] = config_dia['hora_salida_2']
-                        if 'cruza_medianoche_2' in config_dia:
-                            config_dia['cruza_medianoche'] = config_dia['cruza_medianoche_2']
-
-        # ── EXTRACCIÓN DE PROPIEDADES BASE ────────────────────────────────────
         es_libre_config = bool(config_dia and config_dia.get('es_libre'))
         es_nocturno_pre = bool(config_dia and config_dia.get('cruza_medianoche') and not es_libre_config)
 

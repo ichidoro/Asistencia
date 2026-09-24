@@ -207,11 +207,7 @@ class TurnoService:
                         if t_conf:
                             if t_conf['es_libre']:
                                 horario_str = "LIBRE"
-                            else:
                                 h1 = f"{t_conf['hora_entrada'] or '??'}-{t_conf['hora_salida'] or '??'}"
-                                # Turno cortado?
-                                if t_conf.get('hora_entrada_2'):
-                                    h1 += f" / {t_conf['hora_entrada_2']}-{t_conf['hora_salida_2']}"
                                 horario_str = h1
                         
                         active_turno = {

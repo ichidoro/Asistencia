@@ -28,7 +28,6 @@ class TurnoRepository:
                     umbral_horas_colacion REAL DEFAULT 0.0,
                     anclaje_entrada_minutos INTEGER DEFAULT 0,
                     anclaje_salida_minutos INTEGER DEFAULT 0,
-                    es_turno_cortado BOOLEAN DEFAULT 0,
                     hora_limite_ficticia TEXT,
                     area TEXT, -- Nuevo: Área de visibilidad
                     ventana_en_curso_minutos INTEGER DEFAULT 0,
@@ -84,9 +83,6 @@ class TurnoRepository:
         cols_td = set(await self.db.get_column_names("turno_dias"))
         migraciones_td = [
             ("num_semana",       "INTEGER DEFAULT 1"),
-            ("hora_entrada_2",   "TEXT"),
-            ("hora_salida_2",    "TEXT"),
-            ("cruza_medianoche_2", "INTEGER DEFAULT 0"),
             ("horas_teoricas",   "REAL DEFAULT 0"),
             ("etiqueta_bloque",  "TEXT"),
         ]

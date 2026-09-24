@@ -1435,11 +1435,6 @@ window.updateVisorPDF = function(isDownload = false) {
                 let e = config.hora_entrada ? config.hora_entrada.substring(0, 5) : "--:--";
                 let s = config.hora_salida ? config.hora_salida.substring(0, 5) : "--:--";
                 let text = `${e} a ${s}`;
-                if (config.hora_entrada_2 && config.hora_salida_2) {
-                    let e2 = config.hora_entrada_2.substring(0, 5);
-                    let s2 = config.hora_salida_2.substring(0, 5);
-                    text += `\no\n${e2} a ${s2}`;
-                }
                 row.push(text);
             }
         }

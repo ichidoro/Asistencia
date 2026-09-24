@@ -500,7 +500,6 @@ class QuantumMatrixEngine:
         redondeo_min = int(t_cfg.get('redondeo_minutos', 0) or 0)
         bounce_sec = max(60.0, float(redondeo_min * 60.0)) if redondeo_min > 0 else 180.0
 
-        es_cortado = bool(t_cfg.get('es_turno_cortado', False))
         hora_limite_ficticia = t_cfg.get('hora_limite_ficticia')
 
         es_libre_dia = bool(d_cfg.get('es_libre', False))
@@ -966,10 +965,6 @@ class QuantumMatrixEngine:
                 deuda_calculada = max(0.0, min_teo - min_trab - min_permiso_comp)
                 res['minutos_deuda'] = round(deuda_calculada, 2)
                 res['minutos_extra_bruto'] = 0.0
-
-        if es_cortado and res['estado'] == 'OK':
-            if horas_netas < (horas_teoricas * 0.85):
-                res['estado'] = 'SALIDA_ADELANTADA'
 
         return res
 

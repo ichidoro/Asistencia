@@ -104,9 +104,6 @@ class AsistenciaRepository:
         "minutos_permiso_personal_deuda", "minutos_permisos_detectados",
         "tiene_atraso", "tiene_salida_adelantada",
         "jornada_especial_id",
-        "hora_entrada_2_teorica", "hora_salida_2_teorica",
-        "hora_entrada_2_real", "hora_salida_2_real",
-        "horas_trabajadas_segmento_2",
         "fuente_marcacion", "hash_marcacion",
         "minutos_colacion_auto", "tolerancia_aplicada_tipo",
     })
