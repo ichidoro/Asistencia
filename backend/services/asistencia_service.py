@@ -1004,7 +1004,7 @@ class AsistenciaService:
                         break
                     if tipo_prog_init:
                         break
-                if tipo_prog_init not in ('CICLO_INTELIGENTE', 'DINAMICO_FLEXIBLE'):
+                if tipo_prog_init != 'CICLO_INTELIGENTE':
                     continue
 
                 f_asig_dt_init = datetime.strptime(first_assignment, "%Y-%m-%d")
@@ -1045,17 +1045,11 @@ class AsistenciaService:
                         sal_str_init = cfg_init_d.get('hora_salida')
                         if not ent_str_init or not sal_str_init:
                             continue
-                        try:
-                            t_ent_init = datetime.strptime(f"{log_fecha_init} {str(ent_str_init)[:5]}", "%Y-%m-%d %H:%M")
-                        except ValueError:
-                            continue
-                        # Corregir si el turno es nocturno y la entrada es antes de medianoche del día anterior
-                        if cfg_init_d.get('cruza_medianoche') and first_log_dt_init.hour < 12:
-                            t_ent_init -= timedelta(days=1)
-                        diff_s_init = abs((first_log_dt_init - t_ent_init).total_seconds())
-                        diff_s_init = min(diff_s_init, 86400 - diff_s_init) # Wrap around 24 hours
-                        if min_d_init is None or diff_s_init < min_d_init:
-                            min_d_init = diff_s_init
+                        p_teo = QuantumPhaseTopology.time_to_phase(ent_str_init)
+                        p_log = QuantumPhaseTopology.time_to_phase(first_log_dt_init)
+                        diff_min = abs(QuantumPhaseTopology.circular_distance(p_teo, p_log))
+                        if min_d_init is None or diff_min < min_d_init:
+                            min_d_init = diff_min
                             winner_init = nsem_init
 
                     rotativo_last_sem_dict[empleado_id] = winner_init
@@ -1887,13 +1881,8 @@ class AsistenciaService:
 
         # ── DETERMINACIÓN DEL TURNO Y CLASIFICACIÓN CUÁNTICA ──────────────────
         tipo_prog = asignacion.get('tipo_programacion') if asignacion else 'CICLO_INTELIGENTE'
-        if tipo_prog not in ('CICLO_INTELIGENTE', 'BOLSA_FLEXIBLE'):
-            if tipo_prog == 'DINAMICO_FLEXIBLE':
-                tipo_prog = 'CICLO_INTELIGENTE'
-            elif tipo_prog == 'FLEXIBLE_BOLSA':
-                tipo_prog = 'BOLSA_FLEXIBLE'
-            else:
-                tipo_prog = 'CICLO_INTELIGENTE'
+        if tipo_prog != 'BOLSA_FLEXIBLE':
+            tipo_prog = 'CICLO_INTELIGENTE'
 
         is_bolsa = (tipo_prog == 'BOLSA_FLEXIBLE')
         is_pvl = bool(

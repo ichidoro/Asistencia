@@ -94,10 +94,7 @@ class QuantumPhaseTopology:
             if p_out < p_in:
                 return True
             return False
-        if hora_ent_teo_str:
-            p_in = cls.time_to_phase(hora_ent_teo_str)
-            return p_in >= 1200.0
-        return False
+        return bool(cruza_medianoche)
 
     @classmethod
     def get_dynamic_observation_horizon(
@@ -279,20 +276,6 @@ class MultiBlockTensorSolver:
 
         clean_logs = TensorMarkDeduplicator.deduplicate_and_sort(logs, bounce_seconds=bounce_seconds)
         clean_logs = TensorMarkDeduplicator.apply_override_mask(clean_logs)
-
-        if not clean_logs:
-            return result
-
-        # Manejo de Salida residual en madrugada perteneciente al turno anterior
-        primera_marca = clean_logs[0]
-        p_tipo = str(primera_marca.get('tipo', '')).strip().lower()
-        p_dt = cls.parse_dt(primera_marca)
-        is_p_salida = p_tipo in ('salida', 'exit', 's', 'out', '2')
-
-        if is_p_salida and p_dt and p_dt.hour < 6 and len(clean_logs) > 1:
-            if primera_marca.get('id'):
-                result['marcas_consumidas_ids'].append(primera_marca['id'])
-            clean_logs = clean_logs[1:]
 
         if not clean_logs:
             return result
@@ -688,35 +671,9 @@ class QuantumMatrixEngine:
         consumidas_set = set(consumidas_previas or [])
         marcas_no_consumidas = [l for l in logs if l.get('id') not in consumidas_set]
 
-        # 3.1. DYNAMIC OBSERVATION HORIZON & DÍA PREPONDERANTE (BOLSA FLEXIBLE):
+        # 3.1. DYNAMIC OBSERVATION HORIZON:
         # Delimita la ventana temporal matemática para el turno de esta fecha específica.
         dt_fecha = datetime.strptime(fecha, "%Y-%m-%d")
-        ayer_str = (dt_fecha - timedelta(days=1)).strftime("%Y-%m-%d")
-
-        # Regla Día Preponderante (Bolsa Flexible):
-        # A) Si ayer hubo una entrada tardía (>= 20:00) no consumida, hoy es el día preponderante
-        marca_ayer_nocturna = None
-        if is_bolsa:
-            for l in marcas_no_consumidas:
-                fh = str(l.get('fecha_hora', ''))
-                if fh.startswith(ayer_str) and len(fh) >= 16 and fh[11:16] >= "20:00":
-                    t_m = str(l.get('tipo', '') or '').strip().lower()
-                    if t_m in {'entrada', 'entry', 'e', 'in', '1'}:
-                        marca_ayer_nocturna = l
-                        break
-
-        # B) Si hoy solo hay una entrada nocturna tardía (>= 20:00) y ninguna marca diurna,
-        # se reserva para mañana (día preponderante del chofer)
-        marcas_hoy_cand = [l for l in marcas_no_consumidas if str(l.get('fecha_hora', '')).startswith(fecha)]
-        marcas_hoy_diurnas = [l for l in marcas_hoy_cand if str(l.get('fecha_hora', ''))[11:16] < "20:00"]
-        marcas_hoy_nocturnas = [l for l in marcas_hoy_cand if str(l.get('fecha_hora', ''))[11:16] >= "20:00"]
-
-        postergar_nocturna_hoy = False
-        if is_bolsa and not marcas_hoy_diurnas and marcas_hoy_nocturnas and not marca_ayer_nocturna:
-            primer_noc = marcas_hoy_nocturnas[0]
-            t_m = str(primer_noc.get('tipo', '') or '').strip().lower()
-            if t_m in {'entrada', 'entry', 'e', 'in', '1'}:
-                postergar_nocturna_hoy = True
 
         es_nocturno = cruza_med
         if not es_nocturno and hora_ent_teo and hora_sal_teo:
@@ -724,14 +681,6 @@ class QuantumMatrixEngine:
             p_out = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
             if p_out < p_in:
                 es_nocturno = True
-
-        if not is_bolsa and marcas_hoy_cand:
-            try:
-                primera_fh = str(marcas_hoy_cand[0].get('fecha_hora', ''))
-                if len(primera_fh) >= 13 and int(primera_fh[11:13]) >= 18:
-                    es_nocturno = True
-            except Exception:
-                pass
 
         start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
             fecha_str=fecha,
@@ -742,23 +691,15 @@ class QuantumMatrixEngine:
             anclaje_salida_minutos=anclaje_salida,
         )
 
-        if marca_ayer_nocturna:
-            dt_ayer_m = datetime.strptime(str(marca_ayer_nocturna['fecha_hora'])[:19], "%Y-%m-%d %H:%M:%S")
-            start_horizon = min(start_horizon, dt_ayer_m - timedelta(minutes=60))
-            end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
-        elif es_nocturno:
-            end_horizon = dt_fecha + timedelta(days=1, hours=14)
-
         marcas_disponibles = []
-        if not postergar_nocturna_hoy:
-            for l in marcas_no_consumidas:
-                fh_str = str(l.get('fecha_hora', ''))[:19]
-                try:
-                    dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
-                    if start_horizon <= dt_l <= end_horizon:
-                        marcas_disponibles.append(l)
-                except Exception:
-                    pass
+        for l in marcas_no_consumidas:
+            fh_str = str(l.get('fecha_hora', ''))[:19]
+            try:
+                dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
+                if start_horizon <= dt_l <= end_horizon:
+                    marcas_disponibles.append(l)
+            except Exception:
+                pass
 
         # 4. Segmentación Multi-Bloque (+2 y Emergencias)
         segment_res = MultiBlockTensorSolver.segment_blocks(
@@ -1039,10 +980,6 @@ class QuantumMatrixEngine:
                 umbral_horas_colacion=umbral_col,
                 tolerancia_exceso_minutos=tolerancia_exceso_col
             )
-            if min_col_ap > 0 and not res['hora_salida_colacion']:
-                mitad = r_ent_dt + timedelta(seconds=(r_sal_dt - r_ent_dt).total_seconds() / 2.0)
-                res['hora_salida_colacion'] = (mitad - timedelta(minutes=min_col_ap / 2.0)).strftime("%H:%M:%S")
-                res['hora_entrada_colacion'] = (mitad + timedelta(minutes=min_col_ap / 2.0)).strftime("%H:%M:%S")
 
         res['horas_trabajadas'] = round(horas_netas, 4)
         res['minutos_colacion'] = min_col_ap

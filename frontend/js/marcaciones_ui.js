@@ -67,6 +67,19 @@ window.getDatesInRange = function(fechaInicio, fechaFin) {
     return dates;
 };
 
+window.timeToMinutes = function(tStr) {
+    if (!tStr) return 0;
+    const parts = String(tStr).trim().split(':').map(Number);
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+};
+
+window.circularTimeDiff = function(t1, t2) {
+    let diff = (window.timeToMinutes(t2) - window.timeToMinutes(t1)) % 1440;
+    if (diff > 720) diff -= 1440;
+    if (diff < -720) diff += 1440;
+    return diff;
+};
+
 // Referencia local
 // Referencia local (segura para re-declaración)
 // Referencia local (segura para re-declaración)
@@ -2108,12 +2121,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             
             // 2. Llegada Temprana Efectiva (Fuera del margen de anclaje)
             if (di.hora_entrada_teorica && di.hora_entrada_real) {
-                let entTeo = new Date(`1970-01-01T${di.hora_entrada_teorica}`);
-                let entReal = new Date(`1970-01-01T${di.hora_entrada_real}`);
-                // Ajuste por si cruza medianoche inversamente
-                if (entReal > entTeo && (entReal - entTeo) > 12 * 3600000) entReal.setDate(entReal.getDate() - 1);
-                
-                let diffEntradaMin = Math.round((entTeo - entReal) / 60000); 
+                let diffEntradaMin = Math.round(-window.circularTimeDiff(di.hora_entrada_teorica, di.hora_entrada_real)); 
                 let obsLlegada = (di.observaciones || '').toLowerCase();
                 // Verificamos si hay observación de que quedó FUERA del anclaje
                 if (diffEntradaMin > 0 && obsLlegada.includes('llegada anticipada') && obsLlegada.includes('fuera del anclaje')) {
@@ -2123,12 +2131,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             
             // 3. Salida Tardía Efectiva
             if (di.hora_salida_teorica && di.hora_salida_real) {
-                let salTeo = new Date(`1970-01-01T${di.hora_salida_teorica}`);
-                let salReal = new Date(`1970-01-01T${di.hora_salida_real}`);
-                // Ajuste por cruce de medianoche
-                if (salReal < salTeo && (salTeo - salReal) > 12 * 3600000) salReal.setDate(salReal.getDate() + 1);
-                
-                let diffSalidaMin = Math.round((salReal - salTeo) / 60000);
+                let diffSalidaMin = Math.round(window.circularTimeDiff(di.hora_salida_teorica, di.hora_salida_real));
                 let obsSalida = (di.observaciones || '').toLowerCase();
                 // Si salió tarde y no fue anclado (es decir, el tiempo real se mantuvo y generó horas)
                 if (diffSalidaMin > 0 && !obsSalida.includes('salida dentro del anclaje')) {
@@ -3746,11 +3749,7 @@ function cierreGetHEContextBadges(a) {
     
     // 2. Llegada Temprana Efectiva (Fuera del margen de anclaje)
     if (a.hora_entrada_teorica && a.hora_entrada_real) {
-        let entTeo = new Date(`1970-01-01T${a.hora_entrada_teorica}`);
-        let entReal = new Date(`1970-01-01T${a.hora_entrada_real}`);
-        if (entReal > entTeo && (entReal - entTeo) > 12 * 3600000) entReal.setDate(entReal.getDate() - 1);
-        
-        let diffEntradaMin = Math.round((entTeo - entReal) / 60000); 
+        let diffEntradaMin = Math.round(-window.circularTimeDiff(a.hora_entrada_teorica, a.hora_entrada_real)); 
         let obsLlegada = (a.observaciones || '').toLowerCase();
         if (diffEntradaMin > 0 && obsLlegada.includes('llegada anticipada') && obsLlegada.includes('fuera del anclaje')) {
             tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-in-right"></i> +${diffEntradaMin}m (Ingreso Anticipado)</span>`);
@@ -3759,11 +3758,7 @@ function cierreGetHEContextBadges(a) {
     
     // 3. Salida Tardía Efectiva
     if (a.hora_salida_teorica && a.hora_salida_real) {
-        let salTeo = new Date(`1970-01-01T${a.hora_salida_teorica}`);
-        let salReal = new Date(`1970-01-01T${a.hora_salida_real}`);
-        if (salReal < salTeo && (salTeo - salReal) > 12 * 3600000) salReal.setDate(salReal.getDate() + 1);
-        
-        let diffSalidaMin = Math.round((salReal - salTeo) / 60000);
+        let diffSalidaMin = Math.round(window.circularTimeDiff(a.hora_salida_teorica, a.hora_salida_real));
         let obsSalida = (a.observaciones || '').toLowerCase();
         if (diffSalidaMin > 0 && !obsSalida.includes('salida dentro del anclaje')) {
             tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-right"></i> +${diffSalidaMin}m (Salida Tardía)</span>`);
