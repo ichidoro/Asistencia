@@ -2693,10 +2693,10 @@ window.loadTurnosForNewArea = async function(areaName) {
                 const opt = document.createElement('option');
                 opt.value = t.id;
 
-                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                    ? 'Flexible (Bolsa de Horas)'
-                    : 'Ciclo Inteligente (Smart Match)';
-                const horario = t.tipo_programacion === 'DINAMICO_FLEXIBLE'
+                const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+                    ? 'Bolsa Flexible'
+                    : 'Ciclo Inteligente';
+                const horario = (t.tipo_programacion === 'CICLO_INTELIGENTE' || t.tipo_programacion === 'DINAMICO_FLEXIBLE')
                     ? '(Múltiples opciones)'
                     : '';
 

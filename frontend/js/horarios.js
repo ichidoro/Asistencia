@@ -60,7 +60,7 @@ async function saveTurno() {
         }
     }
 
-    if (formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') {
+    if (formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') {
         const metaInputObj = document.getElementById('input-meta-bolsa');
         if (!metaInputObj || !metaInputObj.value) {
             alert("Debe ingresar la meta mensual (Hrs Totales) para la bolsa flexible.");
@@ -92,7 +92,7 @@ async function saveTurno() {
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
-        permite_viajes_largos: (formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA' && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
+        permite_viajes_largos: ((formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         activo: formData.get('activo') !== 'false',
         dias: []
@@ -133,7 +133,7 @@ async function saveTurno() {
         });
     });
 
-    if (turno.tipo_programacion === 'FLEXIBLE_BOLSA') {
+    if (turno.tipo_programacion === 'BOLSA_FLEXIBLE' || turno.tipo_programacion === 'FLEXIBLE_BOLSA') {
         const metaInputObj = document.getElementById('input-meta-bolsa');
         turno.meta_horas_semanales = parseFloat(metaInputObj.value);
     } else {
@@ -141,7 +141,7 @@ async function saveTurno() {
         turno.meta_horas_semanales = parseFloat(metaInputObj.value);
     }
 
-    if (turno.tipo_programacion !== 'FLEXIBLE_BOLSA') {
+    if (turno.tipo_programacion !== 'BOLSA_FLEXIBLE' && turno.tipo_programacion !== 'FLEXIBLE_BOLSA') {
         let hasMismatch = false;
         let mismatchDetails = [];
         
@@ -248,7 +248,7 @@ function ensureViajesLargosSwitch() {
                 <div class="form-check form-switch mb-0">
                     <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
                     <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
-                        🚛 Habilitar Viajes Largos y Rutas Nocturnas Continuas (Art. 25 bis)
+                        🚛 Habilitar Viajes Largos y Rutas Nocturnas Continuas
                     </label>
                     <div class="form-text small text-muted">
                         Activa el reconocimiento de turnos nocturnos continuos (≥ 20:00), dobles jornadas en el mismo día y la unión de retornos de ruta de días posteriores.
@@ -293,7 +293,7 @@ async function openModalHorario(id = null) {
             await populateAreaSelect(areasToSelect);
 
             const inputMetaBol = document.getElementById('input-meta-bolsa');
-            if (inputMetaBol) inputMetaBol.value = turno.tipo_programacion === 'FLEXIBLE_BOLSA' ? (turno.meta_horas_semanales || "") : "";
+            if (inputMetaBol) inputMetaBol.value = (turno.tipo_programacion === 'BOLSA_FLEXIBLE' || turno.tipo_programacion === 'FLEXIBLE_BOLSA') ? (turno.meta_horas_semanales || "") : "";
 
             const chkViajes = document.getElementById('chkPermiteViajesLargos') || document.getElementById('chk-permite-viajes-largos');
             if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
@@ -627,8 +627,8 @@ async function loadBulkData() {
 
         select.innerHTML = '<option value="">Seleccione un turno...</option>' +
             (lista || []).map(t => {
-                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                    ? 'Bolsa de Horas'
+                const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+                    ? 'Bolsa Flexible'
                     : 'Ciclo Inteligente';
                 return `<option value="${t.id}">${t.nombre} (${tipoPlanificacion})</option>`;
             }).join('');
@@ -898,8 +898,8 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
 
         select.innerHTML = '<option value="">Seleccione un turno...</option>' +
             (lista || []).map(t => {
-                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                    ? 'Bolsa de Horas'
+                const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+                    ? 'Bolsa Flexible'
                     : 'Ciclo Inteligente';
                 return `<option value="${t.id}">${t.nombre} (${tipoPlanificacion})</option>`;
             }).join('');
@@ -1040,8 +1040,8 @@ function renderTurnosTable() {
     const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
 
     tbody.innerHTML = turnosList.map(t => {
-        const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-            ? 'Bolsa de Horas (Art. 25 BIS)'
+        const tipoBadge = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+            ? (t.permite_viajes_largos ? 'Bolsa Flexible (Viajes Largos)' : 'Bolsa Flexible')
             : 'Ciclo Inteligente';
 
         const estadoBadge = t.activo !== false
@@ -1092,8 +1092,8 @@ function renderModalHtml() {
                             <div class="col-md-2">
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
                                 <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
-                                    <option value="DINAMICO_FLEXIBLE">Ciclo Inteligente</option>
-                                    <option value="FLEXIBLE_BOLSA">Bolsa de Horas (Art. 25 BIS)</option>
+                                    <option value="CICLO_INTELIGENTE">Ciclo Inteligente</option>
+                                    <option value="BOLSA_FLEXIBLE">Bolsa Flexible</option>
                                 </select>
                             </div>
                             <div class="col-md-2" id="div-meta-jornada">
@@ -1135,14 +1135,14 @@ function renderModalHtml() {
                                     <input type="number" id="input-meta-bolsa" class="form-control border-primary" value="" step="0.5" required>
                                     <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
                                 </div>
-                                <div class="form-text small text-primary">Para Art. 25 BIS en Chile, usualmente son 176 o 180 horas al mes.</div>
+                                <div class="form-text small text-primary">Meta en horas del ciclo mensual contratado.</div>
                             </div>
                             <div class="col-12 mt-2" id="divPermiteViajesLargos">
                                 <div class="card border-info bg-info bg-opacity-10 p-2">
                                     <div class="form-check form-switch mb-1">
                                         <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
                                         <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
-                                            🚚 Habilitar Gestión de Viajes Largos en Ruta (Art. 25 BIS)
+                                            🚚 Habilitar Gestión de Viajes Largos en Ruta
                                         </label>
                                     </div>
                                     <div class="form-text small text-muted">
@@ -1274,7 +1274,7 @@ window.addWeekTab = function (triggerChange = true) {
 
     // Nombre de la pestaña según tipo: Ciclo Inteligente usa la etiqueta, otros usan "Semana"
     const tipoSelect = document.querySelector('select[name="tipo_programacion"]');
-    const isInteligente = tipoSelect && tipoSelect.value === 'DINAMICO_FLEXIBLE';
+    const isInteligente = tipoSelect && (tipoSelect.value === 'CICLO_INTELIGENTE' || tipoSelect.value === 'DINAMICO_FLEXIBLE');
     const tabName = isInteligente ? `Opción ${i}` : `Semana ${i}`;
 
     // Create Tab
@@ -1415,8 +1415,8 @@ function handleTipoProgramacionChange() {
     if (!tipoSelect) return;
 
     const tipo = tipoSelect.value;
-    const isFlexible = tipo === 'FLEXIBLE_BOLSA';
-    const isRotativo = tipo === 'DINAMICO_FLEXIBLE';
+    const isFlexible = tipo === 'BOLSA_FLEXIBLE' || tipo === 'FLEXIBLE_BOLSA';
+    const isRotativo = tipo === 'CICLO_INTELIGENTE' || tipo === 'DINAMICO_FLEXIBLE';
 
     if (isFlexible) {
         ensureViajesLargosSwitch();
@@ -1441,7 +1441,7 @@ function handleTipoProgramacionChange() {
         // Obtenemos el input correspondiente si existe para preservar la etiqueta ingresada
         const etiquetaInput = document.getElementById(`etiqueta-bloque-${index + 1}`);
         const currentEtiqueta = etiquetaInput && etiquetaInput.value.trim() ? etiquetaInput.value.trim() : `Opción ${index + 1}`;
-        tab.textContent = tipo === 'DINAMICO_FLEXIBLE' ? currentEtiqueta : `Semana ${index + 1}`;
+        tab.textContent = (tipo === 'CICLO_INTELIGENTE' || tipo === 'DINAMICO_FLEXIBLE') ? currentEtiqueta : `Semana ${index + 1}`;
     });
 
     const divAddWeek = document.getElementById('btn-add-week-container');
@@ -1449,7 +1449,7 @@ function handleTipoProgramacionChange() {
 
     // Mostrar/ocultar los inputs de nombre del ciclo
     document.querySelectorAll('.etiqueta-bloque-container').forEach(container => {
-        container.style.display = tipo === 'DINAMICO_FLEXIBLE' ? '' : 'none';
+        container.style.display = (tipo === 'CICLO_INTELIGENTE' || tipo === 'DINAMICO_FLEXIBLE') ? '' : 'none';
     });
 
     // Si cambia a no-rotativo y hay semanas extra visibles, ocultarlas sin destruir el DOM:
@@ -1529,7 +1529,7 @@ function updateAllCalculations() {
     if (!tipoSelect) return;
 
     const tipo = tipoSelect.value;
-    if (tipo === 'FLEXIBLE_BOLSA') {
+    if (tipo === 'BOLSA_FLEXIBLE' || tipo === 'FLEXIBLE_BOLSA') {
         document.querySelectorAll('.alert-hours-warning').forEach(alert => alert.remove());
         return; // Flexible is manual
     }
@@ -1547,10 +1547,23 @@ function updateAllCalculations() {
                 return;
             }
 
+            const tIn = row.querySelector('.time-in')?.value;
+            const tOut = row.querySelector('.time-out')?.value;
+            const chkCruce = row.querySelector('.chk-cruce');
+
+            // Auto-detección inteligente de cruce de noche
+            if (tIn && tOut && chkCruce) {
+                if (tOut < tIn && !chkCruce.checked) {
+                    chkCruce.checked = true;
+                } else if (tOut > tIn && chkCruce.checked && !row.dataset.cruceManual) {
+                    chkCruce.checked = false;
+                }
+            }
+
             const h1 = calculateDiff(
-                row.querySelector('.time-in').value,
-                row.querySelector('.time-out').value,
-                row.querySelector('.chk-cruce').checked
+                tIn,
+                tOut,
+                chkCruce ? chkCruce.checked : false
             );
 
             let total = h1;

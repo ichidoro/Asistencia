@@ -1289,7 +1289,7 @@ class SyncService:
             else:
                 # [FIX-INAS-A] Al sincronizar por ÁREA, solo recalcular empleados que
                 # tuvieron marcas NUEVAS en este sync. Procesar todos los empleados (None)
-                # sobreescribe estados correctos de empleados DINAMICO_FLEXIBLE cuyos
+                # sobreescribe estados correctos de empleados CICLO_INTELIGENTE cuyos
                 # logs están en días adyacentes, generando INASISTENCIA falsas.
                 # La regla de negocio: si no hubo marcas nuevas para un empleado,
                 # su estado calculado anterior debe respetarse.
@@ -1383,9 +1383,9 @@ class SyncService:
 
             # C. VALIDACIÓN DE INTEGRIDAD POST-SYNC
             # Detecta discrepancias: logs_raw tiene marcaciones PERO asistencias dice INASISTENCIA.
-            # [FIX-INAS-B] Ampliada para DINAMICO_FLEXIBLE: el motor asigna marcas de días
+            # [FIX-INAS-B] Ampliada para CICLO_INTELIGENTE: el motor asigna marcas de días
             # adyacentes (D-1→D+2) como jornada del día D. La query usa UNION para mantener
-            # el JOIN exacto para turnos normales y la ventana amplia para DINAMICO_FLEXIBLE.
+            # el JOIN exacto para turnos normales y la ventana amplia para CICLO_INTELIGENTE.
             if not skip_recalc:
                 try:
                     integrity_mismatches = await db.fetch_all("""
@@ -1398,11 +1398,11 @@ class SyncService:
                         WHERE a.estado = 'INASISTENCIA'
                           AND a.fecha >= ?
                           AND lr.tipo IN ('Entrada', 'Salida', 'entrada', 'salida', 'entry', 'exit', 'e', 's', 'in', 'out', '1', '2')
-                          AND (t.tipo_programacion IS NULL OR t.tipo_programacion != 'DINAMICO_FLEXIBLE')
+                          AND (t.tipo_programacion IS NULL OR t.tipo_programacion != 'CICLO_INTELIGENTE')
 
                         UNION
 
-                        -- Caso 2: DINAMICO_FLEXIBLE — marcas en ventana D-1 a D+2
+                        -- Caso 2: CICLO_INTELIGENTE — marcas en ventana D-1 a D+2
                         -- El motor asigna estas marcas como jornada del día D aunque
                         -- el timestamp sea de un día adyacente (turno día a día).
                         SELECT DISTINCT a.empleado_id, a.fecha
@@ -1410,7 +1410,7 @@ class SyncService:
                         INNER JOIN logs_raw lr ON a.empleado_id = lr.empleado_id
                             AND date(lr.fecha_hora) BETWEEN date(a.fecha, '-1 day') AND date(a.fecha, '+2 days')
                         INNER JOIN turnos t ON a.turno_asignado_id = t.id
-                            AND t.tipo_programacion = 'DINAMICO_FLEXIBLE'
+                            AND t.tipo_programacion = 'CICLO_INTELIGENTE'
                         WHERE a.estado = 'INASISTENCIA'
                           AND a.fecha >= ?
                           AND lr.tipo IN ('Entrada', 'Salida', 'entrada', 'salida', 'entry', 'exit', 'e', 's', 'in', 'out', '1', '2')

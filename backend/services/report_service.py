@@ -97,7 +97,7 @@ class ReportService:
             
             for emp in empleados:
                 emp_id = emp['id']
-                es_bolsa = emp.get('tipo_programacion') == 'FLEXIBLE_BOLSA'
+                es_bolsa = emp.get('tipo_programacion') == 'BOLSA_FLEXIBLE'
                 if es_bolsa:
                     hay_bolsa = True
                     

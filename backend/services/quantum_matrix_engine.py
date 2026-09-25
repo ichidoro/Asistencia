@@ -13,7 +13,7 @@ Arquitectura Matemática Integral:
      y clasificación de permisos intermedios (con/sin goce o detectados en reloj).
    - Segmentación de bloques extras por gaps parametrizados desde la tabla 'ajustes' (Llamados de Emergencia y Jornada Adicional +2).
 4. AutoMealOperator: Descuento de colación condicionado al umbral de horas trabajadas y tolerancias de exceso configuradas.
-5. FlexibleBolsaDualClassifier: Soporte dual para Art. 25 Bis:
+5. FlexibleBolsaDualClassifier: Soporte dual para Bolsa Flexible:
    - Clase A: Con Viajes Largos (horas de manejo/descanso reconocidas, marcas terminales consumidas, estado VIAJE_LARGO).
    - Clase B: Sin Viajes Largos (bolsa local presencial, horas efectivas de reloj, deuda diaria = 0).
 6. SpecialWorkdayClassifier: Segregación estricta de JORNADA_ESPECIAL (minutos_extra_bruto = 0).
@@ -455,6 +455,102 @@ class SpecialWorkdayClassifier:
         }
 
 
+class QuantumShiftWeekMatcher:
+    """
+    Resuelve la semana ganadora de un turno multi-semana (Ciclo Inteligente)
+    mediante minimización de distancia de fase circular entre las marcas físicas y
+    los bloques teóricos programados.
+    """
+    @classmethod
+    def resolve_winner_week(
+        cls,
+        empleado_id: int,
+        fecha_str: str,
+        dt: datetime,
+        dia_semana: int,
+        logs: List[Dict[str, Any]],
+        turnos_dict: Dict[int, Dict[int, Any]],
+        total_sems: int,
+        semana_inicio_cfg: Optional[int] = None,
+        f_asig_ini: Optional[datetime] = None,
+        last_matched_sem: Optional[int] = None,
+    ) -> int:
+        if total_sems <= 1:
+            return 1
+
+        # Si hay marcas candidatas para el día (ventana amplia de marcas)
+        marcas_cand = [
+            l for l in logs
+            if l.get('fecha_hora', '')[:10] == fecha_str or
+               (l.get('fecha_hora', '')[:10] == (dt + timedelta(days=1)).strftime("%Y-%m-%d") and int(l.get('fecha_hora', '')[11:13] or '99') < 12)
+        ]
+
+        if marcas_cand:
+            min_phase_dist = float('inf')
+            winner_sem = 1
+
+            for sem_idx in range(1, total_sems + 1):
+                cfg_sem = turnos_dict.get(sem_idx, {}).get(dia_semana, {})
+                if not cfg_sem or cfg_sem.get('es_libre'):
+                    continue
+
+                h_ent_str = cfg_sem.get('hora_entrada')
+                h_sal_str = cfg_sem.get('hora_salida')
+
+                if not h_ent_str:
+                    continue
+
+                p_ent_teo = QuantumPhaseTopology.time_to_phase(h_ent_str)
+                p_sal_teo = QuantumPhaseTopology.time_to_phase(h_sal_str) if h_sal_str else None
+
+                dist_tot = 0.0
+                eval_count = 0
+
+                _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+                _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+
+                # Buscar primera entrada
+                ent_m = next((m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_E), None)
+                if ent_m:
+                    dt_m = MultiBlockTensorSolver.parse_dt(ent_m)
+                    if dt_m:
+                        p_m = QuantumPhaseTopology.time_to_phase(dt_m)
+                        d_in = abs(QuantumPhaseTopology.circular_distance(p_ent_teo, p_m))
+                        dist_tot += d_in
+                        eval_count += 1
+
+                # Buscar última salida
+                sal_m = next((m for m in reversed(marcas_cand) if str(m.get('tipo', '')).strip().lower() in _TIPOS_S), None)
+                if sal_m and p_sal_teo is not None:
+                    dt_s = MultiBlockTensorSolver.parse_dt(sal_m)
+                    if dt_s:
+                        p_s = QuantumPhaseTopology.time_to_phase(dt_s)
+                        d_out = abs(QuantumPhaseTopology.circular_distance(p_sal_teo, p_s))
+                        dist_tot += d_out
+                        eval_count += 1
+
+                if eval_count > 0:
+                    avg_dist = dist_tot / eval_count
+                    if avg_dist < min_phase_dist:
+                        min_phase_dist = avg_dist
+                        winner_sem = sem_idx
+
+            if min_phase_dist < float('inf'):
+                return winner_sem
+
+        # Si no hay marcas o no hubo match:
+        if last_matched_sem is not None:
+            return last_matched_sem
+
+        if semana_inicio_cfg is not None and f_asig_ini:
+            monday_dt = dt - timedelta(days=dt.weekday())
+            monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
+            semanas_diff = (monday_dt - monday_ini).days // 7
+            return ((int(semana_inicio_cfg) - 1 + semanas_diff) % total_sems) + 1
+
+        return 1
+
+
 class QuantumMatrixEngine:
     """
     Motor Matricial Cuántico Principal v2.1.
@@ -486,8 +582,8 @@ class QuantumMatrixEngine:
         t_cfg = turno_config or {}
         d_cfg = dia_config or {}
 
-        tipo_prog = t_cfg.get('tipo_programacion', 'FIJO')
-        is_bolsa = (tipo_prog == 'FLEXIBLE_BOLSA')
+        tipo_prog = t_cfg.get('tipo_programacion', 'CICLO_INTELIGENTE')
+        is_bolsa = (tipo_prog in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
 
         tolerancia_alerta = int(t_cfg.get('tolerancia_retraso_alerta', 0) or 0)
         tolerancia_descuento = int(t_cfg.get('tolerancia_retraso_descuento', 0) or 0)

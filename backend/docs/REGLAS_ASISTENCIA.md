@@ -1,52 +1,34 @@
 # REGLAS MAESTRAS DE ASISTENCIA Y CONTROL HORARIO (AGUACOL)
 
-Este documento define la especificación técnica canónica y las reglas de negocio inmutables para el motor de cálculo de asistencia (`asistencia_service.py`).
-**CUALQUIER MODIFICACIÓN DEBE RESPETAR ESTOS 4 MODOS Y NO ALTERAR REGLAS ENTRE ELLOS.**
+Este documento define la especificación técnica canónica y las reglas de negocio inmutables para el motor de cálculo de asistencia matricial cuántico (`QuantumMatrixEngine` / `asistencia_service.py`).
+**TODA LA APLICACIÓN OPERA CON ESTOS 2 TIPOS DE HORARIOS Y BAJO ARQUITECTURA CUÁNTICA MATRICIAL PURA.**
 
 ---
 
-## 1. Modos de Programación y Reglas de Negocio
+## 1. Tipos de Programación Horaria y Reglas de Negocio
 
-### Modo 1: `DINAMICO_FLEXIBLE` (Producción)
-- **Ámbito**: Operarios de planta, supervisores y personal con turnos rotativos semanales (Semanas 1 a 4).
-- **Extracción de Marcas**: `block_inteligente` basado en arrastre de la semana activa (`rotativo_last_sem_dict`) y evaluación de jornada normal vs jornada especial.
-- **Cálculos**: Atrasos diarios, salidas adelantadas, colaciones reales descontadas y horas extras diarias.
-
----
-
-### Modo 2: `FLEXIBLE_BOLSA` Tradicional (`permite_viajes_largos = 0`) (Turno 9: Tradicional Transporte)
-- **Ámbito**: Choferes de reparto local urbano/diurno.
-- **Límite Calendario**: Estricto dentro del día calendario ($00:00$ a $23:59$).
-- **Cruce de Medianoche**: **DESACTIVADO** (`permite_viajes_largos = 0`). Las jornadas inician y terminan en el mismo día.
-- **Cálculos**: Acumula horas trabajadas hacia la meta mensual de la bolsa flexible (180h). No genera atrasos fijos por minuto de reloj.
+### Tipo 1: `CICLO_INTELIGENTE` (Ciclo Inteligente)
+- **Ámbito**: Operarios de planta, supervisores, personal de bodega, mantenimiento y oficinas (turnos fijos o rotativos multi-semana de 1 a 4 semanas).
+- **Resolución de Horas y Semanas**: `QuantumShiftWeekMatcher` resuelve la semana activa por minimización de distancia de fase circular entre las marcas reales y los bloques configurados en la interfaz para cada día.
+- **Cálculos**: Atrasos diarios y salidas adelantadas según tolerancias de UI, colaciones automáticas o reales según umbral de UI, anclajes de entrada y salida de UI, y horas extras diarias.
+- **Cruce de Medianoche Universal**: Soportado tanto por configuración teórica (`hora_salida < hora_entrada` o `cruza_medianoche = 1`) como por marcas físicas continuadas en la madrugada de $D+1$.
 
 ---
 
-### Modo 3: `FLEXIBLE_BOLSA` con Viajes Largos (`permite_viajes_largos = 1`) (Turno 25: Logística Transporte)
-- **Ámbito**: Choferes de rutas largas, viajes interurbanos y transporte nocturno.
-- **Cruce de Medianoche Continuo**: 
-  - Si un conductor inicia turno o viaje en la noche ($\ge 20:00$), la marca de Entrada se mantiene en su día de inicio y busca su Salida en la madrugada del día siguiente ($D+1$ antes de las 14:00h).
-- **Doble Jornada en el Mismo Día**:
-  - Si en un día hay una jornada diurna (ej. `05:59` a `13:13`) y un viaje nocturno (ej. `21:57` a `05:04` $D+1$):
-    * Se empareja de forma secuencial cronológica (FIFO).
-    * `05:59` cierra con `13:13` (Jornada 1).
-    * `21:57` cierra con `05:04` (Jornada 2).
-    * Ambas jornadas se suman a las horas efectivas del colaborador sin saltarse marcas ni generar inasistencias en cascada.
-- **Retorno de Ruta Aislado (Madrugada)**:
-  - Salidas de madrugada ($02:00$ a $07:00$) sin entrada previa en esa madrugada generan la alerta `[Retorno de Ruta Detectado]` con Split Badge (`OK + ANO`) para permitir su unión con el viaje de origen mediante el botón `Registrar Viaje Largo`.
-
----
-
-### Modo 4: `FIJO_ORDINARIO` (Administración / Portería)
-- **Ámbito**: Personal de oficina, porteros y guardias con horarios fijos diarios.
-- **Cálculos**: Comparación contra hora teórica de entrada y salida, con cálculo de atrasos y compensaciones.
+### Tipo 2: `BOLSA_FLEXIBLE` (Bolsa Flexible)
+- **Ámbito**: Choferes de distribución y logística.
+- **Naturaleza**: Horario de bolsa de horas semanal o mensual (sin horas rígidas diarias, `horas_teoricas: 0.0` diario, sin atrasos punitivos diarios). Las horas efectivas se acumulan a la meta de la bolsa.
+- **Cruce de Medianoche Universal**: **ACTIVADO EN TODOS LOS CASOS.** Cualquier jornada que inicie en la noche y termine en la madrugada del día siguiente ($D \rightarrow D+1$) se empareja de forma continua como un único vector de trabajo.
+- **Diferenciador Único (`permite_viajes_largos`)**:
+  - **`permite_viajes_largos = 0` (Bolsa Flexible Estándar)**: Choferes de reparto local / distribución urbana diaria.
+  - **`permite_viajes_largos = 1` (Bolsa Flexible con Viajes Largos)**: Choferes de ruta interurbana con pernoctación fuera de planta, acreditación de bitácora de viaje (conducción + descanso) y protección contra falsas inasistencias en días de ruta.
+- **Cero menciones de "Art. 25 BIS"**: En la interfaz, reportes y tablas se denomina única y limpiamente como **Bolsa Flexible**.
 
 ---
 
 ## 2. Protocolo Obligatorio Anti-Regresión
 
 Antes de cualquier despliegue a producción:
-1. Ejecutar `tests/test_attendance_regressions.py`.
-2. Validar que la corrida de prueba para Bastian Adams (ID 156) resulte en **0 anomalías falsas** y **0 inasistencias falsas**.
-3. Validar que los 18 choferes del Turno 9 y los 45 operarios de Producción arrojen **0 diferencias** contra el estado previo.
-4. Validar sintaxis completa de todos los archivos `.js` y compilación de `.py`.
+1. Validar compilación de sintaxis de todos los archivos `.py` (`py_compile`).
+2. Validar sintaxis y referencias en archivos `.js`.
+3. Validar consistencia con datos reales de la base de datos (choferes de viajes largos, choferes de reparto local y operarios nocturnos).

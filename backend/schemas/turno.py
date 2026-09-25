@@ -27,7 +27,7 @@ class TurnoDiaResponse(TurnoDiaCreate):
 # ==========================================
 class TurnoBase(BaseModel):
     nombre: str
-    tipo_programacion: Literal['DINAMICO_FLEXIBLE', 'FLEXIBLE_BOLSA'] = 'DINAMICO_FLEXIBLE'
+    tipo_programacion: Literal['CICLO_INTELIGENTE', 'BOLSA_FLEXIBLE'] = 'CICLO_INTELIGENTE'
     tolerancia_retraso_alerta: int = 0
     tolerancia_retraso_descuento: int = 0
     redondeo_minutos: int = 0
@@ -37,10 +37,10 @@ class TurnoBase(BaseModel):
     umbral_horas_colacion: float = 0.0 # Umbral para no descontar colación en jornadas cortas
     anclaje_entrada_minutos: int = 0 # Nuevo campo para marcas tempranas
     anclaje_salida_minutos: int = 0 # Nuevo campo para marcas tardías filtrables
-    ventana_en_curso_minutos: int = 0 # (DT-4) Reemplazo de margen duro de 3h para estados EN_CURSO
-    tolerancia_exceso_colacion_minutos: int = 0 # (DT-14) Margen para diferenciar colación de permisos
+    ventana_en_curso_minutos: int = 0 # Reemplazo de margen duro de 3h para estados EN_CURSO
+    tolerancia_exceso_colacion_minutos: int = 0 # Margen para diferenciar colación de permisos
     hora_limite_ficticia: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$", description="Hora trigger para la inasistencia temprana en Horarios Bolsa")
-    permite_viajes_largos: bool = False # Flag para diferenciar Bolsa Normal (0) vs Bolsa Viajes Largos Art. 25 BIS (1)
+    permite_viajes_largos: bool = False # Flag para diferenciar Bolsa Normal (0) vs Bolsa Viajes Largos (1)
     areas: List[str] = [] # Nuevo: Lista de nombres de áreas
     turno_padre_id: Optional[int] = None # Para versionamiento: ID del turno original
     fecha_vigencia: Optional[str] = None # YYYY-MM-DD: Desde cuándo aplica esta versión

@@ -225,7 +225,7 @@ class BonoService:
             info = emp_matrix_data.get('info', {})
             estado        = (dia_data.get("estado") or "").upper()
             horas_teoricas = dia_data.get("horas_teoricas") or 0
-            es_bolsa      = (info.get("tipo_programacion") == "FLEXIBLE_BOLSA")
+            es_bolsa      = (info.get("tipo_programacion") == "BOLSA_FLEXIBLE")
             j_dia = next(
                 (j for j in justificaciones
                  if j["fecha_inicio"] <= fecha <= j["fecha_fin"]), None

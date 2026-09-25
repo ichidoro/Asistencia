@@ -140,7 +140,7 @@ async def wizard_provider_turnos(
             "id": t["id"],
             "nombre": t["nombre"],
             "es_default": False,
-            "tipo_programacion": t["tipo_programacion"] or "DINAMICO_FLEXIBLE",
+            "tipo_programacion": t["tipo_programacion"] or "CICLO_INTELIGENTE",
             "meta_horas_semanales": t["meta_horas_semanales"] or 0,
             "num_semanas": t["num_semanas"] or 1,
             "areas": turno_areas_map.get(t["id"], [])  # lista de nombres de área

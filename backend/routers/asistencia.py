@@ -1914,7 +1914,7 @@ async def recalcular_bolsa_endpoint(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
     """
-    Fuerza el recalculo completo de la Bolsa Flexible (Art. 25 Bis) para un empleado en un periodo.
+    Fuerza el recalculo completo de la Bolsa Flexible para un empleado en un periodo.
     """
     # RLS
     emp_repo = EmpleadoRepository(service.repository.db)
@@ -2338,7 +2338,7 @@ async def get_candidatos_retorno_viaje(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
     """
-    Busca marcaciones candidatas de inicio y retorno para un viaje largo (Art. 25 bis).
+    Busca marcaciones candidatas de inicio y retorno para un viaje largo.
     APLICA EXCLUSIVAMENTE A TURNOS DE BOLSA FLEXIBLE CON VIAJES LARGOS HABILITADOS.
     Filtra inteligentemente solo salidas compatibles y anomalías/retornos de ruta,
     excluyendo jornadas ordinarias cerradas en planta para no confundir al usuario.
@@ -2356,7 +2356,7 @@ async def get_candidatos_retorno_viaje(
         ORDER BY at.fecha_inicio DESC
     """, (empleado_id, fecha_inicio, fecha_inicio))
     
-    if not asig or asig.get('tipo_programacion') != 'FLEXIBLE_BOLSA' or not (asig.get('permite_viajes_largos') == 1 or str(asig.get('permite_viajes_largos')) == '1'):
+    if not asig or asig.get('tipo_programacion') != 'BOLSA_FLEXIBLE' or not (asig.get('permite_viajes_largos') == 1 or str(asig.get('permite_viajes_largos')) == '1'):
         raise HTTPException(
             status_code=400, 
             detail="Esta funcionalidad aplica exclusivamente a turnos de Bolsa Flexible con Viajes Largos habilitados."
@@ -2753,7 +2753,7 @@ async def reasignar_turno_endpoint(
         WHERE at.empleado_id = ?
         ORDER BY at.fecha_inicio DESC LIMIT 1
     """, (req.empleado_id,))
-    if t_row and t_row.get('tipo_programacion') == 'FLEXIBLE_BOLSA':
+    if t_row and t_row.get('tipo_programacion') == 'BOLSA_FLEXIBLE':
         raise HTTPException(status_code=400, detail="La reasignación de turno no está permitida para trabajadores en Bolsa Flexible.")
 
     # Cierre check
@@ -2797,7 +2797,7 @@ async def reasignar_turno_endpoint(
 
 
 # ==========================================
-# GESTIÓN DE VIAJES LARGOS (Art. 25 bis)
+# GESTIÓN DE VIAJES LARGOS
 # ==========================================
 
 @router.post("/viaje-largo/")
@@ -2817,7 +2817,7 @@ async def create_viaje_largo_endpoint(
 
     # Verificar que el turno del empleado tenga permitido viajes largos
     turno_actual = await service.repository.get_turno_activo(data.empleado_id, data.fecha_inicio)
-    if not turno_actual or turno_actual.get('tipo_programacion') != 'FLEXIBLE_BOLSA' or not turno_actual.get('permite_viajes_largos'):
+    if not turno_actual or turno_actual.get('tipo_programacion') != 'BOLSA_FLEXIBLE' or not turno_actual.get('permite_viajes_largos'):
         raise HTTPException(
             status_code=400,
             detail="El colaborador no tiene asignado un turno de Bolsa Flexible con gestión de viajes largos habilitada."

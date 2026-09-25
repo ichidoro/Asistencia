@@ -228,10 +228,10 @@ async function reincLoadTurnos(area) {
         
         select.innerHTML = '<option value="">-- Seleccionar Turno --</option>' + 
             turnos.map(t => {
-                const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                    ? 'Flexible (Bolsa de Horas)'
-                    : 'Ciclo Inteligente (Smart Match)';
-                const horario = t.tipo_programacion === 'DINAMICO_FLEXIBLE'
+                const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+                    ? 'Bolsa Flexible'
+                    : 'Ciclo Inteligente';
+                const horario = (t.tipo_programacion === 'CICLO_INTELIGENTE' || t.tipo_programacion === 'DINAMICO_FLEXIBLE')
                     ? '(Múltiples opciones)'
                     : '';
                 return `<option value="${t.id}" data-tipo="${tipoPlanificacion}" data-horario="${horario}">${t.nombre}</option>`;

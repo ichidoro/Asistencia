@@ -1182,7 +1182,7 @@ function calcularMetricasEmpleado(data) {
             diasTrabajados++;
         }
 
-        if (a.tipo_programacion === 'FLEXIBLE_BOLSA') {
+        if (a.tipo_programacion === 'BOLSA_FLEXIBLE' || a.tipo_programacion === 'FLEXIBLE_BOLSA') {
             esBolsa = true;
             if (a.meta_mensual_minutos) metaMensualMinutos = a.meta_mensual_minutos;
             else if (a.meta_horas_semanales) metaMensualMinutos = Math.round(a.meta_horas_semanales * 60);
@@ -2054,8 +2054,8 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         }
     }
 
-    if (empData && empData.info && empData.info.tipo_programacion === 'FLEXIBLE_BOLSA') {
-        showToast(`${empNombre} tiene Turno Bolsa Flexible (180h). Su balance se gestiona en la columna Bolsa Flexible al cierre mensual.`, 'info');
+    if (empData && empData.info && (empData.info.tipo_programacion === 'BOLSA_FLEXIBLE' || empData.info.tipo_programacion === 'FLEXIBLE_BOLSA')) {
+        showToast(`${empNombre} tiene Turno Bolsa Flexible. Su balance se gestiona en la columna Bolsa Flexible al cierre mensual.`, 'info');
         return;
     }
 
@@ -2667,11 +2667,11 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
         } else {
             selectTurno.innerHTML = '<option value="">-- Seleccione el Turno Oficial --</option>' +
                 turnos.map(t => {
-                    const tipoPlanificacion = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                        ? 'Flexible (Bolsa de Horas)'
-                        : 'Ciclo Inteligente (Smart Match)';
-                    const horario = t.tipo_programacion === 'DINAMICO_FLEXIBLE'
-                        ? '(Múltiples opciones horarias)'
+                    const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+                        ? 'Bolsa Flexible'
+                        : 'Ciclo Inteligente';
+                    const horario = (t.tipo_programacion === 'CICLO_INTELIGENTE' || t.tipo_programacion === 'DINAMICO_FLEXIBLE')
+                        ? '(Ciclo Rotativo/Fijo)'
                         : '';
                     return `<option value="${t.id}" data-tipo="${tipoPlanificacion}" data-horario="${horario}">${t.nombre}</option>`;
                 }).join('');
@@ -4514,8 +4514,9 @@ window.getStickyWidthStyle = function(key, showBonos, showIncidencias, showHE, s
 window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
     let he_bruto=0, he_apr=0, he_rec=0, he_pend=0, he_compensado=0, d_tot=0, min_atr=0, min_sad=0, min_col=0, min_per=0;
     let cnt_atr=0, cnt_sad=0, cnt_inas=0, cnt_esp=0, cnt_per=0, cnt_efectivos=0;
-    const esBolsa = emp.tipo_programacion === 'FLEXIBLE_BOLSA'
-                 || (emp.info && emp.info.tipo_programacion === 'FLEXIBLE_BOLSA');
+    const esBolsa = emp.tipo_programacion === 'BOLSA_FLEXIBLE'
+                 || emp.tipo_programacion === 'FLEXIBLE_BOLSA'
+                 || (emp.info && (emp.info.tipo_programacion === 'BOLSA_FLEXIBLE' || emp.info.tipo_programacion === 'FLEXIBLE_BOLSA'));
     emp._esBolsaFlag = esBolsa;
     let acumBolsa=0, excedido=false, metaMin=0;
 
@@ -5043,7 +5044,7 @@ window.reloadSingleEmployeeRow = async function(empId) {
             const showDeudas = window.vistaAnaliticaState.showDeudas !== false;
             const hayBolsa = stateMarcacionesApp.data.empleados.some(e => {
                 const matrixEmp = stateMarcacionesApp.data.matrix[e.id];
-                return matrixEmp?.info?.tipo_programacion === 'FLEXIBLE_BOLSA';
+                return matrixEmp?.info?.tipo_programacion === 'BOLSA_FLEXIBLE' || matrixEmp?.info?.tipo_programacion === 'FLEXIBLE_BOLSA';
             });
             const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
 
@@ -5932,7 +5933,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
         
         let html = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;">`;
         html += `<span class="fw-bold tabular-nums" style="font-size:0.72rem">${hrs}</span>`;
-        if (di.tipo_programacion !== 'FLEXIBLE_BOLSA' && mDeuda > 0) {
+        if (di.tipo_programacion !== 'BOLSA_FLEXIBLE' && di.tipo_programacion !== 'FLEXIBLE_BOLSA' && mDeuda > 0) {
             html += `<span style="font-size:0.55rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(mDeuda)}</span>`;
         }
         html += `</div>`;
@@ -5964,7 +5965,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
     }
     else if (viewMode === 'acumulado') {
         if (di._esBolsa) {
-            // FLEXIBLE_BOLSA: SOLO mostrar en días efectivos (no LIBRE/FERIADO)
+            // BOLSA_FLEXIBLE: SOLO mostrar en días efectivos (no LIBRE/FERIADO)
             if (!hasEff) return ''; // LIBRE / FERIADO → celda vacía
             const snap         = di._acumuladoBolsaSnap || 0;
             const snapAyer     = di._acumuladoBolsaSnapPrev || 0;
@@ -6214,7 +6215,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     }
     
     if (e._esDiaJustificadoBolsa && empInfo && empInfo._esBolsaFlag && empInfo._valorTurnoMinBolsa) {
-        incidencias.push(`Día justificado (Art 25 bis): descuenta ${formatExactMinutesToTime(empInfo._valorTurnoMinBolsa)} a la meta mensual.`);
+        incidencias.push(`Día justificado: descuenta ${formatExactMinutesToTime(empInfo._valorTurnoMinBolsa)} a la meta mensual.`);
     }
 
     let incidenciasHtml = '';
@@ -6488,7 +6489,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 </div>
                 ${vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size:0.65rem; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:4px; padding:2px 6px;"><i class="bi bi-star-fill me-1"></i>Ruta cruzó Día Feriado (Aplica Día Compensatorio Art. 38)</div>` : ''}
                 ${vl.domingo_en_ruta && !vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size:0.65rem; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:4px; padding:2px 6px;"><i class="bi bi-calendar-event me-1"></i>Ruta en Domingo (Aplica descanso compensatorio)</div>` : ''}
-                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size:0.65rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas Art. 25 bis)</div>` : `<div style="margin-top:4px; font-size:0.65rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (🟢 Cumple norma ≥ 8h)</div>`) : ''}
+                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size:0.65rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas legales)</div>` : `<div style="margin-top:4px; font-size:0.65rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (🟢 Cumple norma ≥ 8h)</div>`) : ''}
             </div>
         </div>`;
     }

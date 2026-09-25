@@ -208,7 +208,7 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     const btnReasignarTurno = document.getElementById('btn-reasignar-turno');
     if (btnReasignarTurno) {
         const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
-        const isNotBolsa = (!empInfo || empInfo.tipo_programacion !== 'FLEXIBLE_BOLSA');
+        const isNotBolsa = (!empInfo || (empInfo.tipo_programacion !== 'BOLSA_FLEXIBLE' && empInfo.tipo_programacion !== 'FLEXIBLE_BOLSA'));
         
         // Mostrar siempre para empleados con turno agendado (no bolsa flexible)
         if (isNotBolsa) {
@@ -667,7 +667,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         }
     }
 
-    marcacionesManualesState.isBolsaFija = (asist && asist.tipo_programacion === 'FLEXIBLE_BOLSA');
+    marcacionesManualesState.isBolsaFija = (asist && (asist.tipo_programacion === 'BOLSA_FLEXIBLE' || asist.tipo_programacion === 'FLEXIBLE_BOLSA'));
 
     if (divTramos) {
         divTramos.style.display = marcacionesManualesState.isBolsaFija ? 'flex' : 'none';
@@ -1876,7 +1876,7 @@ window.evaluarAlertasContextualesViajeLargo = function() {
         cardAlerta.style.borderColor = '#fecaca';
         icoAlerta.innerHTML = `<i class="bi bi-slash-circle-fill text-danger"></i>`;
         titAlerta.className = 'fw-bold text-danger';
-        titAlerta.innerText = `Alerta Legal Art. 25 bis: Descanso Reducido`;
+        titAlerta.innerText = `Alerta Legal: Descanso Reducido`;
         cpoAlerta.innerText = `Por normativa laboral, un viaje de ${totalReloj.toFixed(1)}h requiere un descanso acumulado mínimo de al menos ${reqMin}h (8h por cada 24h). Verifique registros de descanso antes del cierre.`;
     } else if (ruta && hManejo > 0) {
         const kmTotal = ruta.km_ida * 2;
@@ -1911,7 +1911,7 @@ window.aplicarSugerenciaRuta = function() {
         const kmStr = ruta ? `~${(ruta.km_ida * 2).toLocaleString()} km I/V` : '';
         const obsEl = document.getElementById('vl-observaciones');
         if (obsEl && !obsEl.value) {
-            obsEl.value = `Ruta San Fernando ➔ ${nomRuta} (${kmStr}). Estimación Art. 25 bis: ~${window._vl_sug_manejo.toFixed(1)}h conducción/servicio + ~${window._vl_sug_descanso.toFixed(1)}h descanso/esperas en ruta.`;
+            obsEl.value = `Ruta San Fernando ➔ ${nomRuta} (${kmStr}). Estimación de ruta: ~${window._vl_sug_manejo.toFixed(1)}h conducción/servicio + ~${window._vl_sug_descanso.toFixed(1)}h descanso/esperas en ruta.`;
         }
         window.evaluarAlertasContextualesViajeLargo();
     }

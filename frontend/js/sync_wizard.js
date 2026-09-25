@@ -1273,8 +1273,8 @@ async function fetchAndRenderWizardStep3() {
 
         const cardsHTML = turnosParaArea.map(t => {
             const isChecked = String(t.id) === selectedTurnoId ? 'checked' : '';
-            const tipoBadge = t.tipo_programacion === 'FLEXIBLE_BOLSA'
-                ? '<span class="badge bg-warning text-dark">Bolsa de Horas</span>'
+            const tipoBadge = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
+                ? '<span class="badge bg-warning text-dark">Bolsa Flexible</span>'
                 : '<span class="badge bg-primary">Ciclo Inteligente</span>';
             const semLabel = (t.num_semanas || 1) > 1
                 ? `${t.num_semanas} opciones`
