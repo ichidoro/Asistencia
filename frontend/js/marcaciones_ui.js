@@ -52,6 +52,21 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
     showSaldoMeta: true  // Visible por defecto cuando hay bolsa flexible
 };
 
+// ── Generador robusto de rango de fechas (inmune a saltos DST / Timezone offset) ──
+window.getDatesInRange = function(fechaInicio, fechaFin) {
+    if (!fechaInicio || !fechaFin) return [];
+    const dates = [];
+    const [y1, m1, d1] = fechaInicio.split('-').map(Number);
+    const [y2, m2, d2] = fechaFin.split('-').map(Number);
+    let curr = new Date(Date.UTC(y1, m1 - 1, d1, 12, 0, 0));
+    const end = new Date(Date.UTC(y2, m2 - 1, d2, 12, 0, 0));
+    while (curr <= end) {
+        dates.push(curr.toISOString().split('T')[0]);
+        curr.setUTCDate(curr.getUTCDate() + 1);
+    }
+    return dates;
+};
+
 // Referencia local
 // Referencia local (segura para re-declaración)
 // Referencia local (segura para re-declaración)
@@ -2058,21 +2073,6 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         showToast(`${empNombre} tiene Turno Bolsa Flexible. Su balance se gestiona en la columna Bolsa Flexible al cierre mensual.`, 'info');
         return;
     }
-
-// ── Robust date range generator (immune to DST / Timezone offset jumps) ──
-window.getDatesInRange = function(fechaInicio, fechaFin) {
-    if (!fechaInicio || !fechaFin) return [];
-    const dates = [];
-    const [y1, m1, d1] = fechaInicio.split('-').map(Number);
-    const [y2, m2, d2] = fechaFin.split('-').map(Number);
-    let curr = new Date(Date.UTC(y1, m1 - 1, d1, 12, 0, 0));
-    const end = new Date(Date.UTC(y2, m2 - 1, d2, 12, 0, 0));
-    while (curr <= end) {
-        dates.push(curr.toISOString().split('T')[0]);
-        curr.setUTCDate(curr.getUTCDate() + 1);
-    }
-    return dates;
-};
 
     // 1. Determinar el rango de fechas dinámico
     let dates = [];
