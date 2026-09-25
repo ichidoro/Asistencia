@@ -444,6 +444,7 @@ class AsistenciaService:
         fecha_fin: Optional[str] = None,
         areas: Optional[Any] = None,
         force: bool = False,
+        empleado_ids: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Procesa asistencia para un rango de fechas.
@@ -462,6 +463,13 @@ class AsistenciaService:
         elif isinstance(areas, str) and areas:
             area_filter = areas
 
+        emp_set = None
+        if empleado_ids is not None:
+            if isinstance(empleado_ids, (list, tuple, set)):
+                emp_set = set(empleado_ids)
+            else:
+                emp_set = {empleado_ids}
+
         dt_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         dt_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
         current = dt_ini
@@ -471,7 +479,7 @@ class AsistenciaService:
         while current <= dt_fin:
             fecha = current.strftime("%Y-%m-%d")
             try:
-                await self.procesar_dia(fecha, area=area_filter, areas=areas_list, force=force)
+                await self.procesar_dia(fecha, area=area_filter, areas=areas_list, force=force, empleado_ids=emp_set)
                 total += 1
             except Exception as e:
                 logger.error(f"❌ Error procesando día {fecha}: {e}")
@@ -1844,8 +1852,10 @@ class AsistenciaService:
         consumidas_emp = marcas_consumidas_session[empleado_id]
 
         # ── OVERRIDE REASIGNACION MANUAL DE TURNO ──
-        asist_row_manual = await self.repository.get_asistencia(empleado_id, fecha)
-        logger.info(f"[MANUAL-REASIG-DEBUG] emp={empleado_id} fecha={fecha} asist_row={asist_row_manual}")
+        if bulk_ctx and 'asistencias_hoy' in bulk_ctx:
+            asist_row_manual = bulk_ctx['asistencias_hoy'].get(empleado_id)
+        else:
+            asist_row_manual = await self.repository.get_asistencia(empleado_id, fecha)
         self_m_ids = []
 
         if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL' and asist_row_manual.get('marcas_consumidas_ids'):
@@ -1907,42 +1917,45 @@ class AsistenciaService:
         semana_ganadora = 1
         config_dia = None
 
-        if is_bolsa:
-            semana_ganadora = 1
-            config_dia = {
-                'horas_teoricas': 0.0,
-                'es_libre': False,
-                'hora_entrada': None,
-                'hora_salida': None,
-                'cruza_medianoche': 0,
-            }
-        elif asignacion:
+        if asignacion:
             tid = asignacion.get('turno_id') or asignacion.get('id')
             turnos_src = bulk_ctx['turnos'].get(tid, {}) if bulk_ctx else await self.repository.get_turno_dias_map(tid)
             total_sems = bulk_ctx['turnos_weeks'].get(tid, len(turnos_src)) if bulk_ctx else max(len(turnos_src), 1)
-            semana_inicio_cfg = asignacion.get('semana_inicio')
-            f_asig_ini = self._parse_date(asignacion.get('fecha_inicio'))
-            last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id) if bulk_ctx else None
 
-            marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
+            if is_bolsa:
+                semana_ganadora = 1
+                cfg_raw = turnos_src.get(1, {}).get(dia_semana) or {}
+                config_dia = {
+                    'horas_teoricas': 0.0,
+                    'es_libre': bool(cfg_raw.get('es_libre', False)),
+                    'hora_entrada': cfg_raw.get('hora_entrada'),
+                    'hora_salida': cfg_raw.get('hora_salida'),
+                    'cruza_medianoche': bool(cfg_raw.get('cruza_medianoche', False)),
+                }
+            else:
+                semana_inicio_cfg = asignacion.get('semana_inicio')
+                f_asig_ini = self._parse_date(asignacion.get('fecha_inicio'))
+                last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id) if bulk_ctx else None
 
-            semana_ganadora = QuantumShiftWeekMatcher.resolve_winner_week(
-                empleado_id=empleado_id,
-                fecha_str=fecha,
-                dt=dt,
-                dia_semana=dia_semana,
-                logs=marcas_disp_semana,
-                turnos_dict=turnos_src,
-                total_sems=total_sems,
-                semana_inicio_cfg=semana_inicio_cfg,
-                f_asig_ini=f_asig_ini,
-                last_matched_sem=last_matched_sem,
-            )
+                marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
 
-            if bulk_ctx:
-                bulk_ctx.setdefault('rotativo_last_sem_dict', {})[empleado_id] = semana_ganadora
+                semana_ganadora = QuantumShiftWeekMatcher.resolve_winner_week(
+                    empleado_id=empleado_id,
+                    fecha_str=fecha,
+                    dt=dt,
+                    dia_semana=dia_semana,
+                    logs=marcas_disp_semana,
+                    turnos_dict=turnos_src,
+                    total_sems=total_sems,
+                    semana_inicio_cfg=semana_inicio_cfg,
+                    f_asig_ini=f_asig_ini,
+                    last_matched_sem=last_matched_sem,
+                )
 
-            config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)
+                if bulk_ctx:
+                    bulk_ctx.setdefault('rotativo_last_sem_dict', {})[empleado_id] = semana_ganadora
+
+                config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)
 
         # ── MARCAS DISPONIBLES EN LA VENTANA DE OBSERVACIÓN ──────────────────
         marcas_candidatas = [l for l in raw_logs if l.get('id') not in consumidas_emp]

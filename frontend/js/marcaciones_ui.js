@@ -2059,15 +2059,25 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         return;
     }
 
+// ── Robust date range generator (immune to DST / Timezone offset jumps) ──
+window.getDatesInRange = function(fechaInicio, fechaFin) {
+    if (!fechaInicio || !fechaFin) return [];
+    const dates = [];
+    const [y1, m1, d1] = fechaInicio.split('-').map(Number);
+    const [y2, m2, d2] = fechaFin.split('-').map(Number);
+    let curr = new Date(Date.UTC(y1, m1 - 1, d1, 12, 0, 0));
+    const end = new Date(Date.UTC(y2, m2 - 1, d2, 12, 0, 0));
+    while (curr <= end) {
+        dates.push(curr.toISOString().split('T')[0]);
+        curr.setUTCDate(curr.getUTCDate() + 1);
+    }
+    return dates;
+};
+
     // 1. Determinar el rango de fechas dinámico
     let dates = [];
     if (stateMarcacionesApp.data && stateMarcacionesApp.data.periodo) {
-        let curr = new Date(stateMarcacionesApp.data.periodo.inicio + 'T00:00:00');
-        let end = new Date(stateMarcacionesApp.data.periodo.fin + 'T00:00:00');
-        while (curr <= end) {
-            dates.push(curr.toISOString().split('T')[0]);
-            curr.setDate(curr.getDate() + 1);
-        }
+        dates = window.getDatesInRange(stateMarcacionesApp.data.periodo.inicio, stateMarcacionesApp.data.periodo.fin);
     }
 
     // 2. Encontrar días con HE Detectada usando los campos correctos
@@ -4985,11 +4995,9 @@ window.reloadSingleEmployeeRow = async function(empId) {
             stateMarcacionesApp.data.bonos_evaluacion[empId] = data.bonos_evaluacion[empId];
         }
 
-        const dates = [];
+        let dates = [];
         if (stateMarcacionesApp.data.periodo) {
-            let curr = new Date(stateMarcacionesApp.data.periodo.inicio + 'T00:00:00');
-            const end  = new Date(stateMarcacionesApp.data.periodo.fin   + 'T00:00:00');
-            while (curr <= end) { dates.push(curr.toISOString().split('T')[0]); curr.setDate(curr.getDate()+1); }
+            dates = window.getDatesInRange(stateMarcacionesApp.data.periodo.inicio, stateMarcacionesApp.data.periodo.fin);
         } else {
             const y = stateMarcacionesApp.year, m = stateMarcacionesApp.month;
             const daysInMonth = new Date(y, m, 0).getDate();
@@ -5110,11 +5118,9 @@ function renderVistaAnalitica(respData, container) {
     }
 
     // ── 2. Rango de fechas ───────────────────────────────────────────────────
-    const dates = [];
+    let dates = [];
     if (respData.periodo) {
-        let curr = new Date(respData.periodo.inicio + 'T00:00:00');
-        const end  = new Date(respData.periodo.fin   + 'T00:00:00');
-        while (curr <= end) { dates.push(curr.toISOString().split('T')[0]); curr.setDate(curr.getDate()+1); }
+        dates = window.getDatesInRange(respData.periodo.inicio, respData.periodo.fin);
     } else {
         const y = stateMarcacionesApp.year, m = stateMarcacionesApp.month;
         const daysInMonth = new Date(y, m, 0).getDate();

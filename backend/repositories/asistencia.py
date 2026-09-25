@@ -87,10 +87,41 @@ class AsistenciaRepository:
 
     async def get_turno_detalle_dia(self, turno_id: int, dia_semana: int) -> Optional[Dict[str, Any]]:
         """
-        Obtiene la configuraciÃ³n de entrada/salida para un dÃ­a especÃ­fico (0-6).
+        Obtiene la configuración de entrada/salida para un día específico (0-6).
         """
         query = "SELECT * FROM turno_dias WHERE turno_id = ? AND dia_semana = ?"
         return await self.db.fetch_one(query, (turno_id, dia_semana))
+
+    async def get_turno_dias_map(self, turno_id: int) -> Dict[int, Dict[int, Dict[str, Any]]]:
+        """
+        Retorna la estructura anidada {num_semana: {dia_semana: config_dia}} para un turno,
+        con los parámetros del turno padre inyectados.
+        """
+        td_rows = await self.db.fetch_all(
+            "SELECT * FROM turno_dias WHERE turno_id = ? ORDER BY num_semana, dia_semana",
+            (turno_id,)
+        )
+        padre_row = await self.db.fetch_one("SELECT * FROM turnos WHERE id = ?", (turno_id,))
+        padre = dict(padre_row) if padre_row else {}
+        CAMPOS_TURNO_PADRE = [
+            'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
+            'anclaje_entrada_minutos', 'anclaje_salida_minutos',
+            'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
+            'redondeo_minutos', 'meta_horas_semanales',
+            'tipo_programacion', 'nombre',
+            'rotacion_secuencial', 'semana_fallback_sin_marcas',
+            'permite_viajes_largos', 'hora_limite_ficticia',
+        ]
+        result: Dict[int, Dict[int, Dict[str, Any]]] = {}
+        for td in td_rows:
+            sem = td['num_semana']
+            dsem = td['dia_semana']
+            cfg = dict(td)
+            for c in CAMPOS_TURNO_PADRE:
+                if c in padre:
+                    cfg[c] = padre[c]
+            result.setdefault(sem, {})[dsem] = cfg
+        return result
 
     # ── Whitelist de columnas legítimas para update_asistencia (SQL Injection Guard) ──
     ALLOWED_COLUMNS = frozenset({
