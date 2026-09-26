@@ -89,7 +89,20 @@ class HoraExtraRepository:
                 d['empleado_id'], d['fecha'], d['minutos_bruto'], d.get('minutos_autorizados', 0),
                 d.get('estado', 'PENDIENTE'), d.get('origen', 'SISTEMA'), d.get('comentario')
             ))
-        await self.db.executemany(query, params_list, suppress_auto_sync=suppress_auto_sync)
+        chunk_size = 50
+        for i in range(0, len(params_list), chunk_size):
+            chunk = params_list[i:i + chunk_size]
+            await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)
+
+    async def batch_delete_by_empleado_fecha(self, pairs: List[Tuple[int, str]], suppress_auto_sync: bool = False) -> None:
+        """Elimina registros HE en batch."""
+        if not pairs:
+            return
+        query = "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ?"
+        chunk_size = 50
+        for i in range(0, len(pairs), chunk_size):
+            chunk = pairs[i:i + chunk_size]
+            await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)
 
     async def aprobar_batch(self, items: List[Dict[str, Any]]) -> int:
         """

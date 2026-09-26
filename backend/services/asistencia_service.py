@@ -1393,6 +1393,8 @@ class AsistenciaService:
             all_results_to_delete = []
             all_he_to_save = []
             all_he_to_delete = []
+            all_je_to_save = []
+            all_je_to_delete = []
             t0_masivo = _time_mod.time()
 
             for eid in emp_ids:
@@ -1410,6 +1412,8 @@ class AsistenciaService:
                     all_results_to_delete.extend(r.get('_delete_collect', []))
                     all_he_to_save.extend(r.get('_he_collect', []))
                     all_he_to_delete.extend(r.get('_he_delete', []))
+                    all_je_to_save.extend(r.get('_je_collect', []))
+                    all_je_to_delete.extend(r.get('_je_delete', []))
                     _reproceso_status['procesados'] += r.get('procesados', 0)
                     _reproceso_status['errores'] += r.get('errores', 0)
                 except Exception as e:
@@ -1445,11 +1449,13 @@ class AsistenciaService:
                                 logger.error(f"❌ [Masivo Fallback] emp {eid}: {fb_err}")
 
             if all_results_to_delete:
-                for eid_del, f_str in all_results_to_delete:
-                    try:
-                        await self.repository.delete_asistencia(eid_del, f_str)
-                    except Exception:
-                        pass
+                chunk_size = 50
+                for i in range(0, len(all_results_to_delete), chunk_size):
+                    chunk = all_results_to_delete[i:i + chunk_size]
+                    await self.repository.db.executemany(
+                        "DELETE FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+                        chunk, suppress_auto_sync=True
+                    )
 
             if all_he_to_save:
                 try:
@@ -1458,11 +1464,26 @@ class AsistenciaService:
                     logger.error(f"❌ [Masivo] HE batch upsert falló: {he_err}")
 
             if all_he_to_delete:
-                for eid_del, f_str in all_he_to_delete:
+                try:
+                    await self.he_repo.batch_delete_by_empleado_fecha(all_he_to_delete, suppress_auto_sync=True)
+                except Exception as he_del_err:
+                    logger.error(f"❌ [Masivo] HE batch delete falló: {he_del_err}")
+
+            if all_je_to_save:
+                for je_rec in all_je_to_save:
                     try:
-                        await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
-                    except Exception:
-                        pass
+                        await self.repository.upsert_jornada_especial(je_rec)
+                    except Exception as je_err:
+                        logger.error(f"❌ [Masivo] JE upsert falló: {je_err}")
+
+            if all_je_to_delete:
+                chunk_size = 50
+                for i in range(0, len(all_je_to_delete), chunk_size):
+                    chunk = all_je_to_delete[i:i + chunk_size]
+                    await self.repository.db.executemany(
+                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                        chunk, suppress_auto_sync=True
+                    )
 
             # ── FASE 3: 1 ÚNICO sync final a Turso Cloud ────────────────────
             try:

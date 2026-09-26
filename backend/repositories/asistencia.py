@@ -291,7 +291,7 @@ class AsistenciaRepository:
             )
             params_list.append(params)
 
-        chunk_size = 500
+        chunk_size = 50
         for i in range(0, len(params_list), chunk_size):
             chunk = params_list[i:i + chunk_size]
             await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)

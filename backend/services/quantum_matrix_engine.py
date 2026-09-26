@@ -131,20 +131,14 @@ class QuantumPhaseTopology:
         hora_sal_efectiva = hora_max_ciclos_str or hora_sal_teo_str
         is_overnight = cls.is_evening_or_night_shift(hora_ent_efectiva or hora_ent_teo_str, hora_sal_efectiva, cruza_medianoche)
 
-        # Holgura de salida gobernada por anclaje, ventana en curso y banda de ajustes
-        margen_out = anclaje_salida_minutos + ventana_en_curso_minutos + banda_tolerancia_minutos
-
-        if hora_sal_efectiva:
-            p_out = cls.time_to_phase(hora_sal_efectiva)
-            if is_overnight:
-                end_dt = dt_base + timedelta(days=1, minutes=p_out + margen_out)
-            else:
-                end_dt = dt_base + timedelta(minutes=p_out + margen_out)
+        if is_overnight:
+            # Turno nocturno que cruza medianoche: la observación se extiende a la mañana del día siguiente (mediodía de D+1)
+            # para capturar holgadamente cualquier salida de madrugada (04:00, 07:00, etc.)
+            end_dt = dt_base + timedelta(days=1, hours=12)
         else:
-            if is_overnight:
-                end_dt = dt_base + timedelta(days=1, minutes=banda_tolerancia_minutos)
-            else:
-                end_dt = dt_base + timedelta(days=1, seconds=-1)
+            # Turno diurno regular o día libre: el horizonte de salida cubre el día natural completo (23:59:59)
+            # para no cercenar horas extras legítimas (17:30, 18:36, etc.) ni dobles turnos (+2).
+            end_dt = dt_base + timedelta(days=1, seconds=-1)
 
         return start_dt, end_dt
 
@@ -484,17 +478,25 @@ class QuantumShiftWeekMatcher:
         _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
         marcas_hoy = [l for l in logs if l.get('fecha_hora', '')[:10] == fecha_str]
         marcas_madrugada_next = []
+        # Solo consideramos marcas de madrugada de D+1 si el día D tuvo actividad nocturna (>= 18:00)
+        # o si la marca es de madrugada profunda (< 06:00) sin ser entrada matutina
+        hay_marca_noche_hoy = any(
+            QuantumPhaseTopology.time_to_phase(str(l.get('fecha_hora', ''))[11:16]) >= 1080
+            for l in marcas_hoy
+        )
         if tiene_nocturno:
             for l in logs:
                 fh = str(l.get('fecha_hora', ''))
                 if fh[:10] == next_day_str:
-                    tipo_m = str(l.get('tipo', '')).strip().lower()
-                    if tipo_m in _TIPOS_E:
-                        continue
                     try:
                         hora_m = int(fh[11:13])
-                        if hora_m < 10:
+                        if hay_marca_noche_hoy and hora_m < 12:
+                            # Hubo entrada en la noche de D: la marca de madrugada de D+1 es su salida
                             marcas_madrugada_next.append(l)
+                        elif hora_m < 6:
+                            tipo_m = str(l.get('tipo', '')).strip().lower()
+                            if tipo_m not in _TIPOS_E:
+                                marcas_madrugada_next.append(l)
                     except Exception:
                         pass
 
@@ -754,7 +756,7 @@ class QuantumMatrixEngine:
                 dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
                 if start_horizon <= dt_l <= end_horizon:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
-                    if dt_l.strftime("%Y-%m-%d") > fecha and tipo_m in {'entrada', 'entry', 'e', 'in', '1'}:
+                    if not es_nocturno and dt_l.strftime("%Y-%m-%d") > fecha and tipo_m in {'entrada', 'entry', 'e', 'in', '1'}:
                         continue
                     marcas_disponibles.append(l)
             except Exception:
