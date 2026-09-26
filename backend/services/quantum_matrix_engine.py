@@ -105,35 +105,44 @@ class QuantumPhaseTopology:
         cruza_medianoche: bool = False,
         anclaje_entrada_minutos: int = 0,
         anclaje_salida_minutos: int = 0,
-        ventana_en_curso_minutos: int = 0
+        ventana_en_curso_minutos: int = 0,
+        banda_tolerancia_minutos: int = 120,
+        hora_min_ciclos_str: Optional[str] = None,
+        hora_max_ciclos_str: Optional[str] = None
     ) -> Tuple[datetime, datetime]:
         """
-        Calcula la ventana temporal de observación derivada del horario asignado y los anclajes de UI,
-        sin imponer horas fijas arbitrarias en código.
+        Calcula la ventana temporal de observación derivada del horario asignado,
+        los anclajes de UI y la banda de tolerancia configurada en ajustes.
         """
         dt_base = datetime.strptime(fecha_str, "%Y-%m-%d")
         
-        # Holgura de entrada
-        margen_in = max(120, anclaje_entrada_minutos + 60)
-        if hora_ent_teo_str:
-            p_in = cls.time_to_phase(hora_ent_teo_str)
+        # Holgura de entrada gobernada por anclaje y banda de ajustes
+        # Si el turno contempla múltiples ciclos en el día usamos la entrada más temprana
+        hora_ent_efectiva = hora_min_ciclos_str or hora_ent_teo_str
+        margen_in = anclaje_entrada_minutos + banda_tolerancia_minutos
+        if hora_ent_efectiva:
+            p_in = cls.time_to_phase(hora_ent_efectiva)
             start_dt = dt_base + timedelta(minutes=p_in - margen_in)
         else:
             start_dt = dt_base
 
-        # Holgura de salida
-        margen_out = max(180, anclaje_salida_minutos + ventana_en_curso_minutos + 60)
-        is_overnight = cls.is_evening_or_night_shift(hora_ent_teo_str, hora_sal_teo_str, cruza_medianoche)
+        # Si el turno tiene múltiples ciclos en el día y se proporciona hora_max_ciclos_str
+        # usamos la salida más tardía entre los ciclos para no cercenar dobles turnos
+        hora_sal_efectiva = hora_max_ciclos_str or hora_sal_teo_str
+        is_overnight = cls.is_evening_or_night_shift(hora_ent_efectiva or hora_ent_teo_str, hora_sal_efectiva, cruza_medianoche)
 
-        if hora_sal_teo_str:
-            p_out = cls.time_to_phase(hora_sal_teo_str)
+        # Holgura de salida gobernada por anclaje, ventana en curso y banda de ajustes
+        margen_out = anclaje_salida_minutos + ventana_en_curso_minutos + banda_tolerancia_minutos
+
+        if hora_sal_efectiva:
+            p_out = cls.time_to_phase(hora_sal_efectiva)
             if is_overnight:
                 end_dt = dt_base + timedelta(days=1, minutes=p_out + margen_out)
             else:
                 end_dt = dt_base + timedelta(minutes=p_out + margen_out)
         else:
             if is_overnight:
-                end_dt = dt_base + timedelta(days=1, hours=12)
+                end_dt = dt_base + timedelta(days=1, minutes=banda_tolerancia_minutos)
             else:
                 end_dt = dt_base + timedelta(days=1, seconds=-1)
 
@@ -462,12 +471,34 @@ class QuantumShiftWeekMatcher:
         if total_sems <= 1:
             return 1
 
-        # Si hay marcas candidatas para el día (ventana amplia de marcas)
-        marcas_cand = [
-            l for l in logs
-            if l.get('fecha_hora', '')[:10] == fecha_str or
-               (l.get('fecha_hora', '')[:10] == (dt + timedelta(days=1)).strftime("%Y-%m-%d") and int(l.get('fecha_hora', '')[11:13] or '99') < 12)
-        ]
+        # Marcas candidatas para el día (incluye madrugada de mañana sólo si el turno contempla jornada nocturna y la marca es una salida temprana de madrugada < 10:00)
+        next_day_str = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        tiene_nocturno = any(
+            cfg.get('cruza_medianoche') or 
+            (cfg.get('hora_entrada') and cfg.get('hora_salida') and QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
+            for s_dict in turnos_dict.values()
+            for cfg in [s_dict.get(dia_semana, {})]
+            if cfg and not cfg.get('es_libre')
+        )
+
+        _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+        marcas_hoy = [l for l in logs if l.get('fecha_hora', '')[:10] == fecha_str]
+        marcas_madrugada_next = []
+        if tiene_nocturno:
+            for l in logs:
+                fh = str(l.get('fecha_hora', ''))
+                if fh[:10] == next_day_str:
+                    tipo_m = str(l.get('tipo', '')).strip().lower()
+                    if tipo_m in _TIPOS_E:
+                        continue
+                    try:
+                        hora_m = int(fh[11:13])
+                        if hora_m < 10:
+                            marcas_madrugada_next.append(l)
+                    except Exception:
+                        pass
+
+        marcas_cand = marcas_hoy + marcas_madrugada_next
 
         if marcas_cand:
             min_phase_dist = float('inf')
@@ -553,14 +584,23 @@ class QuantumMatrixEngine:
         justificaciones: Optional[List[Dict[str, Any]]] = None,
         global_ajustes: Optional[Dict[str, Any]] = None,
         consumidas_previas: Optional[Set[int]] = None,
-        viaje_largo_info: Optional[Dict[str, Any]] = None
+        viaje_largo_info: Optional[Dict[str, Any]] = None,
+        todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Resuelve holísticamente el estado de asistencia de un empleado para una fecha dada."""
         
-        # 1. Ajustes globales parametrizados (sin números mágicos hardcodeados)
+        # 1. Ajustes globales parametrizados desde la interfaz / BD (sin números mágicos hardcodeados)
         ajustes = global_ajustes or {}
         gap_emergencia = float(ajustes.get('asistencia_emergencia_gap_horas', 4.0))
         limite_emergencia = float(ajustes.get('asistencia_emergencia_jornada_limite_horas', 3.0))
+        banda_horas = float(ajustes.get('asistencia_emergencia_banda_horas', 2.0))
+        banda_minutos = int(round(banda_horas * 60.0))
+        raw_max_he = ajustes.get('asistencia_max_extras_ordinarias_dia_habil', 240)
+        try:
+            val_he = float(raw_max_he)
+            max_he_ordinarias_min = val_he if val_he > 24 else val_he * 60.0
+        except (ValueError, TypeError):
+            max_he_ordinarias_min = 240.0
 
         # 2. Configuración de turno y día
         t_cfg = turno_config or {}
@@ -682,6 +722,18 @@ class QuantumMatrixEngine:
             if p_out < p_in:
                 es_nocturno = True
 
+        hora_min_ciclos = None
+        hora_max_ciclos = None
+        if todos_ciclos_dia:
+            entradas_validas = [c.get('hora_entrada') for c in todos_ciclos_dia if c and c.get('hora_entrada') and not c.get('es_libre')]
+            if entradas_validas:
+                diurnas = [h for h in entradas_validas if QuantumPhaseTopology.time_to_phase(h) < 1200]
+                cand_in = diurnas if diurnas else entradas_validas
+                hora_min_ciclos = min(cand_in, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
+            salidas_validas = [c.get('hora_salida') for c in todos_ciclos_dia if c and c.get('hora_salida') and not c.get('es_libre')]
+            if salidas_validas:
+                hora_max_ciclos = max(salidas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
+
         start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
             fecha_str=fecha,
             hora_ent_teo_str=hora_ent_teo,
@@ -689,6 +741,10 @@ class QuantumMatrixEngine:
             cruza_medianoche=es_nocturno,
             anclaje_entrada_minutos=anclaje_entrada,
             anclaje_salida_minutos=anclaje_salida,
+            ventana_en_curso_minutos=int(t_cfg.get('ventana_en_curso_minutos', 0) or 0),
+            banda_tolerancia_minutos=banda_minutos,
+            hora_min_ciclos_str=hora_min_ciclos,
+            hora_max_ciclos_str=hora_max_ciclos,
         )
 
         marcas_disponibles = []
@@ -697,6 +753,9 @@ class QuantumMatrixEngine:
             try:
                 dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
                 if start_horizon <= dt_l <= end_horizon:
+                    tipo_m = str(l.get('tipo', '')).strip().lower()
+                    if dt_l.strftime("%Y-%m-%d") > fecha and tipo_m in {'entrada', 'entry', 'e', 'in', '1'}:
+                        continue
                     marcas_disponibles.append(l)
             except Exception:
                 pass
@@ -1086,8 +1145,52 @@ class QuantumMatrixEngine:
 
             diff_extra = min_trab - min_teo
             if diff_extra >= 1.0:
-                res['minutos_extra_bruto'] = round(diff_extra, 2)
-                res['minutos_deuda'] = 0.0
+                if diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
+                    # [REGLA DE NEGOCIO CONFIGURADA EN INTERFAZ]:
+                    # "Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente"
+                    # El turno base cubre min_teo (horas_teoricas)
+                    res['horas_trabajadas'] = round(horas_teoricas, 4)
+                    res['minutos_extra_bruto'] = 0.0
+                    res['minutos_deuda'] = 0.0
+                    res['estado'] = 'OK'
+                    res['tiene_salida_adelantada'] = 0
+                    res['minutos_salida_adelantada'] = 0.0
+
+                    # Calcular colación para el segundo bloque (+2)
+                    min_extra_bruto_bloque2 = diff_extra
+                    min_col_je = 0
+                    if descuento_col_auto and minutos_col_auto > 0 and (min_extra_bruto_bloque2 / 60.0) >= umbral_col:
+                        min_col_je = minutos_col_auto
+                    min_trab_je = max(0, int(round(min_extra_bruto_bloque2 - min_col_je)))
+
+                    min_anticipo = 0
+                    if r_ent_dt and dt_ent_teo:
+                        diff_sec = (dt_ent_teo - r_ent_dt).total_seconds()
+                        if diff_sec > 0:
+                            min_anticipo = int(diff_sec / 60.0)
+
+                    if min_anticipo >= max_he_ordinarias_min:
+                        # Cobertura previa: llegó horas antes de la entrada programada para cubrir el turno previo
+                        h_ent_je = res['hora_entrada_real'] or '07:00'
+                        h_sal_je = dt_ent_teo.strftime("%H:%M") if dt_ent_teo else '15:00'
+                    else:
+                        # Cobertura posterior: se quedó horas después de la salida programada para cubrir el turno siguiente
+                        h_ent_je = dt_sal_teo.strftime("%H:%M") if dt_sal_teo else '15:00'
+                        h_sal_je = res['hora_salida_real'] or '23:00'
+
+                    res['_jornada_especial'] = {
+                        'empleado_id': empleado_id,
+                        'fecha': fecha,
+                        'hora_entrada': h_ent_je,
+                        'hora_salida': h_sal_je,
+                        'minutos_trabajados': min_trab_je,
+                        'estado': 'JORNADA_ESPECIAL',
+                        'observaciones': f"[Jornada Especial (+2): Cobertura de Turno ({round(min_trab_je/60.0, 1)}h netas)]"
+                    }
+                    res['observaciones'] += f"[Jornada Especial (+2): Cobertura de Turno] "
+                else:
+                    res['minutos_extra_bruto'] = round(diff_extra, 2)
+                    res['minutos_deuda'] = 0.0
             else:
                 deuda_calculada = max(0.0, min_teo - min_trab - min_permiso_comp)
                 res['minutos_deuda'] = round(deuda_calculada, 2)

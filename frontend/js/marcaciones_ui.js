@@ -5676,14 +5676,14 @@ function _analiticaCellBadge(di) {
         tooltipTitle = estadosCache[est].descripcion;
     }
 
-    let primaryBadge = '';
     if (di.jornada_adicional) {
         const ja = di.jornada_adicional;
+        const esMasDos = (ja.observaciones && ja.observaciones.includes('(+2)')) || (di.observaciones && di.observaciones.includes('(+2)'));
         if ((di.horas_teoricas || 0) === 0 || est === 'LIBRE' || est === 'JORNADA_ESPECIAL') {
             let class_esp = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
-            let label_esp = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
-            let icon_esp = '<i class="bi bi-star-fill me-1"></i>';
-            let title_esp = 'Jornada Adicional Pendiente de Aprobación';
+            let label_esp = esMasDos ? '+2' : ((estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP');
+            let icon_esp = esMasDos ? '' : '<i class="bi bi-star-fill me-1"></i>';
+            let title_esp = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
             
             if (ja.estado === 'EXTRA') {
                 class_esp = _getEstadoColor('EXTRA') || 'badge-state-info';
@@ -5701,13 +5701,13 @@ function _analiticaCellBadge(di) {
             const label_izq = label;
             
             let class_der = 'badge-state-neutral';
-            let label_der = 'ESP';
-            let title_der = 'Jornada Especial Adicional';
+            let label_der = esMasDos ? '+2' : 'ESP';
+            let title_der = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Especial Adicional';
             
-            if (ja.estado === 'PENDIENTE') {
+            if (ja.estado === 'PENDIENTE' || ja.estado === 'JORNADA_ESPECIAL') {
                 class_der = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
-                label_der = (estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP';
-                title_der = 'Jornada Adicional Pendiente de Aprobación';
+                label_der = esMasDos ? '+2' : ((estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP');
+                title_der = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
             } else if (ja.estado === 'EXTRA') {
                 class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
                 label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
@@ -6410,10 +6410,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         let estadoColor = '#64748b'; // gris
         let iconHtml = '<i class="bi bi-clock me-1"></i>';
         
-        if (ja.estado === 'PENDIENTE') {
-            estadoLabel = 'PENDIENTE DE APROBACIÓN';
+        const esMasDos = (ja.observaciones && ja.observaciones.includes('(+2)')) || (e.observaciones && e.observaciones.includes('(+2)'));
+        if (ja.estado === 'PENDIENTE' || ja.estado === 'JORNADA_ESPECIAL') {
+            estadoLabel = esMasDos ? 'COBERTURA DE TURNO (+2)' : 'PENDIENTE DE APROBACIÓN';
             estadoColor = '#0284c7'; // celeste / azul
-            iconHtml = '<i class="bi bi-hourglass-split me-1"></i>';
+            iconHtml = esMasDos ? '<i class="bi bi-person-fill-check me-1"></i>' : '<i class="bi bi-hourglass-split me-1"></i>';
         } else if (ja.estado === 'EXTRA') {
             estadoLabel = 'APROBADA COMO EXTRA';
             estadoColor = '#16a34a'; // verde
@@ -6427,11 +6428,12 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         const hEntJa = ja.hora_entrada ? ja.hora_entrada.substring(0, 5) : '--:--';
         const hSalJa = ja.hora_salida ? ja.hora_salida.substring(0, 5) : '--:--';
         const duracionJa = ja.minutos_trabajados ? formatExactMinutesToTime(ja.minutos_trabajados) : '--:--';
+        const cardTitle = esMasDos ? 'JORNADA ESPECIAL (+2)' : 'JORNADA ADICIONAL';
         
         bloquesAdicionalesHtml += `
         <div style="border: 1px solid ${estadoColor}33; background-color: ${estadoColor}08; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
             <div style="color: ${estadoColor}; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                <span><i class="bi bi-calendar-plus me-1"></i> JORNADA ADICIONAL</span>
+                <span><i class="bi bi-calendar-plus me-1"></i> ${cardTitle}</span>
                 <span style="font-size: 0.58rem; background-color: ${estadoColor}1a; padding: 1px 6px; border-radius: 4px; border: 1px solid ${estadoColor}33; display: inline-flex; align-items: center; text-transform: uppercase;">${iconHtml}${estadoLabel}</span>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-primary, #1e293b); font-family: monospace;">

@@ -402,6 +402,10 @@ class AsistenciaService:
 
         logger.success(f"✅ Contexto masivo cargado: {len(emp_ids)} empleados")
 
+        # Cargar ajustes globales del sistema
+        ajustes_rows = await db.fetch_all("SELECT clave, valor FROM ajustes")
+        global_ajustes = {r['clave']: r['valor'] for r in ajustes_rows}
+
         # Cargar feriados para el año correspondiente (necesario para ley de víspera)
         from backend.services.calendario_service import CalendarioService
         try:
@@ -432,6 +436,7 @@ class AsistenciaService:
             'compensaciones': compensaciones_map,
             'jornadas_especiales': jornadas_especiales_map,
             'rotativo_last_sem_dict': rot_map,
+            'global_ajustes': global_ajustes,
         }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -516,13 +521,34 @@ class AsistenciaService:
 
         results_to_save = []
         he_to_save = []
+        je_to_save = []
         results_to_delete = []
         results_to_delete_he = []
+        je_to_delete = []
         
         for emp_id in emp_ids:
             resultado = await self.procesar_empleado_dia(emp_id, fecha, save=False, bulk_ctx=bulk_ctx, force=force)
             if resultado:
                 results_to_save.append(resultado)
+
+                # Gestión de Jornadas Especiales (+2 o cobertura de turno)
+                je_data = resultado.get('_jornada_especial')
+                je_prev = bulk_ctx.get('jornadas_especiales', {}).get(emp_id, {}).get(fecha)
+                has_validated_je = bool(
+                    je_prev and (
+                        '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                        or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
+                        or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+                    )
+                )
+                if je_data:
+                    if has_validated_je and je_prev:
+                        je_data['estado'] = je_prev['estado']
+                        je_data['observaciones'] = je_prev.get('observaciones') or ''
+                    je_to_save.append(je_data)
+                elif je_prev and not has_validated_je:
+                    je_to_delete.append((emp_id, fecha))
+
                 he_estado = resultado.get('_he_estado')
                 minutos_bruto = resultado.get('minutos_extra_bruto', 0)
                 if minutos_bruto > 0 or he_estado in ('APROBADO', 'RECHAZADO'):
@@ -538,6 +564,16 @@ class AsistenciaService:
             else:
                 results_to_delete.append((emp_id, fecha))
                 results_to_delete_he.append((emp_id, fecha))
+                je_prev = bulk_ctx.get('jornadas_especiales', {}).get(emp_id, {}).get(fecha)
+                has_validated_je = bool(
+                    je_prev and (
+                        '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                        or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
+                        or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+                    )
+                )
+                if je_prev and not has_validated_je:
+                    je_to_delete.append((emp_id, fecha))
         
         if results_to_save:
             await self.repository.batch_upsert_asistencia(results_to_save, suppress_auto_sync=True)
@@ -549,8 +585,17 @@ class AsistenciaService:
         if results_to_delete_he:
             for eid_del, f_str in results_to_delete_he:
                 await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
+        if je_to_save:
+            for je_item in je_to_save:
+                await self.repository.upsert_jornada_especial(je_item)
+        if je_to_delete:
+            for eid_del, f_str in je_to_delete:
+                await self.repository.db.execute(
+                    "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
+                    (eid_del, f_str)
+                )
         
-        if not suppress_sync and (results_to_save or results_to_delete or he_to_save or results_to_delete_he):
+        if not suppress_sync and (results_to_save or results_to_delete or he_to_save or results_to_delete_he or je_to_save or je_to_delete):
             await self.repository.db.sync_to_cloud_explicit()
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1845,6 +1890,24 @@ class AsistenciaService:
             marcas_consumidas_session[empleado_id] = set()
         consumidas_emp = marcas_consumidas_session[empleado_id]
 
+        # [AISLAMIENTO NOCTURNO]: Heredar marcas consumidas del día anterior
+        # para evitar que marcas de salida de madrugada reaparezcan como entradas falsas hoy
+        asist_ayer = None
+        if bulk_ctx and 'asistencias_ayer' in bulk_ctx:
+            asist_ayer = bulk_ctx['asistencias_ayer'].get(empleado_id)
+        else:
+            ayer_str = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
+            asist_ayer = await self.repository.get_asistencia(empleado_id, ayer_str)
+        if asist_ayer and asist_ayer.get('marcas_consumidas_ids'):
+            try:
+                ayer_m_ids = json.loads(asist_ayer['marcas_consumidas_ids'])
+                if isinstance(ayer_m_ids, list):
+                    for mid in ayer_m_ids:
+                        if mid:
+                            consumidas_emp.add(int(mid))
+            except Exception:
+                pass
+
         # ── OVERRIDE REASIGNACION MANUAL DE TURNO ──
         if bulk_ctx and 'asistencias_hoy' in bulk_ctx:
             asist_row_manual = bulk_ctx['asistencias_hoy'].get(empleado_id)
@@ -1973,6 +2036,20 @@ class AsistenciaService:
             logger.debug(f"🛡️ Blindaje Manual Aplicado (MODO OVERRIDE) para {empleado_id} - {fecha}")
             resultado = dict(asist_actual)
         else:
+            todos_ciclos_dia = None
+            if asignacion and 'turnos_src' in locals() and turnos_src:
+                todos_ciclos_dia = [
+                    turnos_src[s][dia_semana]
+                    for s in sorted(turnos_src.keys())
+                    if isinstance(turnos_src[s], dict) and dia_semana in turnos_src[s]
+                ]
+
+            if bulk_ctx and 'global_ajustes' in bulk_ctx:
+                global_ajustes_ctx = bulk_ctx['global_ajustes']
+            else:
+                aj_rows = await db.fetch_all("SELECT clave, valor FROM ajustes")
+                global_ajustes_ctx = {r['clave']: r['valor'] for r in aj_rows}
+
             # ── INVOCACIÓN MATRICIAL CUÁNTICA PURA ──────────────────────────
             resultado = QuantumMatrixEngine.solve_attendance_day(
                 fecha=fecha,
@@ -1982,9 +2059,10 @@ class AsistenciaService:
                 dia_config=config_dia,
                 is_holiday=is_holiday,
                 justificaciones=justificaciones,
-                global_ajustes=bulk_ctx.get('global_ajustes') if bulk_ctx else None,
+                global_ajustes=global_ajustes_ctx,
                 consumidas_previas=consumidas_emp,
                 viaje_largo_info=viaje_largo,
+                todos_ciclos_dia=todos_ciclos_dia,
             )
 
         if resultado:
@@ -2105,7 +2183,14 @@ class AsistenciaService:
                 resultado['_he_estado'] = None
                 resultado['_he_minutos_autorizados'] = 0
 
-        if resultado and (resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA') or has_validated_je):
+        if resultado and resultado.get('_jornada_especial'):
+            je_data = resultado['_jornada_especial']
+            if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')):
+                je_data['estado'] = je_prev['estado']
+                je_data['observaciones'] = je_prev.get('observaciones') or ''
+            if save:
+                await self.repository.upsert_jornada_especial(je_data)
+        elif resultado and (resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA') or has_validated_je):
             ht = resultado.get('horas_teoricas')
             ht_val = float(ht) if ht is not None else 0.0
             
@@ -2169,6 +2254,13 @@ class AsistenciaService:
                         "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
                         (empleado_id, fecha)
                     )
+        else:
+            # Si el día no es jornada especial ni doble turno (+2), limpiar propuesta huérfana
+            if save and je_prev and not has_validated_je:
+                await self.repository.db.execute(
+                    "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
+                    (empleado_id, fecha)
+                )
 
         # ── FASE 2 (Paso D): DOBLE ESCRITURA A horas_extras ───────────────────
         # Fix 3: Post-interceptor JE. Si fue interceptado, minutos_extra_bruto ya es 0
