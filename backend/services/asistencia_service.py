@@ -551,18 +551,13 @@ class AsistenciaService:
 
                 he_estado = resultado.get('_he_estado')
                 minutos_bruto = resultado.get('minutos_extra_bruto', 0)
-                je_prev_emp = bulk_ctx.get('jornadas_especiales', {}).get(emp_id, {}).get(fecha)
-                has_je_validada = bool(je_prev_emp and je_prev_emp.get('estado') in ('EXTRA', 'RECHAZADA'))
-                if minutos_bruto > 0 or he_estado in ('APROBADO', 'RECHAZADO') or has_je_validada:
-                    auth_min = resultado.get('_he_minutos_autorizados', 0)
-                    if auth_min == 0 and has_je_validada and je_prev_emp.get('estado') == 'EXTRA':
-                        auth_min = je_prev_emp.get('minutos_autorizados', 0)
+                if minutos_bruto > 0:
                     he_to_save.append({
                         'empleado_id': emp_id,
                         'fecha': fecha,
-                        'minutos_bruto': minutos_bruto if minutos_bruto > 0 else (je_prev_emp.get('minutos_trabajados') or 0),
-                        'minutos_autorizados': auth_min,
-                        'estado': he_estado or ('APROBADO' if (je_prev_emp and je_prev_emp.get('estado') == 'EXTRA') else 'RECHAZADO')
+                        'minutos_bruto': minutos_bruto,
+                        'minutos_autorizados': resultado.get('_he_minutos_autorizados', 0),
+                        'estado': he_estado or 'PENDIENTE'
                     })
                 else:
                     results_to_delete_he.append((emp_id, fecha))
@@ -1198,21 +1193,16 @@ class AsistenciaService:
                     # ── FASE 2: Doble escritura a horas_extras (path batch save=False) ──
                     he_estado = result.get('_he_estado')
                     minutos_bruto = result.get('minutos_extra_bruto', 0)
-                    je_prev_emp = jornadas_especiales_por_fecha.get(fecha_str)
-                    has_je_validada = bool(je_prev_emp and je_prev_emp.get('estado') in ('EXTRA', 'RECHAZADA'))
-                    if minutos_bruto > 0 or he_estado in ('APROBADO', 'RECHAZADO') or has_je_validada:
-                        auth_min = result.get('_he_minutos_autorizados', 0)
-                        if auth_min == 0 and has_je_validada and je_prev_emp.get('estado') == 'EXTRA':
-                            auth_min = je_prev_emp.get('minutos_autorizados', 0)
+                    if minutos_bruto > 0:
                         he_to_save.append({
                             'empleado_id': empleado_id,
                             'fecha': fecha_str,
-                            'minutos_bruto': minutos_bruto if minutos_bruto > 0 else (je_prev_emp.get('minutos_trabajados') or 0),
-                            'minutos_autorizados': auth_min,
-                            'estado': he_estado or ('APROBADO' if (je_prev_emp and je_prev_emp.get('estado') == 'EXTRA') else 'RECHAZADO'),
+                            'minutos_bruto': minutos_bruto,
+                            'minutos_autorizados': result.get('_he_minutos_autorizados', 0),
+                            'estado': he_estado or 'PENDIENTE',
                         })
                     else:
-                        # Sin HE ni estado especial: eliminar registro previo (puede ser corrupto)
+                        # Sin HE brutas ordinarias: eliminar cualquier registro previo en horas_extras
                         he_to_delete.append((empleado_id, fecha_str))
                     # ── BATCH SAVE FOR JORNADAS ESPECIALES ──
                     if result.get('_jornada_especial'):
@@ -1617,8 +1607,11 @@ class AsistenciaService:
                 """,
                 (update_data['estado'], update_data['observaciones'], empleado_id, fecha)
             )
-            # Limpiar registro en horas_extras
-            await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+            # Limpiar cualquier registro espurio en horas_extras
+            await db.execute(
+                "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
+                (empleado_id, fecha)
+            )
         else:
             estado_nuevo = 'EXTRA' if accion == 'APROBAR' else 'RECHAZADA'
 
@@ -1627,32 +1620,19 @@ class AsistenciaService:
                 tag_obs = '[VALIDADO]'
                 estado_asistencia = asist.get('estado') if es_cobertura else 'EXTRA'
                 estado_ret = 'APROBADO'
-
-                # Sincronizar horas_extras para cierre contable y nómina
-                await self.he_repo.upsert(
-                    empleado_id=empleado_id,
-                    fecha=fecha,
-                    minutos_bruto=min_auth,
-                    minutos_autorizados=min_auth,
-                    estado='APROBADO',
-                    origen='COBERTURA_TURNO' if es_cobertura else 'JORNADA_ESPECIAL',
-                    comentario=observaciones or 'Jornada Especial Validada'
-                )
             else:
                 min_auth = 0.0
                 tag_obs = '[RECHAZADO]'
                 estado_asistencia = asist.get('estado') if es_cobertura else ('INASISTENCIA' if not es_dia_habil else asist.get('estado'))
                 estado_ret = 'RECHAZADO'
 
-                await self.he_repo.upsert(
-                    empleado_id=empleado_id,
-                    fecha=fecha,
-                    minutos_bruto=float(jornada_dict.get('minutos_trabajados') or 0),
-                    minutos_autorizados=0.0,
-                    estado='RECHAZADO',
-                    origen='COBERTURA_TURNO' if es_cobertura else 'JORNADA_ESPECIAL',
-                    comentario=observaciones or 'Jornada Especial Rechazada'
-                )
+            # REGLA DE NEGOCIO: Las jornadas especiales (coberturas +2 y días libres) NO se guardan en horas_extras
+            # porque se pagan como concepto aparte (bono cobertura / turno especial) y no como horas extras al 50%.
+            # Asegurar limpieza preventiva en horas_extras
+            await db.execute(
+                "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
+                (empleado_id, fecha)
+            )
 
             update_data = {
                 'estado': estado_nuevo,
@@ -2252,27 +2232,20 @@ class AsistenciaService:
         )
 
         # ── FASE 2 (Fix B2): PRESERVACIÓN DE DECISIONES HUMANAS ───────────────
-        # Fuente primaria: horas_extras (nueva tabla)
-        # Fallback transicional: asistencias (legacy) — hasta completar Fase 3
+        # Fuente primaria: horas_extras (solo sobretiempo ordinario)
         _pres_estado = None
         _pres_auth = 0
         if he_previo and he_previo['estado'] in ('APROBADO', 'RECHAZADO'):
-            _pres_estado = he_previo['estado']
-            _pres_auth = he_previo.get('minutos_autorizados') or 0
+            if he_previo.get('origen') not in ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL'):
+                _pres_estado = he_previo['estado']
+                _pres_auth = he_previo.get('minutos_autorizados') or 0
 
         if resultado and _pres_estado:
             nuevo_bruto = resultado.get('minutos_extra_bruto', 0)
-            is_je_or_extra = bool(has_validated_je or (asist_actual and asist_actual.get('estado') in ('EXTRA', 'JORNADA_ESPECIAL')))
-            es_cobertura_dia = bool(je_prev and je_prev.get('origen') == 'COBERTURA_TURNO') or bool(resultado and resultado.get('_jornada_especial')) or (float(resultado.get('horas_teoricas') or 0.0) > 0.0 and float(resultado.get('horas_trabajadas') or 0.0) > 0.0 and has_validated_je)
-            
-            # Mantenemos la decisión si hay HE bruto o si es/era una Jornada Especial / EXTRA pura
-            if nuevo_bruto > 0 or (is_je_or_extra and not es_cobertura_dia):
+            if nuevo_bruto > 0:
                 resultado['_he_estado'] = _pres_estado
                 if _pres_estado == 'APROBADO':
-                    resultado['_he_minutos_autorizados'] = _pres_auth if nuevo_bruto == 0 else min(_pres_auth, nuevo_bruto)
-                    # Restaurar estado EXTRA si era jornada especial aprobada pura (no cobertura en día hábil)
-                    if is_je_or_extra and not es_cobertura_dia and float(resultado.get('horas_teoricas') or 0.0) == 0.0:
-                        resultado['estado'] = 'EXTRA'
+                    resultado['_he_minutos_autorizados'] = min(_pres_auth, nuevo_bruto)
                 else:
                     resultado['_he_minutos_autorizados'] = 0
                 
@@ -2282,7 +2255,11 @@ class AsistenciaService:
                 resultado['_he_estado'] = None
                 resultado['_he_minutos_autorizados'] = 0
         else:
-            es_cobertura_dia = bool(je_prev and je_prev.get('origen') == 'COBERTURA_TURNO') or bool(resultado and resultado.get('_jornada_especial')) or (float(resultado.get('horas_teoricas') or 0.0) > 0.0 and float(resultado.get('horas_trabajadas') or 0.0) > 0.0 and has_validated_je)
+            if resultado:
+                resultado['_he_estado'] = None
+                resultado['_he_minutos_autorizados'] = 0
+
+        es_cobertura_dia = bool(je_prev and je_prev.get('origen') == 'COBERTURA_TURNO') or bool(resultado and resultado.get('_jornada_especial')) or (float(resultado.get('horas_teoricas') or 0.0) > 0.0 and float(resultado.get('horas_trabajadas') or 0.0) > 0.0 and has_validated_je)
 
         ht_val = float(resultado.get('horas_teoricas') or 0.0) if resultado else 0.0
 
@@ -2388,11 +2365,8 @@ class AsistenciaService:
                     estado=resultado.get('_he_estado') or 'PENDIENTE',
                 )
             else:
-                # Ghosting Fix: Si las HE caen a 0 (ej. corrección de turno), limpiar el registro huérfano
-                # EXCEPTO si hay una jornada especial o cobertura validada que respalda las HE
-                je_row = bulk_ctx.get('jornadas_especiales', {}).get(empleado_id, {}).get(fecha) if bulk_ctx else je_prev
-                if not (je_row and je_row.get('estado') in ('EXTRA', 'RECHAZADA')):
-                    await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                # Si las HE son 0 (o día sin sobretiempo ordinario), limpiar cualquier registro huérfano en horas_extras
+                await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
 
         if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL':
             resultado['origen'] = 'MANUAL'
@@ -2597,6 +2571,7 @@ class AsistenciaService:
             FROM asistencias a
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
+                AND (he.origen IS NULL OR he.origen NOT IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL'))
             LEFT JOIN turno_dias td ON td.turno_id = a.turno_asignado_id 
                 AND td.num_semana = a.num_semana_ganadora 
                 AND td.dia_semana = (CASE strftime('%w', a.fecha) WHEN '0' THEN 6 ELSE CAST(strftime('%w', a.fecha) AS INTEGER) - 1 END)

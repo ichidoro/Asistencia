@@ -160,6 +160,8 @@ class HoraExtraRepository:
                 SELECT je.empleado_id, je.fecha
                 FROM jornadas_especiales je
             )
+            OR origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')
+            OR origen LIKE '%JORNADA%'
         """
         await self.db.execute(cleanup_query)
 
