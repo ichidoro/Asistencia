@@ -296,20 +296,40 @@ async def post_asignacion_individual(
     try:
         db = service.repository.db
 
-        # 1. Soft-Close: Cerrar asignación previa activa (si existe) justo el día anterior
+        # 1. Soft-Close: Cerrar asignación previa activa que comenzó antes de data.fecha
         await db.execute(
             "UPDATE asignacion_turnos SET fecha_fin = date(?, '-1 day') WHERE empleado_id = ? AND (fecha_fin IS NULL OR fecha_fin >= ?) AND fecha_inicio < ?",
             (data.fecha, data.empleado_id, data.fecha, data.fecha)
         )
 
-        # 2. Insertar nueva asignación de turno
-        await db.execute(
-            "INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, NULL)",
-            (data.empleado_id, data.turno_id, data.fecha)
+        # 2. Reemplazo in-place si ya existe una asignación que inicia exactamente en data.fecha
+        exact_asig = await db.fetch_one(
+            "SELECT id FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio = ?",
+            (data.empleado_id, data.fecha)
         )
-        logger.info(f"✅ Turno {data.turno_id} asignado a empleado {data.empleado_id} desde {data.fecha}")
+        if exact_asig:
+            await db.execute(
+                "UPDATE asignacion_turnos SET turno_id = ?, fecha_fin = NULL WHERE id = ?",
+                (data.turno_id, exact_asig['id'])
+            )
+            logger.info(f"🔄 Turno #{exact_asig['id']} actualizado in-place a turno {data.turno_id} para emp {data.empleado_id} desde {data.fecha}")
+        else:
+            await db.execute(
+                "INSERT INTO asignacion_turnos (empleado_id, turno_id, fecha_inicio, fecha_fin) VALUES (?, ?, ?, NULL)",
+                (data.empleado_id, data.turno_id, data.fecha)
+            )
+            logger.info(f"✅ Turno {data.turno_id} asignado a empleado {data.empleado_id} desde {data.fecha}")
 
-        # 2. Obtener RUT del empleado para el sync individual
+        # 3. Neutralizar cualquier asignación futura que quede eclipsada por el nuevo turno continuo
+        await db.execute(
+            "DELETE FROM asignacion_turnos WHERE empleado_id = ? AND fecha_inicio > ?",
+            (data.empleado_id, data.fecha)
+        )
+
+        # 4. Asegurar persistencia y sync inmediato a la nube
+        await db.sync_to_cloud_explicit()
+
+        # 5. Obtener RUT del empleado para el sync individual
         emp_row = await db.fetch_one("SELECT rut FROM empleados WHERE id = ?", (data.empleado_id,))
         empleado_rut = emp_row['rut'] if emp_row else None
 
@@ -391,7 +411,8 @@ async def post_asignacion_individual(
                     force=True,
                     job_id=job_id,
                 )
-                logger.info(f"✅ [BG] Cálculo completado: {stats.get('procesados', 0)} días [job={job_id}]")
+                await db.sync_to_cloud_explicit()
+                logger.info(f"✅ [BG] Cálculo completado y sincronizado a Turso Cloud: {stats.get('procesados', 0)} días [job={job_id}]")
 
             except Exception as bg_err:
                 logger.error(f"❌ [BG] Error en job {job_id}: {bg_err}")
