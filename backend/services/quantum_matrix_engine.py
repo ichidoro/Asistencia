@@ -408,16 +408,34 @@ MultiPointScheduleSolver = MultiBlockTensorSolver
 
 
 class AutoMealOperator:
-    """Operador de colación automática y validación de descansos con umbrales."""
+    """
+    Operador Asimétrico Unidireccional de Colación y Descansos.
+    
+    Regla de Negocio Formal:
+    Descuento Colación = max(T_pactado, T_real)
+    
+    1. Si T_real <= T_pactado:
+       - Se descuenta estrictamente el total pactado (T_pactado).
+       - Delta a favor = 0. Tomar menos descanso NUNCA genera sobretiempo
+         ni horas adicionales trabajadas bajo ninguna circunstancia.
+       - Exceso de colación = 0.
+    2. Si T_real > T_pactado:
+       - Se descuenta el tiempo total real consumido (T_real).
+       - La diferencia (T_real - T_pactado) constituye exceso de colación y genera déficit/deuda de jornada.
+       - Exceso = max(0, int(round(T_real - T_pactado - tolerancia_exceso_minutos))).
+    3. Si no hay marcaciones intermedias (T_real == 0):
+       - Si descuento_colacion_auto y horas_brutas >= umbral: Descuento = T_pactado.
+       - Si no aplica descuento automático o horas_brutas < umbral: Descuento = 0.
+    """
 
     @classmethod
     def apply_meal_deduction(
         cls,
-        horas_brutas: float,
+        horas_presenciales_brutas: float,
         minutos_colacion_real: float,
+        minutos_colacion_pactada: int,
         descuento_colacion_auto: bool,
-        minutos_colacion_auto: int,
-        umbral_horas_colacion: float,
+        umbral_horas_colacion: float = 0.0,
         tolerancia_exceso_minutos: int = 0
     ) -> Tuple[float, int, int]:
         """
@@ -425,24 +443,50 @@ class AutoMealOperator:
         """
         minutos_colacion_aplicados = 0
         minutos_exceso = 0
+        t_pactado = max(0, int(minutos_colacion_pactada or 0))
+        t_real = max(0.0, float(minutos_colacion_real or 0.0))
 
-        # Caso 1: Hay marcas reales intermedias de colación
-        if minutos_colacion_real > 0:
-            if descuento_colacion_auto and minutos_colacion_auto > 0:
-                minutos_colacion_aplicados = minutos_colacion_auto
-                if minutos_colacion_real > minutos_colacion_auto + tolerancia_exceso_minutos:
-                    minutos_exceso = int(round(minutos_colacion_real - minutos_colacion_auto))
+        # Caso 1: Hay marcaciones biométricas reales de colación (T_real > 0)
+        if t_real > 0:
+            if t_pactado > 0:
+                # Regla de corte unidireccional: Descuento = max(T_pactado, T_real)
+                minutos_colacion_aplicados = int(round(max(float(t_pactado), t_real)))
+                
+                # Asimetría Positiva Inexistente:
+                # horas_presenciales_brutas (suma de bloques de trabajo) solo había excluido t_real.
+                # Para descontar el pactado completo sin regalar horas a favor, restamos el remanente (t_pactado - t_real).
+                if t_real <= t_pactado:
+                    minutos_subutilizados = float(t_pactado) - t_real
+                    horas_netas = max(0.0, horas_presenciales_brutas - (minutos_subutilizados / 60.0))
+                    minutos_exceso = 0
+                else:
+                    # T_real > T_pactado: horas_presenciales_brutas ya excluyó todo t_real
+                    horas_netas = horas_presenciales_brutas
+                    if t_real > (t_pactado + tolerancia_exceso_minutos):
+                        minutos_exceso = int(round(t_real - t_pactado))
             else:
-                minutos_colacion_aplicados = int(round(minutos_colacion_real))
+                # Turno sin colación pactada: se descuenta el tiempo real marcado
+                minutos_colacion_aplicados = int(round(t_real))
+                horas_netas = horas_presenciales_brutas
+                minutos_exceso = 0
 
-        # Caso 2: No hay marcas de colación y aplica descuento automático
-        elif descuento_colacion_auto and minutos_colacion_auto > 0:
-            if umbral_horas_colacion > 0 and horas_brutas < umbral_horas_colacion:
+        # Caso 2: No hay marcaciones intermedias de colación (T_real == 0)
+        elif descuento_colacion_auto and t_pactado > 0:
+            if umbral_horas_colacion > 0 and horas_presenciales_brutas < umbral_horas_colacion:
+                # No alcanza el umbral de horas para exigir colación
                 minutos_colacion_aplicados = 0
+                horas_netas = horas_presenciales_brutas
             else:
-                minutos_colacion_aplicados = minutos_colacion_auto
+                # Aplica descuento automático de colación pactada
+                minutos_colacion_aplicados = t_pactado
+                horas_netas = max(0.0, horas_presenciales_brutas - (t_pactado / 60.0))
+            minutos_exceso = 0
+        else:
+            # Sin colación ni descuento automático
+            minutos_colacion_aplicados = 0
+            horas_netas = horas_presenciales_brutas
+            minutos_exceso = 0
 
-        horas_netas = max(0.0, horas_brutas - (minutos_colacion_aplicados / 60.0))
         return round(horas_netas, 4), minutos_colacion_aplicados, minutos_exceso
 
 
@@ -1054,7 +1098,8 @@ class QuantumMatrixEngine:
         minutos_permisos_detectados = 0.0
 
         if pausas_intermedias:
-            target_col = float(minutos_col_auto if (descuento_col_auto and minutos_col_auto > 0) else 60.0)
+            t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or t_cfg.get('minutos_colacion', 0) or 0)
+            target_col = float(t_col_pactado_target if t_col_pactado_target > 0 else 60.0)
             
             # El intervalo intermedio más cercano a la duración de colación se asigna a colación
             mejor_par_col = min(pausas_intermedias, key=lambda p: abs(p[2] - target_col))
@@ -1074,28 +1119,23 @@ class QuantumMatrixEngine:
                 res['tiene_permiso'] = 1
                 res['observaciones'] += f"Permiso intermedio detectado ({int(round(minutos_permisos_detectados))} min). "
 
-        # 9. Operador de Colación
-        # Si la colación ya fue marcada físicamente, las horas presenciales brutas ya la excluyen
-        if minutos_col_real > 0:
-            min_col_ap = int(round(minutos_col_real))
-            min_exc_col = 0
-            if descuento_col_auto and minutos_col_auto > 0:
-                if minutos_col_real > (minutos_col_auto + tolerancia_exceso_col):
-                    min_exc_col = int(round(minutos_col_real - minutos_col_auto))
-            horas_netas = horas_brutas
-        else:
-            horas_netas, min_col_ap, min_exc_col = AutoMealOperator.apply_meal_deduction(
-                horas_brutas=horas_brutas,
-                minutos_colacion_real=0.0,
-                descuento_colacion_auto=descuento_col_auto,
-                minutos_colacion_auto=minutos_col_auto,
-                umbral_horas_colacion=umbral_col,
-                tolerancia_exceso_minutos=tolerancia_exceso_col
-            )
+        # 9. Operador Asimétrico Unidireccional de Colación: Descuento = max(T_pactado, T_real)
+        t_col_pactado = int(t_cfg.get('minutos_colacion_auto', 0) or t_cfg.get('minutos_colacion', 0) or 0)
+        horas_netas, min_col_ap, min_exc_col = AutoMealOperator.apply_meal_deduction(
+            horas_presenciales_brutas=horas_brutas,
+            minutos_colacion_real=minutos_col_real,
+            minutos_colacion_pactada=t_col_pactado,
+            descuento_colacion_auto=descuento_col_auto,
+            umbral_horas_colacion=umbral_col,
+            tolerancia_exceso_minutos=tolerancia_exceso_col
+        )
 
         res['horas_trabajadas'] = round(horas_netas, 4)
         res['minutos_colacion'] = min_col_ap
+        res['minutos_colacion_auto'] = t_col_pactado if (descuento_col_auto or t_col_pactado > 0) else 0
         res['minutos_exceso_colacion'] = min_exc_col
+        if min_exc_col > 0:
+            res['observaciones'] += f"Exceso de colacion detectado ({min_exc_col} min). "
 
         # ─────────────────────────────────────────────────────────────────────
         # 10. SEGREGACIÓN ESTRICTA DE JORNADA_ESPECIAL
