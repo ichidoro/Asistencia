@@ -93,9 +93,14 @@
                 <div style="margin-bottom:10px;">
                     <label for="panel-tipo-condonacion" style="font-size:0.75rem;font-weight:700;color:#374151;display:block;margin-bottom:5px;">¿Qué deuda condonar?</label>
                     <select id="panel-tipo-condonacion" onchange="renderizarListaPerdonazo()" style="width:100%;padding:6px 10px;border:1px solid #d1fae5;border-radius:8px;font-size:0.8rem;background:#f0fdf4;color:#047857;font-weight:600;">
-                        <option value="1">Solo Salida Adelantada</option>
-                        <option value="2">Solo Atraso</option>
-                        <option value="3">Atraso + Salida Adelantada</option>
+                        <optgroup label="Tolerancias Presenciales (Minutos)">
+                            <option value="1">Solo Salida Adelantada</option>
+                            <option value="2">Solo Atraso</option>
+                            <option value="3" selected>Atraso + Salida Adelantada</option>
+                        </optgroup>
+                        <optgroup label="Cierre Operativo / Víspera de Feriado">
+                            <option value="5">Condonar Cierre de Turno (Inasistencia ➔ OK)</option>
+                        </optgroup>
                     </select>
                 </div>
                 <div style="display:flex;gap:8px;">
@@ -228,10 +233,19 @@ window.renderizarListaPerdonazo = function() {
     const atrasosCondonados = [];
     const salidasPendientes = [];
     const salidasCondonadas = [];
+    const ausenciasPendientes = [];
+    const ausenciasCondonadas = [];
 
     for (const emp of empleados) {
         const asist = matrix[emp.id]?.[fecha];
         if (!asist) continue;
+
+        // Ausencias / Cierres de Turno
+        if (asist.deuda_condonada === 5) {
+            ausenciasCondonadas.push({ emp, asist });
+        } else if (asist.estado === 'INASISTENCIA' || asist.estado === 'FALTA') {
+            ausenciasPendientes.push({ emp, asist });
+        }
 
         // Atrasos
         if (asist.deuda_condonada === 2 || asist.deuda_condonada === 3) {
@@ -263,8 +277,14 @@ window.renderizarListaPerdonazo = function() {
 
     const hasAtrasos = atrasosPendientes.length > 0 || atrasosCondonados.length > 0;
     const hasSalidas = salidasPendientes.length > 0 || salidasCondonadas.length > 0;
+    const hasAusencias = ausenciasPendientes.length > 0 || ausenciasCondonadas.length > 0;
 
-    if ((tipo === 2 && !hasAtrasos) || (tipo === 1 && !hasSalidas) || (tipo === 3 && !hasAtrasos && !hasSalidas)) {
+    if (
+        (tipo === 2 && !hasAtrasos) ||
+        (tipo === 1 && !hasSalidas) ||
+        (tipo === 3 && !hasAtrasos && !hasSalidas) ||
+        (tipo === 5 && !hasAusencias)
+    ) {
         html += '<div style="text-align:center;padding:40px;color:#94a3b8;"><i class="bi bi-check-circle" style="font-size:2rem;display:block;margin-bottom:10px;"></i>Sin incidencias ni deudas del tipo seleccionado</div>';
         body.innerHTML = html;
         return;
@@ -357,6 +377,53 @@ window.renderizarListaPerdonazo = function() {
             }
         } else if (tipo === 3) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">🚶 Sin salidas adelantadas este día</div>`;
+        }
+    }
+
+    // Renderizar Ausencias / Cierres de Turno (si tipo es 5)
+    if (tipo === 5) {
+        if (hasAusencias) {
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#92400e;background:#fef3c7;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
+                <span>🚪 CIERRES DE TURNO / AUSENCIAS (INASISTENCIA ➔ OK)</span>
+                <span style="font-size:0.6rem;background:#fde68a;padding:2px 6px;border-radius:999px;color:#92400e;">Pendientes: ${ausenciasPendientes.length}</span>
+            </div>`;
+
+            // Pendientes
+            for (const { emp, asist } of ausenciasPendientes) {
+                const isSel = window._perdonazoState.seleccionados.has(emp.id);
+                const horarioTeorico = asist.hora_entrada_teorica && asist.hora_salida_teorica ? `(${asist.hora_entrada_teorica} - ${asist.hora_salida_teorica})` : '';
+                html += `
+                <div class="emp-row panel-emp-${emp.id} ${isSel ? 'seleccionado' : ''}" onclick="toggleSeleccionEmpPanel(${emp.id})">
+                    <input type="checkbox" class="form-check-input cb-panel-${emp.id}" ${isSel ? 'checked' : ''} style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">
+                            <span class="badge-estado badge-deuda">Inasistencia ${horarioTeorico}</span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:0.65rem;">Candidato a Cierre de Turno</span>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // Condonados
+            if (ausenciasCondonadas.length > 0) {
+                html += `<div style="font-size:0.65rem;font-weight:700;color:#16a34a;margin:10px 0 4px;padding-left:10px;">Turnos Condonados (${ausenciasCondonadas.length})</div>`;
+                for (const { emp, asist } of ausenciasCondonadas) {
+                    const isSel = window._perdonazoState.seleccionados.has(emp.id);
+                    html += `
+                    <div class="emp-row panel-emp-${emp.id} ${isSel ? 'seleccionado' : ''}" onclick="toggleSeleccionEmpPanel(${emp.id})">
+                        <input type="checkbox" class="form-check-input cb-panel-${emp.id}" ${isSel ? 'checked' : ''} style="width:16px;height:16px;" onclick="event.stopPropagation();toggleSeleccionEmpPanel(${emp.id})">
+                        <div style="flex:1;">
+                            <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
+                            <div style="margin-top:3px;">
+                                <span class="badge-estado badge-condonado">&#10003; Condonado (Cierre de Faena / OK)</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+            }
+        } else {
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">🚪 Sin inasistencias este día</div>`;
         }
     }
 

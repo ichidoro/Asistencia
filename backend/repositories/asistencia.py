@@ -222,7 +222,7 @@ class AsistenciaRepository:
                 minutos_colacion_real=excluded.minutos_colacion_real,
                 horas_trabajadas=excluded.horas_trabajadas,
                 minutos_deuda=CASE 
-                    WHEN asistencias.deuda_condonada = 3 THEN 0
+                    WHEN asistencias.deuda_condonada IN (3, 5) THEN 0
                     WHEN asistencias.deuda_condonada = 2 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_atraso)
                     WHEN asistencias.deuda_condonada = 1 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_salida_adelantada)
                     ELSE excluded.minutos_deuda 
@@ -233,13 +233,18 @@ class AsistenciaRepository:
                     ELSE excluded.minutos_salida_adelantada 
                 END,
                 estado=CASE 
+                    WHEN asistencias.deuda_condonada = 5 AND excluded.estado IN ('INASISTENCIA', 'FALTA') THEN 'OK'
                     WHEN asistencias.deuda_condonada = 3 AND excluded.estado IN ('ATRASO', 'SALIDA_ADELANTADA') THEN 'OK'
                     WHEN asistencias.deuda_condonada = 2 AND excluded.estado = 'ATRASO' AND excluded.tiene_salida_adelantada = 0 THEN 'OK'
                     WHEN asistencias.deuda_condonada = 2 AND excluded.estado = 'ATRASO' AND excluded.tiene_salida_adelantada = 1 THEN 'SALIDA_ADELANTADA'
                     WHEN asistencias.deuda_condonada = 1 AND excluded.estado = 'SALIDA_ADELANTADA' THEN 'OK'
                     ELSE excluded.estado 
                 END,
-                observaciones=excluded.observaciones,
+                observaciones=CASE
+                    WHEN asistencias.deuda_condonada = 5 AND excluded.estado IN ('INASISTENCIA', 'FALTA')
+                        THEN CASE WHEN excluded.observaciones LIKE '%[Cierre de Faena / Turno Condonado]%' THEN excluded.observaciones ELSE excluded.observaciones || ' [Cierre de Faena / Turno Condonado]' END
+                    ELSE excluded.observaciones
+                END,
                 origen=excluded.origen,
                 minutos_exceso_colacion=excluded.minutos_exceso_colacion,
                 minutos_colacion_auto=excluded.minutos_colacion_auto,
@@ -255,9 +260,9 @@ class AsistenciaRepository:
                 num_semana_ganadora=excluded.num_semana_ganadora,
                 marcas_consumidas_ids=excluded.marcas_consumidas_ids,
                 deuda_condonada=CASE 
-                    WHEN excluded.deuda_condonada IN (3, 4) THEN excluded.deuda_condonada
+                    WHEN excluded.deuda_condonada IN (3, 4, 5) THEN excluded.deuda_condonada
                     WHEN excluded.deuda_condonada = 0 AND excluded.estado IN ('INASISTENCIA', 'FALTA') THEN 0
-                    WHEN excluded.deuda_condonada = 0 AND asistencias.deuda_condonada = 4 THEN 0
+                    WHEN excluded.deuda_condonada = 0 AND asistencias.deuda_condonada IN (4, 5) THEN 0
                     ELSE asistencias.deuda_condonada
                 END,
                 updated_at=datetime('now')

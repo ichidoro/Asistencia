@@ -2198,6 +2198,17 @@ class AsistenciaService:
                 resultado['deuda_condonada'] = 4
                 resultado['observaciones'] = resultado.get('observaciones', '') + f' [Inasistencia Compensada con Horas Extras: {total_compensado} min]'
 
+        # ── INTERCEPTOR: CONDONACIÓN DE JORNADA / CIERRE DE FAENA (deuda_condonada = 5) ──
+        condonada_prev = (asist_actual.get('deuda_condonada') or 0) if asist_actual else 0
+        if condonada_prev == 5 and resultado and resultado.get('estado') in ('INASISTENCIA', 'FALTA'):
+            resultado['estado'] = 'OK'
+            resultado['minutos_deuda'] = 0.0
+            resultado['deuda_condonada'] = 5
+            resultado['tiene_atraso'] = 0
+            resultado['tiene_salida_adelantada'] = 0
+            if '[Cierre de Faena / Turno Condonado]' not in (resultado.get('observaciones') or ''):
+                resultado['observaciones'] = (resultado.get('observaciones') or '').strip() + ' [Cierre de Faena / Turno Condonado]'
+
         # ── APLICACIÓN DE AGOTAMIENTO ATÓMICO (MEMORIA) ───────────────────────
         if resultado:
             resultado['num_semana_ganadora'] = semana_ganadora

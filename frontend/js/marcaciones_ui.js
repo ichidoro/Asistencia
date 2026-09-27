@@ -2111,13 +2111,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             // --- CÁLCULO DE ORIGEN/CONTEXTO DE HORAS EXTRAS ---
             let contextoTags = [];
             
-            // 1. Trabajo en Colación (Tomó menos colación de la permitida)
-            if (di.minutos_colacion !== undefined && di.minutos_colacion_auto !== undefined) {
-                if (di.minutos_colacion_real > 0 && di.minutos_colacion_auto > (di.minutos_colacion || 0)) {
-                    let extraMin = di.minutos_colacion_auto - (di.minutos_colacion || 0);
-                    contextoTags.push(`<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mb-1" title="Colación tomada: ${di.minutos_colacion_real}m de ${di.minutos_colacion_auto}m"><i class="bi bi-cup-hot"></i> +${extraMin}m (Colación reducida)</span>`);
-                }
-            }
+            // 1. Colación: Bajo regla canónica, tomar menos descanso no genera sobretiempo (omitido)
             
             // 2. Llegada Temprana Efectiva (Fuera del margen de anclaje)
             if (di.hora_entrada_teorica && di.hora_entrada_real) {
@@ -3739,13 +3733,7 @@ window.cierreWizardConfirmarParametros = async function() {
 function cierreGetHEContextBadges(a) {
     let tags = [];
     
-    // 1. Trabajo en Colación (Tomó menos colación de la permitida)
-    if (a.minutos_colacion !== undefined && a.minutos_colacion_auto !== undefined && a.minutos_colacion !== null && a.minutos_colacion_auto !== null) {
-        if (a.minutos_colacion_real > 0 && a.minutos_colacion_auto > (a.minutos_colacion || 0)) {
-            let extraMin = a.minutos_colacion_auto - (a.minutos_colacion || 0);
-            tags.push(`<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-2" title="Colación tomada: ${a.minutos_colacion_real}m de ${a.minutos_colacion_auto}m"><i class="bi bi-cup-hot"></i> +${extraMin}m (Colación reducida)</span>`);
-        }
-    }
+    // 1. Colación: Bajo regla canónica, tomar menos descanso no genera sobretiempo (omitido)
     
     // 2. Llegada Temprana Efectiva (Fuera del margen de anclaje)
     if (a.hora_entrada_teorica && a.hora_entrada_real) {
@@ -6725,7 +6713,7 @@ window.executeCondonacionMasiva = async function(empleadosIds, fechaInicio, fech
         const result = await response.json();
         const cuenta = result.registros_procesados || empleadosIds.length;
         const accion = isRevoke ? 'revocada' : 'condonada';
-        const tipotxt = { 0:'(Revocar)', 1:'Salida Adelantada', 2:'Atraso', 3:'Atraso + Salida' }[tipo] || '';
+        const tipotxt = { 0:'(Revocar)', 1:'Salida Adelantada', 2:'Atraso', 3:'Atraso + Salida', 5:'Cierre de Turno / Ausencia Condonada' }[tipo] || '';
 
         Swal.fire({
             icon: isRevoke ? 'warning' : 'success',
