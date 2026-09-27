@@ -301,18 +301,32 @@ class AsistenciaRepository:
     async def upsert_jornada_especial(self, data: Dict[str, Any]) -> None:
         """
         Guarda o actualiza un registro en la tabla de jornadas_especiales.
+        Incluye origen trazable y respeta decisiones humanas previas.
         """
         query = """
             INSERT INTO jornadas_especiales (
                 empleado_id, fecha, hora_entrada, hora_salida, 
-                minutos_trabajados, estado, observaciones
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                minutos_trabajados, estado, observaciones, origen,
+                minutos_autorizados, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 hora_entrada=excluded.hora_entrada,
                 hora_salida=excluded.hora_salida,
                 minutos_trabajados=excluded.minutos_trabajados,
-                estado=excluded.estado,
-                observaciones=excluded.observaciones
+                estado=CASE 
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'RECHAZADA') THEN jornadas_especiales.estado
+                    ELSE excluded.estado
+                END,
+                observaciones=CASE
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'RECHAZADA') THEN jornadas_especiales.observaciones
+                    ELSE excluded.observaciones
+                END,
+                origen=excluded.origen,
+                minutos_autorizados=CASE
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'RECHAZADA') THEN jornadas_especiales.minutos_autorizados
+                    ELSE excluded.minutos_autorizados
+                END,
+                updated_at=datetime('now')
         """
         params = (
             data['empleado_id'],
@@ -321,7 +335,9 @@ class AsistenciaRepository:
             data.get('hora_salida'),
             data.get('minutos_trabajados', 0),
             data.get('estado', 'JORNADA_ESPECIAL'),
-            data.get('observaciones', '')
+            data.get('observaciones', ''),
+            data.get('origen', 'SISTEMA'),
+            data.get('minutos_autorizados', 0),
         )
         await self.db.execute(query, params)
 

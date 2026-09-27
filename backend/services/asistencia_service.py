@@ -1206,11 +1206,24 @@ class AsistenciaService:
                         he_to_delete.append((empleado_id, fecha_str))
                     # ── BATCH SAVE FOR JORNADAS ESPECIALES ──
                     if result.get('_jornada_especial'):
-                        je_to_save.append(result['_jornada_especial'])
+                        je_rec = result['_jornada_especial']
+                        je_prev = jornadas_especiales_por_fecha.get(fecha_str)
+                        if je_prev and (je_prev.get('estado') in ('EXTRA', 'RECHAZADA') or '[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '')):
+                            je_rec['estado'] = je_prev['estado']
+                            je_rec['observaciones'] = je_prev.get('observaciones') or ''
+                            if je_prev.get('minutos_autorizados') is not None:
+                                je_rec['minutos_autorizados'] = je_prev.get('minutos_autorizados')
+                        je_to_save.append(je_rec)
                     else:
                         je_prev = jornadas_especiales_por_fecha.get(fecha_str)
                         if je_prev:
-                            je_to_delete.append((empleado_id, fecha_str))
+                            has_val_je = bool(
+                                '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                                or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
+                                or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+                            )
+                            if not has_val_je:
+                                je_to_delete.append((empleado_id, fecha_str))
                     asistencias_map[fecha_str] = result
                 else:
                     existing = asistencias_map.get(fecha_str)
@@ -1220,7 +1233,13 @@ class AsistenciaService:
                     he_to_delete.append((empleado_id, fecha_str))
                     je_prev = jornadas_especiales_por_fecha.get(fecha_str)
                     if je_prev:
-                        je_to_delete.append((empleado_id, fecha_str))
+                        has_val_je = bool(
+                            '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                            or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
+                            or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+                        )
+                        if not has_val_je:
+                            je_to_delete.append((empleado_id, fecha_str))
                 stats['procesados'] += 1
             except Exception as e:
                 import traceback
@@ -1254,7 +1273,7 @@ class AsistenciaService:
                         je_to_save = []
                     if je_to_delete:
                         for eid_del, f_str in je_to_delete:
-                            await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (eid_del, f_str))
+                            await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'", (eid_del, f_str))
                         je_to_delete = []
                 except Exception as e:
                     logger.error(f"Error en checkpoint batch (emp {empleado_id}): {e}")
@@ -1304,7 +1323,7 @@ class AsistenciaService:
                         await self.repository.upsert_jornada_especial(je_rec)
                 if je_to_delete:
                     for eid_del, f_str in je_to_delete:
-                        await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (eid_del, f_str))
+                        await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'", (eid_del, f_str))
                 t_save = int((_time() - t_save_start) * 1000)
                 logger.info(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
             except Exception as e:
@@ -1481,7 +1500,7 @@ class AsistenciaService:
                 for i in range(0, len(all_je_to_delete), chunk_size):
                     chunk = all_je_to_delete[i:i + chunk_size]
                     await self.repository.db.executemany(
-                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
                         chunk, suppress_auto_sync=True
                     )
 
@@ -1516,6 +1535,8 @@ class AsistenciaService:
         fecha: str,
         accion: str,
         observaciones: Optional[str] = None,
+        minutos_autorizados: Optional[float] = None,
+        validador_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         db = self.repository.db
         asist = await self.repository.get_asistencia(empleado_id, fecha)
@@ -1537,6 +1558,7 @@ class AsistenciaService:
                     'hora_salida': asist.get('hora_salida_real'),
                     'minutos_trabajados': min_trab,
                     'estado': asist.get('estado'),
+                    'origen': 'MANUAL' if asist.get('origen') == 'MANUAL' else 'SISTEMA',
                     'observaciones': asist.get('observaciones') or ''
                 }
                 await self.repository.upsert_jornada_especial(j_record)
@@ -1563,7 +1585,7 @@ class AsistenciaService:
             }
 
         if accion == 'REVERTIR':
-            obs = (jornada_dict.get('observaciones') or '').replace('[VALIDADO]', '').strip()
+            obs = (jornada_dict.get('observaciones') or '').replace('[VALIDADO]', '').replace('[RECHAZADO]', '').strip()
             update_data = {
                 'observaciones': obs,
                 'estado': 'JORNADA_ESPECIAL'
@@ -1572,37 +1594,46 @@ class AsistenciaService:
             estado_asistencia = 'JORNADA_ESPECIAL' if jornada_dict.get('hora_salida') else 'ANOMALIA'
             estado_ret = 'REVERTIDO'
             minutos_ret = 0
+
+            # Actualizar tabla jornadas_especiales
+            await db.execute(
+                """
+                UPDATE jornadas_especiales 
+                SET estado = ?, observaciones = ?, minutos_autorizados = 0, validador_id = NULL, fecha_validacion = NULL, updated_at = datetime('now')
+                WHERE empleado_id = ? AND fecha = ?
+                """,
+                (update_data['estado'], update_data['observaciones'], empleado_id, fecha)
+            )
         else:
             estado_nuevo = 'EXTRA' if accion == 'APROBAR' else 'RECHAZADA'
-            minutos_autorizados = jornada_dict.get('minutos_trabajados') or 0 if accion == 'APROBAR' else 0
-            update_data = {
-                'estado': estado_nuevo,
-                'observaciones': (jornada_dict.get('observaciones') or '') + f' [VALIDADO] {observaciones or ""}',
-            }
-            
-            # Al aprobar/rechazar, asistencias refleja el estado final de la JE
-            # Si es día hábil ordinario (horas_teoricas > 0), al rechazar la JE preservamos el estado de asistencia
-            # para que el reprocesador posterior restaure el flujo ordinario completo con HE pendientes.
             es_dia_habil = asist and float(asist.get('horas_teoricas') or 0.0) > 0.0
-            
+
             if accion == 'APROBAR':
+                min_auth = float(minutos_autorizados) if minutos_autorizados is not None else float(jornada_dict.get('minutos_trabajados') or 0)
+                tag_obs = '[VALIDADO]'
                 estado_asistencia = 'EXTRA'
                 estado_ret = 'APROBADO'
             else:
+                min_auth = 0.0
+                tag_obs = '[RECHAZADO]'
                 estado_asistencia = asist.get('estado') if es_dia_habil else 'INASISTENCIA'
                 estado_ret = 'RECHAZADO'
-                
-            minutos_ret = minutos_autorizados
 
-        # Actualizar tabla jornadas_especiales
-        await db.execute(
-            """
-            UPDATE jornadas_especiales 
-            SET estado = ?, observaciones = ? 
-            WHERE empleado_id = ? AND fecha = ?
-            """,
-            (update_data['estado'], update_data['observaciones'], empleado_id, fecha)
-        )
+            update_data = {
+                'estado': estado_nuevo,
+                'observaciones': ((jornada_dict.get('observaciones') or '') + f' {tag_obs} {observaciones or ""}').strip(),
+            }
+            minutos_ret = min_auth
+
+            # Actualizar tabla jornadas_especiales
+            await db.execute(
+                """
+                UPDATE jornadas_especiales 
+                SET estado = ?, observaciones = ?, minutos_autorizados = ?, validador_id = ?, fecha_validacion = datetime('now'), updated_at = datetime('now')
+                WHERE empleado_id = ? AND fecha = ?
+                """,
+                (update_data['estado'], update_data['observaciones'], min_auth, validador_id, empleado_id, fecha)
+            )
 
         # ─── EFECTO DOMINÓ: Sincronizar asistencias.estado ───────────────────
         # Sin esta sincronización, la grilla y el cierre leen estados distintos.
@@ -2209,6 +2240,8 @@ class AsistenciaService:
             if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')):
                 je_data['estado'] = je_prev['estado']
                 je_data['observaciones'] = je_prev.get('observaciones') or ''
+                if je_prev.get('minutos_autorizados') is not None:
+                    je_data['minutos_autorizados'] = je_prev.get('minutos_autorizados')
             if save:
                 await self.repository.upsert_jornada_especial(je_data)
         elif resultado and (resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA') or has_validated_je):
@@ -2252,6 +2285,14 @@ class AsistenciaService:
                     # Si ya estaba validado en el pasado, preservamos el estado en asistencias (ej: EXTRA o RECHAZADA)
                     resultado['estado'] = estado_je
                     
+                # Determinar origen trazable
+                if is_holiday:
+                    _origen_je = 'FERIADO'
+                elif ht_val == 0.0:
+                    _origen_je = 'DIA_LIBRE'
+                else:
+                    _origen_je = 'SISTEMA'
+
                 j_record = {
                     'empleado_id': empleado_id,
                     'fecha': fecha,
@@ -2259,8 +2300,11 @@ class AsistenciaService:
                     'hora_salida': resultado.get('hora_salida_real'),
                     'minutos_trabajados': min_trab,
                     'estado': estado_je,
+                    'origen': _origen_je,
                     'observaciones': obs_je
                 }
+                if je_prev and has_validated_je and je_prev.get('minutos_autorizados') is not None:
+                    j_record['minutos_autorizados'] = je_prev.get('minutos_autorizados')
                 if save:
                     await self.repository.upsert_jornada_especial(j_record)
                 else:
@@ -2658,9 +2702,11 @@ class AsistenciaService:
                     matrix[eid][f_str]['jornada_adicional'] = {
                         'id': j['id'],
                         'estado': j['estado'],
+                        'origen': j.get('origen', 'SISTEMA'),
                         'hora_entrada': j['hora_entrada'],
                         'hora_salida': j['hora_salida'],
                         'minutos_trabajados': j['minutos_trabajados'],
+                        'minutos_autorizados': j.get('minutos_autorizados', 0),
                         'observaciones': j.get('observaciones') or ''
                     }
                     

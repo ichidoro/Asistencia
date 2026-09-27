@@ -1321,6 +1321,8 @@ async def validar_jornada_endpoint(
     empleado_id: int = Body(...),
     fecha: str = Body(...),
     accion: str = Body("APROBAR"),
+    observaciones: Optional[str] = Body(None),
+    minutos_autorizados: Optional[float] = Body(None),
     last_updated_at: Optional[str] = Body(None, description="Fecha/Hora de la versión que el usuario está viendo"),
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
@@ -1350,7 +1352,14 @@ async def validar_jornada_endpoint(
                     detail=f"Conflicto de Concurrencia: El registro fue modificado por otro usuario ({actual.get('updated_at')}). Por favor, refresque los datos."
                 )
 
-        resultado = await service.validar_jornada(empleado_id, fecha, accion)
+        resultado = await service.validar_jornada(
+            empleado_id=empleado_id,
+            fecha=fecha,
+            accion=accion,
+            observaciones=observaciones,
+            minutos_autorizados=minutos_autorizados,
+            validador_id=current_user.user_id
+        )
         if isinstance(resultado, dict) and 'error' in resultado:
             raise HTTPException(status_code=400, detail=resultado['error'])
         mensaje = "Jornada validada exitosamente" if accion == "APROBAR" else "Jornada rechazada exitosamente"

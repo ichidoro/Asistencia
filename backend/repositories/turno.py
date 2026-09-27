@@ -363,6 +363,30 @@ class TurnoRepository:
             logger.warning(f"⚠️ Fix CASCADE jornadas_especiales: {e}")
 
         # ═══════════════════════════════════════════════════════════════════
+        # 10.1. Migración: Columnas adicionales para Jornadas Especiales
+        # ═══════════════════════════════════════════════════════════════════
+        je_new_cols = [
+            ("origen", "TEXT DEFAULT 'SISTEMA'"),
+            ("minutos_autorizados", "REAL DEFAULT 0"),
+            ("validador_id", "INTEGER"),
+            ("fecha_validacion", "TEXT"),
+            ("created_at", "TEXT"),
+            ("updated_at", "TEXT"),
+        ]
+        try:
+            cols_je = set(await self.db.get_column_names("jornadas_especiales"))
+            for col, type_def in je_new_cols:
+                if col not in cols_je:
+                    try:
+                        await self.db.execute(f"ALTER TABLE jornadas_especiales ADD COLUMN {col} {type_def}")
+                        logger.info(f"Migracion: Columna '{col}' agregada a jornadas_especiales")
+                    except Exception as mig_err:
+                        logger.error(f"Error migracion jornadas_especiales ({col}): {mig_err}")
+            self.db._schema_cache.pop("jornadas_especiales", None)
+        except Exception as e:
+            logger.warning(f"Migracion jornadas_especiales columnas: {e}")
+
+        # ═══════════════════════════════════════════════════════════════════
         # 11. Tabla de Compensaciones de Inasistencias con H.E.
         # ═══════════════════════════════════════════════════════════════════
         if not await self.db.column_exists("horas_extras", "minutos_compensados"):

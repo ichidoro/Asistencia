@@ -116,28 +116,26 @@ class QuantumPhaseTopology:
         """
         dt_base = datetime.strptime(fecha_str, "%Y-%m-%d")
         
-        # Holgura de entrada gobernada por anclaje y banda de ajustes
-        # Si el turno contempla múltiples ciclos en el día usamos la entrada más temprana
         hora_ent_efectiva = hora_min_ciclos_str or hora_ent_teo_str
-        margen_in = anclaje_entrada_minutos + banda_tolerancia_minutos
-        if hora_ent_efectiva:
-            p_in = cls.time_to_phase(hora_ent_efectiva)
-            start_dt = dt_base + timedelta(minutes=p_in - margen_in)
-        else:
-            start_dt = dt_base
-
-        # Si el turno tiene múltiples ciclos en el día y se proporciona hora_max_ciclos_str
-        # usamos la salida más tardía entre los ciclos para no cercenar dobles turnos
         hora_sal_efectiva = hora_max_ciclos_str or hora_sal_teo_str
         is_overnight = cls.is_evening_or_night_shift(hora_ent_efectiva or hora_ent_teo_str, hora_sal_efectiva, cruza_medianoche)
 
         if is_overnight:
-            # Turno nocturno que cruza medianoche: la observación se extiende a la mañana del día siguiente (mediodía de D+1)
-            # para capturar holgadamente cualquier salida de madrugada (04:00, 07:00, etc.)
+            # Turno nocturno: la observación de entrada inicia en la tarde del día D (para no atrapar marcas de mañana del día previo)
+            # y se extiende holgadamente hasta el mediodía de D+1 para capturar salidas de madrugada.
+            margen_in = anclaje_entrada_minutos + banda_tolerancia_minutos
+            if hora_ent_efectiva:
+                p_in = cls.time_to_phase(hora_ent_efectiva)
+                start_dt = dt_base + timedelta(minutes=max(0, p_in - margen_in))
+            else:
+                start_dt = dt_base + timedelta(hours=18)
             end_dt = dt_base + timedelta(days=1, hours=12)
         else:
-            # Turno diurno regular o día libre: el horizonte de salida cubre el día natural completo (23:59:59)
-            # para no cercenar horas extras legítimas (17:30, 18:36, etc.) ni dobles turnos (+2).
+            # Turno diurno regular o día libre: el horizonte de observación cubre el día natural completo
+            # (00:00:00 a 23:59:59) para erradicar recortes deterministas en ambos extremos.
+            # Captura llegadas tempranas legítimas (coberturas anticipadas, llegadas a las 06:00/08:00)
+            # y salidas tardías legítimas (horas extras, coberturas de turno +2).
+            start_dt = dt_base
             end_dt = dt_base + timedelta(days=1, seconds=-1)
 
         return start_dt, end_dt
@@ -431,13 +429,15 @@ class SpecialWorkdayClassifier:
         tag_origen = "Trabajo en feriado." if is_holiday else "Trabajo en día libre."
         obs = f"{tag_origen} {observaciones_previas}".strip()
 
+        origen = 'FERIADO' if is_holiday else 'DIA_LIBRE'
         return {
             'empleado_id': empleado_id,
             'fecha': fecha,
             'hora_entrada': hora_entrada_real,
             'hora_salida': hora_salida_real,
             'minutos_trabajados': minutos_trabajados,
-            'estado': 'EXTRA',
+            'estado': 'JORNADA_ESPECIAL',
+            'origen': origen,
             'observaciones': obs
         }
 
@@ -1187,6 +1187,7 @@ class QuantumMatrixEngine:
                         'hora_salida': h_sal_je,
                         'minutos_trabajados': min_trab_je,
                         'estado': 'JORNADA_ESPECIAL',
+                        'origen': 'COBERTURA_TURNO',
                         'observaciones': f"[Jornada Especial (+2): Cobertura de Turno ({round(min_trab_je/60.0, 1)}h netas)]"
                     }
                     res['observaciones'] += f"[Jornada Especial (+2): Cobertura de Turno] "
