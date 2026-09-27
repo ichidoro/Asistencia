@@ -715,21 +715,24 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         return div;
     })();
 
-    if (hasLockedMarks && (!isValidTime(horaEntrada) || !isValidTime(horaSalida))) {
+    if (isValidTime(horaEntrada) && isValidTime(horaSalida)) {
+        alertDiv.className = 'alert alert-info py-2 mb-3 mt-2';
+        alertDiv.innerHTML = '<strong><i class="bi bi-shield-check"></i> Marcaciones Completas.</strong> Esta jornada cuenta con marcaciones biométricas válidas de Entrada y Salida. Si desea condonar un atraso o salida anticipada, utilice la función oficial de <strong>Perdonazo</strong>.';
+        alertDiv.style.display = 'block';
+        if (btnUnlock) btnUnlock.style.display = 'none';
+    } else if (hasLockedMarks && (!isValidTime(horaEntrada) || !isValidTime(horaSalida))) {
+        alertDiv.className = 'alert alert-warning py-2 mb-3 mt-2';
         if (isValidTime(horaEntrada)) {
-            marcaHuerfanaMsj = `<strong><i class="bi bi-info-circle-fill"></i> Marca huérfana de ENTRADA detectada a las ${horaEntrada}.</strong> Por favor, ingrese la hora de SALIDA manual.`;
+            marcaHuerfanaMsj = `<strong><i class="bi bi-info-circle-fill"></i> Marca de ENTRADA detectada a las ${horaEntrada}.</strong> Ingrese únicamente la hora de SALIDA faltante.`;
         } else if (isValidTime(horaSalida)) {
-            marcaHuerfanaMsj = `<strong><i class="bi bi-info-circle-fill"></i> Marca huérfana de SALIDA detectada a las ${horaSalida}.</strong> Por favor, ingrese la hora de ENTRADA manual.`;
+            marcaHuerfanaMsj = `<strong><i class="bi bi-info-circle-fill"></i> Marca de SALIDA detectada a las ${horaSalida}.</strong> Ingrese únicamente la hora de ENTRADA faltante.`;
         }
         alertDiv.innerHTML = marcaHuerfanaMsj;
         alertDiv.style.display = 'block';
+        if (btnUnlock) btnUnlock.style.display = 'none';
     } else {
         alertDiv.style.display = 'none';
-    }
-
-    // Mostrar botón de desbloqueo solo si hay marcas bloqueadas
-    if (btnUnlock && hasLockedMarks) {
-        btnUnlock.style.display = 'flex';
+        if (btnUnlock) btnUnlock.style.display = 'none';
     }
 
     // Auto-focus al primer campo libre
@@ -757,30 +760,17 @@ function closeManualEntryModal() {
 
 /**
  * Permite desbloquear los campos de hora entrada/salida para sobrescribir una marca biométrica.
+ * Blindado: No permite sobreescribir si ya existen ambas marcas en el reloj.
  */
 function unlockManualMarks() {
-    const inputEntrada = document.getElementById('manual-hora-entrada');
-    const inputSalida = document.getElementById('manual-hora-salida');
-
-    if (inputEntrada && inputEntrada.disabled) {
-        inputEntrada.disabled = false;
-        inputEntrada.classList.add('border-warning');
-    }
-    if (inputSalida && inputSalida.disabled) {
-        inputSalida.disabled = false;
-        inputSalida.classList.add('border-warning');
-    }
-
-    // Add visual cue
-    const obs = document.getElementById('manual-observaciones');
-    if (obs && !obs.value) {
-        obs.value = "[SOBREESCRITURA] ";
-    }
-
-    if (typeof showToast === 'function') {
-        showToast("Campos desbloqueados. La nueva marca se registrará como manual.", "warning");
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'info',
+            title: 'Marcaciones Biométricas Registradas',
+            text: 'No se permite sobreescribir marcas biométricas válidas del reloj. Si desea justificar o perdonar un atraso o salida anticipada, utilice la función de Perdonazo.'
+        });
     } else {
-        alert("Campos desbloqueados. La nueva marca se registrará como manual.");
+        alert("No se permite sobreescribir marcas biométricas válidas. Utilice el Perdonazo.");
     }
 }
 
@@ -797,8 +787,13 @@ async function saveManualEntry() {
     const inputCond = document.getElementById('manual-minutos-conduccion');
     const inputEsp = document.getElementById('manual-minutos-espera');
 
-    const nuevaEntrada = (!inputEntrada.disabled && inputEntrada.value) ? inputEntrada.value : null;
-    const nuevaSalida = (!inputSalida.disabled && inputSalida.value) ? inputSalida.value : null;
+    let nuevaEntrada = (!inputEntrada.disabled && inputEntrada.value) ? inputEntrada.value.trim() : null;
+    let nuevaSalida = (!inputSalida.disabled && inputSalida.value) ? inputSalida.value.trim() : null;
+
+    // Blindaje: si se ingresó entrada matutina y la salida es 00:00 por omisión o reset de campo, no enviar salida
+    if (nuevaEntrada && nuevaSalida === "00:00" && nuevaEntrada >= "06:00" && nuevaEntrada <= "12:00") {
+        nuevaSalida = null;
+    }
 
     let tramosConduccion = null;
     let tramosEspera = null;

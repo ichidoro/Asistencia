@@ -1488,15 +1488,34 @@ async def agregar_marcacion_manual(
         rut = emp.rut if emp and emp.rut else str(empleado_id)
         obs_str = observaciones or "Marcación manual"
 
+        # Blindaje: No permitir sobreescribir si ya existen ambas marcas biométricas en el reloj
+        bio_logs = await db.fetch_all(
+            "SELECT id, tipo FROM logs_raw WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? AND manual = 0",
+            (empleado_id, fecha)
+        )
+        has_bio_in = any(str(b.get('tipo', '')).strip().lower() in ('entrada', 'entry', 'e', 'in', '1') for b in bio_logs)
+        has_bio_out = any(str(b.get('tipo', '')).strip().lower() in ('salida', 'exit', 's', 'out', '2') for b in bio_logs)
+        if has_bio_in and has_bio_out and not getattr(current_user, 'is_superuser', False):
+            raise HTTPException(
+                status_code=400,
+                detail="Esta jornada ya cuenta con marcaciones biométricas válidas de Entrada y Salida en el reloj. Si desea condonar un atraso o salida anticipada, utilice la función oficial de Perdonazo."
+            )
+
         marcas_a_insertar = []
-        if hora_entrada:
-            fh_ent = f"{fecha} {hora_entrada}:00" if hora_entrada.count(':') == 1 else f"{fecha} {hora_entrada}"
+        if hora_entrada and str(hora_entrada).strip() not in ('', 'null', 'undefined'):
+            fh_ent = f"{fecha} {hora_entrada}:00" if str(hora_entrada).count(':') == 1 else f"{fecha} {hora_entrada}"
             marcas_a_insertar.append((fh_ent, "Entrada"))
-        if hora_salida:
-            fh_sal = f"{fecha} {hora_salida}:00" if hora_salida.count(':') == 1 else f"{fecha} {hora_salida}"
-            marcas_a_insertar.append((fh_sal, "Salida"))
+        if hora_salida and str(hora_salida).strip() not in ('', 'null', 'undefined'):
+            # Blindaje contra artefacto 00:00 de salida cuando se acompaña con entrada matutina diurna
+            h_sal_clean = str(hora_salida).strip()
+            h_ent_clean = str(hora_entrada).strip() if hora_entrada else ""
+            if h_sal_clean in ('00:00', '00:00:00') and h_ent_clean and '06:00' <= h_ent_clean <= '12:00':
+                logger.warning(f"Ignorando salida espuria 00:00 para entrada matutina {h_ent_clean} de empleado {empleado_id}")
+            else:
+                fh_sal = f"{fecha} {hora_salida}:00" if str(hora_salida).count(':') == 1 else f"{fecha} {hora_salida}"
+                marcas_a_insertar.append((fh_sal, "Salida"))
         if not hora_entrada and not hora_salida and hora and tipo:
-            fh_single = f"{fecha} {hora}:00" if hora.count(':') == 1 else f"{fecha} {hora}"
+            fh_single = f"{fecha} {hora}:00" if str(hora).count(':') == 1 else f"{fecha} {hora}"
             marcas_a_insertar.append((fh_single, tipo))
 
         if not marcas_a_insertar:

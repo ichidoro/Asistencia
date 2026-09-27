@@ -133,10 +133,18 @@ class QuantumPhaseTopology:
         else:
             # Turno diurno regular o día libre: el horizonte de observación cubre el día natural completo
             # (00:00:00 a 23:59:59) para erradicar recortes deterministas en ambos extremos.
-            # Captura llegadas tempranas legítimas (coberturas anticipadas, llegadas a las 06:00/08:00)
-            # y salidas tardías legítimas (horas extras, coberturas de turno +2).
+            # Si el turno termina tarde en la tarde/noche (>= 21:00 / phase 1260) o su margen de salida
+            # desborda la medianoche, se extiende dinámicamente según la tolerancia paramétrica de ajustes.
             start_dt = dt_base
-            end_dt = dt_base + timedelta(days=1, seconds=-1)
+            if hora_sal_efectiva:
+                p_sal = cls.time_to_phase(hora_sal_efectiva)
+                margen_out = anclaje_salida_minutos + banda_tolerancia_minutos
+                if p_sal >= 1260 or (p_sal + margen_out) >= 1440:
+                    end_dt = dt_base + timedelta(minutes=p_sal + margen_out)
+                else:
+                    end_dt = dt_base + timedelta(days=1, seconds=-1)
+            else:
+                end_dt = dt_base + timedelta(days=1, seconds=-1)
 
         return start_dt, end_dt
 
@@ -202,27 +210,67 @@ class TensorMarkDeduplicator:
         if not override_logs:
             return logs
 
-        has_manual_in = any(str(l.get('tipo', '')).strip().lower() in ('entrada', 'entry', 'e', 'in', '1') for l in override_logs)
-        has_manual_out = any(str(l.get('tipo', '')).strip().lower() in ('salida', 'exit', 's', 'out', '2') for l in override_logs)
+        _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+        _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
 
-        if has_manual_in and has_manual_out:
-            return sorted(override_logs, key=lambda x: str(x.get('fecha_hora', '')))
+        sorted_logs = sorted(logs, key=lambda x: str(x.get('fecha_hora', '')))
+        suppressed_ids = set()
 
-        filtered: List[Dict[str, Any]] = []
-        for l in logs:
-            l_tipo = str(l.get('tipo', '')).strip().lower()
-            is_e = l_tipo in ('entrada', 'entry', 'e', 'in', '1')
-            is_s = l_tipo in ('salida', 'exit', 's', 'out', '2')
-            if l.get('manual') == 1:
-                filtered.append(l)
-            else:
-                if is_e and has_manual_in:
-                    continue
-                if is_s and has_manual_out:
-                    continue
-                filtered.append(l)
+        # Resolución Topológica Pura (Sin números mágicos ni umbrales horarios fijos):
+        # - Una Entrada manual con [SOBREESCRITURA] solo entra en conflicto con entradas biométricas
+        #   adyacentes en el mismo bloque continuo de entrada (sin una Salida de por medio).
+        # - Una Salida manual con [SOBREESCRITURA] solo entra en conflicto con salidas biométricas
+        #   adyacentes en el mismo bloque continuo de salida (sin una Entrada de por medio).
+        # - Las colaciones (pares Salida -> Entrada) son transiciones válidas de pausa/descanso
+        #   y se preservan intactas en cualquier turno (Mañana, Tarde, Noche o Rotativo).
+        for m in override_logs:
+            m_tipo = str(m.get('tipo', '')).strip().lower()
+            is_m_in = m_tipo in _TIPOS_E
+            is_m_out = m_tipo in _TIPOS_S
+            m_id = m.get('id')
 
-        return sorted(filtered, key=lambda x: str(x.get('fecha_hora', '')))
+            m_idx = next((i for i, x in enumerate(sorted_logs) if x.get('id') == m_id), None)
+            if m_idx is None:
+                continue
+
+            if is_m_in:
+                # Buscar hacia adelante hasta encontrar una Salida
+                for j in range(m_idx + 1, len(sorted_logs)):
+                    other = sorted_logs[j]
+                    other_tipo = str(other.get('tipo', '')).strip().lower()
+                    if other_tipo in _TIPOS_S:
+                        break  # Transición a salida: fin del bloque de entrada
+                    if other_tipo in _TIPOS_E and other.get('manual') != 1:
+                        suppressed_ids.add(other.get('id'))
+                # Buscar hacia atrás hasta encontrar una Salida
+                for j in range(m_idx - 1, -1, -1):
+                    other = sorted_logs[j]
+                    other_tipo = str(other.get('tipo', '')).strip().lower()
+                    if other_tipo in _TIPOS_S:
+                        break
+                    if other_tipo in _TIPOS_E and other.get('manual') != 1:
+                        suppressed_ids.add(other.get('id'))
+
+            if is_m_out:
+                # Buscar hacia adelante hasta encontrar una Entrada
+                for j in range(m_idx + 1, len(sorted_logs)):
+                    other = sorted_logs[j]
+                    other_tipo = str(other.get('tipo', '')).strip().lower()
+                    if other_tipo in _TIPOS_E:
+                        break  # Transición a entrada: fin del bloque de salida
+                    if other_tipo in _TIPOS_S and other.get('manual') != 1:
+                        suppressed_ids.add(other.get('id'))
+                # Buscar hacia atrás hasta encontrar una Entrada
+                for j in range(m_idx - 1, -1, -1):
+                    other = sorted_logs[j]
+                    other_tipo = str(other.get('tipo', '')).strip().lower()
+                    if other_tipo in _TIPOS_E:
+                        break
+                    if other_tipo in _TIPOS_S and other.get('manual') != 1:
+                        suppressed_ids.add(other.get('id'))
+
+        filtered = [l for l in sorted_logs if l.get('id') not in suppressed_ids]
+        return filtered
 
 
 class MultiBlockTensorSolver:
@@ -469,7 +517,10 @@ class QuantumShiftWeekMatcher:
         next_day_str = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
         tiene_nocturno = any(
             cfg.get('cruza_medianoche') or 
-            (cfg.get('hora_entrada') and cfg.get('hora_salida') and QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
+            (cfg.get('hora_entrada') and cfg.get('hora_salida') and (
+                QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')) or
+                QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) >= 1260
+            ))
             for s_dict in turnos_dict.values()
             for cfg in [s_dict.get(dia_semana, {})]
             if cfg and not cfg.get('es_libre')
