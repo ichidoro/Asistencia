@@ -188,7 +188,14 @@ async function saveTurno() {
             body: JSON.stringify(turno)
         });
 
-        if (!response.ok) throw new Error("Error guardando turno");
+        if (!response.ok) {
+            let errMsg = "Error guardando turno";
+            try {
+                const errData = await response.json();
+                errMsg = errData.detail || JSON.stringify(errData);
+            } catch (_) {}
+            throw new Error(errMsg);
+        }
 
         await loadTurnos();
         window._isSavingTurno = true;

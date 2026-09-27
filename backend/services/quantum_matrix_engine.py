@@ -973,7 +973,7 @@ class QuantumMatrixEngine:
             else:
                 res['observaciones'] += 'Inasistencia detectada (Día hábil sin marcas). '
             res['horas_trabajadas'] = 0.0
-            res['minutos_deuda'] = 0.0 if is_bolsa else round(horas_teoricas * 60.0, 2)
+            res['minutos_deuda'] = 0.0  # [REGLA CANÓNICA]: Las inasistencias descuentan remuneración/día, jamás generan deuda horaria para compensar
             return res
 
         # 5. Extraer timestamps del bloque principal

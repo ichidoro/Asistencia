@@ -456,17 +456,17 @@ class TurnoRepository:
                 INSERT INTO turnos (
                     nombre, tipo_programacion, meta_horas_semanales,
                     tolerancia_retraso_alerta, tolerancia_retraso_descuento,
-                    redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion, es_turno_cortado,
+                    redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
                     activo, permite_viajes_largos
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
-                turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion, turno.es_turno_cortado,
+                turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
@@ -492,16 +492,14 @@ class TurnoRepository:
             sql_dia = """
                 INSERT INTO turno_dias (
                     turno_id, dia_semana, num_semana, es_libre, horas_teoricas,
-                    hora_entrada, hora_salida, cruza_medianoche,
-                    hora_entrada_2, hora_salida_2, cruza_medianoche_2, etiqueta_bloque
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    hora_entrada, hora_salida, cruza_medianoche, etiqueta_bloque
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
             for dia in turno.dias:
                 params_dia = (
                     turno_id, dia.dia_semana, dia.num_semana, dia.es_libre, dia.horas_teoricas,
-                    dia.hora_entrada, dia.hora_salida, dia.cruza_medianoche,
-                    dia.hora_entrada_2, dia.hora_salida_2, dia.cruza_medianoche_2, dia.etiqueta_bloque
+                    dia.hora_entrada, dia.hora_salida, dia.cruza_medianoche, dia.etiqueta_bloque
                 )
                 await self.db.execute(sql_dia, params_dia)
             
@@ -955,7 +953,7 @@ class TurnoRepository:
                 UPDATE turnos SET
                     nombre=?, tipo_programacion=?, meta_horas_semanales=?,
                     tolerancia_retraso_alerta=?, tolerancia_retraso_descuento=?,
-                    redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?, es_turno_cortado=?,
+                    redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, tolerancia_exceso_colacion_minutos=?,
                     turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?
@@ -964,7 +962,7 @@ class TurnoRepository:
             params = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
-                turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion, turno.es_turno_cortado,
+                turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
@@ -994,15 +992,13 @@ class TurnoRepository:
             sql_dia = """
                 INSERT INTO turno_dias (
                     turno_id, dia_semana, num_semana, es_libre, horas_teoricas,
-                    hora_entrada, hora_salida, cruza_medianoche, 
-                    hora_entrada_2, hora_salida_2, cruza_medianoche_2, etiqueta_bloque
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    hora_entrada, hora_salida, cruza_medianoche, etiqueta_bloque
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             for dia in turno.dias:
                 p_dia = (
                     turno_id, dia.dia_semana, dia.num_semana, dia.es_libre, dia.horas_teoricas,
-                    dia.hora_entrada, dia.hora_salida, dia.cruza_medianoche,
-                    dia.hora_entrada_2, dia.hora_salida_2, dia.cruza_medianoche_2, dia.etiqueta_bloque
+                    dia.hora_entrada, dia.hora_salida, dia.cruza_medianoche, dia.etiqueta_bloque
                 )
                 await self.db.execute(sql_dia, p_dia)
 

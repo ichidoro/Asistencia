@@ -4332,6 +4332,8 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Dual Status Indicator (Turno Base vs Cobertura Especial) -->
+                            <div id="decision-dual-split-box" class="px-4 pb-2 d-none"></div>
 
                             <!-- Action Buttons -->
                             <div class="px-3 pb-3 pt-1 d-grid gap-1" style="background:#ffffff;">
@@ -4753,17 +4755,18 @@
                             </div>
                         </div>
                         <div class="modal-body p-4">
-                            <div class="alert alert-info py-2 mb-3">
+                            <div id="val-alert-box" class="alert alert-info py-2 mb-3">
                                 <i class="bi bi-info-circle-fill me-2"></i>Día libre detectado (Domingo/Festivo).
                             </div>
-                            <p>¿Desea validar esta jornada como <strong>trabajada</strong>?</p>
+                            <p id="val-prompt-text">¿Desea validar esta jornada como <strong>trabajada</strong>?</p>
                             <div class="card bg-light border-0 mb-3">
                                 <div class="card-body py-2">
                                     <div><strong>Empleado:</strong> <span id="val-empleado-display"></span></div>
                                     <div><strong>Fecha:</strong> <span id="val-fecha-display"></span></div>
+                                    <div id="val-extra-info" class="d-none"></div>
                                 </div>
                             </div>
-                            <p class="small text-muted mb-0">Al validar, el estado cambiará a <strong>EXTRA</strong>.
+                            <p id="val-footer-note" class="small text-muted mb-0">Al validar, el estado cambiará a <strong>EXTRA</strong>.
                             </p>
                         </div>
                         <div class="modal-footer">

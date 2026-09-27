@@ -77,6 +77,50 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         avatarEl.textContent = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : empNombre[0].toUpperCase();
     }
 
+    // --- NUEVO: MOSTRAR DETALLE DUAL (TURNO BASE VS COBERTURA +2) SI EXISTE ---
+    const dualBox = document.getElementById('decision-dual-split-box');
+    const empMatrixGeneral = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+    const asistGeneral = empMatrixGeneral ? empMatrixGeneral[dateStr] : null;
+    const jaGeneral = asistGeneral ? asistGeneral.jornada_adicional : null;
+
+    if (dualBox) {
+        if (jaGeneral && asistGeneral && (asistGeneral.horas_teoricas > 0 || asistGeneral.hora_entrada_real)) {
+            const horasJa = jaGeneral.minutos_trabajados ? (Math.round(jaGeneral.minutos_trabajados / 60.0 * 10) / 10) : 0;
+            const estadoJaBadge = jaGeneral.estado === 'EXTRA'
+                ? '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">EXTRA Aprobada</span>'
+                : jaGeneral.estado === 'RECHAZADA'
+                ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">Rechazada</span>'
+                : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-bold">Pendiente Validación</span>';
+
+            const estadoBaseBadge = asistGeneral.estado === 'OK'
+                ? '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">OK</span>'
+                : `<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle fw-bold">${asistGeneral.estado || 'OK'}</span>`;
+
+            dualBox.innerHTML = `
+                <div class="p-2 rounded-3 border" style="background:#f8fafc; font-size:0.75rem;">
+                    <div class="d-flex justify-content-between align-items-center mb-1 pb-1 border-bottom">
+                        <span class="text-secondary"><i class="bi bi-clock me-1 text-primary"></i> Turno Base:</span>
+                        <div class="text-end">
+                            ${estadoBaseBadge}
+                            <span class="ms-1 text-muted" style="font-size:0.7rem;">${asistGeneral.hora_entrada_real || '--:--'} a ${asistGeneral.hora_salida_real || '--:--'}</span>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-secondary"><i class="bi bi-plus-circle me-1" style="color:#8b5cf6;"></i> Cobertura (+2):</span>
+                        <div class="text-end">
+                            ${estadoJaBadge}
+                            <span class="ms-1 text-muted" style="font-size:0.7rem;">${jaGeneral.hora_entrada || '--:--'} a ${jaGeneral.hora_salida || '--:--'} (${horasJa}h)</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            dualBox.classList.remove('d-none');
+        } else {
+            dualBox.innerHTML = '';
+            dualBox.classList.add('d-none');
+        }
+    }
+
     // --- NUEVO: CAMBIAR TEXTO BOTÓN SI HAY PERMISO ACTIVO ---
     const btnPermiso = document.getElementById('btn-permiso-dynamic');
     if (btnPermiso) {
@@ -157,13 +201,24 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     if (btnValidarJornada) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
+        const ja = asistJ ? asistJ.jornada_adicional : null;
         // REGLA: mostrar cuando el estado es JORNADA_ESPECIAL (ambas marcas completas)
-        // O cuando hay una jornada adicional pendiente o rechazada que el supervisor pueda gestionar.
-        const tieneJornadaAdicionalPendienteRechazada = asistJ && asistJ.jornada_adicional &&
-            (asistJ.jornada_adicional.estado === 'PENDIENTE' || asistJ.jornada_adicional.estado === 'RECHAZADA');
+        // O cuando hay una jornada adicional (cobertura) pendiente, por validar o rechazada.
+        const tieneJornadaAdicionalPorValidar = ja &&
+            (ja.estado === 'PENDIENTE' || ja.estado === 'RECHAZADA' || ja.estado === 'JORNADA_ESPECIAL');
             
-        if (asistJ && (asistJ.estado === 'JORNADA_ESPECIAL' || tieneJornadaAdicionalPendienteRechazada)) {
+        if (asistJ && (asistJ.estado === 'JORNADA_ESPECIAL' || tieneJornadaAdicionalPorValidar)) {
             btnValidarJornada.classList.remove('d-none');
+            const titleEl = btnValidarJornada.querySelector('.fw-semibold');
+            const subEl = btnValidarJornada.querySelector('.text-muted');
+            if (ja) {
+                const horasJa = ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10) : 0;
+                if (titleEl) titleEl.innerText = "Validar Cobertura (+2)";
+                if (subEl) subEl.innerText = `Aprobar o rechazar cobertura (${horasJa}h)`;
+            } else {
+                if (titleEl) titleEl.innerText = "Validar Jornada Especial";
+                if (subEl) subEl.innerText = "Aprobar día libre trabajado";
+            }
         } else {
             btnValidarJornada.classList.add('d-none');
         }
@@ -893,6 +948,54 @@ function openValidationModal(empId, dateStr, empNombre) {
 
     document.getElementById('val-fecha-display').innerText = window.formatFechaDDMMYYYY(dateStr);
     document.getElementById('val-empleado-display').innerText = empNombre;
+
+    // Detectar si es cobertura (+2) en día hábil o jornada libre pura
+    const empMatrix = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+    const asist = empMatrix ? empMatrix[dateStr] : null;
+    const ja = asist ? asist.jornada_adicional : null;
+
+    const alertBox = document.getElementById('val-alert-box');
+    const promptText = document.getElementById('val-prompt-text');
+    const extraInfo = document.getElementById('val-extra-info');
+    const footerNote = document.getElementById('val-footer-note');
+
+    if (ja && asist && (asist.horas_teoricas > 0 || asist.hora_entrada_real)) {
+        const horasJa = ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10) : 0;
+        if (alertBox) {
+            alertBox.className = "alert alert-warning py-2 mb-3";
+            alertBox.innerHTML = '<i class="bi bi-lightning-fill me-2 text-warning"></i> <strong>Cobertura de Turno (+2) Detectada</strong><br><small class="text-muted">El trabajador cubrió un turno adicional fuera de su jornada ordinaria.</small>';
+        }
+        if (promptText) {
+            promptText.innerHTML = `¿Desea validar la <strong>cobertura adicional (${horasJa}h)</strong> como Jornada Especial?`;
+        }
+        if (extraInfo) {
+            extraInfo.innerHTML = `
+                <div class="mt-2 pt-2 border-top small">
+                    <div><strong>Turno Base:</strong> <span class="badge bg-success-subtle text-success">${asist.estado || 'OK'}</span> (${asist.hora_entrada_real || '--:--'} - ${asist.hora_salida_real || '--:--'}) <span class="text-muted">(Se conserva intacto)</span></div>
+                    <div><strong>Bloque Cobertura (+2):</strong> ${ja.hora_entrada || '--:--'} a ${ja.hora_salida || '--:--'} (${horasJa} hrs netas)</div>
+                </div>
+            `;
+            extraInfo.classList.remove('d-none');
+        }
+        if (footerNote) {
+            footerNote.innerHTML = `Al validar, la cobertura se aprueba como Jornada Especial (EXTRA). El turno base ordinario (${asist.estado || 'OK'}) permanecerá intacto.`;
+        }
+    } else {
+        if (alertBox) {
+            alertBox.className = "alert alert-info py-2 mb-3";
+            alertBox.innerHTML = '<i class="bi bi-info-circle-fill me-2"></i> Día libre o festivo detectado con marcaciones.';
+        }
+        if (promptText) {
+            promptText.innerHTML = '¿Desea validar esta jornada como <strong>trabajada</strong>?';
+        }
+        if (extraInfo) {
+            extraInfo.innerHTML = '';
+            extraInfo.classList.add('d-none');
+        }
+        if (footerNote) {
+            footerNote.innerHTML = 'Al validar, el estado cambiará a <strong>EXTRA</strong>.';
+        }
+    }
 
     const footer = marcacionesManualesState.validationModal.querySelector('.modal-footer');
     if (footer) {
