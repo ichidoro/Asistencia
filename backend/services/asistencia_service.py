@@ -279,7 +279,7 @@ class AsistenciaService:
 
         # Horas Extras
         he_rows = await db.fetch_all(
-            f"SELECT estado, minutos_autorizados, empleado_id FROM horas_extras WHERE empleado_id IN ({ids_placeholder}) AND fecha = ?",
+            f"SELECT estado, minutos_autorizados, origen, empleado_id FROM horas_extras WHERE empleado_id IN ({ids_placeholder}) AND fecha = ?",
             tuple(emp_ids) + (fecha,)
         )
         horas_extras_hoy = {r['empleado_id']: dict(r) for r in he_rows}
@@ -967,7 +967,7 @@ class AsistenciaService:
         # Horas Extras del período
         he_map = {}
         he_rows = await db.fetch_all(
-            "SELECT estado, minutos_autorizados, fecha FROM horas_extras WHERE empleado_id = ? AND fecha >= ? AND fecha <= ?",
+            "SELECT estado, minutos_autorizados, origen, fecha FROM horas_extras WHERE empleado_id = ? AND fecha >= ? AND fecha <= ?",
             (empleado_id, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
         )
         for h in he_rows:
@@ -1203,13 +1203,18 @@ class AsistenciaService:
                             'estado': he_estado or 'PENDIENTE',
                         })
                     else:
-                        # Sin HE brutas ordinarias: eliminar cualquier registro previo en horas_extras
-                        he_to_delete.append((empleado_id, fecha_str))
+                        # Sin HE brutas ordinarias: si no hay Cobertura validada como HE, marcar para eliminar
+                        he_prev_batch = static_ctx.get('horas_extras', {}).get(empleado_id, {}).get(fecha_str)
+                        if he_prev_batch and he_prev_batch.get('origen') == 'COBERTURA_TURNO' and he_prev_batch.get('estado') == 'APROBADO':
+                            result['minutos_extra_bruto'] = he_prev_batch.get('minutos_autorizados', 0)
+                            result['estado_he'] = 'APROBADO'
+                        else:
+                            he_to_delete.append((empleado_id, fecha_str))
                     # ── BATCH SAVE FOR JORNADAS ESPECIALES ──
                     if result.get('_jornada_especial'):
                         je_rec = result['_jornada_especial']
                         je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                        if je_prev and (je_prev.get('estado') in ('EXTRA', 'RECHAZADA') or '[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '')):
+                        if je_prev and (je_prev.get('estado') in ('EXTRA', 'RECHAZADA') or '[VALIDADO]' in (je_prev.get('observaciones') or '') or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '')):
                             je_rec['estado'] = je_prev['estado']
                             je_rec['observaciones'] = je_prev.get('observaciones') or ''
                             if je_prev.get('minutos_autorizados') is not None:
@@ -1588,8 +1593,86 @@ class AsistenciaService:
         es_dia_habil = asist and float(asist.get('horas_teoricas') or 0.0) > 0.0
         es_cobertura = (jornada_dict.get('origen') == 'COBERTURA_TURNO') or (es_dia_habil and float(asist.get('horas_trabajadas') or 0.0) > 0.0)
 
-        if accion == 'REVERTIR':
-            obs = (jornada_dict.get('observaciones') or '').replace('[VALIDADO]', '').replace('[RECHAZADO]', '').strip()
+        # REGLA DE NEGOCIO: Transformar a Horas Extras al 50%
+        # SOLO permitido para Ciclos Inteligentes en días hábiles programados (horas_teoricas > 0).
+        # En días festivos, días libres o bolsa flexible: PROHIBIDO.
+        is_bolsa = False
+        if asist and asist.get('_esBolsa'):
+            is_bolsa = True
+        else:
+            t_row = await db.fetch_one("""
+                SELECT t.tipo_programacion 
+                FROM asignacion_turnos at
+                JOIN turnos t ON at.turno_id = t.id
+                WHERE at.empleado_id = ?
+                  AND at.fecha_inicio <= ?
+                  AND (at.fecha_fin IS NULL OR at.fecha_fin >= ?)
+                ORDER BY at.fecha_inicio DESC LIMIT 1
+            """, (empleado_id, fecha, fecha))
+            if t_row and t_row.get('tipo_programacion') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'):
+                is_bolsa = True
+
+        if accion == 'APROBAR_COMO_HE':
+            if is_bolsa:
+                return {
+                    'error': 'En Bolsa Flexible no aplica validación de Horas Extras por este canal.',
+                    'codigo': 'BOLSA_NO_PERMITIDA'
+                }
+            if not es_dia_habil or (asist and asist.get('estado') in ('LIBRE', 'FERIADO')) or jornada_dict.get('origen') in ('DIA_LIBRE', 'FERIADO'):
+                return {
+                    'error': 'Las jornadas en días libres o festivos no pueden convertirse en horas extras. Solo pueden validarse como Jornada Especial (EXTRA).',
+                    'codigo': 'DIA_LIBRE_NO_HE'
+                }
+
+            min_auth = float(minutos_autorizados) if minutos_autorizados is not None else float(jornada_dict.get('minutos_trabajados') or 0)
+            tag_obs = '[VALIDADO_COMO_HE]'
+            estado_ret = 'APROBADO_HE'
+
+            # 1. Inyectar/actualizar en horas_extras con recargo al 50%
+            await db.execute(
+                """
+                INSERT INTO horas_extras (
+                    empleado_id, fecha, minutos_bruto, minutos_autorizados, 
+                    estado, origen, comentario, updated_at
+                ) VALUES (?, ?, ?, ?, 'APROBADO', 'COBERTURA_TURNO', ?, datetime('now'))
+                ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                    minutos_bruto = excluded.minutos_bruto,
+                    minutos_autorizados = excluded.minutos_autorizados,
+                    estado = 'APROBADO',
+                    origen = 'COBERTURA_TURNO',
+                    comentario = excluded.comentario,
+                    updated_at = datetime('now')
+                """,
+                (
+                    empleado_id, fecha, min_auth, min_auth,
+                    f"Cobertura (+2) aprobada como Horas Extras al 50% ({round(min_auth/60.0, 1)}h)"
+                )
+            )
+
+            # 2. Actualizar jornadas_especiales
+            obs_je = ((jornada_dict.get('observaciones') or '') + f' {tag_obs} {observaciones or ""}').strip()
+            await db.execute(
+                """
+                UPDATE jornadas_especiales 
+                SET estado = 'EXTRA', observaciones = ?, minutos_autorizados = ?, validador_id = ?, fecha_validacion = datetime('now'), updated_at = datetime('now')
+                WHERE empleado_id = ? AND fecha = ?
+                """,
+                (obs_je, min_auth, validador_id, empleado_id, fecha)
+            )
+
+            # 3. Sincronizar asistencias con minutos_extra_bruto
+            await db.execute(
+                """
+                UPDATE asistencias
+                SET minutos_extra_bruto = ?, updated_at = datetime('now')
+                WHERE empleado_id = ? AND fecha = ?
+                """,
+                (min_auth, empleado_id, fecha)
+            )
+            return {'success': True, 'estado_he': estado_ret, 'minutos_extra_autorizados': min_auth}
+
+        elif accion == 'REVERTIR':
+            obs = (jornada_dict.get('observaciones') or '').replace('[VALIDADO_COMO_HE]', '').replace('[VALIDADO]', '').replace('[RECHAZADO]', '').strip()
             update_data = {
                 'observaciones': obs,
                 'estado': 'JORNADA_ESPECIAL'
@@ -1608,9 +1691,18 @@ class AsistenciaService:
                 """,
                 (update_data['estado'], update_data['observaciones'], empleado_id, fecha)
             )
-            # Limpiar cualquier registro espurio en horas_extras
+            # Limpiar cualquier registro en horas_extras
             await db.execute(
                 "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
+                (empleado_id, fecha)
+            )
+            # Limpiar asistencias
+            await db.execute(
+                """
+                UPDATE asistencias
+                SET minutos_extra_bruto = 0, updated_at = datetime('now')
+                WHERE empleado_id = ? AND fecha = ?
+                """,
                 (empleado_id, fecha)
             )
         else:
@@ -1627,11 +1719,19 @@ class AsistenciaService:
                 estado_asistencia = asist.get('estado') if es_cobertura else ('INASISTENCIA' if not es_dia_habil else asist.get('estado'))
                 estado_ret = 'RECHAZADO'
 
-            # REGLA DE NEGOCIO: Las jornadas especiales (coberturas +2 y días libres) NO se guardan en horas_extras
-            # porque se pagan como concepto aparte (bono cobertura / turno especial) y no como horas extras al 50%.
+            # REGLA DE NEGOCIO: Las jornadas especiales (coberturas +2 y días libres) validadas como Jornada Especial
+            # NO se guardan en horas_extras porque se pagan como concepto aparte (bono cobertura / turno especial) y no como horas extras al 50%.
             # Asegurar limpieza preventiva en horas_extras
             await db.execute(
                 "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
+                (empleado_id, fecha)
+            )
+            await db.execute(
+                """
+                UPDATE asistencias
+                SET minutos_extra_bruto = 0, updated_at = datetime('now')
+                WHERE empleado_id = ? AND fecha = ?
+                """,
                 (empleado_id, fecha)
             )
 

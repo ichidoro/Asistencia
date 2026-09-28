@@ -1383,7 +1383,14 @@ async def validar_jornada_endpoint(
         )
         if isinstance(resultado, dict) and 'error' in resultado:
             raise HTTPException(status_code=400, detail=resultado['error'])
-        mensaje = "Jornada validada exitosamente" if accion == "APROBAR" else "Jornada rechazada exitosamente"
+        if accion == "APROBAR_COMO_HE":
+            mensaje = "Cobertura (+2) validada exitosamente como Horas Extras al 50%"
+        elif accion == "APROBAR":
+            mensaje = "Jornada validada exitosamente como Jornada Especial"
+        elif accion == "REVERTIR":
+            mensaje = "Jornada revertida exitosamente"
+        else:
+            mensaje = "Jornada rechazada exitosamente"
         return {
             "success": True, 
             "mensaje": mensaje, 

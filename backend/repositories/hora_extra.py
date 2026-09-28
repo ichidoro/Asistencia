@@ -98,7 +98,7 @@ class HoraExtraRepository:
         """Elimina registros HE en batch."""
         if not pairs:
             return
-        query = "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ?"
+        query = "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND (origen IS NULL OR origen NOT IN ('COBERTURA_TURNO'))"
         chunk_size = 50
         for i in range(0, len(pairs), chunk_size):
             chunk = pairs[i:i + chunk_size]
@@ -182,9 +182,9 @@ class HoraExtraRepository:
 
 
     async def delete_by_empleado_fecha(self, empleado_id: int, fecha: str) -> None:
-        """Elimina un registro HE (usado para JE interceptadas)."""
+        """Elimina un registro HE (usado para JE interceptadas o días sin sobretiempo ordinario)."""
         await self.db.execute(
-            "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ?",
+            "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND (origen IS NULL OR origen NOT IN ('COBERTURA_TURNO'))",
             (empleado_id, fecha)
         )
 

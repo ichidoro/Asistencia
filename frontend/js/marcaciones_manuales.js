@@ -953,6 +953,19 @@ function openValidationModal(empId, dateStr, empNombre) {
     const empMatrix = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
     const asist = empMatrix ? empMatrix[dateStr] : null;
     const ja = asist ? asist.jornada_adicional : null;
+    const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
+    const isBolsa = Boolean(asist && asist._esBolsa) || Boolean(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'));
+
+    // REGLA DE NEGOCIO: La bifurcación a Horas Extras aplica EXCLUSIVAMENTE a Ciclos Inteligentes en días hábiles programados
+    const esDiaHabilProgramado = Boolean(
+        !isBolsa &&
+        asist &&
+        (asist.horas_teoricas || 0) > 0 &&
+        asist.estado !== 'LIBRE' &&
+        asist.estado !== 'FERIADO' &&
+        ja &&
+        (ja.origen === 'COBERTURA_TURNO' || (asist.observaciones && asist.observaciones.includes('(+2)')))
+    );
 
     const alertBox = document.getElementById('val-alert-box');
     const promptText = document.getElementById('val-prompt-text');
@@ -978,7 +991,16 @@ function openValidationModal(empId, dateStr, empNombre) {
             extraInfo.classList.remove('d-none');
         }
         if (footerNote) {
-            footerNote.innerHTML = `Al validar, la cobertura se aprueba como Jornada Especial (EXTRA). El turno base ordinario (${asist.estado || 'OK'}) permanecerá intacto.`;
+            if (esDiaHabilProgramado) {
+                footerNote.innerHTML = `
+                    <div class="small text-muted mt-2 border-top pt-2">
+                        <div>• <strong>Validar Jornada:</strong> Aprueba la cobertura como Jornada Especial (EXTRA) para pago plano/bono de faena. No genera horas extras al 50%.</div>
+                        <div>• <strong>Validar como Horas Extras:</strong> Pasa la cobertura directamente al acumulador de Horas Extras al 50% legal.</div>
+                    </div>
+                `;
+            } else {
+                footerNote.innerHTML = `Al validar, la cobertura se aprueba como Jornada Especial (EXTRA). En días libres o festivos no genera horas extras al 50%. El turno base ordinario (${asist.estado || 'OK'}) permanecerá intacto.`;
+            }
         }
     } else {
         if (alertBox) {
@@ -999,6 +1021,13 @@ function openValidationModal(empId, dateStr, empNombre) {
 
     const footer = marcacionesManualesState.validationModal.querySelector('.modal-footer');
     if (footer) {
+        let btnHeHtml = '';
+        if (esDiaHabilProgramado) {
+            btnHeHtml = `
+            <button type="button" class="btn btn-warning text-dark fw-bold px-3" onclick="validateJornada('APROBAR_COMO_HE')" title="Aprobar cobertura (+2) e inyectar al 50% en la bolsa de Horas Extras">
+                ⏱️ Validar como Horas Extras
+            </button>`;
+        }
         footer.innerHTML = `
             <button type="button" class="btn btn-outline-danger me-auto" onclick="deleteManualJornada('${empId}', '${dateStr}')" title="Elimina las marcaciones manuales creadas en este día">
                 <i class="bi bi-trash"></i> Eliminar Ingreso Manual
@@ -1007,6 +1036,7 @@ function openValidationModal(empId, dateStr, empNombre) {
             <button type="button" class="btn btn-danger" onclick="validateJornada('RECHAZAR')">
                 ❌ Rechazar Jornada
             </button>
+            ${btnHeHtml}
             <button type="button" class="btn btn-success" onclick="validateJornada('APROBAR')">
                 ✅ Validar Jornada
             </button>
@@ -1025,7 +1055,7 @@ function closeValidationModal() {
 }
 
 /**
- * Llama al endpoint de validación (Aprobar o Rechazar)
+ * Llama al endpoint de validación (Aprobar, Aprobar como HE, o Rechazar)
  */
 async function validateJornada(accion = 'APROBAR') {
     const payload = {
@@ -1047,8 +1077,15 @@ async function validateJornada(accion = 'APROBAR') {
         });
 
         if (resp.ok) {
-            const msg = accion === 'APROBAR' ? "Jornada validada exitosamente" : "Jornada rechazada correctamente";
-            if (typeof showToast === 'function') showToast(msg, accion === 'APROBAR' ? "success" : "info");
+            let msg = "Jornada validada exitosamente";
+            if (accion === 'APROBAR_COMO_HE') {
+                msg = "Cobertura (+2) validada exitosamente como Horas Extras al 50%";
+            } else if (accion === 'APROBAR') {
+                msg = "Jornada validada exitosamente como Jornada Especial";
+            } else if (accion === 'RECHAZAR') {
+                msg = "Jornada rechazada correctamente";
+            }
+            if (typeof showToast === 'function') showToast(msg, accion === 'RECHAZAR' ? "info" : "success");
             else alert(msg);
 
             closeValidationModal();
