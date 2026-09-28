@@ -1,10 +1,18 @@
 from backend.core.database import Database
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from typing import Optional, Dict, Any, List
 from loguru import logger
 
 class CierreService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, asistencia_service=None):
         self.db = db
+        if asistencia_service is None:
+            from backend.repositories.asistencia import AsistenciaRepository
+            from backend.services.asistencia_service import AsistenciaService
+            repo = AsistenciaRepository(self.db)
+            self.asistencia_service = AsistenciaService(repo)
+        else:
+            self.asistencia_service = asistencia_service
 
     async def evaluar_cierre(self, fecha_inicio: str, fecha_fin: str, area: str):
         """
@@ -185,128 +193,146 @@ class CierreService:
         if row_cob and row_cob['count_coberturas']:
             resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
 
-        # 1. Obtener horas extras aprobadas agrupadas por empleado
-        query_he_emp = f"""
-            SELECT he.empleado_id, 
-                   SUM(he.minutos_autorizados) AS he_minutos, 
-                   COUNT(*) AS he_count
-            FROM horas_extras he INDEXED BY idx_he_fecha
-            JOIN empleados e ON he.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND he.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE he.fecha BETWEEN ? AND ?
-              AND he.estado = 'APROBADO'
-              {filtro_area}
-            GROUP BY he.empleado_id
-        """
+        # ── CÁLCULO OFICIAL DE HABERES, DÉBITOS Y BALANCES (100% IDÉNTICO AL EXCEL) ──
+        f_ini = date.fromisoformat(fecha_inicio)
+        f_fin = date.fromisoformat(fecha_fin)
+        rango_dias = [(f_ini + timedelta(days=i)) for i in range((f_fin - f_ini).days + 1)]
 
-        # 2. Obtener minutos de deuda total y componentes acumulados por empleado
-        query_deuda_emp = f"""
-            SELECT a.empleado_id, 
-                   SUM(CASE 
-                       WHEN COALESCE(a.deuda_condonada, 0) = 5 THEN 0
-                       WHEN COALESCE(a.deuda_condonada, 0) = 3 THEN COALESCE(a.minutos_exceso_colacion, 0) + COALESCE(a.minutos_permiso_personal_deuda, 0)
-                       WHEN COALESCE(a.deuda_condonada, 0) = 2 THEN MAX(0, COALESCE(a.minutos_deuda, 0) - COALESCE(a.minutos_atraso, 0))
-                       WHEN COALESCE(a.deuda_condonada, 0) = 1 THEN MAX(0, COALESCE(a.minutos_deuda, 0) - COALESCE(a.minutos_salida_adelantada, 0))
-                       ELSE COALESCE(a.minutos_deuda, 0)
-                   END) AS deuda_minutos,
-                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) IN (2, 3, 5) THEN 0 ELSE COALESCE(a.minutos_atraso, 0) END) AS minutos_atraso,
-                   SUM(COALESCE(a.minutos_exceso_colacion, 0)) AS minutos_exceso_colacion,
-                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) IN (1, 3, 5) THEN 0 ELSE COALESCE(a.minutos_salida_adelantada, 0) END) AS minutos_salida_adelantada,
-                   SUM(COALESCE(a.minutos_permiso_personal_deuda, 0)) AS minutos_permiso_personal_deuda
-            FROM asistencias a
-            JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ?
-              {filtro_area}
-            GROUP BY a.empleado_id
-        """
+        matrix_data = await self.asistencia_service.get_matrix_data_with_projections(
+            f_ini.month, f_ini.year, area=area, fecha_inicio_override=fecha_inicio, fecha_fin_override=fecha_fin
+        )
+        empleados_matriz = matrix_data.get("empleados", [])
+        emp_matrix = matrix_data.get("matrix", {})
 
-        # 3. Obtener compensaciones realizadas por empleado
-        query_comp_emp = f"""
-            SELECT comp.empleado_id, 
-                   SUM(comp.minutos) AS total_comp
-            FROM compensaciones_he_inasistencia comp
-            JOIN empleados e ON comp.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND comp.fecha_inasistencia >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR comp.fecha_inasistencia <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE comp.fecha_inasistencia BETWEEN ? AND ?
-              {filtro_area}
-            GROUP BY comp.empleado_id
-        """
+        total_he_fijos_min = 0.0
+        total_he_fijos_count = 0
+        total_exceso_bolsa_min = 0.0
 
-        he_emp_rows = await self.db.fetch_all(query_he_emp, tuple([fecha_inicio, fecha_fin] + params_area))
-        deuda_emp_rows = await self.db.fetch_all(query_deuda_emp, tuple([fecha_inicio, fecha_fin] + params_area))
-        comp_emp_rows = await self.db.fetch_all(query_comp_emp, tuple([fecha_inicio, fecha_fin] + params_area))
+        total_deuda_fijos_min = 0.0
+        total_deuda_atrasos_min = 0.0
+        total_deuda_colacion_min = 0.0
+        total_deuda_salidas_min = 0.0
+        total_deuda_permisos_min = 0.0
+        total_deficit_bolsa_min = 0.0
 
-        he_map = {r['empleado_id']: (r['he_minutos'] or 0.0, r['he_count'] or 0) for r in he_emp_rows}
-        deuda_map = {
-            r['empleado_id']: {
-                'total': r['deuda_minutos'] or 0.0,
-                'atraso': r['minutos_atraso'] or 0.0,
-                'colacion': r['minutos_exceso_colacion'] or 0.0,
-                'salida': r['minutos_salida_adelantada'] or 0.0,
-                'permiso': r['minutos_permiso_personal_deuda'] or 0.0
-            } for r in deuda_emp_rows
-        }
-        comp_map = {r['empleado_id']: r['total_comp'] or 0.0 for r in comp_emp_rows}
+        for emp in empleados_matriz:
+            emp_id = emp["id"]
+            es_bolsa = emp.get("tipo_programacion") in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA")
+            dias_dict = emp_matrix.get(str(emp_id)) or emp_matrix.get(emp_id) or {}
 
-        todos_empleados = set(he_map.keys()) | set(deuda_map.keys()) | set(comp_map.keys())
+            meta_min = emp.get("meta_mensual_minutos") or (40 * 60)
+            if emp.get("meta_ajustada_minutos_descuento"):
+                meta_min = max(0, meta_min - emp.get("meta_ajustada_minutos_descuento"))
 
-        total_neto_he = 0.0
-        total_he_count = 0
-        total_deuda_neta = 0.0
+            acum_bolsa = 0
+            viajes_sumados_ids = set()
 
-        total_deuda_atrasos = 0.0
-        total_deuda_colacion = 0.0
-        total_deuda_salidas = 0.0
-        total_deuda_permisos = 0.0
+            for d in rango_dias:
+                f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
+                di = dias_dict.get(f_str)
+                if not di:
+                    continue
 
-        for emp_id in todos_empleados:
-            emp_he, emp_cnt = he_map.get(emp_id, (0.0, 0))
-            d_info = deuda_map.get(emp_id, {'total': 0.0, 'atraso': 0.0, 'colacion': 0.0, 'salida': 0.0, 'permiso': 0.0})
-            emp_deuda_total = d_info['total']
-            emp_comp = comp_map.get(emp_id, 0.0)
+                di_estado = di.get("estado") or ""
 
-            saldo_neto_emp = emp_he - emp_deuda_total - emp_comp
-            total_he_count += emp_cnt
+                vl_min = 0
+                if es_bolsa and di.get("viaje_largo") and di["viaje_largo"].get("id") and di["viaje_largo"]["id"] not in viajes_sumados_ids:
+                    viajes_sumados_ids.add(di["viaje_largo"]["id"])
+                    ya_registrado = (float(di.get("horas_trabajadas") or 0.0) > 0)
+                    if not ya_registrado:
+                        vl_obj = di["viaje_largo"]
+                        vl_hrs = float(vl_obj.get("horas_reconocidas_totales") or vl_obj.get("horas_manejo_efectivas") or 0.0)
+                        vl_min = round(vl_hrs * 60)
 
-            if saldo_neto_emp > 0:
-                total_neto_he += saldo_neto_emp
-            elif saldo_neto_emp < 0:
-                deuda_restante = abs(saldo_neto_emp)
-                total_deuda_neta += deuda_restante
+                trab = round((di.get("horas_trabajadas") or 0.0) * 60) + vl_min
+                ja = di.get("jornada_adicional") or {}
+                es_ja_he = (ja.get("estado") == 'HORAS_EXTRAS')
+                is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
 
-                # Prorratear la deuda restante entre sus componentes originales
-                raw_atr = d_info['atraso']
-                raw_col = d_info['colacion']
-                raw_sad = d_info['salida']
-                raw_per = d_info['permiso']
-                raw_total = raw_atr + raw_col + raw_sad + raw_per
-
-                if raw_total > 0:
-                    factor = deuda_restante / raw_total
-                    total_deuda_atrasos += raw_atr * factor
-                    total_deuda_colacion += raw_col * factor
-                    total_deuda_salidas += raw_sad * factor
-                    total_deuda_permisos += raw_per * factor
+                if es_bolsa:
+                    if not is_esp:
+                        acum_bolsa += trab
                 else:
-                    total_deuda_atrasos += deuda_restante
+                    if not is_esp:
+                        if di.get("estado_he") == 'APROBADO':
+                            m_aut = float(di.get("minutos_extra_autorizados") or 0.0)
+                            if m_aut > 0:
+                                total_he_fijos_min += m_aut
+                                total_he_fijos_count += 1
+                    elif es_ja_he:
+                        min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
+                        if min_ja_he > 0:
+                            total_he_fijos_min += min_ja_he
+                            total_he_fijos_count += 1
 
-        resumen['he_aprobadas_horas'] = round(total_neto_he / 60.0, 2)
-        resumen['he_aprobadas_count'] = total_he_count
-        resumen['deuda_neta_horas'] = round(total_deuda_neta / 60.0, 2)
-        resumen['deuda_atrasos_horas'] = round(total_deuda_atrasos / 60.0, 2)
-        resumen['deuda_colacion_horas'] = round(total_deuda_colacion / 60.0, 2)
-        resumen['deuda_salidas_horas'] = round(total_deuda_salidas / 60.0, 2)
-        resumen['deuda_permisos_horas'] = round(total_deuda_permisos / 60.0, 2)
+                    if not is_esp:
+                        cond_tipo = int(di.get("deuda_condonada") or 0)
+                        raw_col = float(di.get("minutos_exceso_colacion") or 0.0)
+                        raw_per = float(di.get("minutos_permiso_personal_deuda") or 0.0)
+                        condona_atr = cond_tipo in (2, 3, 5)
+                        raw_atr = 0.0 if condona_atr else float(di.get("minutos_atraso") or 0.0)
+                        condona_sad = cond_tipo in (1, 3, 5)
+                        raw_sad = 0.0 if condona_sad else float(di.get("minutos_salida_adelantada") or 0.0)
+
+                        if cond_tipo == 5:
+                            pass
+                        else:
+                            raw_total = raw_col + raw_per + raw_atr + raw_sad
+                            base_deuda = float(di.get("minutos_deuda") or 0.0)
+                            if raw_total > 0:
+                                eff_deuda = min(base_deuda if base_deuda > 0 else raw_total, raw_total)
+                                total_deuda_fijos_min += eff_deuda
+                                if eff_deuda >= raw_total:
+                                    total_deuda_colacion_min += raw_col
+                                    total_deuda_permisos_min += raw_per
+                                    total_deuda_atrasos_min += raw_atr
+                                    total_deuda_salidas_min += raw_sad
+                                else:
+                                    factor = eff_deuda / raw_total
+                                    total_deuda_colacion_min += raw_col * factor
+                                    total_deuda_permisos_min += raw_per * factor
+                                    total_deuda_atrasos_min += raw_atr * factor
+                                    total_deuda_salidas_min += raw_sad * factor
+
+            if es_bolsa:
+                if acum_bolsa > meta_min:
+                    total_exceso_bolsa_min += (acum_bolsa - meta_min)
+                elif acum_bolsa < meta_min:
+                    total_deficit_bolsa_min += (meta_min - acum_bolsa)
+
+        # Haberes (recargo 50% Art. 32 CdT)
+        he_fijos_hrs = round(total_he_fijos_min / 60.0, 2)
+        he_bolsa_hrs = round(total_exceso_bolsa_min / 60.0, 2)
+        he_total_hrs = round(he_fijos_hrs + he_bolsa_hrs, 2)
+
+        # Débitos (tiempo no trabajado 100%)
+        deuda_fijos_hrs = round(total_deuda_fijos_min / 60.0, 2)
+        deficit_bolsa_hrs = round(total_deficit_bolsa_min / 60.0, 2)
+        deuda_total_hrs = round(deuda_fijos_hrs + deficit_bolsa_hrs, 2)
+
+        # Balance Operativo Neto (coincide al 100% con la columna Saldo Neto de Excel)
+        balance_operativo_hrs = round(he_total_hrs - deuda_total_hrs, 2)
+
+        resumen['total_empleados'] = len(empleados_matriz)
+        resumen['he_aprobadas_fijos_horas'] = he_fijos_hrs
+        resumen['he_aprobadas_fijos_count'] = total_he_fijos_count
+        resumen['he_exceso_bolsa_horas'] = he_bolsa_hrs
+        resumen['he_total_haberes_horas'] = he_total_hrs
+
+        resumen['deuda_fijos_horas'] = deuda_fijos_hrs
+        resumen['deuda_atrasos_horas'] = round(total_deuda_atrasos_min / 60.0, 2)
+        resumen['deuda_colacion_horas'] = round(total_deuda_colacion_min / 60.0, 2)
+        resumen['deuda_salidas_horas'] = round(total_deuda_salidas_min / 60.0, 2)
+        resumen['deuda_permisos_horas'] = round(total_deuda_permisos_min / 60.0, 2)
+        resumen['deficit_bolsa_horas'] = deficit_bolsa_hrs
+        resumen['deuda_total_debitos_horas'] = deuda_total_hrs
+
+        resumen['balance_operativo_horas'] = balance_operativo_hrs
+
+        # Compatibilidad hacia atrás
+        resumen['he_aprobadas_horas'] = he_total_hrs
+        resumen['he_aprobadas_count'] = total_he_fijos_count
+        resumen['deuda_neta_horas'] = deuda_total_hrs
 
         # Feriados del periodo
         query_feriados = """

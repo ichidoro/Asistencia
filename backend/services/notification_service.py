@@ -470,16 +470,27 @@ class NotificationService:
         dias_con_novedad = resumen.get("dias_con_novedad", 0)
         vacaciones = resumen.get("vacaciones", 0)
         licencias = resumen.get("licencias", 0)
+        jornadas_especiales = resumen.get("jornadas_especiales", 0)
         inasistencias = resumen.get("inasistencias", 0)
         anomalias = resumen.get("anomalias", 0)
-        he_aprobadas_horas = resumen.get("he_aprobadas_horas", 0.0)
-        he_aprobadas_count = resumen.get("he_aprobadas_count", 0)
         
-        deuda_neta_horas = resumen.get("deuda_neta_horas", 0.0)
+        # Haberes (HE al 50%)
+        he_total_haberes_horas = resumen.get("he_total_haberes_horas", resumen.get("he_aprobadas_horas", 0.0))
+        he_aprobadas_fijos_horas = resumen.get("he_aprobadas_fijos_horas", he_total_haberes_horas)
+        he_aprobadas_fijos_count = resumen.get("he_aprobadas_fijos_count", resumen.get("he_aprobadas_count", 0))
+        he_exceso_bolsa_horas = resumen.get("he_exceso_bolsa_horas", 0.0)
+        
+        # Débitos (Tiempo no trabajado al 100%)
+        deuda_total_debitos_horas = resumen.get("deuda_total_debitos_horas", resumen.get("deuda_neta_horas", 0.0))
+        deuda_fijos_horas = resumen.get("deuda_fijos_horas", deuda_total_debitos_horas)
         deuda_atrasos_horas = resumen.get("deuda_atrasos_horas", 0.0)
         deuda_colacion_horas = resumen.get("deuda_colacion_horas", 0.0)
         deuda_salidas_horas = resumen.get("deuda_salidas_horas", 0.0)
         deuda_permisos_horas = resumen.get("deuda_permisos_horas", 0.0)
+        deficit_bolsa_horas = resumen.get("deficit_bolsa_horas", 0.0)
+        
+        # Balance Operativo Neto
+        balance_operativo_horas = resumen.get("balance_operativo_horas", round(he_total_haberes_horas - deuda_total_debitos_horas, 2))
 
         # Generar HTML corporativo Aguacol Premium
         html = f"""
@@ -514,7 +525,7 @@ class NotificationService:
                                             NOTIFICACIÓN OFICIAL DE RECURSOS HUMANOS
                                         </div>
                                         <h1 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2;">
-                                            Periodo Sellado Definitivamente
+                                             Periodo Sellado Definitivamente
                                         </h1>
                                         <p style="color: #64748b; font-size: 14px; margin-top: 8px; margin-bottom: 0;">
                                             Se ha procedido al cierre definitivo del periodo de asistencia para el área y rango indicados a continuación.
@@ -548,35 +559,51 @@ class NotificationService:
                                     </td>
                                 </tr>
 
-                                <!-- Resumen Ejecutivo en Tablas/Métricas -->
+                                <!-- Resumen Ejecutivo Bento-Grid (3 Columnas Proporcionales) -->
                                 <tr>
                                     <td style="padding: 10px 40px 20px 40px;">
-                                        <h3 style="color: #334155; font-size: 15px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Resumen Estadístico del Periodo</h3>
+                                        <h3 style="color: #334155; font-size: 15px; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Resumen Consolidado del Periodo</h3>
                                         
-                                        <!-- Bento-Grid de métricas principales -->
+                                        <!-- Bento-Grid de 3 columnas -->
                                         <table width="100%" border="0" cellspacing="10" cellpadding="0" style="margin-left: -10px; margin-right: -10px;">
                                             <tr>
-                                                <td width="33%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center;">
-                                                    <div style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600;">Colaboradores</div>
-                                                    <div style="color: #1e293b; font-size: 20px; font-weight: 700; margin-top: 5px;">{total_emp}</div>
+                                                <!-- Columna 1: Haberes HE (+50%) -->
+                                                <td width="33%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 15px; text-align: center; vertical-align: top;">
+                                                    <div style="color: #1d4ed8; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Haberes HE (+50%)</div>
+                                                    <div style="color: #1e3a8a; font-size: 22px; font-weight: 800; margin-top: 6px;">{he_total_haberes_horas} hrs</div>
+                                                    <div style="color: #64748b; font-size: 11px; margin-top: 5px; line-height: 1.3;">
+                                                        <div>Fijos: {he_aprobadas_fijos_horas} hrs</div>
+                                                        <div style="font-size: 10px; color: #94a3b8;">({he_aprobadas_fijos_count} reg. aprobados)</div>
+                                                        {f'<div style="color: #0284c7; font-weight: 600; margin-top: 2px;">Bolsa: +{he_exceso_bolsa_horas} hrs</div>' if he_exceso_bolsa_horas > 0 else ''}
+                                                    </div>
                                                 </td>
-                                                <td width="33%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; text-align: center;">
-                                                    <div style="color: #1d4ed8; font-size: 11px; text-transform: uppercase; font-weight: 600;">HE Netas a Pago</div>
-                                                    <div style="color: #1e3a8a; font-size: 20px; font-weight: 700; margin-top: 5px;">{he_aprobadas_horas} hrs</div>
-                                                    <div style="color: #64748b; font-size: 10px; margin-top: 2px;">({he_aprobadas_count} reg.)</div>
+                                                <!-- Columna 2: Débitos Tiempo (100%) -->
+                                                <td width="33%" style="background-color: #fff5f5; border: 1px solid #feb2b2; border-radius: 10px; padding: 15px; text-align: center; vertical-align: top;">
+                                                    <div style="color: #c53030; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Débitos Tiempo (100%)</div>
+                                                    <div style="color: #9b2c2c; font-size: 22px; font-weight: 800; margin-top: 6px;">{deuda_total_debitos_horas} hrs</div>
+                                                    <div style="color: #64748b; font-size: 11px; margin-top: 5px; line-height: 1.3;">
+                                                        <div>Fijos: {deuda_fijos_horas} hrs</div>
+                                                        <div style="font-size: 10px; color: #94a3b8;">(Atrasos, salidas, colación)</div>
+                                                        {f'<div style="color: #dc2626; font-weight: 600; margin-top: 2px;">Déficit Bolsa: -{deficit_bolsa_horas} hrs</div>' if deficit_bolsa_horas > 0 else ''}
+                                                    </div>
                                                 </td>
-                                                <td width="33%" style="background-color: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; text-align: center;">
-                                                    <div style="color: #c53030; font-size: 11px; text-transform: uppercase; font-weight: 600;">Deuda Neta Restante</div>
-                                                    <div style="color: #9b2c2c; font-size: 20px; font-weight: 700; margin-top: 5px;">{deuda_neta_horas} hrs</div>
+                                                <!-- Columna 3: Balance Operativo Neto -->
+                                                <td width="33%" style="background-color: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 15px; text-align: center; vertical-align: top;">
+                                                    <div style="color: #7e22ce; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Balance Operativo</div>
+                                                    <div style="color: #581c87; font-size: 22px; font-weight: 800; margin-top: 6px;">{'+' if balance_operativo_horas > 0 else ''}{balance_operativo_horas} hrs</div>
+                                                    <div style="color: #64748b; font-size: 11px; margin-top: 5px; line-height: 1.3;">
+                                                        <div>Saldo Neto Conciliado</div>
+                                                        <div style="font-size: 10px; color: #94a3b8;">(Colaboradores: {total_emp})</div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         </table>
 
-                                        <!-- Tabla de detalles adicionales -->
+                                        <!-- Tabla 1: Detalle de Asistencia y Novedades -->
                                         <table width="100%" border="0" cellspacing="0" cellpadding="8" style="font-size: 13px; margin-top: 15px; border-collapse: collapse; border: 1px solid #e2e8f0;">
                                             <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                                 <th align="left" style="color: #475569; font-weight: 600;">Concepto / Incidencia</th>
-                                                <th align="center" style="color: #475569; font-weight: 600; width: 120px;">Cantidad / Días</th>
+                                                <th align="center" style="color: #475569; font-weight: 600; width: 140px;">Cantidad / Días</th>
                                             </tr>
                                             <tr style="border-bottom: 1px solid #f1f5f9;">
                                                 <td style="color: #334155;">Días con asistencia normal (OK)</td>
@@ -585,6 +612,10 @@ class NotificationService:
                                             <tr style="border-bottom: 1px solid #f1f5f9;">
                                                 <td style="color: #334155;">Días con novedades (Atrasos, salidas adelantadas)</td>
                                                 <td align="center" style="color: #0f172a; font-weight: 600;">{dias_con_novedad}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                                <td style="color: #334155;">Jornadas Especiales y Coberturas (+2)</td>
+                                                <td align="center" style="color: #0284c7; font-weight: 600;">{jornadas_especiales}</td>
                                             </tr>
                                             <tr style="border-bottom: 1px solid #f1f5f9;">
                                                 <td style="color: #334155;">Vacaciones solicitadas en periodo</td>
@@ -603,9 +634,9 @@ class NotificationService:
                                                 <td align="center" style="color: #0f172a; font-weight: 600;">{anomalias}</td>
                                             </tr>
                                             
-                                            <!-- Desglose de Deuda Neta -->
+                                            <!-- Tabla 2: Desglose de Débitos por Tiempo No Trabajado -->
                                             <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; border-top: 2px solid #e2e8f0;">
-                                                <th align="left" style="color: #475569; font-weight: 600;">Detalle de la Deuda Neta Restante</th>
+                                                <th align="left" style="color: #475569; font-weight: 600;">Detalle de Débitos por Tiempo No Trabajado</th>
                                                 <th align="center" style="color: #475569; font-weight: 600;">Horas</th>
                                             </tr>
                                             <tr style="border-bottom: 1px solid #f1f5f9;">
@@ -624,6 +655,7 @@ class NotificationService:
                                                 <td style="color: #334155; padding-left: 15px;">• Deuda por Permisos Personales</td>
                                                 <td align="center" style="color: #0f172a;">{deuda_permisos_horas} hrs</td>
                                             </tr>
+                                            {f'<tr style="border-bottom: 1px solid #f1f5f9;"><td style="color: #dc2626; padding-left: 15px; font-weight: 600;">• Déficit Bolsa Flexible Choferes</td><td align="center" style="color: #dc2626; font-weight: 600;">{deficit_bolsa_horas} hrs</td></tr>' if deficit_bolsa_horas > 0 else ''}
                                         </table>
                                     </td>
                                 </tr>

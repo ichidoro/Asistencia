@@ -4090,33 +4090,47 @@ function renderWizardStep(step) {
             btnNext.onclick = () => renderWizardStep(5);
         }
     } else if (step === 5) { // Reporte Final
+        const heTotal = ev.resumen.he_total_haberes_horas !== undefined ? ev.resumen.he_total_haberes_horas : (ev.resumen.he_aprobadas_horas || 0);
+        const heFijos = ev.resumen.he_aprobadas_fijos_horas !== undefined ? ev.resumen.he_aprobadas_fijos_horas : heTotal;
+        const heCount = ev.resumen.he_aprobadas_fijos_count !== undefined ? ev.resumen.he_aprobadas_fijos_count : (ev.resumen.he_aprobadas_count || 0);
+        const heBolsa = ev.resumen.he_exceso_bolsa_horas || 0;
+
+        const dTotal = ev.resumen.deuda_total_debitos_horas !== undefined ? ev.resumen.deuda_total_debitos_horas : (ev.resumen.deuda_neta_horas || 0);
+        const dFijos = ev.resumen.deuda_fijos_horas !== undefined ? ev.resumen.deuda_fijos_horas : dTotal;
+        const dBolsa = ev.resumen.deficit_bolsa_horas || 0;
+
+        const balNeto = ev.resumen.balance_operativo_horas !== undefined ? ev.resumen.balance_operativo_horas : (heTotal - dTotal);
+
         content.innerHTML = `
             <h4 class="fw-bold mb-4"><i class="bi bi-file-text"></i> Previsualización de Cierre</h4>
-            <div class="row mb-3">
+            <div class="row mb-3 g-3">
                 <div class="col-4">
-                    <div class="card border-0 bg-light shadow-sm h-100">
+                    <div class="card border-0 bg-primary-subtle border-primary-subtle shadow-sm h-100">
                         <div class="card-body py-3">
-                            <h6 class="text-muted text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">HE Netas a Pago</h6>
-                            <h3 class="text-success fw-bold mb-0">${ev.resumen.he_aprobadas_horas || 0} <span class="fs-6 text-muted">hrs</span></h3>
-                            <small class="text-muted d-block mt-1">(${ev.resumen.he_aprobadas_count || 0} autorizaciones)</small>
+                            <h6 class="text-primary text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Haberes HE (+50%)</h6>
+                            <h3 class="text-primary-emphasis fw-bold mb-0">${heTotal} <span class="fs-6 text-muted">hrs</span></h3>
+                            <small class="text-muted d-block mt-1">Fijos: ${heFijos} hrs (${heCount} reg.)</small>
+                            ${heBolsa > 0 ? `<small class="text-primary fw-bold d-block">Bolsa Choferes: +${heBolsa} hrs</small>` : ''}
                         </div>
                     </div>
                 </div>
                 <div class="col-4">
-                    <div class="card border-0 bg-light shadow-sm h-100">
+                    <div class="card border-0 bg-danger-subtle border-danger-subtle shadow-sm h-100">
                         <div class="card-body py-3">
-                            <h6 class="text-muted text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Deuda Neta Restante</h6>
-                            <h3 class="text-danger fw-bold mb-0">${ev.resumen.deuda_neta_horas || 0} <span class="fs-6 text-muted">hrs</span></h3>
-                            <small class="text-muted d-block mt-1">Suma de saldos negativos</small>
+                            <h6 class="text-danger text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Débitos Tiempo (100%)</h6>
+                            <h3 class="text-danger fw-bold mb-0">${dTotal} <span class="fs-6 text-muted">hrs</span></h3>
+                            <small class="text-muted d-block mt-1">Fijos: ${dFijos} hrs</small>
+                            ${dBolsa > 0 ? `<small class="text-danger fw-bold d-block">Déficit Choferes: -${dBolsa} hrs</small>` : ''}
                         </div>
                     </div>
                 </div>
                 <div class="col-4">
-                    <div class="card border-0 bg-light shadow-sm h-100">
+                    <div class="card border-0 ${balNeto >= 0 ? 'bg-success-subtle border-success-subtle' : 'bg-warning-subtle border-warning-subtle'} shadow-sm h-100">
                         <div class="card-body py-3">
-                            <h6 class="text-muted text-uppercase small fw-bold mb-1" style="font-size: 0.72rem;">Inasistencias Selladas</h6>
-                            <h3 class="text-dark fw-bold mb-0">${ev.inasistencias_injustificadas}</h3>
-                            <small class="text-muted d-block mt-1">Aceptadas en paso 4</small>
+                            <h6 class="text-uppercase small fw-bold mb-1 ${balNeto >= 0 ? 'text-success' : 'text-warning-emphasis'}" style="font-size: 0.72rem;">Balance Operativo</h6>
+                            <h3 class="fw-bold mb-0 ${balNeto >= 0 ? 'text-success' : 'text-danger'}">${balNeto > 0 ? '+' : ''}${balNeto} <span class="fs-6 text-muted">hrs</span></h3>
+                            <small class="text-muted d-block mt-1">Saldo Neto Conciliado</small>
+                            <small class="text-muted d-block">Colaboradores: ${ev.resumen.total_empleados || 0}</small>
                         </div>
                     </div>
                 </div>
@@ -4125,7 +4139,7 @@ function renderWizardStep(step) {
             <!-- Desglose de Deuda Neta -->
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-light border-0 py-2">
-                    <h6 class="text-dark fw-bold mb-0 small"><i class="bi bi-pie-chart-fill me-1 text-danger"></i> Detalle de la Deuda Neta Restante del Área</h6>
+                    <h6 class="text-dark fw-bold mb-0 small"><i class="bi bi-pie-chart-fill me-1 text-danger"></i> Detalle de Débitos por Tiempo No Trabajado del Área</h6>
                 </div>
                 <div class="card-body p-0">
                     <ul class="list-group list-group-flush small">
@@ -4145,6 +4159,11 @@ function renderWizardStep(step) {
                             <span><i class="bi bi-calendar-x me-2 text-danger"></i> Deuda por Permisos Personales</span>
                             <span class="fw-bold text-dark">${ev.resumen.deuda_permisos_horas || 0} hrs</span>
                         </li>
+                        ${dBolsa > 0 ? `
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 text-danger">
+                            <span><i class="bi bi-truck me-2 text-danger"></i> Déficit Bolsa Flexible Choferes</span>
+                            <span class="fw-bold text-danger">${dBolsa} hrs</span>
+                        </li>` : ''}
                     </ul>
                 </div>
             </div>

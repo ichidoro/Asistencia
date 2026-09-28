@@ -33,6 +33,101 @@ class ReportService:
         signo = "+" if saldo > 0 else ("-" if saldo < 0 else "")
         return f"{signo}{self._format_hhmmss(abs(saldo))}"
 
+    def _format_concepto_cell(self, di: Optional[dict], es_bolsa: bool = False) -> tuple[str, str, bool]:
+        """
+        Calcula la sigla exacta, color HEX y negrita para la celda de la pestaña Conceptos,
+        replicando con precisión del 100% la lógica de badges de la grilla web (_analiticaCellBadge).
+        """
+        if not di:
+            return ("", "000000", False)
+        
+        di_estado = di.get("estado") or ""
+        
+        # 1. Normalización para Bolsa Flexible (atrasos se absorben en la jornada si no hay turnos fijos)
+        if es_bolsa and di_estado in ('ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'):
+            di_estado = 'OK'
+            
+        # 2. Si tiene viaje largo registrado y el estado es anómalo/inasistencia o vacío
+        tiene_vl = bool(di.get("viaje_largo") or di.get("tiene_viaje_largo") or di_estado == 'VIAJE_LARGO')
+        if tiene_vl and (di_estado in ('ANOMALIA', 'INASISTENCIA') or not di_estado):
+            di_estado = 'VIAJE_LARGO'
+            
+        # 3. Label primario y color
+        lbl = di_estado
+        color = "333333"
+        bold = False
+        
+        if di_estado == 'OK':
+            lbl, color, bold = "OK", "008000", True
+        elif di_estado == 'ATRASO':
+            lbl, color, bold = "ATR", "FF8C00", True
+        elif di_estado == 'SALIDA_ADELANTADA':
+            lbl, color, bold = "SAD", "800080", True
+        elif di_estado == 'ATR_SAD':
+            lbl, color, bold = "ATR-SAD", "FF00FF", True
+        elif di_estado == 'INASISTENCIA' or 'FALTA' in di_estado:
+            lbl, color, bold = "INA", "FF0000", True
+        elif di_estado == 'LIBRE':
+            lbl, color, bold = "LIB", "808080", False
+        elif di_estado == 'FERIADO':
+            lbl, color, bold = "FER", "B45309", True
+        elif di_estado == 'ANOMALIA':
+            lbl, color, bold = "ANO", "1E293B", True
+        elif di_estado == 'EN_CURSO':
+            lbl, color, bold = "CUR", "059669", True
+        elif di_estado == 'PERMISO':
+            lbl, color, bold = "PER", "D97706", True
+        elif di_estado == 'INASISTENCIA_COMPENSADA':
+            if di.get("deuda_condonada") == 3:
+                lbl, color, bold = "COMP", "0284C7", True
+            else:
+                lbl, color, bold = "C.HE", "0369A1", True
+        elif di_estado in ('DESCANSO_OPERATIVO', 'DESCANSO OPERATIVO') or di.get("nomenclatura") == 'DEOP':
+            lbl, color, bold = "DEOP", "475569", True
+        elif di.get("nomenclatura") or di_estado in ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'LCM', 'LMU', 'CUM', 'DUE']:
+            lbl, color, bold = (di.get("nomenclatura") or di_estado[:3].upper()), "0000FF", True
+        elif di_estado == 'VIAJE_LARGO':
+            lbl, color, bold = "VIAJE", "0284C7", True
+        elif di_estado == 'JORNADA_ESPECIAL':
+            lbl, color, bold = "ESP", "0284C7", True
+        elif di_estado == 'EXTRA':
+            lbl, color, bold = "EXT", "0284C7", True
+
+        # 4. Caso Especial: Jornada Adicional / Cobertura (+2)
+        ja = di.get("jornada_adicional")
+        if ja:
+            ja_est = ja.get("estado")
+            obs_ja = str(ja.get("observaciones") or "") + str(di.get("observaciones") or "")
+            es_mas_dos = "(+2)" in obs_ja
+            
+            if ja_est == 'RECHAZADA':
+                pass # Se mantiene el lbl base limpio
+            elif float(di.get("horas_teoricas") or 0.0) == 0.0 or di_estado in ('LIBRE', 'FERIADO', 'JORNADA_ESPECIAL', 'EXTRA'):
+                # Jornada adicional en día no programado (cobertura exclusiva)
+                if ja_est == 'HORAS_EXTRAS':
+                    lbl, color, bold = ("+2 HE" if es_mas_dos else "HE"), "D97706", True
+                elif ja_est == 'EXTRA':
+                    lbl, color, bold = "EXT", "0284C7", True
+                else:
+                    lbl, color, bold = ("+2" if es_mas_dos else "ESP"), "0284C7", True
+            else:
+                # DOBLE TURNO: Turno Ordinario + Cobertura (+2)
+                if ja_est == 'HORAS_EXTRAS':
+                    der = "+2 HE" if es_mas_dos else "HE"
+                elif ja_est == 'EXTRA':
+                    der = "EXT"
+                else:
+                    der = "+2" if es_mas_dos else "ESP"
+                lbl = f"{lbl}\n{der}"
+                bold = True
+
+        # 5. Caso Especial: Viaje Largo + Turno de Planta
+        elif tiene_vl and bool(di.get("hora_entrada_real") and di.get("hora_salida_real")):
+            lbl = f"VIAJE\n{lbl}" if lbl != "VIAJE" else "VIAJE\nOK"
+            color, bold = "0284C7", True
+
+        return (lbl, color, bold)
+
     async def generate_excel_report(self, fecha_inicio: str, fecha_fin: str, area: str = None, turno_id: int = None) -> BytesIO:
         """
         Genera el reporte Excel oficial de cierre o mensual para el periodo y area dados.
@@ -176,6 +271,7 @@ class ReportService:
                 
                 acum_semanal = 0
                 start_day_db = emp.get("primer_dia_semana_turno", 0)
+                viajes_sumados_ids = set()
                 
                 for d in rango_dias:
                     if d.weekday() == start_day_db:
@@ -186,8 +282,30 @@ class ReportService:
                     if not di:
                         continue
                         
-                    trab = round((di.get("horas_trabajadas") or 0.0) * 60)
+                    # Minutos reconocidos de viaje largo para Bolsa Flexible (idéntico a marcaciones_ui.js líneas 4585-4594)
+                    vl_min = 0
+                    if es_bolsa and di.get("viaje_largo") and di["viaje_largo"].get("id") and di["viaje_largo"]["id"] not in viajes_sumados_ids:
+                        viajes_sumados_ids.add(di["viaje_largo"]["id"])
+                        ya_registrado = (float(di.get("horas_trabajadas") or 0.0) > 0)
+                        if not ya_registrado:
+                            vl_obj = di["viaje_largo"]
+                            vl_hrs = float(vl_obj.get("horas_reconocidas_totales") or vl_obj.get("horas_manejo_efectivas") or 0.0)
+                            vl_min = round(vl_hrs * 60)
+                            
+                    trab = round((di.get("horas_trabajadas") or 0.0) * 60) + vl_min
                     di_estado = di.get("estado") or ""
+                    
+                    # Detección exhaustiva de Jornada Especial y Coberturas (idéntico a marcaciones_ui.js líneas 4665-4678)
+                    ja = di.get("jornada_adicional") or {}
+                    ja_est = ja.get("estado")
+                    es_ja_rechazada = (ja_est == 'RECHAZADA')
+                    es_ja_he = (ja_est == 'HORAS_EXTRAS')
+                    tiene_ja_activa = bool(ja and (ja_est in ('PENDIENTE', 'JORNADA_ESPECIAL', 'EXTRA') or not ja_est))
+                    es_dia_esp_valido = not es_ja_rechazada and not es_ja_he and (
+                        di_estado in ('JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA') or
+                        (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0 and di_estado != 'RECHAZADA')
+                    )
+                    
                     is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
                     
                     if not es_bolsa and not is_esp:
@@ -257,7 +375,7 @@ class ReportService:
                             
                     if di_estado == 'INASISTENCIA':
                         cnt_inas += 1
-                    if is_esp:
+                    if tiene_ja_activa or es_dia_esp_valido:
                         cnt_esp += 1
                     if di.get("hora_entrada_real") and not is_esp and di_estado not in ['LIBRE', 'FERIADO', 'INASISTENCIA']:
                         cnt_efectivos += 1
@@ -290,6 +408,11 @@ class ReportService:
                             he_rec += (di.get("minutos_extra_bruto") or 0)
                         elif (di.get("minutos_extra_bruto") or 0) >= 1.0:
                             he_pend += (di.get("minutos_extra_bruto") or 0)
+                    elif es_ja_he:
+                        # Jornada adicional aprobada como HE
+                        min_ja_he = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
+                        he_apr += min_ja_he
+                        
                     # FIX: he_compensado se acumula para TODOS los días (incluidos JORNADA_ESPECIAL),
                     # igual que en el frontend (marcaciones_ui.js línea 4266)
                     he_compensado += (di.get("minutos_compensados_he") or 0)
@@ -303,13 +426,16 @@ class ReportService:
                 saldo = he_apr - d_tot - he_compensado
                 saldo_meta = (acum_bolsa - meta_min) if es_bolsa else None
                 
+                # Total incidencias exacto
+                tot_incidencias_emp = cnt_per + cnt_atr + cnt_sad + cnt_inas + cnt_esp
+                
                 # DEBUG: Log de auditoría para detectar discrepancia Excel vs Grilla
                 emp_nombre = f"{emp['apellido_paterno']} {emp.get('apellido_materno', '')} {emp['nombre']}".strip()
                 logger.info(
                     f"📊 [EXCEL_DEBUG] {emp_nombre}: "
                     f"he_apr={he_apr} d_tot={d_tot} he_comp={he_compensado} "
                     f"saldo={saldo} ({self._format_hhmmss(saldo)}) | "
-                    f"he_bruto={he_bruto} he_rec={he_rec} he_pend={he_pend} "
+                    f"cnt_esp={cnt_esp} tot_incidencias={tot_incidencias_emp} | "
                     f"dias_procesados={sum(1 for d in rango_dias if dias_dict.get(f'{d.year}-{d.month:02d}-{d.day:02d}'))}"
                 )
                 
@@ -333,6 +459,7 @@ class ReportService:
                     "cnt_inas": cnt_inas,
                     "cnt_esp": cnt_esp,
                     "cnt_per": cnt_per,
+                    "tot_incidencias": tot_incidencias_emp,
                     "cnt_efectivos": cnt_efectivos,
                     "saldo": saldo,
                     "metaMin": meta_min,
@@ -578,10 +705,15 @@ class ReportService:
                             val = r["cnt_inas"] if r["cnt_inas"] > 0 else ""
                             if r["cnt_inas"] > 0:
                                 cell.font = Font(name="Segoe UI", size=9, color="FF0000", bold=True)
-                        elif key == "cnt_esp": val = f"{r['cnt_esp']} *" if r["cnt_esp"] > 0 else ""
+                        elif key == "cnt_esp": 
+                            val = r["cnt_esp"] if r["cnt_esp"] > 0 else ""
+                            if r["cnt_esp"] > 0:
+                                cell.font = Font(name="Segoe UI", size=9, color="0284C7", bold=True)
                         elif key == "tot_incidencias":
-                            tot_i = r["cnt_per"] + r["cnt_atr"] + r["cnt_sad"] + r["cnt_inas"] + r["cnt_esp"]
+                            tot_i = r["tot_incidencias"]
                             val = tot_i if tot_i > 0 else ""
+                            if tot_i > 0:
+                                cell.font = Font(name="Segoe UI", size=9, bold=True)
                         # HE
                         elif key == "he_pend": val = self._format_hhmmss(r["he_pend"])
                         elif key == "he_apr": val = self._format_hhmmss(r["he_apr"])
@@ -626,81 +758,66 @@ class ReportService:
                                 trab = round((di.get("horas_trabajadas") or 0.0) * 60)
                                 deuda = di.get("minutos_deuda") or 0
                                 
-                                # Pestaña Conceptos
+                                # Pestaña Conceptos (Gemelo 100% de la grilla web)
                                 if view_mode == "conceptos":
-                                    sigla = di_estado
-                                    if di_estado == 'OK': 
-                                        sigla = 'OK'
-                                        cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
-                                    elif di_estado == 'ATRASO': 
-                                        sigla = 'ATR'
-                                        cell.font = Font(name="Segoe UI", size=9, color="FF8C00", bold=True)
-                                    elif di_estado == 'SALIDA_ADELANTADA': 
-                                        sigla = 'SAD'
-                                        cell.font = Font(name="Segoe UI", size=9, color="800080", bold=True)
-                                    elif di_estado == 'ATR_SAD': 
-                                        sigla = 'ATR-SAD'
-                                        cell.font = Font(name="Segoe UI", size=9, color="FF00FF", bold=True)
-                                    elif di_estado == 'INASISTENCIA' or 'FALTA' in di_estado: 
-                                        sigla = 'INA'
-                                        cell.font = Font(name="Segoe UI", size=9, color="FF0000", bold=True)
-                                    elif di_estado == 'LIBRE': 
-                                        sigla = 'LIB'
-                                        cell.font = Font(name="Segoe UI", size=9, color="808080")
-                                    elif di_estado == 'FERIADO': 
-                                        sigla = 'FES'
-                                        cell.font = Font(name="Segoe UI", size=9, color="FFD700", bold=True)
-                                    elif di.get("nomenclatura") or di_estado in ['VACACIONES', 'LICENCIA', 'LCM', 'LMU', 'CUM', 'DUE']: 
-                                        sigla = di.get("nomenclatura") or di_estado[:3].upper()
-                                        cell.font = Font(name="Segoe UI", size=9, color="0000FF", bold=True)
-                                    val = sigla
+                                    lbl, color, bold = self._format_concepto_cell(di, r["esBolsa"])
+                                    val = lbl
+                                    cell.font = Font(name="Segoe UI", size=9, color=color, bold=bold)
                                     
                                 # Pestaña Horas
                                 elif view_mode == "horas":
-                                    if di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']:
+                                    has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                    if has_eff:
                                         if di_estado == 'EN_CURSO':
-                                            val = ">>>"
+                                            val = ">>"
+                                            cell.font = Font(name="Segoe UI", size=9, color="059669", bold=True)
                                         else:
                                             hrs = self._format_hhmmss(trab)
+                                            # Desglose de Deuda para fijos
                                             if not r["esBolsa"] and deuda > 0:
                                                 val = f"{hrs}\nDEUDA {self._format_hhmmss(deuda)}"
-                                                cell.font = Font(name="Segoe UI", size=8, color="FF0000")
+                                                cell.font = Font(name="Segoe UI", size=8, color="DC2626")
                                             else:
                                                 val = hrs
                                                 
                                 # Pestaña Colación
                                 elif view_mode == "colacion":
-                                    if di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']:
-                                        if di.get("hora_entrada_real") and di.get("hora_salida_real"):
-                                            col_aplicado = di.get("minutos_colacion") or 0
-                                            exceso = di.get("minutos_exceso_colacion") or 0
-                                            col_str = self._format_hhmmss(col_aplicado)
-                                            if exceso > 0:
-                                                val = f"{col_str}\nDEUDA {self._format_hhmmss(exceso)}"
-                                                cell.font = Font(name="Segoe UI", size=8, color="FF0000")
-                                            elif di.get("minutos_colacion_real") == 0 and col_aplicado > 0:
-                                                val = f"{col_str}\nAUTO"
-                                            else:
-                                                val = col_str
-                                                
+                                    has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                    if has_eff and di.get("hora_entrada_real") and di.get("hora_salida_real"):
+                                        col_aplicado = di.get("minutos_colacion") or 0
+                                        exceso = di.get("minutos_exceso_colacion") or 0
+                                        col_str = self._format_hhmmss(col_aplicado)
+                                        if exceso > 0:
+                                            val = f"{col_str}\nDEUDA {self._format_hhmmss(exceso)}"
+                                            cell.font = Font(name="Segoe UI", size=8, color="DC2626")
+                                        elif di.get("minutos_colacion_real") == 0 and col_aplicado > 0:
+                                            val = f"{col_str}\nAUTO"
+                                            cell.font = Font(name="Segoe UI", size=8, color="64748B")
+                                        else:
+                                            val = col_str
+                                    elif has_eff:
+                                        val = "—"
+                                        cell.font = Font(name="Segoe UI", size=9, color="9CA3AF")
+                                        
                                 # Pestaña Permisos
                                 elif view_mode == "permisos":
                                     m_perm = di.get("minutos_permisos_detectados") or 0
                                     m_deuda = di.get("minutos_permiso_personal_deuda") or 0
                                     if m_perm > 0:
                                         val = self._format_hhmmss(m_perm)
-                                        cell.font = Font(name="Segoe UI", size=9, color="0000FF")
+                                        cell.font = Font(name="Segoe UI", size=9, color="2563EB", bold=True)
                                     elif di.get("tiene_permiso_hora") or di.get("permiso_activo"):
                                         mins = m_deuda if m_deuda > 0 else round((di.get("horas_teoricas") or 0.0) * 60)
                                         if mins > 0:
                                             val = self._format_hhmmss(mins)
                                         else:
                                             val = "PER"
-                                        cell.font = Font(name="Segoe UI", size=9, color="FF8C00")
-                                    elif di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']:
+                                        cell.font = Font(name="Segoe UI", size=9, color="D97706", bold=True)
+                                    elif di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']:
                                         val = "—"
+                                        cell.font = Font(name="Segoe UI", size=9, color="9CA3AF")
                                         
-                                # Pestaña Horas Extras
+                                # Pestaña Horas Extras (Gemelo idéntico al frontend)
                                 elif view_mode == "he":
                                     if r["esBolsa"]:
                                         snap_hoy = di.get("_acumuladoBolsaSnap") or 0
@@ -711,42 +828,44 @@ class ReportService:
                                             he_este = trab_hoy if snap_ayer >= meta_min_bolsa else (snap_hoy - meta_min_bolsa)
                                             if he_este > 0:
                                                 val = f"+{self._format_hhmmss(he_este)}"
-                                                cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
+                                                cell.font = Font(name="Segoe UI", size=9, color="16A34A", bold=True)
                                     else:
                                         he_bruto_d = di.get("minutos_extra_bruto") or 0
-                                        deuda_d = di.get("minutos_deuda") or 0
-                                        txt = ""
-                                        if he_bruto_d > 0:
-                                            txt += f"+{self._format_hhmmss(he_bruto_d)}"
-                                        if deuda_d > 0:
-                                            txt += f"\n-{self._format_hhmmss(deuda_d)}"
-                                        val = txt.strip()
-                                        if "+" in val and "-" in val:
-                                            cell.font = Font(name="Segoe UI", size=8)
-                                        elif "+" in val:
-                                            cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
-                                        elif "-" in val:
-                                            cell.font = Font(name="Segoe UI", size=9, color="FF0000")
+                                        he_aut_d = di.get("minutos_extra_autorizados") or 0
+                                        ja = di.get("jornada_adicional") or {}
+                                        if ja.get("estado") == 'HORAS_EXTRAS':
+                                            ja_min = float(ja.get("minutos_autorizados") or ja.get("minutos_trabajados") or 0.0)
+                                            he_aut_d += ja_min
+                                            he_bruto_d = max(he_bruto_d, he_aut_d)
+                                            
+                                        he_mostrar = he_aut_d if di.get("estado_he") == 'APROBADO' else he_bruto_d
+                                        if he_mostrar > 0:
+                                            val = f"+{self._format_hhmmss(he_mostrar)}"
+                                            col_he = "16A34A" if di.get("estado_he") == 'APROBADO' else "D97706"
+                                            cell.font = Font(name="Segoe UI", size=9, color=col_he, bold=True)
                                             
                                 # Pestaña Acumulado
                                 elif view_mode == "acumulado":
                                     if r["esBolsa"]:
-                                        if di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO']:
+                                        has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                        if has_eff:
                                             snap = di.get("_acumuladoBolsaSnap") or 0
                                             snap_ayer = di.get("_acumuladoBolsaSnapPrev") or 0
                                             meta_min_bolsa = di.get("_metaMinBolsa") or 0
                                             if snap > 0:
                                                 cruza = snap > meta_min_bolsa and snap_ayer < meta_min_bolsa
                                                 txt = self._format_hhmmss(snap)
-                                                val = f"{txt}\n*META" if cruza else txt
+                                                val = f"{txt}\n★META" if cruza else txt
                                                 if snap > meta_min_bolsa:
-                                                    cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
+                                                    cell.font = Font(name="Segoe UI", size=9, color="10B981", bold=True)
                                                 else:
-                                                    cell.font = Font(name="Segoe UI", size=9, color="0000FF")
+                                                    cell.font = Font(name="Segoe UI", size=9, color="2563EB")
                                     else:
-                                        if di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO'] and di.get("horas_trabajadas", 0) > 0:
+                                        has_eff = di_estado in ['OK', 'ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD', 'JORNADA_ESPECIAL', 'EXTRA', 'EN_CURSO', 'VIAJE_LARGO']
+                                        if has_eff and di.get("horas_trabajadas", 0) > 0:
                                             snap = di.get("_acumuladoSemanalSnap") or 0
                                             val = self._format_hhmmss(snap) if snap > 0 else "—"
+                                            cell.font = Font(name="Segoe UI", size=9, bold=True)
                                 
                                 if not val and view_mode == "conceptos":
                                     if di.get('es_fin_de_semana'):
@@ -761,8 +880,8 @@ class ReportService:
                                         
                                 if f_str in feriados_set:
                                     if view_mode == "conceptos":
-                                        val = "FES"
-                                        cell.font = Font(name="Segoe UI", size=9, color="FFD700", bold=True)
+                                        val = "FER"
+                                        cell.font = Font(name="Segoe UI", size=9, color="B45309", bold=True)
                                 elif es_libre_puro:
                                     if view_mode == "conceptos":
                                         val = "LIB"
@@ -770,6 +889,8 @@ class ReportService:
                                         
                         cell.value = val
                         
+                    has_multiline = any('\n' in str(ws.cell(row=current_row, column=c).value or '') for c in range(1, len(columns_def) + 1))
+                    ws.row_dimensions[current_row].height = 28 if has_multiline else 20
                     current_row += 1
                     
                 # 5. Fila de TOTALES
