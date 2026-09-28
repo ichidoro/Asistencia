@@ -1654,7 +1654,7 @@ class AsistenciaService:
             await db.execute(
                 """
                 UPDATE jornadas_especiales 
-                SET estado = 'EXTRA', observaciones = ?, minutos_autorizados = ?, validador_id = ?, fecha_validacion = datetime('now'), updated_at = datetime('now')
+                SET estado = 'HORAS_EXTRAS', observaciones = ?, minutos_autorizados = ?, validador_id = ?, fecha_validacion = datetime('now'), updated_at = datetime('now')
                 WHERE empleado_id = ? AND fecha = ?
                 """,
                 (obs_je, min_auth, validador_id, empleado_id, fecha)

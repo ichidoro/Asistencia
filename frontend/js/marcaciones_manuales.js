@@ -227,12 +227,11 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     const btnRevertirHE = document.getElementById('btn-revertir-he');
     if (btnRevertirHE) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
-        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
-        // Solo mostrar si el estado es EXTRA y es producto de una validación de jornada especial.
-        // O si tiene una jornada adicional aprobada (estado EXTRA)
-        const tieneJornadaAdicionalAprobada = asistJ && asistJ.jornada_adicional && asistJ.jornada_adicional.estado === 'EXTRA';
+        // Solo mostrar si el estado es EXTRA o HORAS_EXTRAS y es producto de una validación de jornada especial.
+        // O si tiene una jornada adicional aprobada (estado EXTRA o HORAS_EXTRAS)
+        const tieneJornadaAdicionalAprobada = asistJ && asistJ.jornada_adicional && (asistJ.jornada_adicional.estado === 'EXTRA' || asistJ.jornada_adicional.estado === 'HORAS_EXTRAS');
         
-        if (asistJ && (asistJ.estado === 'EXTRA' || tieneJornadaAdicionalAprobada)) {
+        if (asistJ && (asistJ.estado === 'EXTRA' || asistJ.estado === 'HORAS_EXTRAS' || tieneJornadaAdicionalAprobada)) {
             btnRevertirHE.classList.remove('d-none');
         } else {
             btnRevertirHE.classList.add('d-none');

@@ -313,6 +313,7 @@ class ConfiguracionRepository:
                 ('PERMISO',           'PERMISO',            'PER', 'El empleado cuenta con un permiso de horas aprobado para ese día.',          'badge-state-info',     'bi-calendar-check-fill',        1, 1, 13),
                 ('INASISTENCIA_COMPENSADA', 'INASISTENCIA COMPENSADA', 'C.HE', 'Inasistencia compensada utilizando la bolsa de horas extras aprobadas.', 'badge-inasistencia-compensada-he', 'bi-clock-history', 1, 1, 14),
                 ('JORNADA_COMPENSATORIA',   'JORNADA COMPENSATORIA',   'COMP', 'Día libre compensatorio por jornada trabajada en día de descanso.', 'badge-compensatorio', 'bi-arrow-left-right', 1, 1, 15),
+                ('HORAS_EXTRAS',            'HORAS EXTRAS',            'HE',   'Jornada especial o cobertura validada como Horas Extras al 50%.',    'badge-state-warning',  'bi-clock-fill',         1, 1, 16),
             ]
             for row in seed_data:
                 await self.db.execute(
@@ -321,6 +322,16 @@ class ConfiguracionRepository:
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     row
                 )
+
+        # Migración: Garantizar estado HORAS_EXTRAS en bases de datos existentes
+        try:
+            await self.db.execute("""
+                INSERT OR IGNORE INTO estados_asistencia
+                (codigo, nombre_display, short_label, descripcion, color_clase, icono_bi, es_sistema, activo, orden)
+                VALUES ('HORAS_EXTRAS', 'HORAS EXTRAS', 'HE', 'Jornada especial o cobertura validada como Horas Extras al 50%.', 'badge-state-warning', 'bi-clock-fill', 1, 1, 16)
+            """)
+        except Exception as mig_he_err:
+            logger.warning(f"Migración estados_asistencia (HORAS_EXTRAS): {mig_he_err}")
 
         # 8. Tabla de Periodos de Empleo (Multi-Contrato) [NEW V15]
         if not await self.db.table_exists("periodos_empleo"):

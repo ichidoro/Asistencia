@@ -4640,8 +4640,20 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             if ((di.minutos_salida_adelantada||0) > 0 && !tieneCondonacion) cnt_sad++;
             if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
         }
+        const jaEst = di.jornada_adicional ? di.jornada_adicional.estado : null;
+        const esJaRechazada = jaEst === 'RECHAZADA';
+        const esJaHE = jaEst === 'HORAS_EXTRAS';
+        const tieneJaPendienteOExtra = Boolean(di.jornada_adicional && (jaEst === 'PENDIENTE' || jaEst === 'JORNADA_ESPECIAL' || jaEst === 'EXTRA'));
+        const esDiaEspecialValido = !esJaRechazada && !esJaHE && (
+            di.estado === 'JORNADA_ESPECIAL' ||
+            di.estado === 'EXTRA' ||
+            di.estado === 'FERIADO Y JORNADA EXTRA' ||
+            di.estado === 'DÍA LIBRE Y JORNADA EXTRA' ||
+            (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0 && di.estado !== 'RECHAZADA')
+        );
+
         if (di.estado === 'INASISTENCIA') cnt_inas++;
-        if (isEsp || tieneJa)             cnt_esp++;
+        if (tieneJaPendienteOExtra || esDiaEspecialValido) cnt_esp++;
         if (di.hora_entrada_real && !isEsp && !['LIBRE','FERIADO','INASISTENCIA'].includes(di.estado)) cnt_efectivos++;
 
         if (!isEsp) {
@@ -5670,53 +5682,63 @@ function _analiticaCellBadge(di) {
         const ja = di.jornada_adicional;
         const esMasDos = (ja.observaciones && ja.observaciones.includes('(+2)')) || (di.observaciones && di.observaciones.includes('(+2)'));
         if ((di.horas_teoricas || 0) === 0 || est === 'LIBRE' || est === 'JORNADA_ESPECIAL') {
-            let class_esp = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
-            let label_esp = esMasDos ? '+2' : ((estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP');
-            let icon_esp = esMasDos ? '' : '<i class="bi bi-star-fill me-1"></i>';
-            let title_esp = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
-            
-            if (ja.estado === 'EXTRA') {
-                class_esp = _getEstadoColor('EXTRA') || 'badge-state-info';
-                label_esp = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
-                title_esp = 'Jornada Adicional Aprobada como Extra';
-            } else if (ja.estado === 'RECHAZADA') {
-                class_esp = 'badge-state-danger';
-                label_esp = 'REC';
-                title_esp = 'Jornada Adicional Rechazada';
+            if (ja.estado === 'RECHAZADA') {
+                // REGLA DE NEGOCIO: Si fue rechazada en día libre/festivo, no abulta la grilla con badge especial
+                primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle} (Jornada rechazada)"` : ''}><span>${label}</span></div>`;
+            } else if (ja.estado === 'HORAS_EXTRAS') {
+                const class_esp = 'badge-state-warning';
+                const label_esp = esMasDos ? '+2 HE' : 'HE';
+                const icon_esp = '<i class="bi bi-clock-fill me-1"></i>';
+                const title_esp = 'Jornada Adicional Aprobada como Horas Extras al 50%';
+                primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span>${icon_esp}${label_esp}</span></div>`;
+            } else if (ja.estado === 'EXTRA') {
+                const class_esp = _getEstadoColor('EXTRA') || 'badge-state-info';
+                const label_esp = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
+                const title_esp = 'Jornada Adicional Aprobada como Extra';
+                primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span><i class="bi bi-star-fill me-1"></i>${label_esp}</span></div>`;
+            } else {
+                let class_esp = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
+                let label_esp = esMasDos ? '+2' : ((estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP');
+                let icon_esp = esMasDos ? '' : '<i class="bi bi-star-fill me-1"></i>';
+                let title_esp = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
+                primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span>${icon_esp}${label_esp}</span></div>`;
             }
-
-            primaryBadge = `<div class="badge-status ${class_esp}" style="${stdBadgeStyle}" title="${title_esp}"><span>${icon_esp}${label_esp}</span></div>`;
         } else {
             const class_izq = pillClass;
             const label_izq = label;
             
-            let class_der = 'badge-state-neutral';
-            let label_der = esMasDos ? '+2' : 'ESP';
-            let title_der = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Especial Adicional';
-            
-            if (ja.estado === 'PENDIENTE' || ja.estado === 'JORNADA_ESPECIAL') {
-                class_der = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
-                label_der = esMasDos ? '+2' : ((estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP');
-                title_der = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
-            } else if (ja.estado === 'EXTRA') {
-                class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
-                label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
-                title_der = 'Jornada Adicional Aprobada como Extra';
-            } else if (ja.estado === 'RECHAZADA') {
-                class_der = 'badge-state-danger';
-                label_der = 'REC';
-                title_der = 'Jornada Adicional Rechazada';
+            if (ja.estado === 'RECHAZADA') {
+                // REGLA DE NEGOCIO: Cobertura rechazada desaparece de la celda de la grilla, quedando únicamente el turno ordinario limpio
+                primaryBadge = `<div class="badge-status ${class_izq}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle} (Cobertura +2 rechazada)"` : ''}><span>${label_izq}</span></div>`;
+            } else {
+                let class_der = 'badge-state-neutral';
+                let label_der = esMasDos ? '+2' : 'ESP';
+                let title_der = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Especial Adicional';
+                
+                if (ja.estado === 'PENDIENTE' || ja.estado === 'JORNADA_ESPECIAL') {
+                    class_der = _getEstadoColor('JORNADA_ESPECIAL') || 'badge-state-info';
+                    label_der = esMasDos ? '+2' : ((estadosCache['JORNADA_ESPECIAL'] || {}).short_label || 'ESP');
+                    title_der = esMasDos ? 'Jornada Especial (+2): Cobertura de Turno' : 'Jornada Adicional Pendiente de Aprobación';
+                } else if (ja.estado === 'HORAS_EXTRAS') {
+                    class_der = 'badge-state-warning';
+                    label_der = esMasDos ? '+2 HE' : 'HE';
+                    title_der = 'Jornada Especial (+2): Cobertura Aprobada como Horas Extras al 50%';
+                } else if (ja.estado === 'EXTRA') {
+                    class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
+                    label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
+                    title_der = 'Jornada Adicional Aprobada como Extra (Bono Plano)';
+                }
+                
+                primaryBadge = `
+                <div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">
+                    <div class="badge-status ${class_izq}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}>
+                        <span>${label_izq}</span>
+                    </div>
+                    <div class="badge-status ${class_der}" style="${stdBadgeStyle}" title="${title_der}">
+                        <span>${label_der}</span>
+                    </div>
+                </div>`;
             }
-            
-            primaryBadge = `
-            <div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">
-                <div class="badge-status ${class_izq}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}>
-                    <span>${label_izq}</span>
-                </div>
-                <div class="badge-status ${class_der}" style="${stdBadgeStyle}" title="${title_der}">
-                    <span>${label_der}</span>
-                </div>
-            </div>`;
         }
     }
     // ── Si tiene VIAJE LARGO y además un turno de planta completado (Entrada + Salida) ──

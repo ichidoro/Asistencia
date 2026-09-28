@@ -319,16 +319,16 @@ class AsistenciaRepository:
                 hora_salida=excluded.hora_salida,
                 minutos_trabajados=excluded.minutos_trabajados,
                 estado=CASE 
-                    WHEN jornadas_especiales.estado IN ('EXTRA', 'RECHAZADA') THEN jornadas_especiales.estado
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.estado
                     ELSE excluded.estado
                 END,
                 observaciones=CASE
-                    WHEN jornadas_especiales.estado IN ('EXTRA', 'RECHAZADA') THEN jornadas_especiales.observaciones
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.observaciones
                     ELSE excluded.observaciones
                 END,
                 origen=excluded.origen,
                 minutos_autorizados=CASE
-                    WHEN jornadas_especiales.estado IN ('EXTRA', 'RECHAZADA') THEN jornadas_especiales.minutos_autorizados
+                    WHEN jornadas_especiales.estado IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') THEN jornadas_especiales.minutos_autorizados
                     ELSE excluded.minutos_autorizados
                 END,
                 updated_at=datetime('now')
