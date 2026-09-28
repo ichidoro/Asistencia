@@ -165,6 +165,26 @@ class CierreService:
         )
         resumen = dict(resumen_row) if resumen_row else {}
 
+        # Consolidar coberturas de turno (+2) que operan en paralelo al turno base
+        q_coberturas = f"""
+            SELECT COUNT(je.id) as count_coberturas
+            FROM jornadas_especiales je
+            JOIN empleados e ON je.empleado_id = e.id
+            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE je.fecha BETWEEN ? AND ?
+              AND je.origen = 'COBERTURA_TURNO'
+              AND je.estado != 'RECHAZADA'
+              AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA')
+            {filtro_area}
+        """
+        row_cob = await self.db.fetch_one(q_coberturas, tuple([fecha_inicio, fecha_fin] + params_area))
+        if row_cob and row_cob['count_coberturas']:
+            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
+
         # 1. Obtener horas extras aprobadas agrupadas por empleado
         query_he_emp = f"""
             SELECT he.empleado_id, 

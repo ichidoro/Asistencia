@@ -212,6 +212,23 @@ async def acta_resumen(
         resumen_row = await db.fetch_one(query_resumen, base_params)
         resumen = dict(resumen_row) if resumen_row else {}
 
+        # Consolidar coberturas de turno (+2) que operan en paralelo al turno base
+        q_coberturas = f"""
+            SELECT COUNT(je.id) as count_coberturas
+            FROM jornadas_especiales je
+            JOIN empleados e ON je.empleado_id = e.id
+            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
+            {joins_area_asis}
+            WHERE je.fecha BETWEEN ? AND ?
+              AND je.origen = 'COBERTURA_TURNO'
+              AND je.estado != 'RECHAZADA'
+              AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA')
+            {filtro_area}
+        """
+        row_cob = await db.fetch_one(q_coberturas, base_params)
+        if row_cob and row_cob['count_coberturas']:
+            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
+
         # ── 2. Listado de empleados del periodo ───────────────────────────────
         query_empleados = f"""
             SELECT DISTINCT

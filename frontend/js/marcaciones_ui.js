@@ -1202,7 +1202,8 @@ function calcularMetricasEmpleado(data) {
         if (a.estado === 'ATRASO') atrasosCount++;
         if (a.estado === 'INASISTENCIA' || (a.estado && a.estado.includes('FALTA'))) faltasCount++;
         if (a.estado && (a.estado.includes('SALIDA_ADELANTADA') || a.estado.includes('SAD'))) salidasAdelantadasCount++;
-        if (a.estado === 'JORNADA_ESPECIAL' || a.estado === 'EXTRA' || a.estado === 'FERIADO Y JORNADA EXTRA' || a.estado === 'DÍA LIBRE Y JORNADA EXTRA') jornadasEspecialesCount++;
+        const tieneJaMetrics = Boolean(a.jornada_adicional && a.jornada_adicional.estado !== 'RECHAZADA');
+        if (isEsp || tieneJaMetrics) jornadasEspecialesCount++;
         if (a.justificacion || a.nomenclatura) justificacionesCount++;
         if (a.tiene_permiso_hora || a.permiso_activo) permisosCount++;
         
@@ -4592,6 +4593,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 
         const trab = Math.round((di.horas_trabajadas||0)*60) + vlMin;
         const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
+        const tieneJa = Boolean(di.jornada_adicional && di.jornada_adicional.estado !== 'RECHAZADA');
         
         if (!esBolsa && !isEsp) {
             acumSemanal += trab;
@@ -4639,7 +4641,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
         }
         if (di.estado === 'INASISTENCIA') cnt_inas++;
-        if (isEsp)                         cnt_esp++;
+        if (isEsp || tieneJa)             cnt_esp++;
         if (di.hora_entrada_real && !isEsp && !['LIBRE','FERIADO','INASISTENCIA'].includes(di.estado)) cnt_efectivos++;
 
         if (!isEsp) {
