@@ -277,22 +277,22 @@ class CierreService:
                         if cond_tipo == 5:
                             pass
                         else:
-                            raw_total = raw_col + raw_per + raw_atr + raw_sad
                             base_deuda = float(di.get("minutos_deuda") or 0.0)
-                            if raw_total > 0:
-                                eff_deuda = min(base_deuda if base_deuda > 0 else raw_total, raw_total)
-                                total_deuda_fijos_min += eff_deuda
-                                if eff_deuda >= raw_total:
-                                    total_deuda_colacion_min += raw_col
-                                    total_deuda_permisos_min += raw_per
-                                    total_deuda_atrasos_min += raw_atr
-                                    total_deuda_salidas_min += raw_sad
-                                else:
-                                    factor = eff_deuda / raw_total
-                                    total_deuda_colacion_min += raw_col * factor
-                                    total_deuda_permisos_min += raw_per * factor
-                                    total_deuda_atrasos_min += raw_atr * factor
-                                    total_deuda_salidas_min += raw_sad * factor
+                            if base_deuda > 0:
+                                total_deuda_fijos_min += base_deuda
+                                raw_total = raw_col + raw_per + raw_atr + raw_sad
+                                if raw_total > 0:
+                                    if base_deuda >= raw_total:
+                                        total_deuda_colacion_min += raw_col
+                                        total_deuda_permisos_min += raw_per
+                                        total_deuda_atrasos_min += raw_atr
+                                        total_deuda_salidas_min += raw_sad
+                                    else:
+                                        factor = base_deuda / raw_total
+                                        total_deuda_colacion_min += raw_col * factor
+                                        total_deuda_permisos_min += raw_per
+                                        total_deuda_atrasos_min += raw_atr * factor
+                                        total_deuda_salidas_min += raw_sad * factor
 
             if es_bolsa:
                 if acum_bolsa > meta_min:

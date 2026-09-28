@@ -339,26 +339,28 @@ class ReportService:
                             day_atr = 0.0
                             day_sad = 0.0
                         else:
-                            raw_total = raw_col + raw_per + raw_atr + raw_sad
                             base_deuda = float(di.get("minutos_deuda") or 0.0)
-
-                            if raw_total > 0:
-                                eff_deuda = min(base_deuda if base_deuda > 0 else raw_total, raw_total)
-                                day_net_deuda = eff_deuda
-
-                                if eff_deuda >= raw_total:
-                                    day_col = raw_col
-                                    day_per = raw_per
-                                    day_atr = raw_atr
-                                    day_sad = raw_sad
-                                else:
-                                    factor = eff_deuda / raw_total
-                                    day_col = raw_col * factor
-                                    day_per = raw_per * factor
-                                    day_atr = raw_atr * factor
-                                    day_sad = raw_sad * factor
+                            if base_deuda > 0:
+                                day_net_deuda = base_deuda
+                                raw_total = raw_col + raw_per + raw_atr + raw_sad
+                                if raw_total > 0:
+                                    if base_deuda >= raw_total:
+                                        day_col = raw_col
+                                        day_per = raw_per
+                                        day_atr = raw_atr
+                                        day_sad = raw_sad
+                                    else:
+                                        factor = base_deuda / raw_total
+                                        day_col = raw_col * factor
+                                        day_per = raw_per * factor
+                                        day_atr = raw_atr * factor
+                                        day_sad = raw_sad * factor
                             else:
                                 day_net_deuda = 0.0
+                                day_col = 0.0
+                                day_per = 0.0
+                                day_atr = 0.0
+                                day_sad = 0.0
 
                         d_tot += day_net_deuda
                         min_col += day_col

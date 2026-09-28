@@ -3349,8 +3349,8 @@ class AsistenciaService:
             estado = item.get('estado')
             minutos = item.get('minutos_autorizados', 0)
             
-            # Blindaje: Si es RECHAZADO, forzar 0
-            if estado == 'RECHAZADO':
+            # Blindaje: Si es RECHAZADO o PENDIENTE, forzar 0
+            if estado in ('RECHAZADO', 'PENDIENTE'):
                 minutos = 0
                 
             if emp_id and fecha and estado:
