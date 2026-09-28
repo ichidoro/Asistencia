@@ -1131,8 +1131,11 @@ class QuantumMatrixEngine:
             minutos_col_real = mejor_par_col[2]
             res['minutos_colacion_real'] = int(round(minutos_col_real))
 
-            # Las demás pausas intermedias corresponden a Permisos / Salidas Intermedias
-            pausas_permisos = [p for p in pausas_intermedias if p != mejor_par_col]
+            # Las demás pausas intermedias corresponden a Permisos / Salidas Intermedias (si ocurrieron dentro del horario programado)
+            pausas_permisos = [
+                p for p in pausas_intermedias 
+                if p != mejor_par_col and (not dt_sal_teo or p[0] < dt_sal_teo) and (not dt_ent_teo or p[1] > dt_ent_teo)
+            ]
             if pausas_permisos:
                 minutos_permisos_detectados = sum(p[2] for p in pausas_permisos)
                 res['minutos_permisos_detectados'] = int(round(minutos_permisos_detectados))
@@ -1267,7 +1270,8 @@ class QuantumMatrixEngine:
                     res['horas_trabajadas'] = round(horas_teoricas, 4)
                     res['minutos_extra_bruto'] = 0.0
                     res['minutos_deuda'] = 0.0
-                    res['estado'] = 'OK'
+                    if res.get('estado') not in ('ATRASO', 'SALIDA_ADELANTADA'):
+                        res['estado'] = 'OK'
                     res['tiene_salida_adelantada'] = 0
                     res['minutos_salida_adelantada'] = 0.0
 
