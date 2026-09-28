@@ -2165,7 +2165,14 @@ class AsistenciaService:
                     )
                 )
 
-                last_matched_sem = None if is_rot_dinamica else (bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id) if bulk_ctx else None)
+                if bulk_ctx:
+                    last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id)
+                else:
+                    last_rec = await self.repository.db.fetch_one(
+                        "SELECT num_semana_ganadora FROM asistencias WHERE empleado_id = ? AND fecha < ? ORDER BY fecha DESC LIMIT 1",
+                        (empleado_id, fecha)
+                    )
+                    last_matched_sem = last_rec['num_semana_ganadora'] if last_rec else None
 
                 marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
 
@@ -2183,7 +2190,7 @@ class AsistenciaService:
                     rotacion_dinamica=is_rot_dinamica,
                 )
 
-                if bulk_ctx and not is_rot_dinamica:
+                if bulk_ctx:
                     bulk_ctx.setdefault('rotativo_last_sem_dict', {})[empleado_id] = semana_ganadora
 
                 config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)

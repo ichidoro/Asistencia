@@ -712,11 +712,12 @@ class QuantumShiftWeekMatcher:
         if last_matched_sem is not None:
             return last_matched_sem
 
-        if semana_inicio_cfg is not None and f_asig_ini:
+        if f_asig_ini:
+            sem_ini = int(semana_inicio_cfg or 1)
             monday_dt = dt - timedelta(days=dt.weekday())
             monday_ini = f_asig_ini - timedelta(days=f_asig_ini.weekday())
             semanas_diff = (monday_dt - monday_ini).days // 7
-            return ((int(semana_inicio_cfg) - 1 + semanas_diff) % total_sems) + 1
+            return ((sem_ini - 1 + semanas_diff) % total_sems) + 1
 
         return 1
 
@@ -1045,6 +1046,26 @@ class QuantumMatrixEngine:
                 hora_max_ciclos_str=hora_max_ciclos,
             )
 
+        # Si es turno nocturno, verificar si existe presencia física en la víspera (fecha)
+        # o en la madrugada temprana (< 05:00) del día siguiente.
+        # Si no hubo ninguna marcación nocturna, el turno nocturno de 'fecha' fue una ausencia (inasistencia).
+        # Por lo tanto, las marcaciones de la mañana del día siguiente pertenecen a la jornada diurna de ese día y no deben ser absorbidas.
+        has_night_presence = False
+        if es_nocturno:
+            for l in marcas_no_consumidas:
+                f_l = str(l.get('fecha_hora', ''))[:10]
+                if f_l == fecha:
+                    has_night_presence = True
+                    break
+                elif f_l > fecha:
+                    try:
+                        h_l = int(str(l.get('fecha_hora', ''))[11:13])
+                        if h_l < 5:
+                            has_night_presence = True
+                            break
+                    except Exception:
+                        pass
+
         marcas_disponibles = []
         for l in marcas_no_consumidas:
             fh_str = str(l.get('fecha_hora', ''))[:19]
@@ -1052,8 +1073,11 @@ class QuantumMatrixEngine:
                 dt_l = datetime.strptime(fh_str, "%Y-%m-%d %H:%M:%S")
                 if start_horizon <= dt_l <= end_horizon:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
-                    if not es_nocturno and dt_l.strftime("%Y-%m-%d") > fecha and tipo_m in {'entrada', 'entry', 'e', 'in', '1'}:
-                        continue
+                    if dt_l.strftime("%Y-%m-%d") > fecha:
+                        if (not es_nocturno or not has_night_presence) and tipo_m in {'entrada', 'entry', 'e', 'in', '1'}:
+                            continue
+                        if es_nocturno and not has_night_presence and dt_l.hour >= 5:
+                            continue
                     marcas_disponibles.append(l)
             except Exception:
                 pass
