@@ -1214,7 +1214,7 @@ class AsistenciaService:
                     if result.get('_jornada_especial'):
                         je_rec = result['_jornada_especial']
                         je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                        if je_prev and (je_prev.get('estado') in ('EXTRA', 'RECHAZADA') or '[VALIDADO]' in (je_prev.get('observaciones') or '') or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '')):
+                        if je_prev and (je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') or '[VALIDADO]' in (je_prev.get('observaciones') or '') or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '')):
                             je_rec['estado'] = je_prev['estado']
                             je_rec['observaciones'] = je_prev.get('observaciones') or ''
                             if je_prev.get('minutos_autorizados') is not None:
@@ -1225,8 +1225,9 @@ class AsistenciaService:
                         if je_prev:
                             has_val_je = bool(
                                 '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                                or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '')
                                 or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                                or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+                                or je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
                             )
                             if not has_val_je:
                                 je_to_delete.append((empleado_id, fecha_str))
@@ -2337,17 +2338,30 @@ class AsistenciaService:
         has_validated_je = bool(
             je_prev and (
                 '[VALIDADO]' in (je_prev.get('observaciones') or '')
+                or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '')
                 or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
+                or je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
             )
         )
 
         # ── FASE 2 (Fix B2): PRESERVACIÓN DE DECISIONES HUMANAS ───────────────
-        # Fuente primaria: horas_extras (solo sobretiempo ordinario)
+        # Caso Cobertura validada como Horas Extras:
+        is_cobertura_aprobada_he = bool(
+            (he_previo and he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO')
+            or (je_prev and je_prev.get('estado') == 'HORAS_EXTRAS')
+        )
+        if is_cobertura_aprobada_he and resultado:
+            min_cobertura = (he_previo.get('minutos_autorizados') if he_previo else None) or (je_prev.get('minutos_autorizados') if je_prev else None) or 0
+            if min_cobertura > 0:
+                resultado['minutos_extra_bruto'] = min_cobertura
+                resultado['_he_minutos_autorizados'] = min_cobertura
+                resultado['_he_estado'] = 'APROBADO'
+
+        # Fuente primaria: horas_extras (solo sobretiempo ordinario o cobertura aprobada)
         _pres_estado = None
         _pres_auth = 0
         if he_previo and he_previo['estado'] in ('APROBADO', 'RECHAZADO'):
-            if he_previo.get('origen') not in ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL'):
+            if he_previo.get('origen') not in ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL') or (he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO'):
                 _pres_estado = he_previo['estado']
                 _pres_auth = he_previo.get('minutos_autorizados') or 0
 
@@ -2365,7 +2379,7 @@ class AsistenciaService:
             else:
                 resultado['_he_estado'] = None
                 resultado['_he_minutos_autorizados'] = 0
-        else:
+        elif not is_cobertura_aprobada_he:
             if resultado:
                 resultado['_he_estado'] = None
                 resultado['_he_minutos_autorizados'] = 0
@@ -2376,7 +2390,7 @@ class AsistenciaService:
 
         if resultado and resultado.get('_jornada_especial'):
             je_data = resultado['_jornada_especial']
-            if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')):
+            if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')):
                 je_data['estado'] = je_prev['estado']
                 je_data['observaciones'] = je_prev.get('observaciones') or ''
                 if je_prev.get('minutos_autorizados') is not None:
@@ -2453,14 +2467,14 @@ class AsistenciaService:
                 # Si el día es hábil ordinario (ht_val > 0) y no es JE validada, limpiar propuesta huérfana
                 if save and je_prev and not has_validated_je:
                     await self.repository.db.execute(
-                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
+                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[VALIDADO_COMO_HE]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
                         (empleado_id, fecha)
                     )
         else:
             # Si el día no es jornada especial ni doble turno (+2), limpiar propuesta huérfana
             if save and je_prev and not has_validated_je:
                 await self.repository.db.execute(
-                    "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
+                    "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[VALIDADO_COMO_HE]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
                     (empleado_id, fecha)
                 )
 
@@ -2682,7 +2696,6 @@ class AsistenciaService:
             FROM asistencias a
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
-                AND (he.origen IS NULL OR he.origen NOT IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL'))
             LEFT JOIN turno_dias td ON td.turno_id = a.turno_asignado_id 
                 AND td.num_semana = a.num_semana_ganadora 
                 AND td.dia_semana = (CASE strftime('%w', a.fecha) WHEN '0' THEN 6 ELSE CAST(strftime('%w', a.fecha) AS INTEGER) - 1 END)

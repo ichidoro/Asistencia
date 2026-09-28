@@ -147,21 +147,26 @@ class HoraExtraRepository:
         y limpia registros huérfanos o correspondientes a jornadas especiales/libres/feriados.
         """
         # 1. Limpieza preventiva de huérfanos y días especiales en horas_extras
+        # EXCEPCIÓN: Preservar coberturas (+2) en días hábiles formalmente validadas como Horas Extras (estado='APROBADO', origen='COBERTURA_TURNO')
         cleanup_query = """
             DELETE FROM horas_extras
-            WHERE (empleado_id, fecha) IN (
-                SELECT a.empleado_id, a.fecha
-                FROM asistencias a
-                WHERE a.estado IN ('JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'INASISTENCIA')
-                   OR a.horas_teoricas = 0
-                   OR COALESCE(a.minutos_extra_bruto, 0) < 1.0
+            WHERE NOT (origen = 'COBERTURA_TURNO' AND estado = 'APROBADO')
+            AND (
+                (empleado_id, fecha) IN (
+                    SELECT a.empleado_id, a.fecha
+                    FROM asistencias a
+                    WHERE a.estado IN ('JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'INASISTENCIA')
+                       OR a.horas_teoricas = 0
+                       OR COALESCE(a.minutos_extra_bruto, 0) < 1.0
+                )
+                OR (empleado_id, fecha) IN (
+                    SELECT je.empleado_id, je.fecha
+                    FROM jornadas_especiales je
+                    WHERE je.estado != 'HORAS_EXTRAS'
+                )
+                OR origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')
+                OR origen LIKE '%JORNADA%'
             )
-            OR (empleado_id, fecha) IN (
-                SELECT je.empleado_id, je.fecha
-                FROM jornadas_especiales je
-            )
-            OR origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')
-            OR origen LIKE '%JORNADA%'
         """
         await self.db.execute(cleanup_query)
 
