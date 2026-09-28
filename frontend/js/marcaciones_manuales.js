@@ -86,7 +86,9 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     if (dualBox) {
         if (jaGeneral && asistGeneral && (asistGeneral.horas_teoricas > 0 || asistGeneral.hora_entrada_real)) {
             const horasJa = jaGeneral.minutos_trabajados ? (Math.round(jaGeneral.minutos_trabajados / 60.0 * 10) / 10) : 0;
-            const estadoJaBadge = jaGeneral.estado === 'EXTRA'
+            const estadoJaBadge = jaGeneral.estado === 'HORAS_EXTRAS'
+                ? '<span class="badge bg-warning-subtle text-dark border border-warning fw-bold">⏱️ Horas Extras (50%)</span>'
+                : jaGeneral.estado === 'EXTRA'
                 ? '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">EXTRA Aprobada</span>'
                 : jaGeneral.estado === 'RECHAZADA'
                 ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">Rechazada</span>'
@@ -227,6 +229,7 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     const btnRevertirHE = document.getElementById('btn-revertir-he');
     if (btnRevertirHE) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
+        const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
         // Solo mostrar si el estado es EXTRA o HORAS_EXTRAS y es producto de una validación de jornada especial.
         // O si tiene una jornada adicional aprobada (estado EXTRA o HORAS_EXTRAS)
         const tieneJornadaAdicionalAprobada = asistJ && asistJ.jornada_adicional && (asistJ.jornada_adicional.estado === 'EXTRA' || asistJ.jornada_adicional.estado === 'HORAS_EXTRAS');
