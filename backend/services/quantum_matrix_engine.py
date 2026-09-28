@@ -727,6 +727,11 @@ class QuantumMatrixEngine:
 
         tipo_prog = t_cfg.get('tipo_programacion', 'CICLO_INTELIGENTE')
         is_bolsa = (tipo_prog in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
+        is_pvl = bool(
+            t_cfg.get('permite_viajes_largos') == 1 or
+            str(t_cfg.get('permite_viajes_largos')) in ('1', 'true', 'True') or
+            t_cfg.get('permite_viajes_largos') is True
+        )
 
         tolerancia_alerta = int(t_cfg.get('tolerancia_retraso_alerta', 0) or 0)
         tolerancia_descuento = int(t_cfg.get('tolerancia_retraso_descuento', 0) or 0)
@@ -786,6 +791,18 @@ class QuantumMatrixEngine:
             h_man = viaje_largo_info.get('horas_manejo_efectivas', 0.0)
             h_desc = viaje_largo_info.get('horas_descanso', 0.0)
             h_tot = viaje_largo_info.get('horas_reconocidas_totales', 0.0)
+
+            # Distribución proporcional diaria de horas de viaje largo
+            f_ini_vl = viaje_largo_info.get('fecha_inicio', fecha)
+            f_fin_vl = viaje_largo_info.get('fecha_fin', fecha)
+            try:
+                d_ini = datetime.strptime(str(f_ini_vl)[:10], "%Y-%m-%d")
+                d_fin = datetime.strptime(str(f_fin_vl)[:10], "%Y-%m-%d")
+                cant_dias_vl = max(1, (d_fin - d_ini).days + 1)
+            except Exception:
+                cant_dias_vl = 1
+
+            h_dia_vl = round(float(h_tot or 0.0) / float(cant_dias_vl), 2)
             
             vl_entry_id = viaje_largo_info.get('log_entrada_id')
             vl_exit_id = viaje_largo_info.get('log_salida_id')
@@ -793,7 +810,7 @@ class QuantumMatrixEngine:
             if vl_entry_id: m_ids.append(vl_entry_id)
             if vl_exit_id: m_ids.append(vl_exit_id)
 
-            obs = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_man}h manejo, {h_desc}h descanso."
+            obs = f"🚛 VIAJE LARGO ({c_orig} -> {c_dest}): {h_dia_vl}h/día ({h_man}h manejo, {h_desc}h descanso total)."
             return {
                 'empleado_id': empleado_id,
                 'fecha': fecha,
@@ -804,7 +821,7 @@ class QuantumMatrixEngine:
                 'hora_inicio_permiso': None,
                 'hora_termino_permiso': None,
                 'horas_teoricas': 0.0,
-                'horas_trabajadas': h_tot,
+                'horas_trabajadas': h_dia_vl,
                 'minutos_colacion': 0,
                 'minutos_colacion_real': 0,
                 'minutos_colacion_auto': 0,
@@ -842,8 +859,89 @@ class QuantumMatrixEngine:
                 es_nocturno = True
 
         ext_horizon_bolsa = None
-        if is_bolsa:
-            # En Bolsa Flexible no hay horario rígido diario de entrada/salida (meta mensual 180h).
+        if is_bolsa and is_pvl:
+            # ─────────────────────────────────────────────────────────────────
+            # BOLSA FLEXIBLE VIAJES LARGOS (TURNO 25 - LOGÍSTICA TRANSPORTE):
+            # Paradigma de viaje continuo inter-día:
+            # 1. Domingo: Día de descanso. Las entradas nocturnas (>= 18:00)
+            #    NO se consumen en domingo, quedan reservadas para el Lunes.
+            # 2. Lunes a Sábado:
+            #    Si existe una entrada nocturna de la víspera (>= 18:00) no consumida,
+            #    el horizonte abre a las 18:00 del día anterior para absorberla
+            #    y emparejarla con la salida de hoy.
+            # 3. Las entradas nocturnas de hoy (>= 18:00) que no tienen salida antes de medianoche
+            #    quedan reservadas para la jornada de mañana.
+            # ─────────────────────────────────────────────────────────────────
+            dia_sem_num = dt_fecha.weekday()  # 0=Lun, 6=Dom
+            _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+            _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+
+            if dia_sem_num == 6:
+                # Domingo: solo observa marcas diurnas < 18:00
+                start_horizon = dt_fecha
+                end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)
+                es_nocturno = False
+            else:
+                f_ayer_str = (dt_fecha - timedelta(days=1)).strftime("%Y-%m-%d")
+                dt_ayer = dt_fecha - timedelta(days=1)
+                entrada_vispera = None
+
+                for l in marcas_no_consumidas:
+                    fh = str(l.get('fecha_hora', ''))
+                    if fh[:10] == f_ayer_str:
+                        try:
+                            h = int(fh[11:13])
+                            tipo = str(l.get('tipo', '')).strip().lower()
+                            if h >= 18 and tipo in _TIPOS_E:
+                                entrada_vispera = l
+                                break
+                        except Exception:
+                            pass
+
+                marcas_hoy_disp = [
+                    l for l in marcas_no_consumidas 
+                    if str(l.get('fecha_hora', ''))[:10] == fecha
+                ]
+
+                if entrada_vispera:
+                    start_horizon = dt_ayer.replace(hour=18, minute=0, second=0)
+                    es_nocturno = True
+                    salida_hoy = None
+                    for l in marcas_hoy_disp:
+                        tipo = str(l.get('tipo', '')).strip().lower()
+                        if tipo in _TIPOS_S:
+                            salida_hoy = l
+                            break
+
+                    if salida_hoy:
+                        dt_s = MultiBlockTensorSolver.parse_dt(salida_hoy)
+                        end_horizon = (dt_s + timedelta(seconds=1)) if dt_s else dt_fecha.replace(hour=18, minute=0, second=0)
+                    else:
+                        end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)
+                else:
+                    start_horizon = dt_fecha
+                    es_nocturno = False
+
+                    entradas_hoy = [l for l in marcas_hoy_disp if str(l.get('tipo', '')).strip().lower() in _TIPOS_E]
+                    salidas_hoy = [l for l in marcas_hoy_disp if str(l.get('tipo', '')).strip().lower() in _TIPOS_S]
+
+                    if entradas_hoy and salidas_hoy:
+                        dt_last_s = MultiBlockTensorSolver.parse_dt(salidas_hoy[-1])
+                        end_horizon = (dt_last_s + timedelta(seconds=1)) if dt_last_s else (dt_fecha + timedelta(days=1, seconds=-1))
+                    elif not salidas_hoy and entradas_hoy:
+                        primera_e = entradas_hoy[0]
+                        try:
+                            h_e = int(str(primera_e.get('fecha_hora', ''))[11:13])
+                            if h_e >= 18:
+                                end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)
+                            else:
+                                end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
+                        except Exception:
+                            end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
+                    else:
+                        end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
+        elif is_bolsa:
+            # En Bolsa Flexible Local no hay horario rígido diario de entrada/salida (meta mensual 180h).
             # El horizonte de observación inicia a las 00:00:00 del día natural (captura ingresos de madrugada).
             start_horizon = dt_fecha
 
