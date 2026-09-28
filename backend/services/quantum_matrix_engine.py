@@ -747,8 +747,8 @@ class QuantumMatrixEngine:
         hora_sal_teo = d_cfg.get('hora_salida')
         cruza_med = bool(d_cfg.get('cruza_medianoche', False))
 
-        # Si es feriado o libre, horas teóricas exigibles = 0
-        if is_holiday or es_libre_dia:
+        # Si es feriado, libre o bolsa flexible, horas teóricas exigibles = 0
+        if is_holiday or es_libre_dia or is_bolsa:
             horas_teoricas = 0.0
 
         # Parseo robusto de tiempos teóricos para delimitación de anclajes
@@ -841,30 +841,75 @@ class QuantumMatrixEngine:
             if p_out < p_in:
                 es_nocturno = True
 
-        hora_min_ciclos = None
-        hora_max_ciclos = None
-        if todos_ciclos_dia:
-            entradas_validas = [c.get('hora_entrada') for c in todos_ciclos_dia if c and c.get('hora_entrada') and not c.get('es_libre')]
-            if entradas_validas:
-                diurnas = [h for h in entradas_validas if QuantumPhaseTopology.time_to_phase(h) < 1200]
-                cand_in = diurnas if diurnas else entradas_validas
-                hora_min_ciclos = min(cand_in, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
-            salidas_validas = [c.get('hora_salida') for c in todos_ciclos_dia if c and c.get('hora_salida') and not c.get('es_libre')]
-            if salidas_validas:
-                hora_max_ciclos = max(salidas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
+        ext_horizon_bolsa = None
+        if is_bolsa:
+            # En Bolsa Flexible no hay horario rígido diario de entrada/salida (meta mensual 180h).
+            # El horizonte de observación inicia a las 00:00:00 del día natural (captura ingresos de madrugada).
+            start_horizon = dt_fecha
 
-        start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
-            fecha_str=fecha,
-            hora_ent_teo_str=hora_ent_teo,
-            hora_sal_teo_str=hora_sal_teo,
-            cruza_medianoche=es_nocturno,
-            anclaje_entrada_minutos=anclaje_entrada,
-            anclaje_salida_minutos=anclaje_salida,
-            ventana_en_curso_minutos=int(t_cfg.get('ventana_en_curso_minutos', 0) or 0),
-            banda_tolerancia_minutos=banda_minutos,
-            hora_min_ciclos_str=hora_min_ciclos,
-            hora_max_ciclos_str=hora_max_ciclos,
-        )
+            # Detección continua de viaje inter-día / turno nocturno para Bolsa Flexible:
+            # Si hoy tiene marcas no consumidas donde la última es Entrada (o número impar de marcas),
+            # y en el día siguiente existe una marca de Salida dentro de un rango razonable (<= 24h):
+            marcas_hoy = []
+            marcas_manana = []
+            f_manana_str = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d")
+            for l in marcas_no_consumidas:
+                f_l = str(l.get('fecha_hora', ''))[:10]
+                if f_l == fecha:
+                    marcas_hoy.append(l)
+                elif f_l == f_manana_str:
+                    marcas_manana.append(l)
+
+            if marcas_hoy:
+                ultima_hoy = marcas_hoy[-1]
+                tipo_u = str(ultima_hoy.get('tipo', '')).strip().lower()
+                dt_u = MultiBlockTensorSolver.parse_dt(ultima_hoy)
+
+                es_candidato_noche = False
+                if len(marcas_hoy) % 2 == 1:
+                    es_candidato_noche = True
+                elif tipo_u in {'entrada', 'entry', 'e', 'in', '1'}:
+                    es_candidato_noche = True
+
+                if es_candidato_noche and dt_u and marcas_manana:
+                    for m_cand in marcas_manana:
+                        dt_cand = MultiBlockTensorSolver.parse_dt(m_cand)
+                        if dt_cand and dt_cand > dt_u:
+                            delta_h = (dt_cand - dt_u).total_seconds() / 3600.0
+                            if delta_h <= 24.0:
+                                es_nocturno = True
+                                ext_horizon_bolsa = dt_cand + timedelta(seconds=1)
+                                break
+
+            if ext_horizon_bolsa:
+                end_horizon = ext_horizon_bolsa
+            else:
+                end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
+        else:
+            hora_min_ciclos = None
+            hora_max_ciclos = None
+            if todos_ciclos_dia:
+                entradas_validas = [c.get('hora_entrada') for c in todos_ciclos_dia if c and c.get('hora_entrada') and not c.get('es_libre')]
+                if entradas_validas:
+                    diurnas = [h for h in entradas_validas if QuantumPhaseTopology.time_to_phase(h) < 1200]
+                    cand_in = diurnas if diurnas else entradas_validas
+                    hora_min_ciclos = min(cand_in, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
+                salidas_validas = [c.get('hora_salida') for c in todos_ciclos_dia if c and c.get('hora_salida') and not c.get('es_libre')]
+                if salidas_validas:
+                    hora_max_ciclos = max(salidas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
+
+            start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
+                fecha_str=fecha,
+                hora_ent_teo_str=hora_ent_teo,
+                hora_sal_teo_str=hora_sal_teo,
+                cruza_medianoche=es_nocturno,
+                anclaje_entrada_minutos=anclaje_entrada,
+                anclaje_salida_minutos=anclaje_salida,
+                ventana_en_curso_minutos=int(t_cfg.get('ventana_en_curso_minutos', 0) or 0),
+                banda_tolerancia_minutos=banda_minutos,
+                hora_min_ciclos_str=hora_min_ciclos,
+                hora_max_ciclos_str=hora_max_ciclos,
+            )
 
         marcas_disponibles = []
         for l in marcas_no_consumidas:
@@ -988,12 +1033,17 @@ class QuantumMatrixEngine:
                 else:
                     return None
 
-            # Día hábil sin marcas (día pasado o hoy superada la hora límite sin actividad):
-            res['estado'] = 'INASISTENCIA'
+            # Día sin marcas (día pasado o hoy superada la hora límite sin actividad):
             if is_bolsa:
-                res['observaciones'] += 'Inasistencia detectada (Bolsa Flexible sin marcas). '
-            else:
-                res['observaciones'] += 'Inasistencia detectada (Día hábil sin marcas). '
+                res['estado'] = 'LIBRE'
+                res['observaciones'] += 'Día de descanso (Bolsa Flexible sin marcas programadas). '
+                res['horas_trabajadas'] = 0.0
+                res['horas_teoricas'] = 0.0
+                res['minutos_deuda'] = 0.0
+                return res
+
+            res['estado'] = 'INASISTENCIA'
+            res['observaciones'] += 'Inasistencia detectada (Día hábil sin marcas). '
             res['horas_trabajadas'] = 0.0
             res['minutos_deuda'] = 0.0  # [REGLA CANÓNICA]: Las inasistencias descuentan remuneración/día, jamás generan deuda horaria para compensar
             return res
@@ -1165,7 +1215,7 @@ class QuantumMatrixEngine:
         # ─────────────────────────────────────────────────────────────────────
         # 10. SEGREGACIÓN ESTRICTA DE JORNADA_ESPECIAL
         # ─────────────────────────────────────────────────────────────────────
-        if is_holiday or es_libre_dia:
+        if is_holiday or (es_libre_dia and not is_bolsa):
             res['estado'] = 'JORNADA_ESPECIAL'
             res['minutos_extra_bruto'] = 0.0  # REGLA DE ORO: 0 HE ordinarias
             res['minutos_deuda'] = 0.0

@@ -4592,7 +4592,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         }
 
         const trab = Math.round((di.horas_trabajadas||0)*60) + vlMin;
-        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
+        const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (!esBolsa && Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
         const tieneJa = Boolean(di.jornada_adicional && di.jornada_adicional.estado !== 'RECHAZADA');
         
         if (!esBolsa && !isEsp) {
@@ -4671,7 +4671,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             di.estado === 'EXTRA' ||
             di.estado === 'FERIADO Y JORNADA EXTRA' ||
             di.estado === 'DÍA LIBRE Y JORNADA EXTRA' ||
-            (Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0 && di.estado !== 'RECHAZADA')
+            (!esBolsa && Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0 && di.estado !== 'RECHAZADA')
         );
 
         if (di.estado === 'INASISTENCIA') cnt_inas++;
