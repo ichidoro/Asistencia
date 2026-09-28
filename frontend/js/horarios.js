@@ -91,8 +91,8 @@ async function saveTurno() {
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
-        anclaje_salida_minutos: parseInt(formData.get('anclaje_salida_minutos') || 0),
         permite_viajes_largos: ((formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
+        rotacion_dinamica_diaria: ((formData.get('tipo_programacion') === 'CICLO_INTELIGENTE') && ((document.getElementById('chkRotacionDinamicaDiaria')?.checked) || (document.getElementById('chk-rotacion-dinamica-diaria')?.checked))) ? 1 : 0,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
         activo: formData.get('activo') !== 'false',
         dias: []
@@ -263,7 +263,29 @@ function ensureViajesLargosSwitch() {
                 </div>
             </div>
         `;
-        divLineaFicticia.appendChild(divCol);
+    }
+}
+
+function ensureRotacionDinamicaSwitch() {
+    const divMetaJornada = document.getElementById('div-meta-jornada');
+    if (divMetaJornada && !document.getElementById('divRotacionDinamica')) {
+        const divCol = document.createElement('div');
+        divCol.className = 'col-12 mt-2';
+        divCol.id = 'divRotacionDinamica';
+        divCol.innerHTML = `
+            <div class="card border-warning bg-warning bg-opacity-10 p-2">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="chkRotacionDinamicaDiaria" name="rotacion_dinamica_diaria">
+                    <label class="form-check-label fw-bold text-dark" for="chkRotacionDinamicaDiaria">
+                        ⚙️ Rotación Dinámica Diaria (Evaluar ciclo por presencia del día)
+                    </label>
+                    <div class="form-text small text-muted">
+                        Activa la evaluación cuántica día a día para turnos operativos abiertos (ej. Mantención) donde los trabajadores rotan libremente entre opciones según su asistencia real, sin forzar semanas fijas ni turnos de noche vacíos.
+                    </div>
+                </div>
+            </div>
+        `;
+        divMetaJornada.parentNode.insertBefore(divCol, divMetaJornada.nextSibling);
     }
 }
 
@@ -272,6 +294,7 @@ function ensureViajesLargosSwitch() {
 // ==========================================
 async function openModalHorario(id = null) {
     ensureViajesLargosSwitch();
+    ensureRotacionDinamicaSwitch();
     currentTurnoId = id;
     const modalTitle = document.getElementById('modalTurnoLabel');
     const form = document.getElementById('formTurno');
@@ -304,6 +327,9 @@ async function openModalHorario(id = null) {
 
             const chkViajes = document.getElementById('chkPermiteViajesLargos') || document.getElementById('chk-permite-viajes-largos');
             if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
+
+            const chkRotDin = document.getElementById('chkRotacionDinamicaDiaria') || document.getElementById('chk-rotacion-dinamica-diaria');
+            if (chkRotDin) chkRotDin.checked = Boolean(turno.rotacion_dinamica_diaria === 1 || turno.rotacion_dinamica_diaria === true);
 
             const chkColacion = document.getElementById('chkColacion');
             chkColacion.checked = turno.descuento_colacion_auto;
@@ -1049,7 +1075,7 @@ function renderTurnosTable() {
     tbody.innerHTML = turnosList.map(t => {
         const tipoBadge = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
             ? (t.permite_viajes_largos ? 'Bolsa Flexible (Viajes Largos)' : 'Bolsa Flexible')
-            : 'Ciclo Inteligente';
+            : (t.rotacion_dinamica_diaria ? 'Ciclo Inteligente (Dinámico)' : 'Ciclo Inteligente');
 
         const estadoBadge = t.activo !== false
             ? '<span class="badge bg-success">Activo</span>'
@@ -1428,6 +1454,15 @@ function handleTipoProgramacionChange() {
     if (isFlexible) {
         ensureViajesLargosSwitch();
     }
+    if (isRotativo) {
+        ensureRotacionDinamicaSwitch();
+    }
+
+    const divPermiteViajesLargos = document.getElementById('divPermiteViajesLargos');
+    if (divPermiteViajesLargos) divPermiteViajesLargos.style.display = isFlexible ? 'block' : 'none';
+
+    const divRotacionDinamica = document.getElementById('divRotacionDinamica');
+    if (divRotacionDinamica) divRotacionDinamica.style.display = isRotativo ? 'block' : 'none';
 
     // Visibilidad del bloque de Hora Ficticia: sólo visible en modo Bolsa Flexible
     const divLineaFicticia = document.getElementById('divLineaFicticia');

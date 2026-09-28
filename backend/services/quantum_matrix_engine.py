@@ -121,25 +121,28 @@ class QuantumPhaseTopology:
         is_overnight = cls.is_evening_or_night_shift(hora_ent_efectiva or hora_ent_teo_str, hora_sal_efectiva, cruza_medianoche)
 
         if is_overnight:
-            # Turno nocturno: la observación de entrada inicia en la tarde del día D (para no atrapar marcas de mañana del día previo)
-            # y se extiende holgadamente hasta el mediodía de D+1 para capturar salidas de madrugada.
+            # Turno nocturno: la observación de entrada inicia antes de la entrada programada
+            # y se extiende hasta la salida teórica del día siguiente más su margen de salida.
             margen_in = anclaje_entrada_minutos + banda_tolerancia_minutos
+            margen_out = anclaje_salida_minutos + banda_tolerancia_minutos
             if hora_ent_efectiva:
                 p_in = cls.time_to_phase(hora_ent_efectiva)
-                start_dt = dt_base + timedelta(minutes=max(0, p_in - margen_in))
+                start_dt = dt_base + timedelta(minutes=max(0.0, p_in - margen_in))
             else:
-                start_dt = dt_base + timedelta(hours=18)
-            end_dt = dt_base + timedelta(days=1, hours=12)
+                start_dt = dt_base
+            if hora_sal_efectiva:
+                p_out = cls.time_to_phase(hora_sal_efectiva)
+                end_dt = dt_base + timedelta(days=1, minutes=p_out + margen_out)
+            else:
+                end_dt = dt_base + timedelta(days=1, seconds=-1)
         else:
             # Turno diurno regular o día libre: el horizonte de observación cubre el día natural completo
-            # (00:00:00 a 23:59:59) para erradicar recortes deterministas en ambos extremos.
-            # Si el turno termina tarde en la tarde/noche (>= 21:00 / phase 1260) o su margen de salida
-            # desborda la medianoche, se extiende dinámicamente según la tolerancia paramétrica de ajustes.
+            # (00:00:00 a 23:59:59). Si su margen de salida desborda la medianoche, se extiende dinámicamente.
             start_dt = dt_base
             if hora_sal_efectiva:
                 p_sal = cls.time_to_phase(hora_sal_efectiva)
                 margen_out = anclaje_salida_minutos + banda_tolerancia_minutos
-                if p_sal >= 1260 or (p_sal + margen_out) >= 1440:
+                if (p_sal + margen_out) >= 1440.0:
                     end_dt = dt_base + timedelta(minutes=p_sal + margen_out)
                 else:
                     end_dt = dt_base + timedelta(days=1, seconds=-1)
@@ -553,17 +556,17 @@ class QuantumShiftWeekMatcher:
         semana_inicio_cfg: Optional[int] = None,
         f_asig_ini: Optional[datetime] = None,
         last_matched_sem: Optional[int] = None,
+        rotacion_dinamica: bool = False,
     ) -> int:
         if total_sems <= 1:
             return 1
 
-        # Marcas candidatas para el día (incluye madrugada de mañana sólo si el turno contempla jornada nocturna y la marca es una salida temprana de madrugada < 10:00)
+        # Marcas candidatas para el día
         next_day_str = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
         tiene_nocturno = any(
             cfg.get('cruza_medianoche') or 
             (cfg.get('hora_entrada') and cfg.get('hora_salida') and (
-                QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')) or
-                QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) >= 1260
+                QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada'))
             ))
             for s_dict in turnos_dict.values()
             for cfg in [s_dict.get(dia_semana, {})]
@@ -571,35 +574,54 @@ class QuantumShiftWeekMatcher:
         )
 
         _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+        _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
         marcas_hoy = [l for l in logs if l.get('fecha_hora', '')[:10] == fecha_str]
         marcas_madrugada_next = []
-        # Solo consideramos marcas de madrugada de D+1 si el día D tuvo actividad nocturna (>= 18:00)
-        # o si la marca es de madrugada profunda (< 06:00) sin ser entrada matutina
-        hay_marca_noche_hoy = any(
-            QuantumPhaseTopology.time_to_phase(str(l.get('fecha_hora', ''))[11:16]) >= 1080
-            for l in marcas_hoy
-        )
+
         if tiene_nocturno:
-            for l in logs:
-                fh = str(l.get('fecha_hora', ''))
-                if fh[:10] == next_day_str:
-                    try:
-                        hora_m = int(fh[11:13])
-                        if hay_marca_noche_hoy and hora_m < 12:
-                            # Hubo entrada en la noche de D: la marca de madrugada de D+1 es su salida
+            entradas_nocturnas_teo = [
+                QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada'))
+                for s_dict in turnos_dict.values()
+                for cfg in [s_dict.get(dia_semana, {})]
+                if cfg and not cfg.get('es_libre') and (
+                    cfg.get('cruza_medianoche') or
+                    (cfg.get('hora_entrada') and cfg.get('hora_salida') and
+                     QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
+                )
+            ]
+            hay_entrada_noche_hoy = False
+            for l in marcas_hoy:
+                tipo_l = str(l.get('tipo', '')).strip().lower()
+                if tipo_l in _TIPOS_E:
+                    p_l = QuantumPhaseTopology.time_to_phase(str(l.get('fecha_hora', ''))[11:16])
+                    if any(abs(QuantumPhaseTopology.circular_distance(p_teo, p_l)) <= 180.0 for p_teo in entradas_nocturnas_teo):
+                        hay_entrada_noche_hoy = True
+                        break
+
+            if hay_entrada_noche_hoy:
+                salidas_nocturnas_teo = [
+                    QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida'))
+                    for s_dict in turnos_dict.values()
+                    for cfg in [s_dict.get(dia_semana, {})]
+                    if cfg and not cfg.get('es_libre') and cfg.get('hora_salida')
+                ]
+                max_sal_teo = max(salidas_nocturnas_teo) if salidas_nocturnas_teo else 720.0
+                for l in logs:
+                    fh = str(l.get('fecha_hora', ''))
+                    if fh[:10] == next_day_str:
+                        p_l = QuantumPhaseTopology.time_to_phase(fh[11:16])
+                        if p_l <= (max_sal_teo + 120.0):
                             marcas_madrugada_next.append(l)
-                        elif hora_m < 6:
-                            tipo_m = str(l.get('tipo', '')).strip().lower()
-                            if tipo_m not in _TIPOS_E:
-                                marcas_madrugada_next.append(l)
-                    except Exception:
-                        pass
 
         marcas_cand = marcas_hoy + marcas_madrugada_next
 
         if marcas_cand:
             min_phase_dist = float('inf')
             winner_sem = 1
+
+            # Buscar primer y último evento físico en el horizonte
+            first_m = marcas_cand[0] if marcas_cand else None
+            last_m = marcas_cand[-1] if len(marcas_cand) > 1 else None
 
             for sem_idx in range(1, total_sems + 1):
                 cfg_sem = turnos_dict.get(sem_idx, {}).get(dia_semana, {})
@@ -608,49 +630,49 @@ class QuantumShiftWeekMatcher:
 
                 h_ent_str = cfg_sem.get('hora_entrada')
                 h_sal_str = cfg_sem.get('hora_salida')
-
                 if not h_ent_str:
                     continue
 
                 p_ent_teo = QuantumPhaseTopology.time_to_phase(h_ent_str)
                 p_sal_teo = QuantumPhaseTopology.time_to_phase(h_sal_str) if h_sal_str else None
 
-                dist_tot = 0.0
-                eval_count = 0
-
-                _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
-                _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
-
-                # Buscar primera entrada
-                ent_m = next((m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_E), None)
-                if ent_m:
-                    dt_m = MultiBlockTensorSolver.parse_dt(ent_m)
+                d_in = None
+                if first_m:
+                    dt_m = MultiBlockTensorSolver.parse_dt(first_m)
                     if dt_m:
                         p_m = QuantumPhaseTopology.time_to_phase(dt_m)
                         d_in = abs(QuantumPhaseTopology.circular_distance(p_ent_teo, p_m))
-                        dist_tot += d_in
-                        eval_count += 1
 
-                # Buscar última salida
-                sal_m = next((m for m in reversed(marcas_cand) if str(m.get('tipo', '')).strip().lower() in _TIPOS_S), None)
-                if sal_m and p_sal_teo is not None:
-                    dt_s = MultiBlockTensorSolver.parse_dt(sal_m)
+                d_out = None
+                if last_m and p_sal_teo is not None:
+                    dt_s = MultiBlockTensorSolver.parse_dt(last_m)
                     if dt_s:
                         p_s = QuantumPhaseTopology.time_to_phase(dt_s)
                         d_out = abs(QuantumPhaseTopology.circular_distance(p_sal_teo, p_s))
-                        dist_tot += d_out
-                        eval_count += 1
 
-                if eval_count > 0:
-                    avg_dist = dist_tot / eval_count
-                    if avg_dist < min_phase_dist:
-                        min_phase_dist = avg_dist
-                        winner_sem = sem_idx
+                if d_in is not None and d_out is not None:
+                    weighted_dist = (d_in * 2.0 + d_out * 1.0) / 3.0
+                elif d_in is not None:
+                    weighted_dist = d_in
+                elif d_out is not None:
+                    weighted_dist = d_out
+                else:
+                    weighted_dist = float('inf')
+
+                if weighted_dist < min_phase_dist:
+                    min_phase_dist = weighted_dist
+                    winner_sem = sem_idx
 
             if min_phase_dist < float('inf'):
                 return winner_sem
 
         # Si no hay marcas o no hubo match:
+        if rotacion_dinamica:
+            # En rotación dinámica: buscar si alguna opción tiene descanso (es_libre = 1) en este día de la semana
+            libres = [s for s in range(1, total_sems + 1) if turnos_dict.get(s, {}).get(dia_semana, {}).get('es_libre')]
+            if libres:
+                return libres[0]
+
         if last_matched_sem is not None:
             return last_matched_sem
 

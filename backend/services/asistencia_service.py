@@ -237,7 +237,7 @@ class AsistenciaService:
                 'redondeo_minutos', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
-                'permite_viajes_largos',
+                'permite_viajes_largos', 'rotacion_dinamica_diaria',
             ]
 
             # Construir dict {turno_id: {campo: valor}} desde los datos de asig_rows
@@ -849,6 +849,7 @@ class AsistenciaService:
                 'redondeo_minutos', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre', 'permite_viajes_largos',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
+                'rotacion_dinamica_diaria',
             ]
             for td in td_rows:
                 tid = td['turno_id']
@@ -2054,7 +2055,16 @@ class AsistenciaService:
             else:
                 semana_inicio_cfg = asignacion.get('semana_inicio')
                 f_asig_ini = self._parse_date(asignacion.get('fecha_inicio'))
-                last_matched_sem = bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id) if bulk_ctx else None
+                
+                is_rot_dinamica = bool(
+                    asignacion and (
+                        asignacion.get('rotacion_dinamica_diaria') == 1 or
+                        str(asignacion.get('rotacion_dinamica_diaria')) in ('1', 'true', 'True') or
+                        asignacion.get('rotacion_dinamica_diaria') is True
+                    )
+                )
+
+                last_matched_sem = None if is_rot_dinamica else (bulk_ctx.get('rotativo_last_sem_dict', {}).get(empleado_id) if bulk_ctx else None)
 
                 marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
 
@@ -2069,9 +2079,10 @@ class AsistenciaService:
                     semana_inicio_cfg=semana_inicio_cfg,
                     f_asig_ini=f_asig_ini,
                     last_matched_sem=last_matched_sem,
+                    rotacion_dinamica=is_rot_dinamica,
                 )
 
-                if bulk_ctx:
+                if bulk_ctx and not is_rot_dinamica:
                     bulk_ctx.setdefault('rotativo_last_sem_dict', {})[empleado_id] = semana_ganadora
 
                 config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)
