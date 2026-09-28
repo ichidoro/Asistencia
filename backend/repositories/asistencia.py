@@ -3,6 +3,7 @@ Repository - Asistencia
 Capa de acceso a datos para Marcaciones y Procesamiento de Asistencia
 """
 
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
 from loguru import logger
@@ -292,7 +293,7 @@ class AsistenciaRepository:
                 d.get('tiene_salida_adelantada', 0),
                 d.get('tiene_permiso', 0),
                 d.get('num_semana_ganadora', 1),
-                d.get('marcas_consumidas_ids', '[]'),
+                json.dumps(list(d['marcas_consumidas_ids'])) if isinstance(d.get('marcas_consumidas_ids'), (list, set)) else str(d.get('marcas_consumidas_ids') or '[]'),
                 d.get('deuda_condonada', 0),
             )
             params_list.append(params)

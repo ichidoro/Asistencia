@@ -302,6 +302,42 @@ class MultiBlockTensorSolver:
                 return None
 
     @classmethod
+    def collapse_consecutive_same_type(cls, logs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplica marcaciones consecutivas del mismo tipo dentro de un bloque continuo:
+        - Para entradas consecutivas (E, E...): preserva la primera (inicio de jornada).
+        - Para salidas consecutivas (S, S...): preserva la última (fin de jornada).
+        """
+        if not logs or len(logs) <= 1:
+            return logs
+
+        _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+        _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+
+        collapsed: List[Dict[str, Any]] = []
+        i = 0
+        while i < len(logs):
+            curr = logs[i]
+            t_curr = str(curr.get('tipo', '')).strip().lower()
+            is_e = t_curr in _TIPOS_E
+            is_s = t_curr in _TIPOS_S
+
+            if is_e:
+                collapsed.append(curr)
+                while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_E:
+                    i += 1
+            elif is_s:
+                last_s = curr
+                while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_S:
+                    i += 1
+                    last_s = logs[i]
+                collapsed.append(last_s)
+            else:
+                collapsed.append(curr)
+            i += 1
+        return collapsed
+
+    @classmethod
     def segment_blocks(
         cls,
         logs: List[Dict[str, Any]],
@@ -365,8 +401,8 @@ class MultiBlockTensorSolver:
         if not bloques:
             return result
 
-        # El primer bloque es el Bloque Principal ordinario
-        result['bloque_principal'] = bloques[0]
+        # El primer bloque es el Bloque Principal ordinario (con deduplicación de tipos repetidos)
+        result['bloque_principal'] = cls.collapse_consecutive_same_type(bloques[0])
         for l in bloques[0]:
             if l.get('id'):
                 result['marcas_consumidas_ids'].append(l['id'])
@@ -1132,17 +1168,10 @@ class QuantumMatrixEngine:
                     return None
 
             # Día sin marcas (día pasado o hoy superada la hora límite sin actividad):
-            if is_bolsa:
-                res['estado'] = 'LIBRE'
-                res['observaciones'] += 'Día de descanso (Bolsa Flexible sin marcas programadas). '
-                res['horas_trabajadas'] = 0.0
-                res['horas_teoricas'] = 0.0
-                res['minutos_deuda'] = 0.0
-                return res
-
             res['estado'] = 'INASISTENCIA'
             res['observaciones'] += 'Inasistencia detectada (Día hábil sin marcas). '
             res['horas_trabajadas'] = 0.0
+            res['horas_teoricas'] = 0.0 if is_bolsa else horas_teoricas
             res['minutos_deuda'] = 0.0  # [REGLA CANÓNICA]: Las inasistencias descuentan remuneración/día, jamás generan deuda horaria para compensar
             return res
 
@@ -1158,11 +1187,16 @@ class QuantumMatrixEngine:
 
         # 6. Caso 1 Marca Aislada (Anomalía o En Curso)
         if n_marks == 1:
+            log_item = bloque_p[0]
             m_dt = dt_list[0]
-            m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
+            t_m = str(log_item.get('tipo', '')).strip().lower()
+            _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+            _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
+            is_tipo_s = t_m in _TIPOS_S
+            is_tipo_e = t_m in _TIPOS_E
 
             # Evaluar si la jornada sigue en curso hoy
-            if fecha == today_str:
+            if fecha == today_str and is_tipo_e:
                 ventana_min = int(t_cfg.get('ventana_en_curso_minutos', 180) or 180)
                 sigue_en_curso = True
                 if hora_sal_teo:
@@ -1178,7 +1212,20 @@ class QuantumMatrixEngine:
                     res['observaciones'] += 'Jornada en curso (falta salida).'
                     return res
 
-            if hora_ent_teo and hora_sal_teo:
+            if is_tipo_s:
+                res['hora_entrada_real'] = None
+                res['hora_salida_real'] = m_dt.strftime("%H:%M:%S")
+                res['estado'] = 'ANOMALIA'
+                res['observaciones'] += 'Solo una marcación de Salida registrada (falta entrada). '
+                return res
+            elif is_tipo_e:
+                res['hora_entrada_real'] = m_dt.strftime("%H:%M:%S")
+                res['hora_salida_real'] = None
+                res['estado'] = 'ANOMALIA'
+                res['observaciones'] += 'Solo una marcación de Entrada registrada (falta salida). '
+                return res
+            elif hora_ent_teo and hora_sal_teo:
+                m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
                 p_ent = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
                 p_sal = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
                 d_ent = abs(QuantumPhaseTopology.circular_distance(p_ent, m_phase))
@@ -1200,34 +1247,53 @@ class QuantumMatrixEngine:
         # ─────────────────────────────────────────────────────────────────────
         # 7. RESOLUCIÓN MULTI-MARCA (2, 4, 6 o más marcas)
         # ─────────────────────────────────────────────────────────────────────
-        r_ent_dt = dt_list[0]
-        r_sal_dt = dt_list[-1]
+        _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
+        _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
 
-        res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
-        res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
-
-        # Partición en pares cronológicos de presencia activa: (E1, S1), (E2, S2), ...
-        # Y pausas intermedias: (S1, E2), (S2, E3), ...
         pares_trabajo: List[Tuple[datetime, datetime]] = []
         pausas_intermedias: List[Tuple[datetime, datetime, float]] = []
 
-        if n_marks % 2 == 0:
-            for i in range(0, n_marks, 2):
-                pares_trabajo.append((dt_list[i], dt_list[i + 1]))
-            for i in range(1, n_marks - 1, 2):
-                s_int = dt_list[i]
-                e_int = dt_list[i + 1]
+        # Partición respetando la alternancia natural (Entrada -> Salida)
+        items_emparejar = []
+        for l in bloque_p:
+            dt = MultiBlockTensorSolver.parse_dt(l)
+            if dt:
+                t = str(l.get('tipo', '')).strip().lower()
+                items_emparejar.append((dt, 'E' if t in _TIPOS_E else ('S' if t in _TIPOS_S else 'U')))
+
+        if items_emparejar and items_emparejar[0][1] == 'S':
+            res['observaciones'] += f"Salida huérfana inicial a las {items_emparejar[0][0].strftime('%H:%M:%S')}. "
+            items_emparejar = items_emparejar[1:]
+
+        idx_e = 0
+        while idx_e < len(items_emparejar):
+            if items_emparejar[idx_e][1] == 'E':
+                if idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] == 'S':
+                    pares_trabajo.append((items_emparejar[idx_e][0], items_emparejar[idx_e + 1][0]))
+                    idx_e += 2
+                else:
+                    res['observaciones'] += f"Entrada final sin salida a las {items_emparejar[idx_e][0].strftime('%H:%M:%S')}. "
+                    idx_e += 1
+            else:
+                idx_e += 1
+
+        if pares_trabajo:
+            r_ent_dt = pares_trabajo[0][0]
+            r_sal_dt = pares_trabajo[-1][1]
+            res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
+            res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
+
+            for k in range(len(pares_trabajo) - 1):
+                s_int = pares_trabajo[k][1]
+                e_int = pares_trabajo[k + 1][0]
                 dur_min = max(0.0, (e_int - s_int).total_seconds() / 60.0)
                 pausas_intermedias.append((s_int, e_int, dur_min))
         else:
-            for i in range(0, n_marks - 1, 2):
-                pares_trabajo.append((dt_list[i], dt_list[i + 1]))
-            for i in range(1, n_marks - 2, 2):
-                s_int = dt_list[i]
-                e_int = dt_list[i + 1]
-                dur_min = max(0.0, (e_int - s_int).total_seconds() / 60.0)
-                pausas_intermedias.append((s_int, e_int, dur_min))
-            res['observaciones'] += 'Marcaciones con número impar de registros. '
+            r_ent_dt = dt_list[0]
+            r_sal_dt = dt_list[-1]
+            res['hora_entrada_real'] = r_ent_dt.strftime("%H:%M:%S")
+            res['hora_salida_real'] = r_sal_dt.strftime("%H:%M:%S")
+            pares_trabajo.append((r_ent_dt, r_sal_dt))
 
         # Aplicación de anclajes paramétricos de inicio y fin de turno
         if pares_trabajo and dt_ent_teo and dt_sal_teo and horas_teoricas > 0 and not is_holiday and not es_libre_dia:
