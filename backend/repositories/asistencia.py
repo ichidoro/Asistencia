@@ -222,7 +222,8 @@ class AsistenciaRepository:
                 minutos_colacion_real=excluded.minutos_colacion_real,
                 horas_trabajadas=excluded.horas_trabajadas,
                 minutos_deuda=CASE 
-                    WHEN asistencias.deuda_condonada IN (3, 5) THEN 0
+                    WHEN asistencias.deuda_condonada = 5 THEN 0
+                    WHEN asistencias.deuda_condonada = 3 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_atraso - excluded.minutos_salida_adelantada)
                     WHEN asistencias.deuda_condonada = 2 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_atraso)
                     WHEN asistencias.deuda_condonada = 1 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_salida_adelantada)
                     ELSE excluded.minutos_deuda 

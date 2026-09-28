@@ -196,43 +196,61 @@ class ReportService:
                     di["_acumuladoSemanalSnap"] = acum_semanal
                     
                     if not is_esp and not es_bolsa:
-                        tiene_condonacion = (di.get("deuda_condonada") or 0) > 0
-                        net_deuda = 0 if tiene_condonacion else (di.get("minutos_deuda") or 0)
-                        
-                        raw_col = di.get("minutos_exceso_colacion") or 0
-                        raw_per = di.get("minutos_permiso_personal_deuda") or 0
-                        raw_atr = 0 if tiene_condonacion else (di.get("minutos_atraso") or 0)
-                        raw_sad = 0 if tiene_condonacion else (di.get("minutos_salida_adelantada") or 0)
-                        
-                        raw_total = raw_col + raw_per + raw_atr + raw_sad
-                        
-                        day_col = 0
-                        day_per = 0
-                        day_atr = 0
-                        day_sad = 0
-                        
-                        if net_deuda > 0 and raw_total > 0:
-                            if net_deuda >= raw_total:
-                                day_col = raw_col
-                                day_per = raw_per
-                                day_atr = raw_atr
-                                day_sad = raw_sad
+                        cond_tipo = int(di.get("deuda_condonada") or 0)
+
+                        raw_col = float(di.get("minutos_exceso_colacion") or 0.0)
+                        raw_per = float(di.get("minutos_permiso_personal_deuda") or 0.0)
+
+                        condona_atr = cond_tipo in (2, 3, 5)
+                        raw_atr = 0.0 if condona_atr else float(di.get("minutos_atraso") or 0.0)
+
+                        condona_sad = cond_tipo in (1, 3, 5)
+                        raw_sad = 0.0 if condona_sad else float(di.get("minutos_salida_adelantada") or 0.0)
+
+                        day_net_deuda = 0.0
+                        day_col = 0.0
+                        day_per = 0.0
+                        day_atr = 0.0
+                        day_sad = 0.0
+
+                        if cond_tipo == 5:
+                            # Cierre de Faena / Turno completo condonado
+                            day_net_deuda = 0.0
+                            day_col = 0.0
+                            day_per = 0.0
+                            day_atr = 0.0
+                            day_sad = 0.0
+                        else:
+                            raw_total = raw_col + raw_per + raw_atr + raw_sad
+                            base_deuda = float(di.get("minutos_deuda") or 0.0)
+
+                            if raw_total > 0:
+                                eff_deuda = min(base_deuda if base_deuda > 0 else raw_total, raw_total)
+                                day_net_deuda = eff_deuda
+
+                                if eff_deuda >= raw_total:
+                                    day_col = raw_col
+                                    day_per = raw_per
+                                    day_atr = raw_atr
+                                    day_sad = raw_sad
+                                else:
+                                    factor = eff_deuda / raw_total
+                                    day_col = raw_col * factor
+                                    day_per = raw_per * factor
+                                    day_atr = raw_atr * factor
+                                    day_sad = raw_sad * factor
                             else:
-                                factor = net_deuda / raw_total
-                                day_col = raw_col * factor
-                                day_per = raw_per * factor
-                                day_atr = raw_atr * factor
-                                day_sad = raw_sad * factor
-                                
-                        d_tot += net_deuda
+                                day_net_deuda = 0.0
+
+                        d_tot += day_net_deuda
                         min_col += day_col
                         min_per += day_per
                         min_atr += day_atr
                         min_sad += day_sad
-                        
-                        if (di.get("minutos_atraso") or 0) > 0 and not tiene_condonacion:
+
+                        if (di.get("minutos_atraso") or 0) > 0 and not condona_atr:
                             cnt_atr += 1
-                        if (di.get("minutos_salida_adelantada") or 0) > 0 and not tiene_condonacion:
+                        if (di.get("minutos_salida_adelantada") or 0) > 0 and not condona_sad:
                             cnt_sad += 1
                         if di.get("tiene_permiso_hora") or di.get("permiso_activo"):
                             cnt_per += 1

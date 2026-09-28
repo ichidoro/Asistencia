@@ -205,11 +205,17 @@ class CierreService:
         # 2. Obtener minutos de deuda total y componentes acumulados por empleado
         query_deuda_emp = f"""
             SELECT a.empleado_id, 
-                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN 0 ELSE a.minutos_deuda END) AS deuda_minutos,
-                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN 0 ELSE a.minutos_atraso END) AS minutos_atraso,
-                   SUM(a.minutos_exceso_colacion) AS minutos_exceso_colacion,
-                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) > 0 THEN 0 ELSE a.minutos_salida_adelantada END) AS minutos_salida_adelantada,
-                   SUM(a.minutos_permiso_personal_deuda) AS minutos_permiso_personal_deuda
+                   SUM(CASE 
+                       WHEN COALESCE(a.deuda_condonada, 0) = 5 THEN 0
+                       WHEN COALESCE(a.deuda_condonada, 0) = 3 THEN COALESCE(a.minutos_exceso_colacion, 0) + COALESCE(a.minutos_permiso_personal_deuda, 0)
+                       WHEN COALESCE(a.deuda_condonada, 0) = 2 THEN MAX(0, COALESCE(a.minutos_deuda, 0) - COALESCE(a.minutos_atraso, 0))
+                       WHEN COALESCE(a.deuda_condonada, 0) = 1 THEN MAX(0, COALESCE(a.minutos_deuda, 0) - COALESCE(a.minutos_salida_adelantada, 0))
+                       ELSE COALESCE(a.minutos_deuda, 0)
+                   END) AS deuda_minutos,
+                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) IN (2, 3, 5) THEN 0 ELSE COALESCE(a.minutos_atraso, 0) END) AS minutos_atraso,
+                   SUM(COALESCE(a.minutos_exceso_colacion, 0)) AS minutos_exceso_colacion,
+                   SUM(CASE WHEN COALESCE(a.deuda_condonada, 0) IN (1, 3, 5) THEN 0 ELSE COALESCE(a.minutos_salida_adelantada, 0) END) AS minutos_salida_adelantada,
+                   SUM(COALESCE(a.minutos_permiso_personal_deuda, 0)) AS minutos_permiso_personal_deuda
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
             LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1

@@ -4600,44 +4600,66 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         }
         if (!esBolsa) di._acumuladoSemanalSnap = acumSemanal;
         if (!isEsp && !esBolsa) {
-            const tieneCondonacion = (di.deuda_condonada || 0) > 0;
-            const netDeuda = tieneCondonacion ? 0 : (di.minutos_deuda || 0);
+            const condTipo = Number(di.deuda_condonada || 0);
 
-            const rawCol = di.minutos_exceso_colacion || 0;
-            const rawPer = di.minutos_permiso_personal_deuda || 0;
-            const rawAtr = tieneCondonacion ? 0 : (di.minutos_atraso || 0);
-            const rawSad = tieneCondonacion ? 0 : (di.minutos_salida_adelantada || 0);
+            // Colación y Permisos NUNCA se perdonan por atraso o salida
+            const rawCol = Number(di.minutos_exceso_colacion || 0);
+            const rawPer = Number(di.minutos_permiso_personal_deuda || 0);
 
-            const rawTotal = rawCol + rawPer + rawAtr + rawSad;
+            // Atraso condonado solo si condTipo es 2, 3 o 5
+            const condonaAtr = (condTipo === 2 || condTipo === 3 || condTipo === 5);
+            const rawAtr = condonaAtr ? 0 : Number(di.minutos_atraso || 0);
 
+            // Salida adelantada condonada solo si condTipo es 1, 3 o 5
+            const condonaSad = (condTipo === 1 || condTipo === 3 || condTipo === 5);
+            const rawSad = condonaSad ? 0 : Number(di.minutos_salida_adelantada || 0);
+
+            let dayNetDeuda = 0;
             let dayCol = 0;
             let dayPer = 0;
             let dayAtr = 0;
             let daySad = 0;
 
-            if (netDeuda > 0 && rawTotal > 0) {
-                if (netDeuda >= rawTotal) {
-                    dayCol = rawCol;
-                    dayPer = rawPer;
-                    dayAtr = rawAtr;
-                    daySad = rawSad;
+            if (condTipo === 5) {
+                // Cierre de Faena / Turno completo condonado
+                dayNetDeuda = 0;
+                dayCol = 0;
+                dayPer = 0;
+                dayAtr = 0;
+                daySad = 0;
+            } else {
+                const rawTotal = rawCol + rawPer + rawAtr + rawSad;
+                const baseDeuda = Number(di.minutos_deuda || 0);
+
+                if (rawTotal > 0) {
+                    const effDeuda = Math.min(baseDeuda > 0 ? baseDeuda : rawTotal, rawTotal);
+                    dayNetDeuda = effDeuda;
+
+                    if (effDeuda >= rawTotal) {
+                        dayCol = rawCol;
+                        dayPer = rawPer;
+                        dayAtr = rawAtr;
+                        daySad = rawSad;
+                    } else {
+                        const factor = effDeuda / rawTotal;
+                        dayCol = rawCol * factor;
+                        dayPer = rawPer * factor;
+                        dayAtr = rawAtr * factor;
+                        daySad = rawSad * factor;
+                    }
                 } else {
-                    const factor = netDeuda / rawTotal;
-                    dayCol = rawCol * factor;
-                    dayPer = rawPer * factor;
-                    dayAtr = rawAtr * factor;
-                    daySad = rawSad * factor;
+                    dayNetDeuda = 0;
                 }
             }
 
-            d_tot   += netDeuda;
+            d_tot   += dayNetDeuda;
             min_col += dayCol;
             min_per += dayPer;
             min_atr += dayAtr;
             min_sad += daySad;
 
-            if ((di.minutos_atraso||0) > 0 && !tieneCondonacion)  cnt_atr++;
-            if ((di.minutos_salida_adelantada||0) > 0 && !tieneCondonacion) cnt_sad++;
+            if ((di.minutos_atraso || 0) > 0 && !condonaAtr) cnt_atr++;
+            if ((di.minutos_salida_adelantada || 0) > 0 && !condonaSad) cnt_sad++;
             if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
         }
         const jaEst = di.jornada_adicional ? di.jornada_adicional.estado : null;
