@@ -2203,6 +2203,21 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     const deudaTotalMin = (empStats.d_tot || 0);
     const deudaTotalStr = formatExactMinutesToTime(deudaTotalMin);
 
+    const deudaCompensarMin = deudaTotalMin + (empStats.he_compensado || 0);
+    const saldoPotencialBruto = totalBruto - deudaCompensarMin;
+    const tieneSaldoPositivo = saldoPotencialBruto > 0.0083;
+    const horasEnterasRedondas = tieneSaldoPositivo ? Math.floor(saldoPotencialBruto / 60) : 0;
+    const labelRedondeoHora = (tieneSaldoPositivo && horasEnterasRedondas > 0)
+        ? `+${String(horasEnterasRedondas).padStart(2,'0')}:00:00`
+        : null;
+
+    const bloquesMediaHora = tieneSaldoPositivo ? Math.floor(saldoPotencialBruto / 30) : 0;
+    const minutosMediaHora = bloquesMediaHora * 30;
+    const esDiferenteDeHora = (minutosMediaHora !== horasEnterasRedondas * 60);
+    const labelRedondeoMedia = (tieneSaldoPositivo && esDiferenteDeHora && bloquesMediaHora > 0)
+        ? `+${String(Math.floor(minutosMediaHora / 60)).padStart(2,'0')}:${String(minutosMediaHora % 60).padStart(2,'0')}:00`
+        : null;
+
     const canApproveHE = typeof AuthService !== 'undefined' && AuthService.hasPermission("marcaciones.horas_extras");
 
     // 3. Construir filas de la tabla
@@ -2331,6 +2346,26 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                             </div>
                                         </button>
 
+                                        ${labelRedondeoHora ? `
+                                        <button class="btn btn-warning text-dark fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'redondear_hora')">
+                                            <i class="bi bi-hourglass-bottom fs-5"></i>
+                                            <div class="text-start">
+                                                <div style="line-height:1.1;">Redondear a Horas (${labelRedondeoHora})</div>
+                                                <small class="fw-normal text-dark opacity-75" style="font-size:0.7rem;">Descarta minutos sueltos</small>
+                                            </div>
+                                        </button>
+                                        ` : ''}
+
+                                        ${labelRedondeoMedia ? `
+                                        <button class="btn btn-outline-primary fw-semibold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'redondear_media')">
+                                            <i class="bi bi-clock fs-5"></i>
+                                            <div class="text-start">
+                                                <div style="line-height:1.1;">Redondear a :30 (${labelRedondeoMedia})</div>
+                                                <small class="fw-normal opacity-75" style="font-size:0.7rem;">Cierra a media hora</small>
+                                            </div>
+                                        </button>
+                                        ` : ''}
+
                                         <button class="btn btn-primary fw-semibold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')">
                                             <i class="bi bi-check-all fs-5"></i>
                                             <div class="text-start">
@@ -2363,7 +2398,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                                 <label class="form-label small text-muted mb-1 fw-semibold">Saldo Neto Objetivo (+HH:mm:ss)</label>
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text bg-white">+</span>
-                                                    <input type="text" class="form-control form-control-sm text-center fw-bold text-primary" id="asistente-horas-objetivo" placeholder="02:00:00" value="02:00:00">
+                                                    <input type="text" class="form-control form-control-sm text-center fw-bold text-primary" id="asistente-horas-objetivo" placeholder="08:00:00" value="${labelRedondeoHora ? labelRedondeoHora.replace('+','') : '02:00:00'}">
                                                     <button class="btn btn-outline-primary btn-sm" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'saldo_objetivo')">
                                                         Fijar Meta
                                                     </button>
@@ -2846,6 +2881,78 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         }
         const fb = document.getElementById('asistente-feedback');
         if (fb) fb.innerHTML = fbMsg;
+
+    } else if (accion === 'redondear_hora' || accion === 'redondear_media') {
+        const totalBrutoElegible = parsedRows.filter(r => r.orig === 'PENDIENTE' || r.orig === 'APROBADO' || (incluirRechazadas && r.orig === 'RECHAZADO')).reduce((s, r) => s + r.bruto, 0);
+        const saldoPotencial = totalBrutoElegible - deudaExacta;
+
+        if (saldoPotencial <= 0.0083) {
+            showToast("El empleado no tiene saldo positivo de horas extras para redondear.", "warning");
+            const fb = document.getElementById('asistente-feedback');
+            if (fb) fb.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm">⚠️ El sobretiempo disponible no supera la deuda total. Usa <strong>"Cuadrar en Saldo Cero"</strong> para absorber la deuda.</div>`;
+            return;
+        }
+
+        const stepMin = (accion === 'redondear_media') ? 30 : 60;
+        const targetSaldoNeto = Math.floor(saldoPotencial / stepMin) * stepMin;
+        const metaTotalAprobado = deudaExacta + targetSaldoNeto;
+        let porAsignar = metaTotalAprobado;
+
+        parsedRows.forEach(r => {
+            const esElegible = r.orig === 'PENDIENTE' || r.orig === 'APROBADO' || (incluirRechazadas && r.orig === 'RECHAZADO');
+            if (esElegible && porAsignar > 0.0083 && r.bruto > 0) {
+                const aAprobar = Math.min(r.bruto, porAsignar);
+                r.nuevoEstado = 'APROBADO';
+                r.minutosAut = Math.round(aAprobar * 1000) / 1000;
+                porAsignar -= aAprobar;
+                totalAsignado += aAprobar;
+                diasAprobados++;
+                if (r.orig === 'RECHAZADO') diasRescatadosRech++;
+            } else {
+                r.nuevoEstado = 'RECHAZADO';
+                r.minutosAut = 0;
+            }
+        });
+
+        // Actualizar UI
+        parsedRows.forEach(pr => {
+            const sel = document.getElementById(`sel-estado-${pr.fecha}`);
+            const inp = document.getElementById(`input-min-${pr.fecha}`);
+            const lbl = document.getElementById(`lbl-min-${pr.fecha}`);
+            const chk = document.getElementById(`chk-he-${pr.fecha}`);
+            if (sel) sel.value = pr.nuevoEstado;
+            if (inp) {
+                inp.value = pr.minutosAut;
+                inp.disabled = (pr.nuevoEstado !== 'APROBADO');
+                if (pr.nuevoEstado !== 'APROBADO') inp.classList.add('opacity-50');
+                else inp.classList.remove('opacity-50');
+            }
+            if (lbl) lbl.textContent = formatExactMinutesToTime(pr.minutosAut);
+            if (chk) chk.checked = true;
+            window.onRowHEChange(pr.fecha);
+        });
+
+        const rawSaldoProy = totalAsignado - deudaExacta;
+        const isCero = Math.abs(rawSaldoProy) < 0.0083;
+        const saldoSign = isCero ? '' : (rawSaldoProy > 0 ? '+' : '-');
+        const projStr = isCero ? '00:00:00' : `${saldoSign}${formatExactMinutesToTime(Math.abs(rawSaldoProy))}`;
+        const minutosRecortados = Math.max(0, saldoPotencial - targetSaldoNeto);
+
+        const fb = document.getElementById('asistente-feedback');
+        if (fb) {
+            fb.innerHTML = `
+                <div class="alert alert-success py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div>
+                        <span class="fs-6 fw-bold text-success me-2">⏱️ Horas Extras Redondeadas:</span>
+                        Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
+                        ${diasRescatadosRech > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} de Rechazo</span>` : ''}
+                        · Saldo Neto Proyectado: <span class="badge bg-success fs-6">${projStr}</span>
+                        ${minutosRecortados > 0.0083 ? `<small class="text-muted ms-2">(Recortados ${formatExactMinutesToTime(minutosRecortados)} minutos sueltos)</small>` : ''}
+                    </div>
+                    <div><span class="text-success fw-bold">👉 Haz clic en "Guardar Cambios en BD" para registrar.</span></div>
+                </div>
+            `;
+        }
 
     } else if (accion === 'aprobar_todo') {
         let totalBruto = 0;
