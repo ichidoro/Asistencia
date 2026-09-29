@@ -5444,7 +5444,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols) {
     const { emp } = r;
     const isSaldoZero = Math.abs(r.saldo) < 0.0083;
-    const sClass = isSaldoZero ? 'text-muted' : (r.saldo > 0 ? 'text-success' : 'text-danger');
+    const sClass = isSaldoZero ? 'matrix-saldo-zero' : (r.saldo > 0 ? 'text-success' : 'text-danger');
     const sPrefix = isSaldoZero ? '' : (r.saldo > 0 ? '+' : '-');
     const nameClass = emp.activo ? '' : 'text-danger opacity-75';
 
@@ -5534,11 +5534,11 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         <td class="text-center align-middle tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 2)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_rec>0?_fmtMin(r.he_rec):'')}</td>
         <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('he', 3)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_bruto>0?_fmtMin(r.he_bruto):'')}</td>` : `<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;color:#3b82f6;left:${getStickyLeftLocal('he')}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (r.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(r.he_bruto):'')}</td>`}
         ${showDeudas ? `
-        <td class="text-center align-middle tabular-nums ${r.min_col>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_col>0?_fmtMin(r.min_col):'')}</td>
-        <td class="text-center align-middle tabular-nums ${r.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_per>0?_fmtMin(r.min_per):'')}</td>
-        <td class="text-center align-middle tabular-nums ${r.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_atr>0?_fmtMin(r.min_atr):'')}</td>
-        <td class="text-center align-middle tabular-nums ${r.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_sad>0?_fmtMin(r.min_sad):'')}</td>
-        <td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.d_tot>0?_fmtMin(r.d_tot):'')}</td>` : `<td class="text-center align-middle tabular-nums fw-bold text-muted sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(r.d_tot):'')}</td>`}
+        <td class="text-center align-middle tabular-nums ${r.min_col>0?'matrix-cell-deuda':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_col>0?_fmtMin(r.min_col):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_per>0?'matrix-cell-deuda':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_per>0?_fmtMin(r.min_per):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_atr>0?'matrix-cell-deuda-atr':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_atr>0?_fmtMin(r.min_atr):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.min_sad>0?'matrix-cell-deuda-atr':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.min_sad>0?_fmtMin(r.min_sad):'')}</td>
+        <td class="text-center align-middle tabular-nums ${r.d_tot>0?'matrix-cell-deuda-tot':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.d_tot>0?_fmtMin(r.d_tot):'')}</td>` : `<td class="text-center align-middle tabular-nums ${r.d_tot>0?'matrix-cell-deuda-tot':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}">${r.esBolsa ? '—' : (r.d_tot>0 ? '<i class="bi bi-clock-history me-1 text-danger"></i>' + _fmtMin(r.d_tot):'')}</td>`}
         <td class="text-center align-middle tabular-nums fw-bold ${sClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#f9fafb;font-size:0.8rem;left:${getStickyLeftLocal('saldo')}px;${getStickyWidthStyleLocal('saldo')}">${r.esBolsa ? '—' : (isSaldoZero ? '00:00:00' : `${sPrefix}${_fmtMin(Math.abs(r.saldo))}`)}</td>
         ${(hayBolsa) ? (
             showSaldoMeta
@@ -5611,7 +5611,7 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
         return acc;
     }, {he_bruto:0,he_apr:0,he_rec:0,he_pend:0,d_tot:0,saldo:0,cnt_atr:0,cnt_sad:0,cnt_inas:0,cnt_esp:0,cnt_per:0,min_col:0,min_per:0,min_atr:0,min_sad:0});
 
-    const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'text-muted';
+    const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'matrix-saldo-zero';
     const totSPrefix = tot.saldo > 0 ? '+' : tot.saldo < 0 ? '-' : '';
 
     const hayBolsa = rows.some(r => r.esBolsa);
@@ -5660,11 +5660,11 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
         <td class="tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('he', 2)}px;${getStickyWidthStyleLocal('he')}">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
         <td class="tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('he', 3)}px;${getStickyWidthStyleLocal('he')}">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #3b82f6; color:#3b82f6;left:${getStickyLeftLocal('he')}px;${getStickyWidthStyleLocal('he')}" class="tabular-nums fw-bold sticky-premium-col">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
         ${showDeudas ? `
-        <td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}" class="tabular-nums ${tot.min_col>0?'text-muted fw-bold':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
-        <td class="tabular-nums ${tot.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
-        <td class="tabular-nums ${tot.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
-        <td class="tabular-nums ${tot.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
-        <td class="tabular-nums text-muted fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}" class="tabular-nums text-muted fw-bold sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
+        <td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas', 0)}px;${getStickyWidthStyleLocal('deudas')}" class="tabular-nums ${tot.min_col>0?'matrix-cell-deuda':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
+        <td class="tabular-nums ${tot.min_per>0?'matrix-cell-deuda':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 1)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
+        <td class="tabular-nums ${tot.min_atr>0?'matrix-cell-deuda-atr':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 2)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
+        <td class="tabular-nums ${tot.min_sad>0?'matrix-cell-deuda-atr':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 3)}px;${getStickyWidthStyleLocal('deudas')}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
+        <td class="tabular-nums ${tot.d_tot>0?'matrix-cell-deuda-tot':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('deudas', 4)}px;${getStickyWidthStyleLocal('deudas')}">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeftLocal('deudas')}px;${getStickyWidthStyleLocal('deudas')}" class="tabular-nums ${tot.d_tot>0?'matrix-cell-deuda-tot':''} sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1 text-danger"></i>' + _fmtMin(tot.d_tot):''}</td>`}
         <td class="tabular-nums ${totSClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('saldo')}px;${getStickyWidthStyleLocal('saldo')}">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
         ${(hayBolsa) ? (
             showSaldoMeta
@@ -5990,7 +5990,7 @@ function renderVistaAnalitica(respData, container) {
     }).join('');
 
     // Fila totales
-    const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'text-muted';
+    const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'matrix-saldo-zero';
     const totSPrefix = tot.saldo > 0 ? '+' : tot.saldo < 0 ? '-' : '';
     
     let bonosTotalsCell = '';
@@ -6021,11 +6021,11 @@ function renderVistaAnalitica(respData, container) {
         <td class="tabular-nums text-danger sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}">${tot.he_rec>0?_fmtMin(tot.he_rec):''}</td>
         <td class="tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('he', 3)}px;${getStickyWidthStyle('he')}">${tot.he_bruto>0?_fmtMin(tot.he_bruto):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #3b82f6; color:#3b82f6;left:${getStickyLeft('he')}px;${getStickyWidthStyle('he')}" class="tabular-nums fw-bold sticky-premium-col">${tot.he_bruto>0 ? '<i class="bi bi-lightning-charge-fill me-1"></i>' + _fmtMin(tot.he_bruto):''}</td>`}
         ${showDeudas ? `
-        <td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}" class="tabular-nums ${tot.min_col>0?'text-muted fw-bold':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
-        <td class="tabular-nums ${tot.min_per>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
-        <td class="tabular-nums ${tot.min_atr>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
-        <td class="tabular-nums ${tot.min_sad>0?'text-muted fw-bold':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
-        <td class="tabular-nums text-muted fw-bold sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px;${getStickyWidthStyle('deudas')}" class="tabular-nums text-muted fw-bold sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1"></i>' + _fmtMin(tot.d_tot):''}</td>`}
+        <td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}" class="tabular-nums ${tot.min_col>0?'matrix-cell-deuda':''} sticky-premium-col">${tot.min_col>0?_fmtMin(tot.min_col):''}</td>
+        <td class="tabular-nums ${tot.min_per>0?'matrix-cell-deuda':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}">${tot.min_per>0?_fmtMin(tot.min_per):''}</td>
+        <td class="tabular-nums ${tot.min_atr>0?'matrix-cell-deuda-atr':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}">${tot.min_atr>0?_fmtMin(tot.min_atr):''}</td>
+        <td class="tabular-nums ${tot.min_sad>0?'matrix-cell-deuda-atr':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}">${tot.min_sad>0?_fmtMin(tot.min_sad):''}</td>
+        <td class="tabular-nums ${tot.d_tot>0?'matrix-cell-deuda-tot':''} sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}">${tot.d_tot>0?_fmtMin(tot.d_tot):''}</td>` : `<td style="position:sticky; z-index:60; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px;${getStickyWidthStyle('deudas')}" class="tabular-nums ${tot.d_tot>0?'matrix-cell-deuda-tot':''} sticky-premium-col">${tot.d_tot>0 ? '<i class="bi bi-clock-history me-1 text-danger"></i>' + _fmtMin(tot.d_tot):''}</td>`}
         <td class="tabular-nums ${totSClass} sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">${totSPrefix}${_fmtMin(Math.abs(tot.saldo))}</td>
         ${(hayBolsa) ? (
             showSaldoMeta
@@ -6118,7 +6118,7 @@ function renderVistaAnalitica(respData, container) {
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 1)}px;${getStickyWidthStyle('deudas')}" title="Permisos biométricos sin validar">PER</th>
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 2)}px;${getStickyWidthStyle('deudas')}" title="Minutos de atraso">ATR</th>
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}" title="Minutos salida adelantada">S.ADL</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')}" title="Total deuda acumulada">TOT</th>` : '';
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')};color:#dc2626;font-weight:700" title="Total deuda acumulada">TOT</th>` : '';
 
     container.innerHTML = `
     ${sw}

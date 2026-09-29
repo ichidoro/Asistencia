@@ -3165,6 +3165,31 @@ tr:hover .emp-name-cell {
     border-top: 3px solid #ef4444 !important;
 }
 
+.th-bento-secondary {
+    border-top: 3px solid #64748b !important;
+}
+
+/* ── 25.1. TIEMPO NO TRABAJADO & SALDO (High Contrast & Clear Hierarchy) ── */
+.matrix-cell-deuda {
+    color: #334155 !important;
+    font-weight: 600 !important;
+}
+
+.matrix-cell-deuda-atr {
+    color: #c2410c !important;
+    font-weight: 600 !important;
+}
+
+.matrix-cell-deuda-tot {
+    color: #dc2626 !important;
+    font-weight: 700 !important;
+}
+
+.matrix-saldo-zero {
+    color: #64748b !important;
+    font-weight: 600 !important;
+}
+
 /* ── 26. SEGMENTED CONTROLS ────────────────────────────────── */
 .segmented-control {
     display: inline-flex;
