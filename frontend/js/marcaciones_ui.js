@@ -2248,7 +2248,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     if (existing) existing.remove();
 
     const modalHtml = `
-        <div class="modal fade" id="${modalId}" tabindex="-1">
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-saldo-actual="${currentSaldoMin}" data-deuda-total="${deudaTotalMin}" data-compensado="${empStats.he_compensado || 0}">
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                 <div class="modal-content border-0 shadow-lg" style="border-radius:16px;overflow:hidden">
                     <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);padding:18px 24px 14px">
@@ -2316,7 +2316,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                     <div class="row g-2 align-items-end">
                                         <div class="col-md-5">
                                             <label class="form-label small text-muted mb-1 fw-semibold">Modo de Cuadre / Acción</label>
-                                            <select class="form-select form-select-sm" id="asistente-modo" onchange="window.cambiarModoCuadre(this.value)">
+                                            <select class="form-select form-select-sm" id="asistente-modo" onchange="window.cambiarModoCuadre(this.value); window.simularCuadreHE(${empleadoId});">
                                                 <option value="saldo_cero" selected>🎯 Cuadrar Saldo Neto en 00:00 (Absorber Deuda)</option>
                                                 <option value="saldo_objetivo">⏱️ Fijar Saldo Neto Objetivo Personalizado</option>
                                                 <option value="aprobar_todo">✅ Aprobar Todas las Horas Disponibles</option>
@@ -2328,19 +2328,19 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                             <label class="form-label small text-muted mb-1 fw-semibold">Saldo Deseado (+HH:mm)</label>
                                             <div class="input-group input-group-sm">
                                                 <span class="input-group-text bg-white">+</span>
-                                                <input type="text" class="form-control form-control-sm text-center fw-bold text-primary" id="asistente-horas-objetivo" placeholder="02:00" value="02:00">
+                                                <input type="text" class="form-control form-control-sm text-center fw-bold text-primary" id="asistente-horas-objetivo" placeholder="02:00" value="02:00" oninput="window.simularCuadreHE(${empleadoId})">
                                             </div>
                                         </div>
 
                                         <div class="col-md-4">
                                             <div class="form-check form-switch mb-1">
-                                                <input class="form-check-input" type="checkbox" id="chk-incluir-rechazadas">
+                                                <input class="form-check-input" type="checkbox" id="chk-incluir-rechazadas" onchange="window.simularCuadreHE(${empleadoId})">
                                                 <label class="form-check-label small fw-semibold text-dark" for="chk-incluir-rechazadas">
                                                     Rescatar de RECHAZADAS si falta
                                                 </label>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="chk-ajuste-exacto" checked>
+                                                <input class="form-check-input" type="checkbox" id="chk-ajuste-exacto" checked onchange="window.simularCuadreHE(${empleadoId})">
                                                 <label class="form-check-label small text-muted" for="chk-ajuste-exacto">
                                                     Ajuste exacto al minuto en última jornada
                                                 </label>
@@ -2716,24 +2716,35 @@ window.simularCuadreHE = function(empleadoId) {
     const rows = Array.from(document.querySelectorAll('.he-approval-row'));
     if (rows.length === 0) return;
 
-    const empRaw = (stateMarcacionesApp.empleados || []).find(e => e.id === Number(empleadoId)) || {};
-    const empData = stateMarcacionesApp.data[empleadoId] || {};
+    const modalEl = document.getElementById('modalBatchHE');
+    let currentSaldo = (modalEl && modalEl.dataset.saldoActual !== undefined && modalEl.dataset.saldoActual !== '') 
+        ? parseFloat(modalEl.dataset.saldoActual) : NaN;
+    let deudaTotal = (modalEl && modalEl.dataset.deudaTotal !== undefined && modalEl.dataset.deudaTotal !== '') 
+        ? parseFloat(modalEl.dataset.deudaTotal) : NaN;
+    let compensado = (modalEl && modalEl.dataset.compensado !== undefined && modalEl.dataset.compensado !== '') 
+        ? parseFloat(modalEl.dataset.compensado) : 0;
+
+    const matrix = stateMarcacionesApp.data?.matrix || stateMarcacionesApp.data || {};
+    const empData = matrix[empleadoId] || {};
+    const empRaw = (stateMarcacionesApp.data?.empleados || stateMarcacionesApp.empleados || []).find(e => e.id === Number(empleadoId)) || {};
     const info = empData.info || empRaw;
     const dates = (stateMarcacionesApp.data && stateMarcacionesApp.data.periodo) 
         ? window.getDatesInRange(stateMarcacionesApp.data.periodo.inicio, stateMarcacionesApp.data.periodo.fin) 
         : [];
     const feriadosArray = stateMarcacionesApp.data && stateMarcacionesApp.data.feriados 
         ? stateMarcacionesApp.data.feriados.map(f => f.fecha || f) : [];
-    
-    let stats = { saldo: 0, d_tot: 0, he_apr: 0, he_compensado: 0 };
-    if (typeof window.calcularStatsEmpleado === 'function') {
-        try {
-            stats = window.calcularStatsEmpleado({ id: empleadoId, info, dias: empData, tipo_programacion: info.tipo_programacion || '' }, dates, feriadosArray);
-        } catch(e) {}
-    }
 
-    const deudaTotal = Math.round(stats.d_tot || 0);
-    const compensado = Math.round(stats.he_compensado || 0);
+    if (isNaN(currentSaldo) || isNaN(deudaTotal)) {
+        let stats = { saldo: 0, d_tot: 0, he_apr: 0, he_compensado: 0 };
+        if (typeof window.calcularStatsEmpleado === 'function' && Object.keys(empData).length > 0) {
+            try {
+                stats = window.calcularStatsEmpleado({ id: empleadoId, info, dias: empData, tipo_programacion: info.tipo_programacion || '' }, dates, feriadosArray);
+            } catch(e) {}
+        }
+        if (isNaN(currentSaldo)) currentSaldo = Math.round(stats.saldo || 0);
+        if (isNaN(deudaTotal)) deudaTotal = Math.round(stats.d_tot || 0);
+        if (isNaN(compensado)) compensado = Math.round(stats.he_compensado || 0);
+    }
 
     let targetSaldoNeto = 0;
     if (modo === 'saldo_cero') {
@@ -2769,10 +2780,12 @@ window.simularCuadreHE = function(empleadoId) {
                 minsAprobados += bruto;
             }
         });
-        const projSaldo = minsAprobados - deudaTotal - compensado;
+        const projSaldo = currentSaldo + minsAprobados;
         const projStr = (projSaldo > 0 ? '+' : (projSaldo < 0 ? '-' : '')) + formatMinutesToHHMM(Math.abs(projSaldo));
         const fb = document.getElementById('asistente-feedback');
         if (fb) fb.innerHTML = `<span class="text-success fw-bold">✅ Todas aprobadas (${aprobadasCount} jornadas, +${formatMinutesToHHMM(minsAprobados)}). Saldo Proyectado: ${projStr}</span>`;
+        const btn = document.getElementById('btn-aplicar-cuadre');
+        if (btn) btn.disabled = false;
         return;
     }
 
@@ -2793,12 +2806,16 @@ window.simularCuadreHE = function(empleadoId) {
         const projStr = (projSaldo > 0 ? '+' : (projSaldo < 0 ? '-' : '')) + formatMinutesToHHMM(Math.abs(projSaldo));
         const fb = document.getElementById('asistente-feedback');
         if (fb) fb.innerHTML = `<span class="text-danger fw-bold">❌ Todas rechazadas (${rechazadasCount} jornadas). Saldo Proyectado: ${projStr}</span>`;
+        const btn = document.getElementById('btn-aplicar-cuadre');
+        if (btn) btn.disabled = false;
         return;
     }
 
     // Modo saldo_cero o saldo_objetivo:
-    const heRequeridas = Math.max(0, targetSaldoNeto + deudaTotal + compensado);
+    const deltaNecesario = targetSaldoNeto - currentSaldo;
+    let faltan = Math.max(0, deltaNecesario);
     let heAsignadas = 0;
+    let heReducidas = 0;
     let diasAprobados = 0;
     let diasRescatadosRech = 0;
 
@@ -2807,96 +2824,100 @@ window.simularCuadreHE = function(empleadoId) {
         bruto: parseFloat(r.dataset.bruto) || 0,
         orig: r.dataset.estadoOrig,
         nuevoEstado: r.dataset.estadoOrig,
-        minutosAut: 0
+        minutosAut: (r.dataset.estadoOrig === 'APROBADO') ? (parseFloat(document.getElementById(`input-min-${r.dataset.fecha}`)?.value) || parseFloat(r.dataset.bruto) || 0) : 0
     }));
 
-    // Paso 1: Preservar días ya APROBADOS si no superan la meta
-    parsedRows.filter(r => r.orig === 'APROBADO').forEach(r => {
-        if (heAsignadas < heRequeridas) {
-            const faltan = heRequeridas - heAsignadas;
-            if (r.bruto <= faltan || !ajusteExacto) {
-                r.nuevoEstado = 'APROBADO';
-                r.minutosAut = r.bruto;
-                heAsignadas += r.bruto;
-            } else {
-                r.nuevoEstado = 'APROBADO';
-                r.minutosAut = faltan;
-                heAsignadas += faltan;
-            }
-            diasAprobados++;
-        } else {
-            r.nuevoEstado = 'RECHAZADO';
-            r.minutosAut = 0;
-        }
-    });
+    if (deltaNecesario > 0) {
+        // Paso 1: Preservar días ya APROBADOS
+        parsedRows.filter(r => r.orig === 'APROBADO').forEach(r => {
+            r.nuevoEstado = 'APROBADO';
+        });
 
-    // Paso 2: Si falta, consumir desde PENDIENTES
-    parsedRows.filter(r => r.orig === 'PENDIENTE').forEach(r => {
-        if (heAsignadas < heRequeridas) {
-            const faltan = heRequeridas - heAsignadas;
-            if (r.bruto <= faltan || !ajusteExacto) {
+        // Paso 2: Consumir de PENDIENTES
+        parsedRows.filter(r => r.orig === 'PENDIENTE').forEach(r => {
+            if (faltan > 0) {
+                const toApprove = (r.bruto <= faltan || !ajusteExacto) ? r.bruto : faltan;
                 r.nuevoEstado = 'APROBADO';
-                r.minutosAut = r.bruto;
-                heAsignadas += r.bruto;
-            } else {
-                r.nuevoEstado = 'APROBADO';
-                r.minutosAut = faltan;
-                heAsignadas += faltan;
-            }
-            diasAprobados++;
-        } else {
-            r.nuevoEstado = 'PENDIENTE';
-            r.minutosAut = 0;
-        }
-    });
-
-    // Paso 3: Si falta Y se activó incluirRechazadas, rescatar de RECHAZADAS
-    if (heAsignadas < heRequeridas && incluirRechazadas) {
-        parsedRows.filter(r => r.orig === 'RECHAZADO').forEach(r => {
-            if (heAsignadas < heRequeridas) {
-                const faltan = heRequeridas - heAsignadas;
-                if (r.bruto <= faltan || !ajusteExacto) {
-                    r.nuevoEstado = 'APROBADO';
-                    r.minutosAut = r.bruto;
-                    heAsignadas += r.bruto;
-                } else {
-                    r.nuevoEstado = 'APROBADO';
-                    r.minutosAut = faltan;
-                    heAsignadas += faltan;
-                }
+                r.minutosAut = Math.round(toApprove * 100) / 100;
+                faltan -= toApprove;
+                heAsignadas += toApprove;
                 diasAprobados++;
-                diasRescatadosRech++;
+            } else {
+                r.nuevoEstado = 'PENDIENTE';
+                r.minutosAut = 0;
+            }
+        });
+
+        // Paso 3: Si falta Y se activó incluirRechazadas, rescatar de RECHAZADAS
+        if (faltan > 0 && incluirRechazadas) {
+            parsedRows.filter(r => r.orig === 'RECHAZADO').forEach(r => {
+                if (faltan > 0) {
+                    const toApprove = (r.bruto <= faltan || !ajusteExacto) ? r.bruto : faltan;
+                    r.nuevoEstado = 'APROBADO';
+                    r.minutosAut = Math.round(toApprove * 100) / 100;
+                    faltan -= toApprove;
+                    heAsignadas += toApprove;
+                    diasAprobados++;
+                    diasRescatadosRech++;
+                } else {
+                    r.nuevoEstado = 'RECHAZADO';
+                    r.minutosAut = 0;
+                }
+            });
+        }
+    } else if (deltaNecesario < 0) {
+        // Hay más saldo del deseado y se quiere reducir
+        let exceso = Math.abs(deltaNecesario);
+        parsedRows.filter(r => r.orig === 'APROBADO').forEach(r => {
+            if (exceso > 0) {
+                if (r.minutosAut <= exceso) {
+                    exceso -= r.minutosAut;
+                    heReducidas += r.minutosAut;
+                    r.nuevoEstado = 'RECHAZADO';
+                    r.minutosAut = 0;
+                } else {
+                    r.minutosAut = Math.round((r.minutosAut - exceso) * 100) / 100;
+                    heReducidas += exceso;
+                    exceso = 0;
+                    r.nuevoEstado = 'APROBADO';
+                }
             }
         });
     }
 
-    // Actualizar interfaz
+    // Actualizar interfaz en el DOM
     parsedRows.forEach(pr => {
         const sel = document.getElementById(`sel-estado-${pr.fecha}`);
         const inp = document.getElementById(`input-min-${pr.fecha}`);
         const chk = document.getElementById(`chk-he-${pr.fecha}`);
         if (sel) sel.value = pr.nuevoEstado;
-        if (inp) inp.value = pr.minutosAut > 0 ? pr.minutosAut : pr.bruto;
-        if (chk) chk.checked = (pr.nuevoEstado !== pr.orig);
+        if (inp) inp.value = (pr.nuevoEstado === 'APROBADO' && pr.minutosAut > 0) ? pr.minutosAut : (pr.nuevoEstado === 'APROBADO' ? pr.bruto : 0);
+        if (chk) chk.checked = (pr.nuevoEstado === 'APROBADO' || pr.nuevoEstado !== pr.orig);
         window.onRowHEChange(pr.fecha);
     });
 
-    const projSaldo = heAsignadas - deudaTotal - compensado;
+    const projSaldo = currentSaldo + heAsignadas - heReducidas;
     const projSign = projSaldo > 0 ? '+' : (projSaldo < 0 ? '-' : '');
     const projStr = `${projSign}${formatMinutesToHHMM(Math.abs(projSaldo))}`;
     
-    let fbMsg = `✨ <strong>Propuesta generada:</strong> Se autorizan ${formatMinutesToHHMM(heAsignadas)} en ${diasAprobados} jornadas. `;
+    let fbMsg = `✨ <strong>Propuesta generada:</strong> `;
+    if (heAsignadas > 0) {
+        fbMsg += `Se autorizan +${formatMinutesToHHMM(heAsignadas)} en ${diasAprobados} jornadas. `;
+    }
     if (diasRescatadosRech > 0) {
         fbMsg += `<span class="badge bg-warning text-dark me-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} rescatadas de Rechazo</span> `;
     }
-    fbMsg += `| <strong>Saldo Proyectado:</strong> <span class="badge ${projSaldo === 0 ? 'bg-secondary' : projSaldo > 0 ? 'bg-success' : 'bg-danger'}">${projStr}</span>`;
+    fbMsg += `| <strong>Saldo Proyectado:</strong> <span class="badge ${Math.abs(projSaldo) < 0.05 ? 'bg-secondary' : projSaldo > 0 ? 'bg-success' : 'bg-danger'}">${projStr}</span>`;
     
-    if (heAsignadas < heRequeridas) {
-        fbMsg += ` <span class="text-danger small">(Faltaron ${formatMinutesToHHMM(heRequeridas - heAsignadas)} para la meta. ${!incluirRechazadas ? 'Activa "Rescatar de Rechazadas" si tienes horas disponibles allí.' : 'No hay más horas disponibles en el período.'})</span>`;
+    if (faltan > 0.05) {
+        fbMsg += ` <span class="text-danger small">(Faltaron ${formatMinutesToHHMM(faltan)} para la meta. ${!incluirRechazadas ? 'Activa el switch "Rescatar de RECHAZADAS" si tienes horas allí.' : 'No hay más horas disponibles.'})</span>`;
     }
     
     const fb = document.getElementById('asistente-feedback');
     if (fb) fb.innerHTML = fbMsg;
+
+    const btn = document.getElementById('btn-aplicar-cuadre');
+    if (btn) btn.disabled = false;
 };
 
 window.aplicarCuadreHE = async function(empleadoId) {
@@ -2927,13 +2948,17 @@ window.aplicarCuadreHE = async function(empleadoId) {
     }
     
     try {
+        const token = (typeof AuthService !== 'undefined' && typeof AuthService.getToken === 'function') ? AuthService.getToken() : localStorage.getItem('access_token');
         const res = await fetch('/api/asistencia/aprobar-he-batch/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : ''
+            },
             body: JSON.stringify(items)
         });
         const data = await res.json();
-        if (data.success) {
+        if (data.success || res.ok) {
             showToast(`✅ Cuadre aplicado exitosamente (${items.length} jornadas actualizadas)`, 'success');
             const mEl = document.getElementById('modalBatchHE');
             if (mEl) {
