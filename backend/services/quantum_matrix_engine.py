@@ -664,8 +664,18 @@ class QuantumShiftWeekMatcher:
             winner_sem = 1
 
             # Buscar primer y último evento físico en el horizonte
-            first_m = marcas_cand[0] if marcas_cand else None
-            last_m = marcas_cand[-1] if len(marcas_cand) > 1 else None
+            if len(marcas_cand) == 1:
+                m_single = marcas_cand[0]
+                t_single = str(m_single.get('tipo', '')).strip().lower()
+                if t_single in _TIPOS_S:
+                    first_m = None
+                    last_m = m_single
+                else:
+                    first_m = m_single
+                    last_m = None
+            else:
+                first_m = marcas_cand[0]
+                last_m = marcas_cand[-1]
 
             for sem_idx in range(1, total_sems + 1):
                 cfg_sem = turnos_dict.get(sem_idx, {}).get(dia_semana, {})
