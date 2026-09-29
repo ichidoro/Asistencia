@@ -2120,7 +2120,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                 let obsLlegada = (di.observaciones || '').toLowerCase();
                 // Verificamos si hay observación de que quedó FUERA del anclaje
                 if (diffEntradaMin > 0 && obsLlegada.includes('llegada anticipada') && obsLlegada.includes('fuera del anclaje')) {
-                    contextoTags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle mb-1"><i class="bi bi-box-arrow-in-right"></i> +${diffEntradaMin}m (Ingreso Anticipado)</span>`);
+                    contextoTags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle mb-1"><i class="bi bi-box-arrow-in-right"></i> +${formatExactMinutesToTime(diffEntradaMin)} (Ingreso Anticipado)</span>`);
                 }
             }
             
@@ -2130,7 +2130,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                 let obsSalida = (di.observaciones || '').toLowerCase();
                 // Si salió tarde y no fue anclado (es decir, el tiempo real se mantuvo y generó horas)
                 if (diffSalidaMin > 0 && !obsSalida.includes('salida dentro del anclaje')) {
-                    contextoTags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle mb-1"><i class="bi bi-box-arrow-right"></i> +${diffSalidaMin}m (Salida Tardía)</span>`);
+                    contextoTags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle mb-1"><i class="bi bi-box-arrow-right"></i> +${formatExactMinutesToTime(diffSalidaMin)} (Salida Tardía)</span>`);
                 }
             }
             
@@ -2253,6 +2253,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             <td class="font-monospace text-center align-middle">${d.hora_salida}</td>
             <td class="fw-bold text-center align-middle" style="color:#1e40af">${formatExactMinutesToTime(d.bruto)}</td>
             <td style="font-size: 0.75rem; line-height: 1.2;" class="align-middle">${d.contexto}</td>
+            <td class="font-monospace text-center align-middle fw-bold cell-he-acumulado" id="acum-he-${d.fecha}" style="font-size:0.78rem;color:#0f766e;">—</td>
             <td class="text-center align-middle">${estadoBadge}</td>
             <td class="text-center align-middle">${controlHtml}</td>
         </tr>`;
@@ -2454,12 +2455,39 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <th class="text-center">Entrada</th>
                                         <th class="text-center">Salida</th>
                                         <th class="text-center">HE Bruto</th>
-                                        <th style="min-width: 130px;">Origen / Motivo</th>
+                                        <th style="min-width: 140px;">Origen / Motivo</th>
+                                        <th class="text-center" style="min-width: 110px;" title="Horas acumuladas progresivamente según las jornadas seleccionadas">Acumulado 🧮</th>
                                         <th class="text-center">Estado Actual</th>
                                         <th class="text-center" style="min-width: 200px;">Acción / Autorizar</th>
                                     </tr>
                                 </thead>
                                 <tbody>${heRows}</tbody>
+                                <tfoot class="table-light sticky-bottom fw-bold" style="position:sticky; bottom:0; z-index:10; background:#f8fafc; border-top:2px solid #cbd5e1; font-size:0.78rem;">
+                                    <tr>
+                                        <td colspan="4" class="text-end text-muted small py-2">
+                                            <i class="bi bi-calculator me-1" style="color:#0f766e"></i>Calculadora Selección:
+                                        </td>
+                                        <td class="text-center font-monospace py-2" style="color:#1e40af;font-size:0.8rem;" id="calc-total-bruto-sel">
+                                            ${formatExactMinutesToTime(totalBruto)}
+                                        </td>
+                                        <td></td>
+                                        <td class="text-center py-2" id="calc-acumulado-final">
+                                            <span class="badge font-monospace px-2 py-1 shadow-sm" style="background:#0f766e;color:#ffffff;font-size:0.8rem;" id="badge-total-acumulado">
+                                                ${formatExactMinutesToTime(totalBruto)}
+                                            </span>
+                                        </td>
+                                        <td colspan="2" class="py-2">
+                                            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                                <span class="small" style="font-size:0.75rem;">
+                                                    Saldo Proy: <strong class="px-2 py-0.5 rounded font-monospace" id="calc-saldo-proyectado" style="background:${currentSaldoBg};color:${currentSaldoColor}">${currentSaldoStr}</strong>
+                                                </span>
+                                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 fw-semibold shadow-sm" id="btn-copiar-meta" style="font-size:0.72rem;height:24px;" onclick="window.copiarAcumuladoAMeta()" title="Copiar este saldo a las opciones avanzadas">
+                                                    <i class="bi bi-arrow-up-right-square me-1"></i>Fijar en Opciones
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -2482,6 +2510,12 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modal = new bootstrap.Modal(document.getElementById(modalId));
     modal.show();
+
+    setTimeout(() => {
+        if (typeof window.recalcularCalculadoraHE === 'function') {
+            window.recalcularCalculadoraHE();
+        }
+    }, 50);
 
     document.getElementById(modalId).addEventListener('hidden.bs.modal', function() {
         this.remove();
@@ -2651,6 +2685,9 @@ async function _checkAuditoriaBloqueoImpl(fecha) {
 
 window.toggleAllHECells = function (master) {
     document.querySelectorAll('.check-item-he').forEach(c => c.checked = master.checked);
+    if (typeof window.recalcularCalculadoraHE === 'function') {
+        window.recalcularCalculadoraHE();
+    }
 };
 
 window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
@@ -2755,11 +2792,115 @@ window.onRowHEChange = function(fecha) {
     
     const btn = document.getElementById('btn-aplicar-cuadre');
     if (btn) btn.disabled = false;
+
+    if (typeof window.recalcularCalculadoraHE === 'function') {
+        window.recalcularCalculadoraHE();
+    }
 };
 
 window.onRowHEChecked = function(fecha) {
     const btn = document.getElementById('btn-aplicar-cuadre');
     if (btn) btn.disabled = false;
+
+    if (typeof window.recalcularCalculadoraHE === 'function') {
+        window.recalcularCalculadoraHE();
+    }
+};
+
+window.recalcularCalculadoraHE = function() {
+    const rows = Array.from(document.querySelectorAll('.he-approval-row'));
+    if (rows.length === 0) return;
+
+    const modalEl = document.getElementById('modalBatchHE');
+    const deudaTotal = parseFloat(modalEl?.dataset?.deudaTotal || 0);
+    const compensado = parseFloat(modalEl?.dataset?.compensado || 0);
+    const deudaExacta = deudaTotal + compensado;
+
+    let runningTotalMin = 0;
+    let totalBrutoSelMin = 0;
+    let countChecked = 0;
+
+    rows.forEach(r => {
+        const fecha = r.dataset.fecha;
+        const chk = document.getElementById(`chk-he-${fecha}`);
+        const acumCell = document.getElementById(`acum-he-${fecha}`);
+        const inp = document.getElementById(`input-min-${fecha}`);
+        const sel = document.getElementById(`sel-estado-${fecha}`);
+        const bruto = parseFloat(r.dataset.bruto) || 0;
+
+        const isChecked = chk ? chk.checked : true;
+
+        if (isChecked) {
+            countChecked++;
+            totalBrutoSelMin += bruto;
+
+            let mins = bruto;
+            if (inp && !isNaN(parseFloat(inp.value))) {
+                mins = parseFloat(inp.value);
+            }
+            if (sel && sel.value === 'RECHAZADO') {
+                mins = 0;
+            }
+
+            runningTotalMin += mins;
+
+            if (acumCell) {
+                acumCell.innerHTML = `<span class="badge font-monospace px-2 py-1 shadow-xs" style="background:#ccfbf1;color:#0f766e;font-size:0.78rem;border:1px solid #99f6e4;">${formatExactMinutesToTime(runningTotalMin)}</span>`;
+            }
+            r.classList.remove('opacity-50', 'table-secondary');
+        } else {
+            if (acumCell) {
+                acumCell.innerHTML = `<span class="text-muted" style="font-size:0.8rem;">—</span>`;
+            }
+            r.classList.add('opacity-50', 'table-secondary');
+        }
+    });
+
+    // Actualizar badge y totales de pie
+    const badgeTot = document.getElementById('badge-total-acumulado');
+    if (badgeTot) {
+        badgeTot.textContent = formatExactMinutesToTime(runningTotalMin);
+    }
+    const brutoSelEl = document.getElementById('calc-total-bruto-sel');
+    if (brutoSelEl) {
+        brutoSelEl.textContent = formatExactMinutesToTime(totalBrutoSelMin);
+    }
+
+    // Saldo Proyectado
+    const saldoProyectado = runningTotalMin - deudaExacta;
+    const isSaldoZero = Math.abs(saldoProyectado) < 0.0083;
+    const saldoSign = isSaldoZero ? '' : (saldoProyectado > 0 ? '+' : '-');
+    const saldoStr = isSaldoZero ? '00:00:00' : `${saldoSign}${formatExactMinutesToTime(Math.abs(saldoProyectado))}`;
+    const saldoColor = isSaldoZero ? '#475569' : (saldoProyectado > 0 ? '#15803d' : '#b91c1c');
+    const saldoBg = isSaldoZero ? '#f1f5f9' : (saldoProyectado > 0 ? '#dcfce7' : '#fee2e2');
+
+    const saldoProyEl = document.getElementById('calc-saldo-proyectado');
+    if (saldoProyEl) {
+        saldoProyEl.textContent = saldoStr;
+        saldoProyEl.style.color = saldoColor;
+        saldoProyEl.style.backgroundColor = saldoBg;
+    }
+};
+
+window.copiarAcumuladoAMeta = function() {
+    const el = document.getElementById('calc-saldo-proyectado');
+    if (!el) return;
+    const txt = el.textContent.trim().replace('+', '');
+    const inp = document.getElementById('asistente-horas-objetivo');
+    if (inp) {
+        inp.value = txt;
+        const panel = document.getElementById('panel-avanzado-he');
+        if (panel && !panel.classList.contains('show')) {
+            try {
+                const bsCollapse = new bootstrap.Collapse(panel, { toggle: true });
+            } catch (e) {
+                panel.classList.add('show');
+            }
+        }
+        inp.classList.add('bg-warning-subtle');
+        setTimeout(() => inp.classList.remove('bg-warning-subtle'), 1000);
+        showToast(`Valor copiado a Opciones Avanzadas: +${txt}`, 'info');
+    }
 };
 
 window.ejecutarCuadreRapido = function(empleadoId, accion) {
@@ -3114,6 +3255,10 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
     if (btnGuardar) {
         btnGuardar.disabled = false;
         btnGuardar.classList.remove('opacity-50');
+    }
+
+    if (typeof window.recalcularCalculadoraHE === 'function') {
+        window.recalcularCalculadoraHE();
     }
 };
 
@@ -4424,7 +4569,7 @@ function cierreGetHEContextBadges(a) {
         let diffEntradaMin = Math.round(-window.circularTimeDiff(a.hora_entrada_teorica, a.hora_entrada_real)); 
         let obsLlegada = (a.observaciones || '').toLowerCase();
         if (diffEntradaMin > 0 && obsLlegada.includes('llegada anticipada') && obsLlegada.includes('fuera del anclaje')) {
-            tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-in-right"></i> +${diffEntradaMin}m (Ingreso Anticipado)</span>`);
+            tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-in-right"></i> +${formatExactMinutesToTime(diffEntradaMin)} (Ingreso Anticipado)</span>`);
         }
     }
     
@@ -4433,7 +4578,7 @@ function cierreGetHEContextBadges(a) {
         let diffSalidaMin = Math.round(window.circularTimeDiff(a.hora_salida_teorica, a.hora_salida_real));
         let obsSalida = (a.observaciones || '').toLowerCase();
         if (diffSalidaMin > 0 && !obsSalida.includes('salida dentro del anclaje')) {
-            tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-right"></i> +${diffSalidaMin}m (Salida Tardía)</span>`);
+            tags.push(`<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-2"><i class="bi bi-box-arrow-right"></i> +${formatExactMinutesToTime(diffSalidaMin)} (Salida Tardía)</span>`);
         }
     }
     
