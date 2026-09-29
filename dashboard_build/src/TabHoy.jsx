@@ -166,20 +166,27 @@ export default function TabHoy({ pulse, detail, loading }) {
           <div className="row g-3 mb-3">
             <div className="col-12 col-md-8">
               <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light border-light text-muted">
-                  <i className="bi bi-search"></i>
+                <span className="input-group-text bg-light border-light text-muted" id="tabhoy-search-addon">
+                  <i className="bi bi-search" aria-hidden="true"></i>
                 </span>
+                <label htmlFor="tabhoy-search-input" className="visually-hidden">Buscar colaborador por nombre</label>
                 <input
+                  id="tabhoy-search-input"
+                  aria-label="Buscar colaborador por nombre"
+                  aria-describedby="tabhoy-search-addon"
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="form-control border-light bg-light"
+                  className="form-control form-control-sm border-light bg-light"
                   placeholder="Buscar colaborador por nombre..."
                 />
               </div>
             </div>
             <div className="col-12 col-md-4">
+              <label htmlFor="tabhoy-select-area" className="visually-hidden">Filtrar por Área</label>
               <select
+                id="tabhoy-select-area"
+                aria-label="Filtrar por Área (Todas)"
                 value={selectedArea}
                 onChange={(e) => setSelectedArea(e.target.value)}
                 className="form-select form-select-sm border-light bg-light"

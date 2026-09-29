@@ -325,10 +325,18 @@ class MultiBlockTensorSolver:
             if is_e:
                 collapsed.append(curr)
                 while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_E:
+                    dt_c = cls.parse_dt(curr)
+                    dt_n = cls.parse_dt(logs[i + 1])
+                    if dt_c and dt_n and (dt_n - dt_c).total_seconds() >= 1200.0:
+                        break
                     i += 1
             elif is_s:
                 last_s = curr
                 while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_S:
+                    dt_c = cls.parse_dt(last_s)
+                    dt_n = cls.parse_dt(logs[i + 1])
+                    if dt_c and dt_n and (dt_n - dt_c).total_seconds() >= 1200.0:
+                        break
                     i += 1
                     last_s = logs[i]
                 collapsed.append(last_s)
@@ -1074,9 +1082,7 @@ class QuantumMatrixEngine:
                 if start_horizon <= dt_l <= end_horizon:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
                     if dt_l.strftime("%Y-%m-%d") > fecha:
-                        if (not es_nocturno or not has_night_presence) and tipo_m in {'entrada', 'entry', 'e', 'in', '1'}:
-                            continue
-                        if es_nocturno and not has_night_presence and dt_l.hour >= 5:
+                        if not es_nocturno or not has_night_presence:
                             continue
                     marcas_disponibles.append(l)
             except Exception:
@@ -1295,6 +1301,16 @@ class QuantumMatrixEngine:
                 if idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] == 'S':
                     pares_trabajo.append((items_emparejar[idx_e][0], items_emparejar[idx_e + 1][0]))
                     idx_e += 2
+                elif idx_e + 1 < len(items_emparejar) and items_emparejar[idx_e + 1][1] in ('E', 'U'):
+                    dt_ini = items_emparejar[idx_e][0]
+                    dt_fin = items_emparejar[idx_e + 1][0]
+                    dur_delta = (dt_fin - dt_ini).total_seconds() / 60.0
+                    if dur_delta >= 20.0:
+                        pares_trabajo.append((dt_ini, dt_fin))
+                        idx_e += 2
+                    else:
+                        res['observaciones'] += f"Entrada final sin salida a las {dt_ini.strftime('%H:%M:%S')}. "
+                        idx_e += 1
                 else:
                     res['observaciones'] += f"Entrada final sin salida a las {items_emparejar[idx_e][0].strftime('%H:%M:%S')}. "
                     idx_e += 1

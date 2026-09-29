@@ -161,27 +161,33 @@ export default function DashboardApp() {
   }, [activeTab, selectedArea, selectedHorario, fechaInicio, fechaFin, loadTodayData, loadPeriodData]);
 
   return (
-    <div className="container-fluid p-0">
+    <div className="container-fluid p-0" style={{ minHeight: '80vh' }}>
       {/* Top Filter and Tab Selection Bar */}
       <div className="filter-bar d-flex flex-wrap justify-content-between align-items-center mb-4 bg-white p-3 rounded border border-light shadow-sm gap-3">
         <div className="d-flex align-items-center gap-2">
           {/* Segmented Control Tabs */}
-          <div className="btn-group p-1 bg-light rounded" style={{ padding: '3px !important' }}>
+          <div className="btn-group p-1 bg-light rounded" role="tablist" aria-label="Selector de Vista del Dashboard" style={{ padding: '3px !important' }}>
             <button
               onClick={() => setActiveTab('hoy')}
               className={`btn btn-sm rounded ${activeTab === 'hoy' ? 'btn-white bg-white shadow-sm font-semibold' : 'btn-link text-muted border-0'}`}
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'hoy'}
+              aria-label="Ver datos de Hoy"
               style={{ fontWeight: activeTab === 'hoy' ? '600' : '400' }}
             >
-              <i className="bi bi-clock-history me-1"></i> Hoy
+              <i className="bi bi-clock-history me-1" aria-hidden="true"></i> Hoy
             </button>
             <button
               onClick={() => setActiveTab('periodo')}
               className={`btn btn-sm rounded ${activeTab === 'periodo' ? 'btn-white bg-white shadow-sm font-semibold' : 'btn-link text-muted border-0'}`}
               type="button"
+              role="tab"
+              aria-selected={activeTab === 'periodo'}
+              aria-label="Ver análisis del período"
               style={{ fontWeight: activeTab === 'periodo' ? '600' : '400' }}
             >
-              <i className="bi bi-calendar3 me-1"></i> Análisis Período
+              <i className="bi bi-calendar3 me-1" aria-hidden="true"></i> Análisis Período
             </button>
           </div>
         </div>
@@ -189,13 +195,15 @@ export default function DashboardApp() {
         {/* Global Filters */}
         <div className="d-flex flex-wrap align-items-center gap-3">
           <div className="filter-group">
-            <label className="fw-bold small text-muted mb-1 block">
-              <i className="bi bi-geo-alt me-1"></i> Área
+            <label htmlFor="dash-global-area-select" className="fw-bold small text-muted mb-1 d-block">
+              <i className="bi bi-geo-alt me-1" aria-hidden="true"></i> Área
             </label>
             <select
+              id="dash-global-area-select"
+              aria-label="Todas las Áreas"
               value={selectedArea}
               onChange={(e) => setSelectedArea(e.target.value)}
-              className="form-select form-select-sm"
+              className="form-select form-select-sm border-light bg-light"
               style={{ minWidth: '150px' }}
             >
               <option value="Todas">Todas las Áreas</option>
@@ -208,13 +216,15 @@ export default function DashboardApp() {
           {activeTab === 'periodo' && (
             <>
               <div className="filter-group">
-                <label className="fw-bold small text-muted mb-1 block">
-                  <i className="bi bi-person-badge me-1"></i> Turno
+                <label htmlFor="dash-global-turno-select" className="fw-bold small text-muted mb-1 d-block">
+                  <i className="bi bi-person-badge me-1" aria-hidden="true"></i> Turno
                 </label>
                 <select
+                  id="dash-global-turno-select"
+                  aria-label="Todos los Turnos"
                   value={selectedHorario}
                   onChange={(e) => setSelectedHorario(e.target.value)}
-                  className="form-select form-select-sm"
+                  className="form-select form-select-sm border-light bg-light"
                   style={{ minWidth: '150px' }}
                 >
                   <option value="Todos">Todos los Turnos</option>
@@ -225,27 +235,31 @@ export default function DashboardApp() {
               </div>
 
               <div className="filter-group">
-                <label className="fw-bold small text-muted mb-1 block">
-                  <i className="bi bi-calendar-event me-1"></i> Desde
+                <label htmlFor="dash-fecha-inicio-input" className="fw-bold small text-muted mb-1 d-block">
+                  <i className="bi bi-calendar-event me-1" aria-hidden="true"></i> Desde
                 </label>
                 <input
+                  id="dash-fecha-inicio-input"
+                  aria-label="Fecha Desde"
                   type="date"
                   value={fechaInicio}
                   onChange={(e) => setFechaInicio(e.target.value)}
-                  className="form-control form-control-sm"
+                  className="form-control form-control-sm border-light bg-light"
                   style={{ maxWidth: '140px' }}
                 />
               </div>
 
               <div className="filter-group">
-                <label className="fw-bold small text-muted mb-1 block">
-                  <i className="bi bi-calendar-check me-1"></i> Hasta
+                <label htmlFor="dash-fecha-fin-input" className="fw-bold small text-muted mb-1 d-block">
+                  <i className="bi bi-calendar-check me-1" aria-hidden="true"></i> Hasta
                 </label>
                 <input
+                  id="dash-fecha-fin-input"
+                  aria-label="Fecha Hasta"
                   type="date"
                   value={fechaFin}
                   onChange={(e) => setFechaFin(e.target.value)}
-                  className="form-control form-control-sm"
+                  className="form-control form-control-sm border-light bg-light"
                   style={{ maxWidth: '140px' }}
                 />
               </div>
@@ -259,8 +273,9 @@ export default function DashboardApp() {
             style={{ width: '31px', height: '31px', marginTop: '19px' }}
             type="button"
             title="Refrescar datos"
+            aria-label="Refrescar datos del dashboard"
           >
-            <i className={`bi bi-arrow-clockwise ${(todayLoading || periodLoading) ? 'spin' : ''}`}></i>
+            <i className={`bi bi-arrow-clockwise ${(todayLoading || periodLoading) ? 'spin' : ''}`} aria-hidden="true"></i>
           </button>
         </div>
       </div>
