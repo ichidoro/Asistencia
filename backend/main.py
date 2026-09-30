@@ -314,6 +314,13 @@ async def index_redirect():
     return RedirectResponse(url="/", status_code=301)
 
 
+@app.get("/api/version", tags=["Health"], include_in_schema=False)
+async def app_version():
+    """Identificador de arranque de esta instancia. Las pestañas abiertas lo comparan con el suyo y avisan
+    "hay una versión nueva" cuando cambia (ver frontend/js/update_banner.js)."""
+    return JSONResponse({"build": STARTUP_ID}, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """

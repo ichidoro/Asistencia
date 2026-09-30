@@ -8,6 +8,7 @@
     <meta name="description" content="Sistema Integral de Control y Gestión de Asistencia, Turnos y Jornadas de Aguacol.">
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#1b2f8f">
+    <meta name="app-build" content="{{ startup_id }}">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aguacol">
@@ -39,6 +40,7 @@
     </script>
     <!-- Módulo de Seguridad (Centralizado) -->
     <script src="/static/js/auth.js?v={{ startup_id }}" defer></script>
+    <script src="/static/js/update_banner.js?v={{ startup_id }}" defer></script>
     
     <!-- PDF Generation Libraries -->
     <script src="/static/js/jspdf.umd.min.js" defer></script>
