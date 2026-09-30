@@ -2235,13 +2235,13 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         const controlHtml = canApproveHE
             ? `
                 <div class="d-flex align-items-center justify-content-center gap-1">
-                    <select class="form-select form-select-sm select-row-estado py-0 px-1" id="sel-estado-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" style="font-size:0.75rem; width:95px; height:26px;" onchange="window.onRowHEChange('${d.fecha}')">
+                    <select class="form-select form-select-sm select-row-estado py-0 px-2 fw-semibold shadow-xs" id="sel-estado-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" style="font-size:0.75rem; width:100px; height:26px; border-radius:5px;" onchange="window.onRowHEChange('${d.fecha}')">
                         <option value="APROBADO" ${d.estado === 'APROBADO' ? 'selected' : ''}>✅ Aprobar</option>
                         <option value="PENDIENTE" ${d.estado === 'PENDIENTE' ? 'selected' : ''}>⏳ Pendiente</option>
                         <option value="RECHAZADO" ${d.estado === 'RECHAZADO' ? 'selected' : ''}>❌ Rechazar</option>
                     </select>
-                    <input type="number" class="form-control form-control-sm text-center input-row-minutos py-0 px-1" id="input-min-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" value="${defaultMinutosAut}" min="0" max="${d.bruto}" step="any" style="font-size:0.75rem; width:58px; height:26px;" title="Minutos a autorizar (Máx: ${d.bruto}m)" oninput="window.onRowHEChange('${d.fecha}')">
-                    <span class="text-muted small fw-mono" id="lbl-min-${d.fecha}" style="font-size:0.72rem; min-width:55px;">${formatExactMinutesToTime(defaultMinutosAut)}</span>
+                    <input type="text" class="form-control form-control-sm text-center font-monospace input-row-time fw-bold py-0 px-1 ${d.estado !== 'APROBADO' ? 'opacity-50' : ''}" id="input-time-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" value="${d.estado === 'RECHAZADO' ? '00:00:00' : formatExactMinutesToTime(defaultMinutosAut)}" ${d.estado !== 'APROBADO' ? 'disabled' : ''} style="font-size:0.75rem; width:72px; height:26px;" title="Tiempo autorizado (HH:MM:SS)" onchange="window.onRowTimeChange('${d.fecha}')">
+                    <input type="hidden" class="input-row-minutos" id="input-min-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" value="${d.estado === 'RECHAZADO' ? 0 : defaultMinutosAut}">
                 </div>
               `
             : `<span class="text-muted">—</span>`;
@@ -2317,83 +2317,92 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 </div>
                             </div>
 
-                            <!-- ASISTENTE DE CUADRE CARD (SIMPLIFICADO Y DE ACCIÓN DIRECTA) -->
+                            <!-- ASISTENTE DE CUADRE CARD (ESTRATEGIA EN 3 CLICS) -->
                             ${canApproveHE ? `
-                            <div class="card border border-primary-subtle shadow-sm" style="border-radius:12px; background: #f8faff;">
+                            <div class="card border-0 shadow-sm mb-3" style="border-radius:12px; background: #ffffff; border: 1px solid #cbd5e1 !important;">
+                                <div class="card-header bg-white border-bottom py-2 px-3 d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold" style="font-size:0.75rem;">
+                                            <i class="bi bi-magic me-1"></i> Asistente de Cuadre y Balance
+                                        </span>
+                                        <small class="text-muted" style="font-size:0.75rem;">Selecciona una estrategia operativa con 1 solo clic:</small>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button class="btn btn-xs btn-outline-secondary py-1 px-2 text-decoration-none" style="font-size:0.72rem; border-radius:6px;" type="button" data-bs-toggle="collapse" data-bs-target="#panel-avanzado-he">
+                                            <i class="bi bi-sliders me-1"></i>Ajuste Manual / Metas
+                                        </button>
+                                        <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.72rem; border-radius:6px;" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'rechazar_todo')" title="Rechazar todas las jornadas y dejar horas extras en cero">
+                                            <i class="bi bi-x-circle me-1"></i>Rechazar Todo
+                                        </button>
+                                    </div>
+                                </div>
+                                
                                 <div class="card-body p-3">
-                                    <div class="d-flex align-items-center justify-content-between mb-2">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="fw-bold text-primary" style="font-size: 0.95rem;">
-                                                <i class="bi bi-magic me-1"></i> Asistente de Cuadre y Balance Operativo
-                                            </span>
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.72rem;">
-                                                <i class="bi bi-check-circle-fill me-1"></i>Rescate de Rechazadas ACTIVO
-                                            </span>
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button class="btn btn-sm btn-link text-muted text-decoration-none small py-0" type="button" data-bs-toggle="collapse" data-bs-target="#panel-avanzado-he">
-                                                <i class="bi bi-gear-fill me-1"></i>Opciones avanzadas
+                                    <!-- 3 ESTRATEGIAS PRINCIPALES EN TARJETAS LIMPIAS -->
+                                    <div class="row g-2 mb-2">
+                                        <!-- Estrategia 1: Compensar Deuda (Saldo Cero) -->
+                                        <div class="col-md-4">
+                                            <button type="button" class="btn btn-outline-success w-100 p-2 text-start shadow-sm btn-estrategia-he h-100" id="btn-est-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')" style="border-radius:10px; border-width: 1.5px;">
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <span class="badge bg-success text-white p-1 rounded-circle"><i class="bi bi-bullseye fs-6"></i></span>
+                                                    <strong class="text-success" style="font-size:0.83rem;">1. Compensar Deuda (Saldo Cero)</strong>
+                                                </div>
+                                                <div class="text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                    Absorbe atrasos exactos. Saldo neto resultante: <strong>00:00:00</strong>.
+                                                </div>
                                             </button>
                                         </div>
-                                    </div>
-                                    
-                                    <!-- BOTONERA DE ACCIÓN DIRECTA EN 1 CLIC -->
-                                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-                                        <button class="btn btn-success fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" id="btn-accion-cuadre-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')">
-                                            <i class="bi bi-bullseye fs-5"></i>
-                                            <div class="text-start">
-                                                <div style="line-height:1.1;">Cuadrar en Saldo Cero (00:00:00)</div>
-                                                <small class="fw-normal opacity-75" style="font-size:0.7rem;">Absorbe la deuda al segundo exacto</small>
-                                            </div>
-                                        </button>
 
-                                        ${labelRedondeoHora ? `
-                                        <button class="btn btn-warning text-dark fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'redondear_hora')">
-                                            <i class="bi bi-hourglass-bottom fs-5"></i>
-                                            <div class="text-start">
-                                                <div style="line-height:1.1;">Redondear a Horas (${labelRedondeoHora})</div>
-                                                <small class="fw-normal text-dark opacity-75" style="font-size:0.7rem;">Descarta minutos sueltos</small>
-                                            </div>
-                                        </button>
-                                        ` : ''}
+                                        <!-- Estrategia 2: Pagar Todo (Norma Legal DT) -->
+                                        <div class="col-md-4">
+                                            <button type="button" class="btn btn-outline-primary w-100 p-2 text-start shadow-sm btn-estrategia-he h-100" id="btn-est-todo" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')" style="border-radius:10px; border-width: 1.5px;">
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <span class="badge bg-primary text-white p-1 rounded-circle"><i class="bi bi-shield-check fs-6"></i></span>
+                                                    <strong class="text-primary" style="font-size:0.83rem;">2. Pagar Todo (Norma Legal DT)</strong>
+                                                </div>
+                                                <div class="text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                    Autoriza el 100% de minutos efectivos trabajados sin recortes.
+                                                </div>
+                                            </button>
+                                        </div>
 
-                                        ${labelRedondeoMedia ? `
-                                        <button class="btn btn-outline-primary fw-semibold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'redondear_media')">
-                                            <i class="bi bi-clock fs-5"></i>
-                                            <div class="text-start">
-                                                <div style="line-height:1.1;">Redondear a :30 (${labelRedondeoMedia})</div>
-                                                <small class="fw-normal opacity-75" style="font-size:0.7rem;">Cierra a media hora</small>
+                                        <!-- Estrategia 3: Bloques Nómina (+HH:00 o +HH:30) -->
+                                        <div class="col-md-4">
+                                            <div class="dropdown h-100">
+                                                <button type="button" class="btn btn-outline-warning text-dark w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 dropdown-toggle" id="btn-est-redondeo" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius:10px; border-width: 1.5px;">
+                                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                                        <span class="badge bg-warning text-dark p-1 rounded-circle"><i class="bi bi-cash-coin fs-6"></i></span>
+                                                        <strong class="text-dark" style="font-size:0.83rem;">3. Bloques Nómina (Redondeo)</strong>
+                                                    </div>
+                                                    <div class="text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                        Paga horas redondas (+HH:00 / :30) y remanente a banco de tiempo.
+                                                    </div>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-1" style="border-radius:8px;">
+                                                    ${labelRedondeoHora ? `
+                                                    <li>
+                                                        <a class="dropdown-item py-2 small fw-semibold" href="javascript:void(0)" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'redondear_hora')">
+                                                            <i class="bi bi-hourglass-split me-1 text-warning"></i> Redondear a Horas Enteras (${labelRedondeoHora})
+                                                        </a>
+                                                    </li>
+                                                    ` : ''}
+                                                    ${labelRedondeoMedia ? `
+                                                    <li>
+                                                        <a class="dropdown-item py-2 small fw-semibold" href="javascript:void(0)" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'redondear_media')">
+                                                            <i class="bi bi-clock me-1 text-primary"></i> Redondear a Medias Horas (${labelRedondeoMedia})
+                                                        </a>
+                                                    </li>
+                                                    ` : ''}
+                                                    ${(!labelRedondeoHora && !labelRedondeoMedia) ? `
+                                                    <li><span class="dropdown-item-text text-muted small">No hay saldo positivo suficiente para redondear.</span></li>
+                                                    ` : ''}
+                                                </ul>
                                             </div>
-                                        </button>
-                                        ` : ''}
-
-                                        <button class="btn btn-primary fw-semibold px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')">
-                                            <i class="bi bi-check-all fs-5"></i>
-                                            <div class="text-start">
-                                                <div style="line-height:1.1;">Aprobar Todas las Horas</div>
-                                                <small class="fw-normal opacity-75" style="font-size:0.7rem;">Aprueba el 100% bruto disponible</small>
-                                            </div>
-                                        </button>
-
-                                        <button class="btn btn-outline-danger px-3 py-2 shadow-sm d-flex align-items-center gap-2" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'rechazar_todo')">
-                                            <i class="bi bi-x-circle fs-5"></i>
-                                            <div class="text-start">
-                                                <div style="line-height:1.1;">Rechazar Todo</div>
-                                                <small class="fw-normal opacity-75" style="font-size:0.7rem;">Deja las horas extras en 0</small>
-                                            </div>
-                                        </button>
-
-                                        <button class="btn btn-success fw-bold px-4 py-2 shadow ms-auto d-flex align-items-center gap-2" type="button" id="btn-aplicar-cuadre" disabled onclick="window.aplicarCuadreHE(${empleadoId})">
-                                            <i class="bi bi-floppy-fill fs-5"></i>
-                                            <div class="text-start">
-                                                <div style="line-height:1.1;">Guardar Cambios en BD</div>
-                                                <small class="fw-normal opacity-75" style="font-size:0.7rem;">Registra en base de datos</small>
-                                            </div>
-                                        </button>
+                                        </div>
                                     </div>
 
                                     <!-- PANEL AVANZADO COLAPSABLE -->
-                                    <div class="collapse pt-2 border-top" id="panel-avanzado-he">
+                                    <div class="collapse pt-2 border-top mb-2" id="panel-avanzado-he">
                                         <div class="row g-2 align-items-center">
                                             <div class="col-md-5">
                                                 <label class="form-label small text-muted mb-1 fw-semibold">Saldo Neto Objetivo (+HH:mm:ss)</label>
@@ -2416,10 +2425,21 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         </div>
                                     </div>
 
-                                    <!-- FEEDBACK MESSAGE -->
-                                    <div id="asistente-feedback" class="mt-2">
-                                        <div class="small text-muted">
-                                            💡 Haz clic en <strong>"Cuadrar en Saldo Cero"</strong> para absorber la deuda con exactitud de segundos y luego presiona <strong>"Guardar Cambios"</strong>.
+                                    <!-- FEEDBACK MESSAGE & BOTÓN PRINCIPAL UNIFICADO -->
+                                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-2 border-top" id="asistente-feedback-container">
+                                        <div id="asistente-feedback" class="flex-grow-1">
+                                            <div class="small text-muted">
+                                                💡 Haz clic en una de las <strong>3 Estrategias</strong> arriba para previsualizar el cuadre y luego presiona <strong>"Confirmar y Guardar"</strong>.
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-success fw-bold px-4 py-2 shadow-sm d-flex align-items-center gap-2" type="button" id="btn-aplicar-cuadre" disabled onclick="window.aplicarCuadreHE(${empleadoId})" style="border-radius:8px;">
+                                                <i class="bi bi-floppy-fill fs-5"></i>
+                                                <div class="text-start">
+                                                    <div style="line-height:1.1;">Confirmar y Guardar en BD</div>
+                                                    <small class="fw-normal opacity-75" style="font-size:0.7rem;">Registra en base de datos PostgreSQL</small>
+                                                </div>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2431,18 +2451,11 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                         <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="font-size:0.8rem">
                             <div class="d-flex align-items-center gap-2">
                                 <input type="checkbox" class="form-check-input" id="check-all-he" checked ${canApproveHE ? '' : 'disabled'} onchange="toggleAllHECells(this)">
-                                <label for="check-all-he" class="form-check-label fw-semibold">Seleccionar todos</label>
+                                <label for="check-all-he" class="form-check-label fw-semibold">Seleccionar todas las jornadas</label>
                             </div>
-                            ${canApproveHE ? `
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-sm btn-approve-all" onclick="submitBatchHE(event, ${empleadoId}, 'APROBADO')">
-                                    <i class="bi bi-check-all me-1"></i>Aprobar Seleccionados
-                                </button>
-                                <button class="btn btn-sm btn-reject-all" onclick="submitBatchHE(event, ${empleadoId}, 'RECHAZADO')">
-                                    <i class="bi bi-x-circle me-1"></i>Rechazar Seleccionados
-                                </button>
+                            <div class="text-muted small">
+                                <i class="bi bi-info-circle me-1 text-primary"></i>Cada cambio en la tabla actualiza el saldo neto proyectado en vivo.
                             </div>
-                            ` : ''}
                         </div>
 
                         <!-- TABLA DE DETALLE POR JORNADA -->
@@ -2458,7 +2471,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <th style="min-width: 140px;">Origen / Motivo</th>
                                         <th class="text-center" style="min-width: 110px;" title="Horas acumuladas progresivamente según las jornadas seleccionadas">Acumulado 🧮</th>
                                         <th class="text-center">Estado Actual</th>
-                                        <th class="text-center" style="min-width: 200px;">Acción / Autorizar</th>
+                                        <th class="text-center" style="min-width: 185px;">Acción / Autorizar</th>
                                     </tr>
                                 </thead>
                                 <tbody>${heRows}</tbody>
@@ -2477,13 +2490,10 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                             </span>
                                         </td>
                                         <td colspan="2" class="py-2">
-                                            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                            <div class="d-flex align-items-center justify-content-end gap-2">
                                                 <span class="small" style="font-size:0.75rem;">
                                                     Saldo Proy: <strong class="px-2 py-0.5 rounded font-monospace" id="calc-saldo-proyectado" style="background:${currentSaldoBg};color:${currentSaldoColor}">${currentSaldoStr}</strong>
                                                 </span>
-                                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 fw-semibold shadow-sm" id="btn-copiar-meta" style="font-size:0.72rem;height:24px;" onclick="window.copiarAcumuladoAMeta()" title="Copiar este saldo a las opciones avanzadas">
-                                                    <i class="bi bi-arrow-up-right-square me-1"></i>Fijar en Opciones
-                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -2752,31 +2762,91 @@ window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
 };
 
 // ─── CONTROLADORES DEL ASISTENTE DE CUADRE DE HORAS EXTRAS ──────────────
-window.onRowHEChange = function(fecha) {
+window.onRowTimeChange = function(fecha) {
+    const timeInp = document.getElementById(`input-time-${fecha}`);
+    const minInp = document.getElementById(`input-min-${fecha}`);
     const sel = document.getElementById(`sel-estado-${fecha}`);
-    const inp = document.getElementById(`input-min-${fecha}`);
-    const lbl = document.getElementById(`lbl-min-${fecha}`);
-    const chk = document.getElementById(`chk-he-${fecha}`);
-    const row = document.getElementById(`row-he-${fecha}`);
-    if (!sel || !inp) return;
-    
-    const estado = sel.value;
-    let mins = parseFloat(inp.value) || 0;
-    const bruto = parseFloat(inp.dataset.bruto) || 0;
-    
+    if (!timeInp || !minInp) return;
+
+    let txt = timeInp.value.trim().replace('+', '');
+    let mins = 0;
+    if (txt.includes(':')) {
+        const parts = txt.split(':');
+        const h = parseInt(parts[0], 10) || 0;
+        const m = parseInt(parts[1], 10) || 0;
+        const s = parts[2] ? (parseInt(parts[2], 10) || 0) : 0;
+        mins = h * 60 + m + (s / 60.0);
+    } else {
+        mins = parseFloat(txt) || 0;
+    }
+    const bruto = parseFloat(minInp.dataset.bruto) || 0;
     if (mins > bruto) mins = bruto;
     if (mins < 0) mins = 0;
     mins = Math.round(mins * 1000) / 1000;
-    inp.value = mins;
+    minInp.value = mins;
+    timeInp.value = formatExactMinutesToTime(mins);
+
+    if (mins > 0 && sel && sel.value !== 'APROBADO') {
+        sel.value = 'APROBADO';
+    } else if (mins === 0 && sel && sel.value === 'APROBADO') {
+        sel.value = 'RECHAZADO';
+    }
+    window.onRowHEChange(fecha);
+};
+
+window.onRowHEChange = function(fecha) {
+    const sel = document.getElementById(`sel-estado-${fecha}`);
+    const inp = document.getElementById(`input-min-${fecha}`);
+    const timeInp = document.getElementById(`input-time-${fecha}`);
+    const chk = document.getElementById(`chk-he-${fecha}`);
+    const row = document.getElementById(`row-he-${fecha}`);
+    const badgeSt = document.getElementById(`badge-st-${fecha}`);
+    if (!sel || !inp) return;
     
-    if (lbl) lbl.textContent = formatExactMinutesToTime(mins);
+    const estado = sel.value;
+    const bruto = parseFloat(inp.dataset.bruto) || 0;
+    let mins = parseFloat(inp.value);
+    if (isNaN(mins)) mins = (estado === 'APROBADO' ? bruto : 0);
     
-    if (estado === 'RECHAZADO' || estado === 'PENDIENTE') {
-        inp.disabled = true;
-        inp.classList.add('opacity-50');
-    } else {
-        inp.disabled = false;
-        inp.classList.remove('opacity-50');
+    if (estado === 'RECHAZADO') {
+        mins = 0;
+        inp.value = 0;
+        if (timeInp) {
+            timeInp.value = '00:00:00';
+            timeInp.disabled = true;
+            timeInp.classList.add('opacity-50');
+        }
+    } else if (estado === 'PENDIENTE') {
+        inp.value = mins;
+        if (timeInp) {
+            timeInp.value = formatExactMinutesToTime(mins > 0 ? mins : bruto);
+            timeInp.disabled = true;
+            timeInp.classList.add('opacity-50');
+        }
+    } else if (estado === 'APROBADO') {
+        if (mins <= 0 && bruto > 0) mins = bruto;
+        if (mins > bruto) mins = bruto;
+        if (mins < 0) mins = 0;
+        mins = Math.round(mins * 1000) / 1000;
+        inp.value = mins;
+        if (timeInp) {
+            timeInp.value = formatExactMinutesToTime(mins);
+            timeInp.disabled = false;
+            timeInp.classList.remove('opacity-50');
+        }
+    }
+    
+    if (badgeSt) {
+        if (estado === 'APROBADO') {
+            badgeSt.className = 'badge bg-success';
+            badgeSt.innerHTML = '✅ Aprobado';
+        } else if (estado === 'RECHAZADO') {
+            badgeSt.className = 'badge bg-danger';
+            badgeSt.innerHTML = '❌ Rechazado';
+        } else {
+            badgeSt.className = 'badge bg-warning text-dark';
+            badgeSt.innerHTML = '⏳ Pendiente';
+        }
     }
     
     if (chk) chk.checked = true;
@@ -2904,6 +2974,25 @@ window.copiarAcumuladoAMeta = function() {
 };
 
 window.ejecutarCuadreRapido = function(empleadoId, accion) {
+    // Resaltar visualmente el botón de estrategia seleccionado
+    const marcarBotonActivo = (act) => {
+        document.querySelectorAll('.btn-estrategia-he').forEach(b => {
+            b.classList.remove('active', 'border-2', 'shadow');
+            b.style.fontWeight = 'normal';
+        });
+        if (act === 'cero') {
+            const b = document.getElementById('btn-est-cero');
+            if (b) { b.classList.add('active', 'border-2', 'shadow'); b.style.fontWeight = 'bold'; }
+        } else if (act === 'aprobar_todo') {
+            const b = document.getElementById('btn-est-todo');
+            if (b) { b.classList.add('active', 'border-2', 'shadow'); b.style.fontWeight = 'bold'; }
+        } else if (act === 'redondear_hora' || act === 'redondear_media') {
+            const b = document.getElementById('btn-est-redondeo');
+            if (b) { b.classList.add('active', 'border-2', 'shadow'); b.style.fontWeight = 'bold'; }
+        }
+    };
+    marcarBotonActivo(accion);
+
     const modalEl = document.getElementById('modalBatchHE');
     let currentSaldo = (modalEl && modalEl.dataset.saldoActual !== undefined && modalEl.dataset.saldoActual !== '') 
         ? parseFloat(modalEl.dataset.saldoActual) : NaN;
@@ -2955,6 +3044,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
     let totalAsignado = 0;
     let diasAprobados = 0;
     let diasRescatadosRech = 0;
+    let fbMsg = '';
 
     if (accion === 'cero') {
         // Meta exacta: el total de horas aprobadas debe ser exactamente igual a deudaExacta
@@ -2977,60 +3067,39 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
             }
         });
 
-        // Actualizar UI
-        parsedRows.forEach(pr => {
-            const sel = document.getElementById(`sel-estado-${pr.fecha}`);
-            const inp = document.getElementById(`input-min-${pr.fecha}`);
-            const lbl = document.getElementById(`lbl-min-${pr.fecha}`);
-            const chk = document.getElementById(`chk-he-${pr.fecha}`);
-            if (sel) sel.value = pr.nuevoEstado;
-            if (inp) {
-                inp.value = pr.minutosAut;
-                inp.disabled = (pr.nuevoEstado !== 'APROBADO');
-                if (pr.nuevoEstado !== 'APROBADO') inp.classList.add('opacity-50');
-                else inp.classList.remove('opacity-50');
-            }
-            if (lbl) lbl.textContent = formatExactMinutesToTime(pr.minutosAut);
-            if (chk) chk.checked = true;
-            window.onRowHEChange(pr.fecha);
-        });
-
         const rawSaldoProy = totalAsignado - deudaExacta;
         const isCero = Math.abs(rawSaldoProy) < 0.0083;
         const saldoSign = isCero ? '' : (rawSaldoProy > 0 ? '+' : '-');
         const projStr = isCero ? '00:00:00' : `${saldoSign}${formatExactMinutesToTime(Math.abs(rawSaldoProy))}`;
 
-        let fbMsg = '';
         if (porAsignar <= 0.0083) {
             fbMsg = `
                 <div class="alert alert-success py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div>
-                        <span class="fs-6 fw-bold text-success me-2">🎯 Saldo Cero Exacto:</span>
-                        Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
+                        <span class="fs-6 fw-bold text-success me-2">⚖️ Compensar Deuda (Art. 32 Código del Trabajo):</span>
+                        Se imputan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
                         ${diasRescatadosRech > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} rescatada(s) de Rechazo</span>` : ''}
                         · Saldo Neto Proyectado: <span class="badge bg-dark fs-6">${projStr}</span>
                     </div>
-                    <div><span class="text-success fw-bold">👉 Haz clic en "Guardar Cambios en BD" para registrar.</span></div>
+                    <div class="text-success small fw-semibold"><i class="bi bi-arrow-right-circle me-1"></i>Previsualización lista. Confirma con el botón verde.</div>
                 </div>
             `;
         } else {
             fbMsg = `
                 <div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm">
-                    <strong>⚠️ Horas insuficientes para llegar a cero:</strong> Se aprobó el 100% disponible (+${formatExactMinutesToTime(totalAsignado)}), pero la deuda es de ${formatExactMinutesToTime(deudaExacta)}. Faltaron <strong>${formatExactMinutesToTime(porAsignar)}</strong> para cero · Saldo Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
+                    <strong>⚠️ Horas insuficientes para llegar a cero:</strong> Se aprobó el 100% disponible (+${formatExactMinutesToTime(totalAsignado)}), pero la deuda acumulada es de ${formatExactMinutesToTime(deudaExacta)}. Faltaron <strong>${formatExactMinutesToTime(porAsignar)}</strong> para cero · Saldo Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
                 </div>
             `;
         }
-        const fb = document.getElementById('asistente-feedback');
-        if (fb) fb.innerHTML = fbMsg;
 
     } else if (accion === 'redondear_hora' || accion === 'redondear_media') {
         const totalBrutoElegible = parsedRows.filter(r => r.orig === 'PENDIENTE' || r.orig === 'APROBADO' || (incluirRechazadas && r.orig === 'RECHAZADO')).reduce((s, r) => s + r.bruto, 0);
         const saldoPotencial = totalBrutoElegible - deudaExacta;
 
         if (saldoPotencial <= 0.0083) {
-            showToast("El empleado no tiene saldo positivo de horas extras para redondear.", "warning");
+            showToast("El colaborador no tiene saldo positivo de horas extras para redondear.", "warning");
             const fb = document.getElementById('asistente-feedback');
-            if (fb) fb.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm">⚠️ El sobretiempo disponible no supera la deuda total. Usa <strong>"Cuadrar en Saldo Cero"</strong> para absorber la deuda.</div>`;
+            if (fb) fb.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm">⚠️ El sobretiempo disponible no supera la deuda total. Usa <strong>"1. Compensar Deuda (Saldo Cero)"</strong> para absorber la deuda.</div>`;
             return;
         }
 
@@ -3055,54 +3124,32 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
             }
         });
 
-        // Actualizar UI
-        parsedRows.forEach(pr => {
-            const sel = document.getElementById(`sel-estado-${pr.fecha}`);
-            const inp = document.getElementById(`input-min-${pr.fecha}`);
-            const lbl = document.getElementById(`lbl-min-${pr.fecha}`);
-            const chk = document.getElementById(`chk-he-${pr.fecha}`);
-            if (sel) sel.value = pr.nuevoEstado;
-            if (inp) {
-                inp.value = pr.minutosAut;
-                inp.disabled = (pr.nuevoEstado !== 'APROBADO');
-                if (pr.nuevoEstado !== 'APROBADO') inp.classList.add('opacity-50');
-                else inp.classList.remove('opacity-50');
-            }
-            if (lbl) lbl.textContent = formatExactMinutesToTime(pr.minutosAut);
-            if (chk) chk.checked = true;
-            window.onRowHEChange(pr.fecha);
-        });
-
         const rawSaldoProy = totalAsignado - deudaExacta;
         const isCero = Math.abs(rawSaldoProy) < 0.0083;
         const saldoSign = isCero ? '' : (rawSaldoProy > 0 ? '+' : '-');
         const projStr = isCero ? '00:00:00' : `${saldoSign}${formatExactMinutesToTime(Math.abs(rawSaldoProy))}`;
         const minutosRecortados = Math.max(0, saldoPotencial - targetSaldoNeto);
 
-        const fb = document.getElementById('asistente-feedback');
-        if (fb) {
-            fb.innerHTML = `
-                <div class="alert alert-success py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div>
-                        <span class="fs-6 fw-bold text-success me-2">⏱️ Horas Extras Redondeadas:</span>
-                        Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
-                        ${diasRescatadosRech > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} de Rechazo</span>` : ''}
-                        · Saldo Neto Proyectado: <span class="badge bg-success fs-6">${projStr}</span>
-                        ${minutosRecortados > 0.0083 ? `<small class="text-muted ms-2">(Recortados ${formatExactMinutesToTime(minutosRecortados)} minutos sueltos)</small>` : ''}
-                    </div>
-                    <div><span class="text-success fw-bold">👉 Haz clic en "Guardar Cambios en BD" para registrar.</span></div>
+        fbMsg = `
+            <div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2 text-dark" style="background:#fef3c7;">
+                <div>
+                    <span class="fs-6 fw-bold text-dark me-2">⏱️ Bloque Nómina + Banco de Tiempo:</span>
+                    Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
+                    ${diasRescatadosRech > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} de Rechazo</span>` : ''}
+                    · Saldo Nómina: <span class="badge bg-success fs-6">${projStr}</span>
+                    ${minutosRecortados > 0.0083 ? `<span class="badge bg-light text-dark border ms-1 fw-normal">Remanente de ${formatExactMinutesToTime(minutosRecortados)} imputado a descanso/banco</span>` : ''}
                 </div>
-            `;
-        }
+                <div class="text-dark small fw-semibold"><i class="bi bi-arrow-right-circle me-1"></i>Previsualización lista. Confirma con el botón verde.</div>
+            </div>
+        `;
 
     } else if (accion === 'aprobar_todo') {
-        let totalBruto = 0;
         parsedRows.forEach(r => {
             const esElegible = r.orig === 'PENDIENTE' || r.orig === 'APROBADO' || (incluirRechazadas && r.orig === 'RECHAZADO');
             if (esElegible) {
                 r.nuevoEstado = 'APROBADO';
                 r.minutosAut = r.bruto;
-                totalBruto += r.bruto;
+                totalAsignado += r.bruto;
                 diasAprobados++;
             } else {
                 r.nuevoEstado = r.orig;
@@ -3110,40 +3157,21 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
             }
         });
 
-        parsedRows.forEach(pr => {
-            const sel = document.getElementById(`sel-estado-${pr.fecha}`);
-            const inp = document.getElementById(`input-min-${pr.fecha}`);
-            const lbl = document.getElementById(`lbl-min-${pr.fecha}`);
-            const chk = document.getElementById(`chk-he-${pr.fecha}`);
-            if (sel) sel.value = pr.nuevoEstado;
-            if (inp) {
-                inp.value = pr.minutosAut;
-                inp.disabled = (pr.nuevoEstado !== 'APROBADO');
-                if (pr.nuevoEstado !== 'APROBADO') inp.classList.add('opacity-50');
-                else inp.classList.remove('opacity-50');
-            }
-            if (lbl) lbl.textContent = formatExactMinutesToTime(pr.minutosAut);
-            if (chk) chk.checked = true;
-            window.onRowHEChange(pr.fecha);
-        });
-
-        const rawSaldoProy = totalBruto - deudaExacta;
+        const rawSaldoProy = totalAsignado - deudaExacta;
         const isCero = Math.abs(rawSaldoProy) < 0.0083;
         const saldoSign = isCero ? '' : (rawSaldoProy > 0 ? '+' : '-');
         const projStr = isCero ? '00:00:00' : `${saldoSign}${formatExactMinutesToTime(Math.abs(rawSaldoProy))}`;
 
-        const fb = document.getElementById('asistente-feedback');
-        if (fb) {
-            fb.innerHTML = `
-                <div class="alert alert-primary py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div>
-                        <strong>✅ Todas Aprobadas:</strong> +${formatExactMinutesToTime(totalBruto)} autorizados en ${diasAprobados} jornadas.
-                        · Saldo Neto Proyectado: <span class="badge ${rawSaldoProy >= 0 ? 'bg-success' : 'bg-danger'} fs-6">${projStr}</span>
-                    </div>
-                    <div><span class="text-primary fw-bold">👉 Presiona "Guardar Cambios en BD" para confirmar.</span></div>
+        fbMsg = `
+            <div class="alert alert-primary py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <span class="fs-6 fw-bold text-primary me-2">🏛️ Pago 100% Íntegro (Norma Legal DT):</span>
+                    Se aprueban <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornadas sin descuentos.
+                    · Saldo Neto Proyectado: <span class="badge ${rawSaldoProy >= 0 ? 'bg-success' : 'bg-danger'} fs-6">${projStr}</span>
                 </div>
-            `;
-        }
+                <div class="text-primary small fw-semibold"><i class="bi bi-arrow-right-circle me-1"></i>Previsualización lista. Confirma con el botón verde.</div>
+            </div>
+        `;
 
     } else if (accion === 'rechazar_todo') {
         parsedRows.forEach(r => {
@@ -3151,38 +3179,20 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
             r.minutosAut = 0;
         });
 
-        parsedRows.forEach(pr => {
-            const sel = document.getElementById(`sel-estado-${pr.fecha}`);
-            const inp = document.getElementById(`input-min-${pr.fecha}`);
-            const lbl = document.getElementById(`lbl-min-${pr.fecha}`);
-            const chk = document.getElementById(`chk-he-${pr.fecha}`);
-            if (sel) sel.value = 'RECHAZADO';
-            if (inp) {
-                inp.value = 0;
-                inp.disabled = true;
-                inp.classList.add('opacity-50');
-            }
-            if (lbl) lbl.textContent = '00:00:00';
-            if (chk) chk.checked = true;
-            window.onRowHEChange(pr.fecha);
-        });
-
         const rawSaldoProy = 0 - deudaExacta;
         const saldoSign = rawSaldoProy > 0 ? '+' : (rawSaldoProy < 0 ? '-' : '');
         const projStr = `${saldoSign}${formatExactMinutesToTime(Math.abs(rawSaldoProy))}`;
 
-        const fb = document.getElementById('asistente-feedback');
-        if (fb) {
-            fb.innerHTML = `
-                <div class="alert alert-danger py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div>
-                        <strong>❌ Todas Rechazadas:</strong> Horas extras dejadas en 0.
-                        · Saldo Neto Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
-                    </div>
-                    <div><span class="text-danger fw-bold">👉 Presiona "Guardar Cambios en BD" para confirmar.</span></div>
+        fbMsg = `
+            <div class="alert alert-danger py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <span class="fs-6 fw-bold text-danger me-2">❌ Rechazo Total:</span>
+                    Sobretiempo dejado en 0. Deuda pendiente se mantiene íntegra.
+                    · Saldo Neto Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
                 </div>
-            `;
-        }
+                <div class="text-danger small fw-semibold"><i class="bi bi-arrow-right-circle me-1"></i>Previsualización lista. Confirma con el botón verde.</div>
+            </div>
+        `;
 
     } else if (accion === 'saldo_objetivo') {
         const valStr = (document.getElementById('asistente-horas-objetivo')?.value || '0').trim();
@@ -3216,40 +3226,42 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
             }
         });
 
-        parsedRows.forEach(pr => {
-            const sel = document.getElementById(`sel-estado-${pr.fecha}`);
-            const inp = document.getElementById(`input-min-${pr.fecha}`);
-            const lbl = document.getElementById(`lbl-min-${pr.fecha}`);
-            const chk = document.getElementById(`chk-he-${pr.fecha}`);
-            if (sel) sel.value = pr.nuevoEstado;
-            if (inp) {
-                inp.value = pr.minutosAut;
-                inp.disabled = (pr.nuevoEstado !== 'APROBADO');
-                if (pr.nuevoEstado !== 'APROBADO') inp.classList.add('opacity-50');
-                else inp.classList.remove('opacity-50');
-            }
-            if (lbl) lbl.textContent = formatExactMinutesToTime(pr.minutosAut);
-            if (chk) chk.checked = true;
-            window.onRowHEChange(pr.fecha);
-        });
-
         const rawSaldoProy = totalAsignado - deudaExacta;
         const saldoSign = rawSaldoProy > 0 ? '+' : (rawSaldoProy < 0 ? '-' : '');
         const projStr = `${saldoSign}${formatExactMinutesToTime(Math.abs(rawSaldoProy))}`;
 
-        const fb = document.getElementById('asistente-feedback');
-        if (fb) {
-            fb.innerHTML = `
-                <div class="alert alert-info py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div>
-                        <strong>🎯 Saldo Objetivo:</strong> +${formatExactMinutesToTime(totalAsignado)} autorizados en ${diasAprobados} jornadas.
-                        · Saldo Neto Proyectado: <span class="badge bg-primary fs-6">${projStr}</span>
-                    </div>
-                    <div><span class="text-primary fw-bold">👉 Presiona "Guardar Cambios en BD" para confirmar.</span></div>
+        fbMsg = `
+            <div class="alert alert-info py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <span class="fs-6 fw-bold text-primary me-2">🎯 Saldo Objetivo Personalizado:</span>
+                    Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornadas.
+                    · Saldo Neto Proyectado: <span class="badge bg-primary fs-6">${projStr}</span>
                 </div>
-            `;
-        }
+                <div class="text-primary small fw-semibold"><i class="bi bi-arrow-right-circle me-1"></i>Previsualización lista. Confirma con el botón verde.</div>
+            </div>
+        `;
     }
+
+    // Actualizar UI de forma unificada para todas las filas
+    parsedRows.forEach(pr => {
+        const sel = document.getElementById(`sel-estado-${pr.fecha}`);
+        const inp = document.getElementById(`input-min-${pr.fecha}`);
+        const timeInp = document.getElementById(`input-time-${pr.fecha}`);
+        const chk = document.getElementById(`chk-he-${pr.fecha}`);
+        if (sel) sel.value = pr.nuevoEstado;
+        if (inp) inp.value = pr.minutosAut;
+        if (timeInp) {
+            timeInp.value = (pr.nuevoEstado === 'RECHAZADO' && pr.minutosAut === 0) ? '00:00:00' : formatExactMinutesToTime(pr.minutosAut);
+            timeInp.disabled = (pr.nuevoEstado !== 'APROBADO');
+            if (pr.nuevoEstado !== 'APROBADO') timeInp.classList.add('opacity-50');
+            else timeInp.classList.remove('opacity-50');
+        }
+        if (chk) chk.checked = true;
+        window.onRowHEChange(pr.fecha);
+    });
+
+    const fb = document.getElementById('asistente-feedback');
+    if (fb && fbMsg) fb.innerHTML = fbMsg;
 
     const btnGuardar = document.getElementById('btn-aplicar-cuadre');
     if (btnGuardar) {
@@ -3288,9 +3300,10 @@ window.aplicarCuadreHE = async function(empleadoId) {
     });
     
     const btn = document.getElementById('btn-aplicar-cuadre');
+    const origHtml = btn ? btn.innerHTML : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Registrando en BD...';
     }
     
     try {
@@ -3305,7 +3318,7 @@ window.aplicarCuadreHE = async function(empleadoId) {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(`✅ Cuadre aplicado exitosamente (${items.length} jornadas actualizadas)`, 'success');
+            showToast(`✅ Cuadre registrado exitosamente (${items.length} jornadas guardadas en BD)`, 'success');
             const mEl = document.getElementById('modalBatchHE');
             if (mEl) {
                 const modal = bootstrap.Modal.getInstance(mEl);
@@ -3318,14 +3331,14 @@ window.aplicarCuadreHE = async function(empleadoId) {
             showToast('Error al guardar: ' + (data.detail || 'Error desconocido'), 'danger');
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Aplicar Cuadre';
+                btn.innerHTML = origHtml || '<i class="bi bi-floppy-fill me-1"></i>Confirmar y Guardar en BD';
             }
         }
     } catch(err) {
         showToast('Error de conexión: ' + err.message, 'danger');
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Aplicar Cuadre';
+            btn.innerHTML = origHtml || '<i class="bi bi-floppy-fill me-1"></i>Confirmar y Guardar en BD';
         }
     }
 };
