@@ -6,6 +6,7 @@ Python 3.13.11 - Async/Await
 
 from fastapi import FastAPI, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -102,6 +103,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Compresión gzip (JSON de la matriz de marcaciones ~1.4 MB → ~150 KB; también JS/CSS/HTML).
+# Starlette excluye text/event-stream, así que los SSE de sync no se ven afectados.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 # Montar frontend (archivos estáticos)
 frontend_path = Path(__file__).parent.parent / "frontend"

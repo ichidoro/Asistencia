@@ -5606,12 +5606,15 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         const hEnt = di && di.hora_entrada_real ? `'${di.hora_entrada_real}'` : 'null';
         const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
         const cellContent = _analiticaCellContent(di, d, emp, stateMarcacionesApp.viewMode, isFer);
-        const tooltipData = _buildRichTooltipData(di, d, dt, feriadoDesc, isWE, emp);
+        // Rendimiento: antes cada celda llevaba incrustado el HTML completo de su tooltip en
+        // data-bs-content (~3 KB × miles de celdas = 12 MB por render). Ahora solo se guardan
+        // los datos en memoria y el tooltip se arma al pasar el mouse (ver _getCellTipHtml).
+        const tipKey = emp.id + '|' + d;
+        (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp });
         return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
-                    data-grid-tooltip data-bs-html="true"
-                    data-bs-content="${tooltipData}">
+                    data-grid-tooltip data-tip="${tipKey}">
                     ${cellContent}
                 </td>`;
     }).join('');
@@ -5930,6 +5933,7 @@ function renderVistaAnalitica(respData, container) {
         container.innerHTML = '<div class="alert alert-info">No hay datos para mostrar.</div>';
         return;
     }
+    window.__mxTipReg = new Map();   // datos de tooltips perezosos (se rearman en cada render)
 
     // ── 1. Organizar empleados (igual que renderTeamMatrix) ──────────────────
     const employees = [];
@@ -6310,7 +6314,7 @@ function renderVistaAnalitica(respData, container) {
         }
 
         function _showFlyTip(td, e) {
-            const html = td.getAttribute('data-bs-content');
+            const html = _getCellTipHtml(td);
             if (!html) return;
             flyTip.innerHTML = `<div class="popover-body p-0">${html}</div>`;
             flyTip.style.display = 'block';
@@ -7714,6 +7718,19 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     `;
 
     return _escAttr(html);
+}
+
+// Arma el HTML del tooltip de una celda bajo demanda (hover). Cachea el último por celda.
+function _getCellTipHtml(td) {
+    if (td._tipHtml) return td._tipHtml;
+    const legacy = td.getAttribute('data-bs-content');   // compatibilidad con celdas antiguas
+    if (legacy) return legacy;
+    const reg = window.__mxTipReg && window.__mxTipReg.get(td.getAttribute('data-tip'));
+    if (!reg) return '';
+    const escaped = _buildRichTooltipData(reg.di, reg.d, reg.dt, reg.feriadoDesc, reg.isWE, reg.emp);
+    // _buildRichTooltipData devuelve el HTML escapado para atributo; aquí se necesita el HTML real
+    td._tipHtml = escaped.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    return td._tipHtml;
 }
 
 function _escAttr(html) {
