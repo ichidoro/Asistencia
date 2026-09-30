@@ -663,19 +663,11 @@ class QuantumShiftWeekMatcher:
             min_phase_dist = float('inf')
             winner_sem = 1
 
-            # Buscar primer y último evento físico en el horizonte
-            if len(marcas_cand) == 1:
-                m_single = marcas_cand[0]
-                t_single = str(m_single.get('tipo', '')).strip().lower()
-                if t_single in _TIPOS_S:
-                    first_m = None
-                    last_m = m_single
-                else:
-                    first_m = m_single
-                    last_m = None
-            else:
-                first_m = marcas_cand[0]
-                last_m = marcas_cand[-1]
+            # Buscar primer evento de entrada y último evento de salida en el horizonte candidato
+            entradas_cand = [m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_E]
+            salidas_cand = [m for m in marcas_cand if str(m.get('tipo', '')).strip().lower() in _TIPOS_S]
+            first_m = entradas_cand[0] if entradas_cand else (marcas_cand[0] if marcas_cand else None)
+            last_m = salidas_cand[-1] if salidas_cand else (marcas_cand[-1] if len(marcas_cand) > 1 else None)
 
             for sem_idx in range(1, total_sems + 1):
                 cfg_sem = turnos_dict.get(sem_idx, {}).get(dia_semana, {})
@@ -1092,7 +1084,14 @@ class QuantumMatrixEngine:
                 if start_horizon <= dt_l <= end_horizon:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
                     if dt_l.strftime("%Y-%m-%d") > fecha:
-                        if not es_nocturno or not has_night_presence:
+                        # Las ENTRADAS del día siguiente pertenecen a la jornada de mañana
+                        if tipo_m in _TIPOS_E:
+                            continue
+                        # Las SALIDAS del día siguiente solo se absorben si hubo presencia física previa en 'fecha'
+                        has_presence_today = any(str(x.get('fecha_hora', ''))[:10] == fecha for x in marcas_no_consumidas)
+                        if not has_presence_today:
+                            continue
+                        if es_nocturno and not has_night_presence:
                             continue
                     marcas_disponibles.append(l)
             except Exception:
