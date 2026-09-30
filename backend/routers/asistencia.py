@@ -3,6 +3,7 @@ Router - Asistencia
 Endpoints para procesar y consultar asistencia
 """
 
+from backend.core.fast_json import fast_json
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -1018,9 +1019,9 @@ async def get_reporte_asistencia(
         current_user.verificar_acceso_area(area, "el área solicitada")
     areas_permitidas = current_user.get_areas_filter()
 
-    return await service.repository.get_asistencias_periodo(
+    return fast_json(await service.repository.get_asistencias_periodo(
         fecha_inicio, fecha_fin, area, turno_id=turno_id, areas_permitidas=areas_permitidas
-    )
+    ))
 
 @router.get("/stats/")
 async def get_asistencia_stats(
@@ -1072,7 +1073,7 @@ async def get_asistencia_matrix(
         )
         data["bonos_evaluacion"] = bonos_eval
 
-    return data
+    return fast_json(data)
 
 
 
@@ -1136,7 +1137,7 @@ async def get_matriz_asistencia(
         )
         data["bonos_evaluacion"] = bonos_eval
 
-    return data
+    return fast_json(data)
 
 
 @router.get("/calendar/")

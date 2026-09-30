@@ -322,6 +322,12 @@ def translate_sql(sql: str) -> str:
 
     if up.startswith(("CREATE TABLE", "ALTER TABLE")):
         s = _translate_ddl(s)  # antes de fechas: TIMESTAMP→TEXT no debe tocar el '::timestamp' generado
+    # SQLite: CURRENT_TIMESTAMP/DATE/TIME devuelven TEXT en UTC ('YYYY-MM-DD HH:MM:SS'). En Postgres serian
+    # timestamptz/date y al guardarse en columnas TEXT quedarian '2026-09-30 16:06:02.6+00', que rompe
+    # la validacion de respuestas (ej. /api/auth/me/ con ultimo_acceso). Se emiten como texto.
+    s = _sub_outside_literals(s, r"\bCURRENT_TIMESTAMP\b", "to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')")
+    s = _sub_outside_literals(s, r"\bCURRENT_DATE\b", "to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')")
+    s = _sub_outside_literals(s, r"\bCURRENT_TIME\b", "to_char(now() AT TIME ZONE 'UTC', 'HH24:MI:SS')")
     s = _rewrite_dates(s)
     s = _rewrite_minmax(s)
     s = _sub_outside_literals(s, r"\bIFNULL\s*\(", "COALESCE(")

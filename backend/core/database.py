@@ -69,7 +69,11 @@ def _norm_out(v: Any) -> Any:
 
 
 def _row(r: asyncpg.Record) -> Dict[str, Any]:
-    return {k: _norm_out(v) for k, v in r.items()}
+    d = dict(r)
+    for k, v in d.items():
+        if v.__class__ is Decimal:      # solo las columnas NUMERIC pasan por la conversion
+            d[k] = _norm_out(v)
+    return d
 
 
 def _coerce(value: Any, pg_type: str) -> Any:

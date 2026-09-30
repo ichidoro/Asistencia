@@ -66,3 +66,20 @@ correos ni respaldos de la instancia real.
 `SECRET_KEY`, `CRON_SECRET`, clave de Bioalba y app-password SMTP tienen valores por defecto en el repo (y en su
 historial). El `.env` los sobrescribe, pero conviene rotarlos y quitarlos del código. El token de Turso ya no está en el código
 actual, pero **sigue en el historial de git**: rotarlo en Turso.
+
+## Operación y rendimiento
+
+- **Postgres** arranca con parámetros ajustados (`docker-compose.yml`, bloque `command`) y `pg_stat_statements`.
+  Activarlo una vez: `docker compose exec db psql -U asistencia -d asistencia_db -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"`;
+  luego `select calls, total_exec_time, query from pg_stat_statements order by total_exec_time desc limit 10`.
+- **La app corre sin root (uid 1000)**. Si `logs/`, `downloads/` o `backups/` fueron creados por root (instalaciones antiguas):
+  `docker run --rm -v "$PWD:/w" alpine chown -R 1000:1000 /w/logs /w/downloads /w/backups`.
+- **Respaldos**: `backup-postgres.sh` (diario 02:00) y `restore-test.sh` (domingo 03:00, restaura el último respaldo en una BD
+  temporal y compara conteos). Un respaldo que no restaura no sirve: revisar `logs/restore-test.log`.
+- **Respuestas grandes** (`/asistencia/matriz`, `/matrix`, `/reporte`) usan `backend/core/fast_json.py` (orjson) en vez de
+  `jsonable_encoder` de FastAPI (3× más rápido). Usarlo en endpoints nuevos con payloads de miles de filas.
+- **Tooltips de la tabla de Marcaciones** se arman al pasar el mouse (`window.__mxTipReg` + `_getCellTipHtml`). No volver a
+  incrustar HTML en atributos por celda: pesaba 12 MB por render.
+- **Fechas/horas**: `CURRENT_TIMESTAMP/DATE/TIME` se traducen a TEXT UTC (`YYYY-MM-DD HH:MM:SS`), igual que SQLite.
+- **Claves foráneas con huérfanos** (SQLite no las hacía cumplir): `load_sqlite_to_postgres.py` las deja `NOT VALID` para que
+  los respaldos restauren sin perder historial.
