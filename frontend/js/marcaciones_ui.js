@@ -231,7 +231,7 @@ function renderMarcacionesToolbar(container) {
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0 d-flex align-items-center gap-2">
                 <i class="bi bi-calendar-check" style="color:#3f6fd6"></i>
-                <span style="font-weight:700;color:#1e293b">Control de Asistencia</span>
+                <span style="font-weight:700;color:#1e293b">Ya funciona dani desde tu compu</span>
             </h2>
             <div class="d-flex gap-2 align-items-center">
                 <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
