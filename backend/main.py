@@ -7,7 +7,7 @@ Python 3.13.11 - Async/Await
 from fastapi import FastAPI, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -285,32 +285,33 @@ async def root(request: Request):
         "frontend": "/static/index.html"
     }
 
-@app.get("/login.html", tags=["Root"], include_in_schema=False)
-async def login_redirect(request: Request):
-    """Permite el acceso a login.html desde el root"""
+_NO_CACHE = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0"
+}
+
+
+@app.get("/login", tags=["Root"], include_in_schema=False)
+async def login_page(request: Request):
+    """Pantalla de inicio de sesion (direccion limpia: /login)."""
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "version": settings.APP_VERSION, "startup_id": STARTUP_ID},
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
+        headers=_NO_CACHE
     )
+
+
+@app.get("/login.html", tags=["Root"], include_in_schema=False)
+async def login_html_redirect():
+    """Compatibilidad: enlaces guardados a /login.html pasan a /login."""
+    return RedirectResponse(url="/login", status_code=301)
+
 
 @app.get("/index.html", tags=["Root"], include_in_schema=False)
-async def index_redirect(request: Request):
-    """Permite el acceso a index.html desde el root"""
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "version": settings.APP_VERSION, "startup_id": STARTUP_ID},
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-    )
-
+async def index_redirect():
+    """Compatibilidad: /index.html pasa a la raiz (/), para mostrar la direccion sin el nombre del archivo."""
+    return RedirectResponse(url="/", status_code=301)
 
 
 @app.get("/health", tags=["Health"])

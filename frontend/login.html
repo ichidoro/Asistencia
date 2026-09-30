@@ -196,7 +196,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Verificar si ya está logueado
             if (AuthService.getToken()) {
-                window.location.href = '/index.html';
+                window.location.href = '/';
             }
 
             const loginForm = document.getElementById('loginForm');
@@ -303,11 +303,11 @@
                                 }, 50);
                                 overlay.style.transition = 'opacity 0.4s';
                                 overlay.style.opacity = '0';
-                                setTimeout(() => { overlay.remove(); window.location.href = '/index.html'; }, 400);
+                                setTimeout(() => { overlay.remove(); window.location.href = '/'; }, 400);
                             }
                         });
                     } else {
-                        window.location.href = '/index.html';
+                        window.location.href = '/';
                     }
                 } catch (error) {
                     // Restaurar estado

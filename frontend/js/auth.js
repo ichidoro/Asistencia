@@ -92,7 +92,7 @@ const AuthService = {
         if (razon) {
             alert(razon);
         }
-        window.location.href = '/login.html';
+        window.location.href = '/login';
     },
 
     getToken: function () {
@@ -175,7 +175,7 @@ const AuthService = {
         const isLogin = path.endsWith('/login.html') || path === '/login';
 
         if (!this.getToken() && !isLogin) {
-            window.location.href = '/login.html';
+            window.location.href = '/login';
         }
     },
 
