@@ -18,8 +18,7 @@ Cosas a saber al escribir SQL nuevo:
 
 ```bash
 git clone <repo> asistencia && cd asistencia
-git checkout postgres            # o la rama que se quiera seguir
-echo postgres > .deploy-branch   # rama que sigue el autodeploy
+echo main > .deploy-branch       # rama que sigue el autodeploy (por defecto main)
 cp .env.example .env             # completar POSTGRES_PASSWORD, SECRET_KEY, CRON_SECRET
 docker compose up -d --build     # crea el esquema al arrancar
 ```
@@ -83,3 +82,10 @@ actual, pero **sigue en el historial de git**: rotarlo en Turso.
 - **Fechas/horas**: `CURRENT_TIMESTAMP/DATE/TIME` se traducen a TEXT UTC (`YYYY-MM-DD HH:MM:SS`), igual que SQLite.
 - **Claves foráneas con huérfanos** (SQLite no las hacía cumplir): `load_sqlite_to_postgres.py` las deja `NOT VALID` para que
   los respaldos restauren sin perder historial.
+
+## Ramas
+
+Hay **una sola rama: `main`** (Postgres es la versión oficial). Todo se sube a `main` y el servidor lo despliega solo en ~1 minuto.
+La última versión que usaba Turso quedó guardada como etiqueta `ultima-version-turso` (no es una rama; sirve solo de referencia o marcha atrás):
+`git checkout ultima-version-turso`.
+Quien tenía la rama `postgres` en su computador: `git fetch --prune && git checkout main && git pull`.

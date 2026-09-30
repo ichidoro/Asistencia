@@ -1,5 +1,8 @@
 # Traspaso: apagar Turso y Google Cloud Run, dejar el servidor como principal
 
+> **Estado (30-09-2026): traspaso ejecutado.** El servidor es la única instalación, `main` es Postgres y Turso/Cloud Run ya no reciben escrituras.
+> Queda: dar de baja Turso/Cloud Run en Google, y rotar las credenciales que estuvieron en el historial público.
+
 Objetivo: que el servidor (Docker + PostgreSQL) sea **la única instalación**, y dar de baja Cloud Run y Turso.
 El orden importa: si se apaga algo antes de tiempo se pierden marcaciones o decisiones hechas en el sistema.
 
