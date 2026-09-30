@@ -5461,52 +5461,16 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             const condonaSad = (condTipo === 1 || condTipo === 3 || condTipo === 5);
             const rawSad = condonaSad ? 0 : Number(di.minutos_salida_adelantada || 0);
 
-            let dayNetDeuda = 0;
-            let dayCol = 0;
-            let dayPer = 0;
-            let dayAtr = 0;
-            let daySad = 0;
-
-            if (condTipo === 5) {
-                // Cierre de Faena / Turno completo condonado
-                dayNetDeuda = 0;
-                dayCol = 0;
-                dayPer = 0;
-                dayAtr = 0;
-                daySad = 0;
-            } else {
-                const baseDeuda = Number(di.minutos_deuda || 0);
-                if (baseDeuda > 0) {
-                    dayNetDeuda = baseDeuda;
-                    const rawTotal = rawCol + rawPer + rawAtr + rawSad;
-                    if (rawTotal > 0) {
-                        if (baseDeuda >= rawTotal) {
-                            dayCol = rawCol;
-                            dayPer = rawPer;
-                            dayAtr = rawAtr;
-                            daySad = rawSad;
-                        } else {
-                            const factor = baseDeuda / rawTotal;
-                            dayCol = rawCol * factor;
-                            dayPer = rawPer * factor;
-                            dayAtr = rawAtr * factor;
-                            daySad = rawSad * factor;
-                        }
-                    }
-                } else {
-                    dayNetDeuda = 0;
-                    dayCol = 0;
-                    dayPer = 0;
-                    dayAtr = 0;
-                    daySad = 0;
-                }
-            }
+            // Balance Matricial Limpio y Canónico:
+            // - d_tot acumula la deuda neta imputable (minutos_deuda), respetando condonación completa (Tipo 5).
+            // - min_col, min_per, min_atr, min_sad acumulan fielmente los eventos reales de reloj descontando condonaciones específicas.
+            const dayNetDeuda = (condTipo === 5) ? 0 : Number(di.minutos_deuda || 0);
 
             d_tot   += dayNetDeuda;
-            min_col += dayCol;
-            min_per += dayPer;
-            min_atr += dayAtr;
-            min_sad += daySad;
+            min_col += rawCol;
+            min_per += rawPer;
+            min_atr += rawAtr;
+            min_sad += rawSad;
 
             if ((di.minutos_atraso || 0) > 0 && !condonaAtr) cnt_atr++;
             if ((di.minutos_salida_adelantada || 0) > 0 && !condonaSad) cnt_sad++;

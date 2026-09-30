@@ -1098,6 +1098,19 @@ class QuantumMatrixEngine:
             except Exception as e:
                 logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
 
+        # Selector tensorial de salida óptima para turnos con múltiples marcas de salida:
+        # Si hay 1 entrada y >= 2 salidas sin entrada intermedia, se selecciona la salida que minimiza
+        # la distancia circular de fase hacia la salida teórica contractual, evitando cortar prematuramente.
+        descartadas_multi_salida_ids: Set[Any] = set()
+        if not is_bolsa and hora_sal_teo:
+            e_cands = [l for l in marcas_disponibles if str(l.get('tipo', '')).strip().lower() in _TIPOS_E]
+            s_cands = [l for l in marcas_disponibles if str(l.get('tipo', '')).strip().lower() in _TIPOS_S]
+            if len(e_cands) == 1 and len(s_cands) >= 2:
+                p_sal_teo = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
+                mejor_salida = min(s_cands, key=lambda s: abs(QuantumPhaseTopology.circular_distance(p_sal_teo, QuantumPhaseTopology.time_to_phase(str(s.get('fecha_hora', ''))[11:16]))))
+                descartadas_multi_salida_ids = {s.get('id') for s in s_cands if s.get('id') and s.get('id') != mejor_salida.get('id')}
+                marcas_disponibles = [l for l in marcas_disponibles if l.get('id') not in descartadas_multi_salida_ids]
+
         # 4. Segmentación Multi-Bloque (+2 y Emergencias)
         segment_res = MultiBlockTensorSolver.segment_blocks(
             marcas_disponibles,
@@ -1107,7 +1120,7 @@ class QuantumMatrixEngine:
         )
 
         bloque_p = segment_res['bloque_principal']
-        marcas_consumidas_ids = list(segment_res['marcas_consumidas_ids'])
+        marcas_consumidas_ids = list(set(segment_res['marcas_consumidas_ids']) | descartadas_multi_salida_ids)
 
         # Resultado base
         res: Dict[str, Any] = {
