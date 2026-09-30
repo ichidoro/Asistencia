@@ -19,7 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ backend/
 COPY frontend/ frontend/
 
-RUN mkdir -p downloads logs
+RUN mkdir -p downloads logs     && useradd --uid 1000 --create-home --shell /usr/sbin/nologin app     && chown -R app:app /app
+USER app
 
 EXPOSE 8000
 

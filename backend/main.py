@@ -111,7 +111,23 @@ app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 # Montar frontend (archivos estáticos)
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
+    class CachedStaticFiles(StaticFiles):
+        """StaticFiles con Cache-Control: las URLs versionadas (?v=<startup_id>, que cambia en cada
+        deploy) se cachean un año; fuentes/imagenes 7 dias; el resto se revalida por ETag (304)."""
+        _LONG = (".woff2", ".woff", ".ttf", ".png", ".jpg", ".jpeg", ".ico", ".svg", ".webp", ".mp3")
+
+        async def get_response(self, path, scope):
+            resp = await super().get_response(path, scope)
+            if resp.status_code == 200:
+                if b"v=" in scope.get("query_string", b""):
+                    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                elif path.lower().endswith(self._LONG):
+                    resp.headers["Cache-Control"] = "public, max-age=604800"
+                else:
+                    resp.headers["Cache-Control"] = "no-cache"
+            return resp
+
+    app.mount("/static", CachedStaticFiles(directory=str(frontend_path)), name="static")
     # Configurar Jinja2 Templates para cache busting dinámico
     templates = Jinja2Templates(directory=str(frontend_path))
     logger.info(f"Frontend montado en /static desde {frontend_path}")

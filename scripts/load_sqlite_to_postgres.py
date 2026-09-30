@@ -22,6 +22,33 @@ from backend.core.sql_compat import convert_placeholders, translate_sql  # noqa:
 
 sys.stdout.reconfigure(encoding="utf-8")
 
+# SQLite no hacia cumplir las claves foraneas: pueden existir filas que apuntan a registros borrados.
+# Postgres si las exige, y un respaldo con esas filas no se podria restaurar. Las relaciones con huerfanos
+# se dejan NOT VALID (el historial se conserva; las filas nuevas si se validan).
+FIX_ORPHAN_FKS = """
+DO $$
+DECLARE r record; n bigint; cond text; cols text[]; pcols text[]; i int; def text;
+BEGIN
+ FOR r IN SELECT c.oid, c.conname, c.conrelid::regclass::text AS child, c.confrelid::regclass::text AS parent,
+                 c.conkey, c.confkey, c.conrelid, c.confrelid AS pid, c.convalidated
+          FROM pg_constraint c WHERE c.contype='f' LOOP
+  SELECT array_agg(a.attname ORDER BY k.ord) INTO cols FROM unnest(r.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=r.conrelid AND a.attnum=k.attnum;
+  SELECT array_agg(a.attname ORDER BY k.ord) INTO pcols FROM unnest(r.confkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=r.pid AND a.attnum=k.attnum;
+  cond := '';
+  FOR i IN 1..array_length(cols,1) LOOP
+    cond := cond || CASE WHEN i>1 THEN ' AND ' ELSE '' END || format('c.%I = p.%I', cols[i], pcols[i]);
+  END LOOP;
+  EXECUTE format('SELECT count(*) FROM %s c WHERE c.%I IS NOT NULL AND NOT EXISTS (SELECT 1 FROM %s p WHERE %s)', r.child, cols[1], r.parent, cond) INTO n;
+  IF n>0 AND r.convalidated THEN
+    def := pg_get_constraintdef(r.oid);
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.child, r.conname);
+    EXECUTE format('ALTER TABLE %s ADD CONSTRAINT %I %s NOT VALID', r.child, r.conname, def);
+    RAISE NOTICE 'FK con % huerfanas pasada a NOT VALID: %.%', n, r.child, r.conname;
+  END IF;
+ END LOOP;
+END $$;
+"""
+
 SKIP_SUFFIXES = ("_corrupt", "_new", "_old", "_bak")
 
 
@@ -96,6 +123,8 @@ async def main(path: str, keep: bool):
             seq = await pg.fetchval("SELECT pg_get_serial_sequence($1, 'id')", f'"{t}"')
             if seq:
                 await pg.execute(f'SELECT setval($1, COALESCE((SELECT MAX(id) FROM "{t}"), 0) + 1, false)', seq)
+    pg.add_log_listener(lambda c, m: print('  aviso:', m.message))
+    await pg.execute(FIX_ORPHAN_FKS)
     print(f"\n✅ {total} filas cargadas en {len(tables)} tablas")
     await pg.close()
 

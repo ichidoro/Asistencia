@@ -11,9 +11,40 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-asistencia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD en .env}
       TZ: America/Santiago
+    # Ajuste para un servidor de ~30 GB de RAM con disco NVMe y una BD chica (decenas de MB):
+    # todo el working set cabe en memoria; pg_stat_statements permite ver qué consultas cuestan.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=6GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - max_connections=50
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_compression=on
+      - -c
+      - log_min_duration_statement=500
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backups:/backups
+    logging: &logs
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-asistencia} -d ${POSTGRES_DB:-asistencia_db}"]
       interval: 10s
@@ -38,6 +69,11 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./downloads:/app/downloads
+    logging: *logs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
 volumes:
   pgdata:

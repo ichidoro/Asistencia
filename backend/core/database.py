@@ -11,6 +11,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import asyncpg
@@ -23,6 +24,23 @@ from .sql_compat import convert_placeholders, split_statements, translate_sql
 _tx_conn: contextvars.ContextVar[Optional[asyncpg.Connection]] = contextvars.ContextVar("tx_conn", default=None)
 
 _INSERT_RE = re.compile(r"^\s*INSERT\s+INTO\s+\"?(\w+)\"?", re.IGNORECASE)
+
+
+@lru_cache(maxsize=4096)
+def _split_cached(query: str) -> tuple:
+    return tuple(split_statements(query))
+
+
+@lru_cache(maxsize=4096)
+def _translate_cached(query: str) -> tuple:
+    """(sql_postgres, es_select, tabla_insert_sin_RETURNING|None). Las mismas consultas se repiten
+    miles de veces por request: traducir (regex) una sola vez y reutilizar."""
+    translated = translate_sql(query)
+    head = translated.lstrip().upper()
+    is_select = head.startswith(("SELECT", "WITH", "VALUES"))
+    m = _INSERT_RE.match(translated) if head.startswith("INSERT") else None
+    insert_table = m.group(1).lower() if (m and "RETURNING" not in head) else None
+    return convert_placeholders(translated), is_select, insert_table
 
 
 class Result:
@@ -200,23 +218,18 @@ class PostgresDatabase:
     async def _do(self, query: str, params: Optional[Union[tuple, list]]) -> Result:
         self.last_activity_time = time.time()
         params = tuple(params or ())
-        stmts = split_statements(query)
+        stmts = _split_cached(query)
         if len(stmts) > 1 and not params:  # script de varias sentencias
             res = Result()
             async with self.transaction():
                 for st in stmts:
                     res = await self._do(st, None)
             return res
-        translated = translate_sql(query)
-        sql = convert_placeholders(translated)
-        head = translated.lstrip().upper()
-        is_select = head.startswith(("SELECT", "WITH", "VALUES"))
-        m = _INSERT_RE.match(translated) if head.startswith("INSERT") else None
+        sql, is_select, insert_table = _translate_cached(query)
         add_returning = False
-        if m and "RETURNING" not in head:
-            if await self._table_has_id(m.group(1).lower()):
-                sql += " RETURNING id"
-                add_returning = True
+        if insert_table and await self._table_has_id(insert_table):
+            sql += " RETURNING id"
+            add_returning = True
         try:
             async with self._conn() as (conn, in_tx):
                 if is_select or add_returning:
