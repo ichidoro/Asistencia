@@ -23,16 +23,12 @@ class TursoDatabase:
     def __init__(self):
         self.conn: Optional[libsql.Connection] = None
         
-        # Turso Config
-        self.use_turso = bool(
-            settings.TURSO_DATABASE_URL and 
-            ("libsql" in settings.TURSO_DATABASE_URL or "turso.io" in settings.TURSO_DATABASE_URL)
-        )
+        # Configuración de Base de Datos (Turso Cloud, sqld local o archivo SQLite local)
+        self.use_turso = bool(settings.TURSO_DATABASE_URL)
         
         if not self.use_turso:
             raise RuntimeError(
                 "TURSO_DATABASE_URL es obligatorio. "
-                "No se permite base de datos local. "
                 "Configura las variables de entorno TURSO_DATABASE_URL y TURSO_AUTH_TOKEN."
             )
         
@@ -96,11 +92,10 @@ class TursoDatabase:
     async def _connect_locked(self, retry: bool = True) -> None:
         try:
             logger.warning("ðŸš€ Conectando directamente a Turso Cloud")
-            self.conn = await asyncio.to_thread(
-                libsql.connect, 
-                database=self.turso_url, 
-                auth_token=self.turso_token
-            )
+            connect_kwargs = {"database": self.turso_url}
+            if self.turso_token:
+                connect_kwargs["auth_token"] = self.turso_token
+            self.conn = await asyncio.to_thread(libsql.connect, **connect_kwargs)
 
             self._connected = True
             logger.info("â˜ï¸ Modo Nube Pura: Se omiten PRAGMAs locales (no soportados por Hrana)")
