@@ -142,7 +142,10 @@ class QuantumPhaseTopology:
             if hora_sal_efectiva:
                 p_sal = cls.time_to_phase(hora_sal_efectiva)
                 margen_out = anclaje_salida_minutos + banda_tolerancia_minutos
-                if (p_sal + margen_out) >= 1440.0:
+                if p_sal >= 1260.0:  # 21:00 o posterior (turnos de tarde/vespertinos)
+                    ext_min = max(p_sal + margen_out, 1440.0 + 300.0)  # hasta las 05:00 AM del día siguiente
+                    end_dt = dt_base + timedelta(minutes=ext_min)
+                elif (p_sal + margen_out) >= 1440.0:
                     end_dt = dt_base + timedelta(minutes=p_sal + margen_out)
                 else:
                     end_dt = dt_base + timedelta(days=1, seconds=-1)
@@ -622,6 +625,18 @@ class QuantumShiftWeekMatcher:
         marcas_hoy = [l for l in logs if l.get('fecha_hora', '')[:10] == fecha_str]
         marcas_madrugada_next = []
 
+        # Si en fecha_str hay marcas diurnas/vespertinas (>= 05:00 AM),
+        # las marcas de tipo Salida en la madrugada temprana (< 05:00 AM) son un remanente
+        # de salida de la noche anterior, NO la entrada del turno de hoy.
+        marcas_posteriores = [l for l in marcas_hoy if int(str(l.get('fecha_hora', ''))[11:13] or 0) >= 5]
+        if marcas_posteriores:
+            marcas_hoy_eval = [
+                l for l in marcas_hoy 
+                if not (int(str(l.get('fecha_hora', ''))[11:13] or 0) < 5 and str(l.get('tipo', '')).strip().lower() in _TIPOS_S)
+            ]
+        else:
+            marcas_hoy_eval = marcas_hoy
+
         if tiene_nocturno:
             entradas_nocturnas_teo = [
                 QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada'))
@@ -634,7 +649,7 @@ class QuantumShiftWeekMatcher:
                 )
             ]
             hay_entrada_noche_hoy = False
-            for l in marcas_hoy:
+            for l in marcas_hoy_eval:
                 tipo_l = str(l.get('tipo', '')).strip().lower()
                 if tipo_l in _TIPOS_E:
                     p_l = QuantumPhaseTopology.time_to_phase(str(l.get('fecha_hora', ''))[11:16])
@@ -657,7 +672,7 @@ class QuantumShiftWeekMatcher:
                         if p_l <= (max_sal_teo + 120.0):
                             marcas_madrugada_next.append(l)
 
-        marcas_cand = marcas_hoy + marcas_madrugada_next
+        marcas_cand = marcas_hoy_eval + marcas_madrugada_next
 
         if marcas_cand:
             min_phase_dist = float('inf')
@@ -913,6 +928,9 @@ class QuantumMatrixEngine:
             if p_out < p_in:
                 es_nocturno = True
 
+        hora_sal_efectiva = hora_sal_teo
+        hora_ent_efectiva = hora_ent_teo
+
         ext_horizon_bolsa = None
         if is_bolsa and is_pvl:
             # ─────────────────────────────────────────────────────────────────
@@ -1051,6 +1069,9 @@ class QuantumMatrixEngine:
                 if salidas_validas:
                     hora_max_ciclos = max(salidas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
 
+            hora_sal_efectiva = hora_max_ciclos or hora_sal_teo
+            hora_ent_efectiva = hora_min_ciclos or hora_ent_teo
+
             start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
                 fecha_str=fecha,
                 hora_ent_teo_str=hora_ent_teo,
@@ -1092,8 +1113,21 @@ class QuantumMatrixEngine:
                 if start_horizon <= dt_l <= end_horizon:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
                     if dt_l.strftime("%Y-%m-%d") > fecha:
-                        if not es_nocturno or not has_night_presence:
-                            continue
+                        if es_nocturno:
+                            if not has_night_presence:
+                                continue
+                        else:
+                            # Jornada diurna o vespertina: si termina tarde (cerca de medianoche) y hay presencia
+                            # en el día de la jornada, la salida de la madrugada (< 05:00) es la salida natural.
+                            sal_tarde = False
+                            if hora_sal_efectiva:
+                                p_sal_check = QuantumPhaseTopology.time_to_phase(hora_sal_efectiva)
+                                if (p_sal_check + banda_minutos) >= 1440.0 or p_sal_check >= 1260.0:
+                                    sal_tarde = True
+                            is_madrugada_s = (dt_l.hour < 5 and tipo_m in _TIPOS_S)
+                            has_presence_today = any(str(x.get('fecha_hora', ''))[:10] == fecha for x in marcas_no_consumidas)
+                            if not ((sal_tarde or is_madrugada_s) and has_presence_today):
+                                continue
                     marcas_disponibles.append(l)
             except Exception:
                 pass
