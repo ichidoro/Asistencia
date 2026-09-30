@@ -2218,6 +2218,34 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         ? `+${String(Math.floor(minutosMediaHora / 60)).padStart(2,'0')}:${String(minutosMediaHora % 60).padStart(2,'0')}:00`
         : null;
 
+    // ─── MOTOR DE RECOMENDACIÓN INTELIGENTE (COPILOTO DE ASISTENCIA) ──────
+    let estrategiaSugerida = 'cero'; // 'cero' | 'todo' | 'redondeo'
+    let motivoSugerencia = '';
+    let badgeSugerencia = '';
+
+    if (deudaCompensarMin > 0.0083 && totalBruto >= deudaCompensarMin - 0.0083) {
+        // Caso 1: Con deuda y sobretiempo suficiente para cubrirla (Gana-Gana)
+        estrategiaSugerida = 'cero';
+        badgeSugerencia = '⭐ RECOMENDACIÓN ÓPTIMA (Art. 32 Código del Trabajo)';
+        const remanenteMin = totalBruto - deudaCompensarMin;
+        motivoSugerencia = `<strong>${empNombre}</strong> acumula <strong>${formatExactMinutesToTime(deudaCompensarMin)}</strong> de atrasos y dispone de <strong>${formatExactMinutesToTime(totalBruto)}</strong> de sobretiempo. Se sugiere <strong>1. Compensar Deuda (Saldo Cero)</strong> para absorber sus atrasos a costo $0 para él (Art. 32 CT), liberando además <strong>+${formatExactMinutesToTime(remanenteMin)}</strong> a su favor para pago o descanso.`;
+    } else if (deudaCompensarMin <= 0.0083 && totalBruto > 0) {
+        // Caso 2: Trabajador puntual sin deuda pendiente
+        estrategiaSugerida = 'todo';
+        badgeSugerencia = '⭐ RECOMENDACIÓN LEGAL DT (Pago Íntegro 100%)';
+        motivoSugerencia = `<strong>${empNombre}</strong> no registra atrasos ni deuda de tiempo no trabajado. Conforme a la doctrina de la Dirección del Trabajo (DT), se recomienda <strong>2. Pagar Todo (100% Íntegro)</strong> autorizando sus <strong>+${formatExactMinutesToTime(totalBruto)}</strong> sin deducciones.`;
+    } else if (deudaCompensarMin > totalBruto && totalBruto > 0) {
+        // Caso 3: Deuda supera el sobretiempo disponible
+        estrategiaSugerida = 'cero';
+        badgeSugerencia = '⭐ RECOMENDACIÓN: AMORTIZACIÓN MÁXIMA';
+        const deficitMin = deudaCompensarMin - totalBruto;
+        motivoSugerencia = `La deuda por atrasos (<strong>${formatExactMinutesToTime(deudaCompensarMin)}</strong>) supera el sobretiempo detectado (<strong>${formatExactMinutesToTime(totalBruto)}</strong>). Se sugiere <strong>Compensar al Máximo</strong> para amortizar toda la deuda posible; el saldo por descontar se reduce a solo <strong>-${formatExactMinutesToTime(deficitMin)}</strong>.`;
+    } else {
+        estrategiaSugerida = 'cero';
+        badgeSugerencia = 'ℹ️ ANÁLISIS DE JORNADA';
+        motivoSugerencia = `Revisa las jornadas registradas y selecciona la estrategia operativa adecuada para balancear el ciclo de asistencia.`;
+    }
+
     const canApproveHE = typeof AuthService !== 'undefined' && AuthService.hasPermission("marcaciones.horas_extras");
 
     // 3. Construir filas de la tabla
@@ -2287,32 +2315,63 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                     <div class="modal-body p-0">
                         <!-- KPI BAR & SMART BALANCING ASSISTANT -->
                         <div class="p-3 bg-light border-bottom">
-                            <!-- KPI BAR -->
-                            <div class="row g-2 mb-3">
+                            <!-- BALANZA DE MASA (ORDEN MATEMÁTICO: ENTRADA − SALIDA = BALANCE | INVENTARIO) -->
+                            <div class="row g-2 mb-3 align-items-stretch">
+                                <!-- 1. ENTRADA (+) : HE Aprobadas -->
                                 <div class="col-md-3 col-6">
-                                    <div class="p-2 rounded border text-center shadow-sm" style="background:${currentSaldoBg}; border-color:${currentSaldoColor}40 !important;">
-                                        <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Saldo Neto Actual</div>
-                                        <div class="fs-5 fw-bold" style="color:${currentSaldoColor}">${currentSaldoStr}</div>
+                                    <div class="p-2 rounded bg-white border text-center shadow-sm h-100 position-relative" style="border-top: 3px solid #16a34a !important;">
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                                            <span class="badge bg-success-subtle text-success fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem;">
+                                                <i class="bi bi-plus-circle me-1"></i>A Favor (+)
+                                            </span>
+                                            <span class="text-muted small fw-semibold" style="font-size:0.75rem;">HE Aprobadas</span>
+                                        </div>
+                                        <div class="fs-5 fw-bold text-success" id="kpi-he-aprobadas">${formatExactMinutesToTime(totalAprobado)}</div>
+                                        <div class="text-muted" style="font-size:0.68rem;">Tiempo extra ganado</div>
                                     </div>
                                 </div>
+
+                                <!-- 2. SALIDA (−) : Deuda Tiempo No Trabajado -->
                                 <div class="col-md-3 col-6">
-                                    <div class="p-2 rounded bg-white border text-center shadow-sm">
-                                        <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Deuda Tiempo No Trab.</div>
-                                        <div class="fs-5 fw-bold text-danger">${deudaTotalStr}</div>
+                                    <div class="p-2 rounded bg-white border text-center shadow-sm h-100 position-relative" style="border-top: 3px solid #dc2626 !important;">
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                                            <span class="badge bg-danger-subtle text-danger fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem;">
+                                                <i class="bi bi-dash-circle me-1"></i>Atrasos (−)
+                                            </span>
+                                            <span class="text-muted small fw-semibold" style="font-size:0.75rem;">Deuda No Trab.</span>
+                                        </div>
+                                        <div class="fs-5 fw-bold text-danger" id="kpi-deuda-tiempo">${deudaTotalStr}</div>
+                                        <div class="text-muted" style="font-size:0.68rem;">Atrasos y salidas anticipadas</div>
                                     </div>
                                 </div>
+
+                                <!-- 3. BALANCE (=) : Saldo Neto Actual -->
                                 <div class="col-md-3 col-6">
-                                    <div class="p-2 rounded bg-white border text-center shadow-sm">
-                                        <div class="text-muted small fw-semibold" style="font-size:0.75rem;">HE Aprobadas</div>
-                                        <div class="fs-5 fw-bold text-success">${formatExactMinutesToTime(totalAprobado)}</div>
+                                    <div class="p-2 rounded border text-center shadow-sm h-100 position-relative" id="card-saldo-neto-actual" style="background:${currentSaldoBg}; border-color:${currentSaldoColor}50 !important; border-top: 3px solid ${currentSaldoColor} !important;">
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                                            <span class="badge fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem; background: ${currentSaldoColor}20; color:${currentSaldoColor}">
+                                                <i class="bi bi-calculator me-1"></i>Balance (=)
+                                            </span>
+                                            <span class="text-muted small fw-semibold" style="font-size:0.75rem;">Saldo Neto Actual</span>
+                                        </div>
+                                        <div class="fs-5 fw-bold" id="kpi-saldo-neto" style="color:${currentSaldoColor}">${currentSaldoStr}</div>
+                                        <div class="text-muted" style="font-size:0.68rem;">Resultado nómina (+ / −)</div>
                                     </div>
                                 </div>
+
+                                <!-- 4. INVENTARIO (📦) : Bolsa Pendiente / Rechazado -->
                                 <div class="col-md-3 col-6">
-                                    <div class="p-2 rounded bg-white border text-center shadow-sm">
-                                        <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Bolsa (Pend / Rech)</div>
-                                        <div class="fs-6 fw-bold text-warning pt-1">
+                                    <div class="p-2 rounded bg-white border text-center shadow-sm h-100 position-relative" style="border-top: 3px solid #f59e0b !important;">
+                                        <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
+                                            <span class="badge bg-warning-subtle text-warning-emphasis fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem;">
+                                                <i class="bi bi-inbox me-1"></i>Inventario
+                                            </span>
+                                            <span class="text-muted small fw-semibold" style="font-size:0.75rem;">Bolsa (Pend / Rech)</span>
+                                        </div>
+                                        <div class="fs-6 fw-bold text-warning pt-1" id="kpi-bolsa-remanente">
                                             ${formatExactMinutesToTime(totalPendiente)} <span class="text-muted fw-normal" style="font-size:0.75rem;">/ ${formatExactMinutesToTime(totalRechazado)}</span>
                                         </div>
+                                        <div class="text-muted" style="font-size:0.68rem;">Por auditar / Descartadas</div>
                                     </div>
                                 </div>
                             </div>
@@ -2338,11 +2397,34 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 </div>
                                 
                                 <div class="card-body p-3">
+                                    <!-- BANNER DIAGNÓSTICO COPILOTO -->
+                                    <div class="alert alert-light border p-2 mb-3 d-flex align-items-center gap-2 shadow-xs" style="background: #f8fafc; border-left: 4px solid #0284c7 !important; border-radius: 8px;">
+                                        <div class="d-flex align-items-center justify-content-center bg-primary-subtle text-primary rounded-circle" style="width:34px; height:34px; min-width:34px;">
+                                            <i class="bi bi-robot fs-5"></i>
+                                        </div>
+                                        <div class="flex-grow-1" style="font-size: 0.77rem; line-height: 1.3;">
+                                            <div class="d-flex align-items-center gap-2 mb-0.5">
+                                                <span class="badge bg-primary text-white fw-bold px-2 py-0.5" style="font-size:0.66rem;">COPILOTO DE ASISTENCIA</span>
+                                                <span class="text-primary fw-semibold" style="font-size:0.72rem;">Diagnóstico Automático</span>
+                                            </div>
+                                            <div class="text-dark">
+                                                ${motivoSugerencia}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- 3 ESTRATEGIAS PRINCIPALES EN TARJETAS LIMPIAS -->
                                     <div class="row g-2 mb-2">
                                         <!-- Estrategia 1: Compensar Deuda (Saldo Cero) -->
                                         <div class="col-md-4">
-                                            <button type="button" class="btn btn-outline-success w-100 p-2 text-start shadow-sm btn-estrategia-he h-100" id="btn-est-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')" style="border-radius:10px; border-width: 1.5px;">
+                                            <button type="button" class="btn btn-outline-success w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'cero' ? '2px' : '1.5px'}; ${estrategiaSugerida === 'cero' ? 'background:#f0fdf4;' : ''}">
+                                                ${estrategiaSugerida === 'cero' ? `
+                                                <div class="position-absolute top-0 end-0 translate-middle-y me-2" style="z-index: 2;">
+                                                    <span class="badge bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
+                                                        <i class="bi bi-star-fill text-dark me-1"></i>RECOMENDADO
+                                                    </span>
+                                                </div>
+                                                ` : ''}
                                                 <div class="d-flex align-items-center gap-2 mb-1">
                                                     <span class="badge bg-success text-white p-1 rounded-circle"><i class="bi bi-bullseye fs-6"></i></span>
                                                     <strong class="text-success" style="font-size:0.83rem;">1. Compensar Deuda (Saldo Cero)</strong>
@@ -2355,7 +2437,14 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
 
                                         <!-- Estrategia 2: Pagar Todo (Norma Legal DT) -->
                                         <div class="col-md-4">
-                                            <button type="button" class="btn btn-outline-primary w-100 p-2 text-start shadow-sm btn-estrategia-he h-100" id="btn-est-todo" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')" style="border-radius:10px; border-width: 1.5px;">
+                                            <button type="button" class="btn btn-outline-primary w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-todo" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'todo' ? '2px' : '1.5px'}; ${estrategiaSugerida === 'todo' ? 'background:#eff6ff;' : ''}">
+                                                ${estrategiaSugerida === 'todo' ? `
+                                                <div class="position-absolute top-0 end-0 translate-middle-y me-2" style="z-index: 2;">
+                                                    <span class="badge bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
+                                                        <i class="bi bi-star-fill text-dark me-1"></i>RECOMENDADO
+                                                    </span>
+                                                </div>
+                                                ` : ''}
                                                 <div class="d-flex align-items-center gap-2 mb-1">
                                                     <span class="badge bg-primary text-white p-1 rounded-circle"><i class="bi bi-shield-check fs-6"></i></span>
                                                     <strong class="text-primary" style="font-size:0.83rem;">2. Pagar Todo (Norma Legal DT)</strong>
@@ -2368,7 +2457,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
 
                                         <!-- Estrategia 3: Bloques Nómina (+HH:00 o +HH:30) -->
                                         <div class="col-md-4">
-                                            <div class="dropdown h-100">
+                                            <div class="dropdown h-100 position-relative">
                                                 <button type="button" class="btn btn-outline-warning text-dark w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 dropdown-toggle" id="btn-est-redondeo" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius:10px; border-width: 1.5px;">
                                                     <div class="d-flex align-items-center gap-2 mb-1">
                                                         <span class="badge bg-warning text-dark p-1 rounded-circle"><i class="bi bi-cash-coin fs-6"></i></span>
@@ -2949,6 +3038,45 @@ window.recalcularCalculadoraHE = function() {
         saldoProyEl.textContent = saldoStr;
         saldoProyEl.style.color = saldoColor;
         saldoProyEl.style.backgroundColor = saldoBg;
+    }
+
+    // Actualizar en vivo los contenedores de la Balanza de Masa superior
+    const kpiAprobEl = document.getElementById('kpi-he-aprobadas');
+    if (kpiAprobEl) {
+        kpiAprobEl.textContent = formatExactMinutesToTime(runningTotalMin);
+    }
+    const kpiSaldoEl = document.getElementById('kpi-saldo-neto');
+    const cardSaldoEl = document.getElementById('card-saldo-neto-actual');
+    if (kpiSaldoEl) {
+        kpiSaldoEl.textContent = saldoStr;
+        kpiSaldoEl.style.color = saldoColor;
+    }
+    if (cardSaldoEl) {
+        cardSaldoEl.style.backgroundColor = saldoBg;
+        cardSaldoEl.style.borderColor = `${saldoColor}50`;
+        cardSaldoEl.style.borderTopColor = saldoColor;
+    }
+
+    let pendMins = 0;
+    let rechMins = 0;
+    rows.forEach(r => {
+        const fecha = r.dataset.fecha;
+        const sel = document.getElementById(`sel-estado-${fecha}`);
+        const inp = document.getElementById(`input-min-${fecha}`);
+        const bruto = parseFloat(r.dataset.bruto) || 0;
+        const st = sel ? sel.value : r.dataset.estadoOrig;
+        const minsAut = inp ? parseFloat(inp.value) || 0 : 0;
+        if (st === 'PENDIENTE') {
+            pendMins += bruto;
+        } else if (st === 'RECHAZADO') {
+            rechMins += bruto;
+        } else if (st === 'APROBADO' && bruto > minsAut) {
+            rechMins += (bruto - minsAut);
+        }
+    });
+    const kpiBolsaEl = document.getElementById('kpi-bolsa-remanente');
+    if (kpiBolsaEl) {
+        kpiBolsaEl.innerHTML = `${formatExactMinutesToTime(pendMins)} <span class="text-muted fw-normal" style="font-size:0.75rem;">/ ${formatExactMinutesToTime(rechMins)}</span>`;
     }
 };
 
