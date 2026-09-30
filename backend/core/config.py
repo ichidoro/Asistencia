@@ -3,6 +3,7 @@ Configuración del Sistema - Pydantic Settings
 Carga variables de entorno desde .env de forma type-safe
 """
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict # touch trigger reload
 from typing import List, Optional
 from pathlib import Path
@@ -62,7 +63,7 @@ class Settings(BaseSettings):
     # ============================================
     CONTROL_ASISTENCIA_URL: str = "https://bioalba1.controlasistencia.cl"
     CONTROL_ASISTENCIA_USER: str = "aguacol"
-    CONTROL_ASISTENCIA_PASSWORD: str = "123456"
+    CONTROL_ASISTENCIA_PASSWORD: str = ""   # definir en .env
     
     # Scraping Configuration
     SCRAPER_ENABLED: bool = True
@@ -85,10 +86,10 @@ class Settings(BaseSettings):
     # ============================================
     # SECURITY & AUTH
     # ============================================
-    SECRET_KEY: str = "f6f0eba50b84406b6a1c7903dd4eb123f22fb97584020c5174878494b0a6dcbd"
+    SECRET_KEY: str = ""   # OBLIGATORIO en .env (openssl rand -hex 32)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 días
-    CRON_SECRET: str = "mi-super-secreto-compartido-para-sincronizacion-auto-123"
+    CRON_SECRET: str = ""   # definir en .env
     
     # ============================================
     # WEBSOCKET
@@ -113,7 +114,7 @@ class Settings(BaseSettings):
     SMTP_SERVER: Optional[str] = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = "operaciones.aguacol.spa@gmail.com"
-    SMTP_PASSWORD: Optional[str] = "erff ayax grfd umvj"
+    SMTP_PASSWORD: Optional[str] = None   # definir en .env
     EMAIL_FROM: Optional[str] = "operaciones.aguacol.spa@gmail.com"
     
     # ============================================
@@ -160,6 +161,12 @@ class Settings(BaseSettings):
     def is_cloud(self) -> bool:
         return bool(os.environ.get("K_SERVICE"))
     
+    @model_validator(mode="after")
+    def _exigir_secretos(self):
+        if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY es obligatorio en .env (>= 32 caracteres). Generar con: openssl rand -hex 32")
+        return self
+
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
         env_file_encoding="utf-8",
