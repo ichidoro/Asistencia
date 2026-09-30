@@ -176,15 +176,15 @@ async def acta_resumen(
                 LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                     AND a.fecha >= ha.fecha_desde
                     AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-                LEFT JOIN areas a ON ha.area_id = a.id
+                LEFT JOIN areas ar ON ha.area_id = ar.id
             """
             joins_area_he = """
                 LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
                     AND he.fecha >= ha.fecha_desde
                     AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
-                LEFT JOIN areas a ON ha.area_id = a.id
+                LEFT JOIN areas ar ON ha.area_id = ar.id
             """
-            filtro_area = " AND a.nombre = ?"
+            filtro_area = " AND ar.nombre = ?"
             params_area = [area]
 
         base_params = tuple([fecha_inicio, fecha_fin] + params_area)

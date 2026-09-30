@@ -1,0 +1,44 @@
+# Asistencia Aguacol — app + PostgreSQL 16 (BD propia, sin Turso).
+#   cp .env.example .env   (completar secretos)   →   docker compose up -d --build
+# Actualización desde GitHub: ./deploy.sh  (o el timer de autodeploy, ver docs/DEPLOY_DOCKER_POSTGRES.md)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: asistencia_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-asistencia_db}
+      POSTGRES_USER: ${POSTGRES_USER:-asistencia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD en .env}
+      TZ: America/Santiago
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-asistencia} -d ${POSTGRES_DB:-asistencia_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Sin puerto publicado: solo la app (red interna de compose) habla con la BD.
+
+  app:
+    build: .
+    container_name: asistencia_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-asistencia}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-asistencia_db}
+      PORT: "8000"
+      TZ: America/Santiago
+    ports:
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8000}:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./downloads:/app/downloads
+
+volumes:
+  pgdata:
+    name: asistencia_pgdata

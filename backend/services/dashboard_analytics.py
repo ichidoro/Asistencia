@@ -429,7 +429,7 @@ class DashboardAnalytics:
                 AND e.activo = 1 
                 {filters['asis_cond']} {filters['horario_asis_cond']}
                 GROUP BY 1
-                ORDER BY (min_atraso + min_salida) DESC
+                ORDER BY (SUM(a.minutos_atraso) + SUM(a.minutos_salida_adelantada)) DESC
             """
             res_areas = await self.db.fetch_all(query_areas, tuple(params))
             heatmap_areas = []

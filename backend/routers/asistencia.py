@@ -1323,7 +1323,8 @@ async def diagnostic_no_shift(
         SELECT COUNT(DISTINCT e.id) as count
         FROM empleados e
         JOIN historial_areas h ON e.id = h.empleado_id
-        WHERE h.area = ?
+        JOIN areas ar_d ON h.area_id = ar_d.id
+        WHERE ar_d.nombre = ?
           AND h.fecha_desde <= ?
           AND (h.fecha_hasta IS NULL OR h.fecha_hasta >= ?)
           AND h.validado = 1

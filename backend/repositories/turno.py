@@ -484,7 +484,7 @@ class TurnoRepository:
             if turno.areas:
                 for area_name in turno.areas:
                     cursor_ta = await self.db.execute(
-                        "INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ? COLLATE NOCASE",
+                        "INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE LOWER(nombre) = LOWER(?)",
                         (turno_id, area_name)
                     )
                     if cursor_ta and hasattr(cursor_ta, 'rowcount') and cursor_ta.rowcount == 0:
@@ -981,7 +981,7 @@ class TurnoRepository:
             if turno.areas:
                 for area_name in turno.areas:
                     cursor_ta = await self.db.execute(
-                        "INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE nombre = ? COLLATE NOCASE",
+                        "INSERT OR IGNORE INTO turno_areas (turno_id, area_id) SELECT ?, id FROM areas WHERE LOWER(nombre) = LOWER(?)",
                         (turno_id, area_name)
                     )
                     if cursor_ta and hasattr(cursor_ta, 'rowcount') and cursor_ta.rowcount == 0:

@@ -325,3 +325,11 @@ yarn.lock
 
 # Scratch/
 scratch/
+
+# ── Docker / Postgres / trabajo local ──
+.env
+backups/
+_work/
+.venv/
+.deploy-branch
+*.db

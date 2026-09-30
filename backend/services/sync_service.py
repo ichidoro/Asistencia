@@ -398,7 +398,7 @@ class SyncService:
 
             # 3. GENEROS
             for genero in generos:
-                existente = await db.fetch_one("SELECT id FROM cat_generos WHERE nombre COLLATE NOCASE = ?", (genero,))
+                existente = await db.fetch_one("SELECT id FROM cat_generos WHERE LOWER(nombre) = LOWER(?)", (genero,))
                 if not existente:
                     await db.execute("INSERT INTO cat_generos (nombre) VALUES (?)", (genero,))
                     creados["generos"] += 1
