@@ -27,7 +27,7 @@ Variables reales de producción (pueden diferir de los valores por defecto del c
 - `SECRET_KEY` (si se quiere que **no se cierren las sesiones** de los usuarios; si no, todos vuelven a iniciar sesión)
 - `CRON_SECRET`
 - (Opcional) `GOOGLE_DRIVE_FOLDER_ID` y `GOOGLE_APPLICATION_CREDENTIALS_JSON`
-- La **frecuencia real** del job en Cloud Scheduler (por defecto se propone cada 15 min).
+- La **frecuencia real** del job en Cloud Scheduler (por defecto se propone cada 5 min).
 
 Forma de verlas: consola de Google Cloud → Cloud Run → servicio → *Editar y desplegar nueva revisión* → Variables, o
 `gcloud run services describe <servicio> --region <región> --format=export`.
@@ -43,7 +43,7 @@ Forma de verlas: consola de Google Cloud → Cloud Run → servicio → *Editar 
    `scripts/dump_turso.py` → `scripts/load_sqlite_to_postgres.py` (ver `DEPLOY_DOCKER_POSTGRES.md`).
    Recalcular el día actual y comparar conteos con Turso (empleados, asistencias, horas extras, justificaciones).
 4. **Encender lo que hacía la nube** en el `.env` del servidor y reiniciar (`docker compose up -d`):
-   - `SYNC_CRON_ENABLED=true` (sincronización BioAlba cada 15 min)
+   - `SYNC_CRON_ENABLED=true` (sincronización BioAlba cada 5 min)
    - `FEATURE_NOTIFICACIONES_EMAIL=true` (solo después de verificar una sincronización)
    - `SYNC_ENABLED=true`, `SCRAPER_ENABLED=true`, `BACKUP_ENABLED=true` si se usan esas funciones
 5. **Apuntar la dirección de siempre al servidor:** un túnel de Cloudflare con nombre fijo (necesita el dominio) o el DNS actual.

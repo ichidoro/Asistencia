@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sincroniza marcaciones desde BioAlba (reemplaza a Google Cloud Scheduler). Llama a POST /api/sync/cron/,
 # que descarga ayer+hoy, procesa y recalcula. Se activa con SYNC_CRON_ENABLED=true en .env.
-# cron sugerido (cada 15 min):  */15 * * * * bash /ruta/asistencia/cron-sync.sh >> /ruta/asistencia/logs/cron_sync.log 2>&1
+# cron sugerido (cada 5 min):  */5 * * * * bash /ruta/asistencia/cron-sync.sh >> /ruta/asistencia/logs/cron_sync.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")"
 envget() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }   # .env no es shell-safe
