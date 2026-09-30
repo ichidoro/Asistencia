@@ -487,7 +487,7 @@ async function populateAreaSelect(selectedAreas = []) {
 // RENDER UI
 // ==========================================
 function renderHorariosUI() {
-    const container = document.getElementById('main-content');
+    const container = document.getElementById('horarios-container') || document.getElementById('tab-horarios');
     if (!container) return;
 
     // Solo inyectar HTML si no existe la sección (evita destruir el modal abierto)
