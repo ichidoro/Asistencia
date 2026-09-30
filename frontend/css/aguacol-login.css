@@ -1,0 +1,177 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   AGUACOL — pantalla de login (mismo lenguaje que el login de Nexacol):
+   fondo navy con degradado radial, franja de agua con olas en loop y burbujas,
+   tarjeta clara con el logo de marca. Solo presentación: ids y JS intactos.
+   Todas las animaciones son transform/opacity (compositor).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ag-navy: #1b2f8f; --ag-navy-deep: #14235c; --ag-navy-ink: #0d1a52;
+  --ag-blue: #3f6fd6; --ag-green: #4a8f24; --ag-green-lt: #5aad2e;
+  --ag-ink: #1a2326; --ag-muted: #5a6a6a; --ag-line: #cdd9d9;
+  --ag-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --font-sans: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-head: "Barlow Semi Condensed", "Barlow", "Segoe UI", system-ui, sans-serif;
+}
+
+html, body { min-height: 100dvh; }
+body {
+  position: relative;
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  color: var(--ag-ink);
+  background: radial-gradient(circle at 32% 15%, #2a4bb0 0%, #16267a 45%, #0d1a52 100%) !important;
+  padding: 24px 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Agua ───────────────────────────────────────────────────────────────── */
+.ag-waves { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.ag-water {
+  position: absolute; left: 0; right: 0; bottom: 0; top: 62%;
+  background: linear-gradient(180deg, rgba(66, 88, 207, 0) 0%, rgba(58, 79, 196, 0.85) 16%, #2a3fb0 46%, #14226a 100%);
+}
+.ag-water::before {                     /* brillo que cruza lento */
+  content: ""; position: absolute; inset: 0 -20%; z-index: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.10) 50%, transparent 70%);
+  animation: ag-shimmer 11s ease-in-out infinite alternate;
+}
+.ag-wave {
+  position: absolute; left: 0; top: -36px; width: 200%; height: 104px;
+  background-repeat: repeat-x; background-size: 50% 100%;
+}
+.ag-wave.w1 {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 100' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%232c40a6' stop-opacity='.7'/%3E%3Cstop offset='1' stop-color='%232c40a6' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0,52 C200,88 420,14 720,52 C1020,90 1240,16 1440,52 L1440,100 L0,100 Z' fill='url(%23g)'/%3E%3C/svg%3E");
+  animation: ag-wave 26s linear infinite;
+}
+.ag-wave.w2 {
+  top: -32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 100' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%233a4fc4' stop-opacity='.92'/%3E%3Cstop offset='1' stop-color='%233a4fc4' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0,50 C220,14 440,90 720,50 C1000,12 1240,92 1440,50 L1440,100 L0,100 Z' fill='url(%23g)'/%3E%3C/svg%3E");
+  animation: ag-wave-b 19s linear infinite;
+}
+.ag-wave.w3 {
+  top: -24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 100' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%234a5fd6' stop-opacity='1'/%3E%3Cstop offset='1' stop-color='%234a5fd6' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0,54 C180,20 380,86 720,54 C1060,22 1260,86 1440,54 L1440,100 L0,100 Z' fill='url(%23g)'/%3E%3C/svg%3E");
+  animation: ag-wave 14s linear infinite;
+}
+@keyframes ag-wave   { from { transform: translateX(0); }    to { transform: translateX(-50%); } }
+@keyframes ag-wave-b { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@keyframes ag-shimmer { from { transform: translateX(-24%); } to { transform: translateX(24%); } }
+
+.ag-bubble {
+  position: absolute; bottom: -20px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.08) 70%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  opacity: 0;
+  animation: ag-bubble linear infinite;
+}
+@keyframes ag-bubble {
+  0%   { transform: translateY(40px) scale(0.5); opacity: 0; }
+  18%  { opacity: 0.55; }
+  85%  { opacity: 0.22; }
+  100% { transform: translateY(-78vh) scale(1); opacity: 0; }
+}
+.ag-bubble:nth-child(1) { left: 12%; width: 9px;  height: 9px;  animation-duration: 9s;    animation-delay: .4s; }
+.ag-bubble:nth-child(2) { left: 22%; width: 6px;  height: 6px;  animation-duration: 11s;   animation-delay: 2.6s; }
+.ag-bubble:nth-child(3) { left: 35%; width: 12px; height: 12px; animation-duration: 12.5s; animation-delay: 1.2s; }
+.ag-bubble:nth-child(4) { left: 48%; width: 7px;  height: 7px;  animation-duration: 10s;   animation-delay: 3.4s; }
+.ag-bubble:nth-child(5) { left: 60%; width: 10px; height: 10px; animation-duration: 13s;   animation-delay: .8s; }
+.ag-bubble:nth-child(6) { left: 72%; width: 6px;  height: 6px;  animation-duration: 9.5s;  animation-delay: 2.1s; }
+.ag-bubble:nth-child(7) { left: 84%; width: 8px;  height: 8px;  animation-duration: 11.5s; animation-delay: 3.9s; }
+.ag-bubble:nth-child(8) { left: 92%; width: 5px;  height: 5px;  animation-duration: 10.5s; animation-delay: 1.6s; }
+
+/* ── Tarjeta ────────────────────────────────────────────────────────────── */
+.login-card {
+  position: relative; z-index: 1;
+  max-width: 430px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 20px;
+  box-shadow: 0 30px 70px rgba(6, 12, 46, 0.5), 0 2px 0 rgba(255, 255, 255, 0.6) inset;
+  transition: none;
+  animation: ag-card-in 480ms var(--ag-ease-out) backwards;
+}
+.login-card:hover { transform: none; }
+@keyframes ag-card-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.login-card .card-header {
+  background: linear-gradient(160deg, #1b2f8f 0%, #14235c 100%);
+  border-bottom: 0;
+  padding: 30px 28px 26px;
+  position: relative;
+}
+.login-card .card-header::after {       /* filo verde hoja bajo la cabecera */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
+  background: linear-gradient(90deg, var(--ag-green) 0%, var(--ag-green-lt) 100%);
+}
+.ag-login-logo {
+  display: block; width: 210px; max-width: 78%; height: auto;
+  margin: 0 auto 18px;
+  border-radius: 10px;
+  box-shadow: 0 10px 26px rgba(4, 9, 38, 0.5);
+}
+.login-card .card-header h2 {
+  font-family: var(--font-head);
+  font-size: 1.6rem; font-weight: 600; letter-spacing: .01em;
+  color: #eafcff;
+}
+.login-card .card-header .ag-sub {
+  font-size: .95rem; margin-top: 4px; color: rgba(234, 252, 255, 0.72);
+}
+
+.login-card .card-body { padding: 32px 30px 26px; }
+
+.login-card .form-label {
+  font-family: var(--font-head);
+  font-size: .78rem; letter-spacing: .08em; font-weight: 600;
+  color: var(--ag-muted) !important;
+}
+.login-card .input-group { border-radius: 10px; transition: box-shadow 160ms ease; }
+.login-card .input-group:focus-within { box-shadow: 0 0 0 3px rgba(27, 47, 143, 0.16); }
+.login-card .input-group-text {
+  background: #f4f7f7; color: var(--ag-navy);
+  border: 1px solid var(--ag-line); border-right: 0;
+  border-radius: 10px 0 0 10px;
+}
+.login-card .form-control {
+  border: 1px solid var(--ag-line); border-left: 0;
+  border-radius: 0 10px 10px 0;
+  padding: 11px 14px; font-size: 1rem; color: var(--ag-ink);
+  box-shadow: none;
+}
+.login-card .form-control:focus { border-color: var(--ag-line); box-shadow: none; }
+.login-card .input-group:focus-within .input-group-text,
+.login-card .input-group:focus-within .form-control { border-color: var(--ag-navy); }
+.login-card ::placeholder { color: #8a9a9a; opacity: 1; }
+
+.btn-login {
+  background: var(--ag-navy) !important;
+  border: 0 !important;
+  border-radius: 12px;
+  padding: 13px;
+  font-family: var(--font-head);
+  font-size: 1.05rem; font-weight: 600; letter-spacing: .1em;
+  box-shadow: 0 6px 16px rgba(27, 47, 143, 0.32);
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 140ms var(--ag-ease-out) !important;
+}
+.btn-login:hover { background: var(--ag-navy-deep) !important; transform: none; box-shadow: 0 8px 20px rgba(27, 47, 143, 0.4); }
+.btn-login:active:not(:disabled) { transform: scale(0.98) !important; }
+.btn-login:focus-visible { outline: 2px solid var(--ag-blue); outline-offset: 3px; }
+.btn-login:disabled { opacity: .75; }
+
+.error-message { color: #d9463a; font-weight: 500; }
+.footer-text { color: var(--ag-muted); margin-top: 18px; }
+.footer-text p { text-wrap: balance; }
+
+@media (max-width: 480px) {
+  .login-card .card-body { padding: 26px 20px 22px; }
+  .login-card .card-header { padding: 26px 20px 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-wave, .ag-water::before, .ag-bubble { animation: none; }
+  .ag-bubble { display: none; }
+  .login-card { animation: none; }
+}

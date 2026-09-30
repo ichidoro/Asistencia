@@ -333,3 +333,7 @@ _work/
 .venv/
 .deploy-branch
 *.db
+
+# Recursos de marca (logo e iconos) sí van al repo
+!frontend/assets/img/*.png
+!frontend/assets/img/icons/*.png

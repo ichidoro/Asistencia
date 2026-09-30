@@ -230,7 +230,7 @@ function renderMarcacionesToolbar(container) {
     container.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0 d-flex align-items-center gap-2">
-                <i class="bi bi-calendar-check" style="color:#6366f1"></i>
+                <i class="bi bi-calendar-check" style="color:#3f6fd6"></i>
                 <span style="font-weight:700;color:#1e293b">Control de Asistencia</span>
             </h2>
             <div class="d-flex gap-2 align-items-center">
@@ -313,7 +313,7 @@ function renderMarcacionesToolbar(container) {
                 <!-- Filtro Período (NUEVO) -->
                 <div class="col-md-2">
                     <label for="rrhh-periodo-select" class="form-label small fw-semibold text-muted mb-1">Período de Cierre</label>
-                    <select class="form-select form-select-sm" id="rrhh-periodo-select" onchange="window.cambiarPeriodoFiltro(this.value)" style="border-color:#c7d2fe">
+                    <select class="form-select form-select-sm" id="rrhh-periodo-select" onchange="window.cambiarPeriodoFiltro(this.value)" style="border-color:#c5d3f1">
                         <option value="custom">-- Rango Personalizado --</option>
                     </select>
                 </div>
@@ -325,12 +325,12 @@ function renderMarcacionesToolbar(container) {
                             <div class="flex-grow-1">
                                 <label for="rrhh-fecha-inicio" class="form-label small fw-semibold text-muted mb-1">Desde</label>
                                 <input type="date" class="form-control form-control-sm" id="rrhh-fecha-inicio" 
-                                       value="${stateMarcacionesApp.fechaInicioRRHH}" onchange="updateMarcacionesState('fechaInicioRRHH', this.value)" style="border-color:#c7d2fe">
+                                       value="${stateMarcacionesApp.fechaInicioRRHH}" onchange="updateMarcacionesState('fechaInicioRRHH', this.value)" style="border-color:#c5d3f1">
                             </div>
                             <div class="flex-grow-1">
                                 <label for="rrhh-fecha-fin" class="form-label small fw-semibold text-muted mb-1">Hasta</label>
                                 <input type="date" class="form-control form-control-sm" id="rrhh-fecha-fin" 
-                                       value="${stateMarcacionesApp.fechaFinRRHH}" onchange="updateMarcacionesState('fechaFinRRHH', this.value)" style="border-color:#c7d2fe">
+                                       value="${stateMarcacionesApp.fechaFinRRHH}" onchange="updateMarcacionesState('fechaFinRRHH', this.value)" style="border-color:#c5d3f1">
                             </div>
                         </div>
                     </div>
@@ -362,7 +362,7 @@ function renderMarcacionesToolbar(container) {
 
                 <!-- Botón Ver -->
                 <div class="col-md-1">
-                    <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;" title="Ver">
+                    <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#3f6fd6,#1b2f8f);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;" title="Ver">
                         <i class="bi bi-search"></i>
                     </button>
                 </div>
@@ -966,7 +966,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
             `,
             icon: nuevas > 0 ? 'success' : 'info',
             confirmButtonText: 'Entendido',
-            confirmButtonColor: '#6366f1',
+            confirmButtonColor: '#3f6fd6',
             showCloseButton: true,
             customClass: { popup: 'shadow-lg' }
         });
@@ -2268,7 +2268,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         <div class="modal fade" id="${modalId}" tabindex="-1" data-saldo-actual="${rawSaldoMin}" data-deuda-total="${deudaTotalMin}" data-compensado="${empStats.he_compensado || 0}">
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                 <div class="modal-content border-0 shadow-lg" style="border-radius:16px;overflow:hidden">
-                    <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);padding:18px 24px 14px">
+                    <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#eaf0fb 0%,#dfe8fb 100%);padding:18px 24px 14px">
                         <div>
                             <h5 class="modal-title fw-bold mb-1" style="color:#1e293b">
                                 <i class="bi bi-clock-history text-primary me-2"></i>Gestión y Cuadre de Horas Extra
@@ -6162,7 +6162,7 @@ function renderVistaAnalitica(respData, container) {
 
     const sw = `<div class="va-toolbar-premium">
         <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#6366f1"></i>
+            <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#3f6fd6"></i>
             <span class="fw-bold" style="font-size:0.88rem;color:#1e293b">Vista Analítica</span>
             ${closedBadge}
         </div>
@@ -6938,7 +6938,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                     <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem;">
+                    <div style="color: var(--primary-color, #3f6fd6); font-weight: 700; font-size: 0.85rem;">
                         ${dateFormatted}
                     </div>
                     <div>
@@ -7668,7 +7668,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="color: var(--primary-color, #6366f1); font-weight: 700; font-size: 0.85rem;">
+                <div style="color: var(--primary-color, #3f6fd6); font-weight: 700; font-size: 0.85rem;">
                      ${dateFormatted}
                 </div>
                 <div>
@@ -7688,9 +7688,9 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         <div style="margin-bottom: 12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <span style="font-weight:700; font-size:0.72rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
-                    <i class="bi bi-diagram-3-fill" style="color:var(--primary-color, #6366f1);"></i> Trazabilidad de Jornada
+                    <i class="bi bi-diagram-3-fill" style="color:var(--primary-color, #3f6fd6);"></i> Trazabilidad de Jornada
                 </span>
-                <span style="background:rgba(99, 102, 241, 0.1); color:var(--primary-color, #6366f1); font-weight:700; font-size:0.62rem; padding:2px 6px; border-radius:4px; text-transform:uppercase;">
+                <span style="background:rgba(63, 111, 214, 0.1); color:var(--primary-color, #3f6fd6); font-weight:700; font-size:0.62rem; padding:2px 6px; border-radius:4px; text-transform:uppercase;">
                     ${marksBadgeText}
                 </span>
             </div>

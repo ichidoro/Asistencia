@@ -165,7 +165,7 @@ const COLOR_OPTIONS = [
     { value: 'color-rosa',     label: '🩷 Rosa',           preview: '#f472b6' },
     { value: 'color-cian',     label: '🩵 Cian',           preview: '#22d3ee' },
     { value: 'color-lima',     label: '🍏 Lima',           preview: '#a3e635' },
-    { value: 'color-indigo',   label: '💜 Índigo',         preview: '#6366f1' },
+    { value: 'color-indigo',   label: '💜 Índigo',         preview: '#3f6fd6' },
     { value: 'color-teal',     label: '🌊 Teal',           preview: '#14b8a6' },
     { value: 'color-gris',     label: '⬜ Gris',           preview: '#64748b' },
     { value: 'color-negro',    label: '⬛ Negro',          preview: '#1f2937' },

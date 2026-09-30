@@ -727,7 +727,7 @@ function getAreaBadgeClass(area) {
 
 // --- V13: Avatar Color Palette ---
 const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #6366f1, #8b5cf6)',
+  'linear-gradient(135deg, #3f6fd6, #8b5cf6)',
   'linear-gradient(135deg, #3b82f6, #06b6d4)',
   'linear-gradient(135deg, #10b981, #059669)',
   'linear-gradient(135deg, #f59e0b, #d97706)',
@@ -736,7 +736,7 @@ const AVATAR_GRADIENTS = [
   'linear-gradient(135deg, #8b5cf6, #7c3aed)',
   'linear-gradient(135deg, #14b8a6, #0d9488)',
   'linear-gradient(135deg, #f97316, #ea580c)',
-  'linear-gradient(135deg, #6366f1, #4f46e5)',
+  'linear-gradient(135deg, #3f6fd6, #1b2f8f)',
 ];
 
 function getAvatarGradient(name) {
@@ -1770,7 +1770,7 @@ async function updateSystemStatus() {
 
     if (health.status === 'ok') {
       dot.style.backgroundColor = '#10b981'; // Green
-      text.textContent = 'En línea (Nube Sync)';
+      text.textContent = 'En línea';
       dot.classList.remove('status-offline');
       return true;  // ← OK: el intervalo puede crecer
     } else {

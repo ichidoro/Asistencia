@@ -7,7 +7,7 @@
     <meta name="color-scheme" content="only light">
     <meta name="description" content="Sistema Integral de Control y Gestión de Asistencia, Turnos y Jornadas de Aguacol.">
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#4f46e5">
+    <meta name="theme-color" content="#1b2f8f">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aguacol">
@@ -135,6 +135,11 @@
         /* Color para SALIDA_ADELANTADA (Bootstrap no incluye bg-purple) */
         .bg-purple { background-color: #6f42c1 !important; }
     </style>
+    <!-- Tema Aguacol (Barlow + paleta de marca, mismo lenguaje que Nexacol). Va al final para ganar la cascada. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/static/css/aguacol-theme.css?v={{ startup_id }}">
 </head>
 
 <body>
@@ -161,7 +166,7 @@
         <aside class="sidebar">
             <div class="logo-container">
                 <!-- Logo Image (Prioridad) -->
-                <img src="/static/assets/img/logo.jpg" alt="Aguacol Logo" class="brand-logo-img" width="160" height="60" style="max-height: 60px; width: auto;"
+                <img src="/static/assets/img/logo-aguacol.png" alt="Aguacol — calidad y servicio" class="brand-logo-img" width="160" height="60" style="max-height: 60px; width: auto;"
                     onerror="this.style.display='none'; document.getElementById('logo-fallback-text').style.display='flex'">
 
                 <!-- Fallback Typographic Logo (Default) -->
@@ -253,7 +258,7 @@
                         </span>
                         <div class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-2 p-0" style="min-width:300px; border-radius:16px; overflow:hidden;">
                             <!-- Header del perfil -->
-                            <div style="background:linear-gradient(135deg, var(--primary-color,#4f46e5) 0%, #7c3aed 100%); padding:20px; color:#fff;">
+                            <div style="background:linear-gradient(135deg, var(--primary-color,#1b2f8f) 0%, #7c3aed 100%); padding:20px; color:#fff;">
                                 <div class="d-flex align-items-center gap-3">
                                     <div style="width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); border:2px solid rgba(255,255,255,0.4); display:flex; align-items:center; justify-content:center; font-size:1.2rem; font-weight:800;" id="dropdown-avatar-lg">?</div>
                                     <div>
@@ -352,7 +357,7 @@
                     <div class="row g-3 mb-4">
                         <!-- 1. Paridad de Género -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #6366f1 !important;">
+                            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #3f6fd6 !important;">
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-gender-ambiguous me-1 text-primary"></i>Paridad de Género</h6>
@@ -470,7 +475,7 @@
                                             </div>
                                             <div class="text-center px-3 py-1 rounded" style="background: #eff6ff;">
                                                 <div class="small text-muted mb-0" style="font-size: 0.68rem;">Puntualidad</div>
-                                                <span class="fs-5 fw-bold" style="color: #6366f1;" id="kpi-puntualidad">0%</span>
+                                                <span class="fs-5 fw-bold" style="color: #3f6fd6;" id="kpi-puntualidad">0%</span>
                                             </div>
                                             <div class="text-center px-3 py-1 rounded" style="background: #fef2f2;">
                                                 <div class="small text-muted mb-0" style="font-size: 0.68rem;">Fugas Globales</div>
@@ -623,9 +628,9 @@
 
                         <!-- Total Empleados -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="emp-stat-card h-100" style="border-left-color: #6366f1 !important;">
+                            <div class="emp-stat-card h-100" style="border-left-color: #3f6fd6 !important;">
                                 <div class="d-flex align-items-center gap-2 mb-3">
-                                    <div class="stat-accent-icon" style="background: #eef2ff; color: #6366f1;"><i class="bi bi-people-fill"></i></div>
+                                    <div class="stat-accent-icon" style="background: #eaf0fb; color: #3f6fd6;"><i class="bi bi-people-fill"></i></div>
                                     <h6 class="mb-0 fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">Total Empleados</h6>
                                 </div>
                                 <div class="stat-metric mb-2" style="color: var(--text-primary);" id="stat-total">0</div>
@@ -897,7 +902,7 @@
                                         <div class="tab-pane fade show active" id="pills-vencimientos" role="tabpanel">
                                             <div class="emp-section-toolbar">
                                                 <h5 class="section-title mb-0">
-                                                    <span class="section-icon" style="background: #eef2ff; color: var(--primary-color);"><i class="bi bi-calendar2-event"></i></span>
+                                                    <span class="section-icon" style="background: #eaf0fb; color: var(--primary-color);"><i class="bi bi-calendar2-event"></i></span>
                                                     Próximos Vencimientos (45 días)
                                                 </h5>
                                                 <button class="btn-action-modern btn-action-outline"
@@ -1334,7 +1339,7 @@
                     <!-- Cabecera Premium -->
                     <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                         <div>
-                            <h2 class="fw-bold mb-1"><span class="me-2">🎁</span>4 Productos</h2>
+                            <h2 class="fw-bold mb-1"><i class="bi bi-gift me-2" aria-hidden="true"></i>4 Productos</h2>
                             <p class="text-muted mb-0 small">Planilla de asignación, consolidación y entrega de productos de fabricación propia para personal calificado.</p>
                         </div>
                         <div class="d-flex align-items-center gap-2">
@@ -1472,7 +1477,7 @@
                     <div class="row mb-4">
                         <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
-                                <h2 class="fw-bold mb-1"><span class="me-2">🛡️</span>Portería y Control de Ronda</h2>
+                                <h2 class="fw-bold mb-1"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Portería y Control de Ronda</h2>
                                 <p class="text-muted mb-0">Módulo de control de rondas nocturnas perimetrales en planta.</p>
                             </div>
                             <!-- Indicador Offline/Sincronización -->
@@ -1720,100 +1725,100 @@
                             <ul class="nav nav-tabs card-header-tabs" id="configTabs" role="tablist">
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link active fw-bold" id="horarios-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-horarios" type="button" role="tab">🕒 Turnos</button>
+                                        data-bs-target="#tab-horarios" type="button" role="tab"><i class="bi bi-clock me-1" aria-hidden="true"></i> Turnos</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="areas-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-areas" type="button" role="tab"
-                                        onclick="if(typeof cargarCatalogoAreas === 'function') cargarCatalogoAreas()">🏢
+                                        onclick="if(typeof cargarCatalogoAreas === 'function') cargarCatalogoAreas()"><i class="bi bi-building me-1" aria-hidden="true"></i>
                                         Áreas</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="cargos-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-cargos" type="button" role="tab"
-                                        onclick="if(typeof cargarCatalogoCargos === 'function') cargarCatalogoCargos()">💼
+                                        onclick="if(typeof cargarCatalogoCargos === 'function') cargarCatalogoCargos()"><i class="bi bi-briefcase me-1" aria-hidden="true"></i>
                                         Cargos</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="generos-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-generos" type="button" role="tab"
-                                        onclick="if(typeof cargarCatalogoGeneros === 'function') cargarCatalogoGeneros()">🚻
+                                        onclick="if(typeof cargarCatalogoGeneros === 'function') cargarCatalogoGeneros()"><i class="bi bi-gender-ambiguous me-1" aria-hidden="true"></i>
                                         Géneros</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="pagadores-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-pagadores" type="button" role="tab"
-                                        onclick="if(typeof openTabPagadores === 'function') openTabPagadores()">🏦 Pagadores</button>
+                                        onclick="if(typeof openTabPagadores === 'function') openTabPagadores()"><i class="bi bi-bank me-1" aria-hidden="true"></i> Pagadores</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="bonos-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-bonos" type="button" role="tab">💰 Bonos</button>
+                                        data-bs-target="#tab-bonos" type="button" role="tab"><i class="bi bi-cash-coin me-1" aria-hidden="true"></i> Bonos</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="periodos-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-periodos" type="button" role="tab"
-                                        onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()">📅 Tramos de Cierre</button>
+                                        onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()"><i class="bi bi-calendar-range me-1" aria-hidden="true"></i> Tramos de Cierre</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="justificaciones-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-justificaciones" type="button" role="tab">⚖️
+                                        data-bs-target="#tab-justificaciones" type="button" role="tab"><i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
                                         Justificaciones</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="calendario-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-calendario" type="button" role="tab">📅
+                                        data-bs-target="#tab-calendario" type="button" role="tab"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>
                                         Calendario</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="correo-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-correo" type="button" role="tab">📧
+                                        data-bs-target="#tab-correo" type="button" role="tab"><i class="bi bi-envelope me-1" aria-hidden="true"></i>
                                         Correo</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="estados-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-estados" type="button" role="tab"
-                                        onclick="if(typeof loadEstadosConfig==='function') loadEstadosConfig()">🎨
+                                        onclick="if(typeof loadEstadosConfig==='function') loadEstadosConfig()"><i class="bi bi-palette me-1" aria-hidden="true"></i>
                                         Estados</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="seguridad-config-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-seguridad" type="button" role="tab" data-permiso="configuracion.seguridad">🛡️
+                                        data-bs-target="#tab-seguridad" type="button" role="tab" data-permiso="configuracion.seguridad"><i class="bi bi-shield-lock me-1" aria-hidden="true"></i>
                                         Seguridad</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="robot-bioalba-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-robot-bioalba" type="button" role="tab"
-                                        onclick="if(typeof loadRobotSyncLogs === 'function') loadRobotSyncLogs()">🤖
+                                        onclick="if(typeof loadRobotSyncLogs === 'function') loadRobotSyncLogs()"><i class="bi bi-robot me-1" aria-hidden="true"></i>
                                         Robot BioAlba</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="productos-propios-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo"
-                                        onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()">🎁
+                                        onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()"><i class="bi bi-gift me-1" aria-hidden="true"></i>
                                         Productos Propios</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="catalogo-hallazgos-config-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-catalogo-hallazgos-config" type="button" role="tab" data-permiso="porteria.editar"
-                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()">🛡️
+                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()"><i class="bi bi-shield-exclamation me-1" aria-hidden="true"></i>
                                         Catálogo Hallazgos</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="porteria-ubicaciones-config-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar"
-                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()">📍
+                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>
                                         Ubicación</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="flota-config-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-flota-config" type="button" role="tab" data-permiso="configuracion.flota"
-                                        onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initAdminTab()">🚛
+                                        onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initAdminTab()"><i class="bi bi-truck me-1" aria-hidden="true"></i>
                                         Flota Aguacol</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link fw-bold" id="sistema-config-tab" data-bs-toggle="tab"
                                         data-bs-target="#tab-sistema" type="button" role="tab" data-permiso="superuser"
-                                        onclick="if(typeof loadAjustesSistema === 'function') loadAjustesSistema()">⚙️
+                                        onclick="if(typeof loadAjustesSistema === 'function') loadAjustesSistema()"><i class="bi bi-gear me-1" aria-hidden="true"></i>
                                         Sistema</button>
                                 </li>
                             </ul>

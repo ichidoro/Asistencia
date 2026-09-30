@@ -8,9 +8,9 @@
     style.id = 'intercambio-panel-styles';
     style.textContent = `
         .badge-compensatorio {
-            background: #e0e7ff;
-            color: #4338ca;
-            border: 1px solid #c7d2fe;
+            background: #dfe8fb;
+            color: #14235c;
+            border: 1px solid #c5d3f1;
         }
         .badge-inasistencia-compensada {
             background: #f1f5f9;
@@ -27,7 +27,7 @@
             <div class="modal fade" id="modal-intercambio" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); color: white; border-bottom: none;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1b2f8f 0%, #0d1a52 100%); color: white; border-bottom: none;">
                             <h5 class="modal-title fw-bold">
                                 <i class="bi bi-arrow-left-right me-2"></i> Registrar Día Compensatorio
                             </h5>
@@ -266,7 +266,7 @@ async function cargarIntercambiosEmpleado(empleadoId) {
             return `
             <div class="d-flex justify-content-between align-items-center p-2 mb-2 bg-white border rounded shadow-sm">
                 <div>
-                    <div class="fw-bold small" style="color:#4f46e5;">1x1: Faltó el ${i.fecha_origen} <i class="bi bi-arrow-right"></i> Trabajó el ${i.fecha_destino}</div>
+                    <div class="fw-bold small" style="color:#1b2f8f;">1x1: Faltó el ${i.fecha_origen} <i class="bi bi-arrow-right"></i> Trabajó el ${i.fecha_destino}</div>
                     <div class="text-muted" style="font-size: 0.7rem;">${i.observaciones}</div>
                     <div class="text-muted" style="font-size: 0.65rem;">Por: ${i.registrado_por_nombre || 'Admin'}</div>
                 </div>

@@ -251,7 +251,7 @@ function renderContratos(conData, totalActivos, porVencer) {
     if (elVencer) elVencer.innerText = `${porVencer} por vencer`;
     chartContratosInstance = new Chart(ctx, {
         type: 'doughnut',
-        data: { labels: Object.keys(conData), datasets: [{ data: Object.values(conData), backgroundColor: ['#10b981','#6366f1','#f59e0b','#0ea5e9','#f43f5e'], borderWidth: 2, borderColor: '#fff' }] },
+        data: { labels: Object.keys(conData), datasets: [{ data: Object.values(conData), backgroundColor: ['#10b981','#3f6fd6','#f59e0b','#0ea5e9','#f43f5e'], borderWidth: 2, borderColor: '#fff' }] },
         options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: { size: 9 } } } } }
     });
 }
@@ -552,7 +552,7 @@ function renderEmbudoProductividad(data) {
                 </div>` : ''}
                 
                 <!-- Etiqueta del Marcador Vertical (Prioridad) -->
-                <div class="position-absolute text-truncate" style="left: ${progPct}%; top: ${overlapTotalProg ? '12px' : '0'}; transform: translateX(-50%); font-size: 0.65rem; color: #6366f1; font-weight: bold; z-index: 10;">
+                <div class="position-absolute text-truncate" style="left: ${progPct}%; top: ${overlapTotalProg ? '12px' : '0'}; transform: translateX(-50%); font-size: 0.65rem; color: #3f6fd6; font-weight: bold; z-index: 10;">
                     ${formatNum(prog)}h (Programadas)
                 </div>
                 
@@ -580,7 +580,7 @@ function renderEmbudoProductividad(data) {
                 
                 <!-- Marcador de Jornada Programada (Línea Vertical Absoluta) -->
                 <div class="position-absolute d-flex flex-column align-items-center" style="left: ${progPct}%; top: 0; bottom: 0; z-index: 5; transform: translateX(-50%);">
-                    <div style="width: 2px; height: 100%; background: #4f46e5; box-shadow: 0 0 2px rgba(0,0,0,0.3);"></div>
+                    <div style="width: 2px; height: 100%; background: #1b2f8f; box-shadow: 0 0 2px rgba(0,0,0,0.3);"></div>
                 </div>
             </div>
             
@@ -608,7 +608,7 @@ function renderEmbudoProductividad(data) {
                     </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2 p-1 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0; overflow: hidden;">
-                    <span class="badge text-truncate" style="background: #e0e7ff; color: #4338ca; max-width: 50%;"><i class="bi bi-calendar-event me-1"></i>J. ESPECIALES</span>
+                    <span class="badge text-truncate" style="background: #dfe8fb; color: #14235c; max-width: 50%;"><i class="bi bi-calendar-event me-1"></i>J. ESPECIALES</span>
                     <span class="text-truncate" style="font-size: 0.7rem; text-align: right; max-width: 48%;">${jeCount} jornada${jeCount !== 1 ? 's' : ''} (+${formatNum(jeHrs)}h)</span>
                 </div>
             </div>

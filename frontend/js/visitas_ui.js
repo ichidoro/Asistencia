@@ -35,12 +35,12 @@ const VisitasModule = (() => {
                 .vis-kpi .kpi-number { font-size:2.25rem; font-weight:800; line-height:1; }
                 .vis-kpi .kpi-label { font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; opacity:0.9; }
                 .vis-kpi .kpi-sub { font-size:0.8rem; font-weight:500; opacity:0.8; margin-top:2px; }
-                .vis-scan-zone { background:#fff; border:2px dashed #c7d2fe; border-radius:16px; padding:1.5rem; text-align:center; transition:all 0.3s; position:relative; }
-                .vis-scan-zone.active { border-color:#6366f1; background:#eef2ff; box-shadow:0 0 0 4px rgba(99,102,241,0.1); }
+                .vis-scan-zone { background:#fff; border:2px dashed #c5d3f1; border-radius:16px; padding:1.5rem; text-align:center; transition:all 0.3s; position:relative; }
+                .vis-scan-zone.active { border-color:#3f6fd6; background:#eaf0fb; box-shadow:0 0 0 4px rgba(63, 111, 214, 0.1); }
                 .vis-scan-zone.success { border-color:#10b981; background:#d1fae5; }
                 .vis-scan-zone.error { border-color:#f43f5e; background:#ffe4e6; }
-                .vis-scan-input { width:100%; font-size:1rem; padding:12px 16px; border:1px solid #e2e8f0; border-radius:10px; text-align:center; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s; caret-color:#6366f1; }
-                .vis-scan-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+                .vis-scan-input { width:100%; font-size:1rem; padding:12px 16px; border:1px solid #e2e8f0; border-radius:10px; text-align:center; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s; caret-color:#3f6fd6; }
+                .vis-scan-input:focus { outline:none; border-color:#3f6fd6; box-shadow:0 0 0 3px rgba(63, 111, 214, 0.15); }
                 .vis-scan-input::placeholder { color:#94a3b8; font-weight:400; }
                 .vis-result-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:1.2rem; margin-top:1rem; display:none; }
                 .vis-result-card.show { display:block; animation: visSlideIn 0.3s ease-out; }
@@ -50,7 +50,7 @@ const VisitasModule = (() => {
                 .vis-visitor-row:not(:last-child) { border-bottom:1px solid #f1f5f9; }
                 .vis-visitor-row.en_planta { border-left-color:var(--success-color); }
                 .vis-visitor-row.fuera { border-left-color:#94a3b8; }
-                .vis-avatar { width:38px; height:38px; border-radius:50%; background:#eef2ff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.7rem; color:#4338ca; flex-shrink:0; border:1px solid #c7d2fe; }
+                .vis-avatar { width:38px; height:38px; border-radius:50%; background:#eaf0fb; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.7rem; color:#14235c; flex-shrink:0; border:1px solid #c5d3f1; }
                 .vis-section-header { background:rgba(248,250,252,0.5); padding:0.9rem 1.2rem; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
                 .vis-section-title { font-size:1rem; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:8px; }
                 .vis-status-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:0.68rem; font-weight:600; }
@@ -67,12 +67,12 @@ const VisitasModule = (() => {
                 .vis-camera-container { display:none; margin-top:1rem; position:relative; border-radius:12px; overflow:hidden; background:#000; max-height:50vh; }
                 .vis-camera-container.active { display:block; animation: visSlideIn 0.3s ease-out; }
                 .vis-camera-container video { width:100%; max-height:50vh; object-fit:cover; border-radius:12px; }
-                .vis-camera-guide { position:absolute; left:50%; bottom:22%; transform:translateX(-50%); width:90%; height:28%; border:2px solid rgba(99,102,241,0.8); border-radius:6px; pointer-events:none; box-shadow:0 0 0 2000px rgba(0,0,0,0.45); }
-                .vis-camera-guide-text { position:absolute; top:-28px; left:50%; transform:translateX(-50%); color:#fff; font-size:0.72rem; font-weight:600; background:rgba(99,102,241,0.85); padding:3px 12px; border-radius:999px; white-space:nowrap; }
+                .vis-camera-guide { position:absolute; left:50%; bottom:22%; transform:translateX(-50%); width:90%; height:28%; border:2px solid rgba(63, 111, 214, 0.8); border-radius:6px; pointer-events:none; box-shadow:0 0 0 2000px rgba(0,0,0,0.45); }
+                .vis-camera-guide-text { position:absolute; top:-28px; left:50%; transform:translateX(-50%); color:#fff; font-size:0.72rem; font-weight:600; background:rgba(63, 111, 214, 0.85); padding:3px 12px; border-radius:999px; white-space:nowrap; }
                 .vis-camera-controls { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:5; }
                 .vis-camera-btn { border:none; border-radius:999px; padding:10px 24px; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.2s; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
                 .vis-camera-btn:hover { transform:scale(1.05); }
-                .vis-camera-btn.capture { background:#6366f1; color:#fff; }
+                .vis-camera-btn.capture { background:#3f6fd6; color:#fff; }
                 .vis-camera-btn.stop { background:#f43f5e; color:#fff; }
                 .vis-ocr-status { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:#fff; padding:6px 16px; border-radius:999px; font-size:0.78rem; font-weight:600; z-index:5; display:none; }
                 .vis-ocr-status.show { display:flex; align-items:center; gap:6px; }
