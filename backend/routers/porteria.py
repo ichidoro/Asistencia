@@ -1,4 +1,10 @@
+import os
+import re
+import uuid
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
+from fastapi.responses import FileResponse
 from typing import List, Dict, Any, Optional
 from loguru import logger
 
@@ -15,6 +21,8 @@ from backend.schemas.porteria import (
     RondaRecordResponse,
     SyncBatchRequest
 )
+
+FOTOS_DIR = Path("downloads") / "porteria_fotos"   # volumen ./downloads del docker-compose
 
 router = APIRouter(
     prefix="/porteria",
@@ -306,19 +314,46 @@ async def upload_photo(
         if not content:
             raise HTTPException(status_code=400, detail="El archivo subido está vacío.")
 
-        drive_service = GoogleDriveService()
-        result = await drive_service.upload_photo(content, file.filename, file.content_type)
-        
-        if not result:
-            raise HTTPException(status_code=500, detail="Fallo al cargar la imagen a Google Drive API.")
-            
+        # Google Drive solo si hay credenciales configuradas; si no (o si falla), se guarda en el servidor.
+        result = None
+        if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH"):
+            try:
+                result = await GoogleDriveService().upload_photo(content, file.filename, file.content_type)
+            except Exception as drive_err:
+                logger.warning(f"⚠️ Google Drive no disponible, se guarda localmente: {drive_err}")
+        if result:
+            return {
+                "google_drive_file_id": result["id"],
+                "foto_url": result["web_view_url"]
+            }
+
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if not re.fullmatch(r"\.[a-z0-9]{2,5}", ext):
+            ext = ".jpg"
+        nombre = f"{uuid.uuid4().hex}{ext}"
+        FOTOS_DIR.mkdir(parents=True, exist_ok=True)
+        (FOTOS_DIR / nombre).write_bytes(content)
         return {
-            "google_drive_file_id": result["id"],
-            "foto_url": result["web_view_url"]
+            "google_drive_file_id": "",
+            "foto_url": f"/api/porteria/fotos/{nombre}"
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error subiendo foto de ronda: {e}")
         raise HTTPException(status_code=500, detail=f"Error en la subida de foto: {str(e)}")
+
+
+@router.get("/fotos/{nombre}", include_in_schema=False)
+async def get_foto_ronda(nombre: str):
+    """Sirve una foto de ronda guardada en el servidor. El nombre es un UUID (no adivinable), igual que un
+    enlace "cualquiera con el enlace" de Drive: se abre desde <img>/<a>, que no envian el token."""
+    if not re.fullmatch(r"[0-9a-f]{32}\.[a-z0-9]{2,5}", nombre):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    ruta = FOTOS_DIR / nombre
+    if not ruta.is_file():
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    return FileResponse(ruta, headers={"Cache-Control": "private, max-age=86400"})
 
 
 # ============================================

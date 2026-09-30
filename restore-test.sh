@@ -4,7 +4,8 @@
 # cron sugerido (domingo 03:00):  0 3 * * 0 bash /ruta/asistencia/restore-test.sh >> /ruta/asistencia/logs/restore-test.log 2>&1
 set -euo pipefail
 cd "$(dirname "$0")"
-set -a; . ./.env; set +a
+envget() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }   # .env no es shell-safe
+POSTGRES_USER="$(envget POSTGRES_USER)"; POSTGRES_DB="$(envget POSTGRES_DB)"
 U="${POSTGRES_USER:-asistencia}"; DB="${POSTGRES_DB:-asistencia_db}"; T="restore_test_$$"
 LAST=$(ls -t backups/asistencia_*.sql.gz 2>/dev/null | head -1)
 [ -n "$LAST" ] || { echo "$(date '+%F %T') FALLO: no hay respaldos en ./backups"; exit 1; }
