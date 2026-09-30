@@ -27,6 +27,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_TIPOS_E: Set[str] = {'entrada', 'entry', 'e', 'in', '1'}
+_TIPOS_S: Set[str] = {'salida', 'exit', 's', 'out', '0', '2'}
+
 
 class QuantumPhaseTopology:
     """Manejo de tiempo modular y distancias geodésicas en el círculo unitario S^1 (24 horas = 1440 minutos)."""
@@ -920,8 +923,6 @@ class QuantumMatrixEngine:
             #    quedan reservadas para la jornada de mañana.
             # ─────────────────────────────────────────────────────────────────
             dia_sem_num = dt_fecha.weekday()  # 0=Lun, 6=Dom
-            _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
-            _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
 
             if dia_sem_num == 6:
                 # Domingo: solo observa marcas diurnas < 18:00
@@ -1094,8 +1095,8 @@ class QuantumMatrixEngine:
                         if es_nocturno and not has_night_presence:
                             continue
                     marcas_disponibles.append(l)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
 
         # 4. Segmentación Multi-Bloque (+2 y Emergencias)
         segment_res = MultiBlockTensorSolver.segment_blocks(
@@ -1229,8 +1230,6 @@ class QuantumMatrixEngine:
             log_item = bloque_p[0]
             m_dt = dt_list[0]
             t_m = str(log_item.get('tipo', '')).strip().lower()
-            _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
-            _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
             is_tipo_s = t_m in _TIPOS_S
             is_tipo_e = t_m in _TIPOS_E
 
@@ -1286,9 +1285,6 @@ class QuantumMatrixEngine:
         # ─────────────────────────────────────────────────────────────────────
         # 7. RESOLUCIÓN MULTI-MARCA (2, 4, 6 o más marcas)
         # ─────────────────────────────────────────────────────────────────────
-        _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
-        _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
-
         pares_trabajo: List[Tuple[datetime, datetime]] = []
         pausas_intermedias: List[Tuple[datetime, datetime, float]] = []
 
