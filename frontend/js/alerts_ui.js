@@ -50,7 +50,17 @@ async function checkContractAlerts() {
         const response = await fetch(`${API_VENCIMIENTOS_ALERTS}?days=45`);
         if (!response.ok) throw new Error("Error fetching alerts");
 
-        const data = await response.json();
+        const rawData = await response.json();
+        
+        // Deduplicación defensiva por emp.id
+        const seenIds = new Set();
+        const data = [];
+        for (const emp of (Array.isArray(rawData) ? rawData : [])) {
+            if (emp && emp.id && !seenIds.has(emp.id)) {
+                seenIds.add(emp.id);
+                data.push(emp);
+            }
+        }
 
         // Contar alertas bloqueantes (Vencidos + Críticos + Alerta Legal)
         const blockingAlerts = data.filter(emp => emp.bloqueante);

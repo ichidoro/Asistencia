@@ -58,7 +58,17 @@ async function loadContratosUI() {
         const response = await fetch(`${API_CONTRATOS}?days=45`);
         if (!response.ok) throw new Error("Error al obtener contratos");
 
-        const empleados = await response.json();
+        const rawEmpleados = await response.json();
+        
+        // Deduplicación defensiva por id
+        const seenIds = new Set();
+        const empleados = [];
+        for (const emp of (Array.isArray(rawEmpleados) ? rawEmpleados : [])) {
+            if (emp && emp.id && !seenIds.has(emp.id)) {
+                seenIds.add(emp.id);
+                empleados.push(emp);
+            }
+        }
 
         if (empleados.length === 0) {
             tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-check-circle-fill text-success me-2"></i>Todo en orden. No hay contratos por vencer en los próximos 45 días.</td></tr>`;

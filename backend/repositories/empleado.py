@@ -198,6 +198,64 @@ class EmpleadoRepository:
                 """)
                 logger.info("✨ Tabla cat_generos creada (migración)")
 
+            # --- SANEAMIENTO Y PROTECCIÓN: Deduplicación de historial_areas ---
+            try:
+                # 1. Depurar duplicados en historial_areas: mantener sólo el registro con MAX(id) por empleado
+                await self.db.execute("""
+                    DELETE FROM historial_areas
+                    WHERE id IN (
+                        SELECT h1.id
+                        FROM historial_areas h1
+                        JOIN historial_areas h2 ON h1.empleado_id = h2.empleado_id
+                        WHERE h1.es_actual = 1 AND h1.validado = 1
+                          AND h2.es_actual = 1 AND h2.validado = 1
+                          AND h1.id < h2.id
+                    )
+                """)
+                logger.info("✨ Saneamiento: Duplicados en historial_areas depurados exitosamente")
+            except Exception as e_hdup:
+                logger.warning(f"⚠️ Saneamiento historial_areas: {e_hdup}")
+
+            # 2. Crear índice único parcial para garantizar 1 solo registro activo/validado por empleado
+            try:
+                await self.db.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_historial_areas_actual_validado 
+                    ON historial_areas (empleado_id) 
+                    WHERE es_actual = 1 AND validado = 1
+                """)
+                logger.info("✨ Índice único parcial en historial_areas verificado")
+            except Exception as e_idx:
+                logger.warning(f"⚠️ Índice uq_historial_areas_actual_validado: {e_idx}")
+
+            # 3. Saneamiento de empleados duplicados por RUT normalizado (si existieran)
+            try:
+                dup_ruts = await self.db.fetch_all("""
+                    SELECT REPLACE(REPLACE(REPLACE(UPPER(rut), '.', ''), '-', ''), ' ', '') as rut_clean, COUNT(*) as cnt
+                    FROM empleados
+                    GROUP BY REPLACE(REPLACE(REPLACE(UPPER(rut), '.', ''), '-', ''), ' ', '')
+                    HAVING COUNT(*) > 1
+                """)
+                for r in dup_ruts:
+                    rut_clean = r['rut_clean']
+                    emps = await self.db.fetch_all("""
+                        SELECT id, rut, created_at, activo FROM empleados
+                        WHERE REPLACE(REPLACE(REPLACE(UPPER(rut), '.', ''), '-', ''), ' ', '') = ?
+                        ORDER BY id ASC
+                    """, (rut_clean,))
+                    if len(emps) > 1:
+                        primary_id = emps[0]['id']
+                        for dup in emps[1:]:
+                            dup_id = dup['id']
+                            logger.warning(f"🧹 Fusionando empleado duplicado ID {dup_id} hacia ID principal {primary_id} (RUT: {rut_clean})")
+                            await self.db.execute("UPDATE asignacion_turnos SET empleado_id = ? WHERE empleado_id = ?", (primary_id, dup_id))
+                            await self.db.execute("UPDATE asistencias SET empleado_id = ? WHERE empleado_id = ?", (primary_id, dup_id))
+                            await self.db.execute("UPDATE horas_extras SET empleado_id = ? WHERE empleado_id = ?", (primary_id, dup_id))
+                            await self.db.execute("UPDATE logs_raw SET empleado_id = ? WHERE empleado_id = ?", (primary_id, dup_id))
+                            await self.db.execute("UPDATE historial_areas SET empleado_id = ? WHERE empleado_id = ?", (primary_id, dup_id))
+                            await self.db.execute("DELETE FROM empleados WHERE id = ?", (dup_id,))
+                            logger.success(f"✅ Empleado duplicado ID {dup_id} fusionado y eliminado exitosamente")
+            except Exception as e_edup:
+                logger.warning(f"⚠️ Saneamiento empleados duplicados: {e_edup}")
             
         except Exception as e:
             logger.warning(f"⚠️ Error en migración de esquema de empleados: {e}")
@@ -283,18 +341,27 @@ class EmpleadoRepository:
         return self._dict_to_empleado(result)
     
     async def get_by_rut(self, rut: str) -> Optional[Empleado]:
-        """Obtener empleado por RUT"""
+        """Obtener empleado por RUT con normalización de formato"""
+        if not rut:
+            return None
+        rut_clean = str(rut).replace(".", "").replace("-", "").strip().upper()
         query = """
             SELECT e.*, COALESCE(a_hist.nombre, a_emp.nombre) as area, cg.nombre as genero_nombre
             FROM empleados e
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN (
+                SELECT empleado_id, MAX(area_id) as area_id
+                FROM historial_areas
+                WHERE es_actual = 1 AND validado = 1
+                GROUP BY empleado_id
+            ) ha ON e.id = ha.empleado_id
             LEFT JOIN areas a_hist ON ha.area_id = a_hist.id
             LEFT JOIN areas a_emp ON e.area_id = a_emp.id
             LEFT JOIN cat_generos cg ON e.genero_id = cg.id
-            WHERE e.rut = ?
+            WHERE e.rut = ? OR REPLACE(REPLACE(REPLACE(UPPER(e.rut), '.', ''), '-', ''), ' ', '') = ?
+            LIMIT 1
         """
         
-        result = await self.db.fetch_one(query, (rut,))
+        result = await self.db.fetch_one(query, (rut, rut_clean))
         
         if not result:
             return None
@@ -586,7 +653,12 @@ class EmpleadoRepository:
         query = f"""
             SELECT e.*, COALESCE(a_hist.nombre, a_emp.nombre) as area 
             FROM empleados e
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN (
+                SELECT empleado_id, MAX(area_id) as area_id
+                FROM historial_areas
+                WHERE es_actual = 1 AND validado = 1
+                GROUP BY empleado_id
+            ) ha ON e.id = ha.empleado_id
             LEFT JOIN areas a_hist ON ha.area_id = a_hist.id 
             LEFT JOIN areas a_emp ON e.area_id = a_emp.id
             WHERE e.activo = 1 {area_filter}
@@ -633,7 +705,12 @@ class EmpleadoRepository:
         query = f"""
             SELECT e.*, COALESCE(a_hist.nombre, a_emp.nombre) as area
             FROM empleados e
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN (
+                SELECT empleado_id, MAX(area_id) as area_id
+                FROM historial_areas
+                WHERE es_actual = 1 AND validado = 1
+                GROUP BY empleado_id
+            ) ha ON e.id = ha.empleado_id
             LEFT JOIN areas a_hist ON ha.area_id = a_hist.id
             LEFT JOIN areas a_emp ON e.area_id = a_emp.id
             WHERE e.fecha_salida BETWEEN ? AND ? {area_filter}
@@ -922,7 +999,12 @@ class EmpleadoRepository:
                    (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) as nombre_completo,
                    e.rut, COALESCE(a_hist.nombre, a_emp.nombre) as area, e.activo
             FROM empleados e
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.es_actual = 1 AND ha.validado = 1
+            LEFT JOIN (
+                SELECT empleado_id, MAX(area_id) as area_id
+                FROM historial_areas
+                WHERE es_actual = 1 AND validado = 1
+                GROUP BY empleado_id
+            ) ha ON e.id = ha.empleado_id
             LEFT JOIN areas a_hist ON ha.area_id = a_hist.id
             LEFT JOIN areas a_emp ON e.area_id = a_emp.id
             WHERE 1=1
@@ -975,7 +1057,22 @@ class EmpleadoRepository:
         return await self.db.fetch_all(query, (empleado_id,))
 
     async def add_historial_area(self, empleado_id: int, area_id: int, fecha_desde: str, fecha_hasta: Optional[str] = None, es_actual: bool = True, validado: bool = True) -> int:
-        """Añadir un nuevo registro de área al historial"""
+        """Añadir un nuevo registro de área al historial con protección de idempotencia"""
+        if es_actual and validado:
+            # 1. Si ya existe exactamente este registro activo y validado para la misma área, devolver su ID (evitar duplicados)
+            existente = await self.db.fetch_one(
+                "SELECT id FROM historial_areas WHERE empleado_id = ? AND area_id = ? AND es_actual = 1 AND validado = 1",
+                (empleado_id, area_id)
+            )
+            if existente:
+                return existente["id"]
+
+            # 2. Desmarcar registros previos para garantizar que solo exista 1 registro actual
+            await self.db.execute(
+                "UPDATE historial_areas SET es_actual = 0 WHERE empleado_id = ? AND es_actual = 1",
+                (empleado_id,)
+            )
+
         query = """
             INSERT INTO historial_areas (empleado_id, area_id, fecha_desde, fecha_hasta, es_actual, validado)
             VALUES (?, ?, ?, ?, ?, ?)

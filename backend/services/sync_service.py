@@ -1729,23 +1729,15 @@ class SyncService:
 
                 self.stats['empleados_nuevos'] += 1
                 
-                # 2. AL CREAR: Insertar su primer registro histórico (Validado por defecto)
-                if nuevo_emp and nuevo_emp.id:
-                    await service.repository.add_historial_area(
-                        empleado_id=nuevo_emp.id,
-                        area_id=nuevo_emp.area_id,
-                        fecha_desde=nuevo_emp.fecha_ingreso or datetime.now().strftime("%Y-%m-%d"),
-                        es_actual=True,
-                        validado=True
-                    )
+                # NOTA: EmpleadoService.create_empleado() YA inserta el registro histórico inicial en historial_areas.
+                # Se omite inserción manual aquí para evitar duplicación de registros activos.
                 
             except Exception as e:
-                if "Ya existe" in str(e) or "UNIQUE constraint" in str(e):
+                err_str = str(e).lower()
+                if "ya existe" in err_str or "unique" in err_str or "duplicate key" in err_str:
                     # Si falla por duplicado, intentar recuperar y actualizar
                     logger.warning(f"Conflicto de duplicado para {rut}, intentando actualizar...")
                     try:
-                        # Buscar de nuevo (puede que get_by_rut fallara por formato, pero ahora sabemos que está)
-                        # Intentar buscar por RUT limpio o con puntos si falló antes
                         emp_existente = await service.repository.get_by_rut(rut)
                         
                         if emp_existente:
