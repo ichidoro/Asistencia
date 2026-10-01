@@ -2417,19 +2417,19 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                     <div class="row g-2 mb-2">
                                         <!-- Estrategia 1: Compensar Deuda (Saldo Cero) -->
                                         <div class="col-md-4">
-                                            <button type="button" class="btn btn-outline-success w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'cero' ? '2px' : '1.5px'}; ${estrategiaSugerida === 'cero' ? 'background:#f0fdf4;' : ''}">
+                                            <button type="button" class="btn w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'cero' ? '2px' : '1.5px'};">
                                                 ${estrategiaSugerida === 'cero' ? `
                                                 <div class="position-absolute top-0 end-0 translate-middle-y me-2" style="z-index: 2;">
-                                                    <span class="badge bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
+                                                    <span class="badge badge-recomendado bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
                                                         <i class="bi bi-star-fill text-dark me-1"></i>RECOMENDADO
                                                     </span>
                                                 </div>
                                                 ` : ''}
                                                 <div class="d-flex align-items-center gap-2 mb-1">
-                                                    <span class="badge bg-success text-white p-1 rounded-circle"><i class="bi bi-bullseye fs-6"></i></span>
-                                                    <strong class="text-success" style="font-size:0.83rem;">1. Compensar Deuda (Saldo Cero)</strong>
+                                                    <span class="badge est-icon-badge bg-success text-white p-1 rounded-circle"><i class="bi bi-bullseye fs-6"></i></span>
+                                                    <strong class="est-title text-success" style="font-size:0.83rem;">1. Compensar Deuda (Saldo Cero)</strong>
                                                 </div>
-                                                <div class="text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                <div class="est-desc text-muted small" style="font-size:0.71rem; line-height: 1.2;">
                                                     Absorbe atrasos exactos. Saldo neto resultante: <strong>00:00:00</strong>.
                                                 </div>
                                             </button>
@@ -2437,19 +2437,19 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
 
                                         <!-- Estrategia 2: Pagar Todo (Norma Legal DT) -->
                                         <div class="col-md-4">
-                                            <button type="button" class="btn btn-outline-primary w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-todo" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'todo' ? '2px' : '1.5px'}; ${estrategiaSugerida === 'todo' ? 'background:#eff6ff;' : ''}">
+                                            <button type="button" class="btn w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-todo" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'todo' ? '2px' : '1.5px'};">
                                                 ${estrategiaSugerida === 'todo' ? `
                                                 <div class="position-absolute top-0 end-0 translate-middle-y me-2" style="z-index: 2;">
-                                                    <span class="badge bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
+                                                    <span class="badge badge-recomendado bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
                                                         <i class="bi bi-star-fill text-dark me-1"></i>RECOMENDADO
                                                     </span>
                                                 </div>
                                                 ` : ''}
                                                 <div class="d-flex align-items-center gap-2 mb-1">
-                                                    <span class="badge bg-primary text-white p-1 rounded-circle"><i class="bi bi-shield-check fs-6"></i></span>
-                                                    <strong class="text-primary" style="font-size:0.83rem;">2. Pagar Todo (Norma Legal DT)</strong>
+                                                    <span class="badge est-icon-badge bg-primary text-white p-1 rounded-circle"><i class="bi bi-shield-check fs-6"></i></span>
+                                                    <strong class="est-title text-primary" style="font-size:0.83rem;">2. Pagar Todo (Norma Legal DT)</strong>
                                                 </div>
-                                                <div class="text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                <div class="est-desc text-muted small" style="font-size:0.71rem; line-height: 1.2;">
                                                     Autoriza el 100% de minutos efectivos trabajados sin recortes.
                                                 </div>
                                             </button>
@@ -2458,12 +2458,12 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <!-- Estrategia 3: Bloques Nómina (+HH:00 o +HH:30) -->
                                         <div class="col-md-4">
                                             <div class="dropdown h-100 position-relative">
-                                                <button type="button" class="btn btn-outline-warning text-dark w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 dropdown-toggle" id="btn-est-redondeo" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius:10px; border-width: 1.5px;">
+                                                <button type="button" class="btn text-dark w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 dropdown-toggle" id="btn-est-redondeo" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius:10px; border-width: 1.5px;">
                                                     <div class="d-flex align-items-center gap-2 mb-1">
-                                                        <span class="badge bg-warning text-dark p-1 rounded-circle"><i class="bi bi-cash-coin fs-6"></i></span>
-                                                        <strong class="text-dark" style="font-size:0.83rem;">3. Bloques Nómina (Redondeo)</strong>
+                                                        <span class="badge est-icon-badge bg-warning text-dark p-1 rounded-circle"><i class="bi bi-cash-coin fs-6"></i></span>
+                                                        <strong class="est-title text-dark" style="font-size:0.83rem;">3. Bloques Nómina (Redondeo)</strong>
                                                     </div>
-                                                    <div class="text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                    <div class="est-desc text-muted small" style="font-size:0.71rem; line-height: 1.2;">
                                                         Paga horas redondas (+HH:00 / :30) y remanente a banco de tiempo.
                                                     </div>
                                                 </button>

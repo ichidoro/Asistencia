@@ -578,19 +578,234 @@ a:hover { color: var(--ag-navy-deep); }
 .ag-update-later:hover { color: #fff; }
 @media (prefers-reduced-motion: reduce) { .ag-update-bar { transition: opacity 150ms ease; transform: none; opacity: 0; } .ag-update-bar.is-visible { opacity: 1; } }
 
-/* ── Gestión y Cuadre de Horas Extras: botones de estrategia ───────────────────────────────
-   Seleccionado (.active), con el menú abierto (.show) o al pasar el mouse, el botón se pinta con un fondo
-   sólido; los textos de adentro traen clases fijas (text-success / text-primary / text-dark / text-muted)
-   y quedaban oscuros sobre ese fondo. Aquí todo pasa a blanco y los fondos se oscurecen para dar contraste. */
-#btn-est-cero.active,  #btn-est-cero:hover  { background: #3d7a1e; border-color: #3d7a1e; }
-#btn-est-todo.active,  #btn-est-todo:hover  { background: var(--ag-navy); border-color: var(--ag-navy); }
-#btn-est-redondeo.active, #btn-est-redondeo.show, #btn-est-redondeo:hover { background: #b35f00; border-color: #b35f00; }
+/* ── Gestión y Cuadre de Horas Extras: Botones de Estrategia ───────────────────
+   Diseño de alto contraste y legibilidad absoluta en todos sus estados:
+   1. Inactivo / Normal: Fondo suave temático, bordes definidos, títulos y descripciones oscuras de alta legibilidad.
+   2. Hover / Focus (sin seleccionar): Realce de color y sombra sutil; los textos se mantienen oscuros y nítidos (NUNCA blancos).
+   3. Activo / Seleccionado (.active / .show): Fondo sólido institucional (verde, azul o ámbar) con texto blanco puro de máximo contraste.
+   4. Insignia ★ RECOMENDADO: Siempre amarilla sólida (#f59e0b) con texto negro (#000000), blindada en cualquier estado.
+───────────────────────────────────────────────────────────────────────────── */
 
-.btn-estrategia-he.active, .btn-estrategia-he.show, .btn-estrategia-he:hover,
-.btn-estrategia-he.active *, .btn-estrategia-he.show *, .btn-estrategia-he:hover * {
-  color: #fff !important;
+.btn-estrategia-he {
+  border-radius: 10px !important;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 140ms var(--ag-ease-out) !important;
+  cursor: pointer;
+  text-decoration: none;
+  position: relative;
 }
-.btn-estrategia-he.active .badge, .btn-estrategia-he.show .badge, .btn-estrategia-he:hover .badge {
-  background: rgba(255, 255, 255, 0.22) !important;
+
+/* ── 1. ESTADO NORMAL (INACTIVO) ── */
+#btn-est-cero {
+  background-color: #f0fdf4 !important;
+  border: 1.5px solid #86efac !important;
+  color: #1e293b !important;
 }
-.btn-estrategia-he { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 140ms var(--ag-ease-out); }
+#btn-est-cero .est-title, #btn-est-cero strong.text-success {
+  color: #15803d !important;
+}
+#btn-est-cero .est-desc, #btn-est-cero .text-muted {
+  color: #475569 !important;
+}
+#btn-est-cero .est-icon-badge, #btn-est-cero .badge.bg-success {
+  background-color: #16a34a !important;
+  color: #ffffff !important;
+}
+
+#btn-est-todo {
+  background-color: #eff6ff !important;
+  border: 1.5px solid #93c5fd !important;
+  color: #1e293b !important;
+}
+#btn-est-todo .est-title, #btn-est-todo strong.text-primary {
+  color: #1d4ed8 !important;
+}
+#btn-est-todo .est-desc, #btn-est-todo .text-muted {
+  color: #475569 !important;
+}
+#btn-est-todo .est-icon-badge, #btn-est-todo .badge.bg-primary {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+#btn-est-redondeo {
+  background-color: #fffbeb !important;
+  border: 1.5px solid #fde68a !important;
+  color: #1e293b !important;
+}
+#btn-est-redondeo .est-title, #btn-est-redondeo strong.text-dark {
+  color: #b45309 !important;
+}
+#btn-est-redondeo .est-desc, #btn-est-redondeo .text-muted {
+  color: #475569 !important;
+}
+#btn-est-redondeo .est-icon-badge, #btn-est-redondeo .badge.bg-warning {
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+}
+
+/* ── 2. HOVER Y FOCUS (CUANDO NO ESTÁ ACTIVO) ──
+   Fondo ligeramente más saturado, texto SIEMPRE oscuro y legible (NUNCA blanco) */
+#btn-est-cero:hover:not(.active),
+#btn-est-cero:focus:not(.active) {
+  background-color: #dcfce7 !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.18) !important;
+}
+#btn-est-cero:hover:not(.active) .est-title,
+#btn-est-cero:hover:not(.active) strong.text-success,
+#btn-est-cero:focus:not(.active) .est-title,
+#btn-est-cero:focus:not(.active) strong.text-success {
+  color: #14532d !important;
+}
+#btn-est-cero:hover:not(.active) .est-desc,
+#btn-est-cero:hover:not(.active) .text-muted,
+#btn-est-cero:focus:not(.active) .est-desc,
+#btn-est-cero:focus:not(.active) .text-muted {
+  color: #1e293b !important;
+}
+
+#btn-est-todo:hover:not(.active),
+#btn-est-todo:focus:not(.active) {
+  background-color: #dbeafe !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18) !important;
+}
+#btn-est-todo:hover:not(.active) .est-title,
+#btn-est-todo:hover:not(.active) strong.text-primary,
+#btn-est-todo:focus:not(.active) .est-title,
+#btn-est-todo:focus:not(.active) strong.text-primary {
+  color: #1e40af !important;
+}
+#btn-est-todo:hover:not(.active) .est-desc,
+#btn-est-todo:hover:not(.active) .text-muted,
+#btn-est-todo:focus:not(.active) .est-desc,
+#btn-est-todo:focus:not(.active) .text-muted {
+  color: #1e293b !important;
+}
+
+#btn-est-redondeo:hover:not(.active):not(.show),
+#btn-est-redondeo:focus:not(.active):not(.show) {
+  background-color: #fef3c7 !important;
+  border-color: #d97706 !important;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.18) !important;
+}
+#btn-est-redondeo:hover:not(.active):not(.show) .est-title,
+#btn-est-redondeo:hover:not(.active):not(.show) strong.text-dark,
+#btn-est-redondeo:focus:not(.active):not(.show) .est-title,
+#btn-est-redondeo:focus:not(.active):not(.show) strong.text-dark {
+  color: #78350f !important;
+}
+#btn-est-redondeo:hover:not(.active):not(.show) .est-desc,
+#btn-est-redondeo:hover:not(.active):not(.show) .text-muted,
+#btn-est-redondeo:focus:not(.active):not(.show) .est-desc,
+#btn-est-redondeo:focus:not(.active):not(.show) .text-muted {
+  color: #1e293b !important;
+}
+
+/* ── 3. ESTADO ACTIVO / SELECCIONADO (.active / .show) ──
+   Fondo sólido oscuro con tipografía en blanco puro de máximo contraste */
+#btn-est-cero.active {
+  background-color: #15803d !important;
+  border-color: #14532d !important;
+  box-shadow: 0 4px 14px rgba(21, 128, 61, 0.35) !important;
+}
+#btn-est-cero.active .est-title,
+#btn-est-cero.active strong.text-success {
+  color: #ffffff !important;
+}
+#btn-est-cero.active .est-desc,
+#btn-est-cero.active .text-muted,
+#btn-est-cero.active .est-desc strong {
+  color: #f0fdf4 !important;
+}
+#btn-est-cero.active .est-icon-badge,
+#btn-est-cero.active .badge.bg-success {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+#btn-est-todo.active {
+  background-color: #1d4ed8 !important;
+  border-color: #1e3a8a !important;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.35) !important;
+}
+#btn-est-todo.active .est-title,
+#btn-est-todo.active strong.text-primary {
+  color: #ffffff !important;
+}
+#btn-est-todo.active .est-desc,
+#btn-est-todo.active .text-muted,
+#btn-est-todo.active .est-desc strong {
+  color: #eff6ff !important;
+}
+#btn-est-todo.active .est-icon-badge,
+#btn-est-todo.active .badge.bg-primary {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+#btn-est-redondeo.active,
+#btn-est-redondeo.show {
+  background-color: #b45309 !important;
+  border-color: #78350f !important;
+  box-shadow: 0 4px 14px rgba(180, 83, 9, 0.35) !important;
+}
+#btn-est-redondeo.active .est-title,
+#btn-est-redondeo.show .est-title,
+#btn-est-redondeo.active strong.text-dark,
+#btn-est-redondeo.show strong.text-dark {
+  color: #ffffff !important;
+}
+#btn-est-redondeo.active .est-desc,
+#btn-est-redondeo.show .est-desc,
+#btn-est-redondeo.active .text-muted,
+#btn-est-redondeo.show .text-muted,
+#btn-est-redondeo.active .est-desc strong,
+#btn-est-redondeo.show .est-desc strong {
+  color: #fef3c7 !important;
+}
+#btn-est-redondeo.active .est-icon-badge,
+#btn-est-redondeo.show .est-icon-badge,
+#btn-est-redondeo.active .badge.bg-warning,
+#btn-est-redondeo.show .badge.bg-warning {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+/* ── 4. INSIGNIA ★ RECOMENDADO BLINDADA EN TODOS LOS ESTADOS ── */
+.btn-estrategia-he .badge-recomendado,
+.btn-estrategia-he:hover .badge-recomendado,
+.btn-estrategia-he.active .badge-recomendado,
+.btn-estrategia-he.show .badge-recomendado,
+.btn-estrategia-he .badge.bg-warning.text-dark,
+.btn-estrategia-he:hover .badge.bg-warning.text-dark,
+.btn-estrategia-he.active .badge.bg-warning.text-dark,
+.btn-estrategia-he.show .badge.bg-warning.text-dark {
+  background-color: #f59e0b !important;
+  color: #000000 !important;
+  border: 1px solid #d97706 !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+  font-weight: 800 !important;
+}
+.btn-estrategia-he .badge-recomendado *,
+.btn-estrategia-he:hover .badge-recomendado *,
+.btn-estrategia-he.active .badge-recomendado *,
+.btn-estrategia-he.show .badge-recomendado *,
+.btn-estrategia-he .badge.bg-warning.text-dark *,
+.btn-estrategia-he:hover .badge.bg-warning.text-dark *,
+.btn-estrategia-he.active .badge.bg-warning.text-dark *,
+.btn-estrategia-he.show .badge.bg-warning.text-dark * {
+  color: #000000 !important;
+}
+
+/* ── 5. DROPDOWN DE REDONDEO NÓMINA ── */
+#btn-est-redondeo + .dropdown-menu {
+  border: 1px solid #e2e8f0 !important;
+}
+#btn-est-redondeo + .dropdown-menu .dropdown-item {
+  color: #1e293b !important;
+}
+#btn-est-redondeo + .dropdown-menu .dropdown-item:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
