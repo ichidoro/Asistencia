@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     # ============================================
     # API
     # ============================================
-    API_HOST: str = "0.0.0.0"  # Cloud-ready: acepta conexiones externas
-    API_PORT: int = int(os.environ.get("PORT", 8000))  # Cloud Run define PORT
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = int(os.environ.get("PORT", os.environ.get("APP_PORT", 8000)))
     API_RELOAD: bool = True  # Solo en development
     
     # CORS (Permitir todos los puertos locales para el frontend de reclamos)
@@ -128,8 +128,8 @@ class Settings(BaseSettings):
     # ============================================
     # GOOGLE DRIVE & PORTERIA
     # ============================================
-    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = "1Y3YeLP9l1O5IZdLVlvCDqUjfLRehv_Rp"
-    GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH: Optional[str] = "asistencia-13c58-230b9fe62f70.json"
+    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
+    GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH: Optional[str] = None
     
     # ============================================
     # LOGGING
