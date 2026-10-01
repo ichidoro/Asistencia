@@ -24,8 +24,19 @@ from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional, Tuple, Any, Set
 import math
 import logging
+from zoneinfo import ZoneInfo
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_CHILE_TZ = ZoneInfo(settings.TIMEZONE)
+
+def _get_now_local() -> datetime:
+    """Retorna la fecha/hora actual naive en la zona horaria de Chile."""
+    try:
+        return datetime.now(_CHILE_TZ).replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
 
 _TIPOS_E: Set[str] = {'entrada', 'entry', 'e', 'in', '1'}
 _TIPOS_S: Set[str] = {'salida', 'exit', 's', 'out', '0', '2'}
@@ -1168,7 +1179,7 @@ class QuantumMatrixEngine:
             res['observaciones'] += segment_res['emergencia_detectada']['texto'] + " "
 
         # Si no hay marcas en el bloque principal
-        now_local = datetime.now()
+        now_local = _get_now_local()
         today_str = now_local.strftime("%Y-%m-%d")
 
         if not bloque_p:
@@ -1210,14 +1221,14 @@ class QuantumMatrixEngine:
             if fecha == today_str:
                 if is_bolsa and hora_limite_ficticia:
                     try:
-                        limite_dt = datetime.strptime(f"{fecha} {hora_limite_ficticia}", "%Y-%m-%d %H:%M")
+                        limite_dt = datetime.strptime(f"{fecha} {str(hora_limite_ficticia).strip()[:5]}", "%Y-%m-%d %H:%M")
                         if now_local < limite_dt:
                             return None
                     except Exception:
                         pass
                 elif hora_ent_teo:
                     try:
-                        limite_dt = datetime.strptime(f"{fecha} {hora_ent_teo}", "%Y-%m-%d %H:%M") + timedelta(minutes=anclaje_entrada)
+                        limite_dt = datetime.strptime(f"{fecha} {str(hora_ent_teo).strip()[:5]}", "%Y-%m-%d %H:%M") + timedelta(minutes=anclaje_entrada)
                         if now_local < limite_dt:
                             return None
                     except Exception:
@@ -1251,15 +1262,30 @@ class QuantumMatrixEngine:
             is_tipo_s = t_m in _TIPOS_S
             is_tipo_e = t_m in _TIPOS_E
 
+            # Determinar si la marca corresponde a una Entrada (por rótulo o por cercanía horaria/fase)
+            es_entrada = is_tipo_e
+            if not es_entrada and not is_tipo_s:
+                if hora_ent_teo and hora_sal_teo:
+                    m_phase = QuantumPhaseTopology.time_to_phase(m_dt)
+                    p_ent = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
+                    p_sal = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
+                    d_ent = abs(QuantumPhaseTopology.circular_distance(p_ent, m_phase))
+                    d_sal = abs(QuantumPhaseTopology.circular_distance(p_sal, m_phase))
+                    if d_ent <= d_sal:
+                        es_entrada = True
+                elif hora_ent_teo and not hora_sal_teo:
+                    es_entrada = True
+
             # Evaluar si la jornada sigue en curso hoy
             f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
             jornada_vigente_hoy = (fecha == today_str) or (es_nocturno and today_str == f_sal_eval)
-            if jornada_vigente_hoy and is_tipo_e:
+            if jornada_vigente_hoy and es_entrada:
                 ventana_min = int(t_cfg.get('ventana_en_curso_minutos', 180) or 180)
                 sigue_en_curso = True
                 if hora_sal_teo:
                     try:
-                        dt_sal_teo = datetime.strptime(f"{f_sal_eval} {hora_sal_teo}", "%Y-%m-%d %H:%M")
+                        h_sal_norm = str(hora_sal_teo).strip()[:5]
+                        dt_sal_teo = datetime.strptime(f"{f_sal_eval} {h_sal_norm}", "%Y-%m-%d %H:%M")
                         if now_local >= dt_sal_teo + timedelta(minutes=ventana_min):
                             sigue_en_curso = False
                     except Exception:

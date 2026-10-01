@@ -2831,14 +2831,17 @@ class AsistenciaService:
                     if f_asist == ayer_dt.strftime("%Y-%m-%d"):
                         h_sal_teo = a.get('hora_salida_teorica')
                         h_ent_teo = a.get('hora_entrada_teorica')
-                        # Si cruza medianoche (hora_salida < hora_entrada)
-                        if h_sal_teo and h_ent_teo and h_sal_teo < h_ent_teo:
-                            try:
-                                dt_sal_hoy = datetime.strptime(f"{hoy_str} {h_sal_teo}", "%Y-%m-%d %H:%M")
-                                if _get_now_local() < dt_sal_hoy + timedelta(hours=3):
-                                    es_nocturno_activo = True
-                            except Exception:
-                                pass
+                        if h_sal_teo and h_ent_teo:
+                            h_sal_norm = str(h_sal_teo).strip()[:5]
+                            h_ent_norm = str(h_ent_teo).strip()[:5]
+                            # Si cruza medianoche (hora_salida < hora_entrada)
+                            if h_sal_norm < h_ent_norm:
+                                try:
+                                    dt_sal_hoy = datetime.strptime(f"{hoy_str} {h_sal_norm}", "%Y-%m-%d %H:%M")
+                                    if _get_now_local() < dt_sal_hoy + timedelta(hours=3):
+                                        es_nocturno_activo = True
+                                except Exception:
+                                    pass
 
                     if not es_nocturno_activo:
                         if a.get('hora_entrada_real') and a.get('hora_salida_real'):
