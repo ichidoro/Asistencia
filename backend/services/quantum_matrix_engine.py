@@ -1217,22 +1217,29 @@ class QuantumMatrixEngine:
             if fecha > today_str:
                 return None
 
-            # Día de hoy sin marcas: evaluar hora límite ficticia o de entrada
+            # Día de hoy sin marcas: no presumir inasistencia mientras el turno o jornada esté en transcurso
             if fecha == today_str:
-                if is_bolsa and hora_limite_ficticia:
-                    try:
-                        limite_dt = datetime.strptime(f"{fecha} {str(hora_limite_ficticia).strip()[:5]}", "%Y-%m-%d %H:%M")
-                        if now_local < limite_dt:
-                            return None
-                    except Exception:
-                        pass
-                elif hora_ent_teo:
-                    try:
-                        limite_dt = datetime.strptime(f"{fecha} {str(hora_ent_teo).strip()[:5]}", "%Y-%m-%d %H:%M") + timedelta(minutes=anclaje_entrada)
-                        if now_local < limite_dt:
-                            return None
-                    except Exception:
-                        pass
+                if is_bolsa:
+                    if hora_limite_ficticia:
+                        try:
+                            limite_dt = datetime.strptime(f"{fecha} {str(hora_limite_ficticia).strip()[:5]}", "%Y-%m-%d %H:%M")
+                            if now_local < limite_dt:
+                                return None
+                        except Exception:
+                            pass
+                    else:
+                        return None
+                elif dt_sal_teo:
+                    # El turno concluye a la hora de salida teórica más el margen de anclaje de salida
+                    ventana_salida = max(anclaje_salida, 30)
+                    limite_sal_dt = dt_sal_teo + timedelta(minutes=ventana_salida)
+                    if now_local < limite_sal_dt:
+                        return None
+                elif dt_ent_teo and horas_teoricas > 0:
+                    ventana_salida = max(anclaje_salida, 30)
+                    est_sal_dt = dt_ent_teo + timedelta(hours=horas_teoricas, minutes=ventana_salida)
+                    if now_local < est_sal_dt:
+                        return None
                 else:
                     return None
 
