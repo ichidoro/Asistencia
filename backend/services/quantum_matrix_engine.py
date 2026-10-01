@@ -1252,12 +1252,13 @@ class QuantumMatrixEngine:
             is_tipo_e = t_m in _TIPOS_E
 
             # Evaluar si la jornada sigue en curso hoy
-            if fecha == today_str and is_tipo_e:
+            f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
+            jornada_vigente_hoy = (fecha == today_str) or (es_nocturno and today_str == f_sal_eval)
+            if jornada_vigente_hoy and is_tipo_e:
                 ventana_min = int(t_cfg.get('ventana_en_curso_minutos', 180) or 180)
                 sigue_en_curso = True
                 if hora_sal_teo:
                     try:
-                        f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
                         dt_sal_teo = datetime.strptime(f"{f_sal_eval} {hora_sal_teo}", "%Y-%m-%d %H:%M")
                         if now_local >= dt_sal_teo + timedelta(minutes=ventana_min):
                             sigue_en_curso = False

@@ -2826,13 +2826,28 @@ class AsistenciaService:
                 # [FIX EN_CURSO DIAS PASADOS]: Un día pasado NUNCA puede permanecer en EN_CURSO
                 # a menos que sea un turno nocturno activo de ayer durante su ventana matutina.
                 if a.get('estado') == 'EN_CURSO' and f_asist and f_asist < hoy_str:
-                    if a.get('hora_entrada_real') and a.get('hora_salida_real'):
-                        a['estado'] = 'ATRASO' if a.get('tiene_atraso') else 'OK'
-                    elif a.get('hora_entrada_real') and not a.get('hora_salida_real'):
-                        a['estado'] = 'ANOMALIA'
-                        a['observaciones'] = (a.get('observaciones') or '').replace('Jornada en curso (falta salida).', 'Solo una marcación (falta salida).')
-                    elif not a.get('hora_entrada_real'):
-                        a['estado'] = 'INASISTENCIA'
+                    es_nocturno_activo = False
+                    ayer_dt = _get_now_local() - timedelta(days=1)
+                    if f_asist == ayer_dt.strftime("%Y-%m-%d"):
+                        h_sal_teo = a.get('hora_salida_teorica')
+                        h_ent_teo = a.get('hora_entrada_teorica')
+                        # Si cruza medianoche (hora_salida < hora_entrada)
+                        if h_sal_teo and h_ent_teo and h_sal_teo < h_ent_teo:
+                            try:
+                                dt_sal_hoy = datetime.strptime(f"{hoy_str} {h_sal_teo}", "%Y-%m-%d %H:%M")
+                                if _get_now_local() < dt_sal_hoy + timedelta(hours=3):
+                                    es_nocturno_activo = True
+                            except Exception:
+                                pass
+
+                    if not es_nocturno_activo:
+                        if a.get('hora_entrada_real') and a.get('hora_salida_real'):
+                            a['estado'] = 'ATRASO' if a.get('tiene_atraso') else 'OK'
+                        elif a.get('hora_entrada_real') and not a.get('hora_salida_real'):
+                            a['estado'] = 'ANOMALIA'
+                            a['observaciones'] = (a.get('observaciones') or '').replace('Jornada en curso (falta salida).', 'Solo una marcación (falta salida).')
+                        elif not a.get('hora_entrada_real'):
+                            a['estado'] = 'INASISTENCIA'
 
                 matrix[eid][f_asist] = a
 
