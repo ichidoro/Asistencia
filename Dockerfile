@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Dependencias primero: la capa se cachea mientras requirements no cambie
-COPY requirements-cloud.txt requirements.txt
+COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ backend/
