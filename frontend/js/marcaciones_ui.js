@@ -5465,7 +5465,7 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
 
 window.getStickyLeft = function(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta) {
     let offset = 0;
-    const keys = ['empleado', 'bonos', 'incidencias', 'he', 'deudas', 'saldo', 'bolsa'];
+    const keys = ['empleado', 'bonos', 'incidencias', 'he', 'deudas', 'saldo', 'bolsa', 'espera'];
     for (const k of keys) {
         if (k === key) {
             if (k === 'bonos' && showBonos) return offset + subIndex * 65;
@@ -5473,6 +5473,7 @@ window.getStickyLeft = function(key, subIndex, stickyCols, showBonos, showIncide
             if (k === 'he' && showHE) return offset + subIndex * 65;
             if (k === 'deudas' && showDeudas) return offset + subIndex * 65;
             if (k === 'bolsa' && showSaldoMeta) return offset + subIndex * 72;
+            if (k === 'espera' && showSaldoMeta) return offset + subIndex * 72;
             return offset;
         }
         if (stickyCols[k]) {
@@ -5490,6 +5491,7 @@ window.getStickyWidthStyle = function(key, showBonos, showIncidencias, showHE, s
     else if (key === 'deudas') w = showDeudas ? 65 : 50;
     else if (key === 'saldo') w = 70;
     else if (key === 'bolsa') w = showSaldoMeta ? 72 : 50;
+    else if (key === 'espera') w = showSaldoMeta ? 72 : 50;
     return `width:${w}px; min-width:${w}px; max-width:${w}px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
 };
 
@@ -5501,6 +5503,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
                  || (emp.info && (emp.info.tipo_programacion === 'BOLSA_FLEXIBLE' || emp.info.tipo_programacion === 'FLEXIBLE_BOLSA'));
     emp._esBolsaFlag = esBolsa;
     let acumBolsa=0, excedido=false, metaMin=0;
+    let acumEspera=0;
 
     if (esBolsa && emp.info) {
         let metaOriginal = emp.info.meta_mensual_minutos
@@ -5568,7 +5571,11 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         const di = emp.dias[d];
         if (!di) return;
 
-        if (esBolsa) { di._esBolsa = true; di._metaMinBolsa = metaMin; }
+        if (esBolsa) {
+            di._esBolsa = true;
+            di._metaMinBolsa = metaMin;
+            if (di.minutos_espera) acumEspera += Number(di.minutos_espera || 0);
+        }
 
         let vlMin = 0;
         if (esBolsa && di.viaje_largo && di.viaje_largo.id && !viajesSumadosIds.has(di.viaje_largo.id)) {
@@ -5685,10 +5692,15 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 
     let rawSaldo = esBolsa ? 0 : (he_apr - d_tot - he_compensado);
     const saldo = Math.abs(rawSaldo) < 0.0083 ? 0 : Math.round(rawSaldo * 10000) / 10000;
-    const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null; 
+    const saldoMeta = esBolsa ? (acumBolsa - metaMin) : null;
+    const metaHorasEspera = (emp.info && emp.info.meta_horas_espera !== undefined && emp.info.meta_horas_espera !== null)
+        ? Number(emp.info.meta_horas_espera)
+        : 88.0;
+    const metaEsperaMin = Math.round(metaHorasEspera * 60);
+    const saldoEspera = esBolsa ? (acumEspera - metaEsperaMin) : null;
     return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
              cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
-             esBolsa, metaMin, acumBolsa, saldoMeta };
+             esBolsa, metaMin, acumBolsa, saldoMeta, acumEspera, metaEsperaMin, saldoEspera };
 };
 
 window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols) {
@@ -5803,17 +5815,30 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                         const smSign  = sm > 0 ? '+' : sm < 0 ? '-' : '';
                         const metaTooltip = r.emp._diasJustificadosBolsa > 0 
                             ? `Meta original: ${_fmtMin(r.emp._metaOriginalBolsa)} | Descuento por ${r.emp._diasJustificadosBolsa} día(s) justificado(s)`
-                            : `Meta mensual del ciclo`;
+                            : `Meta mensual del ciclo (180h)`;
+
+                        const se = r.saldoEspera;
+                        const seColor = se >= 0 ? '#10b981' : '#d97706';
+                        const seBg    = se >= 0 ? '#f0fdf4' : '#fffbeb';
+                        const seSign  = se > 0 ? '+' : se < 0 ? '-' : '';
+                        const esperaTooltip = `Meta mensual de espera: ${_fmtMin(r.metaEsperaMin)} (88h DT)`;
 
                         return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
                                 <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
-                                <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>`;
+                                <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>
+                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;font-size:0.78rem;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}" title="${esperaTooltip}">${_fmtMin(r.metaEsperaMin)}</td>
+                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;font-size:0.78rem;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}" title="Horas de espera acumuladas en el ciclo">${_fmtMin(r.acumEspera)}</td>
+                                <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${seBg};color:${seColor};font-size:0.8rem;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')}" title="Balance de espera">${seSign}${_fmtMin(Math.abs(se))}</td>`;
                     })()
                     : `<td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
                        <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
-                       <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}"></td>`
+                       <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                       <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}"></td>
+                       <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}"></td>
+                       <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#fffbeb;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')}"></td>`
                   )
-                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>`
+                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera')}px;${getStickyWidthStyleLocal('espera')}"></td>`
         ) : ''}
         ${dayCells}
     </tr>`;
@@ -5880,6 +5905,7 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
     };
     if (hayBolsa) {
         stickyCols.bolsa = { width: showSaldoMeta ? 3 * 72 : 50 };
+        stickyCols.espera = { width: showSaldoMeta ? 3 * 72 : 50 };
     }
 
     const getStickyLeftLocal = (key, subIndex = 0) => window.getStickyLeft(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
@@ -5923,8 +5949,12 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
             showSaldoMeta
                 ? `<td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
-                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>`
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
+                   <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}"></td>
+                   <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')};text-align:center;font-size:0.7rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera')}px;${getStickyWidthStyleLocal('espera')}"></td>`
         ) : ''}
         <td colspan="${dates.length}"></td>
     </tr>`;
@@ -6045,6 +6075,7 @@ window.reloadSingleEmployeeRow = async function(empId) {
             };
             if (hayBolsa) {
                 stickyCols.bolsa = { width: showSaldoMeta ? 3 * 72 : 50 };
+                stickyCols.espera = { width: showSaldoMeta ? 3 * 72 : 50 };
             }
 
             const newRowHtml = window.renderEmployeeRowHtml(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols);
@@ -6158,11 +6189,14 @@ function renderVistaAnalitica(respData, container) {
         stickyCols.bolsa = {
             width: showSaldoMeta ? 3 * 72 : 50
         };
+        stickyCols.espera = {
+            width: showSaldoMeta ? 3 * 72 : 50
+        };
     }
 
     const getStickyLeft = (key, subIndex = 0) => {
         let offset = 0;
-        const keys = ['empleado', 'bonos', 'incidencias', 'he', 'deudas', 'saldo', 'bolsa'];
+        const keys = ['empleado', 'bonos', 'incidencias', 'he', 'deudas', 'saldo', 'bolsa', 'espera'];
         for (const k of keys) {
             if (k === key) {
                 if (k === 'bonos' && showBonos) return offset + subIndex * 65;
@@ -6170,6 +6204,7 @@ function renderVistaAnalitica(respData, container) {
                 if (k === 'he' && showHE) return offset + subIndex * 65;
                 if (k === 'deudas' && showDeudas) return offset + subIndex * 65;
                 if (k === 'bolsa' && showSaldoMeta) return offset + subIndex * 72;
+                if (k === 'espera' && showSaldoMeta) return offset + subIndex * 72;
                 return offset;
             }
             if (stickyCols[k]) {
@@ -6187,6 +6222,7 @@ function renderVistaAnalitica(respData, container) {
         else if (key === 'deudas') w = showDeudas ? 65 : 50;
         else if (key === 'saldo') w = 70;
         else if (key === 'bolsa') w = showSaldoMeta ? 72 : 50;
+        else if (key === 'espera') w = showSaldoMeta ? 72 : 50;
         return `width:${w}px; min-width:${w}px; max-width:${w}px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;`;
     };
 
@@ -6285,8 +6321,12 @@ function renderVistaAnalitica(respData, container) {
             showSaldoMeta
                 ? `<td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
-                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>`
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
+                   <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}"></td>
+                   <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')};text-align:center;font-size:0.7rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px;${getStickyWidthStyle('espera')}"></td>`
         ) : ''}
         <td colspan="${dates.length}"></td>
     </tr>`;
@@ -6344,16 +6384,27 @@ function renderVistaAnalitica(respData, container) {
         ? `<th colspan="5" class="text-start px-2 th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:325px; min-width:325px; max-width:325px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-clock-history me-1" style="font-size:0.75rem;color:#64748b"></i><span class="fw-bold">Tiempo No Trabajado</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
         : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Tiempos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-clock-history d-block mb-1" style="font-size:0.85rem;color:#64748b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">NO TRAB</span></th>`;
 
-    // Columna SALDO META — solo visible si hay bolsa flexible en el área
+    // Columna SALDO META (180h) — solo visible si hay bolsa flexible en el área
     const saldoMetaHeaderTop = hayBolsa
         ? (showSaldoMeta
-            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.68rem;left:${getStickyLeft('bolsa')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa Flexible</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
-            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#7c3aed">BOLSA</span></th>`)
+            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.68rem;left:${getStickyLeft('bolsa')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa (180h)</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
+            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#7c3aed">180H</span></th>`)
         : '';
     const saldoMetaHeadersSub = (hayBolsa && showSaldoMeta) ? `
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="Meta mensual del ciclo">META</th>
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="Meta mensual del ciclo (180h)">META</th>
             <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}" title="Horas acumuladas en el ciclo">ACUM.</th>
             <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}" title="Balance: negativo = falta, positivo = excedió">BALANCE</th>` : '';
+
+    // Columna ESPERA (88h) — grupo gemelo paralelo
+    const esperaHeaderTop = hayBolsa
+        ? (showSaldoMeta
+            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size:0.68rem;left:${getStickyLeft('espera')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-hourglass-split me-1" style="color:#d97706"></i><span class="fw-bold" style="color:#b45309">Espera (88h)</span></th>`
+            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Tiempos de Espera (88h)"><i class="bi bi-hourglass-split d-block mb-1" style="font-size:0.85rem;color:#d97706"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#b45309">88H</span></th>`)
+        : '';
+    const esperaHeadersSub = (hayBolsa && showSaldoMeta) ? `
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size:0.65rem;color:#b45309;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}" title="Meta mensual de tiempos de espera (88h o configurada)">META</th>
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;font-size:0.65rem;color:#b45309;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}" title="Horas de espera acumuladas en el ciclo">ACUM.</th>
+            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size:0.65rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Balance de espera">BALANCE</th>` : '';
 
     const incHeadersSub = showIncidencias ? `
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 0)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PERM</th>
@@ -6387,6 +6438,7 @@ function renderVistaAnalitica(respData, container) {
             ${deudasHeadersTop}
             <th rowspan="2" class="align-middle text-start px-2 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#f0fdf4;left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">Saldo<br>Neto</th>
             ${saldoMetaHeaderTop}
+            ${esperaHeaderTop}
             <th colspan="${dates.length}" class="text-start px-2" style="background:#f0f7ff">Días del período</th>
         </tr>
         <tr class="text-center" style="background:#f8f9fa;font-size:0.7rem">
@@ -6395,6 +6447,7 @@ function renderVistaAnalitica(respData, container) {
             ${heHeadersSub}
             ${deudasHeadersSub}
             ${saldoMetaHeadersSub}
+            ${esperaHeadersSub}
             ${dayHeaders}
         </tr>
     </thead>

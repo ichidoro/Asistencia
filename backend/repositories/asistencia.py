@@ -138,6 +138,7 @@ class AsistenciaRepository:
         "jornada_especial_id",
         "fuente_marcacion", "hash_marcacion",
         "minutos_colacion_auto", "tolerancia_aplicada_tipo",
+        "minutos_espera",
     })
 
     async def update_asistencia(self, empleado_id: int, fecha: str, update_data: Dict[str, Any]) -> None:
@@ -209,8 +210,9 @@ class AsistenciaRepository:
                 hora_salida_colacion, hora_entrada_colacion, hora_inicio_permiso,
                 hora_termino_permiso, minutos_permisos_detectados,
                 tiene_atraso, tiene_salida_adelantada, tiene_permiso,
-                num_semana_ganadora, marcas_consumidas_ids, deuda_condonada
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                num_semana_ganadora, marcas_consumidas_ids, deuda_condonada,
+                minutos_espera
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 turno_asignado_id=excluded.turno_asignado_id,
                 hora_entrada_teorica=excluded.hora_entrada_teorica,
@@ -267,6 +269,7 @@ class AsistenciaRepository:
                     WHEN excluded.deuda_condonada = 0 AND asistencias.deuda_condonada IN (4, 5) THEN 0
                     ELSE asistencias.deuda_condonada
                 END,
+                minutos_espera=excluded.minutos_espera,
                 updated_at=datetime('now')
         """
         
@@ -295,6 +298,7 @@ class AsistenciaRepository:
                 d.get('num_semana_ganadora', 1),
                 json.dumps(list(d['marcas_consumidas_ids'])) if isinstance(d.get('marcas_consumidas_ids'), (list, set)) else str(d.get('marcas_consumidas_ids') or '[]'),
                 d.get('deuda_condonada', 0),
+                d.get('minutos_espera', 0),
             )
             params_list.append(params)
 
@@ -348,22 +352,76 @@ class AsistenciaRepository:
         )
         await self.db.execute(query, params)
 
+    async def get_libreta_180h(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene el registro de la libreta Art. 25 bis para un empleado en una fecha específica.
+        """
+        query = "SELECT * FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha = ?"
+        return await self.db.fetch_one(query, (empleado_id, fecha))
 
+    async def upsert_libreta_180h(self, data: Dict[str, Any]) -> None:
+        """
+        Guarda o actualiza los 96 slots y cómputos de la libreta Art. 25 bis.
+        """
+        slots_str = json.dumps(data['slots_96']) if isinstance(data['slots_96'], list) else str(data['slots_96'])
+        query = """
+            INSERT INTO libreta_art25bis_dias (
+                empleado_id, fecha, slots_96,
+                minutos_conduccion, minutos_espera, minutos_auxiliares, minutos_descanso,
+                minutos_efectivos, cerrado, validador_id, observaciones, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                slots_96=excluded.slots_96,
+                minutos_conduccion=excluded.minutos_conduccion,
+                minutos_espera=excluded.minutos_espera,
+                minutos_auxiliares=excluded.minutos_auxiliares,
+                minutos_descanso=excluded.minutos_descanso,
+                minutos_efectivos=excluded.minutos_efectivos,
+                cerrado=excluded.cerrado,
+                validador_id=excluded.validador_id,
+                observaciones=excluded.observaciones,
+                updated_at=datetime('now')
+        """
+        params = (
+            data['empleado_id'],
+            data['fecha'],
+            slots_str,
+            data.get('minutos_conduccion', 0),
+            data.get('minutos_espera', 0),
+            data.get('minutos_auxiliares', 0),
+            data.get('minutos_descanso', 0),
+            data.get('minutos_efectivos', 0),
+            data.get('cerrado', 0),
+            data.get('validador_id'),
+            data.get('observaciones', '')
+        )
+        await self.db.execute(query, params)
+
+    async def get_libretas_periodo(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        """
+        Obtiene todas las libretas de un empleado en un rango de fechas.
+        """
+        query = """
+            SELECT * FROM libreta_art25bis_dias
+            WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
+            ORDER BY fecha ASC
+        """
+        return await self.db.fetch_all(query, (empleado_id, fecha_inicio, fecha_fin))
 
     async def get_asistencias_periodo(self, fecha_inicio: str, fecha_fin: str, area: str = None, empleado_id: int = None, turno_id: int = None, areas_permitidas: Optional[List[str]] = None, empleado_ids: Optional[List[int]] = None) -> List[Dict[str, Any]]:
         """
         Obtiene listado de asistencias procesadas para reportes, matriz o calendario.
-        Visibilidad controlada por historial de Ã¡reas y vigencia legal del contrato.
+        Visibilidad controlada por historial de áreas y vigencia legal del contrato.
         
-        [REGLA INVIOLABLE]: Solo se muestran registros cuya fecha estÃ© contenida
-        dentro de la vigencia de la ficha maestra (fecha_ingreso â†’ fecha_salida).
+        [REGLA INVIOLABLE]: Solo se muestran registros cuya fecha esté contenida
+        dentro de la vigencia de la ficha maestra (fecha_ingreso → fecha_salida).
         Esto impide que la grilla muestre asistencias de empleados fuera de contrato.
         """
         query = """
             SELECT 
                 a.id as asistencia_id, a.fecha, e.id as empleado_id, a.estado, a.observaciones,
                 a.hora_entrada_real, a.hora_salida_real, a.minutos_atraso, a.minutos_colacion, a.minutos_colacion_real, a.horas_trabajadas, 
-                a.minutos_deuda, a.minutos_extra_bruto,
+                a.minutos_deuda, a.minutos_extra_bruto, a.minutos_espera,
                 he.minutos_autorizados as minutos_extra_autorizados,
                 he.estado as estado_he,
                 a.minutos_salida_adelantada, a.minutos_exceso_colacion, a.minutos_colacion_auto, a.minutos_permiso_personal_deuda, a.updated_at,

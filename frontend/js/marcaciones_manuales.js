@@ -275,6 +275,20 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
+    // --- MOSTRAR/OCULTAR BOTÓN MARCACIÓN 180 HORAS (ART. 25 BIS DT) ---
+    const btnMarcacion180h = document.getElementById('btn-marcacion-180h');
+    if (btnMarcacion180h) {
+        const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
+        const isBolsa = Boolean(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'));
+        const isLibreta = Boolean(empInfo && (empInfo.modalidad_control === 'LIBRETA_180H' || isBolsa));
+
+        if (isLibreta) {
+            btnMarcacion180h.classList.remove('d-none');
+        } else {
+            btnMarcacion180h.classList.add('d-none');
+        }
+    }
+
     if (marcacionesManualesState.decisionInstance) {
         marcacionesManualesState.decisionInstance.show();
     }
@@ -2174,5 +2188,414 @@ async function submitViajeLargo() {
 window.proceedToViajeLargo = proceedToViajeLargo;
 window.updateViajeLargoCalculos = updateViajeLargoCalculos;
 window.submitViajeLargo = submitViajeLargo;
+
+// =========================================================================
+// MARCACIÓN DINÁMICA 180 HORAS (ART. 25 BIS DT) - LIBRETA DIGITAL
+// =========================================================================
+
+let m180_slots = new Array(96).fill(0);
+let m180_actividad_seleccionada = 1;
+let m180_is_pointer_down = false;
+let m180_drag_act = 1;
+let m180_grid_initialized = false;
+
+const M180_ACTIVIDADES = {
+    1: { id: 1, name: 'CONDUCCIÓN', short: 'COND', bg: '#ecfdf5', border: '#059669', color: '#065f46', activeBg: '#10b981', activeText: '#ffffff' },
+    2: { id: 2, name: 'ESPERA', short: 'ESP', bg: '#fffbeb', border: '#d97706', color: '#92400e', activeBg: '#f59e0b', activeText: '#ffffff' },
+    3: { id: 3, name: 'LABORES AUXILIARES', short: 'AUX', bg: '#eef2ff', border: '#4f46e5', color: '#3730a3', activeBg: '#6366f1', activeText: '#ffffff' },
+    4: { id: 4, name: 'DESCANSO', short: 'DESC', bg: '#f0f9ff', border: '#0284c7', color: '#075985', activeBg: '#0ea5e9', activeText: '#ffffff' }
+};
+
+function formatMinToHHMM(minutos) {
+    const mins = Math.max(0, Math.round(minutos));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function initLibreta180hGrid() {
+    const headerHours = document.getElementById('m180-header-hours');
+    const headerSlots = document.getElementById('m180-header-slots');
+    const tbody = document.getElementById('m180-grid-tbody');
+    if (!headerHours || !headerSlots || !tbody) return;
+
+    // 1. Horas (24 columnas con colspan=4)
+    let hoursHtml = `<th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:20; background:#e2e8f0;">ACTIVIDAD</th>`;
+    for (let h = 0; h < 24; h++) {
+        const hh = String(h).padStart(2, '0');
+        hoursHtml += `<th colspan="4" class="align-middle border-start text-center text-dark fw-bold" style="min-width:104px; font-size:0.75rem; background:#f1f5f9; border-left:2px solid #94a3b8 !important;">${hh}:00</th>`;
+    }
+    hoursHtml += `<th class="align-middle px-2 bg-slate-200 text-dark fw-bold" style="width:90px; min-width:90px; background:#e2e8f0;">TOTAL</th>`;
+    headerHours.innerHTML = hoursHtml;
+
+    // 2. Sub-tramos (96 columnas de 15 min)
+    let slotsHtml = `<th class="text-start px-2 py-1 align-middle" style="position:sticky; left:0; z-index:20; background:#f8fafc; font-size:0.65rem;">SUB-TRAMO</th>`;
+    for (let s = 0; s < 96; s++) {
+        const minQ = (s % 4) * 15;
+        const mm = String(minQ).padStart(2, '0');
+        const borderLeft = (s % 4 === 0) ? 'border-left:2px solid #94a3b8 !important;' : 'border-left:1px solid #e2e8f0;';
+        slotsHtml += `<th class="py-1 text-center font-monospace" style="width:26px; min-width:26px; max-width:26px; ${borderLeft} font-size:0.58rem; color:#64748b;">:${mm}</th>`;
+    }
+    slotsHtml += `<th class="py-1 text-center align-middle font-monospace" style="font-size:0.65rem;">HRS</th>`;
+    headerSlots.innerHTML = slotsHtml;
+
+    // 3. Filas de actividades (4 filas)
+    let rowsHtml = '';
+    const acts = [1, 2, 3, 4];
+    acts.forEach(actId => {
+        const cfg = M180_ACTIVIDADES[actId];
+        rowsHtml += `<tr id="m180-row-act-${actId}">
+            <td class="text-start px-2 align-middle fw-bold text-truncate" style="position:sticky; left:0; z-index:20; background:${cfg.bg}; color:${cfg.color}; border-left:4px solid ${cfg.border}; width:190px; min-width:190px; max-width:190px; font-size:0.72rem;">
+                <span class="d-inline-block rounded-circle me-1.5" style="width:8px;height:8px;background:${cfg.border};"></span>
+                ${cfg.name}
+            </td>`;
+        for (let s = 0; s < 96; s++) {
+            const borderLeft = (s % 4 === 0) ? 'border-left:2px solid #94a3b8 !important;' : 'border-left:1px solid #e2e8f0;';
+            rowsHtml += `<td class="m180-slot-cell p-0 align-middle text-center" 
+                data-slot="${s}" 
+                data-act="${actId}" 
+                style="width:26px; min-width:26px; max-width:26px; height:30px; cursor:pointer; background:#ffffff; ${borderLeft} user-select:none;"
+                title="Tramo ${s}: ${Math.floor(s/4).toString().padStart(2,'0')}:${((s%4)*15).toString().padStart(2,'0')} - ${cfg.name}">
+            </td>`;
+        }
+        rowsHtml += `<td class="text-end px-2 align-middle font-monospace fw-bold" id="m180-tot-act-${actId}" style="background:${cfg.bg}; color:${cfg.color}; font-size:0.75rem;">00:00</td>
+        </tr>`;
+    });
+    tbody.innerHTML = rowsHtml;
+
+    setupLibretaGridInteractions();
+    m180_grid_initialized = true;
+}
+
+function setupLibretaGridInteractions() {
+    const gridContainer = document.getElementById('m180-grid-scroll');
+    if (!gridContainer) return;
+
+    gridContainer.oncontextmenu = (e) => e.preventDefault();
+
+    gridContainer.addEventListener('pointerdown', (e) => {
+        const cell = e.target.closest('.m180-slot-cell');
+        if (!cell) return;
+        m180_is_pointer_down = true;
+        const slot = parseInt(cell.dataset.slot);
+        const actOfCell = parseInt(cell.dataset.act);
+
+        if (m180_actividad_seleccionada === 0) {
+            m180_slots[slot] = 0;
+            m180_drag_act = 0;
+        } else {
+            if (m180_slots[slot] === actOfCell && m180_actividad_seleccionada === actOfCell) {
+                m180_slots[slot] = 0;
+                m180_drag_act = 0;
+            } else {
+                m180_slots[slot] = m180_actividad_seleccionada;
+                m180_drag_act = m180_actividad_seleccionada;
+            }
+        }
+        updateSlotVisuals(slot);
+        recalcLibretaTotales();
+    });
+
+    gridContainer.addEventListener('pointerover', (e) => {
+        if (!m180_is_pointer_down) return;
+        const cell = e.target.closest('.m180-slot-cell');
+        if (!cell) return;
+        const slot = parseInt(cell.dataset.slot);
+        if (m180_slots[slot] !== m180_drag_act) {
+            m180_slots[slot] = m180_drag_act;
+            updateSlotVisuals(slot);
+            recalcLibretaTotales();
+        }
+    });
+
+    window.addEventListener('pointerup', () => {
+        m180_is_pointer_down = false;
+    });
+    window.addEventListener('pointercancel', () => {
+        m180_is_pointer_down = false;
+    });
+}
+
+function updateSlotVisuals(slot) {
+    const act = m180_slots[slot];
+    [1, 2, 3, 4].forEach(actId => {
+        const cell = document.querySelector(`.m180-slot-cell[data-slot="${slot}"][data-act="${actId}"]`);
+        if (!cell) return;
+        const cfg = M180_ACTIVIDADES[actId];
+        if (act === actId) {
+            cell.style.background = cfg.activeBg;
+            cell.style.color = cfg.activeText;
+            cell.innerHTML = `<span style="font-size:0.55rem;font-weight:900;">■</span>`;
+        } else {
+            cell.style.background = '#ffffff';
+            cell.style.color = 'transparent';
+            cell.innerHTML = '';
+        }
+    });
+}
+
+function refreshAllSlotsVisuals() {
+    for (let s = 0; s < 96; s++) {
+        updateSlotVisuals(s);
+    }
+}
+
+function setLibretaActividad(actId) {
+    m180_actividad_seleccionada = actId;
+    document.querySelectorAll('.m180-btn-act').forEach(btn => {
+        const btnAct = parseInt(btn.dataset.act);
+        if (btnAct === actId) {
+            btn.classList.add('active', 'shadow-sm');
+            btn.style.borderColor = btnAct === 1 ? '#059669' : btnAct === 2 ? '#d97706' : btnAct === 3 ? '#4f46e5' : btnAct === 4 ? '#0284c7' : '#475569';
+            btn.style.borderWidth = '2px';
+        } else {
+            btn.classList.remove('active', 'shadow-sm');
+            btn.style.borderWidth = '1px';
+        }
+    });
+}
+
+function libreta180hAutoDescanso() {
+    let filled = 0;
+    for (let s = 0; s < 96; s++) {
+        if (m180_slots[s] === 0) {
+            m180_slots[s] = 4;
+            updateSlotVisuals(s);
+            filled++;
+        }
+    }
+    recalcLibretaTotales();
+    if (typeof showToast === 'function') {
+        showToast(`Se rellenaron ${filled} tramos (${(filled * 15) / 60} hrs) como Descanso`, "info");
+    }
+}
+
+function limpiarGrilla180h() {
+    m180_slots.fill(0);
+    refreshAllSlotsVisuals();
+    recalcLibretaTotales();
+    if (typeof showToast === 'function') {
+        showToast("Grilla reiniciada a cero", "info");
+    }
+}
+
+function recalcLibretaTotales() {
+    let cntCond = 0, cntEsp = 0, cntAux = 0, cntDesc = 0;
+    let maxConsecCond = 0, curConsecCond = 0;
+
+    for (let s = 0; s < 96; s++) {
+        const act = m180_slots[s];
+        if (act === 1) {
+            cntCond++;
+            curConsecCond++;
+            if (curConsecCond > maxConsecCond) maxConsecCond = curConsecCond;
+        } else {
+            curConsecCond = 0;
+            if (act === 2) cntEsp++;
+            else if (act === 3) cntAux++;
+            else if (act === 4) cntDesc++;
+        }
+    }
+
+    const minCond = cntCond * 15;
+    const minEsp = cntEsp * 15;
+    const minAux = cntAux * 15;
+    const minDesc = cntDesc * 15;
+    const minEfec = minCond + minAux;
+    const minTot = minCond + minEsp + minAux + minDesc;
+
+    const elTot1 = document.getElementById('m180-tot-act-1');
+    if (elTot1) elTot1.textContent = formatMinToHHMM(minCond);
+    const elTot2 = document.getElementById('m180-tot-act-2');
+    if (elTot2) elTot2.textContent = formatMinToHHMM(minEsp);
+    const elTot3 = document.getElementById('m180-tot-act-3');
+    if (elTot3) elTot3.textContent = formatMinToHHMM(minAux);
+    const elTot4 = document.getElementById('m180-tot-act-4');
+    if (elTot4) elTot4.textContent = formatMinToHHMM(minDesc);
+
+    const elEfectiva = document.getElementById('m180-res-jornada-efectiva');
+    if (elEfectiva) elEfectiva.innerHTML = `${formatMinToHHMM(minEfec)} <span class="fs-6 fw-normal text-muted">hrs</span>`;
+
+    const elEspera = document.getElementById('m180-res-horas-espera');
+    if (elEspera) elEspera.innerHTML = `${formatMinToHHMM(minEsp)} <span class="fs-6 fw-normal text-muted">hrs</span>`;
+
+    const elDesc = document.getElementById('m180-res-horas-descanso');
+    if (elDesc) elDesc.innerHTML = `${formatMinToHHMM(minDesc)} <span class="fs-6 fw-normal text-muted">hrs</span>`;
+
+    const elTotDia = document.getElementById('m180-tot-acumulado-dia');
+    if (elTotDia) elTotDia.textContent = `${formatMinToHHMM(minTot)} h (${(minTot/60).toFixed(1)} / 24.0 h)`;
+
+    const msgCuadre = document.getElementById('m180-msg-cuadre');
+    if (msgCuadre) {
+        if (minTot === 1440) {
+            msgCuadre.className = 'badge bg-success-subtle text-success border border-success-subtle px-2 py-1';
+            msgCuadre.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Cuadre Completo: 24:00 hrs';
+        } else if (minTot < 1440) {
+            const faltan = 1440 - minTot;
+            msgCuadre.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1';
+            msgCuadre.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Faltan ${formatMinToHHMM(faltan)} hrs por registrar (${faltan / 15} tramos)`;
+        } else {
+            msgCuadre.className = 'badge bg-danger text-white px-2 py-1';
+            msgCuadre.innerHTML = 'Exceso de tramos (> 24:00 hrs)';
+        }
+    }
+
+    const alertaFatiga = document.getElementById('m180-alerta-fatiga');
+    if (alertaFatiga) {
+        if (maxConsecCond > 20) {
+            alertaFatiga.classList.remove('d-none');
+            alertaFatiga.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: Se detectó conducción continua de ${(maxConsecCond * 15 / 60).toFixed(2)} hrs (Límite legal: 5.0 hrs continuas sin descanso).`;
+        } else {
+            alertaFatiga.classList.add('d-none');
+        }
+    }
+}
+
+async function proceedToMarcacion180h() {
+    closeAsistenciaActionModal();
+
+    const empId = marcacionesManualesState.currentEmpId;
+    const dateStr = marcacionesManualesState.currentDate;
+    const empNombre = marcacionesManualesState.currentEmpNombre;
+
+    document.getElementById('m180-empleado-id').value = empId;
+    document.getElementById('m180-fecha-str').value = dateStr;
+    document.getElementById('m180-conductor-nombre').textContent = empNombre;
+    document.getElementById('m180-fecha-display').textContent = window.formatFechaDDMMYYYY(dateStr);
+
+    if (!m180_grid_initialized) {
+        initLibreta180hGrid();
+    }
+
+    setLibretaActividad(1);
+
+    try {
+        const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`);
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
+                m180_slots = [...data.slots_96];
+                document.getElementById('m180-observaciones').value = data.observaciones || '';
+                const badge = document.getElementById('m180-badge-estado');
+                if (badge) {
+                    if (data.cerrado) {
+                        badge.className = 'badge bg-success-subtle text-success-emphasis border border-success px-2 py-1';
+                        badge.textContent = 'DÍA CERRADO';
+                    } else {
+                        badge.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1';
+                        badge.textContent = 'BORRADOR / ABIERTO';
+                    }
+                }
+            } else {
+                m180_slots = new Array(96).fill(0);
+                document.getElementById('m180-observaciones').value = '';
+                const badge = document.getElementById('m180-badge-estado');
+                if (badge) {
+                    badge.className = 'badge bg-secondary-subtle text-secondary-emphasis border border-secondary px-2 py-1';
+                    badge.textContent = 'SIN REGISTRO';
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("No se pudo cargar registro previo de libreta 180h:", e);
+        m180_slots = new Array(96).fill(0);
+    }
+
+    refreshAllSlotsVisuals();
+    recalcLibretaTotales();
+
+    const modalEl = document.getElementById('modalMarcacion180h');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+}
+
+async function guardarLibreta180h(cerrarDia = false) {
+    const empId = parseInt(document.getElementById('m180-empleado-id').value);
+    const dateStr = document.getElementById('m180-fecha-str').value;
+    const obs = document.getElementById('m180-observaciones').value.trim();
+
+    const minTot = m180_slots.filter(s => s > 0).length * 15;
+    if (cerrarDia && minTot < 1440) {
+        const result = await Swal.fire({
+            title: "Jornada Diaria Incompleta",
+            html: `Se han registrado <b>${formatMinToHHMM(minTot)} hrs</b> de las 24:00 hrs requeridas por la Libreta del Art. 25 bis DT.<br><br>¿Deseas rellenar automáticamente los tramos vacíos con <b>Descanso</b> antes de cerrar el día?`,
+            icon: "warning",
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonColor: "#059669",
+            denyButtonColor: "#3b82f6",
+            confirmButtonText: "Rellenar Descanso y Cerrar",
+            denyButtonText: "Cerrar con faltante",
+            cancelButtonText: "Seguir editando"
+        });
+
+        if (result.isConfirmed) {
+            libreta180hAutoDescanso();
+        } else if (!result.isDenied) {
+            return;
+        }
+    }
+
+    const payload = {
+        empleado_id: empId,
+        fecha: dateStr,
+        slots_96: m180_slots,
+        cerrado: Boolean(cerrarDia),
+        observaciones: obs
+    };
+
+    try {
+        const btnSave = document.getElementById('btn-cerrar-guardar-180h');
+        if (btnSave) btnSave.disabled = true;
+
+        const resp = await fetch('/api/asistencia/libreta-180h/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            let errMsg = "Error al guardar Libreta 180h";
+            try {
+                const errData = await resp.json();
+                errMsg = errData.detail || JSON.stringify(errData);
+            } catch (_) {}
+            throw new Error(errMsg);
+        }
+
+        if (typeof showToast === 'function') {
+            showToast(cerrarDia ? "Día cerrado y guardado correctamente en Libreta Art. 25 bis" : "Borrador de Libreta 180h guardado", "success");
+        } else {
+            alert(cerrarDia ? "Día cerrado y guardado exitosamente" : "Borrador guardado");
+        }
+
+        const modalEl = document.getElementById('modalMarcacion180h');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+
+        if (typeof window.reloadSingleEmployeeRow === 'function') {
+            await window.reloadSingleEmployeeRow(empId);
+        } else if (typeof window.loadMarcacionesData === 'function') {
+            window.loadMarcacionesData();
+        }
+
+    } catch (e) {
+        console.error("Error guardando Libreta 180h:", e);
+        alert("Error al guardar: " + e.message);
+    } finally {
+        const btnSave = document.getElementById('btn-cerrar-guardar-180h');
+        if (btnSave) btnSave.disabled = false;
+    }
+}
+
+window.proceedToMarcacion180h = proceedToMarcacion180h;
+window.setLibretaActividad = setLibretaActividad;
+window.libreta180hAutoDescanso = libreta180hAutoDescanso;
+window.limpiarGrilla180h = limpiarGrilla180h;
+window.guardarLibreta180h = guardarLibreta180h;
 
 

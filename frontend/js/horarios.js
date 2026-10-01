@@ -86,6 +86,8 @@ async function saveTurno() {
         tolerancia_retraso_descuento: parseInt(formData.get('tolerancia_retraso_descuento') || 0),
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
+        meta_horas_espera: parseFloat(document.getElementById('input-meta-espera')?.value || 88.0),
+        modalidad_control: document.getElementById('select-modalidad-control')?.value || 'LIBRETA_180H',
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
@@ -325,6 +327,12 @@ async function openModalHorario(id = null) {
             const inputMetaBol = document.getElementById('input-meta-bolsa');
             if (inputMetaBol) inputMetaBol.value = (turno.tipo_programacion === 'BOLSA_FLEXIBLE' || turno.tipo_programacion === 'FLEXIBLE_BOLSA') ? (turno.meta_horas_semanales || "") : "";
 
+            const inputMetaEsp = document.getElementById('input-meta-espera');
+            if (inputMetaEsp) inputMetaEsp.value = (turno.meta_horas_espera !== undefined && turno.meta_horas_espera !== null) ? turno.meta_horas_espera : 88.0;
+
+            const selectModControl = document.getElementById('select-modalidad-control');
+            if (selectModControl) selectModControl.value = turno.modalidad_control || 'LIBRETA_180H';
+
             const chkViajes = document.getElementById('chkPermiteViajesLargos') || document.getElementById('chk-permite-viajes-largos');
             if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
 
@@ -395,6 +403,10 @@ async function openModalHorario(id = null) {
         toggleColacionInput();
         const chkViajesLargos = document.getElementById('chk-permite-viajes-largos');
         if (chkViajesLargos) chkViajesLargos.checked = false;
+        const inputMetaEsp = document.getElementById('input-meta-espera');
+        if (inputMetaEsp) inputMetaEsp.value = "88.0";
+        const selectModControl = document.getElementById('select-modalidad-control');
+        if (selectModControl) selectModControl.value = 'LIBRETA_180H';
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
         handleTipoProgramacionChange();
@@ -1073,9 +1085,18 @@ function renderTurnosTable() {
     const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
 
     tbody.innerHTML = turnosList.map(t => {
-        const tipoBadge = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
-            ? (t.permite_viajes_largos ? 'Bolsa Flexible (Viajes Largos)' : 'Bolsa Flexible')
+        const isBolsa = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA');
+        const isLibreta = isBolsa && (t.modalidad_control === 'LIBRETA_180H' || !t.modalidad_control);
+        const tipoBadge = isBolsa
+            ? (isLibreta
+                ? (t.permite_viajes_largos ? '🚚 180h Art. 25 bis (Viajes)' : '🚚 180h Art. 25 bis')
+                : (t.permite_viajes_largos ? 'Bolsa Flexible (Viajes Largos)' : 'Bolsa Flexible'))
             : (t.rotacion_dinamica_diaria ? 'Ciclo Inteligente (Dinámico)' : 'Ciclo Inteligente');
+
+        const badgeClass = isLibreta ? 'bg-primary' : 'bg-secondary';
+        const horasDisplay = isBolsa
+            ? `${t.meta_horas_semanales} hrs <small class="text-muted d-block">Esp: ${t.meta_horas_espera || 88}h</small>`
+            : `${t.meta_horas_semanales} hrs`;
 
         const estadoBadge = t.activo !== false
             ? '<span class="badge bg-success">Activo</span>'
@@ -1084,8 +1105,8 @@ function renderTurnosTable() {
         return `
         <tr>
             <td class="fw-bold">${t.nombre}</td>
-            <td><span class="badge bg-secondary">${tipoBadge}</span></td>
-            <td>${t.meta_horas_semanales} hrs</td>
+            <td><span class="badge ${badgeClass}">${tipoBadge}</span></td>
+            <td>${horasDisplay}</td>
             <td>${t.tolerancia_retraso_alerta} min / ${t.tolerancia_retraso_descuento} min</td>
             <td>${(t.areas && t.areas.length > 0) ? t.areas.map(a => `<span class="badge bg-info bg-opacity-75 me-1 mb-1" style="font-size:.7em">${a}</span>`).join('') : '<span class="badge bg-warning text-dark" style="font-size:.7em"><i class="bi bi-exclamation-triangle me-1"></i>Sin Área</span>'}</td>
             <td>${estadoBadge}</td>
@@ -1157,18 +1178,40 @@ function renderModalHtml() {
                         </div>
 
                         <div class="row g-3 mb-4" id="divLineaFicticia" style="display:none;">
-                            <div class="col-md-6 border-start border-danger border-4 ps-3">
+                            <div class="col-md-4 border-start border-danger border-4 ps-3">
                                 <label for="input-hora-ficticia" class="form-label fw-bold text-danger">Hora Límite Ficticia (Trigger Inasistencia)</label>
                                 <input type="time" id="input-hora-ficticia" class="form-control border-danger" name="hora_limite_ficticia" value="" required>
                                 <div class="form-text small text-danger">Si a esta hora no hay marcación, se emitirá alerta de INASISTENCIA (Reversible).</div>
                             </div>
-                            <div class="col-md-6 border-start border-primary border-4 ps-3" id="colMetaBolsa">
-                                <label for="input-meta-bolsa" class="form-label fw-bold text-primary">Meta Mensual (Hrs Totales)</label>
+                            <div class="col-md-4 border-start border-primary border-4 ps-3" id="colMetaBolsa">
+                                <label for="input-meta-bolsa" class="form-label fw-bold text-primary">Meta Mensual (180h / Bolsa)</label>
                                 <div class="input-group">
                                     <input type="number" id="input-meta-bolsa" class="form-control border-primary" value="" step="0.5" required>
                                     <span class="input-group-text bg-primary text-white border-primary">Hrs</span>
                                 </div>
-                                <div class="form-text small text-primary">Meta en horas del ciclo mensual contratado.</div>
+                                <div class="form-text small text-primary">Meta en horas del ciclo mensual (Art. 25 bis: 180 hrs).</div>
+                            </div>
+                            <div class="col-md-4 border-start border-warning border-4 ps-3" id="colMetaEspera">
+                                <label for="input-meta-espera" class="form-label fw-bold text-warning-emphasis">Meta Espera (88h)</label>
+                                <div class="input-group">
+                                    <input type="number" id="input-meta-espera" class="form-control border-warning" value="88.0" step="0.5" required>
+                                    <span class="input-group-text bg-warning text-dark border-warning">Hrs</span>
+                                </div>
+                                <div class="form-text small text-muted">Tope mensual de tiempos de espera retribuidos (Art. 25 bis: máx 88 hrs).</div>
+                            </div>
+                            <div class="col-12 mt-2" id="divModalidadControl">
+                                <div class="p-2 border border-success rounded bg-success bg-opacity-10">
+                                    <label for="select-modalidad-control" class="form-label fw-bold text-success mb-1">
+                                        📋 Modalidad de Control de Asistencia
+                                    </label>
+                                    <select id="select-modalidad-control" name="modalidad_control" class="form-select border-success">
+                                        <option value="LIBRETA_180H">🚚 Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj a partir de 01-10-2026)</option>
+                                        <option value="RELOJ">⏱️ Reloj Control Biométrico Tradicional</option>
+                                    </select>
+                                    <div class="form-text small text-muted mt-1">
+                                        Define si la asistencia del trabajador se registra vía Libreta Digital Art. 25 bis (sin marcas biométricas) o mediante reloj control físico.
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-12 mt-2" id="divPermiteViajesLargos">
                                 <div class="card border-info bg-info bg-opacity-10 p-2">

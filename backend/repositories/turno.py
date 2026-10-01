@@ -54,6 +54,8 @@ class TurnoRepository:
             ("activo",                              "BOOLEAN DEFAULT 1"),
             ("permite_viajes_largos",               "INTEGER DEFAULT 0"),
             ("rotacion_dinamica_diaria",            "INTEGER DEFAULT 0"),
+            ("meta_horas_espera",                   "REAL DEFAULT 88.0"),
+            ("modalidad_control",                   "TEXT DEFAULT 'RELOJ'"),
         ]
         for col, defn in migraciones_turnos:
             if col not in cols_turnos:
@@ -219,6 +221,8 @@ class TurnoRepository:
             ("marcas_consumidas_ids",    "TEXT DEFAULT '[]'"),
             # ── Condonación de Deuda (Perdonazo) ─────────────
             ("deuda_condonada",          "INTEGER DEFAULT 0"),
+            # ── [Art. 25 bis DT] Tiempos de Espera (88h) ─────
+            ("minutos_espera",           "INTEGER DEFAULT 0"),
         ]
 
         # Migraciones tabla asistencias: 1 get_column_names() en vez de 27 column_exists() individuales
@@ -449,6 +453,34 @@ class TurnoRepository:
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_intercambios_fechas ON intercambios_dias(fecha_origen, fecha_destino)")
             logger.info("✨ Tabla 'intercambios_dias' creada")
 
+        # ═════════════════════════════════════════════════════════════════════
+        # 13. Tabla Libreta Art. 25 bis (Marcación Dinámica 180 Horas)
+        # ═════════════════════════════════════════════════════════════════════
+        if not await self.db.table_exists("libreta_art25bis_dias"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS libreta_art25bis_dias (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empleado_id INTEGER NOT NULL,
+                    fecha TEXT NOT NULL,
+                    slots_96 TEXT NOT NULL,
+                    minutos_conduccion INTEGER DEFAULT 0,
+                    minutos_espera INTEGER DEFAULT 0,
+                    minutos_auxiliares INTEGER DEFAULT 0,
+                    minutos_descanso INTEGER DEFAULT 0,
+                    minutos_efectivos INTEGER DEFAULT 0,
+                    cerrado INTEGER DEFAULT 0,
+                    validador_id INTEGER,
+                    observaciones TEXT,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now')),
+                    FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                    UNIQUE(empleado_id, fecha)
+                )
+            """)
+            logger.info("✨ Tabla 'libreta_art25bis_dias' creada")
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_emp_fecha ON libreta_art25bis_dias (empleado_id, fecha)")
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_fecha ON libreta_art25bis_dias (fecha)")
+
     async def create_turno(self, turno: TurnoCreate) -> int:
         """Crea un turno completo con sus días de configuración"""
         try:
@@ -461,8 +493,9 @@ class TurnoRepository:
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
-                    activo, permite_viajes_largos, rotacion_dinamica_diaria
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    activo, permite_viajes_largos, rotacion_dinamica_diaria,
+                    meta_horas_espera, modalidad_control
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
@@ -474,7 +507,9 @@ class TurnoRepository:
                 1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas,
                 1 if turno.activo else 0,
                 1 if turno.permite_viajes_largos else 0,
-                1 if turno.rotacion_dinamica_diaria else 0
+                1 if turno.rotacion_dinamica_diaria else 0,
+                getattr(turno, 'meta_horas_espera', 88.0) or 88.0,
+                getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ'
             )
             
             cursor = await self.db.execute(sql_turno, params_turno)
@@ -959,7 +994,7 @@ class TurnoRepository:
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, tolerancia_exceso_colacion_minutos=?,
                     turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?,
-                    rotacion_dinamica_diaria=?
+                    rotacion_dinamica_diaria=?, meta_horas_espera=?, modalidad_control=?
                 WHERE id=?
             """
             params = (
@@ -972,6 +1007,8 @@ class TurnoRepository:
                 1 if turno.activo else 0,
                 1 if turno.permite_viajes_largos else 0,
                 1 if turno.rotacion_dinamica_diaria else 0,
+                getattr(turno, 'meta_horas_espera', 88.0) or 88.0,
+                getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ',
                 turno_id
             )
             await self.db.execute(sql_update, params)

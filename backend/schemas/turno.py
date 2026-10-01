@@ -47,6 +47,8 @@ class TurnoBase(BaseModel):
     fecha_vigencia: Optional[str] = None # YYYY-MM-DD: Desde cuándo aplica esta versión
     rotacion_secuencial: bool = True
     semana_fallback_sin_marcas: int = 1
+    meta_horas_espera: float = 88.0 # Meta de horas de espera para Art. 25 bis (default 88.0 hrs mensuales)
+    modalidad_control: str = 'RELOJ' # 'RELOJ' (Biométrico estándar) o 'LIBRETA_180H' (Libreta Art. 25 bis)
     activo: bool = True
 
     @validator('activo', pre=True, always=True)

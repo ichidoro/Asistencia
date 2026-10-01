@@ -32,6 +32,7 @@ from backend.schemas.asistencia import (
     CompensacionCreate,
     ReasignarTurnoRequest,
     ViajeLargoCreate,
+    Libreta180hRequest,
 )
 
 
@@ -3011,6 +3012,135 @@ async def get_viajes_largos_empleado(
 
     viajes = await service.repository.get_viajes_largos_periodo(empleado_id, fecha_inicio, fecha_fin)
     return {"success": True, "data": viajes}
+
+
+# ═════════════════════════════════════════════════════════════════════
+# MARCACIÓN DINÁMICA 180 HORAS (ART. 25 BIS DT)
+# ═════════════════════════════════════════════════════════════════════
+
+@router.get("/libreta-180h/")
+async def get_libreta_180h(
+    empleado_id: int = Query(...),
+    fecha: str = Query(..., regex=r"^\d{4}-\d{2}-\d{2}$"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """
+    Obtiene la libreta Art. 25 bis del día (96 slots de 15 minutos y desglose de horas).
+    """
+    row = await service.repository.get_libreta_180h(empleado_id, fecha)
+    if not row:
+        return {
+            "empleado_id": empleado_id,
+            "fecha": fecha,
+            "slots_96": [0] * 96,
+            "minutos_conduccion": 0,
+            "minutos_espera": 0,
+            "minutos_auxiliares": 0,
+            "minutos_descanso": 0,
+            "minutos_efectivos": 0,
+            "horas_efectivas": 0.0,
+            "horas_espera": 0.0,
+            "horas_descanso": 0.0,
+            "cerrado": 0,
+            "observaciones": ""
+        }
+
+    raw_s = row.get('slots_96', '[]')
+    slots = json.loads(raw_s) if isinstance(raw_s, str) else (raw_s or [0] * 96)
+    if len(slots) < 96:
+        slots.extend([0] * (96 - len(slots)))
+
+    min_cond = row.get('minutos_conduccion', 0)
+    min_esp = row.get('minutos_espera', 0)
+    min_aux = row.get('minutos_auxiliares', 0)
+    min_desc = row.get('minutos_descanso', 0)
+    min_efec = row.get('minutos_efectivos', min_cond + min_aux)
+
+    return {
+        "id": row.get('id'),
+        "empleado_id": empleado_id,
+        "fecha": fecha,
+        "slots_96": slots,
+        "minutos_conduccion": min_cond,
+        "minutos_espera": min_esp,
+        "minutos_auxiliares": min_aux,
+        "minutos_descanso": min_desc,
+        "minutos_efectivos": min_efec,
+        "horas_efectivas": round(min_efec / 60.0, 2),
+        "horas_espera": round(min_esp / 60.0, 2),
+        "horas_descanso": round(min_desc / 60.0, 2),
+        "cerrado": row.get('cerrado', 0),
+        "observaciones": row.get('observaciones') or ""
+    }
+
+
+@router.post("/libreta-180h/")
+async def save_libreta_180h(
+    payload: Libreta180hRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Guarda la libreta diaria de 96 slots, persiste cómputos y sincroniza en asistencias.
+    """
+    slots = list(payload.slots_96)
+    if len(slots) < 96:
+        slots.extend([0] * (96 - len(slots)))
+    elif len(slots) > 96:
+        slots = slots[:96]
+
+    slots_cond = sum(1 for s in slots if s == 1)
+    slots_esp = sum(1 for s in slots if s == 2)
+    slots_aux = sum(1 for s in slots if s == 3)
+    slots_desc = sum(1 for s in slots if s == 4)
+
+    min_cond = slots_cond * 15
+    min_esp = slots_esp * 15
+    min_aux = slots_aux * 15
+    min_desc = slots_desc * 15
+    min_efec = min_cond + min_aux
+
+    val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+
+    data = {
+        'empleado_id': payload.empleado_id,
+        'fecha': payload.fecha,
+        'slots_96': slots,
+        'minutos_conduccion': min_cond,
+        'minutos_espera': min_esp,
+        'minutos_auxiliares': min_aux,
+        'minutos_descanso': min_desc,
+        'minutos_efectivos': min_efec,
+        'cerrado': 1 if payload.cerrado else 0,
+        'validador_id': val_id,
+        'observaciones': payload.observaciones or ""
+    }
+
+    await service.repository.upsert_libreta_180h(data)
+
+    # Proyección atómica al motor de asistencia
+    res_dia = await service.procesar_dia_empleado(payload.empleado_id, payload.fecha, save=True, force=True)
+
+    return {
+        "status": "success",
+        "message": "Libreta Art. 25 bis guardada exitosamente.",
+        "data": {
+            "empleado_id": payload.empleado_id,
+            "fecha": payload.fecha,
+            "minutos_conduccion": min_cond,
+            "minutos_espera": min_esp,
+            "minutos_auxiliares": min_aux,
+            "minutos_descanso": min_desc,
+            "minutos_efectivos": min_efec,
+            "horas_efectivas": round(min_efec / 60.0, 2),
+            "horas_espera": round(min_esp / 60.0, 2),
+            "horas_descanso": round(min_desc / 60.0, 2),
+            "total_horas_dia": round((min_efec + min_esp + min_desc) / 60.0, 2),
+            "cerrado": data['cerrado'],
+            "resultado_asistencia": res_dia
+        }
+    }
 
 
 

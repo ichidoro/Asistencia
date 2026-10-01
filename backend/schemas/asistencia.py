@@ -80,4 +80,11 @@ class ReasignarTurnoRequest(BaseModel):
     fecha_destino: str
     motivo: Optional[str] = "Reasignación de turno por operativa de terreno"
 
+class Libreta180hRequest(BaseModel):
+    empleado_id: int
+    fecha: str
+    slots_96: List[int]
+    cerrado: bool = True
+    observaciones: Optional[str] = None
+
 

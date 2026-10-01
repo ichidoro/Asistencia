@@ -2222,38 +2222,152 @@ class AsistenciaService:
             logger.debug(f"🛡️ Blindaje Manual Aplicado (MODO OVERRIDE) para {empleado_id} - {fecha}")
             resultado = dict(asist_actual)
         else:
-            todos_ciclos_dia = None
-            if asignacion and 'turnos_src' in locals() and turnos_src:
-                todos_ciclos_dia = [
-                    turnos_src[s][dia_semana]
-                    for s in sorted(turnos_src.keys())
-                    if isinstance(turnos_src[s], dict) and dia_semana in turnos_src[s]
-                ]
+            # ── EVALUACIÓN LIBRETA ART. 25 BIS (180 HORAS DINÁMICA) ─────────
+            modalidad_ctrl = (asignacion.get('modalidad_control') or 'RELOJ').upper() if asignacion else 'RELOJ'
+            tipo_prog_emp = asignacion.get('tipo_programacion') if asignacion else ''
+            is_bolsa_emp = (tipo_prog_emp in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
+            es_180h_dt = (modalidad_ctrl == 'LIBRETA_180H') or (is_bolsa_emp and fecha >= '2026-10-01')
 
-            if bulk_ctx and 'global_ajustes' in bulk_ctx:
-                global_ajustes_ctx = bulk_ctx['global_ajustes']
+            libreta_180h = None
+            if es_180h_dt:
+                if bulk_ctx and 'libretas_180h' in bulk_ctx:
+                    libreta_180h = bulk_ctx['libretas_180h'].get(empleado_id, {}).get(fecha)
+                else:
+                    libreta_180h = await self.repository.get_libreta_180h(empleado_id, fecha)
+
+            if es_180h_dt and libreta_180h:
+                # ── Resolución desde Libreta Digital Art. 25 bis ──
+                h_ent_lib = None
+                h_sal_lib = None
+                try:
+                    raw_s = libreta_180h.get('slots_96', '[]')
+                    slots = json.loads(raw_s) if isinstance(raw_s, str) else (raw_s or [])
+                    active_slots = [idx for idx, val in enumerate(slots) if val > 0]
+                    if active_slots:
+                        first_s = active_slots[0]
+                        last_s = active_slots[-1] + 1
+                        h_ent_lib = f"{first_s // 4:02d}:{(first_s % 4) * 15:02d}"
+                        h_sal_lib = f"{min(23, last_s // 4):02d}:{(last_s % 4) * 15:02d}" if last_s < 96 else "23:59"
+                except Exception:
+                    pass
+
+                min_cond = int(libreta_180h.get('minutos_conduccion', 0) or 0)
+                min_esp = int(libreta_180h.get('minutos_espera', 0) or 0)
+                min_aux = int(libreta_180h.get('minutos_auxiliares', 0) or 0)
+                min_desc = int(libreta_180h.get('minutos_descanso', 0) or 0)
+                min_efec = int(libreta_180h.get('minutos_efectivos', min_cond + min_aux) or (min_cond + min_aux))
+                h_efec = round(min_efec / 60.0, 2)
+                cerrado = bool(libreta_180h.get('cerrado', 0))
+
+                resultado = {
+                    'empleado_id': empleado_id,
+                    'fecha': fecha,
+                    'hora_entrada_real': h_ent_lib,
+                    'hora_salida_real': h_sal_lib,
+                    'hora_salida_colacion': None,
+                    'hora_entrada_colacion': None,
+                    'hora_inicio_permiso': None,
+                    'hora_termino_permiso': None,
+                    'horas_teoricas': 0.0,
+                    'horas_trabajadas': h_efec,
+                    'minutos_espera': min_esp,
+                    'minutos_conduccion': min_cond,
+                    'minutos_auxiliares': min_aux,
+                    'minutos_descanso': min_desc,
+                    'minutos_colacion': 0,
+                    'minutos_colacion_real': 0,
+                    'minutos_colacion_auto': 0,
+                    'minutos_exceso_colacion': 0,
+                    'minutos_permisos_detectados': 0,
+                    'minutos_permiso_personal_deuda': 0,
+                    'minutos_atraso': 0.0,
+                    'minutos_salida_adelantada': 0.0,
+                    'minutos_extra_bruto': 0.0,
+                    'minutos_deuda': 0.0,
+                    'tiene_atraso': 0,
+                    'tiene_salida_adelantada': 0,
+                    'tiene_permiso': 0,
+                    'alerta_atraso': False,
+                    'estado': 'OK' if (cerrado or h_efec > 0 or min_esp > 0) else 'EN_CURSO',
+                    'observaciones': f"🚚 LIBRETA 180H: {round(min_cond/60.0, 1)}h cond, {round(min_esp/60.0, 1)}h esp, {round(min_aux/60.0, 1)}h aux.",
+                    'origen': 'LIBRETA_180H',
+                    'marcas_consumidas_ids': [],
+                    '_jornada_especial': None,
+                    '_jornada_adicional': None
+                }
+            elif es_180h_dt and not marcas_candidatas:
+                # Empleado 180h sin libreta cargada y sin marcas de reloj (no exigir reloj biométrico)
+                today_str = _get_now_local().strftime("%Y-%m-%d")
+                if fecha >= today_str:
+                    resultado = None
+                else:
+                    resultado = {
+                        'empleado_id': empleado_id,
+                        'fecha': fecha,
+                        'hora_entrada_real': None,
+                        'hora_salida_real': None,
+                        'hora_salida_colacion': None,
+                        'hora_entrada_colacion': None,
+                        'hora_inicio_permiso': None,
+                        'hora_termino_permiso': None,
+                        'horas_teoricas': 0.0,
+                        'horas_trabajadas': 0.0,
+                        'minutos_espera': 0,
+                        'minutos_colacion': 0,
+                        'minutos_colacion_real': 0,
+                        'minutos_colacion_auto': 0,
+                        'minutos_exceso_colacion': 0,
+                        'minutos_permisos_detectados': 0,
+                        'minutos_permiso_personal_deuda': 0,
+                        'minutos_atraso': 0.0,
+                        'minutos_salida_adelantada': 0.0,
+                        'minutos_extra_bruto': 0.0,
+                        'minutos_deuda': 0.0,
+                        'tiene_atraso': 0,
+                        'tiene_salida_adelantada': 0,
+                        'tiene_permiso': 0,
+                        'alerta_atraso': False,
+                        'estado': 'PENDIENTE',
+                        'observaciones': '[Pendiente Marcación Libreta 180h]',
+                        'origen': 'LIBRETA_180H',
+                        'marcas_consumidas_ids': [],
+                        '_jornada_especial': None,
+                        '_jornada_adicional': None
+                    }
             else:
-                aj_rows = await db.fetch_all("SELECT clave, valor FROM ajustes")
-                global_ajustes_ctx = {r['clave']: r['valor'] for r in aj_rows}
+                todos_ciclos_dia = None
+                if asignacion and 'turnos_src' in locals() and turnos_src:
+                    todos_ciclos_dia = [
+                        turnos_src[s][dia_semana]
+                        for s in sorted(turnos_src.keys())
+                        if isinstance(turnos_src[s], dict) and dia_semana in turnos_src[s]
+                    ]
 
-            # ── INVOCACIÓN MATRICIAL CUÁNTICA PURA ──────────────────────────
-            resultado = QuantumMatrixEngine.solve_attendance_day(
-                fecha=fecha,
-                empleado_id=empleado_id,
-                logs=marcas_candidatas,
-                turno_config=asignacion or {},
-                dia_config=config_dia,
-                is_holiday=is_holiday,
-                justificaciones=justificaciones,
-                global_ajustes=global_ajustes_ctx,
-                consumidas_previas=consumidas_emp,
-                viaje_largo_info=viaje_largo,
-                todos_ciclos_dia=todos_ciclos_dia,
-            )
+                if bulk_ctx and 'global_ajustes' in bulk_ctx:
+                    global_ajustes_ctx = bulk_ctx['global_ajustes']
+                else:
+                    aj_rows = await db.fetch_all("SELECT clave, valor FROM ajustes")
+                    global_ajustes_ctx = {r['clave']: r['valor'] for r in aj_rows}
+
+                # ── INVOCACIÓN MATRICIAL CUÁNTICA PURA ──────────────────────────
+                resultado = QuantumMatrixEngine.solve_attendance_day(
+                    fecha=fecha,
+                    empleado_id=empleado_id,
+                    logs=marcas_candidatas,
+                    turno_config=asignacion or {},
+                    dia_config=config_dia,
+                    is_holiday=is_holiday,
+                    justificaciones=justificaciones,
+                    global_ajustes=global_ajustes_ctx,
+                    consumidas_previas=consumidas_emp,
+                    viaje_largo_info=viaje_largo,
+                    todos_ciclos_dia=todos_ciclos_dia,
+                )
 
         if resultado:
             resultado['empleado_id'] = empleado_id
             resultado['fecha'] = fecha
+            resultado['minutos_espera'] = resultado.get('minutos_espera', 0)
             resultado['turno_asignado_id'] = (asignacion.get('id') or asignacion.get('turno_id')) if asignacion else None
             resultado['hora_entrada_teorica'] = config_dia.get('hora_entrada') if config_dia else None
             resultado['hora_salida_teorica'] = config_dia.get('hora_salida') if config_dia else None
@@ -2717,7 +2831,8 @@ class AsistenciaService:
         """
         
         q_asig = f"""
-            SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.permite_viajes_largos, t.nombre as turno_nombre
+            SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.permite_viajes_largos, t.nombre as turno_nombre,
+                   t.meta_horas_espera, t.modalidad_control
             FROM asignacion_turnos a
             JOIN turnos t ON a.turno_id = t.id
             WHERE a.empleado_id IN ({ids_ph})
@@ -2808,6 +2923,8 @@ class AsistenciaService:
             t_info = turno_ids_emp.get(eid, {})
             if t_info:
                 emp['meta_horas_semanales'] = t_info.get('meta_horas_semanales') or 45.0
+                emp['meta_horas_espera'] = t_info.get('meta_horas_espera') if t_info.get('meta_horas_espera') is not None else 88.0
+                emp['modalidad_control'] = t_info.get('modalidad_control') or 'RELOJ'
                 emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'CICLO_INTELIGENTE'
                 emp['permite_viajes_largos'] = t_info.get('permite_viajes_largos') or 0
                 emp['turno'] = t_info.get('turno_nombre')

@@ -4429,6 +4429,22 @@
                                     </div>
                                 </button>
 
+                                <!-- Marcación Dinámica 180 Horas (Art. 25 bis DT) -->
+                                <button id="btn-marcacion-180h"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToMarcacion180h()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #059669;">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
+                                            <i class="bi bi-truck-front-fill" style="font-size:1.1rem;color:#059669;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Marcación 180 Horas (Art. 25 bis)</div>
+                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Libreta digital: conducción, espera, descanso</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
+
                                 <!-- Reasignar / Mover Turno Nocturno -->
                                 <button id="btn-reasignar-turno"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
@@ -4746,6 +4762,168 @@
                         <div class="modal-footer border-0 p-3 bg-white">
                             <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
                             <button type="button" class="btn btn-sm btn-primary px-4 fw-bold" onclick="window.submitViajeLargo()"><i class="bi bi-check-lg me-1"></i> Guardar Viaje Largo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal para Marcación Dinámica 180 Horas (Art. 25 bis DT) -->
+            <div class="modal fade" id="modalMarcacion180h" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+                <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 96vw;">
+                    <div class="modal-content shadow-2xl border-0" style="border-radius:18px; overflow:hidden;">
+                        <!-- Header Institucional -->
+                        <div class="modal-header border-0 text-white py-3 px-4" style="background: linear-gradient(135deg, #064e3b 0%, #059669 100%);">
+                            <div class="d-flex align-items-center gap-3 w-100">
+                                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:42px;height:42px;background:rgba(255,255,255,0.15);border-radius:12px;">
+                                    <i class="bi bi-truck-front-fill text-white fs-4"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <h5 class="modal-title fw-extrabold mb-0" style="font-size:1.1rem; letter-spacing:-0.2px;">Libreta de Control de Jornada Art. 25 bis DT</h5>
+                                        <span id="m180-badge-estado" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1" style="font-size:0.7rem;">ABIERTO</span>
+                                    </div>
+                                    <div class="text-white-75 mt-0.5" style="font-size:0.75rem;">
+                                        <span id="m180-conductor-nombre" class="fw-bold text-white">—</span> · 
+                                        Fecha: <span id="m180-fecha-display" class="fw-bold text-white">—</span> · 
+                                        Resolución de 15 minutos (96 tramos diarios)
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                            </div>
+                        </div>
+
+                        <div class="modal-body p-3 p-md-4" style="background:#f8fafc;">
+                            <input type="hidden" id="m180-empleado-id">
+                            <input type="hidden" id="m180-fecha-str">
+
+                            <!-- Barra de Paleta de Actividades (Selectores interactivos) -->
+                            <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                    <div class="fw-bold text-dark d-flex align-items-center gap-1.5" style="font-size:0.82rem;">
+                                        <i class="bi bi-palette2 text-primary"></i> Herramienta de Marcación: Seleccione la actividad y arrastre o toque sobre la grilla
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
+                                            <i class="bi bi-magic me-1"></i> Rellenar vacíos con Descanso
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
+                                            <i class="bi bi-eraser me-1"></i> Limpiar Todo
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-2" id="m180-palette-container">
+                                    <button type="button" class="btn btn-sm m180-btn-act active shadow-sm" data-act="1" onclick="window.setLibretaActividad(1)" style="border: 2px solid #059669; background:#ecfdf5; color:#065f46; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#059669;"></span>
+                                        1. CONDUCCIÓN <small class="fw-normal opacity-75">(Máx. 5h continuas)</small>
+                                    </button>
+                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="2" onclick="window.setLibretaActividad(2)" style="border: 1px solid #d97706; background:#fffbeb; color:#92400e; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#d97706;"></span>
+                                        2. ESPERA <small class="fw-normal opacity-75">(Máx. 88h/mes retribuidas)</small>
+                                    </button>
+                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="3" onclick="window.setLibretaActividad(3)" style="border: 1px solid #4f46e5; background:#eef2ff; color:#3730a3; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#4f46e5;"></span>
+                                        3. LABORES AUXILIARES <small class="fw-normal opacity-75">(Carga, estiba, mtto)</small>
+                                    </button>
+                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="4" onclick="window.setLibretaActividad(4)" style="border: 1px solid #0284c7; background:#f0f9ff; color:#075985; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#0284c7;"></span>
+                                        4. DESCANSO <small class="fw-normal opacity-75">(Intermedio 2h / Diario 8h)</small>
+                                    </button>
+                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="0" onclick="window.setLibretaActividad(0)" style="border: 1px solid #cbd5e1; background:#f8fafc; color:#64748b; font-weight:600;">
+                                        <i class="bi bi-x-circle me-1"></i> Borrador
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Grilla Continua de 24 Horas en tramos de 15 minutos (96 slots) -->
+                            <div class="card border border-dark-subtle shadow-sm mb-3 overflow-hidden" style="border-radius:12px;">
+                                <div class="bg-dark text-white py-1.5 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:0.75rem;">
+                                    <span class="fw-bold text-uppercase"><i class="bi bi-clock-history me-1 text-warning"></i> Grilla Continua 24 Horas (Tramos de 15 Minutos)</span>
+                                    <span class="text-white-50" style="font-size:0.7rem;">Arrastre con el mouse o dedo para pintar de corrido</span>
+                                </div>
+                                <div class="table-responsive m180-grid-container" id="m180-grid-scroll" style="max-height:380px; user-select:none; touch-action:none;">
+                                    <table class="table table-bordered table-sm mb-0 text-center m180-table" style="font-size:0.72rem; border-collapse:separate; border-spacing:0;">
+                                        <thead style="position:sticky; top:0; z-index:10; background:#f1f5f9;">
+                                            <tr id="m180-header-hours">
+                                                <th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:200px; min-width:200px; max-width:200px; position:sticky; left:0; z-index:20;">ACTIVIDAD</th>
+                                                <!-- 24 Horas con colspan="4" generadas por JS -->
+                                                <th class="align-middle px-2 bg-slate-200 text-dark fw-bold" style="width:90px; min-width:90px;">TOTAL</th>
+                                            </tr>
+                                            <tr id="m180-header-slots" style="font-size:0.6rem; color:#64748b; background:#f8fafc;">
+                                                <th class="text-start px-2 py-0 align-middle" style="position:sticky; left:0; z-index:20; background:#f8fafc;">SUB-TRAMO</th>
+                                                <!-- 96 sub-tramos generados por JS -->
+                                                <th class="py-0 align-middle">HRS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="m180-grid-tbody">
+                                            <!-- 4 filas de actividades generadas dinámicamente -->
+                                        </tbody>
+                                        <tfoot style="position:sticky; bottom:0; z-index:10; background:#f8fafc; font-weight:700;">
+                                            <tr>
+                                                <td class="text-start px-2 text-dark bg-slate-100" style="position:sticky; left:0; z-index:20;">TOTAL ACUMULADO DÍA:</td>
+                                                <td id="m180-footer-slots-indicator" colspan="96" class="text-end px-2 text-muted" style="font-size:0.7rem;">Suma total de los 96 tramos:</td>
+                                                <td class="text-end px-2 font-monospace text-dark bg-slate-100" id="m180-tot-acumulado-dia" style="font-size:0.85rem;">00:00 h</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                <!-- Barra de Cuadre y Alerta Legal -->
+                                <div class="p-2.5 bg-light border-top d-flex flex-wrap align-items-center justify-content-between gap-2" style="font-size:0.78rem;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-bold text-secondary">Cuadre de Jornada:</span>
+                                        <span id="m180-msg-cuadre" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                            Faltan 24:00 hrs por registrar
+                                        </span>
+                                    </div>
+                                    <div id="m180-alerta-fatiga" class="d-none text-danger fw-bold bg-danger-subtle border border-danger-subtle px-2 py-1 rounded">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: Se detectó conducción continua superior a 5 horas sin descanso.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Panel de Resumen Legal (3 Bento Cards) -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-4">
+                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #059669 !important;">
+                                        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.68rem; letter-spacing:0.5px;">Jornada Efectiva Diaria</div>
+                                        <div class="small text-muted" style="font-size:0.7rem;">(Conducción + Labores Auxiliares)</div>
+                                        <div class="fs-4 fw-extrabold text-dark mt-1 font-monospace" id="m180-res-jornada-efectiva">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #d97706 !important;">
+                                        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.68rem; letter-spacing:0.5px;">Tiempos de Espera del Día</div>
+                                        <div class="small text-muted" style="font-size:0.7rem;">(No imputables a jornada efectiva)</div>
+                                        <div class="fs-4 fw-extrabold text-amber-700 mt-1 font-monospace" id="m180-res-horas-espera" style="color:#b45309;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #0284c7 !important;">
+                                        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.68rem; letter-spacing:0.5px;">Descanso Efectivo Registrado</div>
+                                        <div class="small text-muted" style="font-size:0.7rem;">(En tierra o litera adecuada)</div>
+                                        <div class="fs-4 fw-extrabold text-sky-700 mt-1 font-monospace" id="m180-res-horas-descanso" style="color:#0369a1;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Observaciones -->
+                            <div class="mb-0">
+                                <label for="m180-observaciones" class="form-label fw-semibold text-secondary mb-1" style="font-size:0.75rem;">Observaciones del Día (Opcional)</label>
+                                <input type="text" class="form-control form-control-sm" id="m180-observaciones" placeholder="Ruta, faena, cambio de posta o novedades...">
+                            </div>
+                        </div>
+
+                        <div class="modal-footer border-0 p-3 bg-white d-flex justify-content-between">
+                            <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3" onclick="window.guardarLibreta180h(false)">
+                                    <i class="bi bi-save me-1"></i> Guardar Borrador
+                                </button>
+                                <button type="button" id="btn-cerrar-guardar-180h" class="btn btn-sm btn-success fw-bold px-4 shadow-sm" onclick="window.guardarLibreta180h(true)">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Cerrar y Guardar Día
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
