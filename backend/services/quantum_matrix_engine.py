@@ -1257,7 +1257,8 @@ class QuantumMatrixEngine:
                 sigue_en_curso = True
                 if hora_sal_teo:
                     try:
-                        dt_sal_teo = datetime.strptime(f"{fecha} {hora_sal_teo}", "%Y-%m-%d %H:%M")
+                        f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
+                        dt_sal_teo = datetime.strptime(f"{f_sal_eval} {hora_sal_teo}", "%Y-%m-%d %H:%M")
                         if now_local >= dt_sal_teo + timedelta(minutes=ventana_min):
                             sigue_en_curso = False
                     except Exception:
