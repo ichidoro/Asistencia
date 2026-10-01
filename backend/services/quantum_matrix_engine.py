@@ -1085,15 +1085,22 @@ class QuantumMatrixEngine:
                 if start_horizon <= dt_l <= end_horizon:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
                     if dt_l.strftime("%Y-%m-%d") > fecha:
-                        # Las ENTRADAS del día siguiente pertenecen a la jornada de mañana
-                        if tipo_m in _TIPOS_E:
-                            continue
-                        # Las SALIDAS del día siguiente solo se absorben si hubo presencia física previa en 'fecha'
-                        has_presence_today = any(str(x.get('fecha_hora', ''))[:10] == fecha for x in marcas_no_consumidas)
-                        if not has_presence_today:
-                            continue
-                        if es_nocturno and not has_night_presence:
-                            continue
+                        if es_nocturno and has_night_presence:
+                            # En turnos nocturnos, la marca de madrugada en D+1 dentro del horizonte
+                            # es la salida del turno, incluso si el reloj biométrico la rotuló como 'Entrada'.
+                            # Solo se descarta si es posterior al mediodía (>= 12:00)
+                            if dt_l.hour >= 12:
+                                continue
+                        else:
+                            # Las ENTRADAS del día siguiente pertenecen a la jornada de mañana
+                            if tipo_m in _TIPOS_E:
+                                continue
+                            # Las SALIDAS del día siguiente solo se absorben si hubo presencia física previa en 'fecha'
+                            has_presence_today = any(str(x.get('fecha_hora', ''))[:10] == fecha for x in marcas_no_consumidas)
+                            if not has_presence_today:
+                                continue
+                            if es_nocturno and not has_night_presence:
+                                continue
                     marcas_disponibles.append(l)
             except Exception as e:
                 logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
@@ -1245,6 +1252,14 @@ class QuantumMatrixEngine:
             t_m = str(log_item.get('tipo', '')).strip().lower()
             is_tipo_s = t_m in _TIPOS_S
             is_tipo_e = t_m in _TIPOS_E
+
+            # [GUARDIA COGNITIVA]: Si es DÍA LIBRE y la única marca presente es de madrugada (< 07:00),
+            # corresponde a la salida de un turno nocturno de víspera que cruzó medianoche y no fue
+            # previamente descartada. No es una anomalía de día libre, es un derrame de salida nocturna.
+            if es_libre_dia and m_dt.hour < 7:
+                res['estado'] = 'LIBRE'
+                res['observaciones'] += f"Día libre (marca aislada de madrugada a las {m_dt.strftime('%H:%M:%S')} tratada como salida nocturna). "
+                return res
 
             # Evaluar si la jornada sigue en curso hoy
             if fecha == today_str and is_tipo_e:

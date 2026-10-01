@@ -83,9 +83,16 @@ async def _recalcular_periodo_activo():
         asist_service = AsistenciaService(asist_repo)
 
         dias_a_recalc = []
+        # Incluir el último día de cierre (día puente) para que turnos nocturnos que cruzan la medianoche
+        # sincronicen y propaguen sus marcas consumidas hacia el primer día del período abierto.
+        if ultimo_cierre and ultimo_cierre.get("fecha_fin"):
+            dias_a_recalc.append(ultimo_cierre["fecha_fin"])
+
         cur = fecha_inicio
         while cur <= fecha_fin:
-            dias_a_recalc.append(cur.strftime("%Y-%m-%d"))
+            f_s = cur.strftime("%Y-%m-%d")
+            if f_s not in dias_a_recalc:
+                dias_a_recalc.append(f_s)
             cur += timedelta(days=1)
 
         logger.info(f"🔄 [Startup] Recalculando {len(dias_a_recalc)} días ({fecha_inicio} → {fecha_fin})...")
