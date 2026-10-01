@@ -23,18 +23,12 @@ cp .env.example .env             # completar POSTGRES_PASSWORD, SECRET_KEY, CRON
 docker compose up -d --build     # crea el esquema al arrancar
 ```
 
-Cargar los datos (una vez, con la app ya arrancada para que exista el esquema):
+Cargar o restaurar datos (si se cuenta con un respaldo previo):
 
 ```bash
-# 1) copia de solo lectura desde Turso (en cualquier máquina con python)
-pip install libsql
-TURSO_URL=libsql://... TURSO_TOKEN=... python scripts/dump_turso.py turso_copy.db
-# 2) cargar en Postgres (TRUNCA las tablas destino)
-pip install asyncpg
-DATABASE_URL=postgresql://asistencia:CLAVE@127.0.0.1:5432/asistencia_db python scripts/load_sqlite_to_postgres.py turso_copy.db
+# Restaurar desde un respaldo de pg_dump:
+docker compose exec -T db pg_restore -U asistencia -d asistencia_db --clean < backups/asistencia_YYYY-MM-DD.dump
 ```
-(El puerto 5432 no está publicado; para cargar desde el host usar `docker compose exec` con un contenedor auxiliar
-o publicar temporalmente `127.0.0.1:5432`.)
 
 ## Actualizar desde GitHub
 
@@ -80,8 +74,7 @@ actual, pero **sigue en el historial de git**: rotarlo en Turso.
 - **Tooltips de la tabla de Marcaciones** se arman al pasar el mouse (`window.__mxTipReg` + `_getCellTipHtml`). No volver a
   incrustar HTML en atributos por celda: pesaba 12 MB por render.
 - **Fechas/horas**: `CURRENT_TIMESTAMP/DATE/TIME` se traducen a TEXT UTC (`YYYY-MM-DD HH:MM:SS`), igual que SQLite.
-- **Claves foráneas con huérfanos** (SQLite no las hacía cumplir): `load_sqlite_to_postgres.py` las deja `NOT VALID` para que
-  los respaldos restauren sin perder historial.
+- **Claves foráneas**: las restricciones foráneas protegen la integridad referencial para que los respaldos restauren consistentemente.
 
 ## Ramas
 
