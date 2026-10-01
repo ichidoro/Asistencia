@@ -1058,9 +1058,9 @@ class QuantumMatrixEngine:
             )
 
         # Si es turno nocturno, verificar si existe presencia física en la víspera (fecha)
-        # o en la madrugada temprana (< 05:00) del día siguiente.
-        # Si no hubo ninguna marcación nocturna, el turno nocturno de 'fecha' fue una ausencia (inasistencia).
-        # Por lo tanto, las marcaciones de la mañana del día siguiente pertenecen a la jornada diurna de ese día y no deben ser absorbidas.
+        # o dentro del horizonte dinámico de observación del turno en el día siguiente.
+        # Si no hubo ninguna marcación en dicho rango, el turno nocturno de 'fecha' fue una inasistencia,
+        # por lo que marcas posteriores pertenecerán a la jornada siguiente y no deben absorberse.
         has_night_presence = False
         if es_nocturno:
             for l in marcas_no_consumidas:
@@ -1070,8 +1070,8 @@ class QuantumMatrixEngine:
                     break
                 elif f_l > fecha:
                     try:
-                        h_l = int(str(l.get('fecha_hora', ''))[11:13])
-                        if h_l < 5:
+                        cand_dt = datetime.strptime(str(l.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
+                        if start_horizon <= cand_dt <= end_horizon:
                             has_night_presence = True
                             break
                     except Exception:
@@ -1086,11 +1086,9 @@ class QuantumMatrixEngine:
                     tipo_m = str(l.get('tipo', '')).strip().lower()
                     if dt_l.strftime("%Y-%m-%d") > fecha:
                         if es_nocturno and has_night_presence:
-                            # En turnos nocturnos, la marca de madrugada en D+1 dentro del horizonte
-                            # es la salida del turno, incluso si el reloj biométrico la rotuló como 'Entrada'.
-                            # Solo se descarta si es posterior al mediodía (>= 12:00)
-                            if dt_l.hour >= 12:
-                                continue
+                            # En turnos nocturnos, la marca en D+1 dentro del horizonte dinámico
+                            # es la culminación del turno nocturno, sin importar el rótulo físico del reloj biométrico.
+                            pass
                         else:
                             # Las ENTRADAS del día siguiente pertenecen a la jornada de mañana
                             if tipo_m in _TIPOS_E:
@@ -1252,14 +1250,6 @@ class QuantumMatrixEngine:
             t_m = str(log_item.get('tipo', '')).strip().lower()
             is_tipo_s = t_m in _TIPOS_S
             is_tipo_e = t_m in _TIPOS_E
-
-            # [GUARDIA COGNITIVA]: Si es DÍA LIBRE y la única marca presente es de madrugada (< 07:00),
-            # corresponde a la salida de un turno nocturno de víspera que cruzó medianoche y no fue
-            # previamente descartada. No es una anomalía de día libre, es un derrame de salida nocturna.
-            if es_libre_dia and m_dt.hour < 7:
-                res['estado'] = 'LIBRE'
-                res['observaciones'] += f"Día libre (marca aislada de madrugada a las {m_dt.strftime('%H:%M:%S')} tratada como salida nocturna). "
-                return res
 
             # Evaluar si la jornada sigue en curso hoy
             if fecha == today_str and is_tipo_e:
