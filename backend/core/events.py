@@ -99,7 +99,7 @@ async def _recalcular_periodo_activo():
 
         for fecha_str in dias_a_recalc:
             try:
-                await asist_service.procesar_dia(fecha_str)
+                await asist_service.procesar_dia(fecha_str, force=True)
                 # Pausa breve para no saturar el WAL durante el arranque
                 await asyncio.sleep(0.05)
             except Exception as e:
@@ -129,14 +129,10 @@ async def lifespan(app: FastAPI):
         from backend.core.sys_utils import ensure_single_instance
         ensure_single_instance()
 
-        # 1. (Limpieza local eliminada — Turso Cloud es la única fuente de verdad)
-        startup_manager.update(8, "Verificando conexión cloud...")
-
-
-        # 2. Conectar a Database (descarga fresco desde Turso)
-        startup_manager.update(10, "Conectando al motor de base de datos...")
+        # 1. Conectar a Database PostgreSQL
+        startup_manager.update(10, "Conectando al motor de base de datos PostgreSQL...")
         await db.connect()
-        logger.success("Database conectada")
+        logger.success("Database PostgreSQL conectada")
 
         # DEFINICIÓN DE TAREAS DE FONDO
         async def finish_startup():
@@ -245,12 +241,14 @@ async def lifespan(app: FastAPI):
 
                 await db.clear_schema_cache()
 
-                # Sync ya fue completado en _connect_locked (bloqueante) — no hay bg_sync_task
-                logger.info("☁️ Sync con Turso Cloud ya completado durante la conexión inicial.")
+                logger.info("🐘 PostgreSQL listo.")
 
                 startup_manager.update(100, "Iniciando Dashboard...", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
+
+                # Recalcular automáticamente el período activo para refrescar la tabla asistencias
+                asyncio.create_task(_recalcular_periodo_activo())
 
                 # Fase 2: Activar sync en tiempo real ahora que las tablas existen
                 await db.enable_realtime_sync(interval=3)

@@ -35,6 +35,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Ignorar peticiones de terceros/cross-origin (ej. cloudflareinsights, analytics)
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // Never cache API calls or auth endpoints
   if (url.pathname.startsWith('/api/') || url.pathname.includes('login')) {
     return;
@@ -64,7 +69,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request);
+      return fetch(event.request).catch(() => {
+        return new Response('', { status: 404, statusText: 'Not found' });
+      });
     })
   );
 });
