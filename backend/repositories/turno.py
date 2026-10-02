@@ -456,30 +456,33 @@ class TurnoRepository:
         # ═════════════════════════════════════════════════════════════════════
         # 13. Tabla Libreta Art. 25 bis (Marcación Dinámica 180 Horas)
         # ═════════════════════════════════════════════════════════════════════
-        if not await self.db.table_exists("libreta_art25bis_dias"):
-            await self.db.execute("""
-                CREATE TABLE IF NOT EXISTS libreta_art25bis_dias (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    empleado_id INTEGER NOT NULL,
-                    fecha TEXT NOT NULL,
-                    slots_96 TEXT NOT NULL,
-                    minutos_conduccion INTEGER DEFAULT 0,
-                    minutos_espera INTEGER DEFAULT 0,
-                    minutos_auxiliares INTEGER DEFAULT 0,
-                    minutos_descanso INTEGER DEFAULT 0,
-                    minutos_efectivos INTEGER DEFAULT 0,
-                    cerrado INTEGER DEFAULT 0,
-                    validador_id INTEGER,
-                    observaciones TEXT,
-                    created_at TEXT DEFAULT (datetime('now')),
-                    updated_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
-                    UNIQUE(empleado_id, fecha)
-                )
-            """)
-            logger.info("✨ Tabla 'libreta_art25bis_dias' creada")
-        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_emp_fecha ON libreta_art25bis_dias (empleado_id, fecha)")
-        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_fecha ON libreta_art25bis_dias (fecha)")
+        try:
+            if not await self.db.table_exists("libreta_art25bis_dias"):
+                await self.db.execute("""
+                    CREATE TABLE IF NOT EXISTS libreta_art25bis_dias (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        empleado_id INTEGER NOT NULL,
+                        fecha TEXT NOT NULL,
+                        slots_96 TEXT NOT NULL,
+                        minutos_conduccion INTEGER DEFAULT 0,
+                        minutos_espera INTEGER DEFAULT 0,
+                        minutos_auxiliares INTEGER DEFAULT 0,
+                        minutos_descanso INTEGER DEFAULT 0,
+                        minutos_efectivos INTEGER DEFAULT 0,
+                        cerrado INTEGER DEFAULT 0,
+                        validador_id INTEGER,
+                        observaciones TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                        UNIQUE(empleado_id, fecha)
+                    )
+                """)
+                logger.info("✨ Tabla 'libreta_art25bis_dias' creada")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_emp_fecha ON libreta_art25bis_dias (empleado_id, fecha)")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_fecha ON libreta_art25bis_dias (fecha)")
+        except Exception as e_lib:
+            logger.error(f"❌ Error asegurando tabla libreta_art25bis_dias: {e_lib}")
 
     async def create_turno(self, turno: TurnoCreate) -> int:
         """Crea un turno completo con sus días de configuración"""

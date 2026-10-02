@@ -2372,7 +2372,7 @@ class AsistenciaService:
             resultado['hora_entrada_teorica'] = config_dia.get('hora_entrada') if config_dia else None
             resultado['hora_salida_teorica'] = config_dia.get('hora_salida') if config_dia else None
             resultado['horas_teoricas'] = float(config_dia.get('horas_teoricas', 0.0) or 0.0) if config_dia else 0.0
-            resultado['origen'] = 'SISTEMA'
+            resultado['origen'] = resultado.get('origen') or 'SISTEMA'
             resultado['num_semana_ganadora'] = semana_ganadora
 
         if resultado is None:

@@ -352,12 +352,57 @@ class AsistenciaRepository:
         )
         await self.db.execute(query, params)
 
+    async def _ensure_libreta_table(self) -> None:
+        """Crea la tabla libreta_art25bis_dias si no existe (Self-healing)."""
+        ddl = """
+            CREATE TABLE IF NOT EXISTS libreta_art25bis_dias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                fecha TEXT NOT NULL,
+                slots_96 TEXT NOT NULL,
+                minutos_conduccion INTEGER DEFAULT 0,
+                minutos_espera INTEGER DEFAULT 0,
+                minutos_auxiliares INTEGER DEFAULT 0,
+                minutos_descanso INTEGER DEFAULT 0,
+                minutos_efectivos INTEGER DEFAULT 0,
+                cerrado INTEGER DEFAULT 0,
+                validador_id INTEGER,
+                observaciones TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                UNIQUE(empleado_id, fecha)
+            )
+        """
+        try:
+            await self.db.execute(ddl)
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_emp_fecha ON libreta_art25bis_dias (empleado_id, fecha)")
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_fecha ON libreta_art25bis_dias (fecha)")
+            await self.db.clear_schema_cache()
+            logger.info("✨ Tabla 'libreta_art25bis_dias' e índices asegurados con éxito")
+        except Exception as e:
+            logger.error(f"❌ Error en _ensure_libreta_table: {e}")
+
     async def get_libreta_180h(self, empleado_id: int, fecha: str) -> Optional[Dict[str, Any]]:
         """
         Obtiene el registro de la libreta Art. 25 bis para un empleado en una fecha específica.
+        Auto-crea la tabla si no existe (self-healing) para evitar 500.
         """
         query = "SELECT * FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha = ?"
-        return await self.db.fetch_one(query, (empleado_id, fecha))
+        try:
+            return await self.db.fetch_one(query, (empleado_id, fecha))
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "no such table" in err_msg:
+                logger.warning(f"⚠️ Tabla 'libreta_art25bis_dias' no existe al consultar. Auto-creando: {e}")
+                try:
+                    await self._ensure_libreta_table()
+                    return await self.db.fetch_one(query, (empleado_id, fecha))
+                except Exception as cr_err:
+                    logger.error(f"❌ Error auto-creando tabla libreta_art25bis_dias: {cr_err}")
+                    return None
+            logger.error(f"❌ Error al consultar libreta_art25bis_dias: {e}")
+            return None
 
     async def upsert_libreta_180h(self, data: Dict[str, Any]) -> None:
         """
@@ -395,7 +440,17 @@ class AsistenciaRepository:
             data.get('validador_id'),
             data.get('observaciones', '')
         )
-        await self.db.execute(query, params)
+        try:
+            await self.db.execute(query, params)
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "no such table" in err_msg:
+                logger.warning(f"⚠️ Tabla 'libreta_art25bis_dias' no existe al hacer upsert. Auto-creando: {e}")
+                await self._ensure_libreta_table()
+                await self.db.execute(query, params)
+            else:
+                logger.error(f"❌ Error en upsert_libreta_180h: {e}")
+                raise
 
     async def get_libretas_periodo(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """
@@ -406,7 +461,15 @@ class AsistenciaRepository:
             WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
             ORDER BY fecha ASC
         """
-        return await self.db.fetch_all(query, (empleado_id, fecha_inicio, fecha_fin))
+        try:
+            return await self.db.fetch_all(query, (empleado_id, fecha_inicio, fecha_fin))
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "no such table" in err_msg:
+                await self._ensure_libreta_table()
+                return await self.db.fetch_all(query, (empleado_id, fecha_inicio, fecha_fin))
+            logger.error(f"❌ Error en get_libretas_periodo: {e}")
+            return []
 
     async def get_asistencias_periodo(self, fecha_inicio: str, fecha_fin: str, area: str = None, empleado_id: int = None, turno_id: int = None, areas_permitidas: Optional[List[str]] = None, empleado_ids: Optional[List[int]] = None) -> List[Dict[str, Any]]:
         """

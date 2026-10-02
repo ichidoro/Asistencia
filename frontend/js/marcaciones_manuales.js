@@ -2557,11 +2557,21 @@ async function guardarLibreta180h(cerrarDia = false) {
         });
 
         if (!resp.ok) {
-            let errMsg = "Error al guardar Libreta 180h";
+            let errMsg = `Error ${resp.status} al guardar Libreta 180h`;
             try {
                 const errData = await resp.json();
-                errMsg = errData.detail || JSON.stringify(errData);
-            } catch (_) {}
+                if (typeof errData.detail === 'string') {
+                    errMsg = errData.detail;
+                } else if (Array.isArray(errData.detail)) {
+                    errMsg = errData.detail.map(d => `${d.loc ? d.loc.join('.') : ''}: ${d.msg}`).join('\n');
+                } else if (errData.detail) {
+                    errMsg = JSON.stringify(errData.detail);
+                } else {
+                    errMsg = JSON.stringify(errData);
+                }
+            } catch (_) {
+                errMsg = `Error ${resp.status}: ${resp.statusText || 'Error interno del servidor'}`;
+            }
             throw new Error(errMsg);
         }
 
