@@ -3053,11 +3053,11 @@ async def get_libreta_180h(
         if len(slots) < 96:
             slots.extend([0] * (96 - len(slots)))
 
-        min_cond = row.get('minutos_conduccion', 0)
-        min_esp = row.get('minutos_espera', 0)
-        min_aux = row.get('minutos_auxiliares', 0)
-        min_desc = row.get('minutos_descanso', 0)
-        min_efec = row.get('minutos_efectivos', min_cond + min_aux)
+        min_cond = int(row.get('minutos_conduccion') or 0)
+        min_esp = int(row.get('minutos_espera') or 0)
+        min_aux = int(row.get('minutos_auxiliares') or 0)
+        min_desc = int(row.get('minutos_descanso') or 0)
+        min_efec = int(row.get('minutos_efectivos') or (min_cond + min_aux))
 
         return {
             "id": row.get('id'),
@@ -3127,7 +3127,7 @@ async def save_libreta_180h(
         await service.repository.upsert_libreta_180h(data)
 
         # Proyección atómica al motor de asistencia
-        res_dia = await service.procesar_dia_empleado(payload.empleado_id, payload.fecha, save=True, force=True)
+        res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
 
         return {
             "status": "success",

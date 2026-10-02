@@ -3508,6 +3508,9 @@ class AsistenciaService:
             "count": count
         }
 
+    # Alias de compatibilidad
+    procesar_dia_empleado = procesar_empleado_dia
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER MODULE-LEVEL

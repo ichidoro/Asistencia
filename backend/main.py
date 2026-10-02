@@ -17,7 +17,7 @@ import uuid
 import os
 
 # Identificador único de ejecución para cache busting agnóstico
-STARTUP_ID = f"{str(uuid.uuid4())[:8]}_v59_fix_libreta_180h"
+STARTUP_ID = f"{str(uuid.uuid4())[:8]}_v60_fix_procesar_empleado_dia"
 
 # Add project root to path for direct execution
 project_root = str(Path(__file__).parent.parent)

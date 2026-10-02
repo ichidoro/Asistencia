@@ -2495,6 +2495,9 @@ async function proceedToMarcacion180h() {
                     badge.textContent = 'SIN REGISTRO';
                 }
             }
+        } else {
+            console.warn(`GET libreta-180h returned status ${resp.status}`);
+            m180_slots = new Array(96).fill(0);
         }
     } catch (e) {
         console.warn("No se pudo cargar registro previo de libreta 180h:", e);
