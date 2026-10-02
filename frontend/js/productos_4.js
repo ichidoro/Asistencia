@@ -348,7 +348,7 @@ const Productos4Module = {
                 seleccionBadge = `
                     <div class="mt-3 p-2.5 bg-danger-subtle text-danger-emphasis rounded text-start small" style="min-height: 60px;">
                         <i class="bi bi-shield-slash-fill me-1"></i> <strong>Motivo de Bloqueo:</strong>
-                        <div class="mt-1 small" style="font-size: 0.72rem; line-height: 1.3;">${e.motivo}</div>
+                        <div class="mt-1 small" style="font-size: 0.75rem; line-height: 1.3;">${e.motivo}</div>
                     </div>
                 `;
                 cardAction = `
@@ -986,7 +986,7 @@ const Productos4Module = {
                     }
                 }
                 deliveryInfo = `
-                    <div class="small lh-sm text-secondary font-monospace" style="font-size: 0.72rem;">
+                    <div class="small lh-sm text-secondary font-monospace" style="font-size: 0.75rem;">
                         Por: <strong>${d.usuario_entrega_nombre || 'Sistema'}</strong><br>
                         El: ${dateFormatted}
                     </div>
@@ -994,10 +994,10 @@ const Productos4Module = {
             }
 
             // Mapear cada uno de los 4 productos en su respectiva columna
-            const p1 = d.productos && d.productos[0] ? `<div class="small fw-semibold text-dark">${d.productos[0].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[0].unidad} (${d.productos[0].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
-            const p2 = d.productos && d.productos[1] ? `<div class="small fw-semibold text-dark">${d.productos[1].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[1].unidad} (${d.productos[1].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
-            const p3 = d.productos && d.productos[2] ? `<div class="small fw-semibold text-dark">${d.productos[2].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[2].unidad} (${d.productos[2].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
-            const p4 = d.productos && d.productos[3] ? `<div class="small fw-semibold text-dark">${d.productos[3].descripcion}</div><div class="text-muted" style="font-size: 0.72rem;">${d.productos[3].unidad} (${d.productos[3].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p1 = d.productos && d.productos[0] ? `<div class="small fw-semibold text-dark">${d.productos[0].descripcion}</div><div class="text-muted" style="font-size: 0.75rem;">${d.productos[0].unidad} (${d.productos[0].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p2 = d.productos && d.productos[1] ? `<div class="small fw-semibold text-dark">${d.productos[1].descripcion}</div><div class="text-muted" style="font-size: 0.75rem;">${d.productos[1].unidad} (${d.productos[1].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p3 = d.productos && d.productos[2] ? `<div class="small fw-semibold text-dark">${d.productos[2].descripcion}</div><div class="text-muted" style="font-size: 0.75rem;">${d.productos[2].unidad} (${d.productos[2].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
+            const p4 = d.productos && d.productos[3] ? `<div class="small fw-semibold text-dark">${d.productos[3].descripcion}</div><div class="text-muted" style="font-size: 0.75rem;">${d.productos[3].unidad} (${d.productos[3].tipo})</div>` : '<span class="text-muted opacity-50">—</span>';
 
             return `
                 <tr>
@@ -1120,7 +1120,7 @@ const Productos4Module = {
                         <button class="btn btn-sm btn-outline-danger w-100 mt-3" onclick="Productos4Module.marcarEntrega(${e.empleado_id}, false)">
                             <i class="bi bi-arrow-counterclockwise me-1"></i> Revertir Entrega
                         </button>
-                        <div class="text-secondary text-center small font-monospace mt-2" style="font-size: 0.72rem; line-height: 1.25;">
+                        <div class="text-secondary text-center small font-monospace mt-2" style="font-size: 0.75rem; line-height: 1.25;">
                             Por: <strong>${e.usuario_entrega_nombre || 'Sistema'}</strong><br>
                             El: ${dateFormatted}
                         </div>

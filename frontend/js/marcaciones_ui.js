@@ -275,7 +275,7 @@ function renderMarcacionesToolbar(container) {
                         <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh-switch" 
                                ${stateMarcacionesApp.autoRefreshEnabled ? 'checked' : ''} onchange="toggleAutoRefresh(this.checked)">
                         <label class="form-check-label small fw-bold text-muted ms-1" for="auto-refresh-switch">
-                            <i class="bi bi-broadcast" style="font-size:0.7rem;${stateMarcacionesApp.autoRefreshEnabled ? 'color:#10b981;' : ''}"></i>
+                            <i class="bi bi-broadcast" style="font-size: 0.75rem;${stateMarcacionesApp.autoRefreshEnabled ? 'color:#10b981;' : ''}"></i>
                             Auto
                         </label>
                     </div>
@@ -814,7 +814,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
     Swal.fire({
         title: '<span style="font-size:1.15rem;font-weight:800;color:#1e293b;">⚡ Sincronizando con BioAlba</span>',
         html: `
-            <div class="text-center py-2" style="font-family:'Inter',sans-serif;">
+            <div class="text-center py-2" style="font-family: var(--font-sans);">
                 <p id="swal-sync-status" class="mb-1 fw-bold text-slate-700">Conectando con BioAlba...</p>
                 <p id="swal-sync-detail" class="text-muted small mb-0">Por favor, no cierres esta ventana. El proceso tardará unos segundos.</p>
             </div>
@@ -935,20 +935,20 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         await Swal.fire({
             title: '<span style="font-size:1.1rem;font-weight:800;color:#1e293b;">☁️ Sincronización BioAlba</span>',
             html: `
-                <div style="text-align:left;font-family:'Inter',sans-serif;">
+                <div style="text-align:left;font-family: var(--font-sans);">
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-                        <span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;font-weight:700;padding:3px 8px;border-radius:999px;">${areasLabel}</span>
-                        <span style="background:#f1f5f9;color:#475569;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:999px;">${fechaInicio} → ${fechaFin}</span>
-                        <span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:3px 8px;border-radius:999px;">⏱ ${duracion}s</span>
+                        <span style="background:#e0f2fe;color:#0369a1;font-size: 0.75rem;font-weight:700;padding:3px 8px;border-radius:999px;">${areasLabel}</span>
+                        <span style="background:#f1f5f9;color:#475569;font-size: 0.75rem;font-weight:600;padding:3px 8px;border-radius:999px;">${fechaInicio} → ${fechaFin}</span>
+                        <span style="background:#f1f5f9;color:#64748b;font-size: 0.75rem;padding:3px 8px;border-radius:999px;">⏱ ${duracion}s</span>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
                         <div style="background:${nuevas > 0 ? '#f0fdf4' : '#f8fafc'};border:1px solid ${nuevas > 0 ? '#86efac' : '#e2e8f0'};border-radius:10px;padding:12px;text-align:center;">
                             <div style="font-size:1.6rem;font-weight:800;color:${nuevas > 0 ? '#16a34a' : '#94a3b8'};">${nuevas}</div>
-                            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">${iconoNuevas} Marcaciones nuevas</div>
+                            <div style="font-size: 0.75rem;color:#64748b;margin-top:2px;">${iconoNuevas} Marcaciones nuevas</div>
                         </div>
                         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;text-align:center;">
                             <div style="font-size:1.6rem;font-weight:800;color:#2563eb;">${recalc}</div>
-                            <div style="font-size:0.7rem;color:#64748b;margin-top:2px;">📅 Días recalculados</div>
+                            <div style="font-size: 0.75rem;color:#64748b;margin-top:2px;">📅 Días recalculados</div>
                         </div>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -2321,13 +2321,13 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 <div class="col-md-3 col-6">
                                     <div class="p-2 rounded bg-white border text-center shadow-sm h-100 position-relative" style="border-top: 3px solid #16a34a !important;">
                                         <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
-                                            <span class="badge bg-success-subtle text-success fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem;">
+                                            <span class="badge bg-success-subtle text-success fw-bold px-1.5 py-0.5 rounded" style="font-size: 0.75rem;">
                                                 <i class="bi bi-plus-circle me-1"></i>A Favor (+)
                                             </span>
                                             <span class="text-muted small fw-semibold" style="font-size:0.75rem;">HE Aprobadas</span>
                                         </div>
                                         <div class="fs-5 fw-bold text-success" id="kpi-he-aprobadas">${formatExactMinutesToTime(totalAprobado)}</div>
-                                        <div class="text-muted" style="font-size:0.68rem;">Tiempo extra ganado</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Tiempo extra ganado</div>
                                     </div>
                                 </div>
 
@@ -2335,13 +2335,13 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 <div class="col-md-3 col-6">
                                     <div class="p-2 rounded bg-white border text-center shadow-sm h-100 position-relative" style="border-top: 3px solid #dc2626 !important;">
                                         <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
-                                            <span class="badge bg-danger-subtle text-danger fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem;">
+                                            <span class="badge bg-danger-subtle text-danger fw-bold px-1.5 py-0.5 rounded" style="font-size: 0.75rem;">
                                                 <i class="bi bi-dash-circle me-1"></i>Atrasos (−)
                                             </span>
                                             <span class="text-muted small fw-semibold" style="font-size:0.75rem;">Deuda No Trab.</span>
                                         </div>
                                         <div class="fs-5 fw-bold text-danger" id="kpi-deuda-tiempo">${deudaTotalStr}</div>
-                                        <div class="text-muted" style="font-size:0.68rem;">Atrasos y salidas anticipadas</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Atrasos y salidas anticipadas</div>
                                     </div>
                                 </div>
 
@@ -2349,13 +2349,13 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 <div class="col-md-3 col-6">
                                     <div class="p-2 rounded border text-center shadow-sm h-100 position-relative" id="card-saldo-neto-actual" style="background:${currentSaldoBg}; border-color:${currentSaldoColor}50 !important; border-top: 3px solid ${currentSaldoColor} !important;">
                                         <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
-                                            <span class="badge fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem; background: ${currentSaldoColor}20; color:${currentSaldoColor}">
+                                            <span class="badge fw-bold px-1.5 py-0.5 rounded" style="font-size: 0.75rem; background: ${currentSaldoColor}20; color:${currentSaldoColor}">
                                                 <i class="bi bi-calculator me-1"></i>Balance (=)
                                             </span>
                                             <span class="text-muted small fw-semibold" style="font-size:0.75rem;">Saldo Neto Actual</span>
                                         </div>
                                         <div class="fs-5 fw-bold" id="kpi-saldo-neto" style="color:${currentSaldoColor}">${currentSaldoStr}</div>
-                                        <div class="text-muted" style="font-size:0.68rem;">Resultado nómina (+ / −)</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Resultado nómina (+ / −)</div>
                                     </div>
                                 </div>
 
@@ -2363,7 +2363,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                 <div class="col-md-3 col-6">
                                     <div class="p-2 rounded bg-white border text-center shadow-sm h-100 position-relative" style="border-top: 3px solid #f59e0b !important;">
                                         <div class="d-flex align-items-center justify-content-center gap-1 mb-1">
-                                            <span class="badge bg-warning-subtle text-warning-emphasis fw-bold px-1.5 py-0.5 rounded" style="font-size:0.68rem;">
+                                            <span class="badge bg-warning-subtle text-warning-emphasis fw-bold px-1.5 py-0.5 rounded" style="font-size: 0.75rem;">
                                                 <i class="bi bi-inbox me-1"></i>Inventario
                                             </span>
                                             <span class="text-muted small fw-semibold" style="font-size:0.75rem;">Bolsa (Pend / Rech)</span>
@@ -2371,7 +2371,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <div class="fs-6 fw-bold text-warning pt-1" id="kpi-bolsa-remanente">
                                             ${formatExactMinutesToTime(totalPendiente)} <span class="text-muted fw-normal" style="font-size:0.75rem;">/ ${formatExactMinutesToTime(totalRechazado)}</span>
                                         </div>
-                                        <div class="text-muted" style="font-size:0.68rem;">Por auditar / Descartadas</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Por auditar / Descartadas</div>
                                     </div>
                                 </div>
                             </div>
@@ -2387,10 +2387,10 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <small class="text-muted" style="font-size:0.75rem;">Selecciona una estrategia operativa con 1 solo clic:</small>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
-                                        <button class="btn btn-xs btn-outline-secondary py-1 px-2 text-decoration-none" style="font-size:0.72rem; border-radius:6px;" type="button" data-bs-toggle="collapse" data-bs-target="#panel-avanzado-he">
+                                        <button class="btn btn-xs btn-outline-secondary py-1 px-2 text-decoration-none" style="font-size: 0.75rem; border-radius:6px;" type="button" data-bs-toggle="collapse" data-bs-target="#panel-avanzado-he">
                                             <i class="bi bi-sliders me-1"></i>Ajuste Manual / Metas
                                         </button>
-                                        <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.72rem; border-radius:6px;" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'rechazar_todo')" title="Rechazar todas las jornadas y dejar horas extras en cero">
+                                        <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size: 0.75rem; border-radius:6px;" type="button" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'rechazar_todo')" title="Rechazar todas las jornadas y dejar horas extras en cero">
                                             <i class="bi bi-x-circle me-1"></i>Rechazar Todo
                                         </button>
                                     </div>
@@ -2404,8 +2404,8 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         </div>
                                         <div class="flex-grow-1" style="font-size: 0.77rem; line-height: 1.3;">
                                             <div class="d-flex align-items-center gap-2 mb-0.5">
-                                                <span class="badge bg-primary text-white fw-bold px-2 py-0.5" style="font-size:0.66rem;">COPILOTO DE ASISTENCIA</span>
-                                                <span class="text-primary fw-semibold" style="font-size:0.72rem;">Diagnóstico Automático</span>
+                                                <span class="badge bg-primary text-white fw-bold px-2 py-0.5" style="font-size: 0.75rem;">COPILOTO DE ASISTENCIA</span>
+                                                <span class="text-primary fw-semibold" style="font-size: 0.75rem;">Diagnóstico Automático</span>
                                             </div>
                                             <div class="text-dark">
                                                 ${motivoSugerencia}
@@ -2420,7 +2420,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                             <button type="button" class="btn w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-cero" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'cero')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'cero' ? '2px' : '1.5px'};">
                                                 ${estrategiaSugerida === 'cero' ? `
                                                 <div class="position-absolute top-0 end-0 translate-middle-y me-2" style="z-index: 2;">
-                                                    <span class="badge badge-recomendado bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
+                                                    <span class="badge badge-recomendado bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size: 0.75rem;">
                                                         <i class="bi bi-star-fill text-dark me-1"></i>RECOMENDADO
                                                     </span>
                                                 </div>
@@ -2429,7 +2429,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                                     <span class="badge est-icon-badge bg-success text-white p-1 rounded-circle"><i class="bi bi-bullseye fs-6"></i></span>
                                                     <strong class="est-title text-success" style="font-size:0.83rem;">1. Compensar Deuda (Saldo Cero)</strong>
                                                 </div>
-                                                <div class="est-desc text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                <div class="est-desc text-muted small" style="font-size: 0.75rem; line-height: 1.2;">
                                                     Absorbe atrasos exactos. Saldo neto resultante: <strong>00:00:00</strong>.
                                                 </div>
                                             </button>
@@ -2440,7 +2440,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                             <button type="button" class="btn w-100 p-2 text-start shadow-sm btn-estrategia-he h-100 position-relative" id="btn-est-todo" onclick="window.ejecutarCuadreRapido(${empleadoId}, 'aprobar_todo')" style="border-radius:10px; border-width: ${estrategiaSugerida === 'todo' ? '2px' : '1.5px'};">
                                                 ${estrategiaSugerida === 'todo' ? `
                                                 <div class="position-absolute top-0 end-0 translate-middle-y me-2" style="z-index: 2;">
-                                                    <span class="badge badge-recomendado bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size:0.64rem;">
+                                                    <span class="badge badge-recomendado bg-warning text-dark border border-warning shadow-xs fw-bold px-2 py-0.5" style="font-size: 0.75rem;">
                                                         <i class="bi bi-star-fill text-dark me-1"></i>RECOMENDADO
                                                     </span>
                                                 </div>
@@ -2449,7 +2449,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                                     <span class="badge est-icon-badge bg-primary text-white p-1 rounded-circle"><i class="bi bi-shield-check fs-6"></i></span>
                                                     <strong class="est-title text-primary" style="font-size:0.83rem;">2. Pagar Todo (Norma Legal DT)</strong>
                                                 </div>
-                                                <div class="est-desc text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                <div class="est-desc text-muted small" style="font-size: 0.75rem; line-height: 1.2;">
                                                     Autoriza el 100% de minutos efectivos trabajados sin recortes.
                                                 </div>
                                             </button>
@@ -2463,7 +2463,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                                         <span class="badge est-icon-badge bg-warning text-dark p-1 rounded-circle"><i class="bi bi-cash-coin fs-6"></i></span>
                                                         <strong class="est-title text-dark" style="font-size:0.83rem;">3. Bloques Nómina (Redondeo)</strong>
                                                     </div>
-                                                    <div class="est-desc text-muted small" style="font-size:0.71rem; line-height: 1.2;">
+                                                    <div class="est-desc text-muted small" style="font-size: 0.75rem; line-height: 1.2;">
                                                         Paga horas redondas (+HH:00 / :30) y remanente a banco de tiempo.
                                                     </div>
                                                 </button>
@@ -2526,7 +2526,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                                 <i class="bi bi-floppy-fill fs-5"></i>
                                                 <div class="text-start">
                                                     <div style="line-height:1.1;">Confirmar y Guardar en BD</div>
-                                                    <small class="fw-normal opacity-75" style="font-size:0.7rem;">Registra en base de datos PostgreSQL</small>
+                                                    <small class="fw-normal opacity-75" style="font-size: 0.75rem;">Registra en base de datos PostgreSQL</small>
                                                 </div>
                                             </button>
                                         </div>
@@ -4725,7 +4725,7 @@ function cierreGetHEContextBadges(a) {
     
     // Fallback si no identificó nada específico pero hay horas extras
     if (tags.length === 0) {
-        tags.push(`<span class="badge bg-light text-secondary border border-secondary-subtle ms-2 text-uppercase" style="font-size: 0.65rem;"><i class="bi bi-tag-fill me-1"></i>Exceso Jornada</span>`);
+        tags.push(`<span class="badge bg-light text-secondary border border-secondary-subtle ms-2 text-uppercase" style="font-size: 0.6875rem;"><i class="bi bi-tag-fill me-1"></i>Exceso Jornada</span>`);
     }
     
     return tags.join('');
@@ -4898,7 +4898,7 @@ function renderWizardStep(step) {
                                 <span class="mx-2 text-muted">|</span>
                                 <span class="text-secondary small">${a.nombre_completo}</span>
                                 ${a.hora_entrada_real || a.hora_salida_real ? `
-                                    <span class="badge bg-warning-subtle text-warning-emphasis ms-2" style="font-size: 0.7rem;">
+                                    <span class="badge bg-warning-subtle text-warning-emphasis ms-2" style="font-size: 0.75rem;">
                                         <i class="bi bi-clock-fill me-1"></i>${a.hora_entrada_real || '--:--'} / ${a.hora_salida_real || '--:--'}
                                     </span>
                                 ` : ''}
@@ -5774,7 +5774,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
     }).join('');
 
     const hasHE = !r.esBolsa && r.he_pend > 0;
-    const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size:0.68rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
+    const heIndicator = hasHE ? `<i class="bi bi-clock-history text-warning ms-1" style="font-size: 0.75rem" title="Tiene HE pendientes — Doble clic para gestionar"></i>` : '';
 
     const getStickyLeftLocal = (key, subIndex = 0) => window.getStickyLeft(key, subIndex, stickyCols, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
     const getStickyWidthStyleLocal = (key) => window.getStickyWidthStyle(key, showBonos, showIncidencias, showHE, showDeudas, showSaldoMeta);
@@ -5951,10 +5951,10 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
             showSaldoMeta
                 ? `<td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')};text-align:center;font-size: 0.75rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')};text-align:center;font-size:0.7rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')};text-align:center;font-size: 0.75rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
                 : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera')}px;${getStickyWidthStyleLocal('espera')}"></td>`
         ) : ''}
@@ -6256,7 +6256,7 @@ function renderVistaAnalitica(respData, container) {
                 return `<th class="text-center px-1 align-middle th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; width:65px; min-width:65px; max-width:65px; left:${getStickyLeft('bonos', idx)}px" title="${b}">${bShort}</th>`;
             }).join('');
         } else {
-            bonosHeadersTop = `<th rowspan="2" class="align-middle text-center px-1 th-bento th-bento-success sticky-premium-col" style="position:sticky; z-index:120; width:50px; min-width:50px; max-width:50px; left:${getStickyLeft('bonos')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleBonos()" title="Expandir Bonos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-trophy-fill d-block mb-1" style="font-size:0.85rem;color:#10b981"></i><span style="font-size:0.65rem;letter-spacing:0.5px">BONOS</span></th>`;
+            bonosHeadersTop = `<th rowspan="2" class="align-middle text-center px-1 th-bento th-bento-success sticky-premium-col" style="position:sticky; z-index:120; width:50px; min-width:50px; max-width:50px; left:${getStickyLeft('bonos')}px"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleBonos()" title="Expandir Bonos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-trophy-fill d-block mb-1" style="font-size:0.85rem;color:#10b981"></i><span style="font-size: 0.75rem;letter-spacing:0.5px">BONOS</span></th>`;
         }
     }
 
@@ -6274,11 +6274,11 @@ function renderVistaAnalitica(respData, container) {
         const perdonazoStyle = window._perdonazoState?.activo
             ? 'cursor:pointer;border-bottom:2px solid #10b981;'
             : '';
-        return `<th class="col-day text-center p-1" style="min-width:48px;font-size:0.65rem;white-space:nowrap;${bg}${perdonazoStyle}" ${perdonazoClick}
+        return `<th class="col-day text-center p-1" style="min-width:48px;font-size: 0.75rem;white-space:nowrap;${bg}${perdonazoStyle}" ${perdonazoClick}
                     title="${window._perdonazoState?.activo ? 'Clic para gestionar perdonazos del día' : ''}">
-                    <div style="font-weight:700;font-size:0.7rem;line-height:1.1">${dateStrObj}</div>
-                    <div style="opacity:0.8;font-size:0.6rem;line-height:1.1">${dayShortName}</div>
-                    ${window._perdonazoState?.activo ? '<div style="font-size:0.55rem;color:#10b981;font-weight:600;">🎁</div>' : ''}
+                    <div style="font-weight:700;font-size: 0.75rem;line-height:1.1">${dateStrObj}</div>
+                    <div style="opacity:0.8;font-size: 0.75rem;line-height:1.1">${dayShortName}</div>
+                    ${window._perdonazoState?.activo ? '<div style="font-size: 0.75rem;color:#10b981;font-weight:600;">🎁</div>' : ''}
                 </th>`;
     }).join('');
 
@@ -6330,10 +6330,10 @@ function renderVistaAnalitica(respData, container) {
             showSaldoMeta
                 ? `<td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')};text-align:center;font-size:0.7rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')};text-align:center;font-size: 0.75rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')};text-align:center;font-size:0.7rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')};text-align:center;font-size: 0.75rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
                 : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px;${getStickyWidthStyle('espera')}"></td>`
         ) : ''}
@@ -6383,37 +6383,37 @@ function renderVistaAnalitica(respData, container) {
 
     const incHeadersTop = showIncidencias 
         ? `<th colspan="6" class="text-start px-2 th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:390px; min-width:390px; max-width:390px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-flag-fill me-1" style="font-size:0.75rem;color:#f59e0b"></i><span class="fw-bold">Incidencias</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showIncidencias')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
-        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">INCID</span></th>`;
+        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span style="font-size: 0.75rem;letter-spacing:0.5px">INCID</span></th>`;
     
     const heHeadersTop = showHE 
         ? `<th colspan="4" class="text-start px-2 th-bento th-bento-primary sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he')}px; width:260px; min-width:260px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-lightning-charge-fill me-1" style="font-size:0.75rem;color:#3b82f6"></i><span class="fw-bold">Horas Extra</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showHE')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
-        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-primary sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showHE')" title="Expandir HE"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-lightning-charge-fill d-block mb-1" style="font-size:0.85rem;color:#3b82f6"></i><span style="font-size:0.65rem;letter-spacing:0.5px">HR EX</span></th>`;
+        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-primary sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showHE')" title="Expandir HE"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-lightning-charge-fill d-block mb-1" style="font-size:0.85rem;color:#3b82f6"></i><span style="font-size: 0.75rem;letter-spacing:0.5px">HR EX</span></th>`;
     
     const deudasHeadersTop = showDeudas 
         ? `<th colspan="5" class="text-start px-2 th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:325px; min-width:325px; max-width:325px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-clock-history me-1" style="font-size:0.75rem;color:#64748b"></i><span class="fw-bold">Tiempo No Trabajado</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showDeudas')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
-        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Tiempos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-clock-history d-block mb-1" style="font-size:0.85rem;color:#64748b"></i><span style="font-size:0.65rem;letter-spacing:0.5px">NO TRAB</span></th>`;
+        : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-secondary sticky-premium-col" style="position:sticky; z-index:120; border-left:3px solid #64748b;left:${getStickyLeft('deudas')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showDeudas')" title="Expandir Tiempos"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-clock-history d-block mb-1" style="font-size:0.85rem;color:#64748b"></i><span style="font-size: 0.75rem;letter-spacing:0.5px">NO TRAB</span></th>`;
 
     // Columna SALDO META (180h) — solo visible si hay bolsa flexible en el área
     const saldoMetaHeaderTop = hayBolsa
         ? (showSaldoMeta
-            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.68rem;left:${getStickyLeft('bolsa')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa (180h)</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
-            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#7c3aed">180H</span></th>`)
+            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size: 0.75rem;left:${getStickyLeft('bolsa')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-bullseye me-1" style="color:#8b5cf6"></i><span class="fw-bold" style="color:#7c3aed">Bolsa (180h)</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="vaToggleCol('showSaldoMeta')" title="Contraer" style="color:#8b5cf6"><i class="bi bi-chevron-left"></i></button></th>`
+            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Bolsa Flexible" style="color:#8b5cf6"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-bullseye d-block mb-1" style="font-size:0.85rem;color:#8b5cf6"></i><span style="font-size: 0.75rem;letter-spacing:0.5px;color:#7c3aed">180H</span></th>`)
         : '';
     const saldoMetaHeadersSub = (hayBolsa && showSaldoMeta) ? `
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="Meta mensual del ciclo (180h)">META</th>
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}" title="Horas acumuladas en el ciclo">ACUM.</th>
-            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;font-size:0.65rem;color:#7c3aed;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}" title="Balance: negativo = falta, positivo = excedió">BALANCE</th>` : '';
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;border-left:3px solid #8b5cf6;font-size: 0.75rem;color:#7c3aed;left:${getStickyLeft('bolsa', 0)}px;${getStickyWidthStyle('bolsa')}" title="Meta mensual del ciclo (180h)">META</th>
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#faf5ff;font-size: 0.75rem;color:#7c3aed;left:${getStickyLeft('bolsa', 1)}px;${getStickyWidthStyle('bolsa')}" title="Horas acumuladas en el ciclo">ACUM.</th>
+            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#faf5ff;font-size: 0.75rem;color:#7c3aed;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')}" title="Balance: negativo = falta, positivo = excedió">BALANCE</th>` : '';
 
     // Columna ESPERA (88h) — grupo gemelo paralelo
     const esperaHeaderTop = hayBolsa
         ? (showSaldoMeta
-            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size:0.68rem;left:${getStickyLeft('espera')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-hourglass-split me-1" style="color:#d97706"></i><span class="fw-bold" style="color:#b45309">Espera (88h)</span></th>`
-            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Tiempos de Espera (88h)"><i class="bi bi-hourglass-split d-block mb-1" style="font-size:0.85rem;color:#d97706"></i><span style="font-size:0.65rem;letter-spacing:0.5px;color:#b45309">88H</span></th>`)
+            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size: 0.75rem;left:${getStickyLeft('espera')}px; width:216px; min-width:216px; max-width:216px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-hourglass-split me-1" style="color:#d97706"></i><span class="fw-bold" style="color:#b45309">Espera (88h)</span></th>`
+            : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px; width:50px; min-width:50px; max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Tiempos de Espera (88h)"><i class="bi bi-hourglass-split d-block mb-1" style="font-size:0.85rem;color:#d97706"></i><span style="font-size: 0.75rem;letter-spacing:0.5px;color:#b45309">88H</span></th>`)
         : '';
     const esperaHeadersSub = (hayBolsa && showSaldoMeta) ? `
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size:0.65rem;color:#b45309;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}" title="Meta mensual de tiempos de espera (88h o configurada)">META</th>
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;font-size:0.65rem;color:#b45309;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}" title="Horas de espera acumuladas en el ciclo">ACUM.</th>
-            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size:0.65rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Balance de espera">BALANCE</th>` : '';
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}" title="Meta mensual de tiempos de espera (88h o configurada)">META</th>
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}" title="Horas de espera acumuladas en el ciclo">ACUM.</th>
+            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Balance de espera">BALANCE</th>` : '';
 
     const incHeadersSub = showIncidencias ? `
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 0)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PERM</th>
@@ -6439,7 +6439,7 @@ function renderVistaAnalitica(respData, container) {
     <div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
     <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
-        <tr class="text-center" style="background:#f8f9fa;font-size:0.68rem">
+        <tr class="text-center" style="background:#f8f9fa;font-size: 0.75rem">
             <th rowspan="2" class="sticky-col-analitica align-middle text-start ps-2" style="position:sticky; left:0; z-index:120; white-space:nowrap; background:#f8f9fa; width:260px; min-width:260px; max-width:260px;">Empleado</th>
             ${bonosHeadersTop}
             ${incHeadersTop}
@@ -6450,7 +6450,7 @@ function renderVistaAnalitica(respData, container) {
             ${esperaHeaderTop}
             <th colspan="${dates.length}" class="text-start px-2" style="background:#f0f7ff">Días del período</th>
         </tr>
-        <tr class="text-center" style="background:#f8f9fa;font-size:0.7rem">
+        <tr class="text-center" style="background:#f8f9fa;font-size: 0.75rem">
             ${bonosHeadersSub}
             ${incHeadersSub}
             ${heHeadersSub}
@@ -6464,7 +6464,7 @@ function renderVistaAnalitica(respData, container) {
     <tfoot>${totalsRow}</tfoot>
     </table>
     </div>
-    <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size:0.72rem;color:#6b7280">
+    <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
         <span class="badge-status badge-state-success"><i class="bi bi-check-circle-fill me-1"></i>OK</span> Normal
         <span class="badge-status badge-state-warning"><i class="bi bi-clock-fill me-1"></i>ATR</span> Atraso
         <span class="badge-status badge-state-info"><i class="bi bi-box-arrow-left me-1"></i>SAD</span> Sal.Adelantada
@@ -6472,7 +6472,7 @@ function renderVistaAnalitica(respData, container) {
         <span class="badge-status badge-state-neutral"><i class="bi bi-cup-hot-fill me-1"></i>LIB</span> Libre (Auto)
         <span class="badge-status badge-state-warning"><i class="bi bi-calendar-heart-fill me-1"></i>FER</span> Feriado
         <span class="badge-status badge-state-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>PER</span> Permiso
-        <span class="ms-auto text-muted" style="font-size:0.68rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
+        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
     </div>`;
 
     // ── TOOLTIP VOLANTE (reemplaza Bootstrap Popover) ─────────────────────────
@@ -6990,9 +6990,9 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
         const mDeuda = di.minutos_deuda || 0;
         
         let html = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;">`;
-        html += `<span class="fw-bold tabular-nums" style="font-size:0.72rem">${hrs}</span>`;
+        html += `<span class="fw-bold tabular-nums" style="font-size: 0.75rem">${hrs}</span>`;
         if (di.tipo_programacion !== 'BOLSA_FLEXIBLE' && di.tipo_programacion !== 'FLEXIBLE_BOLSA' && mDeuda > 0) {
-            html += `<span style="font-size:0.55rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(mDeuda)}</span>`;
+            html += `<span style="font-size: 0.75rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(mDeuda)}</span>`;
         }
         html += `</div>`;
         resultHtml = html;
@@ -7008,7 +7008,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
                 const heEste = snapAyer >= metaMinBolsa ? trabHoy : (snapHoy - metaMinBolsa);
                 if (heEste > 0) {
                     const col = di.estado_he === 'APROBADO' ? 'color:#16a34a' : 'color:#f97316';
-                    return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;${col}">${_fmtMin(heEste)}</span>`;
+                    return `<span class="fw-bold tabular-nums" style="font-size: 0.75rem;${col}">${_fmtMin(heEste)}</span>`;
                 }
             }
             return ''; // Sin HE: celda vacía (no badge)
@@ -7016,7 +7016,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
             const heBruto = di.minutos_extra_bruto || 0;
             if (heBruto > 0) {
                 const col = di.estado_he === 'APROBADO' ? 'color:#16a34a' : 'color:#dc2626';
-                return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;${col}">${_fmtMin(heBruto)}</span>`;
+                return `<span class="fw-bold tabular-nums" style="font-size: 0.75rem;${col}">${_fmtMin(heBruto)}</span>`;
             }
             return ''; // Sin HE: celda vacía (no badge)
         }
@@ -7041,8 +7041,8 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
                 }
                 const cruzaHoy = snap > metaMinBolsa && snapAyer < metaMinBolsa;
                 return `<div style="display:flex;flex-direction:column;align-items:center;line-height:1.2;${bg}">
-                    <span class="fw-bold tabular-nums" style="font-size:0.72rem;color:${color}">${_fmtMin(snap)}</span>
-                    ${cruzaHoy ? `<span style="font-size:0.5rem;color:#10b981;font-weight:800">&#9733;META</span>` : ''}
+                    <span class="fw-bold tabular-nums" style="font-size: 0.75rem;color:${color}">${_fmtMin(snap)}</span>
+                    ${cruzaHoy ? `<span style="font-size: 0.75rem;color:#10b981;font-weight:800">&#9733;META</span>` : ''}
                 </div>`;
             }
             return '';
@@ -7050,8 +7050,8 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
             // Turnos normales: acumulado semanal
             const snap = di._acumuladoSemanalSnap || 0;
             return snap > 0
-                ? `<span class="fw-bold tabular-nums" style="font-size:0.72rem">${_fmtMin(snap)}</span>`
-                : `<span style="font-size:0.68rem;color:#9ca3af">—</span>`;
+                ? `<span class="fw-bold tabular-nums" style="font-size: 0.75rem">${_fmtMin(snap)}</span>`
+                : `<span style="font-size: 0.75rem;color:#9ca3af">—</span>`;
         }
         return ''; // cualquier otro caso → vacío
     }
@@ -7063,29 +7063,29 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
         if (di.hora_entrada_real && di.hora_salida_real) {
             let color = mColAplicado > 0 ? '#1e293b' : '#9ca3af';
             let html = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;">`;
-            html += `<span class="fw-bold tabular-nums" style="font-size:0.72rem;color:${color}">${_fmtMin(mColAplicado)}</span>`;
+            html += `<span class="fw-bold tabular-nums" style="font-size: 0.75rem;color:${color}">${_fmtMin(mColAplicado)}</span>`;
             
             if (exceso > 0) {
-                html += `<span style="font-size:0.55rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(exceso)}</span>`;
+                html += `<span style="font-size: 0.75rem;color:#dc2626;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">DEUDA ${_fmtMin(exceso)}</span>`;
             } else if (mColReal === 0 && mColAplicado > 0) {
-                html += `<span style="font-size:0.55rem;color:#64748b;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">AUTO</span>`;
+                html += `<span style="font-size: 0.75rem;color:#64748b;font-weight:700;letter-spacing:-0.2px;margin-top:2px;">AUTO</span>`;
             }
             html += `</div>`;
             resultHtml = html;
         } else {
-            resultHtml = `<span style="font-size:0.68rem;color:#9ca3af">—</span>`;
+            resultHtml = `<span style="font-size: 0.75rem;color:#9ca3af">—</span>`;
         }
     }
     else if (viewMode === 'permisos') {
         const mPerm = di.minutos_permisos_detectados || 0;
         const mDeuda = di.minutos_permiso_personal_deuda || 0;
-        if (mPerm > 0) return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;color:#2563eb">${_fmtMin(mPerm)}</span>`;
+        if (mPerm > 0) return `<span class="fw-bold tabular-nums" style="font-size: 0.75rem;color:#2563eb">${_fmtMin(mPerm)}</span>`;
         if (di.tiene_permiso_hora || di.permiso_activo) {
             const mins = mDeuda > 0 ? mDeuda : Math.round((di.horas_teoricas||0)*60);
-            if (mins > 0) return `<span class="fw-bold tabular-nums" style="font-size:0.72rem;color:#d97706">${_fmtMin(mins)}</span>`;
-            return `<span style="font-size:0.68rem;color:#d97706">PER</span>`;
+            if (mins > 0) return `<span class="fw-bold tabular-nums" style="font-size: 0.75rem;color:#d97706">${_fmtMin(mins)}</span>`;
+            return `<span style="font-size: 0.75rem;color:#d97706">PER</span>`;
         }
-        return hasEff ? `<span style="font-size:0.68rem;color:#9ca3af">—</span>` : '';
+        return hasEff ? `<span style="font-size: 0.75rem;color:#9ca3af">—</span>` : '';
     }
 
     if (resultHtml !== '') {
@@ -7094,7 +7094,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
             const color = '#8b5cf6';
             return `<div style="display:flex;flex-direction:column;align-items:center;line-height:1.2;">
                 ${resultHtml}
-                <span style="font-size:0.55rem;color:${color};font-weight:700;letter-spacing:-0.2px;margin-top:2px;">${label}</span>
+                <span style="font-size: 0.75rem;color:${color};font-weight:700;letter-spacing:-0.2px;margin-top:2px;">${label}</span>
             </div>`;
         }
         return resultHtml;
@@ -7228,15 +7228,15 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     // Badge de estado
     let badgeHtml = '';
     if (isCerrado) {
-        badgeHtml = `<span class="badge bg-success" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-shield-check me-1"></i>DÍA CERRADO</span>`;
+        badgeHtml = `<span class="badge bg-success" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-shield-check me-1"></i>DÍA CERRADO</span>`;
     } else if (slotsData) {
-        badgeHtml = `<span class="badge bg-primary text-white" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-journal-check me-1"></i>REGISTRADO</span>`;
+        badgeHtml = `<span class="badge bg-primary text-white" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-journal-check me-1"></i>REGISTRADO</span>`;
     } else if (est === 'LIBRE') {
-        badgeHtml = `<span class="badge bg-secondary" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-cup-hot-fill me-1"></i>DÍA LIBRE</span>`;
+        badgeHtml = `<span class="badge bg-secondary" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-cup-hot-fill me-1"></i>DÍA LIBRE</span>`;
     } else if (isFer) {
-        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-star-fill me-1"></i>FERIADO</span>`;
+        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-star-fill me-1"></i>FERIADO</span>`;
     } else {
-        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-exclamation-triangle-fill me-1"></i>PENDIENTE</span>`;
+        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-exclamation-triangle-fill me-1"></i>PENDIENTE</span>`;
     }
 
     // Acumulados mensuales
@@ -7263,7 +7263,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         slotsData.tramos.forEach(t => {
             if (t.code === '0' && slotsData.tramos.length > 1) return;
             tramosListHtml += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:3px 6px; border-bottom:1px dashed #e2e8f0; font-size:0.70rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:3px 6px; border-bottom:1px dashed #e2e8f0; font-size: 0.75rem;">
                 <div style="display:flex; align-items:center; gap:6px;">
                     <span style="display:inline-block; width:8px; height:8px; border-radius:2px; background:${t.color};"></span>
                     <strong style="font-family:monospace; color:#1e293b;">${t.startStr} - ${t.endStr}</strong>
@@ -7277,12 +7277,12 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         let fatigaHtml = '';
         if (slotsData.maxConduccionContinua > 300) {
             fatigaHtml = `
-            <div style="margin-top:6px; padding:5px 8px; background:#fff1f2; border:1px solid #fecdd3; border-radius:4px; color:#e11d48; font-size:0.65rem; font-weight:600;">
+            <div style="margin-top:6px; padding:5px 8px; background:#fff1f2; border:1px solid #fecdd3; border-radius:4px; color:#e11d48; font-size: 0.75rem; font-weight:600;">
                 <i class="bi bi-exclamation-octagon-fill me-1"></i> ALERTA LEGAL: Conducción continua de ${(slotsData.maxConduccionContinua/60).toFixed(1)}h supera el tope de 5 horas continuas sin descanso (Art. 25 bis).
             </div>`;
         } else if (slotsData.minConduccion > 0) {
             fatigaHtml = `
-            <div style="margin-top:6px; padding:4px 8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; color:#15803d; font-size:0.65rem; font-weight:600;">
+            <div style="margin-top:6px; padding:4px 8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; color:#15803d; font-size: 0.75rem; font-weight:600;">
                 <i class="bi bi-shield-check me-1"></i> Conducción continua conforme a norma (bloque máx: ${(slotsData.maxConduccionContinua/60).toFixed(1)}h ≤ 5h).
             </div>`;
         }
@@ -7291,10 +7291,10 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         <!-- SECCIÓN 1: Mini-Línea de Tiempo 24 Horas -->
         <div style="margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-weight:700; font-size:0.72rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
+                <span style="font-weight:700; font-size: 0.75rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
                     <i class="bi bi-clock-history" style="color:#059669;"></i> Cronología 24 Horas (Libreta DT)
                 </span>
-                <span style="font-size:0.62rem; color:#64748b; font-weight:600;">Resolución 15m</span>
+                <span style="font-size: 0.75rem; color:#64748b; font-weight:600;">Resolución 15m</span>
             </div>
             
             <div style="display:flex; width:100%; height:16px; border-radius:4px; overflow:hidden; border:1px solid #cbd5e1; margin-bottom:6px; box-shadow:inset 0 1px 2px rgba(0,0,0,0.06);">
@@ -7302,7 +7302,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
             </div>
 
             <!-- Leyenda compacta -->
-            <div style="display:flex; justify-content:space-between; font-size:0.62rem; color:#64748b; margin-bottom:8px; padding:0 2px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; color:#64748b; margin-bottom:8px; padding:0 2px;">
                 <span><span style="color:#059669; font-weight:bold;">●</span> Conducción</span>
                 <span><span style="color:#4f46e5; font-weight:bold;">●</span> Auxiliares</span>
                 <span><span style="color:#d97706; font-weight:bold;">●</span> Espera</span>
@@ -7319,17 +7319,17 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
             <div style="font-weight:700; font-size:0.70rem; color:#1e293b; text-transform:uppercase; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
                 <span><i class="bi bi-scale me-1" style="color:#3b82f6;"></i> Balance Diario del Registro</span>
-                <span class="badge ${isCuadrado ? 'bg-success' : 'bg-warning text-dark'}" style="font-size:0.58rem; padding:2px 6px;">${isCuadrado ? '24:00 CUADRADO' : 'INCOMPLETO'}</span>
+                <span class="badge ${isCuadrado ? 'bg-success' : 'bg-warning text-dark'}" style="font-size: 0.75rem; padding:2px 6px;">${isCuadrado ? '24:00 CUADRADO' : 'INCOMPLETO'}</span>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
                 <span style="color:#64748b;">• Jornada Efectiva (Cond. + Aux.):</span>
                 <strong style="font-family:monospace; color:#059669;">${formatExactMinutesToTime(minEfec)} (${(minEfec/60).toFixed(1)} hrs)</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
                 <span style="color:#64748b;">• Tiempo de Espera (Retribuido):</span>
                 <strong style="font-family:monospace; color:#d97706;">${formatExactMinutesToTime(minEsp)} (${(minEsp/60).toFixed(1)} hrs)</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:4px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:4px;">
                 <span style="color:#64748b;">• Descanso Total (Tierra/Litera):</span>
                 <strong style="font-family:monospace; color:#0284c7;">${formatExactMinutesToTime(minDesc)} (${(minDesc/60).toFixed(1)} hrs)</strong>
             </div>
@@ -7341,19 +7341,19 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
             <div style="font-weight:700; font-size:0.70rem; color:#1e293b; text-transform:uppercase; margin-bottom:6px;">
                 <i class="bi bi-scale me-1" style="color:#3b82f6;"></i> Resumen de Jornada Art. 25 bis
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
                 <span style="color:#64748b;">• Conducción Registrada:</span>
                 <strong style="font-family:monospace; color:#059669;">${formatExactMinutesToTime(minCond)} (${(minCond/60).toFixed(1)} hrs)</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
                 <span style="color:#64748b;">• Labores Auxiliares:</span>
                 <strong style="font-family:monospace; color:#4f46e5;">${formatExactMinutesToTime(minAux)} (${(minAux/60).toFixed(1)} hrs)</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
                 <span style="color:#64748b;">• Tiempos de Espera:</span>
                 <strong style="font-family:monospace; color:#d97706;">${formatExactMinutesToTime(minEsp)} (${(minEsp/60).toFixed(1)} hrs)</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.70rem;">
+            <div style="display:flex; justify-content:space-between; font-size: 0.75rem;">
                 <span style="color:#64748b;">• Descanso:</span>
                 <strong style="font-family:monospace; color:#0284c7;">${formatExactMinutesToTime(minDesc)} (${(minDesc/60).toFixed(1)} hrs)</strong>
             </div>
@@ -7364,16 +7364,16 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
             <div style="color:#b45309; font-weight:700; font-size:0.75rem; margin-bottom:4px;">
                 <i class="bi bi-exclamation-triangle-fill me-1"></i> Libreta Art. 25 bis pendiente de registro
             </div>
-            <div style="font-size:0.70rem; color:#475569; margin-bottom:8px; line-height:1.3;">
+            <div style="font-size: 0.75rem; color:#475569; margin-bottom:8px; line-height:1.3;">
                 Este día no cuenta con la distribución de tramos de 24 horas registrada en el sistema.
             </div>
             ${di.hora_entrada_real || di.hora_salida_real ? `
-            <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:4px; padding:6px 8px; font-size:0.70rem; color:#334155; margin-bottom:8px;">
+            <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:4px; padding:6px 8px; font-size: 0.75rem; color:#334155; margin-bottom:8px;">
                 <strong>Marcas físicas en terminal:</strong><br>
                 • Entrada: ${di.hora_entrada_real || 'Sin registro'}<br>
                 • Salida: ${di.hora_salida_real || 'Sin registro'}
             </div>` : ''}
-            <div style="font-size:0.70rem; color:#3f6fd6; font-weight:600;">
+            <div style="font-size: 0.75rem; color:#3f6fd6; font-weight:600;">
                 <i class="bi bi-cursor-fill me-1"></i> Haga clic sobre la celda para abrir el Registro Diario Art. 25 bis.
             </div>
         </div>`;
@@ -7389,16 +7389,16 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:6px; padding:10px; margin-bottom:8px;">
         <div style="font-weight:700; font-size:0.70rem; color:#7c3aed; text-transform:uppercase; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
             <span><i class="bi bi-bullseye me-1"></i> Acumulado Mensual Art. 25 bis</span>
-            <span style="font-size:0.62rem; color:#8b5cf6; font-weight:600;">Bolsas DT</span>
+            <span style="font-size: 0.75rem; color:#8b5cf6; font-weight:600;">Bolsas DT</span>
         </div>
-        <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:4px;">
+        <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:4px;">
             <span style="color:#64748b;">• Bolsa 180h Efectiva:</span>
             <span style="font-family:monospace;">
                 <strong>${_fmtMin(acumBolsaMin)}</strong> / ${_fmtMin(metaBolsaMin)} 
                 <span style="color:${saldoBolsaColor}; font-weight:700;">(${saldoBolsaSign}${_fmtMin(Math.abs(saldoBolsaMin))})</span>
             </span>
         </div>
-        <div style="display:flex; justify-content:space-between; font-size:0.70rem;">
+        <div style="display:flex; justify-content:space-between; font-size: 0.75rem;">
             <span style="color:#64748b;">• Bolsa Espera 88h:</span>
             <span style="font-family:monospace;">
                 <strong>${_fmtMin(acumEsperaMin)}</strong> / ${_fmtMin(metaEsperaMin)}
@@ -7411,18 +7411,18 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     let marcasFisicasHtml = '';
     if (di.hora_entrada_real || di.hora_salida_real) {
         marcasFisicasHtml = `
-        <div style="font-size:0.66rem; color:#64748b; padding:4px 8px; background:#f1f5f9; border-radius:4px; display:flex; justify-content:space-between;">
+        <div style="font-size: 0.75rem; color:#64748b; padding:4px 8px; background:#f1f5f9; border-radius:4px; display:flex; justify-content:space-between;">
             <span><i class="bi bi-fingerprint me-1"></i>Terminal Biométrico:</span>
             <span style="font-family:monospace; color:#334155;">Entrada: <strong>${di.hora_entrada_real || '—'}</strong> · Salida: <strong>${di.hora_salida_real || '—'}</strong></span>
         </div>`;
     }
 
     const html = `
-    <div style="width: 380px; font-family: 'Inter', system-ui, -apple-system, sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
+    <div style="width: 380px; font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
         
         <!-- Header Principal Art. 25 bis -->
         <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 10px; margin-bottom: 10px;">
-            <div style="color: #059669; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+            <div style="color: #059669; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                 <i class="bi bi-truck me-1" style="font-size:0.8rem"></i> CONTROL JORNADA ART. 25 BIS DT
             </div>
             
@@ -7436,9 +7436,9 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
             </div>
 
             <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span> · TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
-            <div style="color:#7c3aed; font-weight:600; font-size:0.62rem; text-transform: uppercase;">RÉGIMEN: ART. 25 BIS CÓDIGO DEL TRABAJO (BOLSA 180H / ESPERA 88H)</div>
-            ${isFer ? `<div style="margin-top: 6px; padding: 5px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.72rem; font-weight: 600;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span> · TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
+            <div style="color:#7c3aed; font-weight:600; font-size: 0.6875rem; text-transform: uppercase;">RÉGIMEN: ART. 25 BIS CÓDIGO DEL TRABAJO (BOLSA 180H / ESPERA 88H)</div>
+            ${isFer ? `<div style="margin-top: 6px; padding: 5px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
         </div>
 
         ${bodyContentHtml}
@@ -7447,7 +7447,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
 
         ${marcasFisicasHtml}
 
-        <div style="margin-top:8px; text-align:center; font-size:0.62rem; color:#94a3b8;">
+        <div style="margin-top:8px; text-align:center; font-size: 0.75rem; color:#94a3b8;">
             <i class="bi bi-info-circle me-1"></i> Doble clic en celda para justificar · Clic para abrir Libreta 180h
         </div>
     </div>`;
@@ -7493,19 +7493,19 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const dayInfo = empInfo.turno_dias[pyDay];
             if (dayInfo) {
                 if (dayInfo.es_libre) {
-                    scheduleHtml = `<div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-top:2px;"><i class="bi bi-cup-hot-fill me-1"></i> HORARIO: <span style="color:var(--text-primary, #1e293b);">DÍA LIBRE</span></div>`;
+                    scheduleHtml = `<div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase; margin-top:2px;"><i class="bi bi-cup-hot-fill me-1"></i> HORARIO: <span style="color:var(--text-primary, #1e293b);">DÍA LIBRE</span></div>`;
                 } else if (dayInfo.hora_entrada && dayInfo.hora_salida) {
                     const hEnt = dayInfo.hora_entrada.substring(0, 5);
                     const hSal = dayInfo.hora_salida.substring(0, 5);
-                    scheduleHtml = `<div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-top:2px;"><i class="bi bi-clock-history me-1"></i> HORARIO: <span style="color:var(--text-primary, #1e293b);">${hEnt} - ${hSal}</span></div>`;
+                    scheduleHtml = `<div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase; margin-top:2px;"><i class="bi bi-clock-history me-1"></i> HORARIO: <span style="color:var(--text-primary, #1e293b);">${hEnt} - ${hSal}</span></div>`;
                 }
             }
         }
-        let emptyStateHtml = isFer ? `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-star-fill me-1"></i>FERIADO</div>` : `<div class="badge-status badge-state-secondary" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">SIN DATOS</div>`;
+        let emptyStateHtml = isFer ? `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-star-fill me-1"></i>FERIADO</div>` : `<div class="badge-status badge-state-secondary" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">SIN DATOS</div>`;
         
-        return _escAttr(`<div style="width: 340px; font-family:'Inter',sans-serif; cursor: default; background:var(--card-bg, #ffffff); color:var(--text-primary, #1e293b); padding:12px; border-radius:6px; margin:0; border:1px solid var(--border-color, #e2e8f0); box-shadow:var(--shadow-premium);">
+        return _escAttr(`<div style="width: 340px; font-family: var(--font-sans); cursor: default; background:var(--card-bg, #ffffff); color:var(--text-primary, #1e293b); padding:12px; border-radius:6px; margin:0; border:1px solid var(--border-color, #e2e8f0); box-shadow:var(--shadow-premium);">
             <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
-                <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+                <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                     <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -7517,9 +7517,9 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                     </div>
                 </div>
                 <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
-                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
-                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-bottom:2px;">TURNO: <span style="color:var(--text-primary, #1e293b);">${fallbackShift}</span></div>
-                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase; margin-bottom:2px;">CICLO: <span style="color:var(--text-primary, #1e293b);">--</span></div>
+                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
+                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase; margin-bottom:2px;">TURNO: <span style="color:var(--text-primary, #1e293b);">${fallbackShift}</span></div>
+                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase; margin-bottom:2px;">CICLO: <span style="color:var(--text-primary, #1e293b);">--</span></div>
                 ${scheduleHtml}
                 ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
             </div>
@@ -7584,19 +7584,19 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     const perSuffix = (e.tiene_permiso_hora || e.permiso_activo) ? ' <span style="opacity:0.8;font-size:0.9em;margin-left:4px;">(+PERM)</span>' : '';
     
     if (est === 'ATR_SAD') {
-        const b1 = `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-clock-fill me-1"></i>ATRASO</div>`;
-        const b2 = `<div class="badge-status badge-state-info" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-box-arrow-left me-1"></i>SAL. ADEL. ${perSuffix}</div>`;
+        const b1 = `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-clock-fill me-1"></i>ATRASO</div>`;
+        const b2 = `<div class="badge-status badge-state-info" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-box-arrow-left me-1"></i>SAL. ADEL. ${perSuffix}</div>`;
         badgeHtml = `<div style="display:flex; flex-direction:column; align-items:flex-end; gap: 4px;">${b1}${b2}</div>`;
     } else if (e.jornada_adicional && (est === 'LIBRE' || est === 'JORNADA_ESPECIAL')) {
         let label_je = e.jornada_adicional.estado === 'EXTRA' ? 'JORNADA EXTRA' : (e.jornada_adicional.estado === 'RECHAZADA' ? 'RECHAZADA' : 'JORNADA ESPECIAL');
         let icon_je = e.jornada_adicional.estado === 'EXTRA' ? '<i class="bi bi-plus-circle-fill me-1"></i>' : (e.jornada_adicional.estado === 'RECHAZADA' ? '<i class="bi bi-x-circle-fill me-1"></i>' : '<i class="bi bi-star-fill me-1"></i>');
         let class_je = e.jornada_adicional.estado === 'RECHAZADA' ? 'badge-state-danger' : 'badge-state-info';
-        badgeHtml = `<div class="badge-status ${class_je}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon_je}${label_je}${perSuffix}</div>`;
+        badgeHtml = `<div class="badge-status ${class_je}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon_je}${label_je}${perSuffix}</div>`;
     } else {
         const fullName = stateNameMap[est] || (e.nomenclatura || est);
         const pillClass = pillClassMap[est] || 'badge-state-info';
         const icon = iconMap[est] || '';
-        badgeHtml = `<div class="badge-status ${pillClass}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size:0.65rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon}${fullName}${perSuffix}</div>`;
+        badgeHtml = `<div class="badge-status ${pillClass}" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">${icon}${fullName}${perSuffix}</div>`;
     }
     
     // Formatters
@@ -7616,7 +7616,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     const isUnderHours = e.horas_trabajadas && e.horas_teoricas && e.horas_trabajadas < e.horas_teoricas;
     const hoursColor = isUnderHours ? 'var(--danger-color, #f43f5e)' : 'var(--text-primary, #1e293b)';
     const rowStyles = "display:flex; justify-content:space-between; margin-bottom:4px; align-items:center;";
-    const labelStyles = "color:var(--text-secondary, #64748b); font-weight:500; font-size:0.7rem;";
+    const labelStyles = "color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.75rem;";
     
     const valMins = (mins, activeColor) => {
         if (!mins || mins <= 0) return `<span style="color:var(--text-secondary, #64748b); font-family:monospace; font-size:0.75rem;"></span>`;
@@ -7669,11 +7669,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         if (e.hora_entrada_teorica) {
             const diffMin = rawTimeToMins(e.hora_entrada_real) - rawTimeToMins(e.hora_entrada_teorica);
             if (diffMin > 0.5) {
-                diffEntHtml = `<span style="color:#f43f5e; font-weight:700; font-family:monospace; font-size:0.68rem;">+${formatExactMinutesToTime(diffMin)}</span>`;
+                diffEntHtml = `<span style="color:#f43f5e; font-weight:700; font-family:monospace; font-size: 0.75rem;">+${formatExactMinutesToTime(diffMin)}</span>`;
             } else if (diffMin < -0.5) {
-                diffEntHtml = `<span style="color:#10b981; font-weight:700; font-family:monospace; font-size:0.68rem;">-${formatExactMinutesToTime(Math.abs(diffMin))}</span>`;
+                diffEntHtml = `<span style="color:#10b981; font-weight:700; font-family:monospace; font-size: 0.75rem;">-${formatExactMinutesToTime(Math.abs(diffMin))}</span>`;
             } else {
-                diffEntHtml = `<span style="color:#64748b; font-size:0.65rem;">En punto</span>`;
+                diffEntHtml = `<span style="color:#64748b; font-size: 0.75rem;">En punto</span>`;
             }
         }
         timelineEvents.push({
@@ -7692,7 +7692,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             color: '#f43f5e',
             icon: 'bi-exclamation-circle-fill',
             titulo: 'Entrada no registrada',
-            detalle: `<span style="color:#f43f5e; font-size:0.65rem;">Teórica ${e.hora_entrada_teorica.substring(0,5)}</span>`,
+            detalle: `<span style="color:#f43f5e; font-size: 0.75rem;">Teórica ${e.hora_entrada_teorica.substring(0,5)}</span>`,
             order: 0
         });
     }
@@ -7716,7 +7716,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 color: '#f59e0b',
                 icon: 'bi-cup-hot',
                 titulo: 'Salida a Colación',
-                detalle: `<span style="color:#64748b; font-size:0.65rem;">Inicio</span>`,
+                detalle: `<span style="color:#64748b; font-size: 0.75rem;">Inicio</span>`,
                 order: rawTimeToMins(hSalCol)
             });
         }
@@ -7727,7 +7727,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 color: '#f59e0b',
                 icon: 'bi-arrow-return-right',
                 titulo: 'Retorno Colación',
-                detalle: `<span style="font-family:monospace; font-size:0.68rem; color:#d97706; font-weight:700;">${colSub}</span>`,
+                detalle: `<span style="font-family:monospace; font-size: 0.75rem; color:#d97706; font-weight:700;">${colSub}</span>`,
                 order: rawTimeToMins(hEntCol)
             });
         }
@@ -7739,7 +7739,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             color: '#f59e0b',
             icon: 'bi-clock-history',
             titulo: 'Descuento Colación Automática',
-            detalle: `<span style="font-family:monospace; font-size:0.68rem; color:#d97706; font-weight:700;">-${formatExactMinutesToTime(colAuto)} (Regla Turno)</span>`,
+            detalle: `<span style="font-family:monospace; font-size: 0.75rem; color:#d97706; font-weight:700;">-${formatExactMinutesToTime(colAuto)} (Regla Turno)</span>`,
             order: rawTimeToMins(e.hora_entrada_real) + 240
         });
     }
@@ -7759,7 +7759,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 color: '#0284c7',
                 icon: 'bi-box-arrow-right',
                 titulo: 'Salida a Permiso',
-                detalle: `<span style="color:#64748b; font-size:0.65rem;">Permiso Personal</span>`,
+                detalle: `<span style="color:#64748b; font-size: 0.75rem;">Permiso Personal</span>`,
                 order: rawTimeToMins(hIniPer)
             });
         }
@@ -7770,7 +7770,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 color: '#0284c7',
                 icon: 'bi-box-arrow-in-left',
                 titulo: 'Retorno de Permiso',
-                detalle: `<span style="font-family:monospace; font-size:0.68rem; color:#0284c7; font-weight:700;">${durPerMin > 0 ? formatExactMinutesToTime(durPerMin) : 'Retorno'}</span>`,
+                detalle: `<span style="font-family:monospace; font-size: 0.75rem; color:#0284c7; font-weight:700;">${durPerMin > 0 ? formatExactMinutesToTime(durPerMin) : 'Retorno'}</span>`,
                 order: rawTimeToMins(hFinPer)
             });
         }
@@ -7783,11 +7783,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         if (e.hora_salida_teorica) {
             const diffSalMin = rawTimeToMins(e.hora_salida_real) - rawTimeToMins(e.hora_salida_teorica);
             if (diffSalMin > 0.5) {
-                diffSalHtml = `<span style="color:#10b981; font-weight:700; font-family:monospace; font-size:0.68rem;">+${formatExactMinutesToTime(diffSalMin)}</span>`;
+                diffSalHtml = `<span style="color:#10b981; font-weight:700; font-family:monospace; font-size: 0.75rem;">+${formatExactMinutesToTime(diffSalMin)}</span>`;
             } else if (diffSalMin < -0.5) {
-                diffSalHtml = `<span style="color:#f43f5e; font-weight:700; font-family:monospace; font-size:0.68rem;">-${formatExactMinutesToTime(Math.abs(diffSalMin))}</span>`;
+                diffSalHtml = `<span style="color:#f43f5e; font-weight:700; font-family:monospace; font-size: 0.75rem;">-${formatExactMinutesToTime(Math.abs(diffSalMin))}</span>`;
             } else {
-                diffSalHtml = `<span style="color:#64748b; font-size:0.65rem;">En punto</span>`;
+                diffSalHtml = `<span style="color:#64748b; font-size: 0.75rem;">En punto</span>`;
             }
         }
         timelineEvents.push({
@@ -7806,7 +7806,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             color: e.estado === 'EN_CURSO' ? '#10b981' : '#f59e0b',
             icon: e.estado === 'EN_CURSO' ? 'bi-play-circle-fill' : 'bi-exclamation-triangle-fill',
             titulo: e.estado === 'EN_CURSO' ? 'Turno en curso' : 'Salida no registrada',
-            detalle: `<span style="color:#64748b; font-size:0.65rem;">Teórica ${e.hora_salida_teorica ? e.hora_salida_teorica.substring(0,5) : '--:--'}</span>`,
+            detalle: `<span style="color:#64748b; font-size: 0.75rem;">Teórica ${e.hora_salida_teorica ? e.hora_salida_teorica.substring(0,5) : '--:--'}</span>`,
             order: 9999
         });
     }
@@ -7831,7 +7831,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const horaText = evt.hora ? `<strong style="font-family:monospace; font-size:0.75rem; color:var(--text-primary, #1e293b);">${evt.hora}</strong>` : '';
             const borderLeftStyle = isLast ? 'border-left: 2px solid transparent;' : 'border-left: 2px solid #e2e8f0;';
             const bulletBg = isAuto ? 'background: #fef3c7; border: 1px dashed #f59e0b;' : `background: ${evt.color};`;
-            const bulletInner = isAuto ? `<i class="bi bi-clock-history" style="font-size:0.5rem; color:#d97706;"></i>` : '';
+            const bulletInner = isAuto ? `<i class="bi bi-clock-history" style="font-size: 0.75rem; color:#d97706;"></i>` : '';
 
             return `
             <div style="position:relative; padding-left:18px; padding-bottom:${isLast ? '0px' : '8px'}; ${borderLeftStyle} margin-left:7px;">
@@ -7839,7 +7839,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                     ${bulletInner}
                 </span>
                 <div style="display:flex; justify-content:space-between; align-items:center; line-height:1.2;">
-                    <div style="font-size:0.72rem; color:var(--text-primary, #1e293b);">
+                    <div style="font-size: 0.75rem; color:var(--text-primary, #1e293b);">
                         ${horaText ? `${horaText} — ` : ''}<span style="${isAuto ? 'color:#b45309; font-weight:600;' : 'font-weight:600;'}">${evt.titulo}</span>
                     </div>
                     <div>${evt.detalle || ''}</div>
@@ -7879,7 +7879,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
         timeBarHtml = `
         <div style="background: var(--bg-secondary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.68rem; font-weight:700; color:var(--text-secondary, #64748b); margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.75rem; font-weight:700; color:var(--text-secondary, #64748b); margin-bottom:6px;">
                 <span><i class="bi bi-bar-chart-steps me-1"></i> Distribución de Jornada</span>
                 <span style="font-family:monospace; color:var(--text-primary, #1e293b);">${permRealMins > 0 ? formatExactMinutesToTime(permRealMins) : (e.horas_teoricas ? formatDecimalToTime(e.horas_teoricas) : '--:--:--')} Planta</span>
             </div>
@@ -7889,7 +7889,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 ${pctCol > 0 ? `<div style="background:#f59e0b; width:${pctCol}%; height:100%;" title="Colación: ${formatExactMinutesToTime(minColacion)}"></div>` : ''}
                 ${pctDeuda > 0 ? `<div style="background:#f43f5e; width:${pctDeuda}%; height:100%;" title="Atraso / Deuda"></div>` : ''}
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.65rem; font-family:monospace; margin-top:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.75rem; font-family:monospace; margin-top:6px;">
                 <span style="display:inline-flex; align-items:center; gap:3px; color:#15803d; font-weight:700;"><span style="width:6px; height:6px; border-radius:50%; background:#10b981;"></span> ${formatExactMinutesToTime(minEfectivos).substring(0,5)}h Efect.</span>
                 ${permBadge}
                 ${colBadge}
@@ -7969,10 +7969,10 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         balanceCardHtml = `
         <div style="border: 1px solid rgba(244, 63, 94, 0.25); background-color: rgba(244, 63, 94, 0.04); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:#e11d48; font-weight:800; font-size:0.68rem; letter-spacing:0.5px; text-transform:uppercase;">
+                <span style="color:#e11d48; font-weight:800; font-size: 0.6875rem; letter-spacing:0.5px; text-transform:uppercase;">
                     <i class="bi bi-calculator-fill me-1"></i> Balance Horario & Deuda
                 </span>
-                <span style="font-size:0.62rem; color:#64748b; font-family:monospace;">Prog. ${progHrsFormatted}</span>
+                <span style="font-size: 0.75rem; color:#64748b; font-family:monospace;">Prog. ${progHrsFormatted}</span>
             </div>
             ${deudaRows}
             <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(244, 63, 94, 0.2); display:flex; justify-content:space-between; align-items:center;">
@@ -7990,7 +7990,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         heRows += `<div style="${rowStyles} padding-top:2px; border-top:1px dashed rgba(16, 185, 129, 0.2);"><span style="${labelStyles} font-weight:700; color:var(--text-primary, #1e293b);">Total Aprobado</span> ${valMins(heTotal, 'var(--success-color, #10b981)')}</div>`;
 
         let origHtml = heBreakdownRows.length > 0 ? `
-            <div style="margin-top:6px; padding-top:6px; border-top:1px dashed rgba(16, 185, 129, 0.2); font-size:0.65rem;">
+            <div style="margin-top:6px; padding-top:6px; border-top:1px dashed rgba(16, 185, 129, 0.2); font-size: 0.75rem;">
                 <div style="color:#64748b; font-weight:700; margin-bottom:2px; text-transform:uppercase;">Origen Horas Extras:</div>
                 ${heBreakdownRows.join('')}
             </div>` : '';
@@ -7998,10 +7998,10 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         balanceCardHtml = `
         <div style="border: 1px solid rgba(16, 185, 129, 0.25); background-color: rgba(16, 185, 129, 0.04); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:#059669; font-weight:800; font-size:0.68rem; letter-spacing:0.5px; text-transform:uppercase;">
+                <span style="color:#059669; font-weight:800; font-size: 0.6875rem; letter-spacing:0.5px; text-transform:uppercase;">
                     <i class="bi bi-plus-circle-fill me-1"></i> ${(est === 'EXTRA' || est === 'JORNADA_ESPECIAL') ? (stateNameMap[est] || 'HORAS EXTRAS') : 'HORAS EXTRAS'}
                 </span>
-                <span style="font-size:0.62rem; color:#059669; font-family:monospace; font-weight:700;">+${formatExactMinutesToTime(heTotal)}</span>
+                <span style="font-size: 0.75rem; color:#059669; font-family:monospace; font-weight:700;">+${formatExactMinutesToTime(heTotal)}</span>
             </div>
             ${heRows}
             ${origHtml}
@@ -8009,10 +8009,10 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     } else if (e.estado === 'OK') {
         balanceCardHtml = `
         <div style="border: 1px solid rgba(16, 185, 129, 0.2); background-color: rgba(16, 185, 129, 0.04); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="color:#059669; font-weight:700; font-size:0.72rem; display:flex; align-items:center; gap:4px;">
+            <span style="color:#059669; font-weight:700; font-size: 0.75rem; display:flex; align-items:center; gap:4px;">
                 <i class="bi bi-check-circle-fill text-success"></i> Jornada Conforme & Cuadrada
             </span>
-            <span style="font-family:monospace; font-size:0.7rem; color:#059669; font-weight:700; background:rgba(16,185,129,0.1); padding:2px 6px; border-radius:4px;">0 Deuda</span>
+            <span style="font-family:monospace; font-size: 0.75rem; color:#059669; font-weight:700; background:rgba(16,185,129,0.1); padding:2px 6px; border-radius:4px;">0 Deuda</span>
         </div>`;
     }
 
@@ -8020,12 +8020,12 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     let avisosHtml = '';
     if (e._esDiaJustificadoBolsa && empInfo && empInfo._esBolsaFlag && empInfo._valorTurnoMinBolsa) {
         avisosHtml += `
-        <div style="background-color: rgba(2, 132, 199, 0.08); border-left: 3px solid #0284c7; border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; font-size: 0.68rem; color: #0369a1;">
+        <div style="background-color: rgba(2, 132, 199, 0.08); border-left: 3px solid #0284c7; border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; font-size: 0.75rem; color: #0369a1;">
             <i class="bi bi-info-circle-fill me-1"></i> Día justificado: descuenta ${formatExactMinutesToTime(empInfo._valorTurnoMinBolsa)} a la meta mensual.
         </div>`;
     } else if (e.deuda_condonada > 0) {
         avisosHtml += `
-        <div style="background-color: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; font-size: 0.68rem; color: #047857;">
+        <div style="background-color: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; border-radius: 4px; padding: 6px 8px; margin-bottom: 10px; font-size: 0.75rem; color: #047857;">
             <i class="bi bi-shield-check me-1"></i> Deuda del día condonada mediante resolución administrativa.
         </div>`;
     }
@@ -8062,11 +8062,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         
         bloquesAdicionalesHtml += `
         <div style="border: 1px solid ${estadoColor}33; background-color: ${estadoColor}08; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
-            <div style="color: ${estadoColor}; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: ${estadoColor}; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
                 <span><i class="bi bi-calendar-plus me-1"></i> ${cardTitle}</span>
-                <span style="font-size: 0.58rem; background-color: ${estadoColor}1a; padding: 1px 6px; border-radius: 4px; border: 1px solid ${estadoColor}33; display: inline-flex; align-items: center; text-transform: uppercase;">${iconHtml}${estadoLabel}</span>
+                <span style="font-size: 0.6875rem; background-color: ${estadoColor}1a; padding: 1px 6px; border-radius: 4px; border: 1px solid ${estadoColor}33; display: inline-flex; align-items: center; text-transform: uppercase;">${iconHtml}${estadoLabel}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-primary, #1e293b); font-family: monospace;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-primary, #1e293b); font-family: monospace;">
                 <div>Entrada: <span style="font-weight:700;">${hEntJa}</span></div>
                 <div>Salida: <span style="font-weight:700;">${hSalJa}</span></div>
                 <div>Duración: <span style="font-weight:700; color: ${estadoColor};">${duracionJa}</span></div>
@@ -8106,11 +8106,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
         bloquesAdicionalesHtml += `
         <div style="border: 1px solid ${borderStyle}; background-color: ${bgStyle}; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
-            <div style="color: ${badgeColor}; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: ${badgeColor}; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
                 <span><i class="bi bi-truck me-1"></i> ${badgeTitle}</span>
-                <span style="font-size: 0.58rem; background-color: rgba(255,255,255,0.7); padding: 1px 6px; border-radius: 4px; border: 1px solid ${borderStyle}; display: inline-flex; align-items: center; text-transform: uppercase; color: ${badgeColor}; font-weight:700;"><i class="bi bi-geo-alt me-1"></i>${orig} ➔ ${dest}</span>
+                <span style="font-size: 0.6875rem; background-color: rgba(255,255,255,0.7); padding: 1px 6px; border-radius: 4px; border: 1px solid ${borderStyle}; display: inline-flex; align-items: center; text-transform: uppercase; color: ${badgeColor}; font-weight:700;"><i class="bi bi-geo-alt me-1"></i>${orig} ➔ ${dest}</span>
             </div>
-            <div style="font-size: 0.68rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 3px; font-family: monospace;">
+            <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 3px; font-family: monospace;">
                 <div style="display:flex; justify-content:space-between;">
                     <span style="color:#64748b;">Inicio: <strong style="color:#1e293b;">${fIniFull}</strong></span>
                     <span style="color:#64748b;">Fin: <strong style="color:#1e293b;">${fFinFull}</strong></span>
@@ -8120,9 +8120,9 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                     <span>Descanso: <strong>${hDesc}h</strong></span>
                     <span style="color:${badgeColor}; font-weight:700;">Reconocido: ${hRecon}h</span>
                 </div>
-                ${vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size:0.65rem; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:4px; padding:2px 6px;"><i class="bi bi-star-fill me-1"></i>Ruta cruzó Día Feriado (Aplica Día Compensatorio Art. 38)</div>` : ''}
-                ${vl.domingo_en_ruta && !vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size:0.65rem; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:4px; padding:2px 6px;"><i class="bi bi-calendar-event me-1"></i>Ruta en Domingo (Aplica descanso compensatorio)</div>` : ''}
-                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size:0.65rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas legales)</div>` : `<div style="margin-top:4px; font-size:0.65rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (🟢 Cumple norma ≥ 8h)</div>`) : ''}
+                ${vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size: 0.75rem; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:4px; padding:2px 6px;"><i class="bi bi-star-fill me-1"></i>Ruta cruzó Día Feriado (Aplica Día Compensatorio Art. 38)</div>` : ''}
+                ${vl.domingo_en_ruta && !vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size: 0.75rem; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:4px; padding:2px 6px;"><i class="bi bi-calendar-event me-1"></i>Ruta en Domingo (Aplica descanso compensatorio)</div>` : ''}
+                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size: 0.75rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas legales)</div>` : `<div style="margin-top:4px; font-size: 0.75rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (🟢 Cumple norma ≥ 8h)</div>`) : ''}
             </div>
         </div>`;
     }
@@ -8140,7 +8140,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 <span><i class="bi bi-truck me-1"></i> ${bannerTitle}</span>
                 <span class="badge bg-primary text-white font-monospace">${sug.horas_transcurridas}h reloj</span>
             </div>
-            <div style="font-size: 0.74rem; color: #1e293b; margin-bottom: 8px;">
+            <div style="font-size: 0.75rem; color: #1e293b; margin-bottom: 8px;">
                 Se detectó <strong>Salida</strong> el ${sug.fecha_inicio} (${hIni}) y <strong>Retorno</strong> el ${sug.fecha_fin} (${hFin}).
             </div>
             <button type="button" class="btn btn-sm btn-primary w-100 py-1 fw-bold shadow-sm" onclick="if(window.proceedToViajeLargoConSugerencia){ window.proceedToViajeLargoConSugerencia(${empId}, '${sug.fecha_inicio}', ${sug.log_inicio_id}, ${sug.log_fin_id}); } else { window.proceedToViajeLargo(); }">
@@ -8157,10 +8157,10 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             const contenido = match[1]; // ej: "38 min de 03:38 a 04:16"
             bloquesAdicionalesHtml += `
             <div style="border: 1px solid rgba(139, 92, 246, 0.3); background-color: rgba(139, 92, 246, 0.06); border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
-                <div style="color: #7c3aed; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+                <div style="color: #7c3aed; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                     <i class="bi bi-lightning-charge-fill me-1"></i> LLAMADO DE EMERGENCIA
                 </div>
-                <div style="font-size: 0.72rem; color: var(--text-primary, #1e293b); font-weight: 600; line-height: 1.3;">
+                <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); font-weight: 600; line-height: 1.3;">
                     ${contenido}
                 </div>
             </div>`;
@@ -8199,11 +8199,11 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             
             bloquesAdicionalesHtml += `
             <div style="border: 1px solid rgba(2, 132, 199, 0.4); background-color: rgba(2, 132, 199, 0.06); border-radius: 6px; padding: 10px; margin-bottom: 12px; text-align: left;">
-                <div style="color: #0284c7; font-weight: 700; font-size: 0.68rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="color: #0284c7; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
                     <span><i class="bi bi-lightning-charge-fill me-1"></i> JORNADA ADICIONAL (+2)</span>
-                    <span class="badge bg-primary text-white" style="font-size:0.58rem; padding: 2px 6px;">${durHrsBadge}</span>
+                    <span class="badge bg-primary text-white" style="font-size: 0.75rem; padding: 2px 6px;">${durHrsBadge}</span>
                 </div>
-                <div style="font-size: 0.70rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 4px;">
+                <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 4px;">
                     <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:3px;">
                         <span style="color:#64748b;">Entrada Real Adicional:</span>
                         <strong style="font-family:monospace; color:#0284c7;">${hEntTarde}</strong>
@@ -8229,12 +8229,12 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
 
     const html = `
-    <div style="width: 360px; font-family: 'Inter', system-ui, -apple-system, sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
+    <div style="width: 360px; font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
         
         <!-- Header Principal -->
         <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
             
-            <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+            <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                 <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
             </div>
             
@@ -8248,9 +8248,9 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
             </div>
 
             <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; text-transform: uppercase;">CICLO: <span style="color:var(--text-primary, #1e293b);">${cycleName}</span></div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase;">CICLO: <span style="color:var(--text-primary, #1e293b);">${cycleName}</span></div>
             ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
             
         </div>
@@ -8258,10 +8258,10 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         <!-- SECCIÓN 1: Trazabilidad Física de Jornada (Timeline Cronológico) -->
         <div style="margin-bottom: 12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:700; font-size:0.72rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
+                <span style="font-weight:700; font-size: 0.75rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
                     <i class="bi bi-diagram-3-fill" style="color:var(--primary-color, #3f6fd6);"></i> Trazabilidad de Jornada
                 </span>
-                <span style="background:rgba(63, 111, 214, 0.1); color:var(--primary-color, #3f6fd6); font-weight:700; font-size:0.62rem; padding:2px 6px; border-radius:4px; text-transform:uppercase;">
+                <span style="background:rgba(63, 111, 214, 0.1); color:var(--primary-color, #3f6fd6); font-weight:700; font-size: 0.6875rem; padding:2px 6px; border-radius:4px; text-transform:uppercase;">
                     ${marksBadgeText}
                 </span>
             </div>

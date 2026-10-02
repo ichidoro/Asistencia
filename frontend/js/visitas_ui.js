@@ -39,7 +39,7 @@ const VisitasModule = (() => {
                 .vis-scan-zone.active { border-color:#3f6fd6; background:#eaf0fb; box-shadow:0 0 0 4px rgba(63, 111, 214, 0.1); }
                 .vis-scan-zone.success { border-color:#10b981; background:#d1fae5; }
                 .vis-scan-zone.error { border-color:#f43f5e; background:#ffe4e6; }
-                .vis-scan-input { width:100%; font-size:1rem; padding:12px 16px; border:1px solid #e2e8f0; border-radius:10px; text-align:center; font-family:'Inter',sans-serif; font-weight:500; transition:all 0.2s; caret-color:#3f6fd6; }
+                .vis-scan-input { width:100%; font-size:1rem; padding:12px 16px; border:1px solid #e2e8f0; border-radius:10px; text-align:center; font-family: var(--font-sans); font-weight:500; transition:all 0.2s; caret-color:#3f6fd6; }
                 .vis-scan-input:focus { outline:none; border-color:#3f6fd6; box-shadow:0 0 0 3px rgba(63, 111, 214, 0.15); }
                 .vis-scan-input::placeholder { color:#94a3b8; font-weight:400; }
                 .vis-result-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:1.2rem; margin-top:1rem; display:none; }
@@ -50,25 +50,25 @@ const VisitasModule = (() => {
                 .vis-visitor-row:not(:last-child) { border-bottom:1px solid #f1f5f9; }
                 .vis-visitor-row.en_planta { border-left-color:var(--success-color); }
                 .vis-visitor-row.fuera { border-left-color:#94a3b8; }
-                .vis-avatar { width:38px; height:38px; border-radius:50%; background:#eaf0fb; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.7rem; color:#14235c; flex-shrink:0; border:1px solid #c5d3f1; }
+                .vis-avatar { width:38px; height:38px; border-radius:50%; background:#eaf0fb; display:flex; align-items:center; justify-content:center; font-weight:700; font-size: 0.75rem; color:#14235c; flex-shrink:0; border:1px solid #c5d3f1; }
                 .vis-section-header { background:rgba(248,250,252,0.5); padding:0.9rem 1.2rem; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
                 .vis-section-title { font-size:1rem; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:8px; }
-                .vis-status-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:0.68rem; font-weight:600; }
+                .vis-status-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size: 0.75rem; font-weight:600; }
                 .vis-status-en_planta { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
                 .vis-status-en_planta .dot { width:6px; height:6px; border-radius:50%; background:#10b981; }
                 .vis-status-fuera { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
                 .vis-status-fuera .dot { width:6px; height:6px; border-radius:50%; background:#94a3b8; }
-                .vis-hist-table thead th { font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#64748b; padding:10px 12px; background:#f8fafc; }
+                .vis-hist-table thead th { font-size: 0.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#64748b; padding:10px 12px; background:#f8fafc; }
                 .vis-hist-table tbody td { padding:10px 12px; font-size:0.82rem; }
                 .vis-hist-table tbody tr:hover { background:rgba(248,250,252,0.5); }
-                .vis-hint { font-size:0.72rem; color:#94a3b8; margin-top:6px; }
+                .vis-hint { font-size: 0.75rem; color:#94a3b8; margin-top:6px; }
                 .vis-pulse { animation: visPulse 2s infinite; }
                 @keyframes visPulse { 0%, 100% { opacity:1; } 50% { opacity:0.5; } }
                 .vis-camera-container { display:none; margin-top:1rem; position:relative; border-radius:12px; overflow:hidden; background:#000; max-height:50vh; }
                 .vis-camera-container.active { display:block; animation: visSlideIn 0.3s ease-out; }
                 .vis-camera-container video { width:100%; max-height:50vh; object-fit:cover; border-radius:12px; }
                 .vis-camera-guide { position:absolute; left:50%; bottom:22%; transform:translateX(-50%); width:90%; height:28%; border:2px solid rgba(63, 111, 214, 0.8); border-radius:6px; pointer-events:none; box-shadow:0 0 0 2000px rgba(0,0,0,0.45); }
-                .vis-camera-guide-text { position:absolute; top:-28px; left:50%; transform:translateX(-50%); color:#fff; font-size:0.72rem; font-weight:600; background:rgba(63, 111, 214, 0.85); padding:3px 12px; border-radius:999px; white-space:nowrap; }
+                .vis-camera-guide-text { position:absolute; top:-28px; left:50%; transform:translateX(-50%); color:#fff; font-size: 0.75rem; font-weight:600; background:rgba(63, 111, 214, 0.85); padding:3px 12px; border-radius:999px; white-space:nowrap; }
                 .vis-camera-controls { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:5; }
                 .vis-camera-btn { border:none; border-radius:999px; padding:10px 24px; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.2s; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
                 .vis-camera-btn:hover { transform:scale(1.05); }
@@ -183,30 +183,30 @@ const VisitasModule = (() => {
                     <div class="vis-result-card" id="vis-result-card">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div>
-                                <span class="badge" id="vis-result-tipo" style="font-size:0.7rem">—</span>
-                                <span class="badge bg-light text-dark border ms-1" id="vis-result-parse" style="font-size:0.65rem">—</span>
+                                <span class="badge" id="vis-result-tipo" style="font-size: 0.75rem">—</span>
+                                <span class="badge bg-light text-dark border ms-1" id="vis-result-parse" style="font-size: 0.75rem">—</span>
                             </div>
-                            <button class="btn btn-sm btn-outline-danger" onclick="VisitasModule.cancelarRegistro()" style="font-size:0.72rem">
+                            <button class="btn btn-sm btn-outline-danger" onclick="VisitasModule.cancelarRegistro()" style="font-size: 0.75rem">
                                 <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label for="vis-rut" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">RUT</label>
+                                <label for="vis-rut" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">RUT</label>
                                 <input type="text" class="form-control form-control-sm fw-bold" id="vis-rut" style="font-size:1rem">
                             </div>
                             <div class="col-md-4">
-                                <label for="vis-nombre" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Nombre</label>
+                                <label for="vis-nombre" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Nombre</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-nombre">
                             </div>
                             <div class="col-md-4">
-                                <label for="vis-empresa" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Empresa</label>
+                                <label for="vis-empresa" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Empresa</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-empresa">
                             </div>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label for="vis-motivo" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Motivo</label>
+                                <label for="vis-motivo" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Motivo</label>
                                 <select class="form-select form-select-sm" id="vis-motivo">
                                     <option value="">Seleccionar...</option>
                                     <option value="Reunión">Reunión</option>
@@ -218,21 +218,21 @@ const VisitasModule = (() => {
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label for="vis-area" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Área destino</label>
+                                <label for="vis-area" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Área destino</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-area">
                             </div>
                             <div class="col-md-4">
-                                <label for="vis-contacto" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Contacto interno</label>
+                                <label for="vis-contacto" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Contacto interno</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-contacto">
                             </div>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label for="vis-patente" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Patente vehículo</label>
+                                <label for="vis-patente" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Patente vehículo</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-patente" placeholder="Opcional">
                             </div>
                             <div class="col-md-8">
-                                <label for="vis-obs" class="form-label" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Observaciones</label>
+                                <label for="vis-obs" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Observaciones</label>
                                 <input type="text" class="form-control form-control-sm" id="vis-obs" placeholder="Opcional">
                             </div>
                         </div>
@@ -265,9 +265,9 @@ const VisitasModule = (() => {
                         <i class="bi bi-clock-history" style="color:var(--primary-color)"></i>Historial
                     </span>
                     <div class="d-flex align-items-center gap-2" style="background:#f8fafc; padding:6px 10px; border-radius:8px; border:1px solid #f1f5f9">
-                        <label for="vis-hist-desde" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Desde</label>
+                        <label for="vis-hist-desde" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Desde</label>
                         <input type="date" class="form-control form-control-sm" id="vis-hist-desde" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width:140px">
-                        <label for="vis-hist-hasta" style="font-size:0.65rem; font-weight:600; text-transform:uppercase; color:#64748b">Hasta</label>
+                        <label for="vis-hist-hasta" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Hasta</label>
                         <input type="date" class="form-control form-control-sm" id="vis-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width:140px">
                         <button class="btn btn-sm btn-primary fw-bold" onclick="VisitasModule.cargarHistorial()" style="border-radius:6px; font-size:0.8rem; white-space:nowrap">
                             <i class="bi bi-search me-1"></i>Consultar
@@ -827,18 +827,18 @@ const VisitasModule = (() => {
                 const marcasHtml = v.marcas.map(m => {
                     const isE = m.tipo === 'E';
                     const cls = isE ? 'art22-mark-e' : 'art22-mark-s';
-                    return `<span class="art22-mark ${cls}" style="font-size:0.68rem; padding:2px 6px"><i class="bi bi-${isE ? 'box-arrow-in-right' : 'box-arrow-right'}" style="font-size:0.6rem"></i>${m.hora.substring(0,5)}</span>`;
+                    return `<span class="art22-mark ${cls}" style="font-size: 0.75rem; padding:2px 6px"><i class="bi bi-${isE ? 'box-arrow-in-right' : 'box-arrow-right'}" style="font-size: 0.75rem"></i>${m.hora.substring(0,5)}</span>`;
                 }).join(' ');
 
                 return `<div class="vis-visitor-row ${v.estado}">
                     <div style="width:8%"><div class="vis-avatar">${initials}</div></div>
                     <div style="width:18%">
                         <div style="font-weight:600; color:#1e293b; font-size:0.85rem">${v.rut}</div>
-                        <div style="font-size:0.72rem; color:#64748b">${v.nombre || 'Sin nombre'}</div>
+                        <div style="font-size: 0.75rem; color:#64748b">${v.nombre || 'Sin nombre'}</div>
                     </div>
                     <div style="width:15%">
                         <div style="font-size:0.78rem; color:#475569">${v.empresa || ''}</div>
-                        <div style="font-size:0.68rem; color:#94a3b8">${v.motivo || ''}</div>
+                        <div style="font-size: 0.75rem; color:#94a3b8">${v.motivo || ''}</div>
                     </div>
                     <div style="width:12%">
                         <span class="art22-area-badge">${v.area_destino || '—'}</span>
@@ -849,7 +849,7 @@ const VisitasModule = (() => {
                     </div>
                     <div style="width:10%; text-align:right">
                         <button class="${v.estado === 'en_planta' ? 'art22-btn-salida' : 'art22-btn-entrada'}"
-                            onclick="VisitasModule.marcarVisitante('${v.rut}')" style="font-size:0.7rem; padding:4px 10px">
+                            onclick="VisitasModule.marcarVisitante('${v.rut}')" style="font-size: 0.75rem; padding:4px 10px">
                             ${v.estado === 'en_planta' ? 'Salida' : 'Re-entrada'} <i class="bi bi-${v.estado === 'en_planta' ? 'box-arrow-right' : 'box-arrow-in-right'}"></i>
                         </button>
                     </div>
@@ -908,7 +908,7 @@ const VisitasModule = (() => {
                     <td style="color:#065f46; font-weight:500">${r.primera_entrada ? r.primera_entrada.substring(0,5) : '—'}</td>
                     <td style="color:#9f1239; font-weight:500">${r.ultima_salida ? r.ultima_salida.substring(0,5) : '—'}</td>
                     <td class="text-center"><span class="art22-marcas-circle">${r.total_marcas}</span></td>
-                    <td><span class="badge bg-light text-dark border" style="font-size:0.65rem">${r.tipo_documento}</span></td>
+                    <td><span class="badge bg-light text-dark border" style="font-size: 0.75rem">${r.tipo_documento}</span></td>
                 </tr>`;
             }).join('');
         } catch (e) { tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error</td></tr>'; }

@@ -925,7 +925,7 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
             lista = res.ok ? await res.json() : [];
             hintHtml = `
                 <div class="d-flex align-items-center gap-1 mt-1" style="font-size:0.78rem;">
-                    <i class="bi bi-funnel-fill text-primary" style="font-size:0.7rem;"></i>
+                    <i class="bi bi-funnel-fill text-primary" style="font-size: 0.75rem;"></i>
                     <span class="text-muted">Mostrando turnos para <strong class="text-primary">${areas[0]}</strong> + globales</span>
                 </div>`;
         } else {
@@ -934,7 +934,7 @@ async function _fetchAndPopulateBulkTurnos(areas, hintEl) {
             lista = res.ok ? await res.json() : [];
             hintHtml = `
                 <div class="d-flex align-items-center gap-1 mt-1" style="font-size:0.78rem;">
-                    <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size:0.7rem;"></i>
+                    <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 0.75rem;"></i>
                     <span class="text-muted">Selección de <strong>${areas.length} áreas distintas</strong> — mostrando todos los turnos</span>
                 </div>`;
         }
@@ -1236,22 +1236,22 @@ function renderModalHtml() {
                             <div class="col-md-3 gobernanza-col">
                                 <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Atraso Visual (min)</label>
                                 <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Si llega tarde hasta estos minutos, marca amarilla pero NO genera deuda.</div>
+                                <div class="form-text small" style="font-size: 0.75rem;">Si llega tarde hasta estos minutos, marca amarilla pero NO genera deuda.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
                                 <label for="input-tol-desc" class="form-label small fw-bold">Tolerancia Atraso Real (min)</label>
                                 <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Si excede estos minutos, se genera Deuda (Atraso) y marca roja.</div>
+                                <div class="form-text small" style="font-size: 0.75rem;">Si excede estos minutos, se genera Deuda (Atraso) y marca roja.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
                                 <label for="input-anclaje" class="form-label small fw-bold" title="Minutos antes de la entrada que se asimilan al inicio oficial">Rango Anticipación Entrada (min)</label>
                                 <input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Marcas dentro de este tiempo previo se asumen como entrada a la hora en punto.</div>
+                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo previo se asumen como entrada a la hora en punto.</div>
                             </div>
                             <div class="col-md-3 gobernanza-col">
                                 <label for="input-anclaje-salida" class="form-label small fw-bold" title="Minutos después de la salida que se asimilan al fin oficial">Rango Demora Salida (min)</label>
                                 <input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" value="0">
-                                <div class="form-text small" style="font-size: 0.7rem;">Marcas dentro de este tiempo posterior se asumen como salida a la hora en punto.</div>
+                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo posterior se asumen como salida a la hora en punto.</div>
                             </div>
 
                             <!-- Fila 2: Ajustes de Cálculo (Simétrica 2 columnas) -->

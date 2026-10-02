@@ -19,9 +19,9 @@ function fmtMin(m) {
     return h > 0 ? `${h}h ${min}m` : `${min} min`;
 }
 function severityBadge(val, thresholds = [10, 5]) {
-    if (val >= thresholds[0]) return '<span class="badge" style="background:#fee2e2;color:#991b1b;font-size:0.65rem;">CRÍTICO</span>';
-    if (val >= thresholds[1]) return '<span class="badge" style="background:#fef3c7;color:#92400e;font-size:0.65rem;">ALTO</span>';
-    return '<span class="badge" style="background:#ecfdf5;color:#065f46;font-size:0.65rem;">MEDIO</span>';
+    if (val >= thresholds[0]) return '<span class="badge" style="background:#fee2e2;color:#991b1b;font-size: 0.75rem;">CRÍTICO</span>';
+    if (val >= thresholds[1]) return '<span class="badge" style="background:#fef3c7;color:#92400e;font-size: 0.75rem;">ALTO</span>';
+    return '<span class="badge" style="background:#ecfdf5;color:#065f46;font-size: 0.75rem;">MEDIO</span>';
 }
 
 // ─── Inicialización ───
@@ -463,13 +463,13 @@ function renderAusentismo(ausData) {
 
             html += `
                 <div class="d-flex align-items-center mb-1" style="${cursorStyle} line-height: 1;" ${hoverAction} ${clickAction}>
-                    <div style="width: 120px; font-size: 0.7rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-family: monospace;" class="${isOtros ? 'text-muted' : 'text-secondary'}" title="${item.tipo}">
+                    <div style="width: 120px; font-size: 0.75rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-family: monospace;" class="${isOtros ? 'text-muted' : 'text-secondary'}" title="${item.tipo}">
                         ${item.tipo}
                     </div>
                     <div class="flex-grow-1 mx-2 bg-light" style="height: 12px; border-radius: 2px;">
                         <div style="width: ${barWidth}%; background-color: ${isOtros ? '#cbd5e1' : cat.color}; height: 100%; border-radius: 2px; opacity: ${isOtros ? '0.7' : '1'}"></div>
                     </div>
-                    <div style="width: 30px; text-align: right; font-size: 0.7rem; font-family: monospace;" class="text-muted">
+                    <div style="width: 30px; text-align: right; font-size: 0.75rem; font-family: monospace;" class="text-muted">
                         ${item.dias}d
                     </div>
                 </div>
@@ -537,27 +537,27 @@ function renderEmbudoProductividad(data) {
     
     let html = `
         <div class="mb-2">
-            <div class="d-flex justify-content-between text-muted" style="font-size: 0.72rem; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px; margin-bottom: 8px;">
+            <div class="d-flex justify-content-between text-muted" style="font-size: 0.75rem; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px; margin-bottom: 8px;">
                 <span>Horas Programadas: <strong style="color: #334155;">${formatNum(prog)} hrs</strong></span>
                 <span>Total Físico: <strong style="color: #334155;">${formatNum(trabBrutas)} hrs</strong></span>
             </div>
             
             <!-- Eje Superior -->
             <div class="position-relative" style="height: ${overlapTotalProg ? '28px' : '16px'}; margin-top: 15px; transition: height 0.3s;">
-                <div class="position-absolute text-truncate" style="left: 0; top: 0; font-size: 0.65rem; color: #64748b;">0h</div>
+                <div class="position-absolute text-truncate" style="left: 0; top: 0; font-size: 0.75rem; color: #64748b;">0h</div>
                 
                 ${trabNetas > 0 && !overlapNetoProg ? `
-                <div class="position-absolute text-truncate" style="left: ${netoPct}%; top: 0; transform: translateX(-50%); font-size: 0.65rem; color: #64748b; max-width: 40px; text-align: center;">
+                <div class="position-absolute text-truncate" style="left: ${netoPct}%; top: 0; transform: translateX(-50%); font-size: 0.75rem; color: #64748b; max-width: 40px; text-align: center;">
                     ${formatNum(trabNetas)}h
                 </div>` : ''}
                 
                 <!-- Etiqueta del Marcador Vertical (Prioridad) -->
-                <div class="position-absolute text-truncate" style="left: ${progPct}%; top: ${overlapTotalProg ? '12px' : '0'}; transform: translateX(-50%); font-size: 0.65rem; color: #3f6fd6; font-weight: bold; z-index: 10;">
+                <div class="position-absolute text-truncate" style="left: ${progPct}%; top: ${overlapTotalProg ? '12px' : '0'}; transform: translateX(-50%); font-size: 0.75rem; color: #3f6fd6; font-weight: bold; z-index: 10;">
                     ${formatNum(prog)}h (Programadas)
                 </div>
                 
                 ${extra > 0 ? `
-                <div class="position-absolute text-truncate" style="left: ${totalPct}%; top: 0; transform: translateX(-50%); font-size: 0.65rem; color: #64748b; font-weight: bold;">
+                <div class="position-absolute text-truncate" style="left: ${totalPct}%; top: 0; transform: translateX(-50%); font-size: 0.75rem; color: #64748b; font-weight: bold;">
                     ${formatNum(totalFisico)}h
                 </div>` : ''}
             </div>
@@ -569,7 +569,7 @@ function renderEmbudoProductividad(data) {
                 
                 <!-- Barra Neto (Azul oscuro) -->
                 <div class="position-absolute d-flex align-items-center" style="left: 0; top: 6px; height: 20px; width: ${netoPct}%; background: #334155; z-index: 1; transition: width 0.5s ease-in-out; overflow: hidden; white-space: nowrap;">
-                    <span class="px-1" style="color: #fff; font-size: 0.65rem; z-index: 2;">NETO: ${formatNum(trabNetas)} hrs</span>
+                    <span class="px-1" style="color: #fff; font-size: 0.75rem; z-index: 2;">NETO: ${formatNum(trabNetas)} hrs</span>
                 </div>
                 
                 <!-- Barra Sobretiempo (Naranja/Amarillo texturizado, anclada) -->
@@ -586,13 +586,13 @@ function renderEmbudoProductividad(data) {
             
             <!-- Etiqueta inferior del Sobretiempo -->
             ${extra > 0 ? `
-            <div class="text-end text-truncate" style="font-size: 0.7rem; color: #475569; margin-top: -4px; margin-bottom: 4px;">
+            <div class="text-end text-truncate" style="font-size: 0.75rem; color: #475569; margin-top: -4px; margin-bottom: 4px;">
                 Sobretiempo: <strong>${formatNum(extra)} hrs</strong> <span class="text-muted">(${formatNum(heRegularesHrs)}h HE | ${formatNum(jeHrs)}h JE)</span>
             </div>
             ` : '<div style="height: 12px;"></div>'}
             
             <!-- Desglose Estricto (Neto + Fugas + Ausencias = Programadas) -->
-            <div style="border-top: 1px dashed #cbd5e1; margin-top: 10px; padding-top: 8px; font-size: 0.72rem; color: #475569;">
+            <div style="border-top: 1px dashed #cbd5e1; margin-top: 10px; padding-top: 8px; font-size: 0.75rem; color: #475569;">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <span>Fugas Registradas:</span>
                     <div>
@@ -609,7 +609,7 @@ function renderEmbudoProductividad(data) {
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-2 p-1 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0; overflow: hidden;">
                     <span class="badge text-truncate" style="background: #dfe8fb; color: #14235c; max-width: 50%;"><i class="bi bi-calendar-event me-1"></i>J. ESPECIALES</span>
-                    <span class="text-truncate" style="font-size: 0.7rem; text-align: right; max-width: 48%;">${jeCount} jornada${jeCount !== 1 ? 's' : ''} (+${formatNum(jeHrs)}h)</span>
+                    <span class="text-truncate" style="font-size: 0.75rem; text-align: right; max-width: 48%;">${jeCount} jornada${jeCount !== 1 ? 's' : ''} (+${formatNum(jeHrs)}h)</span>
                 </div>
             </div>
         </div>
@@ -729,11 +729,11 @@ function renderHeatmapGrid(data) {
         if (ratio > 0.15) return '#fde68a';
         return '#bbf7d0';
     };
-    let html = '<table class="table table-sm mb-0" style="font-size:0.7rem;"><thead><tr><th style="font-size:0.65rem;">Área</th>';
-    dias.forEach((d, i) => { if (i > 0 && i < 6) html += `<th class="text-center" style="font-size:0.65rem;">${d}</th>`; });
+    let html = '<table class="table table-sm mb-0" style="font-size: 0.75rem;"><thead><tr><th style="font-size: 0.75rem;">Área</th>';
+    dias.forEach((d, i) => { if (i > 0 && i < 6) html += `<th class="text-center" style="font-size: 0.75rem;">${d}</th>`; });
     html += '</tr></thead><tbody>';
     areas.forEach(area => {
-        html += `<tr><td class="fw-bold" style="font-size:0.68rem;white-space:nowrap;">${area}</td>`;
+        html += `<tr><td class="fw-bold" style="font-size: 0.75rem;white-space:nowrap;">${area}</td>`;
         for (let i = 1; i <= 5; i++) {
             const v = matrix[`${area}_${i}`] || 0;
             html += `<td class="text-center" style="background:${getColor(v)};border-radius:3px;cursor:help;" title="${area} - ${dias[i]}: ${fmtMin(v)}">${v > 0 ? Math.round(v) : '-'}</td>`;
@@ -754,7 +754,7 @@ function renderTopInfractores(data) {
         return `<tr style="${i < 3 ? 'border-left:3px solid #ef4444;' : ''}">
             <td class="fw-bold">${i + 1}</td>
             <td style="white-space:nowrap;">${r.nombre || 'N/D'}</td>
-            <td><span class="badge bg-light text-dark" style="font-size:0.65rem;">${r.area}</span></td>
+            <td><span class="badge bg-light text-dark" style="font-size: 0.75rem;">${r.area}</span></td>
             <td class="text-center fw-bold">${r.eventos}</td>
             <td class="text-center" title="${fmtMin(r.min_atraso)}">${fmtMin(r.min_atraso)}</td>
             <td class="text-center" title="${fmtMin(r.min_sad)}">${fmtMin(r.min_sad)}</td>
@@ -774,7 +774,7 @@ function renderTopDeudores(data) {
         return `<tr style="${i < 3 ? 'border-left:3px solid #f59e0b;' : ''}">
             <td class="fw-bold">${i + 1}</td>
             <td style="white-space:nowrap;">${r.nombre || 'N/D'}</td>
-            <td><span class="badge bg-light text-dark" style="font-size:0.65rem;">${r.area}</span></td>
+            <td><span class="badge bg-light text-dark" style="font-size: 0.75rem;">${r.area}</span></td>
             <td class="text-center fw-bold">${r.deuda_hrs} hrs</td>
             <td class="text-center">${r.dias}</td>
             <td class="text-center">${impacto}</td>

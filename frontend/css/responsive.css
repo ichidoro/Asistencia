@@ -315,8 +315,8 @@
         font-size: 0.85rem !important;
     }
 
-    .card-body .text-muted[style*="font-size: 0.68rem"] {
-        font-size: 0.65rem !important;
+    .card-body .text-muted[style*="font-size: 0.75rem"] {
+        font-size: 0.75rem !important;
     }
 
     /* Evolution chart KPI badges */
@@ -523,7 +523,7 @@
 
     /* Legend: wrap on mobile */
     #asignaciones-legend {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* ─── Tab 5: Asignación Masiva ─── */
@@ -553,7 +553,7 @@
 
     .emp-filter-chip {
         padding: 6px 10px;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
     }
 
     /* Birthday celebration: single column */
@@ -791,7 +791,7 @@
 
     /* Auto-refresh and perdonazo switches: compact */
     #page-marcaciones .form-check-label {
-        font-size: 0.72rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* ─── Filter bar: stack to vertical ─── */
@@ -817,7 +817,7 @@
     /* ─── Matrix table: enable scroll ─── */
     .matrix-table-premium {
         min-width: 1200px;
-        font-size: 0.72rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Sticky column (employee name): narrower on mobile */
@@ -825,12 +825,12 @@
         min-width: 180px !important;
         max-width: 180px !important;
         width: 180px !important;
-        font-size: 0.72rem;
+        font-size: 0.75rem;
     }
 
     /* Sticky premium cols: reduce width */
     .matrix-table-premium .sticky-premium-col {
-        font-size: 0.65rem;
+        font-size: 0.75rem;
         padding: 4px 2px !important;
     }
 
@@ -848,7 +848,7 @@
 
     /* ─── Legend bar: wrap and smaller ─── */
     .va-legend-bar {
-        font-size: 0.62rem !important;
+        font-size: 0.75rem !important;
         gap: 6px !important;
         padding: 8px 10px !important;
     }
@@ -861,7 +861,7 @@
 
     /* Badge status in legend */
     .badge-status {
-        font-size: 0.6rem;
+        font-size: 0.75rem;
         padding: 2px 5px;
     }
 
@@ -878,7 +878,7 @@
         min-width: 140px !important;
         max-width: 140px !important;
         width: 140px !important;
-        font-size: 0.65rem;
+        font-size: 0.75rem;
     }
 
     /* Overflow tooltip: limit width */
@@ -1104,7 +1104,7 @@
 
 @media (max-width: 480px) {
     #configTabs .nav-link {
-        font-size: 0.72rem;
+        font-size: 0.75rem;
         padding: 6px 10px;
     }
 }
@@ -1129,7 +1129,7 @@
     #modal-sync-wizard .step-indicator {
         width: 24px !important;
         height: 24px !important;
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Step labels row: hide on mobile (too narrow for 10 labels) */
@@ -1192,7 +1192,7 @@
     /* Sync log: shorter on mobile */
     #wizard-sync-log {
         height: 100px !important;
-        font-size: 0.7rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* ─── Step 9: Onboarding — stack employee list + form ─── */
@@ -1286,7 +1286,7 @@
     #modal-sync-wizard .step-indicator {
         width: 20px !important;
         height: 20px !important;
-        font-size: 0.55rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Wizard body: tighter padding */
@@ -1480,7 +1480,7 @@
 
     /* Badge adjustments */
     .badge {
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         padding: 3px 8px;
     }
 
@@ -1733,12 +1733,12 @@
         min-width: 130px !important;
         max-width: 130px !important;
         width: 130px !important;
-        font-size: 0.68rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Employee name truncation */
     .sticky-col-analitica .emp-name-link {
-        font-size: 0.68rem !important;
+        font-size: 0.75rem !important;
         max-width: 120px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1746,7 +1746,7 @@
     }
 
     .sticky-col-analitica .emp-area-label {
-        font-size: 0.58rem !important;
+        font-size: 0.75rem !important;
         max-width: 120px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1757,7 +1757,7 @@
     .sticky-premium-col,
     td.sticky-premium-col,
     th.sticky-premium-col {
-        font-size: 0.6rem !important;
+        font-size: 0.75rem !important;
         padding: 2px 1px !important;
         min-width: 38px !important;
         max-width: 45px !important;
@@ -1766,7 +1766,7 @@
 
     /* Bento header cells */
     .th-bento, .th-bento-sub {
-        font-size: 0.55rem !important;
+        font-size: 0.75rem !important;
         padding: 2px 1px !important;
     }
 
@@ -1777,35 +1777,35 @@
         min-width: 36px !important;
         max-width: 40px !important;
         width: 38px !important;
-        font-size: 0.6rem !important;
+        font-size: 0.75rem !important;
         padding: 2px 1px !important;
         height: 24px !important;
     }
 
     /* Day header */
-    th.col-day div[style*="font-size:0.7rem"] {
-        font-size: 0.58rem !important;
+    th.col-day div[style*="font-size: 0.75rem"] {
+        font-size: 0.75rem !important;
     }
 
-    th.col-day div[style*="font-size:0.6rem"] {
-        font-size: 0.5rem !important;
+    th.col-day div[style*="font-size: 0.75rem"] {
+        font-size: 0.75rem !important;
     }
 
     /* Status badges inside cells */
     .col-day .badge,
     .col-day span[class*="badge"] {
-        font-size: 0.5rem !important;
+        font-size: 0.75rem !important;
         padding: 1px 2px !important;
     }
 
     /* Matrix table overall */
     .matrix-table-premium {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Saldo column highlight */
     .sticky-saldo-col {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Landscape orientation hint for matrix page */
@@ -1828,11 +1828,11 @@
         flex-wrap: wrap !important;
         gap: 4px !important;
         padding: 6px 8px !important;
-        font-size: 0.58rem !important;
+        font-size: 0.75rem !important;
     }
 
     .va-legend-bar .badge {
-        font-size: 0.55rem !important;
+        font-size: 0.75rem !important;
         padding: 2px 4px !important;
     }
 }
@@ -1845,12 +1845,12 @@
         min-width: 100px !important;
         max-width: 100px !important;
         width: 100px !important;
-        font-size: 0.6rem !important;
+        font-size: 0.75rem !important;
     }
 
     .sticky-col-analitica .emp-name-link {
         max-width: 90px;
-        font-size: 0.6rem !important;
+        font-size: 0.75rem !important;
     }
 
     .sticky-col-analitica .emp-area-label {
@@ -1863,7 +1863,7 @@
         min-width: 32px !important;
         max-width: 38px !important;
         width: 35px !important;
-        font-size: 0.55rem !important;
+        font-size: 0.75rem !important;
     }
 
     .col-day,
@@ -1872,13 +1872,13 @@
         min-width: 30px !important;
         max-width: 34px !important;
         width: 32px !important;
-        font-size: 0.55rem !important;
+        font-size: 0.75rem !important;
         height: 22px !important;
     }
 
     /* Hide the landscape hint on very small screens (they'll figure it out) */
     #page-marcaciones::before {
-        font-size: 0.65rem;
+        font-size: 0.75rem;
         padding: 6px 8px;
     }
 }
@@ -2043,7 +2043,7 @@
     }
 
     #porteriaTabs .nav-link i {
-        font-size: 0.72rem !important;
+        font-size: 0.75rem !important;
     }
 }
 
@@ -2211,7 +2211,7 @@
     .vis-avatar {
         width: 32px !important;
         height: 32px !important;
-        font-size: 0.6rem !important;
+        font-size: 0.75rem !important;
     }
 }
 
@@ -2273,7 +2273,7 @@
     /* Toggle labels smaller */
     #auto-refresh-switch + label,
     #perdonazo-switch + label {
-        font-size: 0.72rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Sync button group: flex-grow */
@@ -2422,7 +2422,7 @@
     }
 
     .vis-kpi .kpi-label {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* Portería header: compact */
@@ -2480,7 +2480,7 @@
     .art22-avatar {
         width: 36px !important;
         height: 36px !important;
-        font-size: 0.7rem !important;
+        font-size: 0.75rem !important;
     }
 
     /* KPIs: stack vertically */
@@ -2519,18 +2519,18 @@
 
     /* Status pill: smaller text */
     .art22-status-pill {
-        font-size: 0.65rem !important;
+        font-size: 0.75rem !important;
         padding: 3px 8px !important;
     }
 
     /* Area badge: compact */
     .art22-area-badge {
-        font-size: 0.58rem !important;
+        font-size: 0.75rem !important;
         padding: 1px 6px !important;
     }
 
     /* Estadía label: compact */
     .art22-estadia-label {
-        font-size: 0.55rem !important;
+        font-size: 0.75rem !important;
     }
 }

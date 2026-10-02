@@ -987,7 +987,7 @@ function renderEmpleados(empleados) {
                         <div class="avatar-initials" style="background: ${avatarBg};">${initials}</div>
                         <div>
                             <div class="fw-bold" style="font-size: 0.85rem;">${fullName}</div>
-                            <div class="text-muted" style="font-size: 0.68rem;">${empleado.email || ''}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">${empleado.email || ''}</div>
                         </div>
                     </div>
                 </td>
@@ -1933,7 +1933,7 @@ function _mostrarBatchBonosModal() {
           <div class="flex-grow-1">
             <div class="fw-semibold text-dark" style="font-size:0.85rem;">${bonoNombre}</div>
           </div>
-          <span class="badge rounded-pill" style="background:#d97706;font-size:0.7rem;">
+          <span class="badge rounded-pill" style="background:#d97706;font-size: 0.75rem;">
             <i class="bi bi-check-lg me-1"></i>Asignado
           </span>
         `;
@@ -2175,7 +2175,7 @@ function renderSyncEmpleados(empleados) {
     }
 
     const areaChangeDetail = emp.cambio_area
-      ? `<span class="text-warning" style="font-size:0.7rem;"> (${emp.area_local} → ${emp.area})</span>`
+      ? `<span class="text-warning" style="font-size: 0.75rem;"> (${emp.area_local} → ${emp.area})</span>`
       : '';
 
     const label = document.createElement('label');

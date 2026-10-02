@@ -104,14 +104,14 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
                         <span class="text-secondary"><i class="bi bi-clock me-1 text-primary"></i> Turno Base:</span>
                         <div class="text-end">
                             ${estadoBaseBadge}
-                            <span class="ms-1 text-muted" style="font-size:0.7rem;">${asistGeneral.hora_entrada_real || '--:--'} a ${asistGeneral.hora_salida_real || '--:--'}</span>
+                            <span class="ms-1 text-muted" style="font-size: 0.75rem;">${asistGeneral.hora_entrada_real || '--:--'} a ${asistGeneral.hora_salida_real || '--:--'}</span>
                         </div>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="text-secondary"><i class="bi bi-plus-circle me-1" style="color:#8b5cf6;"></i> Cobertura (+2):</span>
                         <div class="text-end">
                             ${estadoJaBadge}
-                            <span class="ms-1 text-muted" style="font-size:0.7rem;">${jaGeneral.hora_entrada || '--:--'} a ${jaGeneral.hora_salida || '--:--'} (${horasJa}h)</span>
+                            <span class="ms-1 text-muted" style="font-size: 0.75rem;">${jaGeneral.hora_entrada || '--:--'} a ${jaGeneral.hora_salida || '--:--'} (${horasJa}h)</span>
                         </div>
                     </div>
                 </div>

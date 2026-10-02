@@ -232,7 +232,7 @@ function renderEstadosConfig() {
         <tr id="estado-row-${e.codigo}">
             <td>
                 <span class="badge bg-light text-dark border fw-bold font-monospace">${e.codigo}</span>
-                ${e.es_sistema ? '<div class="small text-muted" style="font-size:0.65rem">Sistema</div>' : ''}
+                ${e.es_sistema ? '<div class="small text-muted" style="font-size: 0.75rem">Sistema</div>' : ''}
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm"
@@ -732,7 +732,7 @@ function addBonoReglaRow(regla = null) {
                 </div>
             </div>
             <div class="col-md-3">
-                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req. <span class="text-muted" style="font-size:0.65rem">(multi)</span></label>
+                <label for="rule-cargo-${rowIdx}" class="small text-muted">Cargo Req. <span class="text-muted" style="font-size: 0.75rem">(multi)</span></label>
                 <div class="input-group input-group-sm cargo-req-wrapper">
                     <input type="text" id="rule-cargo-${rowIdx}" class="rule-cargo form-control form-control-sm"
                         placeholder="Todos (o varios)"
@@ -1025,7 +1025,7 @@ window.renderTiposJustificacion = function () {
                     <span class="badge ${tipo.con_goce_sueldo ? 'bg-success' : 'bg-danger'}">
                         ${tipo.con_goce_sueldo ? 'Sí' : 'No'}
                     </span>
-                    <div class="small text-muted" style="font-size: 0.7rem;">Pagador: ${tipo.pagador}</div>
+                    <div class="small text-muted" style="font-size: 0.75rem;">Pagador: ${tipo.pagador}</div>
                 </td>
                 <td>
                     <span class="badge ${tipo.activo ? 'bg-light text-success' : 'bg-light text-muted'}">
@@ -1614,7 +1614,7 @@ window.loadRobotSyncLogs = async function() {
                     <td>${duracion}s</td>
                     <td>
                         <span class="badge ${badgeClass} mb-1">${statusText}</span>
-                        ${log.detalle ? `<div class="small text-muted border-start border-3 border-info ps-2 mt-1" style="max-height: 60px; overflow-y: auto; font-size: 0.7rem; white-space: pre-wrap;">${typeof log.detalle === 'object' ? JSON.stringify(log.detalle, null, 2) : log.detalle}</div>` : ''}
+                        ${log.detalle ? `<div class="small text-muted border-start border-3 border-info ps-2 mt-1" style="max-height: 60px; overflow-y: auto; font-size: 0.75rem; white-space: pre-wrap;">${typeof log.detalle === 'object' ? JSON.stringify(log.detalle, null, 2) : log.detalle}</div>` : ''}
                     </td>
                 </tr>
             `;

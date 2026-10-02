@@ -119,7 +119,7 @@ const StartupUI = {
                             #easter-egg-overlay .ee-dots{display:flex;gap:8px;animation:eeTxt .4s ease-out 1s both;opacity:0}
                             #easter-egg-overlay .ee-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .3s}
                             #easter-egg-overlay .ee-dot.active{background:#FFD700;transform:scale(1.3)}
-                            #easter-egg-overlay .ee-h{font-size:.7rem;color:rgba(255,255,255,.35);animation:eeTxt .4s ease-out 1.2s both;opacity:0}
+                            #easter-egg-overlay .ee-h{font-size: 0.75rem;color:rgba(255,255,255,.35);animation:eeTxt .4s ease-out 1.2s both;opacity:0}
                         </style>
                         <img class="ee-img" src="/huevo_1.jpg" alt="🥚">
                         <div class="ee-n">¡Encontraste el Huevo de Pascua! 🥚✨</div>

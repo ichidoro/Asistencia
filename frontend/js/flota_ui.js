@@ -70,8 +70,8 @@ const FlotaModule = (() => {
                 bottom: 1.5px;
                 left: 50%;
                 transform: translateX(-50%);
-                font-family: 'Inter', Arial, sans-serif;
-                font-size: 0.38rem;
+                font-family: var(--font-sans);
+                font-size: 0.75rem;
                 font-weight: 900;
                 color: #1d4ed8;
                 letter-spacing: 1.5px;
@@ -104,7 +104,7 @@ const FlotaModule = (() => {
                 border-color: #fecdd3;
             }
             .flota-mark-box .flota-mark-header {
-                font-size: 0.55rem;
+                font-size: 0.75rem;
                 font-weight: 900;
                 letter-spacing: 0.05em;
                 padding: 2px 0;
@@ -271,7 +271,7 @@ const FlotaModule = (() => {
             }
             .flota-gantt-grid-label {
                 position: absolute;
-                font-size: 0.58rem;
+                font-size: 0.75rem;
                 font-weight: 700;
                 color: #94a3b8;
                 top: -16px;
@@ -326,8 +326,8 @@ const FlotaModule = (() => {
                 height: 34px;
             }
             .flota-gantt-bubble {
-                font-family: 'Inter', system-ui, -apple-system, sans-serif;
-                font-size: 0.62rem;
+                font-family: var(--font-sans);
+                font-size: 0.75rem;
                 font-weight: 600;
                 white-space: nowrap;
                 padding: 4px 8px;
@@ -353,7 +353,7 @@ const FlotaModule = (() => {
                 border: 1px solid rgba(254, 202, 202, 0.5);
             }
             .flota-gantt-bubble .bubble-label {
-                font-size: 0.56rem;
+                font-size: 0.75rem;
                 font-weight: 500;
                 opacity: 0.85;
                 text-transform: uppercase;
@@ -364,7 +364,7 @@ const FlotaModule = (() => {
             }
             .flota-gantt-bubble .bubble-time {
                 font-family: 'JetBrains Mono', monospace;
-                font-size: 0.72rem;
+                font-size: 0.75rem;
                 font-weight: 700;
             }
             .flota-gantt-pulse-ring {
@@ -384,7 +384,7 @@ const FlotaModule = (() => {
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                font-size: 0.72rem;
+                font-size: 0.75rem;
                 font-weight: 600;
                 color: #64748b;
                 font-style: italic;
@@ -517,7 +517,7 @@ const FlotaModule = (() => {
                 box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.04);
             }
             .flota-dash-card-label {
-                font-size: 0.72rem;
+                font-size: 0.75rem;
                 font-weight: 700;
                 color: #64748b;
                 letter-spacing: 0.02em;
@@ -536,7 +536,7 @@ const FlotaModule = (() => {
                 gap: 8px;
             }
             .flota-dash-card-sub {
-                font-size: 0.65rem;
+                font-size: 0.75rem;
                 color: #94a3b8;
                 font-weight: 500;
                 margin-top: 5px;
@@ -562,7 +562,7 @@ const FlotaModule = (() => {
                 max-width: 420px;
                 height: 48px;
                 border-radius: 24px;
-                font-family: 'Inter', system-ui, sans-serif;
+                font-family: var(--font-sans);
                 font-size: 0.9rem;
                 font-weight: 800;
                 color: #ffffff !important;
@@ -616,7 +616,7 @@ const FlotaModule = (() => {
                 flex: 1;
                 border: none;
                 background: none;
-                font-size: 0.68rem;
+                font-size: 0.75rem;
                 font-weight: 700;
                 color: #64748b;
                 padding: 6px 4px;
@@ -699,10 +699,10 @@ const FlotaModule = (() => {
                 .flota-section-header { background: rgba(248,250,252,0.5); padding: 0.9rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
                 .flota-section-title { font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
                 .flota-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
-                .flota-filter-bar label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
+                .flota-filter-bar label { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
                 
                 .flota-hist-table thead tr { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-                .flota-hist-table thead th { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 10px 14px; }
+                .flota-hist-table thead th { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 10px 14px; }
                 .flota-hist-table tbody td { padding: 10px 14px; font-size: 0.82rem; }
                 .flota-hist-table tbody tr { transition: background 0.15s; }
                 .flota-hist-table tbody tr:hover { background: rgba(248,250,252,0.5); }
@@ -933,7 +933,7 @@ const FlotaModule = (() => {
         // 1. Renderizar la columna izquierda (Lista de vehículos)
         const sidebarHtml = `
             <div class="flota-sidebar-list">
-                <div class="small fw-bold text-muted mb-2 px-1 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">UNIDADES EN PATIO</div>
+                <div class="small fw-bold text-muted mb-2 px-1 text-uppercase" style="letter-spacing: 0.05em; font-size: 0.6875rem;">UNIDADES EN PATIO</div>
                 ${filterHtml}
                 ${filteredVehicles.map(v => {
                     const isActive = v.id === _selectedVehiculoId ? 'active' : '';
@@ -948,17 +948,17 @@ const FlotaModule = (() => {
                             </div>
                             <div class="flex-grow-1 min-width-0 ms-3">
                                 <div class="d-flex align-items-center justify-content-between mb-1">
-                                    <span class="fw-bold text-muted" style="font-size: 0.7rem; letter-spacing: 0.02em;">Unidad</span>
-                                    <span class="badge border ${statePillClass}" style="font-size: 0.58rem; font-weight: 800; padding: 2px 6px;">${stateLabel}</span>
+                                    <span class="fw-bold text-muted" style="font-size: 0.75rem; letter-spacing: 0.02em;">Unidad</span>
+                                    <span class="badge border ${statePillClass}" style="font-size: 0.75rem; font-weight: 800; padding: 2px 6px;">${stateLabel}</span>
                                 </div>
                                 <div class="mb-2">
                                     ${renderPlacaPatente(v.patente)}
                                 </div>
                                 <div class="d-flex align-items-center justify-content-between">
-                                    <span class="text-secondary text-truncate" style="font-size: 0.68rem; font-weight: 500; max-width: 130px;" title="${driverText}">
+                                    <span class="text-secondary text-truncate" style="font-size: 0.75rem; font-weight: 500; max-width: 130px;" title="${driverText}">
                                         <i class="bi bi-person me-0.5"></i>${driverText}
                                     </span>
-                                    <span class="badge bg-light text-secondary border" style="font-size: 0.58rem; padding: 1.5px 5px;">${v.area}</span>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.75rem; padding: 1.5px 5px;">${v.area}</span>
                                 </div>
                             </div>
                         </div>
@@ -1200,13 +1200,13 @@ const FlotaModule = (() => {
                 <div>
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
-                            <div class="small fw-bold text-muted text-uppercase" style="letter-spacing: 0.05em; font-size: 0.65rem;">DETALLES DEL VIAJE</div>
+                            <div class="small fw-bold text-muted text-uppercase" style="letter-spacing: 0.05em; font-size: 0.6875rem;">DETALLES DEL VIAJE</div>
                             <div class="d-flex align-items-center gap-2 mt-1">
                                 <span class="fw-bold text-dark" style="font-size: 1.05rem;">Secuencia de Viaje:</span>
                                 ${renderPlacaPatente(veh.patente)}
                             </div>
                         </div>
-                        <span class="badge border px-3 py-1.5 fw-extrabold ${statusBadgeClass}" style="font-size:0.7rem; border-radius:30px; letter-spacing:0.04em;">
+                        <span class="badge border px-3 py-1.5 fw-extrabold ${statusBadgeClass}" style="font-size: 0.75rem; border-radius:30px; letter-spacing:0.04em;">
                             <span class="d-inline-block rounded-circle me-1" style="width:7px; height:7px; background: currentColor; vertical-align: middle;"></span>
                             ${statusBadgeLabel}
                         </span>

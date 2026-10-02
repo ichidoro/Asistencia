@@ -148,7 +148,7 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans)"Segoe UI", Roboto, sans-serif;
 }
 
 body {
@@ -414,7 +414,7 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .app-version {
-    font-size: 10px;
+    font-size: 0.75rem;
     font-weight: 500;
     color: rgba(255, 255, 255, 0.4);
     background: rgba(255, 255, 255, 0.05);
@@ -630,7 +630,7 @@ input[type="search"], .search-input, [class*="search"] input {
 
 .bell-badge {
     box-shadow: 0 0 0 2px white;
-    font-size: 0.65rem !important;
+    font-size: 0.75rem !important;
     padding: 0.35em 0.5em !important;
     transform: translate(25%, -25%);
 }
@@ -1582,7 +1582,7 @@ tfoot .sticky-col-analitica {
     align-items: center;
     justify-content: center;
     border-radius: 4px;
-    font-size: 9px;
+    font-size: 0.75rem;
     font-weight: 700;
     margin: 0 auto;
     cursor: help;
@@ -2121,7 +2121,7 @@ tfoot .sticky-col-analitica {
 }
 
 .emp-nav-pills .nav-link .badge {
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     padding: 2px 6px;
     margin-left: 4px;
     vertical-align: middle;
@@ -2356,7 +2356,7 @@ tfoot .sticky-col-analitica {
     display: inline-block;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s;
     margin-left: 4px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
 }
 
 .data-table th.sortable-header.sort-active .sort-icon {
@@ -2728,14 +2728,14 @@ tfoot .sticky-col-analitica {
 
 /* ── 4. MATRIX TABLE — GLOBAL ──────────────────────────────── */
 .matrix-table-premium {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-sans);
 }
 
 .matrix-table-premium thead th {
     font-weight: 600;
     letter-spacing: 0.2px;
     text-transform: uppercase;
-    font-size: 0.68rem !important;
+    font-size: 0.6875rem !important;
     padding: 6px 4px !important;
     vertical-align: middle;
     border-bottom: 2px solid #cbd5e1 !important;
@@ -2789,7 +2789,7 @@ tfoot .sticky-col-analitica {
 /* ── 6. COLLAPSE/EXPAND BUTTONS [+] [-] ────────────────────── */
 .matrix-table-premium .btn-link {
     text-decoration: none !important;
-    font-size: 0.72rem !important;
+    font-size: 0.75rem !important;
     width: 22px;
     height: 22px;
     display: inline-flex;
@@ -2894,7 +2894,7 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium .emp-area-label {
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     color: #94a3b8;
     font-weight: 400;
     text-transform: uppercase;
@@ -2931,7 +2931,7 @@ tfoot .sticky-col-analitica {
 .matrix-table-premium td.font-monospace,
 .matrix-table-premium td[style*="font-family:monospace"] {
     font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', monospace !important;
-    font-size: 0.73rem !important;
+    font-size: 0.75rem !important;
     letter-spacing: -0.3px;
 }
 
@@ -2943,7 +2943,7 @@ tfoot .sticky-col-analitica {
 
 /* ── 11. DAY COLUMNS — Calendar cells ──────────────────────── */
 .col-day {
-    font-size: 0.66rem !important;
+    font-size: 0.75rem !important;
     padding: 3px 2px !important;
     min-width: 52px;
     text-align: center;
@@ -3049,7 +3049,7 @@ div[style*="overflow:auto"]::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf8 100%);
     border: 1px solid #c7d2fe;
     border-radius: 20px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: #4338ca;
     font-weight: 500;
     white-space: nowrap;
@@ -3124,7 +3124,7 @@ tr:hover .emp-name-cell {
 }
 
 .matrix-table-premium th .btn-link i {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
 }
 
 /* ── 25. BENTO GRID HEADERS ────────────────────────────────── */
@@ -3142,7 +3142,7 @@ tr:hover .emp-name-cell {
 }
 
 .th-bento-sub {
-    font-size: 0.65rem !important;
+    font-size: 0.75rem !important;
     font-weight: 600 !important;
     color: #64748b !important;
     background: #f8fafc !important;
@@ -3225,7 +3225,7 @@ tr:hover .emp-name-cell {
 /* ── 27. TABULAR NUMS ──────────────────────────────────────── */
 .tabular-nums {
     font-variant-numeric: tabular-nums;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-sans);
     letter-spacing: -0.2px;
 }
 
@@ -3236,7 +3236,7 @@ tr:hover .emp-name-cell {
     justify-content: center;
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.3px;
     text-transform: uppercase;
@@ -3247,7 +3247,7 @@ tr:hover .emp-name-cell {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     font-weight: 700;
     border-radius: 6px;
     padding: 3px 6px;
@@ -3463,7 +3463,7 @@ tr:hover .emp-name-cell {
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04) !important;
     border-radius: 12px !important;
     padding: 0 !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-sans);
     z-index: 1070;
 }
 
@@ -3844,10 +3844,10 @@ tr:hover .emp-name-cell {
    LIBRETA ART. 25 BIS — línea de tiempo con marcación por arrastre
    ═══════════════════════════════════════════════════════════════ */
 .m180-card { background:#fff; border:1px solid #dbe3ea; border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.12); }
-.m180-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:10px 16px; background:#0f1a2b; color:#e8eef6; font-size:.74rem; }
+.m180-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:10px 16px; background:#0f1a2b; color:#e8eef6; font-size: 0.75rem; }
 .m180-card-title { font-weight:700; letter-spacing:.02em; display:inline-flex; align-items:center; gap:8px; }
 .m180-card-title i { color:#fbbf24; }
-.m180-readout { font-family:'JetBrains Mono', ui-monospace, monospace; font-size:.7rem; color:#9fb0c6; min-height:1em; font-variant-numeric:tabular-nums; }
+.m180-readout { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; color:#9fb0c6; min-height:1em; font-variant-numeric:tabular-nums; }
 .m180-card-foot { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px 16px; background:#f6f8fb; border-top:1px solid #e5eaf0; font-size:.78rem; }
 
 .m180-grid-container { overflow-x:auto; overscroll-behavior-x:contain; padding:12px 16px 4px; scrollbar-width:thin; }
@@ -3856,17 +3856,17 @@ tr:hover .emp-name-cell {
 
 .m180-overview-row, .m180-ruler-row, .m180-lane { display:grid; grid-template-columns:var(--label-w) 1fr var(--total-w); align-items:stretch; column-gap:10px; }
 .m180-overview-row { margin-bottom:8px; align-items:center; }
-.m180-overview-label { font-size:.68rem; color:#64748b; font-weight:600; }
+.m180-overview-label { font-size: 0.75rem; color:#64748b; font-weight:600; }
 .m180-overview { display:flex; height:10px; border-radius:99px; overflow:hidden; background:#e7ecf2; }
 .m180-overview span { display:block; height:100%; transition:width .25s cubic-bezier(.2,.8,.2,1), background-color .2s; }
 .m180-overview span.is-empty { background:repeating-linear-gradient(135deg,#e2e8f0 0 4px,#eef2f6 4px 8px); }
-.m180-overview-total { font-family:'JetBrains Mono', ui-monospace, monospace; font-size:.66rem; color:#475569; text-align:right; white-space:nowrap; align-self:center; }
+.m180-overview-total { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; color:#475569; text-align:right; white-space:nowrap; align-self:center; }
 
 .m180-ruler-row { margin-bottom:4px; }
-.m180-ruler-label { font-size:.64rem; letter-spacing:.06em; text-transform:uppercase; color:#8b98a9; font-weight:700; align-self:end; }
+.m180-ruler-label { font-size: 0.6875rem; letter-spacing:.06em; text-transform:uppercase; color:#8b98a9; font-weight:700; align-self:end; }
 .m180-ruler-row .m180-lane-total { text-align:right; }
 .m180-ruler { display:grid; grid-template-columns:repeat(24, 1fr); }
-.m180-ruler-h { font-family:'JetBrains Mono', ui-monospace, monospace; font-size:.68rem; font-weight:600; color:#334155; padding-left:4px; border-left:1px solid #b8c4d2; font-variant-numeric:tabular-nums; user-select:none; }
+.m180-ruler-h { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight:600; color:#334155; padding-left:4px; border-left:1px solid #b8c4d2; font-variant-numeric:tabular-nums; user-select:none; }
 .m180-ruler-h small { color:#94a3b8; font-weight:400; }
 
 .m180-lane { margin-bottom:6px; }
@@ -3882,15 +3882,15 @@ tr:hover .emp-name-cell {
     background-size:calc(100% / 24) 100%, calc(100% / 96) 100%;
     box-shadow:inset 0 0 0 1px rgba(15,23,42,.06); }
 .m180-blocks { position:absolute; inset:0; pointer-events:none; }
-.m180-block { position:absolute; top:5px; bottom:5px; display:flex; align-items:center; gap:6px; padding:0 8px; border-radius:7px; background:var(--c); color:#fff; overflow:hidden; white-space:nowrap; font-size:.68rem; box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 3px 8px -3px var(--c); }
+.m180-block { position:absolute; top:5px; bottom:5px; display:flex; align-items:center; gap:6px; padding:0 8px; border-radius:7px; background:var(--c); color:#fff; overflow:hidden; white-space:nowrap; font-size: 0.75rem; box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 3px 8px -3px var(--c); }
 .m180-block b { font-weight:800; letter-spacing:.03em; }
-.m180-block i { font-style:normal; font-family:'JetBrains Mono', ui-monospace, monospace; opacity:.85; font-size:.64rem; }
+.m180-block i { font-style:normal; font-family:'JetBrains Mono', ui-monospace, monospace; opacity:.85; font-size: 0.75rem; }
 .m180-block.is-new { animation:m180-pop .26s cubic-bezier(.2,.9,.3,1.25); transform-origin:left center; }
 @keyframes m180-pop { from { opacity:.35; transform:scaleX(.88) scaleY(.82); } to { opacity:1; transform:none; } }
 
 .m180-hover { position:absolute; top:0; bottom:0; border-radius:4px; background:rgba(15,23,42,.1); opacity:0; pointer-events:none; transition:opacity .12s; }
 .m180-hover.is-on { opacity:1; }
-.m180-ghost { position:absolute; top:3px; bottom:3px; border-radius:8px; background:var(--c); opacity:0; pointer-events:none; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'JetBrains Mono', ui-monospace, monospace; font-size:.68rem; font-weight:700; white-space:nowrap; overflow:visible; outline:2px solid #fff; box-shadow:0 0 0 4px color-mix(in srgb, var(--c) 35%, transparent), 0 8px 18px -6px var(--c); transition:left .06s linear, width .06s linear; }
+.m180-ghost { position:absolute; top:3px; bottom:3px; border-radius:8px; background:var(--c); opacity:0; pointer-events:none; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight:700; white-space:nowrap; overflow:visible; outline:2px solid #fff; box-shadow:0 0 0 4px color-mix(in srgb, var(--c) 35%, transparent), 0 8px 18px -6px var(--c); transition:left .06s linear, width .06s linear; }
 .m180-ghost.is-on { opacity:.82; }
 .m180-ghost.is-erase { background:repeating-linear-gradient(135deg, #ef4444 0 6px, #f87171 6px 12px); box-shadow:0 0 0 4px rgba(239,68,68,.25); }
 .m180-ghost span { padding:2px 8px; border-radius:6px; background:rgba(15,23,42,.78); }
