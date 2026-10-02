@@ -32,6 +32,22 @@
   --ag-card:       #f4f7f7;
   --ag-page:       #eef3f5;
 
+  /* Neutros y estados de la interfaz (valores históricos, ahora con nombre) */
+  --ui-white: #ffffff;
+  --ui-surface: #f8fafc;
+  --ui-surface-2: #f1f5f9;
+  --ui-line: #e2e8f0;
+  --ui-line-strong: #cbd5e1;
+  --ui-text-soft: #94a3b8;
+  --ui-text-muted: #64748b;
+  --ui-text-body: #475569;
+  --ui-ink: #1e293b;
+  --ui-ink-deep: #0f172a;
+  --ui-success: #10b981;
+  --ui-warning: #f59e0b;
+  --ui-danger: #ef4444;
+  --ui-info: #3b82f6;
+
   /* Movimiento (curvas fuertes; nada de ease-in en UI) */
   --ag-ease-out:   cubic-bezier(0.23, 1, 0.32, 1);
   --ag-ease-io:    cubic-bezier(0.77, 0, 0.175, 1);
