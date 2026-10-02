@@ -159,7 +159,7 @@ async function syncChileHolidays() {
 }
 
 async function deleteFeriado(id) {
-    if (!confirm("¿Eliminar este feriado?")) return;
+    if (!await uiConfirm("¿Eliminar este feriado?")) return;
 
     try {
         const response = await fetch(`${API_CALENDARIO}${id}/`, { method: 'DELETE' });

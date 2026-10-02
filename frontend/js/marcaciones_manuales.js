@@ -505,7 +505,7 @@ window.ejecutarReasignacionTurno = ejecutarReasignacionTurno;
 async function proceedToRevertExtra() {
     closeAsistenciaActionModal();
     
-    if (!confirm(`¿Está seguro que desea revertir esta jornada a 'Especial'?\n\nEsto eliminará la autorización de horas extras y restaurará el estado original de la validación.`)) {
+    if (!await uiConfirm(`¿Está seguro que desea revertir esta jornada a 'Especial'?\n\nEsto eliminará la autorización de horas extras y restaurará el estado original de la validación.`)) {
         return;
     }
 
@@ -1138,7 +1138,7 @@ async function validateJornada(accion = 'APROBAR') {
  * @param {string} fecha 
  */
 async function deleteManualJornada(empId, fecha) {
-    if (!confirm(`¿Está seguro que desea eliminar TODAS las marcaciones manuales ingresadas para el día ${window.formatFechaDDMMYYYY(fecha)}? Esta acción no se puede deshacer.`)) {
+    if (!await uiConfirm(`¿Está seguro que desea eliminar TODAS las marcaciones manuales ingresadas para el día ${window.formatFechaDDMMYYYY(fecha)}? Esta acción no se puede deshacer.`)) {
         return;
     }
 

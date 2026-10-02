@@ -232,7 +232,7 @@ async function saveTurno() {
 }
 
 async function deleteTurno(id) {
-    if (!confirm("¿Estás seguro de eliminar este turno? Esta acción no se puede deshacer.")) return;
+    if (!await uiConfirm("¿Estás seguro de eliminar este turno? Esta acción no se puede deshacer.")) return;
 
     try {
         const response = await fetch(`${API_TURNOS}${id}/`, { method: 'DELETE' });
@@ -977,7 +977,7 @@ async function submitBulkAsignacion() {
         ? `¿Desea ${accion} a ${selectedIds.length} empleados desde el ${fecha} hasta el ${fechaFin}?`
         : `¿Desea ${accion} a ${selectedIds.length} empleados de forma indefinida a partir del ${fecha}?`;
 
-    if (!confirm(confirmMsg)) return;
+    if (!await uiConfirm(confirmMsg)) return;
 
     // --- UI: Bloquear botón con spinner ---
     const btn = document.querySelector('[onclick="submitBulkAsignacion()"]');

@@ -323,7 +323,7 @@ async function confirmProcesarVencimiento() {
         confirmMsg = `¿Está seguro de procesar esta acción (${action}) para ${nombre}?`;
     }
 
-    if (!confirm(confirmMsg)) return;
+    if (!await uiConfirm(confirmMsg)) return;
 
     try {
         const response = await fetch(`/api/empleados/${currentEmpleadoVencimiento.id}/procesar-vencimiento/`, {

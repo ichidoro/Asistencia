@@ -476,7 +476,8 @@ a:hover { color: var(--ag-navy-deep); }
 
 /* ── Selección y foco global ────────────────────────────────────────────── */
 ::selection { background: rgba(63, 111, 214, 0.28); }
-:focus-visible { outline-color: var(--ag-blue); }
+:focus-visible { outline: 2px solid var(--ag-blue); outline-offset: 2px; }
+.visually-hidden-h1 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ═══ PROTEGIDO: tabla "Días del período" de Marcaciones ═════════════════════
    Conserva exactamente su diseño anterior: se restauran las variables y la

@@ -2807,7 +2807,7 @@ window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
         return;
     }
 
-    if (!confirm(`¿Está seguro de marcar ${selected.length} registros como ${nuevoEstado}?`)) return;
+    if (!await uiConfirm(`¿Está seguro de marcar ${selected.length} registros como ${nuevoEstado}?`)) return;
 
     try {
         const btn = event.target;
@@ -5229,7 +5229,7 @@ window.cierreResolverTodasHE = async function() {
     const s = window.cierreWizardState;
     if (!s.evaluacion || !s.evaluacion.detalle_he || s.evaluacion.detalle_he.length === 0) return;
     
-    if (!confirm(`¿Está seguro que desea APROBAR todas las horas extras pendientes (${s.evaluacion.detalle_he.length}) de este período?`)) {
+    if (!await uiConfirm(`¿Está seguro que desea APROBAR todas las horas extras pendientes (${s.evaluacion.detalle_he.length}) de este período?`)) {
         return;
     }
 
@@ -5416,7 +5416,7 @@ async function openHistorialCierresModal() {
 }
 
 window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
-    if (!confirm(`¿Está seguro que desea reabrir el período cerrado del ${fechaInicio} al ${fechaFin} para el área "${area}"?\n\nEsta acción eliminará el bloqueo y permitirá modificaciones/recálculos.`)) {
+    if (!await uiConfirm(`¿Está seguro que desea reabrir el período cerrado del ${fechaInicio} al ${fechaFin} para el área "${area}"?\n\nEsta acción eliminará el bloqueo y permitirá modificaciones/recálculos.`)) {
         return;
     }
     

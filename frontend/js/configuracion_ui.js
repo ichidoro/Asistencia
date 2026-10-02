@@ -932,8 +932,8 @@ function editBono(id) {
     if (bono) openModalBono(bono);
 }
 
-function confirmDeleteBono(id) {
-    if (confirm("¿Está seguro de eliminar este bono? Esta acción no se puede deshacer.")) {
+async function confirmDeleteBono(id) {
+    if (await uiConfirm("¿Está seguro de eliminar este bono? Esta acción no se puede deshacer.")) {
         deleteBono(id);
     }
 }
@@ -1233,8 +1233,8 @@ function editTipoJ(id) {
     if (tipo) openModalTipoJ(tipo);
 }
 
-function confirmDeleteTipoJ(id) {
-    if (confirm("¿Eliminar este tipo de justificación?")) {
+async function confirmDeleteTipoJ(id) {
+    if (await uiConfirm("¿Eliminar este tipo de justificación?")) {
         deleteTipoJ(id);
     }
 }
@@ -1534,7 +1534,7 @@ window.editAreaNotificaciones = function(area, emails) {
 }
 
 window.deleteAreaNotificaciones = async function (area) {
-    if (!confirm(`¿Eliminar notificaciones para el área ${area}?`)) return;
+    if (!await uiConfirm(`¿Eliminar notificaciones para el área ${area}?`)) return;
     
     try {
         const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 

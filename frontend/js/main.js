@@ -119,7 +119,7 @@ window.iniciarEdicionFecha = function(id, originalValue, element) {
     const handleUpdate = async () => {
         const newDate = input.value;
         if (newDate && newDate !== cleanValue) {
-            if (confirm(`¿Desea cambiar la fecha de inicio a ${window.formatFechaDDMMYYYY(newDate)}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
+            if (await uiConfirm(`¿Desea cambiar la fecha de inicio a ${window.formatFechaDDMMYYYY(newDate)}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
                 try {
                     // Feedback visual: deshabilitar y mostrar carga
                     element.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
@@ -1689,7 +1689,7 @@ window.editEmpleado = (id) => {
 };
 
 window.deleteEmpleado = async (id) => {
-  if (!confirm('⚠️ ¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
+  if (!await uiConfirm('⚠️ ¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
     return;
   }
 
@@ -2275,7 +2275,7 @@ window.confirmSync = async function () {
     ? `${selectedRuts.length} empleado(s) seleccionado(s)` 
     : `Todos los ${allBoxes.length} empleado(s)`;
 
-  if (!confirm(`¿Iniciar sincronización?\n(${filterMsg})`)) return;
+  if (!await uiConfirm(`¿Iniciar sincronización?\n(${filterMsg})`)) return;
 
   closeModalSync();
 
@@ -2568,7 +2568,7 @@ window.confirmarBaja = async function () {
 
   if (!fecha) return alert("Debe seleccionar una fecha de salida.");
 
-  if (!confirm("¿Está seguro de registrar la baja? Esta acción puede desactivar al empleado.")) return;
+  if (!await uiConfirm("¿Está seguro de registrar la baja? Esta acción puede desactivar al empleado.")) return;
 
   try {
     const response = await fetch(`${API_BASE_URL}/empleados/${empId}/baja/`, {
