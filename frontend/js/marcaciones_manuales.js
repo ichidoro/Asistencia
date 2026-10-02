@@ -2282,28 +2282,8 @@ function initLibreta180hGrid() {
     });
     tbody.innerHTML = rowsHtml;
 
-    initRangoHorarioOptions();
     setupLibretaGridInteractions();
     m180_grid_initialized = true;
-}
-
-function initRangoHorarioOptions() {
-    const selDesde = document.getElementById('m180-rango-desde');
-    const selHasta = document.getElementById('m180-rango-hasta');
-    if (!selDesde || !selHasta) return;
-
-    let optsDesde = '';
-    let optsHasta = '';
-    for (let s = 0; s < 96; s++) {
-        const hIni = formatSlotToHHMM(s);
-        const hFin = formatSlotToHHMM(s + 1);
-        optsDesde += `<option value="${s}">${hIni}</option>`;
-        optsHasta += `<option value="${s}">${hFin}</option>`;
-    }
-    selDesde.innerHTML = optsDesde;
-    selHasta.innerHTML = optsHasta;
-    selDesde.value = "0";
-    selHasta.value = "95";
 }
 
 function setupLibretaGridInteractions() {
@@ -2422,28 +2402,6 @@ function toggleLibretaBrushMode(enabled) {
     const container = document.getElementById('m180-grid-scroll');
     if (container) {
         container.style.cursor = m180_brush_mode ? 'crosshair' : 'default';
-    }
-}
-
-function aplicarRango180h() {
-    const actId = parseInt(document.getElementById('m180-rango-act')?.value || '1');
-    const startSlot = parseInt(document.getElementById('m180-rango-desde')?.value || '0');
-    const endSlot = parseInt(document.getElementById('m180-rango-hasta')?.value || '0');
-
-    if (isNaN(startSlot) || isNaN(endSlot)) return;
-    const from = Math.min(startSlot, endSlot);
-    const to = Math.max(startSlot, endSlot);
-
-    for (let s = from; s <= to; s++) {
-        m180_slots[s] = actId;
-        updateSlotVisuals(s);
-    }
-    recalcLibretaTotales();
-    if (typeof showToast === 'function') {
-        const hFrom = formatSlotToHHMM(from);
-        const hTo = formatSlotToHHMM(to + 1);
-        const name = actId === 0 ? 'Vacío / Borrado' : M180_ACTIVIDADES[actId]?.name || '';
-        showToast(`Tramo ${hFrom} a ${hTo} marcado como ${name}`, "success");
     }
 }
 
@@ -2707,6 +2665,5 @@ window.libreta180hAutoDescanso = libreta180hAutoDescanso;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
-window.aplicarRango180h = aplicarRango180h;
 
 

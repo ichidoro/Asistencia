@@ -4796,7 +4796,7 @@
                             <input type="hidden" id="m180-empleado-id">
                             <input type="hidden" id="m180-fecha-str">
 
-                            <!-- Barra de Paleta de Actividades y Herramientas Inteligentes -->
+                            <!-- Barra de Herramientas y Leyenda Directa -->
                             <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom">
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -4804,10 +4804,10 @@
                                             <i class="bi bi-hand-index-thumb me-1"></i> Marcación Directa por Fila
                                         </span>
                                         <span class="text-secondary" style="font-size:0.75rem;">
-                                            Toque o pase el cursor directamente por cualquier fila para marcarla sin necesidad de presionar botones.
+                                            Pase el cursor o toque directamente la fila que desee marcar (Conducción, Espera, Auxiliares o Descanso).
                                         </span>
                                     </div>
-                                    <div class="d-flex align-items-center gap-2">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
                                         <!-- Switch Modo Pincel (Hover to Paint) -->
                                         <div class="form-check form-switch m-0 d-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
                                             <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
@@ -4815,40 +4815,10 @@
                                                 🖌️ Pintar al pasar (Hover)
                                             </label>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- Herramienta de Rango Rápido -->
-                                <div class="p-2 rounded-2 border bg-light d-flex flex-wrap align-items-center gap-2 mb-2" style="font-size:0.78rem;">
-                                    <div class="fw-bold text-dark d-flex align-items-center gap-1">
-                                        <i class="bi bi-lightning-charge-fill text-warning"></i> Rellenar Tramo Rápido:
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <span class="text-muted small">Actividad:</span>
-                                        <select id="m180-rango-act" class="form-select form-select-sm fw-bold" style="width:150px; font-size:0.75rem;">
-                                            <option value="1" selected>1. Conducción</option>
-                                            <option value="2">2. Espera</option>
-                                            <option value="3">3. Labores Auxil.</option>
-                                            <option value="4">4. Descanso</option>
-                                            <option value="0">0. Borrar (Vacío)</option>
-                                        </select>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <span class="text-muted small">Desde:</span>
-                                        <select id="m180-rango-desde" class="form-select form-select-sm font-monospace" style="width:90px; font-size:0.75rem;"></select>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <span class="text-muted small">Hasta:</span>
-                                        <select id="m180-rango-hasta" class="form-select form-select-sm font-monospace" style="width:90px; font-size:0.75rem;"></select>
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-primary px-3 fw-bold" onclick="window.aplicarRango180h()" style="font-size:0.75rem;">
-                                        <i class="bi bi-check-circle me-1"></i> Aplicar Tramo
-                                    </button>
-                                    <div class="ms-auto d-flex gap-1">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:0.73rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
                                             <i class="bi bi-magic me-1"></i> Rellenar Vacíos con Descanso
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.73rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
                                             <i class="bi bi-trash3 me-1"></i> Limpiar Todo
                                         </button>
                                     </div>
