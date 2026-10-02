@@ -455,7 +455,7 @@ const PorteriaModule = (function () {
         document.getElementById('porteria-form-observacion').value = "";
         document.getElementById('porteria-foto-input').value = "";
         document.getElementById('porteria-preview-container').classList.add('d-none');
-        document.getElementById('porteria-foto-preview').src = "";
+        document.getElementById('porteria-foto-preview').removeAttribute('src');
         document.getElementById('porteria-form-detalles-opcionales').classList.add('d-none');
 
         // Mostrar formulario y ocultar tarjeta de espera

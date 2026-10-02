@@ -7419,7 +7419,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     }
 
     const html = `
-    <div style="width: 380px; font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
+    <div style="width: min(380px, calc(100vw - 24px)); font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
         
         <!-- Header Principal Art. 25 bis -->
         <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 10px; margin-bottom: 10px;">
@@ -7504,7 +7504,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         }
         let emptyStateHtml = isFer ? `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-star-fill me-1"></i>FERIADO</div>` : `<div class="badge-status badge-state-secondary" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">SIN DATOS</div>`;
         
-        return _escAttr(`<div style="width: 340px; font-family: var(--font-sans); cursor: default; background:var(--card-bg, #ffffff); color:var(--text-primary, #1e293b); padding:12px; border-radius:6px; margin:0; border:1px solid var(--border-color, #e2e8f0); box-shadow:var(--shadow-premium);">
+        return _escAttr(`<div style="width: min(340px, calc(100vw - 24px)); font-family: var(--font-sans); cursor: default; background:var(--card-bg, #ffffff); color:var(--text-primary, #1e293b); padding:12px; border-radius:6px; margin:0; border:1px solid var(--border-color, #e2e8f0); box-shadow:var(--shadow-premium);">
             <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
                 <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
                     <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
@@ -8230,7 +8230,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
 
     const html = `
-    <div style="width: 360px; font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
+    <div style="width: min(360px, calc(100vw - 24px)); font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
         
         <!-- Header Principal -->
         <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">

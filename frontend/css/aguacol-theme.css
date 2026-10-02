@@ -810,3 +810,15 @@ a:hover { color: var(--ag-navy-deep); }
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
 }
+
+/* ── Movimiento reducido: sin desplazamientos ni bucles, pero el cambio de estado
+   (color, fondo, opacidad, sombra) sigue visible. Los spinners se mantienen. ── */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *:not(.spinner-border):not(.spinner-grow), *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-property: color, background-color, border-color, box-shadow, opacity !important;
+  }
+}
