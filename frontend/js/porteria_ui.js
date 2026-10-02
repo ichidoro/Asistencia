@@ -325,7 +325,8 @@ const PorteriaModule = (function () {
         }
     }
 
-    function iniciarScannerProceso() {
+    async function iniciarScannerProceso() {
+        try { await window.ensureLib('html5qrcode'); } catch (e) { console.error(e); return; }
         html5QrCode = new Html5Qrcode("porteria-reader");
         const config = { fps: 10, qrbox: { width: 220, height: 220 } };
 

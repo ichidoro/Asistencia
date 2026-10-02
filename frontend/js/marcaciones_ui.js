@@ -1338,7 +1338,7 @@ function renderReporteEmpleado(data, container) {
     }, 50);
 }
 
-window.updateVisorPDF = function(isDownload = false) {
+window.updateVisorPDF = async function(isDownload = false) {
     if (!pdfDataCache) return;
 
     // 1. Seguro de vida: Validar rango de fechas para prevenir crasheos de memoria gráfica
@@ -1359,6 +1359,7 @@ window.updateVisorPDF = function(isDownload = false) {
     const formatSelect = document.getElementById('pdf-format-select');
     const format = formatSelect ? formatSelect.value : 'a4';
 
+    await window.ensureLib('jspdf');
     const { jsPDF } = window.jspdf;
     // Forzamos orientación Horizontal (landscape) para que quepan las nuevas columnas
     const doc = new jsPDF('l', 'pt', format);

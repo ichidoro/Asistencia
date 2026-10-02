@@ -523,6 +523,7 @@ const VisitasModule = (() => {
         // OCR con Tesseract.js
         statusText.textContent = 'Procesando OCR...';
         try {
+            if (typeof Tesseract === 'undefined') { try { await window.ensureLib('tesseract'); } catch (_) { /* se informa abajo */ } }
             if (typeof Tesseract === 'undefined') {
                 throw new Error('Tesseract.js no cargó. Verifique su conexión a internet.');
             }

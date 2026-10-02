@@ -200,7 +200,7 @@ input[type="search"], .search-input, [class*="search"] input {
     border-radius: var(--radius-lg) !important;
     box-shadow: var(--shadow-sm) !important;
     background: var(--card-bg);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Exclude modal-content from card hover transform (prevents modal interaction issues) */
@@ -437,7 +437,7 @@ input[type="search"], .search-input, [class*="search"] input {
     margin: 2px 12px;
     color: rgba(255, 255, 255, 0.6);
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     border-left: none;
     border-radius: 12px;
     font-size: 14px;
@@ -554,7 +554,7 @@ input[type="search"], .search-input, [class*="search"] input {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .btn-sync:hover {
@@ -567,7 +567,7 @@ input[type="search"], .search-input, [class*="search"] input {
     border: none;
     border-radius: 999px;
     color: #fff;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -607,7 +607,7 @@ input[type="search"], .search-input, [class*="search"] input {
     color: var(--text-secondary);
     padding: 8px;
     border-radius: 50%;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: #f1f5f9;
 }
 
@@ -711,7 +711,7 @@ input[type="search"], .search-input, [class*="search"] input {
     flex-direction: column;
     gap: 16px;
     min-height: 160px;
-    transition: all 0.3s ease;
+    transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
 }
 
 .stat-card:hover {
@@ -784,7 +784,7 @@ input[type="search"], .search-input, [class*="search"] input {
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
     font-size: 0.85rem;
 }
 
@@ -882,7 +882,7 @@ input[type="search"], .search-input, [class*="search"] input {
     background: white;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .btn-icon:hover {
@@ -1026,7 +1026,7 @@ input[type="search"], .search-input, [class*="search"] input {
     border-radius: 10px;
     /* Más redondeado */
     font-size: 14px;
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
     background: #fcfcfc;
 }
 
@@ -1063,7 +1063,7 @@ input[type="search"], .search-input, [class*="search"] input {
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .input-group .btn:hover {
@@ -1136,7 +1136,7 @@ input[type="search"], .search-input, [class*="search"] input {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
     cursor: pointer;
     /* Hacer clicable */
     user-select: none;
@@ -1237,7 +1237,7 @@ input[type="search"], .search-input, [class*="search"] input {
     text-align: center;
     gap: 12px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: color 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     perspective: 1000px;
     animation: floatingCard 0.8s ease-out backwards;
 }
@@ -1431,7 +1431,7 @@ tfoot .sticky-col-analitica {
 
 /* Clickable cells premium */
 .cell-clickable {
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
     border: 1px solid #e5e7eb !important;
 }
 
@@ -1463,7 +1463,7 @@ tfoot .sticky-col-analitica {
     font-size: 0.78rem !important;
     padding: 5px 12px !important;
     border-radius: 8px !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
     cursor: pointer;
 }
@@ -1537,7 +1537,7 @@ tfoot .sticky-col-analitica {
     font-weight: 700;
     border-radius: 8px;
     padding: 8px 20px;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     box-shadow: 0 3px 10px rgba(16, 185, 129, 0.25);
 }
 
@@ -1555,7 +1555,7 @@ tfoot .sticky-col-analitica {
     font-weight: 700;
     border-radius: 8px;
     padding: 8px 20px;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     box-shadow: 0 3px 10px rgba(244, 63, 94, 0.25);
 }
 
@@ -1674,7 +1674,7 @@ tfoot .sticky-col-analitica {
 /* Click-to-Justify styles */
 .cell-clickable {
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     position: relative;
 }
 
@@ -1841,7 +1841,7 @@ tfoot .sticky-col-analitica {
     width: 32px !important;
     border-radius: 8px !important;
     padding: 0 !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     border: 1px solid transparent !important;
 }
 
@@ -1920,7 +1920,7 @@ tfoot .sticky-col-analitica {
     border-left: 4px solid var(--primary-color);
     box-shadow: var(--shadow-sm);
     padding: 20px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .emp-stat-card:hover {
@@ -2070,7 +2070,7 @@ tfoot .sticky-col-analitica {
     border: 1px solid var(--border-color);
     background: white;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     color: var(--text-secondary);
 }
 
@@ -2104,7 +2104,7 @@ tfoot .sticky-col-analitica {
     font-weight: 600;
     padding: 8px 16px;
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     border: 1px solid transparent;
 }
 
@@ -2222,7 +2222,7 @@ tfoot .sticky-col-analitica {
     padding: 6px 12px;
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
-    transition: all 0.2s;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
     line-height: 1.4;
 }
 
@@ -2274,7 +2274,7 @@ tfoot .sticky-col-analitica {
     border-radius: 12px;
     padding: 16px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     user-select: none;
     border: 1px solid transparent;
 }
@@ -2464,7 +2464,7 @@ tfoot .sticky-col-analitica {
     font-weight: 600;
     border: 1px solid transparent;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     white-space: nowrap;
 }
 
@@ -2579,7 +2579,7 @@ tfoot .sticky-col-analitica {
     padding: 6px 14px;
     font-weight: 600;
     font-size: 0.78rem;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
 }
 
@@ -2598,7 +2598,7 @@ tfoot .sticky-col-analitica {
     padding: 6px 14px;
     font-weight: 600;
     font-size: 0.78rem;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
     box-shadow: 0 2px 4px rgba(244, 63, 94, 0.3);
 }
 
@@ -2673,7 +2673,7 @@ tfoot .sticky-col-analitica {
     padding: 6px 12px;
     font-size: 0.78rem;
     font-weight: 500;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     white-space: nowrap;
 }
@@ -2706,7 +2706,7 @@ tfoot .sticky-col-analitica {
     color: white !important;
     border-radius: 8px !important;
     box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .va-toolbar-premium .btn-warning:hover:not(:disabled) {
@@ -2718,7 +2718,7 @@ tfoot .sticky-col-analitica {
 .va-toolbar-premium .btn-outline-secondary {
     border-radius: 8px !important;
     border-color: #d1d5db !important;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .va-toolbar-premium .btn-outline-secondary:hover {
@@ -2800,7 +2800,7 @@ tfoot .sticky-col-analitica {
     background: rgba(0, 0, 0, 0.06);
     color: #475569 !important;
     font-weight: 700 !important;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
     border: 1px solid rgba(0, 0, 0, 0.08);
     line-height: 1;
     vertical-align: middle;
@@ -3207,7 +3207,7 @@ tr:hover .emp-name-cell {
     font-size: 0.78rem;
     font-weight: 600;
     border-radius: 6px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
 }
 
@@ -3690,7 +3690,7 @@ tr:hover .emp-name-cell {
 /* ── Decision Action Modal Buttons ── */
 .decision-action-btn {
     background: transparent !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     border-radius: 10px !important;
 }
 
@@ -3743,7 +3743,7 @@ tr:hover .emp-name-cell {
     border-radius: var(--radius-lg, 16px) !important;
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04), 
                 inset 0 1px 0 0 rgba(255, 255, 255, 0.6) !important;
-    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    transition: color 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), background-color 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), border-color 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
 }
 
 #page-dashboard .card:hover:not(.modal-content),

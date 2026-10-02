@@ -1754,7 +1754,8 @@ const Productos4Module = {
         }
     },
 
-    exportarPDF() {
+    async exportarPDF() {
+        try { await window.ensureLib('jspdf'); } catch (_) { /* se informa abajo */ }
         const { jsPDF } = window.jspdf || {};
         if (!jsPDF) {
             showToast("No se pudo cargar la librería de PDF.", "error");

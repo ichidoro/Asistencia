@@ -69,6 +69,31 @@
         })).catch(() => { /* un fallo de render no debe cortar la cola */ });
     };
 
+    // ── Carga diferida de librerías pesadas (se descargan al primer uso) ────
+    const LIBS = {
+        jspdf: ['/static/js/jspdf.umd.min.js', '/static/js/jspdf.plugin.autotable.min.js'],
+        html5qrcode: ['/static/js/libs/html5-qrcode.min.js'],
+        tesseract: ['https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js']
+    };
+    const libPromises = {};
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+            document.head.appendChild(s);
+        });
+    }
+    window.ensureLib = function ensureLib(key) {
+        if (!libPromises[key]) {
+            // en serie: autotable necesita jsPDF ya cargado
+            libPromises[key] = LIBS[key].reduce((p, src) => p.then(() => loadScript(src)), Promise.resolve())
+                .catch((e) => { delete libPromises[key]; throw e; });
+        }
+        return libPromises[key];
+    };
+
     // ── Teclado y lectores de pantalla ──────────────────────────────────────
     const NATIVE = 'a[href],button,input,select,textarea,summary,[contenteditable="true"]';
     const CLICKABLE = '[onclick]:not(' + NATIVE.split(',').join('):not(') + '):not(tr):not(td):not(th):not(li)';
