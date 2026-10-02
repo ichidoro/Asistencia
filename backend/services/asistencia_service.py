@@ -2300,8 +2300,9 @@ class AsistenciaService:
                     '_jornada_especial': None,
                     '_jornada_adicional': None
                 }
-            elif es_180h_dt and not marcas_candidatas:
-                # Empleado 180h sin libreta cargada y sin marcas de reloj (no exigir reloj biométrico)
+            elif es_180h_dt:
+                # Empleado 180h sin libreta cargada: desde el 01-10-2026 se controla SOLO por libreta ("sin reloj").
+                # Las marcas del reloj se ignoran aunque existan; el día queda pendiente hasta registrar la libreta.
                 today_str = _get_now_local().strftime("%Y-%m-%d")
                 if fecha >= today_str:
                     resultado = None
