@@ -163,7 +163,7 @@ class AsistenciaService:
             q_emp = "SELECT * FROM empleados WHERE (activo = 1 OR (fecha_salida IS NOT NULL AND fecha_salida >= ?)) AND (excluido_asistencia = 0 OR excluido_asistencia IS NULL)"
             params_emp = [fecha]
             if area:
-                q_emp += " AND area = ?"
+                q_emp += " AND id IN (SELECT ha.empleado_id FROM historial_areas ha JOIN areas a ON ha.area_id = a.id WHERE ha.es_actual = 1 AND ha.validado = 1 AND a.nombre = ?)"
                 params_emp.append(area)
         empleados_rows = await db.fetch_all(q_emp, tuple(params_emp))
         emp_ids = [e['id'] for e in empleados_rows]
@@ -323,10 +323,15 @@ class AsistenciaService:
         has_global_closure = None in closed_areas or any(x is None for x in closed_areas)
 
         # 3. Determinar para cada empleado si está cerrado
+        # La tabla empleados NO tiene columna 'area': se resuelve por historial_areas en la fecha y,
+        # si el empleado aún no tiene historial (alta posterior a la fecha), por su area_id actual.
+        areas_by_id = {r['id']: r['nombre'] for r in await db.fetch_all("SELECT id, nombre FROM areas")}
+        emp_area_map = {}
         closed_dates = {}
         for e in empleados_rows:
             eid = e['id']
-            emp_area = hist_areas_map.get(eid) or e['area']
+            emp_area = hist_areas_map.get(eid) or areas_by_id.get(e.get('area_id'))
+            emp_area_map[eid] = emp_area
             is_closed = False
             if closures_rows:
                 if has_global_closure:
@@ -419,7 +424,7 @@ class AsistenciaService:
             feriados_dict_bulk = {}
 
         return {
-            'empleados': {e['id']: dict(e) for e in empleados_rows},
+            'empleados': {e['id']: {**dict(e), 'area': emp_area_map.get(e['id'])} for e in empleados_rows},
             'asignaciones': asignaciones,
             'justificaciones': justificaciones,
             'logs': logs_map,
