@@ -2570,6 +2570,42 @@ function m180SetLocked(locked) {
     if (grp) grp.classList.toggle('d-none', m180_locked);
     const cancel = document.getElementById('m180-btn-cancel');
     if (cancel) cancel.textContent = m180_locked ? 'Cerrar' : 'Cancelar';
+    const reabrir = document.getElementById('m180-btn-reabrir');
+    if (reabrir) reabrir.classList.toggle('d-none', !(m180_locked && m180EsSuperAdmin()));
+}
+
+function m180EsSuperAdmin() {
+    try { return JSON.parse(localStorage.getItem('user'))?.is_superuser === true; } catch (_) { return false; }
+}
+
+async function libreta180hReabrir() {
+    if (!m180_locked || !m180EsSuperAdmin()) return;
+    const empId = parseInt(document.getElementById('m180-empleado-id').value);
+    const dateStr = document.getElementById('m180-fecha-str').value;
+    const ok = await uiConfirm('¿Reabrir este día?\n\nVuelve a borrador y se podrá editar de nuevo. Queda registrado quién lo reabrió.', { confirmText: 'Reabrir día', danger: false });
+    if (!ok) return;
+    const btn = document.getElementById('m180-btn-reabrir');
+    if (btn) btn.disabled = true;
+    try {
+        const resp = await fetch('/api/asistencia/libreta-180h/reabrir/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empleado_id: empId, fecha: dateStr })
+        });
+        if (!resp.ok) {
+            let msg = `Error ${resp.status}`;
+            try { const d = await resp.json(); if (typeof d.detail === 'string') msg = d.detail; } catch (_) { /* sin cuerpo */ }
+            throw new Error(msg);
+        }
+        m180SetBadge('borrador');
+        m180SetLocked(false);
+        if (typeof showToast === 'function') showToast('Día reabierto: ya puedes editarlo', 'success');
+        if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+    } catch (e) {
+        Swal.fire({ icon: 'error', title: 'No se pudo reabrir', text: e.message, confirmButtonColor: '#059669' });
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 function m180SetBadge(kind) {
@@ -2759,6 +2795,7 @@ window.libreta180hAutoDescanso = libreta180hAutoDescanso;
 window.libreta180hUndo = libreta180hUndo;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
+window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 
 
