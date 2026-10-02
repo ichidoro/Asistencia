@@ -3092,6 +3092,10 @@ async def save_libreta_180h(
     Guarda la libreta diaria de 96 slots, persiste cómputos y sincroniza en asistencias.
     """
     try:
+        existente = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
+        if existente and int(existente.get('cerrado') or 0) == 1:
+            raise HTTPException(status_code=409, detail="El día está cerrado: la libreta es de solo lectura.")
+
         slots = list(payload.slots_96)
         if len(slots) < 96:
             slots.extend([0] * (96 - len(slots)))
@@ -3149,6 +3153,8 @@ async def save_libreta_180h(
                 "resultado_asistencia": res_dia
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"❌ Error en save_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
         raise HTTPException(status_code=500, detail=f"Error guardando Libreta 180h: {str(e)}")

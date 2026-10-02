@@ -3910,3 +3910,8 @@ tr:hover .emp-name-cell {
     .m180-lane-label { font-size: .7rem; padding: 0 8px; }
     .m180-card-head { padding: 8px 12px; }
 }
+
+.m180-lock-banner { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px 14px; border-radius:10px; background:#ecfdf5; color:#065f46; font-size:.82rem; border:1px solid #a7f3d0; }
+.m180-lock-banner i { font-size:1rem; }
+.m180-locked .m180-track { cursor:default; }
+.m180-locked .m180-hover { display:none; }

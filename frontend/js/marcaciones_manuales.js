@@ -2202,6 +2202,7 @@ let m180_history = [];
 let m180_dirty = false;
 let m180_force_close = false;
 let m180_prev_keys = new Set();
+let m180_locked = false;      // día cerrado: solo lectura
 
 const M180_ACTIVIDADES = {
     1: { id: 1, name: 'Conducción', short: 'COND', color: '#059669', soft: '#ecfdf5', ink: '#065f46' },
@@ -2336,6 +2337,7 @@ function setupLibretaTrack(track) {
     const scroller = document.getElementById('m180-grid-scroll');
 
     track.addEventListener('pointerdown', (e) => {
+        if (m180_locked) return;
         if (e.button !== undefined && e.button !== 0) return;
         const slot = m180SlotFromEvent(track, e);
         const mode = m180_slots[slot] === act ? 'erase' : 'paint';
@@ -2365,7 +2367,7 @@ function setupLibretaTrack(track) {
             return;
         }
 
-        if (m180_brush_mode && e.pointerType !== 'touch') {
+        if (m180_brush_mode && !m180_locked && e.pointerType !== 'touch') {
             // Modo pincel: pinta el tramo bajo el cursor sin necesidad de presionar
             if (m180_slots[slot] !== act) {
                 if (!m180_brush_stroke) { m180PushHistory(); m180_brush_stroke = true; }
@@ -2374,7 +2376,8 @@ function setupLibretaTrack(track) {
             }
             m180SetReadout(`${formatSlotToHHMM(slot)} – ${formatSlotToHHMM(slot + 1)} · ${M180_ACTIVIDADES[act].name}`);
         } else {
-            m180SetReadout(`${formatSlotToHHMM(slot)} – ${formatSlotToHHMM(slot + 1)}`);
+            const actLeida = m180_slots[slot];
+            m180SetReadout(`${formatSlotToHHMM(slot)} – ${formatSlotToHHMM(slot + 1)}` + (m180_locked && actLeida ? ` · ${M180_ACTIVIDADES[actLeida].name}` : ''));
         }
     });
 
@@ -2450,13 +2453,14 @@ function setLibretaActividad(actId) {
 }
 
 function libreta180hUndo() {
-    if (!m180_history.length) return;
+    if (m180_locked || !m180_history.length) return;
     m180_slots = m180_history.pop();
     m180UpdateUndoBtn();
     m180RenderBlocks();
 }
 
 function libreta180hAutoDescanso() {
+    if (m180_locked) return;
     const empty = m180_slots.filter(s => s === 0).length;
     if (!empty) return;
     m180PushHistory();
@@ -2470,7 +2474,7 @@ function libreta180hAutoDescanso() {
 }
 
 function limpiarGrilla180h() {
-    if (!m180_slots.some(s => s !== 0)) return;
+    if (m180_locked || !m180_slots.some(s => s !== 0)) return;
     m180PushHistory();
     m180_slots.fill(0);
     m180RenderBlocks();
@@ -2548,6 +2552,26 @@ function recalcLibretaTotales() {
     }
 }
 
+function m180SetLocked(locked) {
+    m180_locked = Boolean(locked);
+    const modalEl = document.getElementById('modalMarcacion180h');
+    if (modalEl) modalEl.classList.toggle('m180-locked', m180_locked);
+    const banner = document.getElementById('m180-lock-banner');
+    if (banner) banner.classList.toggle('d-none', !m180_locked);
+    const obs = document.getElementById('m180-observaciones');
+    if (obs) obs.disabled = m180_locked;
+    if (m180_locked) toggleLibretaBrushMode(false);
+    const brush = document.getElementById('m180-toggle-brush');
+    if (brush) brush.disabled = m180_locked;
+    document.querySelectorAll('#modalMarcacion180h .m180-edit-btn').forEach(b => b.classList.toggle('d-none', m180_locked));
+    const wrap = document.getElementById('m180-brush-wrap');
+    if (wrap) wrap.classList.toggle('d-none', m180_locked);
+    const grp = document.getElementById('m180-save-group');
+    if (grp) grp.classList.toggle('d-none', m180_locked);
+    const cancel = document.getElementById('m180-btn-cancel');
+    if (cancel) cancel.textContent = m180_locked ? 'Cerrar' : 'Cancelar';
+}
+
 function m180SetBadge(kind) {
     const badge = document.getElementById('m180-badge-estado');
     if (!badge) return;
@@ -2567,7 +2591,7 @@ function m180AttachCloseGuard(modalEl) {
     if (modalEl.dataset.m180Guard) return;
     modalEl.dataset.m180Guard = '1';
     modalEl.addEventListener('hide.bs.modal', (e) => {
-        if (!m180_dirty || m180_force_close) return;
+        if (!m180_dirty || m180_force_close || m180_locked) return;
         e.preventDefault();
         Swal.fire({
             title: 'Hay cambios sin guardar',
@@ -2609,6 +2633,7 @@ async function proceedToMarcacion180h() {
     m180_slots = new Array(96).fill(0);
     document.getElementById('m180-observaciones').value = '';
     m180SetBadge('sin');
+    m180SetLocked(false);
 
     try {
         const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`);
@@ -2618,6 +2643,7 @@ async function proceedToMarcacion180h() {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
                 document.getElementById('m180-observaciones').value = data.observaciones || '';
                 m180SetBadge(Number(data.cerrado) ? 'cerrado' : 'borrador');
+                m180SetLocked(Number(data.cerrado) === 1);
             }
         } else {
             console.warn(`GET libreta-180h returned status ${resp.status}`);
@@ -2638,6 +2664,7 @@ async function proceedToMarcacion180h() {
 }
 
 async function guardarLibreta180h(cerrarDia = false) {
+    if (m180_locked) return;
     const empId = parseInt(document.getElementById('m180-empleado-id').value);
     const dateStr = document.getElementById('m180-fecha-str').value;
     const obs = document.getElementById('m180-observaciones').value.trim();

@@ -4796,6 +4796,11 @@
                             <input type="hidden" id="m180-empleado-id">
                             <input type="hidden" id="m180-fecha-str">
 
+                            <div id="m180-lock-banner" class="m180-lock-banner d-none" role="status">
+                                <i class="bi bi-lock-fill"></i>
+                                <span><strong>Día cerrado · solo lectura.</strong> Las horas ya fueron registradas y no se pueden modificar.</span>
+                            </div>
+
                             <!-- Barra de Herramientas y Leyenda Directa -->
                             <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom">
@@ -4809,19 +4814,19 @@
                                     </div>
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
                                         <!-- Switch Modo Pincel (Hover to Paint) -->
-                                        <div class="form-check form-switch m-0 d-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
+                                        <div id="m180-brush-wrap" class="form-check form-switch m-0 d-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
                                             <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
                                             <label class="form-check-label fw-bold small text-dark mb-0 user-select-none" for="m180-toggle-brush" style="font-size:0.75rem; cursor:pointer;" id="m180-brush-label">
                                                 🖌️ Pintar al pasar (Hover)
                                             </label>
                                         </div>
-                                        <button type="button" id="m180-btn-undo" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hUndo()" title="Deshacer último cambio (Ctrl+Z)" disabled>
+                                        <button type="button" id="m180-btn-undo" class="btn btn-sm btn-outline-secondary py-1 px-2.5 m180-edit-btn" style="font-size:0.75rem;" onclick="window.libreta180hUndo()" title="Deshacer último cambio (Ctrl+Z)" disabled>
                                             <i class="bi bi-arrow-counterclockwise me-1"></i> Deshacer
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5 m180-edit-btn" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
                                             <i class="bi bi-magic me-1"></i> Rellenar Vacíos con Descanso
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 m180-edit-btn" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
                                             <i class="bi bi-trash3 me-1"></i> Limpiar Todo
                                         </button>
                                     </div>
@@ -4920,8 +4925,8 @@
                         </div>
 
                         <div class="modal-footer border-0 p-3 bg-white d-flex justify-content-between">
-                            <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
-                            <div class="d-flex gap-2">
+                            <button type="button" id="m180-btn-cancel" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
+                            <div class="d-flex gap-2" id="m180-save-group">
                                 <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3 m180-save-btn" onclick="window.guardarLibreta180h(false)">
                                     <i class="bi bi-save me-1"></i> Guardar Borrador
                                 </button>
