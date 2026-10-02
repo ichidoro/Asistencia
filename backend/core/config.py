@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     CONTROL_ASISTENCIA_URL: str = "https://bioalba1.controlasistencia.cl"
     CONTROL_ASISTENCIA_USER: str = "aguacol"
     CONTROL_ASISTENCIA_PASSWORD: str = ""   # definir en .env
+
+    # EasyTime Pro (desde 01-10-2026 los relojes reportan aquí en vez de BioAlba).
+    # Si EASYTIME_URL y EASYTIME_PASSWORD están definidos en .env, las marcaciones se leen de EasyTime.
+    EASYTIME_URL: str = ""
+    EASYTIME_USER: str = ""
+    EASYTIME_PASSWORD: str = ""
     
     # Scraping Configuration
     SCRAPER_ENABLED: bool = True

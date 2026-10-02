@@ -223,6 +223,17 @@ class BioAlbaScraper:
         Si rut_filter se provee, BioAlba filtra en servidor (reduce descarga drásticamente).
         Si ruts_set se provee, filtra durante el parsing (reduce objetos en RAM).
         """
+        # Origen EasyTime Pro (si está configurado): lee la API JSON; si falla, cae al Excel de BioAlba.
+        if settings.EASYTIME_URL and settings.EASYTIME_PASSWORD:
+            try:
+                from backend.scraper.easytime_scraper import EasyTimeClient
+                _now = datetime.now()
+                cliente = EasyTimeClient(settings.EASYTIME_URL, settings.EASYTIME_USER, settings.EASYTIME_PASSWORD)
+                return await cliente.fetch_marcaciones(anio or _now.year, mes or _now.month,
+                                                       ruts_set=ruts_set, rut_filter=rut_filter)
+            except Exception as e_et:
+                logger.error(f"❌ EasyTime falló ({e_et}); se intenta con BioAlba")
+
         try:
             if not await self.ensure_logged_in():
                 return []
