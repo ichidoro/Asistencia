@@ -5500,7 +5500,8 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
     let cnt_atr=0, cnt_sad=0, cnt_inas=0, cnt_esp=0, cnt_per=0, cnt_efectivos=0;
     const esBolsa = emp.tipo_programacion === 'BOLSA_FLEXIBLE'
                  || emp.tipo_programacion === 'FLEXIBLE_BOLSA'
-                 || (emp.info && (emp.info.tipo_programacion === 'BOLSA_FLEXIBLE' || emp.info.tipo_programacion === 'FLEXIBLE_BOLSA'));
+                 || (emp.turno && emp.turno.toUpperCase().includes('TRANSPORTE'))
+                 || (emp.info && (emp.info.tipo_programacion === 'BOLSA_FLEXIBLE' || emp.info.tipo_programacion === 'FLEXIBLE_BOLSA' || (emp.info.turno && emp.info.turno.toUpperCase().includes('TRANSPORTE'))));
     emp._esBolsaFlag = esBolsa;
     let acumBolsa=0, excedido=false, metaMin=0;
     let acumEspera=0;
@@ -5763,7 +5764,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         // data-bs-content (~3 KB × miles de celdas = 12 MB por render). Ahora solo se guardan
         // los datos en memoria y el tooltip se arma al pasar el mouse (ver _getCellTipHtml).
         const tipKey = emp.id + '|' + d;
-        (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp });
+        (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp: Object.assign({}, emp, { stats: r }) });
         return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
@@ -5850,8 +5851,6 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
     const showBonos = window.vistaAnaliticaState.showBonos;
     const bonosNombres = stateMarcacionesApp.data.bonos_nombres || [];
     const showIncidencias = window.vistaAnaliticaState.showIncidencias !== false;
-    const showHE = window.vistaAnaliticaState.showHE !== false;
-    const showDeudas = window.vistaAnaliticaState.showDeudas !== false;
 
     const employees = [];
     if (stateMarcacionesApp.data.empleados) {
@@ -5893,6 +5892,9 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
     const totSPrefix = tot.saldo > 0 ? '+' : tot.saldo < 0 ? '-' : '';
 
     const hayBolsa = rows.some(r => r.esBolsa);
+    const soloBolsa = rows.length > 0 && rows.every(r => r.esBolsa);
+    const showHE = soloBolsa ? (s.showHE === true) : (s.showHE !== false);
+    const showDeudas = soloBolsa ? (s.showDeudas === true) : (s.showDeudas !== false);
     const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
 
     const stickyCols = {
@@ -6057,12 +6059,18 @@ window.reloadSingleEmployeeRow = async function(empId) {
             const bonosNombres = stateMarcacionesApp.data.bonos_nombres || [];
             const bonosEval = stateMarcacionesApp.data.bonos_evaluacion || {};
             const showIncidencias = window.vistaAnaliticaState.showIncidencias !== false;
-            const showHE = window.vistaAnaliticaState.showHE !== false;
-            const showDeudas = window.vistaAnaliticaState.showDeudas !== false;
             const hayBolsa = stateMarcacionesApp.data.empleados.some(e => {
                 const matrixEmp = stateMarcacionesApp.data.matrix[e.id];
-                return matrixEmp?.info?.tipo_programacion === 'BOLSA_FLEXIBLE' || matrixEmp?.info?.tipo_programacion === 'FLEXIBLE_BOLSA';
+                const info = matrixEmp?.info || {};
+                return info.tipo_programacion === 'BOLSA_FLEXIBLE' || info.tipo_programacion === 'FLEXIBLE_BOLSA' || (info.turno && info.turno.toUpperCase().includes('TRANSPORTE'));
             });
+            const soloBolsa = stateMarcacionesApp.data.empleados.length > 0 && stateMarcacionesApp.data.empleados.every(e => {
+                const matrixEmp = stateMarcacionesApp.data.matrix[e.id];
+                const info = matrixEmp?.info || {};
+                return info.tipo_programacion === 'BOLSA_FLEXIBLE' || info.tipo_programacion === 'FLEXIBLE_BOLSA' || (info.turno && info.turno.toUpperCase().includes('TRANSPORTE'));
+            });
+            const showHE = soloBolsa ? (window.vistaAnaliticaState.showHE === true) : (window.vistaAnaliticaState.showHE !== false);
+            const showDeudas = soloBolsa ? (window.vistaAnaliticaState.showDeudas === true) : (window.vistaAnaliticaState.showDeudas !== false);
             const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
 
             const stickyCols = {
@@ -6156,14 +6164,15 @@ function renderVistaAnalitica(respData, container) {
     if (s.soloConHE)    visibleRows = visibleRows.filter(r => r.he_bruto > 0);
 
     // ── 5. Totales ───────────────────────────────────────────────────────────
-    const showHE = s.showHE !== false;
-    const showDeudas = s.showDeudas !== false;
+    const hayBolsa = rows.some(r => r.esBolsa);
+    const soloBolsa = rows.length > 0 && rows.every(r => r.esBolsa);
+    const showHE = soloBolsa ? (s.showHE === true) : (s.showHE !== false);
+    const showDeudas = soloBolsa ? (s.showDeudas === true) : (s.showDeudas !== false);
     const showIncidencias = s.showIncidencias !== false;
     const bonosNombres = respData.bonos_nombres || [];
     const bonosEval = respData.bonos_evaluacion || {};
     const hasBonos = bonosNombres.length > 0;
     const showBonos = window.vistaAnaliticaState.showBonos;
-    const hayBolsa = rows.some(r => r.esBolsa);
     const showSaldoMeta = hayBolsa && (window.vistaAnaliticaState.showSaldoMeta !== false);
 
     // Configuración de anchos dinámicos para columnas sticky
@@ -7095,6 +7104,349 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
     return _analiticaCellBadge(di);
 }
 
+// ─── PARSER Y RENDERIZADOR DE SLOTS DE LIBRETA ART. 25 BIS (180 HORAS) ────
+function _parseSlotsArt25bis(slots_96) {
+    if (!slots_96 || typeof slots_96 !== 'string' || slots_96.length < 96) {
+        return null;
+    }
+    const slotTypes = {
+        'D': { code: 'D', name: 'Descanso en tierra o litera', short: 'Descanso', icon: 'bi-moon-stars-fill', color: '#0284c7', bg: '#e0f2fe' },
+        'M': { code: 'M', name: 'Conducción activa', short: 'Conducción', icon: 'bi-truck', color: '#059669', bg: '#d1fae5' },
+        'A': { code: 'A', name: 'Labores auxiliares / carga', short: 'Auxiliares', icon: 'bi-wrench-adjustable-circle-fill', color: '#4f46e5', bg: '#e0e7ff' },
+        'E': { code: 'E', name: 'Tiempo de espera (retribuido)', short: 'Espera', icon: 'bi-hourglass-split', color: '#d97706', bg: '#fef3c7' },
+        '0': { code: '0', name: 'Sin actividad registrada', short: 'Sin registro', icon: 'bi-dash-circle', color: '#94a3b8', bg: '#f1f5f9' }
+    };
+    
+    // Agrupar en tramos continuos
+    const tramos = [];
+    let currentCode = slots_96[0];
+    let startIdx = 0;
+    
+    for (let i = 1; i <= 96; i++) {
+        const c = i < 96 ? slots_96[i] : null;
+        if (c !== currentCode) {
+            const count = i - startIdx;
+            const hStart = Math.floor(startIdx / 4);
+            const mStart = (startIdx % 4) * 15;
+            const hEnd = Math.floor(i / 4);
+            const mEnd = (i % 4) * 15;
+            
+            const startStr = `${String(hStart).padStart(2,'0')}:${String(mStart).padStart(2,'0')}`;
+            const endStr = `${String(hEnd).padStart(2,'0')}:${String(mEnd).padStart(2,'0')}`;
+            const typeInfo = slotTypes[currentCode] || slotTypes['0'];
+            const durMin = count * 15;
+            const durHrs = (durMin / 60).toFixed(1);
+            
+            tramos.push({
+                code: currentCode,
+                startStr,
+                endStr,
+                count,
+                durMin,
+                durHrs,
+                ...typeInfo
+            });
+            
+            currentCode = c;
+            startIdx = i;
+        }
+    }
+    
+    // Totales por tipo y fatiga
+    let minDescanso = 0, minConduccion = 0, minAuxiliares = 0, minEspera = 0, minSinReg = 0;
+    let maxConduccionContinua = 0;
+    let currCond = 0;
+    
+    for (let i = 0; i < 96; i++) {
+        const c = slots_96[i];
+        if (c === 'D') { minDescanso += 15; currCond = 0; }
+        else if (c === 'M') {
+            minConduccion += 15;
+            currCond += 15;
+            if (currCond > maxConduccionContinua) maxConduccionContinua = currCond;
+        }
+        else if (c === 'A') { minAuxiliares += 15; currCond = 0; }
+        else if (c === 'E') { minEspera += 15; currCond = 0; }
+        else { minSinReg += 15; currCond = 0; }
+    }
+    
+    return {
+        tramos,
+        minDescanso,
+        minConduccion,
+        minAuxiliares,
+        minEspera,
+        minSinReg,
+        minEfectivos: minConduccion + minAuxiliares,
+        maxConduccionContinua,
+        totalMin: 1440
+    };
+}
+
+// ─── TOOLTIP EXCLUSIVO ART. 25 BIS / TRANSPORTE (BOLSA 180H Y ESPERA 88H) ────
+function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo) {
+    di = di || {};
+    const empName = empInfo ? (empInfo.nombre_completo || empInfo.nombre || 'Colaborador') : 'Colaborador';
+    const empAreaText = empInfo && empInfo.area ? empInfo.area : 'LOGÍSTICA TRADICIONAL';
+    const shiftName = (empInfo && empInfo.turno) || (di && di.turno_nombre) || 'TRADICIONAL TRANSPORTE';
+    const stats = (empInfo && (empInfo.stats || empInfo._stats)) || {};
+    
+    const isFer = !!feriadoDesc;
+    const est = di.estado;
+    const slots_96 = di.slots_96;
+    const isCerrado = !!di.libreta_cerrada || !!di.cerrado;
+    
+    // Parse slots si existen
+    const slotsData = _parseSlotsArt25bis(slots_96);
+    
+    // Minutos del día
+    let minCond = di.minutos_conduccion || 0;
+    let minEsp = di.minutos_espera || 0;
+    let minAux = di.minutos_auxiliares || 0;
+    let minDesc = di.minutos_descanso || 0;
+    
+    if (slotsData) {
+        minCond = slotsData.minConduccion;
+        minEsp = slotsData.minEspera;
+        minAux = slotsData.minAuxiliares;
+        minDesc = slotsData.minDescanso;
+    }
+    
+    const minEfec = minCond + minAux;
+    const totalMinReg = minCond + minEsp + minAux + minDesc;
+    const isCuadrado = totalMinReg >= 1440;
+    const hasData = !!(slotsData || totalMinReg > 0 || di.hora_entrada_real || (di.horas_trabajadas && di.horas_trabajadas > 0));
+
+    // Badge de estado
+    let badgeHtml = '';
+    if (isCerrado) {
+        badgeHtml = `<span class="badge bg-success" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-shield-check me-1"></i>DÍA CERRADO</span>`;
+    } else if (slotsData) {
+        badgeHtml = `<span class="badge bg-primary text-white" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-journal-check me-1"></i>REGISTRADO</span>`;
+    } else if (est === 'LIBRE') {
+        badgeHtml = `<span class="badge bg-secondary" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-cup-hot-fill me-1"></i>DÍA LIBRE</span>`;
+    } else if (isFer) {
+        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-star-fill me-1"></i>FERIADO</span>`;
+    } else {
+        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size:0.65rem; padding:4px 8px; font-weight:700;"><i class="bi bi-exclamation-triangle-fill me-1"></i>PENDIENTE</span>`;
+    }
+
+    // Acumulados mensuales
+    const acumBolsaMin = stats.acumBolsa || 0;
+    const metaBolsaMin = stats.metaMin || 10800; // 180h = 10800 min
+    const saldoBolsaMin = stats.saldoMeta !== null && stats.saldoMeta !== undefined ? stats.saldoMeta : (acumBolsaMin - metaBolsaMin);
+    const acumEsperaMin = stats.acumEspera || 0;
+    const metaEsperaMin = stats.metaEsperaMin || 5280; // 88h = 5280 min
+    const saldoEsperaMin = stats.saldoEspera !== null && stats.saldoEspera !== undefined ? stats.saldoEspera : (acumEsperaMin - metaEsperaMin);
+
+    // Contenido dinámico según si tiene libreta o está pendiente
+    let bodyContentHtml = '';
+
+    if (slotsData && slotsData.tramos && slotsData.tramos.length > 0) {
+        // 1. Mini barra continua de 24h
+        let barSegments = '';
+        slotsData.tramos.forEach(t => {
+            const pct = ((t.count / 96) * 100).toFixed(2);
+            barSegments += `<div style="width:${pct}%; height:100%; background-color:${t.color};" title="${t.short} (${t.startStr} - ${t.endStr}): ${t.durHrs}h"></div>`;
+        });
+
+        // 2. Desglose de tramos cronológicos
+        let tramosListHtml = '';
+        slotsData.tramos.forEach(t => {
+            if (t.code === '0' && slotsData.tramos.length > 1) return;
+            tramosListHtml += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:3px 6px; border-bottom:1px dashed #e2e8f0; font-size:0.70rem;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="display:inline-block; width:8px; height:8px; border-radius:2px; background:${t.color};"></span>
+                    <strong style="font-family:monospace; color:#1e293b;">${t.startStr} - ${t.endStr}</strong>
+                    <span style="color:#475569;"><i class="bi ${t.icon} me-1" style="color:${t.color}; font-size:0.75rem;"></i>${t.short}</span>
+                </div>
+                <span style="font-family:monospace; font-weight:700; color:${t.color};">${formatExactMinutesToTime(t.durMin)}</span>
+            </div>`;
+        });
+
+        // 3. Alerta de fatiga / seguridad vial
+        let fatigaHtml = '';
+        if (slotsData.maxConduccionContinua > 300) {
+            fatigaHtml = `
+            <div style="margin-top:6px; padding:5px 8px; background:#fff1f2; border:1px solid #fecdd3; border-radius:4px; color:#e11d48; font-size:0.65rem; font-weight:600;">
+                <i class="bi bi-exclamation-octagon-fill me-1"></i> ALERTA LEGAL: Conducción continua de ${(slotsData.maxConduccionContinua/60).toFixed(1)}h supera el tope de 5 horas continuas sin descanso (Art. 25 bis).
+            </div>`;
+        } else if (slotsData.minConduccion > 0) {
+            fatigaHtml = `
+            <div style="margin-top:6px; padding:4px 8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; color:#15803d; font-size:0.65rem; font-weight:600;">
+                <i class="bi bi-shield-check me-1"></i> Conducción continua conforme a norma (bloque máx: ${(slotsData.maxConduccionContinua/60).toFixed(1)}h ≤ 5h).
+            </div>`;
+        }
+
+        bodyContentHtml = `
+        <!-- SECCIÓN 1: Mini-Línea de Tiempo 24 Horas -->
+        <div style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:700; font-size:0.72rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
+                    <i class="bi bi-clock-history" style="color:#059669;"></i> Cronología 24 Horas (Libreta DT)
+                </span>
+                <span style="font-size:0.62rem; color:#64748b; font-weight:600;">Resolución 15m</span>
+            </div>
+            
+            <div style="display:flex; width:100%; height:16px; border-radius:4px; overflow:hidden; border:1px solid #cbd5e1; margin-bottom:6px; box-shadow:inset 0 1px 2px rgba(0,0,0,0.06);">
+                ${barSegments}
+            </div>
+
+            <!-- Leyenda compacta -->
+            <div style="display:flex; justify-content:space-between; font-size:0.62rem; color:#64748b; margin-bottom:8px; padding:0 2px;">
+                <span><span style="color:#059669; font-weight:bold;">●</span> Conducción</span>
+                <span><span style="color:#4f46e5; font-weight:bold;">●</span> Auxiliares</span>
+                <span><span style="color:#d97706; font-weight:bold;">●</span> Espera</span>
+                <span><span style="color:#0284c7; font-weight:bold;">●</span> Descanso</span>
+            </div>
+
+            <!-- Lista de Tramos -->
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:6px 8px; max-height:160px; overflow-y:auto;">
+                ${tramosListHtml}
+            </div>
+        </div>
+
+        <!-- SECCIÓN 2: Balance Legal Diario Art. 25 bis -->
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+            <div style="font-weight:700; font-size:0.70rem; color:#1e293b; text-transform:uppercase; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                <span><i class="bi bi-scale me-1" style="color:#3b82f6;"></i> Balance Diario del Registro</span>
+                <span class="badge ${isCuadrado ? 'bg-success' : 'bg-warning text-dark'}" style="font-size:0.58rem; padding:2px 6px;">${isCuadrado ? '24:00 CUADRADO' : 'INCOMPLETO'}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+                <span style="color:#64748b;">• Jornada Efectiva (Cond. + Aux.):</span>
+                <strong style="font-family:monospace; color:#059669;">${formatExactMinutesToTime(minEfec)} (${(minEfec/60).toFixed(1)} hrs)</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+                <span style="color:#64748b;">• Tiempo de Espera (Retribuido):</span>
+                <strong style="font-family:monospace; color:#d97706;">${formatExactMinutesToTime(minEsp)} (${(minEsp/60).toFixed(1)} hrs)</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:4px;">
+                <span style="color:#64748b;">• Descanso Total (Tierra/Litera):</span>
+                <strong style="font-family:monospace; color:#0284c7;">${formatExactMinutesToTime(minDesc)} (${(minDesc/60).toFixed(1)} hrs)</strong>
+            </div>
+            ${fatigaHtml}
+        </div>`;
+    } else if (hasData && totalMinReg > 0) {
+        bodyContentHtml = `
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:10px;">
+            <div style="font-weight:700; font-size:0.70rem; color:#1e293b; text-transform:uppercase; margin-bottom:6px;">
+                <i class="bi bi-scale me-1" style="color:#3b82f6;"></i> Resumen de Jornada Art. 25 bis
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+                <span style="color:#64748b;">• Conducción Registrada:</span>
+                <strong style="font-family:monospace; color:#059669;">${formatExactMinutesToTime(minCond)} (${(minCond/60).toFixed(1)} hrs)</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+                <span style="color:#64748b;">• Labores Auxiliares:</span>
+                <strong style="font-family:monospace; color:#4f46e5;">${formatExactMinutesToTime(minAux)} (${(minAux/60).toFixed(1)} hrs)</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:3px;">
+                <span style="color:#64748b;">• Tiempos de Espera:</span>
+                <strong style="font-family:monospace; color:#d97706;">${formatExactMinutesToTime(minEsp)} (${(minEsp/60).toFixed(1)} hrs)</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.70rem;">
+                <span style="color:#64748b;">• Descanso:</span>
+                <strong style="font-family:monospace; color:#0284c7;">${formatExactMinutesToTime(minDesc)} (${(minDesc/60).toFixed(1)} hrs)</strong>
+            </div>
+        </div>`;
+    } else {
+        bodyContentHtml = `
+        <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:12px; margin-bottom:10px;">
+            <div style="color:#b45309; font-weight:700; font-size:0.75rem; margin-bottom:4px;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> Libreta Art. 25 bis pendiente de registro
+            </div>
+            <div style="font-size:0.70rem; color:#475569; margin-bottom:8px; line-height:1.3;">
+                Este día no cuenta con la distribución de tramos de 24 horas registrada en el sistema.
+            </div>
+            ${di.hora_entrada_real || di.hora_salida_real ? `
+            <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:4px; padding:6px 8px; font-size:0.70rem; color:#334155; margin-bottom:8px;">
+                <strong>Marcas físicas en terminal:</strong><br>
+                • Entrada: ${di.hora_entrada_real || 'Sin registro'}<br>
+                • Salida: ${di.hora_salida_real || 'Sin registro'}
+            </div>` : ''}
+            <div style="font-size:0.70rem; color:#3f6fd6; font-weight:600;">
+                <i class="bi bi-cursor-fill me-1"></i> Haga clic sobre la celda para abrir el Registro Diario Art. 25 bis.
+            </div>
+        </div>`;
+    }
+
+    // SECCIÓN 3: Acumulados de Ciclo Mensual (Meta 180h / 88h)
+    let saldoBolsaColor = saldoBolsaMin >= 0 ? '#10b981' : '#ef4444';
+    let saldoBolsaSign = saldoBolsaMin > 0 ? '+' : (saldoBolsaMin < 0 ? '-' : '');
+    let saldoEsperaColor = saldoEsperaMin >= 0 ? '#10b981' : '#d97706';
+    let saldoEsperaSign = saldoEsperaMin > 0 ? '+' : (saldoEsperaMin < 0 ? '-' : '');
+
+    const acumuladosHtml = `
+    <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:6px; padding:10px; margin-bottom:8px;">
+        <div style="font-weight:700; font-size:0.70rem; color:#7c3aed; text-transform:uppercase; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+            <span><i class="bi bi-bullseye me-1"></i> Acumulado Mensual Art. 25 bis</span>
+            <span style="font-size:0.62rem; color:#8b5cf6; font-weight:600;">Bolsas DT</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:0.70rem; margin-bottom:4px;">
+            <span style="color:#64748b;">• Bolsa 180h Efectiva:</span>
+            <span style="font-family:monospace;">
+                <strong>${_fmtMin(acumBolsaMin)}</strong> / ${_fmtMin(metaBolsaMin)} 
+                <span style="color:${saldoBolsaColor}; font-weight:700;">(${saldoBolsaSign}${_fmtMin(Math.abs(saldoBolsaMin))})</span>
+            </span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:0.70rem;">
+            <span style="color:#64748b;">• Bolsa Espera 88h:</span>
+            <span style="font-family:monospace;">
+                <strong>${_fmtMin(acumEsperaMin)}</strong> / ${_fmtMin(metaEsperaMin)}
+                <span style="color:${saldoEsperaColor}; font-weight:700;">(${saldoEsperaSign}${_fmtMin(Math.abs(saldoEsperaMin))})</span>
+            </span>
+        </div>
+    </div>`;
+
+    // Marcas físicas en terminal (si existen marcas de reloj)
+    let marcasFisicasHtml = '';
+    if (di.hora_entrada_real || di.hora_salida_real) {
+        marcasFisicasHtml = `
+        <div style="font-size:0.66rem; color:#64748b; padding:4px 8px; background:#f1f5f9; border-radius:4px; display:flex; justify-content:space-between;">
+            <span><i class="bi bi-fingerprint me-1"></i>Terminal Biométrico:</span>
+            <span style="font-family:monospace; color:#334155;">Entrada: <strong>${di.hora_entrada_real || '—'}</strong> · Salida: <strong>${di.hora_salida_real || '—'}</strong></span>
+        </div>`;
+    }
+
+    const html = `
+    <div style="width: 380px; font-family: 'Inter', system-ui, -apple-system, sans-serif; cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
+        
+        <!-- Header Principal Art. 25 bis -->
+        <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 10px; margin-bottom: 10px;">
+            <div style="color: #059669; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
+                <i class="bi bi-truck me-1" style="font-size:0.8rem"></i> CONTROL JORNADA ART. 25 BIS DT
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <div style="color: var(--primary-color, #3f6fd6); font-weight: 700; font-size: 0.85rem;">
+                    ${dateFormatted}
+                </div>
+                <div>
+                    ${badgeHtml}
+                </div>
+            </div>
+
+            <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
+            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size:0.65rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span> · TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
+            <div style="color:#7c3aed; font-weight:600; font-size:0.62rem; text-transform: uppercase;">RÉGIMEN: ART. 25 BIS CÓDIGO DEL TRABAJO (BOLSA 180H / ESPERA 88H)</div>
+            ${isFer ? `<div style="margin-top: 6px; padding: 5px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.72rem; font-weight: 600;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
+        </div>
+
+        ${bodyContentHtml}
+
+        ${acumuladosHtml}
+
+        ${marcasFisicasHtml}
+
+        <div style="margin-top:8px; text-align:center; font-size:0.62rem; color:#94a3b8;">
+            <i class="bi bi-info-circle me-1"></i> Doble clic en celda para justificar · Clic para abrir Libreta 180h
+        </div>
+    </div>`;
+
+    return _escAttr(html);
+}
+
 // ─── TOOLTIP DASHBOARD PREMIUM (LIGHT THEME) ────────────────────
 function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -7111,6 +7463,19 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     const empAreaText = empInfo && empInfo.area ? empInfo.area : 'SIN ÁREA';
     const empId = empInfo ? (empInfo.id || empInfo.empleado_id) : (di ? di.empleado_id : null);
     const isFer = !!feriadoDesc;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DETECCIÓN EXCLUSIVA: HORARIOS ART. 25 BIS (TRANSPORTE / BOLSA FLEXIBLE 180H)
+    // ─────────────────────────────────────────────────────────────────────────
+    const isEmpBolsa = (empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA' || empInfo._esBolsaFlag)) ||
+                       (di && (di.tipo_programacion === 'BOLSA_FLEXIBLE' || di.tipo_programacion === 'FLEXIBLE_BOLSA' || di.origen === 'LIBRETA_180H')) ||
+                       (empInfo && empInfo.turno && empInfo.turno.toUpperCase().includes('TRANSPORTE')) ||
+                       (di && di.turno_nombre && di.turno_nombre.toUpperCase().includes('TRANSPORTE')) ||
+                       (di && di.slots_96);
+
+    if (isEmpBolsa) {
+        return _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo);
+    }
 
     if (!di || !di.estado) {
         const fallbackShift = (empInfo && empInfo.turno) ? empInfo.turno : 'SIN PROGRAMACIÓN';

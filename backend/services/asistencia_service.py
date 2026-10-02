@@ -2847,16 +2847,32 @@ class AsistenciaService:
               AND date(j.fecha_inicio) <= date(?) AND date(j.fecha_fin) >= date(?)
         """
 
-        # Cargar asistencias, jornadas, asignación de turnos, justificaciones y feriados en paralelo
+        async def _safe_fetch_libretas():
+            try:
+                q_libretas = f"""
+                    SELECT empleado_id, fecha, slots_96, minutos_conduccion, minutos_espera, 
+                           minutos_auxiliares, minutos_descanso, minutos_efectivos, cerrado, observaciones
+                    FROM libreta_art25bis_dias
+                    WHERE empleado_id IN ({ids_ph}) AND fecha BETWEEN ? AND ?
+                """
+                return await db.fetch_all(q_libretas, tuple(emp_ids) + (fecha_inicio, fecha_fin))
+            except Exception as e_l:
+                logger.warning(f"No se pudieron cargar libretas 180h para matriz: {e_l}")
+                return []
+
+        # Cargar asistencias, jornadas, asignación de turnos, justificaciones, feriados y libretas 180h en paralelo
         tasks = [
             db.fetch_all(q_asist, tuple(emp_ids) + (fecha_inicio, fecha_fin)),
             db.fetch_all(q_jornadas, tuple(emp_ids) + (fecha_inicio, fecha_fin)),
             db.fetch_all(q_asig, tuple(emp_ids) + (fecha_fin, fecha_inicio)),
             db.fetch_all(q_just, tuple(emp_ids) + (fecha_fin, fecha_inicio)),
-            cal_svc.get_feriados(anio)
+            cal_svc.get_feriados(anio),
+            _safe_fetch_libretas()
         ]
         
-        asist_rows, jornadas_rows, asig_emp_rows, just_rows, feriados_raw = await asyncio.gather(*tasks)
+        asist_rows, jornadas_rows, asig_emp_rows, just_rows, feriados_raw, libretas_raw = await asyncio.gather(*tasks)
+
+        libretas_map = {(r['empleado_id'], r['fecha']): dict(r) for r in (libretas_raw or [])}
 
         asistencias = [dict(a) for a in asist_rows]
         if turno_id:
@@ -2969,7 +2985,50 @@ class AsistenciaService:
                         elif not a.get('hora_entrada_real'):
                             a['estado'] = 'INASISTENCIA'
 
+                if (eid, f_asist) in libretas_map:
+                    lib_info = libretas_map[(eid, f_asist)]
+                    a['slots_96'] = lib_info.get('slots_96')
+                    a['libreta_cerrada'] = bool(lib_info.get('cerrado'))
+                    a['libreta_obs'] = lib_info.get('observaciones')
+                    if lib_info.get('minutos_conduccion') is not None:
+                        a['minutos_conduccion'] = lib_info.get('minutos_conduccion')
+                    if lib_info.get('minutos_espera') is not None:
+                        a['minutos_espera'] = lib_info.get('minutos_espera')
+                    if lib_info.get('minutos_auxiliares') is not None:
+                        a['minutos_auxiliares'] = lib_info.get('minutos_auxiliares')
+                    if lib_info.get('minutos_descanso') is not None:
+                        a['minutos_descanso'] = lib_info.get('minutos_descanso')
+                    if lib_info.get('minutos_efectivos') is not None:
+                        a['horas_trabajadas'] = round(float(lib_info.get('minutos_efectivos', 0)) / 60.0, 2)
+                    a['origen'] = 'LIBRETA_180H'
+
                 matrix[eid][f_asist] = a
+
+        # Enriquecer o insertar días que tengan Libreta Art. 25 bis pero no asistencias registradas
+        for (eid, f_lib), lib_info in libretas_map.items():
+            if eid in matrix and f_lib not in matrix[eid]:
+                min_cond = int(lib_info.get('minutos_conduccion') or 0)
+                min_esp = int(lib_info.get('minutos_espera') or 0)
+                min_aux = int(lib_info.get('minutos_auxiliares') or 0)
+                min_desc = int(lib_info.get('minutos_descanso') or 0)
+                min_efec = int(lib_info.get('minutos_efectivos') or (min_cond + min_aux))
+                matrix[eid][f_lib] = {
+                    'empleado_id': eid,
+                    'fecha': f_lib,
+                    'estado': 'OK' if lib_info.get('cerrado') else 'EN_CURSO',
+                    'origen': 'LIBRETA_180H',
+                    'slots_96': lib_info.get('slots_96'),
+                    'libreta_cerrada': bool(lib_info.get('cerrado')),
+                    'minutos_conduccion': min_cond,
+                    'minutos_espera': min_esp,
+                    'minutos_auxiliares': min_aux,
+                    'minutos_descanso': min_desc,
+                    'horas_trabajadas': round(min_efec / 60.0, 2),
+                    'minutos_deuda': 0.0,
+                    'minutos_atraso': 0.0,
+                    'minutos_extra_bruto': 0.0,
+                    'observaciones': lib_info.get('observaciones') or f"🚚 LIBRETA 180H: {round(min_cond/60.0, 1)}h cond, {round(min_esp/60.0, 1)}h esp."
+                }
 
         # Superponer jornadas especiales — enriquecer marcas, NO pisar asistencias.estado
         # Tabla jornadas_especiales.estado es un estado INTERNO de flujo de validación:
