@@ -4804,7 +4804,7 @@
                                             <i class="bi bi-hand-index-thumb me-1"></i> Marcación Directa por Fila
                                         </span>
                                         <span class="text-secondary" style="font-size:0.75rem;">
-                                            Pase el cursor o toque directamente la fila que desee marcar (Conducción, Espera, Auxiliares o Descanso).
+                                            Arrastre sobre la fila de la actividad para marcar un rango; clic sobre un tramo marcado lo quita.
                                         </span>
                                     </div>
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -4815,6 +4815,9 @@
                                                 🖌️ Pintar al pasar (Hover)
                                             </label>
                                         </div>
+                                        <button type="button" id="m180-btn-undo" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hUndo()" title="Deshacer último cambio (Ctrl+Z)" disabled>
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i> Deshacer
+                                        </button>
                                         <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
                                             <i class="bi bi-magic me-1"></i> Rellenar Vacíos con Descanso
                                         </button>
@@ -4845,49 +4848,41 @@
                                 </div>
                             </div>
 
-                            <!-- Grilla Continua de 24 Horas en tramos de 15 minutos (96 slots) -->
-                            <div class="card border border-dark-subtle shadow-sm mb-3 overflow-hidden" style="border-radius:12px;">
-                                <div class="bg-dark text-white py-1.5 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:0.75rem;">
-                                    <span class="fw-bold text-uppercase"><i class="bi bi-clock-history me-1 text-warning"></i> Grilla Continua 24 Horas (Tramos de 15 Minutos)</span>
-                                    <span class="text-white-50" style="font-size:0.7rem;">Pase el cursor o toque directamente la fila para pintar</span>
-                                </div>
-                                <div class="table-responsive m180-grid-container" id="m180-grid-scroll" style="max-height:380px; user-select:none; touch-action:none;">
-                                    <table class="table table-bordered table-sm mb-0 text-center m180-table" style="font-size:0.72rem; border-collapse:separate; border-spacing:0;">
-                                        <thead style="position:sticky; top:0; z-index:10; background:#f1f5f9;">
-                                            <tr id="m180-header-hours">
-                                                <th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:25;">ACTIVIDAD</th>
-                                                <!-- 24 Horas con colspan="4" generadas por JS -->
-                                                <th class="align-middle px-2 bg-slate-200 text-dark fw-bold text-center" style="width:90px; min-width:90px;">TOTAL</th>
-                                            </tr>
-                                            <tr id="m180-header-slots" style="font-size:0.65rem; color:#64748b; background:#f8fafc;">
-                                                <th class="text-start px-2 py-0 align-middle" style="position:sticky; left:0; z-index:25; background:#f8fafc;">SUB-TRAMO</th>
-                                                <!-- 96 sub-tramos generados por JS -->
-                                                <th class="py-0 align-middle">HRS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="m180-grid-tbody">
-                                            <!-- 4 filas de actividades generadas dinámicamente -->
-                                        </tbody>
-                                        <tfoot style="position:sticky; bottom:0; z-index:10; background:#f8fafc; font-weight:700;">
-                                            <tr>
-                                                <td class="text-start px-2 text-dark bg-slate-100" style="position:sticky; left:0; z-index:20;">TOTAL ACUMULADO DÍA:</td>
-                                                <td id="m180-footer-slots-indicator" colspan="96" class="text-end px-2 text-muted" style="font-size:0.7rem;">Suma total de los 96 tramos:</td>
-                                                <td class="text-end px-2 font-monospace text-dark bg-slate-100" id="m180-tot-acumulado-dia" style="font-size:0.85rem;">00:00 h</td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                            <!-- Línea de tiempo 24 h: un carril por actividad, marcación por arrastre (tramos de 15 min) -->
+                            <div class="m180-card mb-3">
+                                <div class="m180-card-head">
+                                    <span class="m180-card-title"><i class="bi bi-clock-history"></i> Línea de tiempo 24 horas · tramos de 15 min</span>
+                                    <span id="m180-readout" class="m180-readout">Arrastre sobre una fila para marcar un rango · clic sobre un tramo marcado para quitarlo</span>
                                 </div>
 
-                                <!-- Barra de Cuadre y Alerta Legal -->
-                                <div class="p-2.5 bg-light border-top d-flex flex-wrap align-items-center justify-content-between gap-2" style="font-size:0.78rem;">
+                                <div class="m180-grid-container" id="m180-grid-scroll">
+                                    <div class="m180-board">
+                                        <div class="m180-overview-row">
+                                            <div class="m180-lane-label m180-overview-label">Día completo</div>
+                                            <div id="m180-overview" class="m180-overview"></div>
+                                            <div class="m180-lane-total m180-overview-total" id="m180-tot-acumulado-dia">00:00 h</div>
+                                        </div>
+                                        <div class="m180-ruler-row">
+                                            <div class="m180-lane-label m180-ruler-label">Actividad</div>
+                                            <div id="m180-ruler" class="m180-ruler"></div>
+                                            <div class="m180-lane-total m180-ruler-label">Hrs</div>
+                                        </div>
+                                        <div id="m180-lanes"></div>
+                                    </div>
+                                </div>
+
+                                <div class="m180-progress" aria-hidden="true"><div id="m180-progress-fill" class="m180-progress-fill"></div></div>
+
+                                <!-- Barra de cuadre y alerta legal -->
+                                <div class="m180-card-foot">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="fw-bold text-secondary">Cuadre de Jornada:</span>
+                                        <span class="fw-semibold text-secondary">Cuadre de jornada:</span>
                                         <span id="m180-msg-cuadre" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
                                             Faltan 24:00 hrs por registrar
                                         </span>
                                     </div>
                                     <div id="m180-alerta-fatiga" class="d-none text-danger fw-bold bg-danger-subtle border border-danger-subtle px-2 py-1 rounded">
-                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: Se detectó conducción continua superior a 5 horas sin descanso.
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: conducción continua superior a 5 horas sin descanso.
                                     </div>
                                 </div>
                             </div>
@@ -4927,10 +4922,10 @@
                         <div class="modal-footer border-0 p-3 bg-white d-flex justify-content-between">
                             <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
                             <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3" onclick="window.guardarLibreta180h(false)">
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3 m180-save-btn" onclick="window.guardarLibreta180h(false)">
                                     <i class="bi bi-save me-1"></i> Guardar Borrador
                                 </button>
-                                <button type="button" id="btn-cerrar-guardar-180h" class="btn btn-sm btn-success fw-bold px-4 shadow-sm" onclick="window.guardarLibreta180h(true)">
+                                <button type="button" id="btn-cerrar-guardar-180h" class="btn btn-sm btn-success fw-bold px-4 shadow-sm m180-save-btn" onclick="window.guardarLibreta180h(true)">
                                     <i class="bi bi-check-circle-fill me-1"></i> Cerrar y Guardar Día
                                 </button>
                             </div>

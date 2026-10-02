@@ -3,6 +3,7 @@ Router - Asistencia
 Endpoints para procesar y consultar asistencia
 """
 
+import json
 from backend.core.fast_json import fast_json
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks
 from pydantic import BaseModel

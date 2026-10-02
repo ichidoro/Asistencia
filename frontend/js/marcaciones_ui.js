@@ -7106,6 +7106,14 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
 
 // ─── PARSER Y RENDERIZADOR DE SLOTS DE LIBRETA ART. 25 BIS (180 HORAS) ────
 function _parseSlotsArt25bis(slots_96) {
+    // La libreta se guarda como JSON de enteros ([1,1,4,0,...]); también se acepta cadena de letras (M/E/A/D/0)
+    if (typeof slots_96 === 'string' && slots_96.trim().startsWith('[')) {
+        try { slots_96 = JSON.parse(slots_96); } catch (_) { return null; }
+    }
+    if (Array.isArray(slots_96)) {
+        const codeMap = { 1: 'M', 2: 'E', 3: 'A', 4: 'D' };
+        slots_96 = Array.from({ length: 96 }, (_, i) => codeMap[Number(slots_96[i])] || '0').join('');
+    }
     if (!slots_96 || typeof slots_96 !== 'string' || slots_96.length < 96) {
         return null;
     }
@@ -7200,10 +7208,10 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     const slotsData = _parseSlotsArt25bis(slots_96);
     
     // Minutos del día
-    let minCond = di.minutos_conduccion || 0;
-    let minEsp = di.minutos_espera || 0;
-    let minAux = di.minutos_auxiliares || 0;
-    let minDesc = di.minutos_descanso || 0;
+    let minCond = Number(di.minutos_conduccion) || 0;
+    let minEsp = Number(di.minutos_espera) || 0;
+    let minAux = Number(di.minutos_auxiliares) || 0;
+    let minDesc = Number(di.minutos_descanso) || 0;
     
     if (slotsData) {
         minCond = slotsData.minConduccion;
