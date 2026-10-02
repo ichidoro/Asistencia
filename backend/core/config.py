@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     EASYTIME_URL: str = ""
     EASYTIME_USER: str = ""
     EASYTIME_PASSWORD: str = ""
+    # Correos (separados por coma) que reciben las alertas de la sincronización. Si está vacío, SMTP_USER.
+    ALERT_EMAIL_TO: str = ""
     
     # Scraping Configuration
     SCRAPER_ENABLED: bool = True
