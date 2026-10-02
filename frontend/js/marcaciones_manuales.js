@@ -2196,14 +2196,15 @@ window.submitViajeLargo = submitViajeLargo;
 let m180_slots = new Array(96).fill(0);
 let m180_actividad_seleccionada = 1;
 let m180_is_pointer_down = false;
-let m180_drag_act = 1;
+let m180_drag_mode = 'paint'; // 'paint' | 'erase'
+let m180_brush_mode = false;  // Modo Pincel (marcar al pasar el cursor)
 let m180_grid_initialized = false;
 
 const M180_ACTIVIDADES = {
-    1: { id: 1, name: 'CONDUCCIÓN', short: 'COND', bg: '#ecfdf5', border: '#059669', color: '#065f46', activeBg: '#10b981', activeText: '#ffffff' },
-    2: { id: 2, name: 'ESPERA', short: 'ESP', bg: '#fffbeb', border: '#d97706', color: '#92400e', activeBg: '#f59e0b', activeText: '#ffffff' },
-    3: { id: 3, name: 'LABORES AUXILIARES', short: 'AUX', bg: '#eef2ff', border: '#4f46e5', color: '#3730a3', activeBg: '#6366f1', activeText: '#ffffff' },
-    4: { id: 4, name: 'DESCANSO', short: 'DESC', bg: '#f0f9ff', border: '#0284c7', color: '#075985', activeBg: '#0ea5e9', activeText: '#ffffff' }
+    1: { id: 1, name: 'CONDUCCIÓN', short: 'COND', bg: '#ecfdf5', border: '#059669', color: '#065f46', activeBg: '#059669', activeText: '#ffffff' },
+    2: { id: 2, name: 'ESPERA', short: 'ESP', bg: '#fffbeb', border: '#d97706', color: '#92400e', activeBg: '#d97706', activeText: '#ffffff' },
+    3: { id: 3, name: 'LABORES AUXILIARES', short: 'AUX', bg: '#eef2ff', border: '#4f46e5', color: '#3730a3', activeBg: '#4f46e5', activeText: '#ffffff' },
+    4: { id: 4, name: 'DESCANSO', short: 'DESC', bg: '#f0f9ff', border: '#0284c7', color: '#075985', activeBg: '#0284c7', activeText: '#ffffff' }
 };
 
 function formatMinToHHMM(minutos) {
@@ -2213,58 +2214,96 @@ function formatMinToHHMM(minutos) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function formatSlotToHHMM(slot) {
+    if (slot >= 96) return '24:00';
+    const h = Math.floor(slot / 4);
+    const m = (slot % 4) * 15;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 function initLibreta180hGrid() {
     const headerHours = document.getElementById('m180-header-hours');
     const headerSlots = document.getElementById('m180-header-slots');
     const tbody = document.getElementById('m180-grid-tbody');
     if (!headerHours || !headerSlots || !tbody) return;
 
-    // 1. Horas (24 columnas con colspan=4)
-    let hoursHtml = `<th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:20; background:#e2e8f0;">ACTIVIDAD</th>`;
+    // 1. Horas (24 bloques con colspan=4, ancho 152px cada hora = 4 * 38px)
+    let hoursHtml = `<th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:25; background:#e2e8f0; box-shadow: 2px 0 5px rgba(0,0,0,0.05); white-space:nowrap !important;">ACTIVIDAD</th>`;
     for (let h = 0; h < 24; h++) {
         const hh = String(h).padStart(2, '0');
-        hoursHtml += `<th colspan="4" class="align-middle border-start text-center text-dark fw-bold" style="min-width:104px; font-size:0.75rem; background:#f1f5f9; border-left:2px solid #94a3b8 !important;">${hh}:00</th>`;
+        hoursHtml += `<th colspan="4" class="align-middle text-center fw-bold" style="width:152px; min-width:152px; max-width:152px; font-size:0.78rem; background:#0f172a; color:#f8fafc; border-left:2px solid #334155 !important; white-space:nowrap !important; padding:4px 0;">
+            <div class="d-flex align-items-center justify-content-center gap-1 font-monospace">
+                <i class="bi bi-clock text-warning" style="font-size:0.7rem;"></i><span>${hh}:00</span>
+            </div>
+        </th>`;
     }
-    hoursHtml += `<th class="align-middle px-2 bg-slate-200 text-dark fw-bold" style="width:90px; min-width:90px; background:#e2e8f0;">TOTAL</th>`;
+    hoursHtml += `<th class="align-middle px-2 bg-slate-200 text-dark fw-bold text-center" style="width:90px; min-width:90px; background:#e2e8f0; white-space:nowrap !important;">TOTAL</th>`;
     headerHours.innerHTML = hoursHtml;
 
-    // 2. Sub-tramos (96 columnas de 15 min)
-    let slotsHtml = `<th class="text-start px-2 py-1 align-middle" style="position:sticky; left:0; z-index:20; background:#f8fafc; font-size:0.65rem;">SUB-TRAMO</th>`;
+    // 2. Sub-tramos (96 columnas de 15 min, ancho 38px cada una, en una sola línea horizontal)
+    let slotsHtml = `<th class="text-start px-2 py-1 align-middle" style="position:sticky; left:0; z-index:25; background:#f8fafc; font-size:0.68rem; color:#475569; font-weight:700; box-shadow: 2px 0 5px rgba(0,0,0,0.05); white-space:nowrap !important;">SUB-TRAMO</th>`;
     for (let s = 0; s < 96; s++) {
         const minQ = (s % 4) * 15;
         const mm = String(minQ).padStart(2, '0');
-        const borderLeft = (s % 4 === 0) ? 'border-left:2px solid #94a3b8 !important;' : 'border-left:1px solid #e2e8f0;';
-        slotsHtml += `<th class="py-1 text-center font-monospace" style="width:26px; min-width:26px; max-width:26px; ${borderLeft} font-size:0.58rem; color:#64748b;">:${mm}</th>`;
+        const isHourStart = (s % 4 === 0);
+        const borderStyle = isHourStart ? 'border-left:2px solid #334155 !important;' : 'border-left:1px solid #cbd5e1;';
+        const bgStyle = isHourStart ? 'background:#e2e8f0; color:#0f172a; font-weight:800;' : 'background:#f8fafc; color:#64748b; font-weight:600;';
+        slotsHtml += `<th class="text-center font-monospace" style="width:38px; min-width:38px; max-width:38px; ${borderStyle} ${bgStyle} font-size:0.65rem; padding:3px 0; white-space:nowrap !important; user-select:none;">:${mm}</th>`;
     }
-    slotsHtml += `<th class="py-1 text-center align-middle font-monospace" style="font-size:0.65rem;">HRS</th>`;
+    slotsHtml += `<th class="py-1 text-center align-middle font-monospace fw-bold" style="font-size:0.68rem; background:#f8fafc; color:#475569; white-space:nowrap !important;">HRS</th>`;
     headerSlots.innerHTML = slotsHtml;
 
-    // 3. Filas de actividades (4 filas)
+    // 3. Filas de actividades (4 filas, interacción directa por fila)
     let rowsHtml = '';
     const acts = [1, 2, 3, 4];
     acts.forEach(actId => {
         const cfg = M180_ACTIVIDADES[actId];
         rowsHtml += `<tr id="m180-row-act-${actId}">
-            <td class="text-start px-2 align-middle fw-bold text-truncate" style="position:sticky; left:0; z-index:20; background:${cfg.bg}; color:${cfg.color}; border-left:4px solid ${cfg.border}; width:190px; min-width:190px; max-width:190px; font-size:0.72rem;">
-                <span class="d-inline-block rounded-circle me-1.5" style="width:8px;height:8px;background:${cfg.border};"></span>
-                ${cfg.name}
+            <td class="text-start px-2 align-middle fw-bold" style="position:sticky; left:0; z-index:20; background:${cfg.bg}; color:${cfg.color}; border-left:5px solid ${cfg.border}; width:190px; min-width:190px; max-width:190px; font-size:0.75rem; box-shadow: 2px 0 5px rgba(0,0,0,0.05); user-select:none; white-space:nowrap !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span>${actId}. ${cfg.name}</span>
+                    <span class="badge" style="background:${cfg.border}; color:#ffffff; font-size:0.6rem; padding:2px 4px;">${cfg.short}</span>
+                </div>
             </td>`;
         for (let s = 0; s < 96; s++) {
-            const borderLeft = (s % 4 === 0) ? 'border-left:2px solid #94a3b8 !important;' : 'border-left:1px solid #e2e8f0;';
+            const isHourStart = (s % 4 === 0);
+            const borderStyle = isHourStart ? 'border-left:2px solid #334155 !important;' : 'border-left:1px solid #e2e8f0;';
+            const horaStr = formatSlotToHHMM(s);
+            const horaSigStr = formatSlotToHHMM(s + 1);
             rowsHtml += `<td class="m180-slot-cell p-0 align-middle text-center" 
                 data-slot="${s}" 
                 data-act="${actId}" 
-                style="width:26px; min-width:26px; max-width:26px; height:30px; cursor:pointer; background:#ffffff; ${borderLeft} user-select:none;"
-                title="Tramo ${s}: ${Math.floor(s/4).toString().padStart(2,'0')}:${((s%4)*15).toString().padStart(2,'0')} - ${cfg.name}">
+                style="width:38px; min-width:38px; max-width:38px; height:34px; cursor:pointer; background:#ffffff; ${borderStyle} user-select:none; white-space:nowrap !important;"
+                title="${horaStr} - ${horaSigStr} (${cfg.name})">
             </td>`;
         }
-        rowsHtml += `<td class="text-end px-2 align-middle font-monospace fw-bold" id="m180-tot-act-${actId}" style="background:${cfg.bg}; color:${cfg.color}; font-size:0.75rem;">00:00</td>
+        rowsHtml += `<td class="text-end px-2 align-middle font-monospace fw-bold" id="m180-tot-act-${actId}" style="background:${cfg.bg}; color:${cfg.color}; font-size:0.78rem; white-space:nowrap !important;">00:00</td>
         </tr>`;
     });
     tbody.innerHTML = rowsHtml;
 
+    initRangoHorarioOptions();
     setupLibretaGridInteractions();
     m180_grid_initialized = true;
+}
+
+function initRangoHorarioOptions() {
+    const selDesde = document.getElementById('m180-rango-desde');
+    const selHasta = document.getElementById('m180-rango-hasta');
+    if (!selDesde || !selHasta) return;
+
+    let optsDesde = '';
+    let optsHasta = '';
+    for (let s = 0; s < 96; s++) {
+        const hIni = formatSlotToHHMM(s);
+        const hFin = formatSlotToHHMM(s + 1);
+        optsDesde += `<option value="${s}">${hIni}</option>`;
+        optsHasta += `<option value="${s}">${hFin}</option>`;
+    }
+    selDesde.innerHTML = optsDesde;
+    selHasta.innerHTML = optsHasta;
+    selDesde.value = "0";
+    selHasta.value = "95";
 }
 
 function setupLibretaGridInteractions() {
@@ -2273,40 +2312,66 @@ function setupLibretaGridInteractions() {
 
     gridContainer.oncontextmenu = (e) => e.preventDefault();
 
-    gridContainer.addEventListener('pointerdown', (e) => {
-        const cell = e.target.closest('.m180-slot-cell');
+    function interactWithCell(cell, isClick = false) {
         if (!cell) return;
-        m180_is_pointer_down = true;
         const slot = parseInt(cell.dataset.slot);
         const actOfCell = parseInt(cell.dataset.act);
+        if (isNaN(slot) || isNaN(actOfCell)) return;
 
-        if (m180_actividad_seleccionada === 0) {
-            m180_slots[slot] = 0;
-            m180_drag_act = 0;
-        } else {
-            if (m180_slots[slot] === actOfCell && m180_actividad_seleccionada === actOfCell) {
+        if (isClick) {
+            // Clic directo: si ya está asignado a esta misma actividad, se apaga (toggle off)
+            if (m180_slots[slot] === actOfCell) {
                 m180_slots[slot] = 0;
-                m180_drag_act = 0;
+                m180_drag_mode = 'erase';
             } else {
-                m180_slots[slot] = m180_actividad_seleccionada;
-                m180_drag_act = m180_actividad_seleccionada;
+                m180_slots[slot] = actOfCell;
+                m180_drag_mode = 'paint';
+            }
+        } else {
+            // Arrastre o modo pincel
+            if (m180_drag_mode === 'erase') {
+                if (m180_slots[slot] === actOfCell) {
+                    m180_slots[slot] = 0;
+                }
+            } else {
+                m180_slots[slot] = actOfCell;
             }
         }
         updateSlotVisuals(slot);
         recalcLibretaTotales();
+    }
+
+    gridContainer.addEventListener('pointerdown', (e) => {
+        const cell = e.target.closest('.m180-slot-cell');
+        if (!cell) return;
+        m180_is_pointer_down = true;
+        interactWithCell(cell, true);
     });
 
     gridContainer.addEventListener('pointerover', (e) => {
-        if (!m180_is_pointer_down) return;
         const cell = e.target.closest('.m180-slot-cell');
         if (!cell) return;
-        const slot = parseInt(cell.dataset.slot);
-        if (m180_slots[slot] !== m180_drag_act) {
-            m180_slots[slot] = m180_drag_act;
-            updateSlotVisuals(slot);
-            recalcLibretaTotales();
+        if (m180_brush_mode) {
+            // Modo Pincel activo: pintar directamente al pasar el cursor
+            m180_drag_mode = 'paint';
+            interactWithCell(cell, false);
+        } else if (m180_is_pointer_down) {
+            // Arrastre con clic presionado
+            interactWithCell(cell, false);
         }
     });
+
+    // Soporte para arrastre táctil fluido en pantallas touch / tablets
+    gridContainer.addEventListener('touchmove', (e) => {
+        if (!m180_is_pointer_down && !m180_brush_mode) return;
+        const touch = e.touches[0];
+        if (!touch) return;
+        const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+        const cell = elem ? elem.closest('.m180-slot-cell') : null;
+        if (cell) {
+            interactWithCell(cell, false);
+        }
+    }, { passive: true });
 
     window.addEventListener('pointerup', () => {
         m180_is_pointer_down = false;
@@ -2324,12 +2389,14 @@ function updateSlotVisuals(slot) {
         const cfg = M180_ACTIVIDADES[actId];
         if (act === actId) {
             cell.style.background = cfg.activeBg;
-            cell.style.color = cfg.activeText;
-            cell.innerHTML = `<span style="font-size:0.55rem;font-weight:900;">■</span>`;
+            cell.style.color = '#ffffff';
+            cell.innerHTML = `<span style="font-size:0.62rem; font-weight:800; font-family:monospace; line-height:1;">${cfg.short}</span>`;
+            cell.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.2)';
         } else {
             cell.style.background = '#ffffff';
             cell.style.color = 'transparent';
             cell.innerHTML = '';
+            cell.style.boxShadow = 'none';
         }
     });
 }
@@ -2340,19 +2407,48 @@ function refreshAllSlotsVisuals() {
     }
 }
 
+function toggleLibretaBrushMode(enabled) {
+    m180_brush_mode = Boolean(enabled);
+    const lbl = document.getElementById('m180-brush-label');
+    const chk = document.getElementById('m180-toggle-brush');
+    if (chk) chk.checked = m180_brush_mode;
+    if (lbl) {
+        if (m180_brush_mode) {
+            lbl.innerHTML = `<span class="text-success"><i class="bi bi-brush-fill me-1"></i> Modo Pincel: ACTIVO</span>`;
+        } else {
+            lbl.innerHTML = `<span>🖌️ Pintar al pasar (Hover)</span>`;
+        }
+    }
+    const container = document.getElementById('m180-grid-scroll');
+    if (container) {
+        container.style.cursor = m180_brush_mode ? 'crosshair' : 'default';
+    }
+}
+
+function aplicarRango180h() {
+    const actId = parseInt(document.getElementById('m180-rango-act')?.value || '1');
+    const startSlot = parseInt(document.getElementById('m180-rango-desde')?.value || '0');
+    const endSlot = parseInt(document.getElementById('m180-rango-hasta')?.value || '0');
+
+    if (isNaN(startSlot) || isNaN(endSlot)) return;
+    const from = Math.min(startSlot, endSlot);
+    const to = Math.max(startSlot, endSlot);
+
+    for (let s = from; s <= to; s++) {
+        m180_slots[s] = actId;
+        updateSlotVisuals(s);
+    }
+    recalcLibretaTotales();
+    if (typeof showToast === 'function') {
+        const hFrom = formatSlotToHHMM(from);
+        const hTo = formatSlotToHHMM(to + 1);
+        const name = actId === 0 ? 'Vacío / Borrado' : M180_ACTIVIDADES[actId]?.name || '';
+        showToast(`Tramo ${hFrom} a ${hTo} marcado como ${name}`, "success");
+    }
+}
+
 function setLibretaActividad(actId) {
     m180_actividad_seleccionada = actId;
-    document.querySelectorAll('.m180-btn-act').forEach(btn => {
-        const btnAct = parseInt(btn.dataset.act);
-        if (btnAct === actId) {
-            btn.classList.add('active', 'shadow-sm');
-            btn.style.borderColor = btnAct === 1 ? '#059669' : btnAct === 2 ? '#d97706' : btnAct === 3 ? '#4f46e5' : btnAct === 4 ? '#0284c7' : '#475569';
-            btn.style.borderWidth = '2px';
-        } else {
-            btn.classList.remove('active', 'shadow-sm');
-            btn.style.borderWidth = '1px';
-        }
-    });
 }
 
 function libreta180hAutoDescanso() {
@@ -2610,5 +2706,7 @@ window.setLibretaActividad = setLibretaActividad;
 window.libreta180hAutoDescanso = libreta180hAutoDescanso;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
+window.toggleLibretaBrushMode = toggleLibretaBrushMode;
+window.aplicarRango180h = aplicarRango180h;
 
 

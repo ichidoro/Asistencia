@@ -4796,42 +4796,82 @@
                             <input type="hidden" id="m180-empleado-id">
                             <input type="hidden" id="m180-fecha-str">
 
-                            <!-- Barra de Paleta de Actividades (Selectores interactivos) -->
+                            <!-- Barra de Paleta de Actividades y Herramientas Inteligentes -->
                             <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
-                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                    <div class="fw-bold text-dark d-flex align-items-center gap-1.5" style="font-size:0.82rem;">
-                                        <i class="bi bi-palette2 text-primary"></i> Herramienta de Marcación: Seleccione la actividad y arrastre o toque sobre la grilla
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle px-2.5 py-1.5 fw-bold" style="font-size:0.78rem;">
+                                            <i class="bi bi-hand-index-thumb me-1"></i> Marcación Directa por Fila
+                                        </span>
+                                        <span class="text-secondary" style="font-size:0.75rem;">
+                                            Toque o pase el cursor directamente por cualquier fila para marcarla sin necesidad de presionar botones.
+                                        </span>
                                     </div>
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
-                                            <i class="bi bi-magic me-1"></i> Rellenar vacíos con Descanso
+                                    <div class="d-flex align-items-center gap-2">
+                                        <!-- Switch Modo Pincel (Hover to Paint) -->
+                                        <div class="form-check form-switch m-0 d-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
+                                            <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
+                                            <label class="form-check-label fw-bold small text-dark mb-0 user-select-none" for="m180-toggle-brush" style="font-size:0.75rem; cursor:pointer;" id="m180-brush-label">
+                                                🖌️ Pintar al pasar (Hover)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Herramienta de Rango Rápido -->
+                                <div class="p-2 rounded-2 border bg-light d-flex flex-wrap align-items-center gap-2 mb-2" style="font-size:0.78rem;">
+                                    <div class="fw-bold text-dark d-flex align-items-center gap-1">
+                                        <i class="bi bi-lightning-charge-fill text-warning"></i> Rellenar Tramo Rápido:
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="text-muted small">Actividad:</span>
+                                        <select id="m180-rango-act" class="form-select form-select-sm fw-bold" style="width:150px; font-size:0.75rem;">
+                                            <option value="1" selected>1. Conducción</option>
+                                            <option value="2">2. Espera</option>
+                                            <option value="3">3. Labores Auxil.</option>
+                                            <option value="4">4. Descanso</option>
+                                            <option value="0">0. Borrar (Vacío)</option>
+                                        </select>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="text-muted small">Desde:</span>
+                                        <select id="m180-rango-desde" class="form-select form-select-sm font-monospace" style="width:90px; font-size:0.75rem;"></select>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="text-muted small">Hasta:</span>
+                                        <select id="m180-rango-hasta" class="form-select form-select-sm font-monospace" style="width:90px; font-size:0.75rem;"></select>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-primary px-3 fw-bold" onclick="window.aplicarRango180h()" style="font-size:0.75rem;">
+                                        <i class="bi bi-check-circle me-1"></i> Aplicar Tramo
+                                    </button>
+                                    <div class="ms-auto d-flex gap-1">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:0.73rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
+                                            <i class="bi bi-magic me-1"></i> Rellenar Vacíos con Descanso
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
-                                            <i class="bi bi-eraser me-1"></i> Limpiar Todo
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.73rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
+                                            <i class="bi bi-trash3 me-1"></i> Limpiar Todo
                                         </button>
                                     </div>
                                 </div>
 
-                                <div class="d-flex flex-wrap gap-2" id="m180-palette-container">
-                                    <button type="button" class="btn btn-sm m180-btn-act active shadow-sm" data-act="1" onclick="window.setLibretaActividad(1)" style="border: 2px solid #059669; background:#ecfdf5; color:#065f46; font-weight:700;">
-                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#059669;"></span>
-                                        1. CONDUCCIÓN <small class="fw-normal opacity-75">(Máx. 5h continuas)</small>
-                                    </button>
-                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="2" onclick="window.setLibretaActividad(2)" style="border: 1px solid #d97706; background:#fffbeb; color:#92400e; font-weight:700;">
-                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#d97706;"></span>
-                                        2. ESPERA <small class="fw-normal opacity-75">(Máx. 88h/mes retribuidas)</small>
-                                    </button>
-                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="3" onclick="window.setLibretaActividad(3)" style="border: 1px solid #4f46e5; background:#eef2ff; color:#3730a3; font-weight:700;">
-                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#4f46e5;"></span>
-                                        3. LABORES AUXILIARES <small class="fw-normal opacity-75">(Carga, estiba, mtto)</small>
-                                    </button>
-                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="4" onclick="window.setLibretaActividad(4)" style="border: 1px solid #0284c7; background:#f0f9ff; color:#075985; font-weight:700;">
-                                        <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#0284c7;"></span>
-                                        4. DESCANSO <small class="fw-normal opacity-75">(Intermedio 2h / Diario 8h)</small>
-                                    </button>
-                                    <button type="button" class="btn btn-sm m180-btn-act" data-act="0" onclick="window.setLibretaActividad(0)" style="border: 1px solid #cbd5e1; background:#f8fafc; color:#64748b; font-weight:600;">
-                                        <i class="bi bi-x-circle me-1"></i> Borrador
-                                    </button>
+                                <!-- Leyenda Informativa de Actividades -->
+                                <div class="d-flex flex-wrap gap-2 pt-1" id="m180-palette-container">
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#059669 !important; background:#ecfdf5; color:#065f46; font-size:0.74rem; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#059669;"></span>
+                                        1. CONDUCCIÓN <span class="fw-normal opacity-75">(Máx. 5h continuas)</span>
+                                    </div>
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#d97706 !important; background:#fffbeb; color:#92400e; font-size:0.74rem; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#d97706;"></span>
+                                        2. ESPERA <span class="fw-normal opacity-75">(Máx. 88h/mes retribuidas)</span>
+                                    </div>
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#4f46e5 !important; background:#eef2ff; color:#3730a3; font-size:0.74rem; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#4f46e5;"></span>
+                                        3. LABORES AUXILIARES <span class="fw-normal opacity-75">(Carga, estiba, mtto)</span>
+                                    </div>
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#0284c7 !important; background:#f0f9ff; color:#075985; font-size:0.74rem; font-weight:700;">
+                                        <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#0284c7;"></span>
+                                        4. DESCANSO <span class="fw-normal opacity-75">(Intermedio 2h / Diario 8h)</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -4839,18 +4879,18 @@
                             <div class="card border border-dark-subtle shadow-sm mb-3 overflow-hidden" style="border-radius:12px;">
                                 <div class="bg-dark text-white py-1.5 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:0.75rem;">
                                     <span class="fw-bold text-uppercase"><i class="bi bi-clock-history me-1 text-warning"></i> Grilla Continua 24 Horas (Tramos de 15 Minutos)</span>
-                                    <span class="text-white-50" style="font-size:0.7rem;">Arrastre con el mouse o dedo para pintar de corrido</span>
+                                    <span class="text-white-50" style="font-size:0.7rem;">Pase el cursor o toque directamente la fila para pintar</span>
                                 </div>
                                 <div class="table-responsive m180-grid-container" id="m180-grid-scroll" style="max-height:380px; user-select:none; touch-action:none;">
                                     <table class="table table-bordered table-sm mb-0 text-center m180-table" style="font-size:0.72rem; border-collapse:separate; border-spacing:0;">
                                         <thead style="position:sticky; top:0; z-index:10; background:#f1f5f9;">
                                             <tr id="m180-header-hours">
-                                                <th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:200px; min-width:200px; max-width:200px; position:sticky; left:0; z-index:20;">ACTIVIDAD</th>
+                                                <th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:25;">ACTIVIDAD</th>
                                                 <!-- 24 Horas con colspan="4" generadas por JS -->
-                                                <th class="align-middle px-2 bg-slate-200 text-dark fw-bold" style="width:90px; min-width:90px;">TOTAL</th>
+                                                <th class="align-middle px-2 bg-slate-200 text-dark fw-bold text-center" style="width:90px; min-width:90px;">TOTAL</th>
                                             </tr>
-                                            <tr id="m180-header-slots" style="font-size:0.6rem; color:#64748b; background:#f8fafc;">
-                                                <th class="text-start px-2 py-0 align-middle" style="position:sticky; left:0; z-index:20; background:#f8fafc;">SUB-TRAMO</th>
+                                            <tr id="m180-header-slots" style="font-size:0.65rem; color:#64748b; background:#f8fafc;">
+                                                <th class="text-start px-2 py-0 align-middle" style="position:sticky; left:0; z-index:25; background:#f8fafc;">SUB-TRAMO</th>
                                                 <!-- 96 sub-tramos generados por JS -->
                                                 <th class="py-0 align-middle">HRS</th>
                                             </tr>
