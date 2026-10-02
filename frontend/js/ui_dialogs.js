@@ -69,6 +69,37 @@
         })).catch(() => { /* un fallo de render no debe cortar la cola */ });
     };
 
+    // ── GET idénticos simultáneos comparten una sola petición ────────────────
+    // Cada petición cuesta ~300 ms por el túnel; el arranque repetía varias (permisos, cumpleaños…).
+    // Solo agrupa las que están en vuelo a la vez: no guarda respuestas, así que nunca sirve datos viejos.
+    const nativeFetch = window.fetch.bind(window);
+    const inflight = new Map();
+    const SKIP = /[?&]_t=|last-change|\/api\/version|\/health|\/ping/;
+    window.fetch = function (input, init) {
+        try {
+            const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+            const url = typeof input === 'string' ? input : (input && input.url);
+            const hasSignal = (init && init.signal) || (input && typeof input !== 'string' && input.signal);
+            if (method !== 'GET' || !url || hasSignal || (init && init.cache) || SKIP.test(url)) {
+                return nativeFetch(input, init);
+            }
+            let auth = '';
+            const h = init && init.headers;
+            if (h) auth = typeof h.get === 'function' ? (h.get('Authorization') || '') : (h.Authorization || h.authorization || '');
+            const key = url + '|' + auth;
+            let p = inflight.get(key);
+            if (!p) {
+                p = nativeFetch(input, init);
+                inflight.set(key, p);
+                const done = () => inflight.delete(key);
+                p.then(done, done);
+            }
+            return p.then((r) => r.clone());
+        } catch (_) {
+            return nativeFetch(input, init);
+        }
+    };
+
     // ── Carga diferida de librerías pesadas (se descargan al primer uso) ────
     const LIBS = {
         jspdf: ['/static/js/jspdf.umd.min.js', '/static/js/jspdf.plugin.autotable.min.js'],

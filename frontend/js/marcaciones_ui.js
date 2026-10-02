@@ -644,6 +644,7 @@ function updateMarcacionesState(key, value) {
 // ── DEBOUNCE GUARD: evitar múltiples cargas simultáneas ──────────────────
 let _loadMarcacionesInProgress = false;
 let _loadMarcacionesDebounceTimer = null;
+let _lastLoadMarcacionesCall = 0;
 
 // Exponer globalmente para ser visible desde bypassSecurityWall y otros modales
 window.loadMarcacionesData = async function() {
@@ -656,14 +657,18 @@ window.loadMarcacionesData = async function() {
         return;
     }
 
-    // Debounce: cancelar llamadas rápidas consecutivas (300ms)
-    if (_loadMarcacionesDebounceTimer) {
-        clearTimeout(_loadMarcacionesDebounceTimer);
+    // Debounce con borde de entrada: la primera llamada corre de inmediato; solo las ráfagas esperan 300ms
+    const _ahoraLoad = Date.now();
+    const _esRafaga = (_ahoraLoad - _lastLoadMarcacionesCall) < 300 || !!_loadMarcacionesDebounceTimer;
+    _lastLoadMarcacionesCall = _ahoraLoad;
+    if (_esRafaga) {
+        if (_loadMarcacionesDebounceTimer) {
+            clearTimeout(_loadMarcacionesDebounceTimer);
+        }
+        await new Promise(resolve => {
+            _loadMarcacionesDebounceTimer = setTimeout(resolve, 300);
+        });
     }
-
-    await new Promise(resolve => {
-        _loadMarcacionesDebounceTimer = setTimeout(resolve, 300);
-    });
 
     // Verificar nuevamente después del debounce (otra llamada puede haber tomado el lock)
     if (_loadMarcacionesInProgress) {
@@ -696,11 +701,9 @@ async function _loadMarcacionesDataImpl() {
     // 🛑 BLOQUEO DE SEGURIDAD (PLAN V29+)
     // El sistema valida SIEMPRE si hay empleados con marcas pero sin turno (Fantasmas)
     // El bloqueo es mandatorio para el área de responsabilidad del usuario.
-    const isBlocked = await checkAuditoriaBloqueo();
-    if (isBlocked) {
-        console.warn("⚠️ ACCESO BLOQUEADO: Se detectaron empleados con marcas pero sin turno asignado.");
-        return; 
-    }
+    // Se lanza en paralelo con la carga de la matriz (cada petición cuesta ~300 ms por el túnel);
+    // si resulta bloqueado, se descarta la matriz más abajo.
+    const bloqueoPromise = checkAuditoriaBloqueo();
 
     // 🐛 DEBUG: Estado completo
     console.group('🔍 DEBUG: loadMarcacionesData');
@@ -742,7 +745,15 @@ async function _loadMarcacionesDataImpl() {
 
         console.log('URL generada:', url);
 
-        const resp = await fetch(url, { signal });
+        const fetchPromise = fetch(url, { signal });
+        fetchPromise.catch(() => { /* si hay bloqueo y se aborta, no dejar el rechazo sin manejar */ });
+        if (await bloqueoPromise) {
+            console.warn("⚠️ ACCESO BLOQUEADO: Se detectaron empleados con marcas pero sin turno asignado.");
+            _currentMarcacionesAbortController.abort();
+            console.groupEnd();
+            return;
+        }
+        const resp = await fetchPromise;
         if (!resp.ok) throw new Error("Error fetching data");
         const data = await resp.json();
 
