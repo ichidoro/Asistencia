@@ -100,49 +100,53 @@ class GeminiVisionService:
         prompt = f"""Eres un perito experto en lectura visual forense de Libretas Oficiales de Control de Asistencia de Choferes de Carga Terrestre (Chile, Resolución Exenta N° 1213 de la Dirección del Trabajo / Art. 25 bis del Código del Trabajo).
 
 CONTEXTO Y ANATOMÍA DE LA HOJA FÍSICA:
-- La fotografía capturada corresponde a una hoja de control de jornada.
-- En la hoja física suele haber 5 bloques impresos en paralelo (uno para cada día).
+- La fotografía corresponde a la Libreta Oficial de Asistencia de Choferes (Art. 25 bis DT / Res. Ex. 1213 Chile).
+- En este formato oficial, la hoja semanal contiene 5 o 6 columnas verticales (una para cada día).
+- La imagen enviada corresponde al ENCUADRE DE UN SOLO DÍA (columna vertical alta y esbelta) o a la hoja completa si se subió foto panorámica.
 - La aplicación y el usuario YA TIENEN ASIGNADO el día y chofer a ingresar{f" (Fecha esperada: {fecha_esperada})" if fecha_esperada else ""}.
-- TU OBJETIVO: Analizar el bloque principal de 24 horas visible en la imagen (o el bloque central/más destacado si hay varios visibles) y extraer con precisión milimétrica los trazos manuscritos del chofer sobre la regleta horaria.
+- TU OBJETIVO: Analizar la columna de 24 horas del día (si hay franjas de columnas adyacentes a los costados, concéntrate 100% en la columna central completa) y extraer con precisión milimétrica los trazos manuscritos del chofer sobre la regleta horaria.
 
-ESTRUCTURA DE LAS 4 FILAS IMPRESAS EN CADA BLOQUE (De arriba hacia abajo):
-1. FILA 1 (Superior) = CONDUCCIÓN (Código 1):
-   - Tiempo manejando al volante. Línea azul/negra manuscrita en este carril = Código 1.
-2. FILA 2 = TIEMPO DE ESPERA (Código 2):
-   - Espera en andén, fiscalización o turno sin conducir. Línea en este carril = Código 2.
-3. FILA 3 = DESCANSO (Código 4):
-   - Pausa legal, colación o reposo. Línea en este carril = Código 4.
-4. FILA 4 (Inferior) = TAREAS AUXILIARES / LABORES AUXILIARES (Código 3):
-   - ¡PRIORIDAD CRÍTICA! La cuarta fila (la de más abajo) corresponde a TAREAS AUXILIARES (revisión mecánica, estiba, carga/descarga, papeleo).
-   - Cualquier trazo horizontal manuscrito en esta cuarta fila DEBE codificarse obligatoriamente con el código 3.
+ESTRUCTURA DE LOS 4 CARRILES DE ACTIVIDAD EN CADA DÍA:
+1. CARRIL 1 = CONDUCCIÓN (Código 1):
+   - Tiempo al volante manejando el camión/bus. Trazo de bolígrafo en este carril = Código 1.
+2. CARRIL 2 = TIEMPO DE ESPERA (Código 2):
+   - Espera en andén, fiscalización o turno sin conducir. Trazo en este carril = Código 2.
+3. CARRIL 3 = DESCANSO (Código 4):
+   - Pausa legal, colación o reposo. Trazo en este carril = Código 4.
+4. CARRIL 4 = TAREAS AUXILIARES / LABORES AUXILIARES (Código 3):
+   - ¡PRIORIDAD CRÍTICA! Tareas de revisión mecánica, estiba, carga/descarga, papeleo.
+   - Cualquier trazo de lápiz en este carril DEBE codificarse obligatoriamente con el código 3.
 
 REGLAS DE PRECISIÓN MILIMÉTRICA Y ANCLAJE GEOMÉTRICO:
-1. ORIENTACIÓN Y ANCLAJE HORIZONTAL (0 A 23):
-   - Las fotos pueden venir en vertical o giradas 90°. Oriéntala mentalmente para que la regleta de 0 a 23 vaya de izquierda a derecha.
-   - EXTREMO IZQUIERDO: La línea vertical divisoria que separa los textos ("CONDUCCION", etc.) de la columna "0" es el inicio del día: 00:00.
-   - EXTREMO DERECHO: La línea vertical que cierra la columna "23" antes de "DESTINO/Resumen" es el fin del día: 24:00.
+1. ORIENTACIÓN Y ANCLAJE HORARIO (0 A 24 HORAS):
+   - EN COLUMNAS VERTICALES: Las horas avanzan de ARRIBA hacia ABAJO:
+     * El extremo superior (bajo el encabezado ACTIVIDAD / FECHA) es el inicio del día: 00:00.
+     * Los números 0, 1, 2, ..., 23 corren secuencialmente hacia abajo hasta llegar a 24:00 (línea inferior antes de firmas/observaciones).
+     * Los 4 carriles (Conducción, Espera, Descanso, Auxiliares) corren en paralelo a lo largo de este eje.
+   - EN FOTOS ROTADAS O HORIZONTALES: Si la foto viene rotada, oriéntala mentalmente para hacer coincidir las horas de 0 a 23 con su progresión secuencial.
 
 2. SUBDIVISIONES DE 15 MINUTOS Y MEDIA HORA:
-   - Línea divisoria vertical entre columnas horarias (atraviesa las 4 filas) = :00 (hora en punto).
-   - Primer tick corto = :15.
-   - Segundo tick (marca central más larga) = :30 (media hora).
+   - Línea divisoria principal entre horas (marca de número de hora) = :00 (hora en punto).
+   - Primer tick / subdivisión corta = :15.
+   - Segundo tick (marca central más destacada) = :30 (media hora).
    - Tercer tick corto = :45.
-   - CRITERIO INCLUSIVO DE HORAS COMPLETAS: Si una línea manuscrita cubre una columna "H" completa hasta rozar o tocar la divisoria con la siguiente hora, abarca los 4 cuartos de hora de esa columna.
-     * Ejemplo: Si Conducción cubre columnas 6, 7, 8 y 9 hasta la divisoria con el 10, el tramo va de 06:00 a 10:00 (EXACTAMENTE 4.0 HORAS = 16 slots con código 1). NO recortes a 3.5h ni a 09:30.
-     * Ejemplo: Si Tareas Auxiliares inicia en el tick :30 de la columna 10 (10:30) y corre continuo cubriendo 11, 12, 13, 14, 15, 16, 17, 18, 19 hasta la línea divisoria del 20 (20:00), el tramo va de 10:30 a 20:00 (EXACTAMENTE 9.5 HORAS = 38 slots con código 3).
+   - CRITERIO INCLUSIVO DE HORAS COMPLETAS: Si una línea de lápiz pasta cubre una hora completa hasta tocar o rozar la divisoria con la siguiente hora, abarca los 4 cuartos de hora de esa hora.
+     * Ejemplo: Si Conducción cubre las horas 6, 7, 8 y 9 completas hasta rozar la divisoria del 10, el tramo va de 06:00 a 10:00 (EXACTAMENTE 4.0 HORAS = 16 slots con código 1). NO recortes a 3.5h ni a 09:30.
+     * Ejemplo: Si Tareas Auxiliares inicia en el tick :30 de la hora 10 (10:30) y corre continuo cubriendo 11, 12, 13, 14, 15, 16, 17, 18, 19 hasta la divisoria de las 20 (20:00), el tramo va de 10:30 a 20:00 (EXACTAMENTE 9.5 HORAS = 38 slots con código 3).
 
 3. TOLERANCIA A HOJAS ARRUGADAS, DOBLADAS O EN ÁNGULO:
    - Sigue el carril de forma topológica local: los ticks de la regleta y la tinta del lápiz se deforman juntos con el papel.
-   - Distingue la tinta de bolígrafo pasta (azul/negra orgánica, trazada por el centro del carril) de las líneas finas de imprenta de la cuadrícula.
+   - Distingue la tinta de bolígrafo pasta (azul/negra orgánica, trazada a mano por el chofer) de las líneas finas de imprenta de la cuadrícula.
+   - Si se aprecian franjas cortadas de días adyacentes a la izquierda o derecha en los bordes de la foto, IGNÓRALAS por completo. Concéntrate en la columna central encuadrada.
 
 4. ESPACIOS VACÍOS:
-   - Si no hay trazo físico en una fila (ej. Espera o Descanso vacías), sus slots son estrictamente 0.
+   - Si no hay trazo físico en un carril (ej. Espera o Descanso vacíos), sus slots son estrictamente 0.
 
 CÓDIGOS PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
-- 1: Conducción (Fila 1)
-- 2: Espera (Fila 2)
-- 3: Tareas Auxiliares (Fila 4)
-- 4: Descanso (Fila 3)
+- 1: Conducción (Carril 1)
+- 2: Espera (Carril 2)
+- 3: Tareas Auxiliares (Carril 4)
+- 4: Descanso (Carril 3)
 - 0: Vacío / Sin actividad
 
 RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:

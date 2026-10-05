@@ -2730,15 +2730,34 @@
 .scanner-corner.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 8px; }
 .scanner-corner.bottom-right { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 8px; }
 
-/* Silueta panorámica amplia e inmersiva (aprovecha 100% de la pantalla móvil y PC) */
+/* Silueta inteligente para 1 Día: Columna Vertical física (Art. 25 bis DT) */
+.scanner-guide-box-col-dia {
+    width: 44% !important;
+    height: 84% !important;
+    max-width: 250px;
+    max-height: 720px;
+    border: 2.5px dashed rgba(16, 185, 129, 0.9) !important;
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.58);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (min-width: 768px) {
+    .scanner-guide-box-col-dia {
+        width: 260px !important;
+        height: 80% !important;
+        max-height: 650px;
+    }
+}
+
+/* Silueta panorámica amplia para Hoja Completa / Semana */
 .scanner-guide-box-panoramic {
     width: 92% !important;
-    height: 55% !important;
+    height: 58% !important;
     max-height: 480px;
     border: 2px dashed rgba(16, 185, 129, 0.8) !important;
     border-radius: 12px;
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (orientation: landscape), (min-width: 768px) {
     .scanner-guide-box-panoramic {
@@ -2748,46 +2767,83 @@
     }
 }
 
-/* Silueta inteligente previa */
+/* Carriles de las 4 sub-columnas de actividad (Conducción, Espera, Descanso, Auxiliares) */
+.scanner-col-lanes {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: row;
+    pointer-events: none;
+    opacity: 0.7;
+}
+.scanner-col-lane {
+    flex: 1;
+    border-right: 1px dashed rgba(52, 211, 153, 0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 6px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: #a7f3d0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+}
+.scanner-col-lane:last-child {
+    border-right: none;
+}
+
+/* Regleta horaria de 24h a la izquierda de la columna */
+.scanner-col-timeline {
+    position: absolute;
+    left: -28px;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #34d399;
+    text-align: right;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+    padding: 6px 0;
+}
+
+/* Silueta previa legacy */
 .scanner-guide-box {
     transition: width 0.3s ease, height 0.3s ease;
 }
 .scanner-guide-box.mode-1day {
-    width: 94% !important;
-    height: 22% !important;
-    max-height: 180px;
-    border: 2px dashed rgba(16, 185, 129, 0.9) !important;
+    width: 44% !important;
+    height: 84% !important;
+    max-width: 250px;
+    max-height: 720px;
+    border: 2.5px dashed rgba(16, 185, 129, 0.9) !important;
 }
-@media (orientation: landscape), (min-width: 768px) {
-    .scanner-guide-box.mode-1day {
-        width: 88% !important;
-        height: 38% !important;
-        max-height: 240px;
-    }
-}
-
 .scanner-1day-lanes {
     position: absolute;
     inset: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     pointer-events: none;
     opacity: 0.6;
 }
 .scanner-1day-lane {
     flex: 1;
-    border-bottom: 1px dashed rgba(52, 211, 153, 0.35);
+    border-right: 1px dashed rgba(52, 211, 153, 0.35);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 8px;
+    justify-content: center;
     font-size: 0.62rem;
     color: #a7f3d0;
     font-weight: 700;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
 }
 .scanner-1day-lane:last-child {
-    border-bottom: none;
+    border-right: none;
 }
 
 .scanner-laser-line {

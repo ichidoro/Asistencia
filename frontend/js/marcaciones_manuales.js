@@ -2897,6 +2897,26 @@ window.abrirScannerLibreta = async function() {
     const modalEl = document.getElementById('modalScannerLibreta');
     if (!modalEl) return;
     
+    // Asegurar modo 1 Día (columna vertical) inicializado por defecto
+    window.scannerModoActual = 'dia';
+    const box = document.getElementById('scanner-guide-box');
+    if (box) {
+        box.classList.remove('scanner-guide-box-panoramic');
+        box.classList.add('scanner-guide-box-col-dia');
+    }
+    const txt = document.getElementById('txt-scanner-mode');
+    if (txt) txt.textContent = '1 Día';
+    const icon = document.getElementById('icon-scanner-mode');
+    if (icon) icon.className = 'bi bi-layout-sidebar-inset text-success';
+    const hint = document.getElementById('scanner-hud-hint');
+    if (hint) hint.textContent = 'Acerca a la columna de hoy (vertical)';
+    const lanes = document.getElementById('scanner-guide-lanes');
+    if (lanes) lanes.classList.remove('d-none');
+    const timeline = document.getElementById('scanner-guide-timeline');
+    if (timeline) timeline.classList.remove('d-none');
+    const label = document.getElementById('scanner-guide-label');
+    if (label) label.textContent = 'Columna del día (00 a 24h)';
+
     const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     bsModal.show();
     
@@ -2965,6 +2985,44 @@ function getJscanifyInstance() {
     return null;
 }
 
+window.scannerModoActual = 'dia';
+
+window.scannerToggleModoGuia = function() {
+    const box = document.getElementById('scanner-guide-box');
+    const txt = document.getElementById('txt-scanner-mode');
+    const icon = document.getElementById('icon-scanner-mode');
+    const hint = document.getElementById('scanner-hud-hint');
+    const lanes = document.getElementById('scanner-guide-lanes');
+    const timeline = document.getElementById('scanner-guide-timeline');
+    const label = document.getElementById('scanner-guide-label');
+
+    if (window.scannerModoActual === 'dia') {
+        window.scannerModoActual = 'hoja';
+        if (box) {
+            box.classList.remove('scanner-guide-box-col-dia');
+            box.classList.add('scanner-guide-box-panoramic');
+        }
+        if (txt) txt.textContent = 'Hoja';
+        if (icon) icon.className = 'bi bi-table text-warning';
+        if (hint) hint.textContent = 'Encuadra la hoja completa';
+        if (lanes) lanes.classList.add('d-none');
+        if (timeline) timeline.classList.add('d-none');
+        if (label) label.textContent = 'Hoja completa de asistencia';
+    } else {
+        window.scannerModoActual = 'dia';
+        if (box) {
+            box.classList.remove('scanner-guide-box-panoramic');
+            box.classList.add('scanner-guide-box-col-dia');
+        }
+        if (txt) txt.textContent = '1 Día';
+        if (icon) icon.className = 'bi bi-layout-sidebar-inset text-success';
+        if (hint) hint.textContent = 'Acerca a la columna de hoy (vertical)';
+        if (lanes) lanes.classList.remove('d-none');
+        if (timeline) timeline.classList.remove('d-none');
+        if (label) label.textContent = 'Columna del día (00 a 24h)';
+    }
+};
+
 window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
     const video = document.getElementById('scanner-live-video');
     const canvas = document.getElementById('scanner-hidden-canvas');
@@ -2978,18 +3036,67 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, w, h);
 
-    // Intentar aplanar y recortar la hoja con jscanify (OpenCV) si está disponible
     let finalDataUrl = null;
-    const scanner = getJscanifyInstance();
-    if (scanner) {
+
+    // Recorte geométrico exacto de la columna visible en pantalla (1 Día)
+    const guideBox = document.getElementById('scanner-guide-box');
+    if (window.scannerModoActual === 'dia' && guideBox && typeof video.getBoundingClientRect === 'function') {
         try {
-            const paperCanvas = scanner.extractPaper(canvas, 1800, 500);
-            if (paperCanvas) {
-                finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.92);
-                console.log("📄 OpenCV/jscanify: Hoja enderezada y aplanada automáticamente.");
+            const vRect = video.getBoundingClientRect();
+            const gRect = guideBox.getBoundingClientRect();
+
+            if (vRect.width > 0 && vRect.height > 0 && gRect.width > 0 && gRect.height > 0) {
+                // Mapeo exacto bajo escalado CSS object-fit: cover
+                const scale = Math.max(vRect.width / w, vRect.height / h);
+                const renderedW = w * scale;
+                const renderedH = h * scale;
+                const offsetX = (renderedW - vRect.width) / 2;
+                const offsetY = (renderedH - vRect.height) / 2;
+
+                const gx = gRect.left - vRect.left + offsetX;
+                const gy = gRect.top - vRect.top + offsetY;
+
+                let cropX = gx / scale;
+                let cropY = gy / scale;
+                let cropW = gRect.width / scale;
+                let cropH = gRect.height / scale;
+
+                // Margen de seguridad del 6% para no cercenar números ni divisores
+                const padX = cropW * 0.06;
+                const padY = cropH * 0.06;
+                cropX = Math.max(0, cropX - padX);
+                cropY = Math.max(0, cropY - padY);
+                cropW = Math.min(w - cropX, cropW + 2 * padX);
+                cropH = Math.min(h - cropY, cropH + 2 * padY);
+
+                if (cropW > 60 && cropH > 60) {
+                    const cropCanvas = document.createElement('canvas');
+                    cropCanvas.width = Math.round(cropW);
+                    cropCanvas.height = Math.round(cropH);
+                    const cCtx = cropCanvas.getContext('2d');
+                    cCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
+                    finalDataUrl = cropCanvas.toDataURL('image/jpeg', 0.94);
+                    console.log(`📸 Columna 1 Día recortada con éxito en alta resolución: ${cropCanvas.width}x${cropCanvas.height}px`);
+                }
             }
-        } catch (e) {
-            console.warn("⚠️ Fallback jscanify extractPaper:", e);
+        } catch (cropErr) {
+            console.warn("⚠️ Fallback recorte inteligente:", cropErr);
+        }
+    }
+
+    // Modo Hoja Completa: aplanar con jscanify si está disponible
+    if (!finalDataUrl && window.scannerModoActual === 'hoja') {
+        const scanner = getJscanifyInstance();
+        if (scanner) {
+            try {
+                const paperCanvas = scanner.extractPaper(canvas, 1600, 1000);
+                if (paperCanvas) {
+                    finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.92);
+                    console.log("📄 Hoja completa aplanada con OpenCV/jscanify.");
+                }
+            } catch (e) {
+                console.warn("⚠️ Fallback jscanify extractPaper:", e);
+            }
         }
     }
 

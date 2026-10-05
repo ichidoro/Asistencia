@@ -5046,36 +5046,54 @@
                             <canvas id="scanner-hidden-canvas" style="display:none;"></canvas>
 
                             <!-- HUD SUPERIOR FLOTANTE (TRANSPARENTE) -->
-                            <div class="position-absolute top-0 start-0 w-100 p-3 d-flex align-items-center justify-content-between pointer-events-none" style="z-index:20; background:linear-gradient(rgba(0,0,0,0.65), transparent);">
+                            <div class="position-absolute top-0 start-0 w-100 p-2.5 d-flex align-items-center justify-content-between pointer-events-none" style="z-index:20; background:linear-gradient(rgba(0,0,0,0.7), transparent);">
                                 <!-- Botón Cerrar -->
-                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" style="width:40px; height:40px; pointer-events:auto;" onclick="window.scannerCerrar()" aria-label="Cerrar">
+                                <button type="button" class="btn btn-dark bg-opacity-70 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" style="width:42px; height:42px; pointer-events:auto;" onclick="window.scannerCerrar()" aria-label="Cerrar">
                                     <i class="bi bi-x-lg fs-5"></i>
                                 </button>
 
                                 <!-- Indicador Central Discreto -->
-                                <div class="badge bg-dark bg-opacity-75 text-white px-3 py-2 rounded-pill border border-white border-opacity-25 d-flex align-items-center gap-1.5 shadow" style="font-size:0.75rem; pointer-events:auto;">
-                                    <i class="bi bi-phone-landscape text-warning fs-6"></i>
-                                    <span>Enfoca de cerca el bloque de hoy (horizontal)</span>
+                                <div class="badge bg-dark bg-opacity-80 text-white px-3 py-2 rounded-pill border border-white border-opacity-25 d-flex align-items-center gap-1.5 shadow" style="font-size:0.75rem; pointer-events:auto;">
+                                    <i class="bi bi-phone text-warning fs-6" id="scanner-hud-icon"></i>
+                                    <span id="scanner-hud-hint">Acerca a la columna de hoy (vertical)</span>
                                 </div>
 
-                                <!-- Badge IA -->
-                                <span class="badge bg-success bg-opacity-80 text-white px-2.5 py-1.5 rounded-pill border border-success-subtle shadow d-none d-sm-inline" style="font-size:0.7rem; pointer-events:auto;">
-                                    <i class="bi bi-stars me-1"></i>Gemini Flash IA
-                                </span>
+                                <!-- Toggle Modo Rápido (1 Día vs Hoja) -->
+                                <button type="button" class="btn btn-dark bg-opacity-70 text-white rounded-pill px-2.5 py-1.5 d-flex align-items-center gap-1 shadow border border-white border-opacity-25" id="btn-toggle-scanner-mode" onclick="window.scannerToggleModoGuia()" style="font-size:0.72rem; pointer-events:auto;" title="Cambiar modo de encuadre">
+                                    <i class="bi bi-layout-sidebar-inset text-success" id="icon-scanner-mode"></i>
+                                    <span id="txt-scanner-mode">1 Día</span>
+                                </button>
                             </div>
 
-                            <!-- GUÍA RETÍCULA VISUAL PANORÁMICA (AMPLIA, NO RESTRICTIVA) -->
+                            <!-- GUÍA RETÍCULA VISUAL (COLUMNA DIARIA POR DEFECTO) -->
                             <div id="scanner-camera-overlay" class="position-absolute top-0 start-0 w-100 h-100 pointer-events-none d-flex flex-column align-items-center justify-content-center" style="pointer-events:none; z-index:10;">
-                                <div class="scanner-guide-box-panoramic position-relative" id="scanner-guide-box">
+                                <div class="scanner-guide-box-col-dia position-relative" id="scanner-guide-box">
                                     <!-- Esquinas de mira óptica -->
                                     <div class="scanner-corner top-left"></div>
                                     <div class="scanner-corner top-right"></div>
                                     <div class="scanner-corner bottom-left"></div>
                                     <div class="scanner-corner bottom-right"></div>
 
+                                    <!-- Timeline vertical horario a la izquierda -->
+                                    <div class="scanner-col-timeline" id="scanner-guide-timeline">
+                                        <span>00h</span>
+                                        <span>06h</span>
+                                        <span>12h</span>
+                                        <span>18h</span>
+                                        <span>24h</span>
+                                    </div>
+
+                                    <!-- 4 Carriles de actividad verticales -->
+                                    <div class="scanner-col-lanes" id="scanner-guide-lanes">
+                                        <div class="scanner-col-lane"><span>COND</span></div>
+                                        <div class="scanner-col-lane"><span>ESP</span></div>
+                                        <div class="scanner-col-lane"><span>DESC</span></div>
+                                        <div class="scanner-col-lane"><span>AUX</span></div>
+                                    </div>
+
                                     <!-- Indicador visual interior sutil -->
-                                    <div class="position-absolute bottom-0 start-0 w-100 text-center pb-2 text-white-50" style="font-size:0.68rem; text-shadow:0 1px 3px rgba(0,0,0,0.9);">
-                                        Cuadra la regleta horaria dentro de este marco
+                                    <div class="position-absolute bottom-0 start-0 w-100 text-center pb-2 text-white-50" style="font-size:0.65rem; text-shadow:0 1px 3px rgba(0,0,0,0.95);" id="scanner-guide-label">
+                                        Columna del día (00 a 24h)
                                     </div>
 
                                     <!-- Línea láser animada de escaneo -->
