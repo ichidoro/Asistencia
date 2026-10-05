@@ -5061,22 +5061,47 @@
                             
                             <!-- PASO 1: VISOR DE CÁMARA EN VIVO -->
                             <div id="scanner-step-camera" class="w-100 h-100 position-relative d-flex flex-column align-items-center justify-content-center bg-black">
+                                <!-- Barra Superior de Modo de Encuadre -->
+                                <div class="position-absolute top-0 start-0 w-100 p-2.5 d-flex justify-content-between align-items-center" style="z-index:10; background:linear-gradient(rgba(0,0,0,0.8), transparent);">
+                                    <div class="btn-group btn-group-sm bg-dark rounded border border-secondary p-0.5" role="group">
+                                        <button type="button" class="btn btn-sm btn-success py-1 px-2.5 fw-bold" id="scanner-mode-1day-btn" onclick="window.scannerSetCameraGuideMode('1day')">
+                                            <i class="bi bi-aspect-ratio me-1"></i> 1 Día (Fila 24h)
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-light py-1 px-2.5" id="scanner-mode-page-btn" onclick="window.scannerSetCameraGuideMode('page')">
+                                            <i class="bi bi-file-earmark-text me-1"></i> Hoja Completa
+                                        </button>
+                                    </div>
+                                    <span class="badge bg-dark bg-opacity-75 text-warning border border-warning-subtle small d-none d-sm-inline">
+                                        <i class="bi bi-phone-landscape me-1"></i> Gira celular a horizontal
+                                    </span>
+                                </div>
+
                                 <!-- Video en Vivo -->
                                 <video id="scanner-live-video" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; background:#000; display:block;"></video>
                                 
-                                <!-- Marco Guía / Retícula Superpuesta tipo CamScanner -->
+                                <!-- Marco Guía / Retícula Superpuesta tipo CamScanner con Stencil de 1 Día -->
                                 <div id="scanner-camera-overlay" class="position-absolute top-0 start-0 w-100 h-100 pointer-events-none d-flex flex-column align-items-center justify-content-center" style="pointer-events:none; z-index:5;">
-                                    <div class="scanner-guide-box position-relative" style="width:88%; height:75%; border:2px dashed rgba(16, 185, 129, 0.7); border-radius:12px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);">
+                                    <div class="scanner-guide-box mode-1day position-relative" id="scanner-guide-box" style="box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);">
                                         <!-- Esquinas de mira óptica -->
                                         <div class="scanner-corner top-left"></div>
                                         <div class="scanner-corner top-right"></div>
                                         <div class="scanner-corner bottom-left"></div>
                                         <div class="scanner-corner bottom-right"></div>
+
+                                        <!-- Silueta de Carriles de 1 Día -->
+                                        <div class="scanner-1day-lanes" id="scanner-guide-lanes">
+                                            <div class="scanner-1day-lane"><span>1. CONDUCCIÓN</span><span style="font-size:0.55rem; opacity:0.7;">00:00 ── 24:00</span></div>
+                                            <div class="scanner-1day-lane"><span>2. ESPERA</span></div>
+                                            <div class="scanner-1day-lane"><span>3. DESCANSO</span></div>
+                                            <div class="scanner-1day-lane"><span>4. TAREAS AUXILIARES</span></div>
+                                        </div>
+
                                         <!-- Línea láser animada de escaneo -->
                                         <div class="scanner-laser-line"></div>
                                     </div>
-                                    <div class="badge bg-dark text-white bg-opacity-75 mt-2 px-3 py-1.5 fw-normal" style="font-size:0.75rem; border:1px solid rgba(255,255,255,0.2);">
-                                        <i class="bi bi-arrows-fullscreen me-1 text-warning"></i> Encuadra la cuadrícula de 24 horas dentro del marco
+
+                                    <div class="badge bg-dark text-white bg-opacity-85 mt-2 px-3 py-1.5 fw-normal" id="scanner-guide-help" style="font-size:0.75rem; border:1px solid rgba(255,255,255,0.25);">
+                                        <i class="bi bi-bullseye me-1 text-success"></i> Calza la fila del día dentro del marco verde
                                     </div>
                                 </div>
 
@@ -5101,10 +5126,19 @@
 
                             <!-- PASO 2: RECORTADOR INTERACTIVO TÁCTIL (CROPPER) -->
                             <div id="scanner-step-crop" class="d-none d-flex flex-column w-100 h-100" style="background:#0b1329;">
-                                <!-- Barra de Instrucciones Superior -->
-                                <div class="scanner-crop-banner flex-shrink-0 px-3 py-2 d-flex align-items-center justify-content-between" style="background:#0f172a; border-bottom:1px solid #334155; font-size:0.75rem; color:#93c5fd;">
-                                    <span><i class="bi bi-crop me-1 text-warning"></i> <strong>Recorta los bordes:</strong> Arrastra las esquinas verdes sobre la cuadrícula.</span>
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Paso 2 / 2</span>
+                                <!-- Barra de Selección Rápida de Días y Proporción -->
+                                <div class="scanner-crop-banner flex-shrink-0 px-2.5 py-1.5 d-flex flex-wrap align-items-center justify-content-between gap-1" style="background:#0f172a; border-bottom:1px solid #334155; font-size:0.75rem; color:#93c5fd;">
+                                    <div class="d-flex align-items-center gap-1 overflow-x-auto py-0.5" style="scrollbar-width:none;">
+                                        <span class="small fw-bold text-white me-1 text-nowrap"><i class="bi bi-calendar-week text-warning me-1"></i>Auto-Día:</span>
+                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(1)">1 (Lun)</button>
+                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(2)">2 (Mar)</button>
+                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(3)">3 (Mié)</button>
+                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(4)">4 (Jue)</button>
+                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(5)">5 (Vie)</button>
+                                    </div>
+                                    <button type="button" id="scanner-btn-lock-ratio" class="btn btn-xs btn-success py-0.5 px-2 text-nowrap" onclick="window.scannerToggleAspectRatio()" title="Bloquea la proporción para que no se deforme la tabla">
+                                        <i class="bi bi-lock-fill me-1"></i> Proporción 1 Día (5.2:1)
+                                    </button>
                                 </div>
 
                                 <!-- Contenedor del Cropper (Ocupa exactamente el espacio central sobrante) -->
@@ -5113,20 +5147,35 @@
                                 </div>
 
                                 <!-- BARRA INFERIOR FIJA DE ACCIONES DEL RECORTADOR (SIEMPRE VISIBLE) -->
-                                <div class="scanner-crop-footer flex-shrink-0 p-2.5 d-flex flex-column gap-2" style="background:#0f172a; border-top:1px solid #334155; z-index:20;">
-                                    <!-- Fila de Herramientas Auxiliares -->
-                                    <div class="d-flex align-items-center justify-content-between gap-2">
-                                        <div class="d-flex align-items-center gap-1.5">
-                                            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1 px-2.5 py-1.5" onclick="window.scannerRotar(90)" title="Rotar 90°">
-                                                <i class="bi bi-arrow-clockwise"></i> <span>Rotar 90°</span>
+                                <div class="scanner-crop-footer flex-shrink-0 p-2 d-flex flex-column gap-1.5" style="background:#0f172a; border-top:1px solid #334155; z-index:20;">
+                                    <!-- Fila de Micro-Ajustes Táctiles (D-Pad, Zoom, Rotar) -->
+                                    <div class="d-flex align-items-center justify-content-between gap-1 flex-wrap">
+                                        <!-- Micro-ajustes D-Pad para celular -->
+                                        <div class="d-flex align-items-center gap-1">
+                                            <div class="btn-group btn-group-sm" role="group" title="Mover marco">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(0, -15)" title="Subir marco"><i class="bi bi-arrow-up"></i></button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(0, 15)" title="Bajar marco"><i class="bi bi-arrow-down"></i></button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(-15, 0)" title="Mover izquierda"><i class="bi bi-arrow-left"></i></button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(15, 0)" title="Mover derecha"><i class="bi bi-arrow-right"></i></button>
+                                            </div>
+                                            <div class="btn-group btn-group-sm ms-1" role="group" title="Escalar tamaño">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerEscalarCrop(1.05)" title="Agrandar marco"><i class="bi bi-zoom-in"></i></button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerEscalarCrop(0.95)" title="Achicar marco"><i class="bi bi-zoom-out"></i></button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Rotación y Volver -->
+                                        <div class="d-flex align-items-center gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-light px-2 py-1" onclick="window.scannerRotar(90)" title="Rotar 90°">
+                                                <i class="bi bi-arrow-clockwise"></i> <span class="d-none d-sm-inline">Rotar</span>
                                             </button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary text-white-50 px-2 py-1.5" onclick="window.scannerResetCrop()" title="Restablecer marco">
-                                                <i class="bi bi-arrow-counterclockwise"></i> Reiniciar
+                                            <button type="button" class="btn btn-sm btn-outline-secondary text-white-50 px-2 py-1" onclick="window.scannerResetCrop()" title="Restablecer">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-light px-2 py-1" onclick="window.scannerVolverACamara()">
+                                                <i class="bi bi-camera"></i> <span class="d-none d-sm-inline">Reintentar</span>
                                             </button>
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1 px-2.5 py-1.5" onclick="window.scannerVolverACamara()">
-                                            <i class="bi bi-camera"></i> <span>Tomar de Nuevo</span>
-                                        </button>
                                     </div>
 
                                     <!-- Botón Principal Prominente de Escaneo e Interpretación -->

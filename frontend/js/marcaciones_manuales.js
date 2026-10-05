@@ -2277,7 +2277,18 @@ function initLibreta180hGrid() {
 
     let rulerHtml = '';
     for (let h = 0; h < 24; h++) {
-        rulerHtml += `<span class="m180-ruler-h">${String(h).padStart(2, '0')}<small>:00</small></span>`;
+        const hh = String(h).padStart(2, '0');
+        rulerHtml += `<div class="m180-ruler-h" title="Hora ${hh}:00 a ${String(h + 1).padStart(2, '0')}:00">
+            <div class="m180-ruler-header">
+                <span class="m180-ruler-num">${hh}</span><small class="m180-ruler-min">:00</small>
+            </div>
+            <div class="m180-ruler-ticks">
+                <span class="m180-tick t-00" title="${hh}:00"></span>
+                <span class="m180-tick t-15" title="${hh}:15"></span>
+                <span class="m180-tick t-30" title="${hh}:30"></span>
+                <span class="m180-tick t-45" title="${hh}:45"></span>
+            </div>
+        </div>`;
     }
     ruler.innerHTML = rulerHtml;
 
@@ -2994,14 +3005,14 @@ function activarRecorteImagen(imageSrc) {
             scannerCropperInstance = null;
         }
 
-        // Inicializar Cropper.js
+        // Inicializar Cropper.js con proporción 5.2:1 de 1 cuadrícula diaria por defecto
         if (typeof Cropper !== 'undefined') {
             setTimeout(() => {
                 scannerCropperInstance = new Cropper(cropImg, {
                     viewMode: 1,
                     dragMode: 'move',
-                    aspectRatio: NaN, // libre para que encuadre la cuadrícula
-                    autoCropArea: 0.88,
+                    aspectRatio: 5.2, // Proporción calibrada de 1 día de 24h
+                    autoCropArea: 0.92,
                     restore: false,
                     guides: true,
                     center: true,
@@ -3012,10 +3023,119 @@ function activarRecorteImagen(imageSrc) {
                     responsive: true,
                     background: false
                 });
+                window._scannerRatioLocked = true;
             }, 100);
         }
     }
 }
+
+let scannerGuideMode = '1day';
+window._scannerRatioLocked = true;
+
+window.scannerSetCameraGuideMode = function(mode) {
+    scannerGuideMode = mode;
+    const box = document.getElementById('scanner-guide-box');
+    const lanes = document.getElementById('scanner-guide-lanes');
+    const help = document.getElementById('scanner-guide-help');
+    const btn1Day = document.getElementById('scanner-mode-1day-btn');
+    const btnPage = document.getElementById('scanner-mode-page-btn');
+
+    if (mode === '1day') {
+        box?.classList.add('mode-1day');
+        lanes?.classList.remove('d-none');
+        if (help) help.innerHTML = '<i class="bi bi-bullseye me-1 text-success"></i> Calza la fila del día dentro del marco verde';
+        btn1Day?.classList.remove('btn-outline-light');
+        btn1Day?.classList.add('btn-success');
+        btnPage?.classList.remove('btn-success');
+        btnPage?.classList.add('btn-outline-light');
+    } else {
+        box?.classList.remove('mode-1day');
+        lanes?.classList.add('d-none');
+        if (help) help.innerHTML = '<i class="bi bi-arrows-fullscreen me-1 text-warning"></i> Encuadra la hoja completa dentro del marco';
+        btnPage?.classList.remove('btn-outline-light');
+        btnPage?.classList.add('btn-success');
+        btn1Day?.classList.remove('btn-success');
+        btn1Day?.classList.add('btn-outline-light');
+    }
+};
+
+window.scannerToggleAspectRatio = function() {
+    if (!scannerCropperInstance) return;
+    const btn = document.getElementById('scanner-btn-lock-ratio');
+    if (window._scannerRatioLocked) {
+        window._scannerRatioLocked = false;
+        scannerCropperInstance.setAspectRatio(NaN);
+        if (btn) {
+            btn.className = 'btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap';
+            btn.innerHTML = '<i class="bi bi-unlock me-1"></i> Proporción Libre';
+        }
+    } else {
+        window._scannerRatioLocked = true;
+        scannerCropperInstance.setAspectRatio(5.2);
+        if (btn) {
+            btn.className = 'btn btn-xs btn-success py-0.5 px-2 text-nowrap';
+            btn.innerHTML = '<i class="bi bi-lock-fill me-1"></i> Proporción 1 Día (5.2:1)';
+        }
+    }
+};
+
+window.scannerSeleccionarDia = function(diaNum) {
+    if (!scannerCropperInstance) return;
+    const canvasData = scannerCropperInstance.getCanvasData();
+    scannerCropperInstance.setAspectRatio(5.2);
+    window._scannerRatioLocked = true;
+    const btn = document.getElementById('scanner-btn-lock-ratio');
+    if (btn) {
+        btn.className = 'btn btn-xs btn-success py-0.5 px-2 text-nowrap';
+        btn.innerHTML = '<i class="bi bi-lock-fill me-1"></i> Proporción 1 Día (5.2:1)';
+    }
+
+    const w = canvasData.width * 0.94;
+    const h = w / 5.2;
+    const left = canvasData.left + (canvasData.width - w) / 2;
+
+    const availableH = Math.max(0, canvasData.height - h);
+    const stepY = availableH / 4.4;
+    const top = canvasData.top + (diaNum - 1) * stepY;
+
+    scannerCropperInstance.setCropBoxData({
+        left: left,
+        top: Math.max(canvasData.top, Math.min(top, canvasData.top + canvasData.height - h)),
+        width: w,
+        height: h
+    });
+
+    if (typeof showToast === 'function') {
+        const nombres = ['', 'Lunes (Día 1)', 'Martes (Día 2)', 'Miércoles (Día 3)', 'Jueves (Día 4)', 'Viernes (Día 5)'];
+        showToast(`Marco calibrado a ${nombres[diaNum] || `Día ${diaNum}`}`, 'info');
+    }
+};
+
+window.scannerMoverCrop = function(dx, dy) {
+    if (!scannerCropperInstance) return;
+    const box = scannerCropperInstance.getCropBoxData();
+    scannerCropperInstance.setCropBoxData({
+        left: box.left + dx,
+        top: box.top + dy,
+        width: box.width,
+        height: box.height
+    });
+};
+
+window.scannerEscalarCrop = function(factor) {
+    if (!scannerCropperInstance) return;
+    const box = scannerCropperInstance.getCropBoxData();
+    const newW = box.width * factor;
+    const newH = box.height * factor;
+    const dW = newW - box.width;
+    const dH = newH - box.height;
+    scannerCropperInstance.setCropBoxData({
+        left: box.left - dW / 2,
+        top: box.top - dH / 2,
+        width: newW,
+        height: newH
+    });
+};
 
 window.scannerRotar = function(deg) {
     if (scannerCropperInstance) {
@@ -3026,6 +3146,7 @@ window.scannerRotar = function(deg) {
 window.scannerResetCrop = function() {
     if (scannerCropperInstance) {
         scannerCropperInstance.reset();
+        window.scannerSeleccionarDia(1);
     }
 };
 

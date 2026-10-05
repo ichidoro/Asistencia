@@ -2730,6 +2730,47 @@
 .scanner-corner.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 8px; }
 .scanner-corner.bottom-right { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 8px; }
 
+/* Silueta inteligente para encuadre de 1 día (proporción ~5.2:1 de la libreta física) */
+.scanner-guide-box {
+    transition: width 0.3s ease, height 0.3s ease;
+}
+.scanner-guide-box.mode-1day {
+    width: 94% !important;
+    height: 22% !important;
+    max-height: 180px;
+    border: 2px dashed rgba(16, 185, 129, 0.9) !important;
+}
+@media (orientation: landscape), (min-width: 768px) {
+    .scanner-guide-box.mode-1day {
+        width: 88% !important;
+        height: 38% !important;
+        max-height: 240px;
+    }
+}
+.scanner-1day-lanes {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    opacity: 0.6;
+}
+.scanner-1day-lane {
+    flex: 1;
+    border-bottom: 1px dashed rgba(52, 211, 153, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    font-size: 0.62rem;
+    color: #a7f3d0;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.scanner-1day-lane:last-child {
+    border-bottom: none;
+}
+
 .scanner-laser-line {
     position: absolute;
     width: 100%;
