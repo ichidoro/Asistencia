@@ -1554,7 +1554,7 @@ window.deleteAreaNotificaciones = async function (area) {
 function showToast(msg, type = "success") {
     if (type === "error") {
         if (typeof window.showError === 'function') window.showError(msg);
-        else alert("⚠️ " + msg);
+        else alert("" + msg);
     } else {
         if (typeof window.showNotification === 'function') window.showNotification(msg, type);
         else alert(msg);

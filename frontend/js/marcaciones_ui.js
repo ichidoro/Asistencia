@@ -987,9 +987,9 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         Swal.close();
         console.error('[Sync BioAlba] Error:', e);
         if (e.name === 'AbortError') {
-            showToast('⏱️ Timeout: La sincronización tardó más de 6 minutos.', 'error');
+            showToast('Timeout: La sincronización tardó más de 6 minutos.', 'error');
         } else {
-            showToast('❌ Error de sincronización: ' + e.message, 'error');
+            showToast('Error de sincronización: ' + e.message, 'error');
         }
         try { await window.loadMarcacionesData(); } catch (_) {}
     } finally {
@@ -1127,11 +1127,11 @@ async function confirmSyncMarcaciones() {
     const fFin    = document.getElementById('sync-areas-fecha-fin')?.value    || '';
 
     if (!fInicio || !fFin) {
-        alert('⚠️ Debes indicar el rango de fechas (Desde / Hasta).');
+        alert('Debes indicar el rango de fechas (Desde / Hasta).');
         return;
     }
     if (fFin < fInicio) {
-        alert('⚠️ La fecha "Hasta" no puede ser anterior a "Desde".');
+        alert('La fecha "Hasta" no puede ser anterior a "Desde".');
         return;
     }
 
@@ -1139,7 +1139,7 @@ async function confirmSyncMarcaciones() {
     const selectedAreas = Array.from(checkboxes).map(cb => cb.value);
 
     if (selectedAreas.length === 0) {
-        alert('⚠️ Selecciona al menos un área para sincronizar.');
+        alert('Selecciona al menos un área para sincronizar.');
         return;
     }
 
@@ -2051,7 +2051,7 @@ async function _checkForChanges(isBaseline = false) {
             cd.lastCount = newCount;
 
             // Mostrar toast informativo
-            showToast("📡 Nuevas marcaciones detectadas. Actualizando...", "info");
+            showToast("Nuevas marcaciones detectadas. Actualizando...", "info");
 
             // Recargar la grilla
             if (typeof window.loadMarcacionesData === 'function') {
@@ -2238,23 +2238,23 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     if (deudaCompensarMin > 0.0083 && totalBruto >= deudaCompensarMin - 0.0083) {
         // Caso 1: Con deuda y sobretiempo suficiente para cubrirla (Gana-Gana)
         estrategiaSugerida = 'cero';
-        badgeSugerencia = '⭐ RECOMENDACIÓN ÓPTIMA (Art. 32 Código del Trabajo)';
+        badgeSugerencia = 'RECOMENDACIÓN ÓPTIMA (Art. 32 Código del Trabajo)';
         const remanenteMin = totalBruto - deudaCompensarMin;
         motivoSugerencia = `<strong>${empNombre}</strong> acumula <strong>${formatExactMinutesToTime(deudaCompensarMin)}</strong> de atrasos y dispone de <strong>${formatExactMinutesToTime(totalBruto)}</strong> de sobretiempo. Se sugiere <strong>1. Compensar Deuda (Saldo Cero)</strong> para absorber sus atrasos a costo $0 para él (Art. 32 CT), liberando además <strong>+${formatExactMinutesToTime(remanenteMin)}</strong> a su favor para pago o descanso.`;
     } else if (deudaCompensarMin <= 0.0083 && totalBruto > 0) {
         // Caso 2: Trabajador puntual sin deuda pendiente
         estrategiaSugerida = 'todo';
-        badgeSugerencia = '⭐ RECOMENDACIÓN LEGAL DT (Pago Íntegro 100%)';
+        badgeSugerencia = 'RECOMENDACIÓN LEGAL DT (Pago Íntegro 100%)';
         motivoSugerencia = `<strong>${empNombre}</strong> no registra atrasos ni deuda de tiempo no trabajado. Conforme a la doctrina de la Dirección del Trabajo (DT), se recomienda <strong>2. Pagar Todo (100% Íntegro)</strong> autorizando sus <strong>+${formatExactMinutesToTime(totalBruto)}</strong> sin deducciones.`;
     } else if (deudaCompensarMin > totalBruto && totalBruto > 0) {
         // Caso 3: Deuda supera el sobretiempo disponible
         estrategiaSugerida = 'cero';
-        badgeSugerencia = '⭐ RECOMENDACIÓN: AMORTIZACIÓN MÁXIMA';
+        badgeSugerencia = 'RECOMENDACIÓN: AMORTIZACIÓN MÁXIMA';
         const deficitMin = deudaCompensarMin - totalBruto;
         motivoSugerencia = `La deuda por atrasos (<strong>${formatExactMinutesToTime(deudaCompensarMin)}</strong>) supera el sobretiempo detectado (<strong>${formatExactMinutesToTime(totalBruto)}</strong>). Se sugiere <strong>Compensar al Máximo</strong> para amortizar toda la deuda posible; el saldo por descontar se reduce a solo <strong>-${formatExactMinutesToTime(deficitMin)}</strong>.`;
     } else {
         estrategiaSugerida = 'cero';
-        badgeSugerencia = 'ℹ️ ANÁLISIS DE JORNADA';
+        badgeSugerencia = 'ANÁLISIS DE JORNADA';
         motivoSugerencia = `Revisa las jornadas registradas y selecciona la estrategia operativa adecuada para balancear el ciclo de asistencia.`;
     }
 
@@ -2276,9 +2276,9 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
             ? `
                 <div class="d-flex align-items-center justify-content-center gap-1">
                     <select class="form-select form-select-sm select-row-estado py-0 px-2 fw-semibold shadow-xs" id="sel-estado-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" style="font-size:0.75rem; width:100px; height:26px; border-radius:5px;" onchange="window.onRowHEChange('${d.fecha}')">
-                        <option value="APROBADO" ${d.estado === 'APROBADO' ? 'selected' : ''}>✅ Aprobar</option>
-                        <option value="PENDIENTE" ${d.estado === 'PENDIENTE' ? 'selected' : ''}>⏳ Pendiente</option>
-                        <option value="RECHAZADO" ${d.estado === 'RECHAZADO' ? 'selected' : ''}>❌ Rechazar</option>
+                        <option value="APROBADO" ${d.estado === 'APROBADO' ? 'selected' : ''}>Aprobar</option>
+                        <option value="PENDIENTE" ${d.estado === 'PENDIENTE' ? 'selected' : ''}>Pendiente</option>
+                        <option value="RECHAZADO" ${d.estado === 'RECHAZADO' ? 'selected' : ''}>Rechazar</option>
                     </select>
                     <input type="text" class="form-control form-control-sm text-center font-monospace input-row-time fw-bold py-0 px-1 ${d.estado !== 'APROBADO' ? 'opacity-50' : ''}" id="input-time-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" value="${d.estado === 'RECHAZADO' ? '00:00:00' : formatExactMinutesToTime(defaultMinutosAut)}" ${d.estado !== 'APROBADO' ? 'disabled' : ''} style="font-size:0.75rem; width:72px; height:26px;" title="Tiempo autorizado (HH:MM:SS)" onchange="window.onRowTimeChange('${d.fecha}')">
                     <input type="hidden" class="input-row-minutos" id="input-min-${d.fecha}" data-fecha="${d.fecha}" data-bruto="${d.bruto}" value="${d.estado === 'RECHAZADO' ? 0 : defaultMinutosAut}">
@@ -2530,7 +2530,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-2 border-top" id="asistente-feedback-container">
                                         <div id="asistente-feedback" class="flex-grow-1">
                                             <div class="small text-muted">
-                                                💡 Haz clic en una de las <strong>3 Estrategias</strong> arriba para previsualizar el cuadre y luego presiona <strong>"Confirmar y Guardar"</strong>.
+                                                <i class="bi bi-lightbulb" aria-hidden="true"></i> Haz clic en una de las <strong>3 Estrategias</strong> arriba para previsualizar el cuadre y luego presiona <strong>"Confirmar y Guardar"</strong>.
                                             </div>
                                         </div>
                                         <div>
@@ -2648,7 +2648,7 @@ window.submitSingleHE = async function(empId, fecha, estado, minutos) {
         });
         const data = await res.json();
         if (data.success) {
-            showToast(estado === 'APROBADO' ? '✅ HE Aprobada' : '❌ HE Rechazada', 'success');
+            showToast(estado === 'APROBADO' ? 'HE Aprobada' : 'HE Rechazada', 'success');
             await loadMarcacionesData();
             const mEl = document.getElementById('modalBatchHE');
             if (mEl) bootstrap.Modal.getInstance(mEl)?.hide();
@@ -2856,7 +2856,7 @@ window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
         // En caso de error, restaurar botón
         const btn = event.target;
         if (btn && btn.disabled) {
-            btn.innerHTML = nuevoEstado === 'APROBADO' ? '✅ Aprobar Seleccionados' : '❌ Rechazar Seleccionados';
+            btn.innerHTML = nuevoEstado === 'APROBADO' ? '<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i> Aprobar Seleccionados' : '<i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Rechazar Seleccionados';
             btn.disabled = false;
         }
     }
@@ -2940,13 +2940,13 @@ window.onRowHEChange = function(fecha) {
     if (badgeSt) {
         if (estado === 'APROBADO') {
             badgeSt.className = 'badge bg-success';
-            badgeSt.innerHTML = '✅ Aprobado';
+            badgeSt.innerHTML = '<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i> Aprobado';
         } else if (estado === 'RECHAZADO') {
             badgeSt.className = 'badge bg-danger';
-            badgeSt.innerHTML = '❌ Rechazado';
+            badgeSt.innerHTML = '<i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Rechazado';
         } else {
             badgeSt.className = 'badge bg-warning text-dark';
-            badgeSt.innerHTML = '⏳ Pendiente';
+            badgeSt.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i> Pendiente';
         }
     }
     
@@ -3458,7 +3458,7 @@ window.aplicarCuadreHE = async function(empleadoId) {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(`✅ Cuadre registrado exitosamente (${items.length} jornadas guardadas en BD)`, 'success');
+            showToast(`Cuadre registrado exitosamente (${items.length} jornadas guardadas en BD)`, 'success');
             const mEl = document.getElementById('modalBatchHE');
             if (mEl) {
                 const modal = bootstrap.Modal.getInstance(mEl);
@@ -3651,7 +3651,7 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
         
         if (turnos.length === 0) {
             console.warn("\u26a0\ufe0f No se encontraron turnos para el \u00e1rea:", area);
-            selectTurno.innerHTML = '<option value="">❌ No hay turnos creados</option>';
+            selectTurno.innerHTML = '<option value="">No hay turnos creados</option>';
             document.getElementById('asig-indiv-alerta-area').innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> No existen turnos configurados para <u>${area}</u>.`;
         } else {
             selectTurno.innerHTML = '<option value="">-- Seleccione el Turno Oficial --</option>' +
@@ -3777,7 +3777,7 @@ async function saveAsignacionIndividual() {
             const data = await resp.json();
             const jobId = data.job_id || null;
 
-            showToast("✅ Turno asignado. Iniciando proceso...", "success");
+            showToast("Turno asignado. Iniciando proceso...", "success");
 
             // Cerrar modal de asignación
             const modalAsig = bootstrap.Modal.getInstance(document.getElementById('modal-asignar-turno-individual'));
@@ -3826,7 +3826,7 @@ async function saveAsignacionIndividual() {
                     if (!isBlocked) {
                         const modalReg = bootstrap.Modal.getInstance(document.getElementById('modal-regularizacion-asistencia'));
                         if (modalReg) modalReg.hide();
-                        showToast("✅ Regularización completada.", "success");
+                        showToast("Regularización completada.", "success");
                         if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
                     }
                 } else {
@@ -3839,11 +3839,11 @@ async function saveAsignacionIndividual() {
 
         } else {
             const err = await resp.json();
-            showToast("❌ " + (err.detail || "No se pudo asignar el turno"), "danger");
+            showToast("" + (err.detail || "No se pudo asignar el turno"), "danger");
         }
     } catch (e) {
         console.error(e);
-        showToast("❌ Error de conexión al asignar turno", "danger");
+        showToast("Error de conexión al asignar turno", "danger");
     } finally {
         // Restaurar botón siempre
         if (btn) {
@@ -3915,14 +3915,14 @@ window.confirmarCalibracion = async function() {
 
     // 2. Si el checkbox está marcado, disparar sync individual de BioAlba (fire-and-forget)
     if (syncBioAlba && empleadoId) {
-        showToast("☁️ Descargando marcaciones desde BioAlba...", "info");
+        showToast("Descargando marcaciones desde BioAlba...", "info");
         // Fire-and-forget — el reproceso en background leerá las marcas cuando terminen de llegar
         fetch(`/api/sync/asistencia/empleado/${empleadoId}/?fecha_inicio=${fechaInicio}`, {
             method: 'POST'
         }).then(r => r.ok
-            ? showToast("✅ Marcaciones BioAlba descargadas. El reproceso se actualizará.", "success")
-            : showToast("⚠️ No se pudieron descargar marcaciones de BioAlba.", "warning")
-        ).catch(() => showToast("⚠️ Error conectando a BioAlba.", "warning"));
+            ? showToast("Marcaciones BioAlba descargadas. El reproceso se actualizará.", "success")
+            : showToast("No se pudieron descargar marcaciones de BioAlba.", "warning")
+        ).catch(() => showToast("Error conectando a BioAlba.", "warning"));
     }
 
     // 3. Iniciar polling de progreso (el reproceso ya está corriendo en background)
@@ -3970,7 +3970,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
     el('repr-progress-bar').classList.add('progress-bar-animated', 'progress-bar-striped');
     el('repr-pct').textContent = '0%';
     el('repr-pct').className = 'badge rounded-pill bg-info';
-    el('repr-day-label').textContent = syncBioAlba ? '☁️ Descargando marcaciones BioAlba...' : 'Iniciando cálculo...';
+    el('repr-day-label').textContent = syncBioAlba ? 'Descargando marcaciones BioAlba...' : 'Iniciando cálculo...';
     el('repr-counter').textContent = syncBioAlba ? 'Fase 1 de 2: Sincronización' : 'Iniciando...';
     el('repr-log').innerHTML = `<span style="color:#38bdf8;">⟳</span> ${syncBioAlba ? 'Conectando a BioAlba...' : 'Esperando inicio del proceso...'}`;
     el('repr-footer-completado').classList.add('d-none');
@@ -4013,7 +4013,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                 bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
                 bar.style.background = 'linear-gradient(90deg,#f59e0b,#d97706)';
                 bar.style.width = '100%';
-                el('repr-pct').textContent = '⚠️';
+                el('repr-pct').textContent = '';
                 el('repr-pct').className = 'badge rounded-pill bg-warning text-dark';
                 el('repr-header-title').textContent = 'Proceso Interrumpido';
                 el('repr-day-label').textContent = 'El servidor se reinició durante el proceso.';
@@ -4024,7 +4024,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                 const logEl = el('repr-log');
                 const warnLine = document.createElement('div');
                 warnLine.style.color = '#fbbf24';
-                warnLine.textContent = `⚠️ Job ${jobId} no encontrado — el servidor fue reiniciado`;
+                warnLine.textContent = `Job ${jobId} no encontrado — el servidor fue reiniciado`;
                 logEl.appendChild(warnLine);
                 logEl.scrollTop = logEl.scrollHeight;
                 return;
@@ -4046,7 +4046,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                 el('repr-progress-bar').style.width = `${Math.max(pct, 2)}%`;
                 el('repr-pct').className = 'badge rounded-pill bg-info';
                 el('repr-pct').textContent = `${pct}%`;
-                el('repr-day-label').textContent = `☁️ ${phaseLabel}`;
+                el('repr-day-label').textContent = `${phaseLabel}`;
                 el('repr-counter').textContent = 'Fase 1 de 2: Sincronización BioAlba';
 
                 // Agregar entrada al log al cambiar de fase
@@ -4055,7 +4055,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                     const logEl = el('repr-log');
                     const line = document.createElement('div');
                     line.style.color = '#38bdf8';
-                    line.textContent = `☁️ Conectado a BioAlba — descargando marcaciones...`;
+                    line.textContent = `Conectado a BioAlba — descargando marcaciones...`;
                     logEl.appendChild(line);
                     logEl.scrollTop = logEl.scrollHeight;
                 }
@@ -4072,7 +4072,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                 const logEl = el('repr-log');
                 const sep = document.createElement('div');
                 sep.style.cssText = 'color:#64748b;border-top:1px solid #1e293b;margin:4px 0;padding-top:4px;';
-                sep.textContent = '✔ BioAlba OK — Iniciando cálculo día a día...';
+                sep.textContent = 'BioAlba OK — Iniciando cálculo día a día...';
                 logEl.appendChild(sep);
                 logEl.scrollTop = logEl.scrollHeight;
             }
@@ -4112,7 +4112,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                         if (!allDone) {
                             // Actualizar label para mostrar progreso del batch
                             const doneCount = allResponses.filter(j => j.status === 'done' || j.status === 'completed' || j.status === 'error').length;
-                            el('repr-day-label').textContent = `⏳ ${doneCount}/${_allJobs.length} empleados completados...`;
+                            el('repr-day-label').textContent = `${doneCount}/${_allJobs.length} empleados completados...`;
                             el('repr-progress-bar').style.width = `${Math.round(50 + 50 * doneCount / _allJobs.length)}%`;
                             return; // Seguir polling hasta que TODOS terminen
                         }
@@ -4128,28 +4128,28 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                 if (isError) {
                     bar.style.background = 'linear-gradient(90deg,#dc2626,#ef4444)';
                     el('repr-pct').className = 'badge rounded-pill bg-danger';
-                    el('repr-day-label').textContent = '❌ Error en el proceso';
+                    el('repr-day-label').textContent = 'Error en el proceso';
                     el('repr-resumen-texto').textContent = `Error: ${s.error || 'Desconocido'}. Revise la terminal.`;
                     const logEl = el('repr-log');
                     const errLine = document.createElement('div');
                     errLine.style.color = '#fca5a5';
-                    errLine.textContent = `❌ ${s.error || 'Error desconocido'}`;
+                    errLine.textContent = `${s.error || 'Error desconocido'}`;
                     logEl.appendChild(errLine);
                 } else {
                     bar.style.width = '100%';
                     bar.style.background = 'linear-gradient(90deg,#059669,#10b981)';
                     el('repr-pct').textContent = '100%';
                     el('repr-pct').className = 'badge rounded-pill bg-success';
-                    el('repr-header-title').textContent = 'Proceso Completado ✅';
-                    el('repr-day-label').textContent = '✅ Todo listo — puede revisar la grilla';
-                    const bioAlbaNote = syncBioAlba ? ' (☁️ BioAlba + 🗃️ cálculo)' : '';
+                    el('repr-header-title').textContent = 'Proceso Completado';
+                    el('repr-day-label').textContent = 'Todo listo — puede revisar la grilla';
+                    const bioAlbaNote = syncBioAlba ? ' (BioAlba + cálculo)' : '';
                     el('repr-resumen-texto').textContent =
-                        `✅ ${s.procesados} días procesados en ${elapsed}s${bioAlbaNote} ⋅ ✕ ${s.errores} errores`;
+                        `${s.procesados} días procesados en ${elapsed}s${bioAlbaNote} ⋅ ✕ ${s.errores} errores`;
 
                     const logEl = el('repr-log');
                     const okLine = document.createElement('div');
                     okLine.style.cssText = 'color:#86efac;font-weight:bold;margin-top:4px;';
-                    okLine.textContent = `✔ Completado: ${s.procesados} días (${elapsed}s)`;
+                    okLine.textContent = `Completado: ${s.procesados} días (${elapsed}s)`;
                     logEl.appendChild(okLine);
                     logEl.scrollTop = logEl.scrollHeight;
 
@@ -4197,7 +4197,7 @@ window.cerrarModalReproceso = function() {
 function iniciarPollingReproceso(empleadoId, nombre, fechaDesde) {
     // En el flujo de Calibración, el reproceso ya corrió desde saveAsignacionIndividual.
     // Solo mostramos un banner informativo liviano sin polling.
-    showToast(`🔄 Reprocesando asistencia de ${nombre} desde ${fechaDesde}. La grilla se actualizará al finalizar.`, 'info');
+    showToast(`Reprocesando asistencia de ${nombre} desde ${fechaDesde}. La grilla se actualizará al finalizar.`, 'info');
 }
 
 
@@ -4343,7 +4343,7 @@ window.cierreFiltrarGrillaYIniciarCierre = async function(fIni, fFin) {
     if (selectArea) selectArea.value = areaVal;
 
     // 3. Forzar el recargado de la grilla de asistencia
-    showToast(`🔄 Filtrando grilla para área '${areaVal}' y período seleccionado...`, "info");
+    showToast(`Filtrando grilla para área '${areaVal}' y período seleccionado...`, "info");
     await loadMarcacionesData();
 
     // 4. Lanzar asistente de cierre tras cargar la grilla
@@ -4671,7 +4671,7 @@ window.cierreWizardConfirmarParametros = async function() {
     if (mainFFin) mainFFin.value = fFin;
 
     // 3. Forzar el recargado de la grilla de asistencia en segundo plano
-    showToast(`🔄 Filtrando grilla para área '${area}' y rango seleccionado...`, "info");
+    showToast(`Filtrando grilla para área '${area}' y rango seleccionado...`, "info");
     if (typeof loadMarcacionesData === 'function') {
         loadMarcacionesData(); // se ejecuta en background
     }
@@ -5223,7 +5223,7 @@ window.cierreResolverHE = async function(empId, fecha, minutos, estado) {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(estado === 'APROBADO' ? '✅ Hora Extra aprobada' : '❌ Hora Extra rechazada', 'success');
+            showToast(estado === 'APROBADO' ? 'Hora Extra aprobada' : 'Hora Extra rechazada', 'success');
             await recargarPreEvaluacionCierre();
         } else {
             showToast('Error: ' + (data.detail || 'Error al procesar'), 'danger');
@@ -5267,7 +5267,7 @@ window.cierreResolverTodasHE = async function() {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(`✅ Aprobadas ${items.length} horas extras exitosamente.`, 'success');
+            showToast(`Aprobadas ${items.length} horas extras exitosamente.`, 'success');
             await recargarPreEvaluacionCierre();
         } else {
             showToast('Error: ' + (data.detail || 'Error al procesar lote'), 'danger');
@@ -5331,7 +5331,7 @@ async function confirmarCierreRRHH() {
 
         const res = await resp.json();
         if (resp.ok) {
-            showToast("✅ Periodo cerrado exitosamente", "success");
+            showToast("Periodo cerrado exitosamente", "success");
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-wizard'));
             if (m) m.hide();
             loadMarcacionesData();
@@ -5442,7 +5442,7 @@ window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
         
         const res = await resp.json();
         if (resp.ok) {
-            showToast("✅ Periodo reabierto con éxito", "success");
+            showToast("Periodo reabierto con éxito", "success");
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-historial-cierres'));
             if (m) m.hide();
             loadMarcacionesData();
@@ -5794,7 +5794,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
     return `<tr id="row-empleado-${emp.id}">
         <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
             ondblclick="openBatchApprovalModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
-            title="${hasHE ? '⚡ Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
+            title="${hasHE ? 'Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
             <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
             <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
         </td>
@@ -8166,7 +8166,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 </div>
                 ${vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size: 0.75rem; color:#b45309; background:#fef3c7; border:1px solid #fde68a; border-radius:4px; padding:2px 6px;"><i class="bi bi-star-fill me-1"></i>Ruta cruzó Día Feriado (Aplica Día Compensatorio Art. 38)</div>` : ''}
                 ${vl.domingo_en_ruta && !vl.feriado_en_ruta ? `<div style="margin-top:4px; font-size: 0.75rem; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:4px; padding:2px 6px;"><i class="bi bi-calendar-event me-1"></i>Ruta en Domingo (Aplica descanso compensatorio)</div>` : ''}
-                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size: 0.75rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas legales)</div>` : `<div style="margin-top:4px; font-size: 0.75rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (🟢 Cumple norma ≥ 8h)</div>`) : ''}
+                ${(vl.descanso_post_viaje_horas != null && dateStr === fFinStr) ? (vl.alerta_descanso_post_viaje ? `<div style="margin-top:4px; font-size: 0.75rem; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Descanso Post-Viaje Reducido: ${vl.descanso_post_viaje_horas}h (< 8h mínimas legales)</div>` : `<div style="margin-top:4px; font-size: 0.75rem; color:#15803d; background:#dcfce7; border:1px solid #bbf7d0; border-radius:4px; padding:2px 6px;"><i class="bi bi-check-circle-fill me-1"></i>Descanso Post-Viaje: ${vl.descanso_post_viaje_horas}h (Cumple norma ≥ 8h)</div>`) : ''}
             </div>
         </div>`;
     }

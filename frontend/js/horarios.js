@@ -257,7 +257,7 @@ function ensureViajesLargosSwitch() {
                 <div class="form-check form-switch mb-0">
                     <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
                     <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
-                        🚛 Habilitar Viajes Largos y Rutas Nocturnas Continuas
+                        <i class="bi bi-truck" aria-hidden="true"></i> Habilitar Viajes Largos y Rutas Nocturnas Continuas
                     </label>
                     <div class="form-text small text-muted">
                         Activa el reconocimiento de turnos nocturnos continuos (≥ 20:00), dobles jornadas en el mismo día y la unión de retornos de ruta de días posteriores.
@@ -279,7 +279,7 @@ function ensureRotacionDinamicaSwitch() {
                 <div class="form-check form-switch mb-0">
                     <input class="form-check-input" type="checkbox" id="chkRotacionDinamicaDiaria" name="rotacion_dinamica_diaria">
                     <label class="form-check-label fw-bold text-dark" for="chkRotacionDinamicaDiaria">
-                        ⚙️ Rotación Dinámica Diaria (Evaluar ciclo por presencia del día)
+                        <i class="bi bi-gear" aria-hidden="true"></i> Rotación Dinámica Diaria (Evaluar ciclo por presencia del día)
                     </label>
                     <div class="form-text small text-muted">
                         Activa la evaluación cuántica día a día para turnos operativos abiertos (ej. Mantención) donde los trabajadores rotan libremente entre opciones según su asistencia real, sin forzar semanas fijas ni turnos de noche vacíos.
@@ -1089,7 +1089,7 @@ function renderTurnosTable() {
         const isLibreta = isBolsa && (t.modalidad_control === 'LIBRETA_180H' || !t.modalidad_control);
         const tipoBadge = isBolsa
             ? (isLibreta
-                ? (t.permite_viajes_largos ? '🚚 180h Art. 25 bis (Viajes)' : '🚚 180h Art. 25 bis')
+                ? (t.permite_viajes_largos ? '180h Art. 25 bis (Viajes)' : '180h Art. 25 bis')
                 : (t.permite_viajes_largos ? 'Bolsa Flexible (Viajes Largos)' : 'Bolsa Flexible'))
             : (t.rotacion_dinamica_diaria ? 'Ciclo Inteligente (Dinámico)' : 'Ciclo Inteligente');
 
@@ -1202,11 +1202,11 @@ function renderModalHtml() {
                             <div class="col-12 mt-2" id="divModalidadControl">
                                 <div class="p-2 border border-success rounded bg-success bg-opacity-10">
                                     <label for="select-modalidad-control" class="form-label fw-bold text-success mb-1">
-                                        📋 Modalidad de Control de Asistencia
+                                        <i class="bi bi-clipboard-check" aria-hidden="true"></i> Modalidad de Control de Asistencia
                                     </label>
                                     <select id="select-modalidad-control" name="modalidad_control" class="form-select border-success">
-                                        <option value="LIBRETA_180H">🚚 Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj a partir de 01-10-2026)</option>
-                                        <option value="RELOJ">⏱️ Reloj Control Biométrico Tradicional</option>
+                                        <option value="LIBRETA_180H">Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj a partir de 01-10-2026)</option>
+                                        <option value="RELOJ">Reloj Control Biométrico Tradicional</option>
                                     </select>
                                     <div class="form-text small text-muted mt-1">
                                         Define si la asistencia del trabajador se registra vía Libreta Digital Art. 25 bis (sin marcas biométricas) o mediante reloj control físico.
@@ -1218,7 +1218,7 @@ function renderModalHtml() {
                                     <div class="form-check form-switch mb-1">
                                         <input class="form-check-input" type="checkbox" id="chkPermiteViajesLargos" name="permite_viajes_largos">
                                         <label class="form-check-label fw-bold text-dark" for="chkPermiteViajesLargos">
-                                            🚚 Habilitar Gestión de Viajes Largos en Ruta
+                                            <i class="bi bi-truck" aria-hidden="true"></i> Habilitar Gestión de Viajes Largos en Ruta
                                         </label>
                                     </div>
                                     <div class="form-text small text-muted">

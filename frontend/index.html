@@ -674,7 +674,7 @@
                                     <div class="d-flex align-items-center gap-2 mb-2">
                                         <div class="stat-icon"
                                             style="background: rgba(244, 63, 94, 0.1); color: #f43f5e; width: 40px; height: 40px; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            🎉
+                                            <i class="bi bi-stars" aria-hidden="true"></i>
                                         </div>
                                         <h6 class="mb-0 fw-bold text-dark">Cumpleaños de Hoy</h6>
                                     </div>
@@ -688,7 +688,7 @@
                                     <div class="d-flex align-items-center gap-2 mb-2">
                                         <div class="stat-icon"
                                             style="background: rgba(244, 63, 94, 0.1); color: #f43f5e; width: 40px; height: 40px; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            🎂
+                                            <i class="bi bi-cake2" aria-hidden="true"></i>
                                         </div>
                                         <h6 class="mb-0 fw-bold text-dark">Este Mes</h6>
                                     </div>
@@ -2685,11 +2685,11 @@
                             <div class="mb-3">
                                 <label for="area-pending-align-rule" class="form-label fw-bold small text-muted">Alinear Fecha a:</label>
                                 <select id="area-pending-align-rule" class="form-select form-select-sm" onchange="applyAlignmentRule()">
-                                    <option value="custom">📅 Selección Manual</option>
-                                    <option value="today">🕒 Hoy mismo</option>
-                                    <option value="monday">📅 Próximo Lunes (Inicio Semana)</option>
-                                    <option value="month">🗓️ Día 1 del Mes Actual</option>
-                                    <option value="next_month">🗓️ Día 1 del Mes Próximo</option>
+                                    <option value="custom">Selección Manual</option>
+                                    <option value="today">Hoy mismo</option>
+                                    <option value="monday">Próximo Lunes (Inicio Semana)</option>
+                                    <option value="month">Día 1 del Mes Actual</option>
+                                    <option value="next_month">Día 1 del Mes Próximo</option>
                                 </select>
                             </div>
 
@@ -2884,7 +2884,7 @@
                                     <h6 class="fw-bold mb-0">Reglas de Aplicación</h6>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                         onclick="addBonoReglaRow()">
-                                        ➕ Agregar Regla
+                                        <i class="bi bi-plus-lg" aria-hidden="true"></i> Agregar Regla
                                     </button>
                                 </div>
                                 <div id="reglas-container">
@@ -3241,7 +3241,7 @@
                                     <span id="wizard-emp-counter" class="badge bg-secondary">0 listos</span>
                                 </div>
                                 <div class="d-flex gap-2 mb-2">
-                                    <input type="text" id="wizard-emp-search" class="form-control form-control-sm" placeholder="🔍 Buscar empleado..." oninput="filterWizardEmpleados()">
+                                    <input type="text" id="wizard-emp-search" class="form-control form-control-sm" placeholder="Buscar empleado..." oninput="filterWizardEmpleados()">
                                     <select class="form-select form-select-sm" id="wizard-emp-filter-type" onchange="filterWizardEmpleados()" style="width: 200px;">
                                         <option value="all">Mostrar Todos</option>
                                         <option value="new_changed">Nuevos/Cambios</option>
@@ -4133,7 +4133,7 @@
                                             id="venc-fecha" class="fw-bold">-</span>.
                                         <div id="venc-alerta-legal"
                                             class="mt-2 p-2 bg-white rounded border border-warning d-none">
-                                            ⚠️ <strong>¡ALERTA LEGAL!</strong> Este es el <span id="venc-num-contrato"
+                                            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> <strong>¡ALERTA LEGAL!</strong> Este es el <span id="venc-num-contrato"
                                                 class="fw-bold">2do</span> contrato.
                                             <br><small>Según legislación, una renovación adicional podría convertirlo
                                                 automáticamente en INDEFINIDO.</small>
@@ -4755,7 +4755,7 @@
                                     <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('manejo')">
                                 </div>
                                 <div class="col-4">
-                                    <label for="vl-hrs-descanso" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">🛌 Hrs. Descanso</label>
+                                    <label for="vl-hrs-descanso" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-moon-stars" aria-hidden="true"></i> Hrs. Descanso</label>
                                     <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0" oninput="window.updateViajeLargoCalculos('descanso')">
                                 </div>
                                 <div class="col-4">
@@ -4889,7 +4889,7 @@
                                         <div id="m180-brush-wrap" class="form-check form-switch m-0 d-none d-md-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
                                             <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
                                             <label class="form-check-label fw-bold small text-dark mb-0 user-select-none" for="m180-toggle-brush" style="font-size:0.75rem; cursor:pointer;" id="m180-brush-label">
-                                                🖌️ Pintar al pasar (Hover)
+                                                <i class="bi bi-brush" aria-hidden="true"></i> Pintar al pasar (Hover)
                                             </label>
                                         </div>
                                         <!-- Acciones Rápidas con protección m180-edit-btn -->
