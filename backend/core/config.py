@@ -132,6 +132,12 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH: Optional[str] = None
     
     # ============================================
+    # GOOGLE GEMINI AI (Visión y Escaneo Libreta 180h)
+    # ============================================
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    
+    # ============================================
     # LOGGING
     # ============================================
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL

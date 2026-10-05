@@ -4,13 +4,13 @@ Endpoints para procesar y consultar asistencia
 """
 
 from backend.core.fast_json import fast_json
-from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from loguru import logger
 
-
+from backend.services.gemini_vision_service import gemini_vision_service
 from backend.services.asistencia_service import AsistenciaService
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
@@ -3153,5 +3153,97 @@ async def save_libreta_180h(
         raise HTTPException(status_code=500, detail=f"Error guardando Libreta 180h: {str(e)}")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# ESCANEO INTELIGENTE LIBRETA 180H CON GOOGLE GEMINI VISION (AI)
+# ═══════════════════════════════════════════════════════════════════
+
+class LibretaOcrBase64Payload(BaseModel):
+    imagen_base64: str
+    mime_type: Optional[str] = "image/jpeg"
+    empleado_id: Optional[int] = None
+    fecha: Optional[str] = None
 
 
+@router.get("/libreta-180h/ocr-status/")
+async def get_ocr_status(
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """
+    Indica si el servicio de reconocimiento visual de Gemini está activo y configurado.
+    """
+    configured = gemini_vision_service.is_configured()
+    return {
+        "disponible": configured,
+        "modelo": gemini_vision_service.model,
+        "mensaje": "Servicio Gemini Vision listo para escaneo" if configured else "GEMINI_API_KEY no configurada en .env"
+    }
+
+
+@router.post("/libreta-180h/ocr-gemini/")
+async def ocr_libreta_180h_upload(
+    file: UploadFile = File(...),
+    empleado_id: Optional[int] = Form(None),
+    fecha: Optional[str] = Form(None),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Escanea y reconoce visualmente la libreta física de chofer (Art. 25 bis DT)
+    mediante Google Gemini Vision (Free Tier) a partir de una foto subida por multipart/form-data.
+    """
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="El archivo de imagen enviado está vacío.")
+
+        mime_type = file.content_type or "image/jpeg"
+        resultado = await gemini_vision_service.parse_libreta_180h_image(
+            image_bytes=content,
+            mime_type=mime_type,
+            fecha_esperada=fecha
+        )
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error en ocr_libreta_180h_upload: {e}")
+        raise HTTPException(status_code=500, detail=f"Error procesando imagen de libreta con Gemini Vision: {str(e)}")
+
+
+@router.post("/libreta-180h/ocr-gemini-base64/")
+async def ocr_libreta_180h_base64(
+    payload: LibretaOcrBase64Payload,
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Escanea la libreta física de chofer a partir de una cadena Base64 capturada directamente por la cámara web/móvil.
+    """
+    try:
+        raw_b64 = payload.imagen_base64
+        if "," in raw_b64:
+            header, raw_b64 = raw_b64.split(",", 1)
+            if "png" in header:
+                mime_type = "image/png"
+            elif "webp" in header:
+                mime_type = "image/webp"
+            else:
+                mime_type = "image/jpeg"
+        else:
+            mime_type = payload.mime_type or "image/jpeg"
+
+        import base64
+        try:
+            image_bytes = base64.b64decode(raw_b64)
+        except Exception as b64_err:
+            raise HTTPException(status_code=400, detail=f"Base64 inválido: {b64_err}")
+
+        resultado = await gemini_vision_service.parse_libreta_180h_image(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            fecha_esperada=payload.fecha
+        )
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error en ocr_libreta_180h_base64: {e}")
+        raise HTTPException(status_code=500, detail=f"Error procesando imagen base64 con Gemini Vision: {str(e)}")

@@ -533,6 +533,11 @@ function _executeSwitchPage(pageName) {
     }
   });
 
+  // Update mobile bottom nav
+  document.querySelectorAll('.mobile-nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.page === pageName);
+  });
+
   // Update pages
   pages.forEach(page => {
     page.classList.remove('active');

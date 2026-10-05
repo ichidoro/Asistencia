@@ -4342,7 +4342,21 @@
                                         <div id="decision-emp-nombre" class="fw-bold text-dark text-truncate" style="font-size:0.88rem;line-height:1.3;"></div>
                                         <div class="d-flex align-items-center gap-2 mt-1">
                                             <span id="decision-fecha" class="badge" style="background:#eff6ff;color:#3b82f6;border:1px solid #bfdbfe;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
+                                            <span id="decision-estado-badge" class="badge bg-secondary-subtle text-secondary border d-none" style="font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Mini Resumen de Turno y Marcas Reales (Para móvil / touch) -->
+                            <div id="decision-summary-card" class="px-4 pb-2 d-none">
+                                <div class="p-2 rounded-3 border d-flex justify-content-between align-items-center" style="background:#f8fafc; font-size:0.75rem;">
+                                    <div>
+                                        <span class="text-muted d-block" style="font-size:0.62rem;font-weight:700;letter-spacing:0.5px;">TURNO</span>
+                                        <strong id="decision-turno-label" class="text-dark">—</strong>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="text-muted d-block" style="font-size:0.62rem;font-weight:700;letter-spacing:0.5px;">MARCACIONES</span>
+                                        <strong id="decision-marcas-label" class="text-primary">—</strong>
                                     </div>
                                 </div>
                             </div>
@@ -4797,24 +4811,71 @@
                             <input type="hidden" id="m180-fecha-str">
 
                             <!-- Barra de Herramientas y Leyenda Directa -->
+                            <!-- 1. BLOQUE DE ESCANEO INTELIGENTE CON CÁMARA (GEMINI VISION AI) -->
+                            <div class="card border-0 shadow-sm mb-3 overflow-hidden" style="border-radius:14px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1.5px solid #a7f3d0 !important;">
+                                <div class="p-3">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="d-flex align-items-center justify-content-center text-white" style="width:34px; height:34px; background:#059669; border-radius:10px;">
+                                                <i class="bi bi-camera-fill fs-6"></i>
+                                            </div>
+                                            <div>
+                                                <span class="fw-bold text-dark" style="font-size:0.85rem;">Escaneo Automático con Cámara (Gemini Vision AI)</span>
+                                                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle ms-1" style="font-size:0.65rem;">FREE TIER</span>
+                                                <p class="text-muted mb-0" style="font-size:0.72rem;">Saca una foto a la hoja física de papel y la grilla de 96 slots se llenará sola.</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <input type="file" id="m180-camera-input" accept="image/*" capture="environment" style="display:none;" onchange="window.m180HandleCameraUpload(event)">
+                                            <input type="file" id="m180-gallery-input" accept="image/*" style="display:none;" onchange="window.m180HandleCameraUpload(event)">
+                                            <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 shadow-sm d-flex align-items-center gap-1.5" style="border-radius:8px;" onclick="document.getElementById('m180-camera-input').click()">
+                                                <i class="bi bi-camera"></i> Sacar Foto con Celular
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary bg-white px-2.5 py-1.5" style="border-radius:8px; font-size:0.75rem;" onclick="document.getElementById('m180-gallery-input').click()">
+                                                <i class="bi bi-image"></i> Subir Foto
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Banner de estado y previsualización -->
+                                    <div id="m180-ocr-status-box" class="alert py-2 px-3 mb-0 d-none" style="font-size:0.75rem; border-radius:8px;"></div>
+                                    
+                                    <div id="m180-ocr-preview-container" class="mt-2 d-none d-flex align-items-center gap-2 p-2 bg-white rounded border">
+                                        <img id="m180-ocr-preview-img" src="" alt="Foto de libreta física" style="max-height: 70px; border-radius:6px; object-fit: contain; border:1px solid #e2e8f0;">
+                                        <div class="small text-muted flex-grow-1">
+                                            <span class="fw-bold text-dark">Foto capturada</span> · Los 96 slots han sido volcados en la grilla inferior. Puedes ajustarlos o pulsar Guardar.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. BARRA DE HERRAMIENTAS Y PINTADO MANUAL (TÁCTIL Y DESKTOP) -->
                             <div class="bg-white p-3 rounded-3 border shadow-sm mb-3">
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom">
+                                    <!-- Controles Táctiles de Modo: Desplazar vs Pintar -->
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle px-2.5 py-1.5 fw-bold" style="font-size:0.78rem;">
-                                            <i class="bi bi-hand-index-thumb me-1"></i> Marcación Directa por Fila
-                                        </span>
-                                        <span class="text-secondary" style="font-size:0.75rem;">
-                                            Pase el cursor o toque directamente la fila que desee marcar (Conducción, Espera, Auxiliares o Descanso).
-                                        </span>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <!-- Switch Modo Pincel (Hover to Paint) -->
-                                        <div class="form-check form-switch m-0 d-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
+                                        <span class="fw-bold small text-muted">Modo Táctil:</span>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-primary active" id="m180-btn-mode-scroll" onclick="window.setLibretaTouchMode('scroll')" title="Desplazar libremente por las 24 horas con el dedo">
+                                                <i class="bi bi-hand-index me-1"></i> 🖐️ Desplazar 24h
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary" id="m180-btn-mode-paint" onclick="window.setLibretaTouchMode('paint')" title="Pintar slots al arrastrar el dedo">
+                                                <i class="bi bi-pencil-fill me-1"></i> ✏️ Pintar Slots
+                                            </button>
+                                        </div>
+
+                                        <!-- Switch Modo Pincel (Hover to Paint) para Desktop -->
+                                        <div class="form-check form-switch m-0 d-none d-md-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
                                             <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
                                             <label class="form-check-label fw-bold small text-dark mb-0 user-select-none" for="m180-toggle-brush" style="font-size:0.75rem; cursor:pointer;" id="m180-brush-label">
                                                 🖌️ Pintar al pasar (Hover)
                                             </label>
                                         </div>
+                                    </div>
+
+                                    <!-- Acciones Rápidas -->
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
                                         <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
                                             <i class="bi bi-magic me-1"></i> Rellenar Vacíos con Descanso
                                         </button>
@@ -4822,6 +4883,27 @@
                                             <i class="bi bi-trash3 me-1"></i> Limpiar Todo
                                         </button>
                                     </div>
+                                </div>
+
+                                <!-- Atajo Rápido por Tramo Horario (Sin quitar la grilla) -->
+                                <div class="p-2 mb-2 rounded bg-light border d-flex flex-wrap align-items-center justify-content-between gap-2" style="font-size:0.75rem;">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="fw-bold text-dark"><i class="bi bi-lightning-charge-fill text-warning me-1"></i> Aplicar Tramo Directo:</span>
+                                        <select id="m180-quick-act" class="form-select form-select-sm py-0.5 px-2" style="width:140px; font-size:0.75rem;">
+                                            <option value="1">1. Conducción</option>
+                                            <option value="2">2. Espera</option>
+                                            <option value="3">3. Auxiliares</option>
+                                            <option value="4">4. Descanso</option>
+                                        </select>
+                                        <label for="m180-quick-desde" class="mb-0 text-muted">Desde:</label>
+                                        <input type="time" id="m180-quick-desde" class="form-control form-control-sm py-0.5 px-1 text-center" style="width:85px; font-size:0.75rem;" value="08:00">
+                                        <label for="m180-quick-hasta" class="mb-0 text-muted">Hasta:</label>
+                                        <input type="time" id="m180-quick-hasta" class="form-control form-control-sm py-0.5 px-1 text-center" style="width:85px; font-size:0.75rem;" value="13:30">
+                                        <button type="button" class="btn btn-sm btn-primary py-0.5 px-2.5 fw-bold" style="font-size:0.75rem;" onclick="window.aplicarTramoRango180h()">
+                                            <i class="bi bi-check-lg me-1"></i> Aplicar a Grilla
+                                        </button>
+                                    </div>
+                                    <span class="text-muted small">Pinta automáticamente los cuartos de hora de ese rango</span>
                                 </div>
 
                                 <!-- Leyenda Informativa de Actividades -->
@@ -4845,13 +4927,13 @@
                                 </div>
                             </div>
 
-                            <!-- Grilla Continua de 24 Horas en tramos de 15 minutos (96 slots) -->
+                            <!-- 3. GRILLA CONTINUA DE 24 HORAS EN TRAMOS DE 15 MINUTOS (96 SLOTS) -->
                             <div class="card border border-dark-subtle shadow-sm mb-3 overflow-hidden" style="border-radius:12px;">
                                 <div class="bg-dark text-white py-1.5 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:0.75rem;">
                                     <span class="fw-bold text-uppercase"><i class="bi bi-clock-history me-1 text-warning"></i> Grilla Continua 24 Horas (Tramos de 15 Minutos)</span>
                                     <span class="text-white-50" style="font-size:0.7rem;">Pase el cursor o toque directamente la fila para pintar</span>
                                 </div>
-                                <div class="table-responsive m180-grid-container" id="m180-grid-scroll" style="max-height:380px; user-select:none; touch-action:none;">
+                                <div class="table-responsive m180-grid-container" id="m180-grid-scroll" style="max-height:380px; user-select:none; touch-action: pan-x pan-y;">
                                     <table class="table table-bordered table-sm mb-0 text-center m180-table" style="font-size:0.72rem; border-collapse:separate; border-spacing:0;">
                                         <thead style="position:sticky; top:0; z-index:10; background:#f1f5f9;">
                                             <tr id="m180-header-hours">
@@ -5289,8 +5371,31 @@
 
             <!-- Overlay para Sidebar Móvil -->
         </main>
-    </div>
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- 📱 Barra Inferior Fija Nativa para Android / Móviles (< 768px) -->
+    <nav class="mobile-bottom-nav d-md-none" id="mobile-bottom-nav" aria-label="Navegación móvil inferior">
+        <button type="button" class="mobile-nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
+            <span class="mobile-nav-icon">📊</span>
+            <span class="mobile-nav-label">Dashboard</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-page="empleados" onclick="switchPage('empleados')">
+            <span class="mobile-nav-icon">👥</span>
+            <span class="mobile-nav-label">Empleados</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-page="marcaciones" onclick="switchPage('marcaciones')">
+            <span class="mobile-nav-icon">⏰</span>
+            <span class="mobile-nav-label">Asistencia</span>
+        </button>
+        <button type="button" class="mobile-nav-item" data-page="porteria" onclick="switchPage('porteria')">
+            <span class="mobile-nav-icon">🛡️</span>
+            <span class="mobile-nav-label">Portería</span>
+        </button>
+        <button type="button" class="mobile-nav-item" id="mobile-nav-more-btn" onclick="document.getElementById('sidebar-toggle')?.click()">
+            <span class="mobile-nav-icon">☰</span>
+            <span class="mobile-nav-label">Más</span>
+        </button>
+    </nav>
 </body>
 
 <!-- PWA Service Worker Registration -->

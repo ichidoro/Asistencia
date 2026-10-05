@@ -1726,6 +1726,18 @@
         border-radius: 8px;
     }
 
+    /* Soporte para desfijar columnas sticky en móviles y tablets para deslizamiento 100% libre */
+    .matrix-table-premium.unpin-sticky-columns .sticky-col-analitica,
+    .matrix-table-premium.unpin-sticky-columns .sticky-premium-col,
+    .matrix-table-premium.unpin-sticky-columns th.sticky-col-analitica,
+    .matrix-table-premium.unpin-sticky-columns td.sticky-col-analitica,
+    .matrix-table-premium.unpin-sticky-columns th.sticky-premium-col,
+    .matrix-table-premium.unpin-sticky-columns td.sticky-premium-col,
+    .matrix-table-premium.unpin-sticky-columns .sticky-saldo-col {
+        position: static !important;
+        left: auto !important;
+    }
+
     /* Employee name column: much narrower on mobile */
     .sticky-col-analitica,
     td.sticky-col-analitica,
@@ -2534,3 +2546,171 @@
         font-size: 0.55rem !important;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   📱 SHELL MÓVIL NATIVO (ANDROID & SMARTPHONES < 768px)
+   Barra Inferior Fija (Bottom Nav), Bottom Sheets y Desfijar Columnas Sticky
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1. Desfijar columnas sticky globalmente (tablets, laptops y móviles) */
+.matrix-table-premium.unpin-sticky-columns .sticky-col-analitica,
+.matrix-table-premium.unpin-sticky-columns .sticky-premium-col,
+.matrix-table-premium.unpin-sticky-columns th.sticky-col-analitica,
+.matrix-table-premium.unpin-sticky-columns td.sticky-col-analitica,
+.matrix-table-premium.unpin-sticky-columns th.sticky-premium-col,
+.matrix-table-premium.unpin-sticky-columns td.sticky-premium-col,
+.matrix-table-premium.unpin-sticky-columns .sticky-saldo-col,
+.matrix-table-premium.unpin-sticky-columns .th-bento-emp,
+.matrix-table-premium.unpin-sticky-columns .td-empleado-sticky {
+    position: static !important;
+    left: auto !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 768px) {
+    /* 2. Compensación de padding inferior para no tapar contenido */
+    .main-content {
+        padding-bottom: 74px !important;
+    }
+
+    /* 3. Barra Inferior Fija (Bottom Nav) nativa para el pulgar */
+    .mobile-bottom-nav {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 60px !important;
+        background: rgba(15, 23, 42, 0.94) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-around !important;
+        z-index: 1050 !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .mobile-nav-item {
+        background: transparent !important;
+        border: none !important;
+        color: #94a3b8 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex: 1 !important;
+        height: 100% !important;
+        min-height: 48px !important;
+        padding: 4px 2px !important;
+        font-family: inherit !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        outline: none !important;
+    }
+
+    .mobile-nav-icon {
+        font-size: 1.25rem !important;
+        line-height: 1.2 !important;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .mobile-nav-label {
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.2px !important;
+        margin-top: 2px !important;
+    }
+
+    .mobile-nav-item.active {
+        color: #60a5fa !important;
+    }
+
+    .mobile-nav-item.active .mobile-nav-icon {
+        transform: translateY(-2px) scale(1.15) !important;
+    }
+
+    .mobile-nav-item:active {
+        transform: scale(0.92) !important;
+    }
+
+    /* 4. Bottom Sheet nativo en celular para Acciones de Asistencia y Modales Rápidos */
+    #modal-decision-asistencia .modal-dialog,
+    .modal-bottom-sheet-mobile .modal-dialog {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        transform: translate3d(0, 100%, 0) !important;
+        transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    #modal-decision-asistencia.show .modal-dialog,
+    .modal-bottom-sheet-mobile.show .modal-dialog {
+        transform: translate3d(0, 0, 0) !important;
+    }
+
+    #modal-decision-asistencia .modal-content,
+    .modal-bottom-sheet-mobile .modal-content {
+        border-radius: 24px 24px 0 0 !important;
+        border: none !important;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.35) !important;
+        max-height: 85vh !important;
+        overflow-y: auto !important;
+    }
+
+    #modal-decision-asistencia .modal-header,
+    .modal-bottom-sheet-mobile .modal-header {
+        position: relative !important;
+        padding-top: 22px !important;
+    }
+
+    #modal-decision-asistencia .modal-header::before,
+    .modal-bottom-sheet-mobile .modal-header::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 8px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 38px !important;
+        height: 4px !important;
+        border-radius: 2px !important;
+        background: rgba(255, 255, 255, 0.45) !important;
+    }
+
+    /* 5. Pestañas de Configuración táctiles (18 tabs con deslizamiento horizontal sin quiebres) */
+    #configTabs {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 8px !important;
+        border-bottom: 2px solid #e2e8f0 !important;
+        gap: 6px !important;
+    }
+
+    #configTabs .nav-item {
+        flex: 0 0 auto !important;
+    }
+
+    #configTabs .nav-link {
+        white-space: nowrap !important;
+        padding: 8px 14px !important;
+        font-size: 0.78rem !important;
+        border-radius: 8px !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+
+    #configTabs .nav-link.active {
+        background: #3b82f6 !important;
+        color: #ffffff !important;
+        border-color: #3b82f6 !important;
+    }
+}
+

@@ -6103,6 +6103,30 @@ window.reloadSingleEmployeeRow = async function(empId) {
     }
 };
 
+window.toggleStickyEmpleado = function() {
+    window._stickyUnpinned = !window._stickyUnpinned;
+    const table = document.querySelector('.matrix-table-premium');
+    const btn = document.getElementById('btn-toggle-sticky-emp');
+    if (table) {
+        if (window._stickyUnpinned) {
+            table.classList.add('unpin-sticky-columns');
+        } else {
+            table.classList.remove('unpin-sticky-columns');
+        }
+    }
+    if (btn) {
+        if (window._stickyUnpinned) {
+            btn.className = 'btn btn-sm btn-primary fw-bold';
+            btn.innerHTML = '<i class="bi bi-pin-fill me-1"></i> <span class="d-none d-sm-inline">Fijar Nombres</span>';
+            btn.title = "Columnas liberadas para desplazamiento táctil libre. Clic para volver a fijar.";
+        } else {
+            btn.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            btn.innerHTML = '<i class="bi bi-pin-angle me-1"></i> <span class="d-none d-sm-inline">Desfijar Nombres</span>';
+            btn.title = "Columnas fijadas. Clic para liberar y deslizar del día 1 al 31.";
+        }
+    }
+};
+
 // ─── PUNTO DE ENTRADA (llamado desde marcaciones_ui.js) ──────────────────────
 function renderVistaAnalitica(respData, container) {
     if (!respData) return;
@@ -6354,6 +6378,11 @@ function renderVistaAnalitica(respData, container) {
         {key:'acumulado', icon:'bi-graph-up',         label:'Acumulado'}
     ].map(v => `<button class="btn segmented-btn ${activeVM===v.key ? 'active' : ''}" onclick="vaSetViewMode('${v.key}')" title="${v.label}"><i class="bi ${v.icon} me-1 d-none d-sm-inline"></i>${v.label}</button>`).join('');
 
+    const isUnpinned = window._stickyUnpinned === true;
+    const pinBtnText = isUnpinned ? 'Fijar' : 'Desfijar';
+    const pinBtnIcon = isUnpinned ? 'bi-pin-fill' : 'bi-pin-angle';
+    const pinBtnClass = isUnpinned ? 'btn-primary' : 'btn-outline-secondary';
+
     const sw = `<div class="va-toolbar-premium">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#3f6fd6"></i>
@@ -6362,10 +6391,13 @@ function renderVistaAnalitica(respData, container) {
         </div>
         <div style="width:1px;height:24px;background:#cbd5e1"></div>
         <div class="segmented-control" role="group" aria-label="Modo de vista">${vmButtons}</div>
-        <div class="ms-auto d-flex align-items-center gap-3">
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <button id="btn-toggle-sticky-emp" class="btn btn-sm ${pinBtnClass} fw-bold" onclick="window.toggleStickyEmpleado()" title="Fijar o liberar nombres y columnas de resumen para deslizamiento libre en pantallas táctiles">
+                <i class="bi ${pinBtnIcon} me-1"></i> <span class="d-none d-sm-inline">${pinBtnText} Nombres</span>
+            </button>
             <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
                 <button class="btn btn-sm ${isClosed ? 'btn-secondary disabled' : 'btn-warning'} fw-bold" ${isClosed ? 'disabled' : ''} onclick="openCierrePeriodoModal()" title="${isClosed ? 'El periodo ya está cerrado' : 'Cerrar este periodo definitivamente'}">
-                    <i class="bi bi-shield-lock-fill me-1"></i> Cerrar Periodo
+                    <i class="bi bi-shield-lock-fill me-1"></i> <span class="d-none d-md-inline">Cerrar Periodo</span>
                 </button>
                 <button class="btn btn-sm btn-outline-secondary bg-white" onclick="openHistorialCierresModal()" title="Ver historial de cierres">
                     <i class="bi bi-clock-history"></i>
@@ -6437,7 +6469,7 @@ function renderVistaAnalitica(respData, container) {
     container.innerHTML = `
     ${sw}
     <div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
-    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
+    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
         <tr class="text-center" style="background:#f8f9fa;font-size:0.68rem">
             <th rowspan="2" class="sticky-col-analitica align-middle text-start ps-2" style="position:sticky; left:0; z-index:120; white-space:nowrap; background:#f8f9fa; width:260px; min-width:260px; max-width:260px;">Empleado</th>

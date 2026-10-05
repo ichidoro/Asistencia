@@ -83,6 +83,34 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     const asistGeneral = empMatrixGeneral ? empMatrixGeneral[dateStr] : null;
     const jaGeneral = asistGeneral ? asistGeneral.jornada_adicional : null;
 
+    // --- NUEVO: RESUMEN RÁPIDO PARA DISPOSITIVOS TÁCTILES / MÓVIL ---
+    const summaryCard = document.getElementById('decision-summary-card');
+    const estadoBadge = document.getElementById('decision-estado-badge');
+    const turnoLabel = document.getElementById('decision-turno-label');
+    const marcasLabel = document.getElementById('decision-marcas-label');
+    if (summaryCard && asistGeneral) {
+        summaryCard.classList.remove('d-none');
+        if (turnoLabel) {
+            const turnoNombre = asistGeneral.turno_nombre || asistGeneral.nombre_turno || '';
+            const horasTeoricas = (asistGeneral.hora_entrada_teorica && asistGeneral.hora_salida_teorica)
+                ? `${asistGeneral.hora_entrada_teorica} - ${asistGeneral.hora_salida_teorica}`
+                : '';
+            turnoLabel.textContent = turnoNombre || horasTeoricas || (asistGeneral.horas_teoricas === 0 ? 'Día Libre' : 'Sin turno');
+        }
+        const entStr = asistGeneral.hora_entrada_real || (horaEntrada && horaEntrada !== 'null' ? horaEntrada : '--:--');
+        const salStr = asistGeneral.hora_salida_real || (horaSalida && horaSalida !== 'null' ? horaSalida : '--:--');
+        if (marcasLabel) {
+            marcasLabel.textContent = (entStr === '--:--' && salStr === '--:--') ? 'Sin marcas' : `${entStr} - ${salStr}`;
+        }
+        if (estadoBadge) {
+            estadoBadge.textContent = asistGeneral.estado || 'OK';
+            estadoBadge.classList.remove('d-none');
+        }
+    } else if (summaryCard) {
+        summaryCard.classList.add('d-none');
+        if (estadoBadge) estadoBadge.classList.add('d-none');
+    }
+
     if (dualBox) {
         if (jaGeneral && asistGeneral && (asistGeneral.horas_teoricas > 0 || asistGeneral.hora_entrada_real)) {
             const horasJa = jaGeneral.minutos_trabajados ? (Math.round(jaGeneral.minutos_trabajados / 60.0 * 10) / 10) : 0;
@@ -2665,5 +2693,198 @@ window.libreta180hAutoDescanso = libreta180hAutoDescanso;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
+
+// ═══════════════════════════════════════════════════════════════════
+// ESCANEO CON CÁMARA (GEMINI VISION AI) & CONTROLES TÁCTILES 180H
+// ═══════════════════════════════════════════════════════════════════
+
+let m180_touch_mode = 'scroll'; // 'scroll' (desplazar libremente con el dedo) o 'paint' (pintar celdas)
+
+window.setLibretaTouchMode = function(mode) {
+    m180_touch_mode = mode;
+    const container = document.getElementById('m180-grid-scroll');
+    const btnScroll = document.getElementById('m180-btn-mode-scroll');
+    const btnPaint = document.getElementById('m180-btn-mode-paint');
+
+    if (container) {
+        if (mode === 'paint') {
+            container.style.touchAction = 'none';
+            if (btnPaint) { btnPaint.classList.remove('btn-outline-primary'); btnPaint.classList.add('btn-primary'); }
+            if (btnScroll) { btnScroll.classList.remove('btn-primary'); btnScroll.classList.add('btn-outline-primary'); }
+        } else {
+            container.style.touchAction = 'pan-x pan-y';
+            if (btnScroll) { btnScroll.classList.remove('btn-outline-primary'); btnScroll.classList.add('btn-primary'); }
+            if (btnPaint) { btnPaint.classList.remove('btn-primary'); btnPaint.classList.add('btn-outline-primary'); }
+        }
+    }
+};
+
+window.m180HandleCameraUpload = async function(event) {
+    const input = event.target;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+
+    const empId = document.getElementById('m180-empleado-id').value;
+    const fecha = document.getElementById('m180-fecha-str').value;
+
+    const statusBox = document.getElementById('m180-ocr-status-box');
+    const previewImg = document.getElementById('m180-ocr-preview-img');
+    const previewContainer = document.getElementById('m180-ocr-preview-container');
+
+    // Previsualizar la imagen capturada de inmediato
+    if (previewImg && previewContainer) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImg.src = e.target.result;
+            previewContainer.classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    if (statusBox) {
+        statusBox.classList.remove('d-none', 'alert-danger', 'alert-success', 'alert-warning');
+        statusBox.classList.add('alert-info');
+        statusBox.innerHTML = `
+            <div class="d-flex align-items-center gap-2">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <div class="small">
+                    <strong>Analizando libreta física con Google Gemini Vision...</strong><br>
+                    <span class="text-muted">Leyendo marcas de conducción, espera, labores auxiliares y descanso.</span>
+                </div>
+            </div>
+        `;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (empId) formData.append('empleado_id', empId);
+    if (fecha) formData.append('fecha', fecha);
+
+    try {
+        const resp = await fetch('/api/asistencia/libreta-180h/ocr-gemini/', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token') || localStorage.getItem('access_token') || ''}`
+            },
+            body: formData
+        });
+
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.detail || `Error ${resp.status} al procesar imagen`);
+        }
+
+        const data = await resp.json();
+
+        if (!data.exito && data.error === 'GEMINI_API_KEY_MISSING') {
+            if (statusBox) {
+                statusBox.classList.remove('alert-info');
+                statusBox.classList.add('alert-warning');
+                statusBox.innerHTML = `
+                    <div class="small">
+                        <strong><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Requiere Clave Gemini (Free Tier):</strong><br>
+                        ${data.mensaje}<br>
+                        <span class="text-muted">Obtén tu API key gratuita en <a href="https://aistudio.google.com/" target="_blank" class="fw-bold">aistudio.google.com</a> y agrégala a <code>.env</code>.</span>
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        if (!data.exito) {
+            throw new Error(data.mensaje || data.error || 'No se pudo interpretar la libreta');
+        }
+
+        // Llenar automáticamente los 96 slots
+        if (Array.isArray(data.slots_96) && data.slots_96.length === 96) {
+            m180_slots = data.slots_96.map(s => Number(s) || 0);
+            refreshAllSlotsVisuals();
+            recalcLibretaTotales();
+        }
+
+        const rh = data.resumen_horas || {};
+        const condH = rh.horas_conduccion || 0;
+        const espH = rh.horas_espera || 0;
+        const descH = rh.horas_descanso || 0;
+        const cntTramos = (data.tramos && data.tramos.length) || 0;
+
+        if (statusBox) {
+            statusBox.classList.remove('alert-info');
+            statusBox.classList.add('alert-success');
+            statusBox.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-check-circle-fill text-success fs-5 mt-0.5"></i>
+                    <div class="small">
+                        <strong class="text-success">¡Lectura Completada con Éxito (Gemini Vision)!</strong><br>
+                        <span>Se detectaron <b>${cntTramos} tramos</b>: 🟢 Conducción ${condH}h · 🟡 Espera ${espH}h · ⚪ Descanso ${descH}h.</span><br>
+                        <span class="text-muted">Los 96 slots se han pintado automáticamente abajo. Compara con la foto, ajusta si es necesario y pulsa Guardar.</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (typeof showToast === 'function') {
+            showToast("Libreta digital rellenada automáticamente desde la foto", "success");
+        }
+
+    } catch (err) {
+        console.error("Error en escaneo de libreta:", err);
+        if (statusBox) {
+            statusBox.classList.remove('alert-info');
+            statusBox.classList.add('alert-danger');
+            statusBox.innerHTML = `
+                <div class="small">
+                    <strong><i class="bi bi-x-circle-fill text-danger me-1"></i> Error al escanear la libreta:</strong><br>
+                    ${err.message || 'Error desconocido'}<br>
+                    <span class="text-muted">Asegúrate de que la foto tenga buena luz y que la cuadrícula esté enfocada. También puedes pintar manualmente abajo.</span>
+                </div>
+            `;
+        }
+    } finally {
+        input.value = ''; // Reset file input
+    }
+};
+
+window.aplicarTramoRango180h = function() {
+    const actId = parseInt(document.getElementById('m180-quick-act').value) || 1;
+    const hDesde = document.getElementById('m180-quick-desde').value;
+    const hHasta = document.getElementById('m180-quick-hasta').value;
+
+    if (!hDesde || !hHasta) {
+        alert("Por favor selecciona hora de inicio y fin del tramo.");
+        return;
+    }
+
+    const [dH, dM] = hDesde.split(':').map(Number);
+    const [hH, hM] = hHasta.split(':').map(Number);
+
+    const startMin = dH * 60 + dM;
+    const endMin = hH * 60 + hM;
+
+    if (endMin <= startMin) {
+        alert("La hora de fin debe ser posterior a la hora de inicio.");
+        return;
+    }
+
+    const startSlot = Math.max(0, Math.min(95, Math.floor(startMin / 15)));
+    const endSlot = Math.max(0, Math.min(96, Math.ceil(endMin / 15)));
+
+    for (let s = startSlot; s < endSlot; s++) {
+        m180_slots[s] = actId;
+    }
+
+    refreshAllSlotsVisuals();
+    recalcLibretaTotales();
+
+    const actName = M180_ACTIVIDADES[actId]?.name || 'Actividad';
+    if (typeof showToast === 'function') {
+        showToast(`Tramo '${actName}' aplicado de ${hDesde} a ${hHasta} (${(endSlot - startSlot) * 15 / 60}h)`, "success");
+    }
+};
+
+window.m180HandleCameraUpload = m180HandleCameraUpload;
+window.setLibretaTouchMode = setLibretaTouchMode;
+window.aplicarTramoRango180h = aplicarTramoRango180h;
+
 
 
