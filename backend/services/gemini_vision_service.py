@@ -16,15 +16,50 @@ class GeminiVisionService:
     Aprovecha la cuota gratuita (Free Tier) de Google AI Studio (hasta 1.500 solicitudes/día gratis).
     """
 
-    def __init__(self):
-        # Intentar obtener la API Key desde settings, os.environ o fallback
-        self.api_key = (
+    @property
+    def api_key(self) -> str:
+        """
+        Obtiene dinámicamente la API Key desde settings, variables de entorno
+        o buscando directamente en archivos .env en el servidor.
+        """
+        key = (
             getattr(settings, "GEMINI_API_KEY", None)
             or os.environ.get("GEMINI_API_KEY")
             or os.environ.get("GOOGLE_API_KEY")
-            or ""
         )
-        self.model = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
+        if key and len(str(key).strip()) > 10:
+            return str(key).strip()
+
+        # Intento de lectura directa de posibles archivos .env
+        candidates = [
+            os.path.join(os.getcwd(), ".env"),
+            os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+            os.path.join(os.path.dirname(__file__), "..", ".env"),
+            ".env"
+        ]
+        for env_file in candidates:
+            try:
+                if os.path.isfile(env_file):
+                    with open(env_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith("GEMINI_API_KEY="):
+                                val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                                if len(val) > 10:
+                                    return val
+            except Exception:
+                pass
+
+        return ""
+
+    @property
+    def model(self) -> str:
+        """Obtiene dinámicamente el modelo configurado."""
+        return (
+            getattr(settings, "GEMINI_MODEL", None)
+            or os.environ.get("GEMINI_MODEL")
+            or "gemini-3.6-flash"
+        )
 
     def is_configured(self) -> bool:
         """Verifica si la API Key de Gemini está configurada."""
