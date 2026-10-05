@@ -343,7 +343,7 @@ input[type="search"], .search-input, [class*="search"] input {
     left: 0;
     top: 0;
     z-index: 1100;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease, width 0.3s ease, margin-left 0.3s ease, background-color 0.3s ease;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -378,7 +378,7 @@ input[type="search"], .search-input, [class*="search"] input {
     /* Definición sutil */
 
     /* Micro-interacción */
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease, background-color 0.3s ease;
     cursor: pointer;
 }
 
@@ -1720,7 +1720,7 @@ tfoot .sticky-col-analitica {
         border: none;
         border-radius: 10px;
         box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
-        transition: all 0.2s;
+        transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
     }
 
     .menu-toggle:hover,
@@ -2034,7 +2034,7 @@ tfoot .sticky-col-analitica {
     padding: 0 12px;
     flex: 1;
     max-width: 420px;
-    transition: all 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 
 .emp-search-group:focus-within {
@@ -2313,7 +2313,7 @@ tfoot .sticky-col-analitica {
     cursor: pointer;
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
-    transition: all 0.2s;
+    transition: color 0.2s, border-color 0.2s, background-color 0.2s;
 }
 
 .emp-inner-tab:hover {
