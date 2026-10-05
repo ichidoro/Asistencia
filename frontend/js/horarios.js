@@ -508,7 +508,7 @@ function renderHorariosUI() {
         const html = `
             <div id="horarios-view" class="fade-in">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2>📅 Configuración de Turnos</h2>
+                    <h2><i class="bi bi-calendar3" aria-hidden="true"></i> Configuración de Turnos</h2>
                     ${canEdit ? `
                     <button class="btn btn-primary" onclick="openModalHorario()">
                         <i class="bi bi-plus-lg"></i> Nuevo Turno
@@ -564,7 +564,7 @@ function renderHorariosUI() {
                     <!-- Tab Asignación: Redirige al Módulo Empleados -->
                     <div class="tab-pane fade" id="asignacion" role="tabpanel">
                         <div class="d-flex flex-column align-items-center justify-content-center py-5 text-center">
-                            <div class="mb-4" style="font-size: 4rem;">🔄</div>
+                            <div class="mb-4" style="font-size: 4rem;"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></div>
                             <h4 class="fw-bold mb-2">Asignación Masiva de Horarios</h4>
                             <p class="text-muted mb-4" style="max-width: 480px;">
                                 Esta funcionalidad fue movida al módulo <strong>Empleados</strong> para una mejor experiencia.
@@ -1020,7 +1020,7 @@ async function submitBulkAsignacion() {
                 <i class="bi bi-check-circle-fill fs-5 mt-1 flex-shrink-0"></i>
                 <div>
                     <strong>${res.success} asignación(es) guardada(s) correctamente.</strong>
-                    ${res.errors > 0 ? `<br><span class="text-warning">⚠️ ${res.errors} con error.</span>` : ''}
+                    ${res.errors > 0 ? `<br><span class="text-warning"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> ${res.errors} con error.</span>` : ''}
                     ${esRetroactivo ? `
                     <hr class="my-2">
                     <div class="d-flex align-items-center gap-2">

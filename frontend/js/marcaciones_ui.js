@@ -823,7 +823,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
 
     // Mostrar overlay de carga SweetAlert2 sin doble spinner
     Swal.fire({
-        title: '<span style="font-size:1.15rem;font-weight:800;color:#1e293b;">⚡ Sincronizando con BioAlba</span>',
+        title: '<span style="font-size:1.15rem;font-weight:800;color:#1e293b;"><i class="bi bi-lightning-charge-fill text-warning" aria-hidden="true"></i> Sincronizando con BioAlba</span>',
         html: `
             <div class="text-center py-2" style="font-family: var(--font-sans);">
                 <p id="swal-sync-status" class="mb-1 fw-bold text-slate-700">Conectando con BioAlba...</p>
@@ -944,13 +944,13 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
             : '';
 
         await Swal.fire({
-            title: '<span style="font-size:1.1rem;font-weight:800;color:#1e293b;">☁️ Sincronización BioAlba</span>',
+            title: '<span style="font-size:1.1rem;font-weight:800;color:#1e293b;"><i class="bi bi-cloud" aria-hidden="true"></i> Sincronización BioAlba</span>',
             html: `
                 <div style="text-align:left;font-family: var(--font-sans);">
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
                         <span style="background:#e0f2fe;color:#0369a1;font-size: 0.75rem;font-weight:700;padding:3px 8px;border-radius:999px;">${areasLabel}</span>
                         <span style="background:#f1f5f9;color:#475569;font-size: 0.75rem;font-weight:600;padding:3px 8px;border-radius:999px;">${fechaInicio} → ${fechaFin}</span>
-                        <span style="background:#f1f5f9;color:#64748b;font-size: 0.75rem;padding:3px 8px;border-radius:999px;">⏱ ${duracion}s</span>
+                        <span style="background:#f1f5f9;color:#64748b;font-size: 0.75rem;padding:3px 8px;border-radius:999px;"><i class="bi bi-stopwatch" aria-hidden="true"></i> ${duracion}s</span>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
                         <div style="background:${nuevas > 0 ? '#f0fdf4' : '#f8fafc'};border:1px solid ${nuevas > 0 ? '#86efac' : '#e2e8f0'};border-radius:10px;padding:12px;text-align:center;">
@@ -959,16 +959,16 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
                         </div>
                         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;text-align:center;">
                             <div style="font-size:1.6rem;font-weight:800;color:#2563eb;">${recalc}</div>
-                            <div style="font-size: 0.75rem;color:#64748b;margin-top:2px;">📅 Días recalculados</div>
+                            <div style="font-size: 0.75rem;color:#64748b;margin-top:2px;"><i class="bi bi-calendar3" aria-hidden="true"></i> Días recalculados</div>
                         </div>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:0.75rem;color:#64748b;">🔒 Sin asignación</span>
+                            <span style="font-size:0.75rem;color:#64748b;"><i class="bi bi-lock" aria-hidden="true"></i> Sin asignación</span>
                             <span style="font-weight:700;color:#f59e0b;font-size:0.85rem;">${bloqueadas}</span>
                         </div>
                         <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:0.75rem;color:#64748b;">❌ Errores</span>
+                            <span style="font-size:0.75rem;color:#64748b;"><i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Errores</span>
                             <span style="font-weight:700;color:${errores > 0 ? '#dc2626' : '#10b981'};font-size:0.85rem;">${errores}</span>
                         </div>
                     </div>
@@ -2262,9 +2262,9 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
 
     // 3. Construir filas de la tabla
     const heRows = diasHE.map(d => {
-        const estadoBadge = d.estado === 'APROBADO' ? '<span class="badge bg-success" id="badge-st-' + d.fecha + '">✅ Aprobado</span>' :
-                           d.estado === 'RECHAZADO' ? '<span class="badge bg-danger" id="badge-st-' + d.fecha + '">❌ Rechazado</span>' :
-                           '<span class="badge bg-warning text-dark" id="badge-st-' + d.fecha + '">⏳ Pendiente</span>';
+        const estadoBadge = d.estado === 'APROBADO' ? '<span class="badge bg-success" id="badge-st-' + d.fecha + '"><i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i> Aprobado</span>' :
+                           d.estado === 'RECHAZADO' ? '<span class="badge bg-danger" id="badge-st-' + d.fecha + '"><i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Rechazado</span>' :
+                           '<span class="badge bg-warning text-dark" id="badge-st-' + d.fecha + '"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Pendiente</span>';
         const checked = (d.estado === 'PENDIENTE' || d.estado === 'APROBADO') ? 'checked' : '';
         const checkboxHtml = canApproveHE 
             ? `<input class="form-check-input check-item-he" type="checkbox" id="chk-he-${d.fecha}" data-fecha="${d.fecha}" data-minutos="${d.bruto}" ${checked} onchange="window.onRowHEChecked('${d.fecha}')">`
@@ -2570,7 +2570,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
                                         <th class="text-center">Salida</th>
                                         <th class="text-center">HE Bruto</th>
                                         <th style="min-width: 140px;">Origen / Motivo</th>
-                                        <th class="text-center" style="min-width: 110px;" title="Horas acumuladas progresivamente según las jornadas seleccionadas">Acumulado 🧮</th>
+                                        <th class="text-center" style="min-width: 110px;" title="Horas acumuladas progresivamente según las jornadas seleccionadas">Acumulado <i class="bi bi-calculator" aria-hidden="true"></i></th>
                                         <th class="text-center">Estado Actual</th>
                                         <th class="text-center" style="min-width: 185px;">Acción / Autorizar</th>
                                     </tr>
@@ -3216,7 +3216,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
             fbMsg = `
                 <div class="alert alert-success py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div>
-                        <span class="fs-6 fw-bold text-success me-2">⚖️ Compensar Deuda (Art. 32 Código del Trabajo):</span>
+                        <span class="fs-6 fw-bold text-success me-2"><i class="bi bi-hammer" aria-hidden="true"></i> Compensar Deuda (Art. 32 Código del Trabajo):</span>
                         Se imputan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
                         ${diasRescatadosRech > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} rescatada(s) de Rechazo</span>` : ''}
                         · Saldo Neto Proyectado: <span class="badge bg-dark fs-6">${projStr}</span>
@@ -3227,7 +3227,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         } else {
             fbMsg = `
                 <div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm">
-                    <strong>⚠️ Horas insuficientes para llegar a cero:</strong> Se aprobó el 100% disponible (+${formatExactMinutesToTime(totalAsignado)}), pero la deuda acumulada es de ${formatExactMinutesToTime(deudaExacta)}. Faltaron <strong>${formatExactMinutesToTime(porAsignar)}</strong> para cero · Saldo Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
+                    <strong><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> Horas insuficientes para llegar a cero:</strong> Se aprobó el 100% disponible (+${formatExactMinutesToTime(totalAsignado)}), pero la deuda acumulada es de ${formatExactMinutesToTime(deudaExacta)}. Faltaron <strong>${formatExactMinutesToTime(porAsignar)}</strong> para cero · Saldo Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
                 </div>
             `;
         }
@@ -3239,7 +3239,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         if (saldoPotencial <= 0.0083) {
             showToast("El colaborador no tiene saldo positivo de horas extras para redondear.", "warning");
             const fb = document.getElementById('asistente-feedback');
-            if (fb) fb.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm">⚠️ El sobretiempo disponible no supera la deuda total. Usa <strong>"1. Compensar Deuda (Saldo Cero)"</strong> para absorber la deuda.</div>`;
+            if (fb) fb.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> El sobretiempo disponible no supera la deuda total. Usa <strong>"1. Compensar Deuda (Saldo Cero)"</strong> para absorber la deuda.</div>`;
             return;
         }
 
@@ -3273,7 +3273,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         fbMsg = `
             <div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2 text-dark" style="background:#fef3c7;">
                 <div>
-                    <span class="fs-6 fw-bold text-dark me-2">⏱️ Bloque Nómina + Banco de Tiempo:</span>
+                    <span class="fs-6 fw-bold text-dark me-2"><i class="bi bi-stopwatch" aria-hidden="true"></i> Bloque Nómina + Banco de Tiempo:</span>
                     Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornada(s)
                     ${diasRescatadosRech > 0 ? `<span class="badge bg-warning text-dark ms-1"><i class="bi bi-arrow-repeat"></i> ${diasRescatadosRech} de Rechazo</span>` : ''}
                     · Saldo Nómina: <span class="badge bg-success fs-6">${projStr}</span>
@@ -3305,7 +3305,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         fbMsg = `
             <div class="alert alert-primary py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div>
-                    <span class="fs-6 fw-bold text-primary me-2">🏛️ Pago 100% Íntegro (Norma Legal DT):</span>
+                    <span class="fs-6 fw-bold text-primary me-2"><i class="bi bi-bank2" aria-hidden="true"></i> Pago 100% Íntegro (Norma Legal DT):</span>
                     Se aprueban <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornadas sin descuentos.
                     · Saldo Neto Proyectado: <span class="badge ${rawSaldoProy >= 0 ? 'bg-success' : 'bg-danger'} fs-6">${projStr}</span>
                 </div>
@@ -3326,7 +3326,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         fbMsg = `
             <div class="alert alert-danger py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div>
-                    <span class="fs-6 fw-bold text-danger me-2">❌ Rechazo Total:</span>
+                    <span class="fs-6 fw-bold text-danger me-2"><i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Rechazo Total:</span>
                     Sobretiempo dejado en 0. Deuda pendiente se mantiene íntegra.
                     · Saldo Neto Proyectado: <span class="badge bg-danger fs-6">${projStr}</span>
                 </div>
@@ -3373,7 +3373,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         fbMsg = `
             <div class="alert alert-info py-2 px-3 mb-0 small border-0 shadow-sm d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div>
-                    <span class="fs-6 fw-bold text-primary me-2">🎯 Saldo Objetivo Personalizado:</span>
+                    <span class="fs-6 fw-bold text-primary me-2"><i class="bi bi-bullseye" aria-hidden="true"></i> Saldo Objetivo Personalizado:</span>
                     Se autorizan <strong>+${formatExactMinutesToTime(totalAsignado)}</strong> en ${diasAprobados} jornadas.
                     · Saldo Neto Proyectado: <span class="badge bg-primary fs-6">${projStr}</span>
                 </div>
@@ -3508,7 +3508,7 @@ function renderBonoStatus(empId, bonoName, evaluations) {
 
     // Pendiente: sin días laborables aún (inicio de mes)
     if (b.califica && b.monto === 0 && b.motivo && b.motivo.startsWith('Pendiente')) {
-        return `<span class="badge" style="background:#94a3b8;padding:0.4em 0.7em;min-width:55px;font-size:0.85em;" title="${b.motivo}">⏳ …</span>`;
+        return `<span class="badge" style="background:#94a3b8;padding:0.4em 0.7em;min-width:55px;font-size:0.85em;" title="${b.motivo}"><i class="bi bi-hourglass-split" aria-hidden="true"></i> …</span>`;
     }
 
     const montoFmt   = (b.monto || 0).toLocaleString('es-CL');
@@ -6314,7 +6314,7 @@ function renderVistaAnalitica(respData, container) {
                     title="${window._perdonazoState?.activo ? 'Clic para gestionar perdonazos del día' : ''}">
                     <div style="font-weight:700;font-size: 0.75rem;line-height:1.1">${dateStrObj}</div>
                     <div style="opacity:0.8;font-size: 0.75rem;line-height:1.1">${dayShortName}</div>
-                    ${window._perdonazoState?.activo ? '<div style="font-size: 0.75rem;color:#10b981;font-weight:600;">🎁</div>' : ''}
+                    ${window._perdonazoState?.activo ? '<div style="font-size: 0.75rem;color:#10b981;font-weight:600;"><i class="bi bi-gift" aria-hidden="true"></i></div>' : ''}
                 </th>`;
     }).join('');
 
@@ -6468,8 +6468,8 @@ function renderVistaAnalitica(respData, container) {
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', 5)}px;${getStickyWidthStyle('incidencias')}" title="Total incidencias">TOT</th>` : '';
     const heHeadersSub = showHE ? `
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 0)}px;${getStickyWidthStyle('he')}" title="HE pendientes por revisar">PEND</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 1)}px;${getStickyWidthStyle('he')}" title="HE aprobadas por jefe">APR ✅</th>
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}" title="HE rechazadas">RECH ❌</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 1)}px;${getStickyWidthStyle('he')}" title="HE aprobadas por jefe">APR <i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i></th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 2)}px;${getStickyWidthStyle('he')}" title="HE rechazadas">RECH <i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i></th>
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('he', 3)}px;${getStickyWidthStyle('he')}" title="Total HE brutas calculadas">TOT</th>` : '';
     const deudasHeadersSub = showDeudas ? `
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 0)}px;${getStickyWidthStyle('deudas')}" title="Exceso colación (disponible tras nuevo motor)">COL</th>

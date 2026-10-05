@@ -342,7 +342,7 @@ function setupEventListeners() {
     if (btnSync.disabled) return;
     btnSync.disabled = true;
     const originalHTML = btnSync.innerHTML;
-    btnSync.innerHTML = '<span>🔄</span><span>Analizando...</span>';
+    btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Analizando...</span>';
     
     try {
       showBatchLoadingOverlay("Analizando integridad de áreas con BioAlba...");
@@ -2140,7 +2140,7 @@ async function fetchSyncPreviewData() {
   } catch (error) {
     console.error('Error en preview:', error);
     if (listContainer) {
-      listContainer.innerHTML = `<div class="text-danger p-3 text-center">❌ Error: ${error.message}</div>`;
+      listContainer.innerHTML = `<div class="text-danger p-3 text-center"><i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Error: ${error.message}</div>`;
     }
   }
 }
@@ -2296,7 +2296,7 @@ window.confirmSync = async function () {
   };
 
   const btnSync = document.getElementById('btn-sync');
-  btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
+  btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizando...</span>';
   btnSync.disabled = true;
 
   // 3. Mostrar spinner inicial
@@ -2421,7 +2421,7 @@ window.confirmSync = async function () {
     console.error('Error en sync stream:', error);
     alert('❌ Error de conexión al iniciar sincronización');
   } finally {
-    btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
+    btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizar</span>';
     btnSync.disabled = false;
   }
 }
@@ -2434,7 +2434,7 @@ window.confirmSync = async function () {
 window._executeSyncFromWizard = async function(payload) {
   const btnSync = document.getElementById('btn-sync');
   if (btnSync) {
-    btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
+    btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizando...</span>';
     btnSync.disabled = true;
   }
 
@@ -2534,7 +2534,7 @@ window._executeSyncFromWizard = async function(payload) {
     alert('❌ Error de conexión al iniciar sincronización');
   } finally {
     if (btnSync) {
-      btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
+      btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizar</span>';
       btnSync.disabled = false;
     }
   }

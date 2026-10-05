@@ -193,7 +193,7 @@ function renderEstadosConfig() {
     let html = `
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h5 class="fw-bold mb-1">🎨 Tabla Maestra de Estados</h5>
+            <h5 class="fw-bold mb-1"><i class="bi bi-palette" aria-hidden="true"></i> Tabla Maestra de Estados</h5>
             <p class="small text-muted mb-0">Define cómo se visualiza cada estado en la grilla y tooltips.
             El <strong>código</strong> es inmutable — lo usa el motor de asistencia.</p>
         </div>
@@ -536,7 +536,7 @@ function renderBonos() {
     if (bonosList.length === 0) {
         container.innerHTML = h5Title + `
             <div class="empty-state py-5 card border-0 shadow-sm">
-                <div class="stat-icon mb-3" style="font-size: 3rem;">💰</div>
+                <div class="stat-icon mb-3" style="font-size: 3rem;"><i class="bi bi-cash-coin" aria-hidden="true"></i></div>
                 <h3>Sin Bonos Configurados</h3>
                 <p class="text-muted">Presione el botón para crear su primer bono genérico.</p>
             </div>
@@ -2162,7 +2162,7 @@ window.renderPeriodosRRHH = function(periodos) {
     let html = `
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h5 class="fw-bold mb-1">📅 Tramos de Cierre Mensual</h5>
+            <h5 class="fw-bold mb-1"><i class="bi bi-calendar3" aria-hidden="true"></i> Tramos de Cierre Mensual</h5>
             <p class="small text-muted mb-0">Defina los rangos de fechas de inicio y fin para el cierre de mes de Recursos Humanos.</p>
         </div>
         ${canEdit ? `
@@ -2200,7 +2200,7 @@ window.renderPeriodosRRHH = function(periodos) {
         html += `
             <tr>
                 <td colspan="9" class="text-center text-muted py-4">
-                    <div class="mb-2" style="font-size: 2rem;">📅</div>
+                    <div class="mb-2" style="font-size: 2rem;"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
                     No hay tramos de cierre configurados.
                 </td>
             </tr>
