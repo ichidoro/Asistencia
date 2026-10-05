@@ -838,3 +838,65 @@ a:hover { color: var(--ag-navy-deep); }
     transition-property: color, background-color, border-color, box-shadow, opacity !important;
   }
 }
+
+/* ── Accesibilidad ──────────────────────────────────────────────────────────
+   Foco visible para teclado en todo lo interactivo (varias reglas históricas
+   anulan el outline; las entradas de texto conservan su propio anillo). */
+a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible, summary:focus-visible,
+.btn:focus-visible, .nav-link:focus-visible, .dropdown-item:focus-visible,
+.sidebar-item:focus-visible {
+  outline: 2px solid var(--ag-blue) !important;
+  outline-offset: 2px;
+}
+td.cell-clickable:focus-visible { outline-offset: -2px; }
+.sidebar a:focus-visible, .sidebar button:focus-visible, .mobile-bottom-nav :focus-visible {
+  outline-color: #ffffff !important;
+}
+
+/* Movimiento reducido: sin desplazamientos ni deslizamientos largos, pero el
+   cambio de estado se sigue notando (fundidos cortos, colores). */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  .sidebar { transition: none !important; }
+  .modal.fade .modal-dialog { transform: none !important; transition: opacity .15s linear !important; }
+  #modal-decision-asistencia .modal-dialog, .modal-bottom-sheet-mobile .modal-dialog { transition: opacity .15s linear !important; }
+  .animate-fade-up, [class*="animate-"] { animation: none !important; }
+  .mobile-nav-item:active { transform: none !important; }
+}
+
+/* Familias de estado y énfasis (mismos valores que estaban fijos en styles.css; ahora con nombre).
+   El índigo antiguo (#6366f1, #6c63ff, #eef2ff…) se resuelve con --primary-* de la marca. */
+:root {
+  --ui-success-strong: #059669;
+  --ui-success-ink: #047857;
+  --ui-success-deep: #065f46;
+  --ui-success-text: #166534;
+  --ui-success-soft: #dcfce7;
+  --ui-success-softer: #ecfdf5;
+  --ui-success-line: #bbf7d0;
+  --ui-success-line-2: #a7f3d0;
+  --ui-teal: #0d9488;
+  --ui-danger-strong: #dc2626;
+  --ui-danger-rose: #e11d48;
+  --ui-danger-deep: #b91c1c;
+  --ui-danger-soft: #fee2e2;
+  --ui-warning-strong: #d97706;
+  --ui-warning-deep: #92400e;
+  --ui-warning-soft: #fef3c7;
+  --ui-warning-line: #fde68a;
+  --ui-warning-softer: #fef9c3;
+  --ui-info-deep: #1e40af;
+  --ui-info-soft: #dbeafe;
+  --ui-info-line: #bfdbfe;
+  --ui-info-softer: #eff6ff;
+  --ui-sky-soft: #e0f2fe;
+  --ui-orange-soft: #ffedd5;
+  --ui-orange-line: #fed7aa;
+  --ui-orange-deep: #9a3412;
+  --ui-purple-soft: #f3e8ff;
+  --ui-purple-line: #e9d5ff;
+  --ui-purple-deep: #6b21a8;
+  --ui-ink-mid: #334155;
+  --primary-line: rgba(27, 47, 143, 0.24);
+}

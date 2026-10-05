@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="color-scheme" content="only light">
     <meta name="description" content="Sistema Integral de Control y Gestión de Asistencia, Turnos y Jornadas de Aguacol.">
     <!-- PWA Meta Tags -->
@@ -144,6 +144,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="/static/css/aguacol-theme.css?v={{ startup_id }}">
+    <!-- Ajustes móviles (después del tema y de responsive.css) -->
+    <link rel="stylesheet" href="/static/css/mobile-ui.css?v={{ startup_id }}">
 </head>
 
 <body>
@@ -184,32 +186,32 @@
 
             <nav class="sidebar-nav">
                 <a href="#" class="sidebar-item active" data-page="dashboard" data-permiso="dashboard.ver">
-                    <span class="icon">📊</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>Dashboard</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="empleados" data-permiso="empleados.ver">
-                    <span class="icon">👥</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>Empleados</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="marcaciones" data-permiso="marcaciones.ver">
-                    <span class="icon">⏰</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>Marcaciones</span>
                 </a>
 
                 <a href="#" class="sidebar-item" data-page="reportes" data-permiso="reportes.ver">
-                    <span class="icon">📈</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>Reportes</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="productos_4" data-permiso="productos_4.asignar || productos_4.consolidar || productos_4.entregar">
-                    <span class="icon">🎁</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>4 Productos</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="porteria" data-permiso="porteria.ver || porteria.registrar || porteria.rondas || porteria.llaves || porteria.art22 || porteria.proveedores || porteria.visitas">
-                    <span class="icon">🛡️</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>Portería</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="configuracion" data-permiso="configuracion.ver">
-                    <span class="icon">⚙️</span>
+                    <span class="icon" aria-hidden="true"></span>
                     <span>Configuración</span>
                 </a>
             </nav>
@@ -242,7 +244,7 @@
                         <li class="nav-item list-unstyled">
                             <a class="nav-link position-relative" href="#" aria-label="Centro de Notificaciones y Alertas"
                                 onclick="switchPage('empleados'); document.getElementById('contratos-tab').click(); return false;">
-                                <span class="fs-5" aria-hidden="true">🔔</span>
+                                <span class="fs-5" aria-hidden="true"><i class="bi bi-bell" aria-hidden="true"></i></span>
                                 <span
                                     class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none bell-badge">
                                     0
@@ -252,7 +254,7 @@
                     </div>
 
                     <button class="btn-sync" id="btn-sync" title="Wizard de Inicialización" aria-label="Wizard de Sincronización" data-permiso="configuracion.wizard">
-                        <span>🔄</span>
+                        <span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
                         <span>Empleados</span>
                     </button>
                     <div class="user-menu dropdown">
@@ -362,11 +364,11 @@
                     <div class="row g-3 mb-4">
                         <!-- 1. Paridad de Género -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #3f6fd6 !important;">
+                            <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-gender-ambiguous me-1 text-primary"></i>Paridad de Género</h6>
-                                        <span class="badge bg-light text-muted" style="font-size: 0.75rem;" title="Distribución de género de la dotación activa">ℹ️</span>
+                                        <span class="badge bg-light text-muted" style="font-size: 0.75rem;" title="Distribución de género de la dotación activa"><i class="bi bi-info-circle" aria-hidden="true"></i></span>
                                     </div>
                                     <p class="text-muted mb-2" style="font-size: 0.75rem; line-height: 1.3;">Proporción hombres/mujeres del personal activo. Un ratio equilibrado indica diversidad organizacional.</p>
                                     <div class="d-flex justify-content-around align-items-center mb-2">
@@ -399,7 +401,7 @@
                         </div>
                         <!-- 2. Distribución por Edades -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #8b5cf6 !important;">
+                            <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body p-3">
                                     <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-bar-chart-fill me-1" style="color: #8b5cf6;"></i>Distribución por Edades</h6>
                                     <p class="text-muted mb-1" style="font-size: 0.75rem; line-height: 1.3;">Pirámide etaria del personal. Bandas mayoritarias indican concentración generacional.</p>
@@ -412,7 +414,7 @@
                         </div>
                         <!-- 3. Permanencia y Retención -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #10b981 !important;">
+                            <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-shield-check me-1 text-success"></i>Permanencia y Retención</h6>
@@ -442,7 +444,7 @@
                         </div>
                         <!-- 4. Configuración Contractual -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #f59e0b !important;">
+                            <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-file-earmark-text me-1" style="color: #f59e0b;"></i>Configuración Contractual</h6>
@@ -675,7 +677,7 @@
                                     <div class="d-flex align-items-center gap-2 mb-2">
                                         <div class="stat-icon"
                                             style="background: rgba(244, 63, 94, 0.1); color: #f43f5e; width: 40px; height: 40px; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            🎉
+                                            <i class="bi bi-stars" aria-hidden="true"></i>
                                         </div>
                                         <h6 class="mb-0 fw-bold text-dark">Cumpleaños de Hoy</h6>
                                     </div>
@@ -689,7 +691,7 @@
                                     <div class="d-flex align-items-center gap-2 mb-2">
                                         <div class="stat-icon"
                                             style="background: rgba(244, 63, 94, 0.1); color: #f43f5e; width: 40px; height: 40px; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            🎂
+                                            <i class="bi bi-cake2" aria-hidden="true"></i>
                                         </div>
                                         <h6 class="mb-0 fw-bold text-dark">Este Mes</h6>
                                     </div>
@@ -1074,7 +1076,7 @@
                                                 </div>
                                                 <div class="col-md-1">
                                                     <button class="btn btn-primary w-100"
-                                                        onclick="loadAsignacionesMatrix()">
+                                                        onclick="loadAsignacionesMatrix()" aria-label="Actualizar matriz de asignaciones" title="Actualizar matriz de asignaciones">
                                                         <i class="bi bi-arrow-clockwise"></i>
                                                     </button>
                                                 </div>
@@ -1552,7 +1554,7 @@
                                                     <p class="text-muted small px-3">Por favor, confirma tu sesión activa para iniciar la ronda nocturna.</p>
                                                     
                                                     <div class="d-inline-flex flex-column align-items-center bg-white p-3 rounded border border-light shadow-sm my-2 mx-auto" style="min-width: 200px;">
-                                                        <span class="d-block fw-bold text-dark" id="porteria-guardia-nombre">👤 Cargando Guardia...</span>
+                                                        <span class="d-block fw-bold text-dark" id="porteria-guardia-nombre"><i class="bi bi-person" aria-hidden="true"></i> Cargando Guardia...</span>
                                                         <span class="badge bg-primary mt-2" id="porteria-guardia-rol">Guardia</span>
                                                     </div>
                                                     
@@ -1578,7 +1580,7 @@
                                                         <div id="porteria-reader" class="w-100 h-100"></div>
                                                     </div>
                                                     <div class="card-footer bg-light py-1 text-center">
-                                                        <span id="porteria-scanner-status" class="small text-muted font-monospace" style="font-size: 0.8rem;">🎥 Esperando activación...</span>
+                                                        <span id="porteria-scanner-status" class="small text-muted font-monospace" style="font-size: 0.8rem;"><i class="bi bi-camera-video" aria-hidden="true"></i> Esperando activación...</span>
                                                     </div>
                                                 </div>
 
@@ -1701,7 +1703,7 @@
                                 <div class="tab-pane fade" id="tab-ingreso-proveedores" role="tabpanel">
                                     <div class="text-center py-5">
                                         <div class="mb-4">
-                                            <span style="font-size: 4rem;">🚚</span>
+                                            <span style="font-size: 4rem;"><i class="bi bi-truck" aria-hidden="true"></i></span>
                                         </div>
                                         <h3 class="fw-bold text-dark mb-2">Ingreso Proveedores</h3>
                                         <p class="text-muted mb-4" style="max-width: 480px; margin: 0 auto;">Control de ingreso y salida de proveedores con registro de vehículos, carga y documentación.</p>
@@ -1907,7 +1909,7 @@
                                         <div class="col-md-8 mx-auto">
                                             <div class="card border-0 bg-light">
                                                 <div class="card-body p-4">
-                                                    <h5 class="fw-bold mb-4">🏦 Gestión de Pagadores</h5>
+                                                    <h5 class="fw-bold mb-4"><i class="bi bi-bank" aria-hidden="true"></i> Gestión de Pagadores</h5>
                                                     <p class="text-muted small mb-4">Defina las entidades responsables del pago de los beneficios o permisos.</p>
                                                     <div class="mb-3">
                                                         <label for="config-new-pagador-nombre" class="form-label small fw-bold text-muted">Nombre del Nuevo Pagador</label>
@@ -1951,7 +1953,7 @@
                                 <div class="tab-pane fade" id="tab-calendario" role="tabpanel">
                                     <div id="calendario-container">
                                         <div class="empty-state py-5 text-center">
-                                            <div class="stat-icon mb-3" style="font-size: 3rem;">📅</div>
+                                            <div class="stat-icon mb-3" style="font-size: 3rem;"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
                                             <h3>Calendario Laboral de Chile</h3>
                                             <p class="text-muted">Gestione los feriados nacionales y días especiales de
                                                 su empresa.</p>
@@ -1973,7 +1975,7 @@
                                         <div class="col-md-8 mx-auto">
                                             <div class="card border-0 bg-light">
                                                 <div class="card-body p-4">
-                                                    <h5 class="fw-bold mb-4">📧 Notificaciones por Correo Electrónico
+                                                    <h5 class="fw-bold mb-4"><i class="bi bi-envelope" aria-hidden="true"></i> Notificaciones por Correo Electrónico
                                                     </h5>
                                                     <p class="text-muted small mb-4">Configura las direcciones de correo
                                                         de Recursos Humanos y Gerencia que recibirán avisos automáticos sobre
@@ -2013,7 +2015,7 @@
 
                                                     <hr class="mb-5">
 
-                                                    <h5 class="fw-bold mb-4">📍 Notificaciones Específicas por Área
+                                                    <h5 class="fw-bold mb-4"><i class="bi bi-geo-alt" aria-hidden="true"></i> Notificaciones Específicas por Área
                                                     </h5>
                                                     <p class="text-muted small mb-4">Configura correos para que reciban avisos SÓLO cuando el empleado pertenece a su área. (Por ejemplo, el gerente de Producción solo recibe avisos de Producción).</p>
 
@@ -2407,7 +2409,7 @@
                             style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                             <h5 class="modal-title"><i class="bi bi-magic me-2"></i>Relleno Masivo de Asistencia
                             </h5>
-                            <button type="button" class="btn-close btn-close-white"
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white"
                                 onclick="closeBulkFillModal()"></button>
                         </div>
                         <div class="modal-body p-4">
@@ -2469,7 +2471,7 @@
                 <div class="modal-content" style="max-width: 900px; width: 95%;">
                     <div class="modal-header">
                         <h3 id="modal-title">Nuevo Empleado</h3>
-                        <button class="btn-close" id="btn-close-modal" onclick="closeModal()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" id="btn-close-modal" onclick="closeModal()">×</button>
                     </div>
                     <div class="modal-body">
                         <!-- Tabs Navigation -->
@@ -2514,7 +2516,7 @@
                                         <div class="form-group d-flex align-items-center" style="margin-left: 20px; padding-top: 10px;">
                                             <div class="custom-control custom-switch">
                                                 <input type="checkbox" class="custom-control-input" id="input-autorizado-llaves">
-                                                <label class="custom-control-label font-weight-bold text-primary" for="input-autorizado-llaves">🔑 Autorizado para solicitar llaves</label>
+                                                <label class="custom-control-label font-weight-bold text-primary" for="input-autorizado-llaves"><i class="bi bi-key" aria-hidden="true"></i> Autorizado para solicitar llaves</label>
                                             </div>
                                         </div>
                                     </div>
@@ -2658,7 +2660,7 @@
                         <div class="modal-header bg-warning text-dark">
                             <h5 class="modal-title fw-bold"><i class="bi bi-calendar-event me-2"></i>Validar Cambio de
                                 Área</h5>
-                            <button type="button" class="btn-close" onclick="closeConfirmarAreaModal()"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close" onclick="closeConfirmarAreaModal()"></button>
                         </div>
                         <div class="modal-body p-4">
                             <div id="area-pending-msg" class="alert alert-warning small mb-3">
@@ -2686,11 +2688,11 @@
                             <div class="mb-3">
                                 <label for="area-pending-align-rule" class="form-label fw-bold small text-muted">Alinear Fecha a:</label>
                                 <select id="area-pending-align-rule" class="form-select form-select-sm" onchange="applyAlignmentRule()">
-                                    <option value="custom">📅 Selección Manual</option>
-                                    <option value="today">🕒 Hoy mismo</option>
-                                    <option value="monday">📅 Próximo Lunes (Inicio Semana)</option>
-                                    <option value="month">🗓️ Día 1 del Mes Actual</option>
-                                    <option value="next_month">🗓️ Día 1 del Mes Próximo</option>
+                                    <option value="custom">Selección Manual</option>
+                                    <option value="today">Hoy mismo</option>
+                                    <option value="monday">Próximo Lunes (Inicio Semana)</option>
+                                    <option value="month">Día 1 del Mes Actual</option>
+                                    <option value="next_month">Día 1 del Mes Próximo</option>
                                 </select>
                             </div>
 
@@ -2731,7 +2733,7 @@
                 <div class="modal-content">
                     <div class="modal-header bg-danger text-white">
                         <h3>Confirmar Baja de Empleado</h3>
-                        <button class="btn-close btn-close-white" onclick="closeBajaConfirmation()">×</button>
+                        <button aria-label="Cerrar" class="btn-close btn-close-white" onclick="closeBajaConfirmation()">×</button>
                     </div>
                     <div class="modal-body">
                         <p>Estás a punto de registrar la baja para: <strong id="baja-emp-nombre"></strong>.</p>
@@ -2770,7 +2772,7 @@
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
                         <h3 id="modal-periodo-title">Configurar Tramo de Cierre</h3>
-                        <button class="btn-close" onclick="closeModalPeriodo()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalPeriodo()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-periodo" onsubmit="event.preventDefault(); savePeriodoRRHH()">
@@ -2848,7 +2850,7 @@
                 <div class="modal-content" style="max-width: 700px;">
                     <div class="modal-header">
                         <h3 id="modal-bono-title">Configurar Bono</h3>
-                        <button class="btn-close" onclick="closeModalBono()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalBono()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-bono" onsubmit="event.preventDefault(); saveBono()">
@@ -2885,7 +2887,7 @@
                                     <h6 class="fw-bold mb-0">Reglas de Aplicación</h6>
                                     <button type="button" class="btn btn-sm btn-outline-primary"
                                         onclick="addBonoReglaRow()">
-                                        ➕ Agregar Regla
+                                        <i class="bi bi-plus-lg" aria-hidden="true"></i> Agregar Regla
                                     </button>
                                 </div>
                                 <div id="reglas-container">
@@ -2908,7 +2910,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 id="modal-tipo-j-title">Nuevo Tipo de Justificación</h3>
-                        <button class="btn-close" onclick="closeModalTipoJ()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalTipoJ()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-tipo-justificacion" onsubmit="event.preventDefault(); saveTipoJustificacion()">
@@ -2942,7 +2944,7 @@
                                             </select>
                                             <button type="button" class="btn btn-outline-secondary"
                                                 onclick="openModalGestionPagadores()"
-                                                title="Gestionar Pagadores">⚙️</button>
+                                                title="Gestionar Pagadores"><i class="bi bi-gear" aria-hidden="true"></i></button>
                                         </div>
                                     </div>
                                     <div class="col-md-4">
@@ -3064,7 +3066,7 @@
                     <div class="modal-content shadow-lg border-0">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title fw-bold"><i class="bi bi-magic me-2"></i>Asistente de Sincronización BioAlba</h5>
-                            <button type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
                         </div>
                         <div class="modal-body p-4">
                             <!-- Stepper UI (10 pasos) -->
@@ -3242,7 +3244,7 @@
                                     <span id="wizard-emp-counter" class="badge bg-secondary">0 listos</span>
                                 </div>
                                 <div class="d-flex gap-2 mb-2">
-                                    <input type="text" id="wizard-emp-search" class="form-control form-control-sm" placeholder="🔍 Buscar empleado..." oninput="filterWizardEmpleados()">
+                                    <input type="text" id="wizard-emp-search" class="form-control form-control-sm" placeholder="Buscar empleado..." oninput="filterWizardEmpleados()">
                                     <select class="form-select form-select-sm" id="wizard-emp-filter-type" onchange="filterWizardEmpleados()" style="width: 200px;">
                                         <option value="all">Mostrar Todos</option>
                                         <option value="new_changed">Nuevos/Cambios</option>
@@ -3500,7 +3502,7 @@
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
                         <h3>Gestionar Pagadores</h3>
-                        <button class="btn-close" onclick="closeModalGestionPagadores()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalGestionPagadores()">×</button>
                     </div>
                     <div class="modal-body">
                         <p class="text-muted small">Defina las entidades responsables del pago de los beneficios o
@@ -3540,7 +3542,7 @@
                     <div class="modal-header">
                         <h3 class="fw-bold"><i class="bi bi-person-badge text-warning"></i> Registrar Permiso / Salida
                         </h3>
-                        <button class="btn-close" onclick="closePermissionModal()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closePermissionModal()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-registro-permiso">
@@ -3606,7 +3608,7 @@
                         <div class="modal-body p-4">
                             <div class="text-center mb-4">
                                 <div class="stat-icon bg-danger-subtle text-danger mx-auto mb-3"
-                                    style="width: 80px; height: 80px; font-size: 2.5rem; line-height: 80px;">⚠️</div>
+                                    style="width: 80px; height: 80px; font-size: 2.5rem; line-height: 80px;"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i></div>
                                 <h3 class="fw-bold">Gestión de Contratos Requerida</h3>
                                 <p class="text-muted">Se han detectado vencimientos de contrato vencidos o fuera de
                                     término
@@ -3685,7 +3687,7 @@
                             <button id="btn-bypass-seguridad" class="btn btn-warning fw-bold shadow-sm" style="display:none;" onclick="bypassSecurityWall()">
                                 <i class="bi bi-unlock-fill me-2"></i>Continuar (Admin Bypass)
                             </button>
-                            <button class="btn btn-outline-secondary" onclick="window.location.reload()">🔄 Reintentar / Recargar</button>
+                            <button class="btn btn-outline-secondary" onclick="window.location.reload()"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Reintentar / Recargar</button>
                         </div>
                     </div>
                 </div>
@@ -3697,7 +3699,7 @@
                     <div class="modal-content shadow-lg border-0">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title fw-bold">Asignar Turno Oficial</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <input type="hidden" id="asig-indiv-empleado-id">
@@ -3889,7 +3891,7 @@
               <!-- Nombre del empleado actual -->
               <p id="batch-loading-emp" style="color:#94a3b8; font-size:0.88rem;
                  font-family: var(--font-sans); margin:0; text-align:center;
-                 max-width:360px; line-height:1.5; min-height:1.3em; transition:all 0.2s ease;">
+                 max-width:360px; line-height:1.5; min-height:1.3em; transition:color 0.2s ease, opacity 0.2s ease;">
               </p>
               <!-- Contador N / Total -->
               <p id="batch-loading-counter" style="color:#60a5fa; font-size:0.82rem;
@@ -4059,7 +4061,7 @@
                                     <h5 class="modal-title fw-bold mb-0">Justificar Inasistencia</h5>
                                     <div class="small opacity-75">Ingrese los detalles de la justificación</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeModalJustify()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeModalJustify()"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4">
@@ -4114,12 +4116,12 @@
                 <div class="modal-dialog modal-md modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header bg-danger text-white" id="modal-vencimiento-header">
-                            <h3 class="mb-0">⚠️ Gestión de Vencimiento de Contrato</h3>
-                            <button class="btn-close btn-close-white" onclick="closeVencimientoModal()"></button>
+                            <h3 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> Gestión de Vencimiento de Contrato</h3>
+                            <button aria-label="Cerrar" class="btn-close btn-close-white" onclick="closeVencimientoModal()"></button>
                         </div>
                         <div class="modal-body">
                             <div class="d-flex align-items-center gap-3 mb-4 p-3 bg-light rounded shadow-sm">
-                                <div class="flex-shrink-0 fs-1">👤</div>
+                                <div class="flex-shrink-0 fs-1"><i class="bi bi-person" aria-hidden="true"></i></div>
                                 <div class="flex-grow-1">
                                     <h4 id="venc-emp-nombre" class="mb-0 fw-bold">-</h4>
                                     <div class="text-muted" id="venc-emp-cargo-area">-</div>
@@ -4134,7 +4136,7 @@
                                             id="venc-fecha" class="fw-bold">-</span>.
                                         <div id="venc-alerta-legal"
                                             class="mt-2 p-2 bg-white rounded border border-warning d-none">
-                                            ⚠️ <strong>¡ALERTA LEGAL!</strong> Este es el <span id="venc-num-contrato"
+                                            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> <strong>¡ALERTA LEGAL!</strong> Este es el <span id="venc-num-contrato"
                                                 class="fw-bold">2do</span> contrato.
                                             <br><small>Según legislación, una renovación adicional podría convertirlo
                                                 automáticamente en INDEFINIDO.</small>
@@ -4219,7 +4221,7 @@
                                     <h5 class="modal-title fw-bold mb-0">Corregir Anomalía de Asistencia</h5>
                                     <div class="small opacity-75">Ingrese las horas manualmente</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeManualEntryModal()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeManualEntryModal()"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4">
@@ -4332,7 +4334,7 @@
                                 <div>
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:0.95rem;letter-spacing:0.3px;">Acciones de Asistencia</h6>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size: 0.75rem;opacity:0.7;"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size: 0.75rem;opacity:0.7;"></button>
                             </div>
                         </div>
 
@@ -4372,7 +4374,7 @@
                                 <!-- Justificar Ausencia -->
                                 <button class="btn text-start p-0 border-0 rounded-3 decision-action-btn"
                                     onclick="proceedToJustify()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #3b82f6;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#eff6ff;border-radius:10px;">
                                             <i class="bi bi-file-earmark-text" style="font-size:1rem;color:#3b82f6;"></i>
                                         </div>
@@ -4388,7 +4390,7 @@
                                 <button id="btn-permiso-dynamic"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn btn-outline-warning"
                                     onclick="proceedToPermission()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #f59e0b;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fffbeb;border-radius:10px;">
                                             <i class="bi bi-clock-history" style="font-size:1rem;color:#f59e0b;"></i>
                                         </div>
@@ -4403,7 +4405,7 @@
                                 <!-- Ingreso Manual -->
                                 <button class="btn text-start p-0 border-0 rounded-3 decision-action-btn"
                                     onclick="proceedToManualEntry()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #10b981;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
                                             <i class="bi bi-keyboard" style="font-size:1rem;color:#10b981;"></i>
                                         </div>
@@ -4418,7 +4420,7 @@
                                 <!-- Relleno (Turno) -->
                                 <button class="btn text-start p-0 border-0 rounded-3 decision-action-btn"
                                     onclick="proceedToBulkFill()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #06b6d4;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfeff;border-radius:10px;">
                                             <i class="bi bi-magic" style="font-size:1rem;color:#06b6d4;"></i>
                                         </div>
@@ -4434,7 +4436,7 @@
                                 <button id="btn-viaje-largo"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToViajeLargo()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #8b5cf6;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#f3e8ff;border-radius:10px;">
                                             <i class="bi bi-truck" style="font-size:1rem;color:#8b5cf6;"></i>
                                         </div>
@@ -4450,7 +4452,7 @@
                                 <button id="btn-marcacion-180h"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToMarcacion180h()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #059669;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
                                             <i class="bi bi-truck-front-fill" style="font-size:1.1rem;color:#059669;"></i>
                                         </div>
@@ -4466,7 +4468,7 @@
                                 <button id="btn-reasignar-turno"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToReasignarTurno()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #f59e0b;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef3c7;border-radius:10px;">
                                             <i class="bi bi-arrow-right-square" style="font-size:1rem;color:#d97706;"></i>
                                         </div>
@@ -4486,7 +4488,7 @@
                                 <button id="btn-edit-justificacion"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToEditJustify()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #ef4444;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef2f2;border-radius:10px;">
                                             <i class="bi bi-pencil-square" style="font-size:1rem;color:#ef4444;"></i>
                                         </div>
@@ -4502,7 +4504,7 @@
                                 <button id="btn-gestionar-he"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToHoraExtra()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #f59e0b;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fffbeb;border-radius:10px;">
                                             <i class="bi bi-star-fill" style="font-size:1rem;color:#f59e0b;"></i>
                                         </div>
@@ -4518,7 +4520,7 @@
                                 <button id="btn-revertir-he"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToRevertExtra()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #ef4444;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef2f2;border-radius:10px;">
                                             <i class="bi bi-arrow-counterclockwise" style="font-size:1rem;color:#ef4444;"></i>
                                         </div>
@@ -4534,7 +4536,7 @@
                                 <button id="btn-compensar-he-action"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToCompensateHE()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #10b981;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
                                             <i class="bi bi-clock-history" style="font-size:1rem;color:#10b981;"></i>
                                         </div>
@@ -4550,7 +4552,7 @@
                                 <button id="btn-validar-jornada"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToValidation()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3" style="border-left:3px solid #8b5cf6;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#f5f3ff;border-radius:10px;">
                                             <i class="bi bi-lightning-fill" style="font-size:1rem;color:#8b5cf6;"></i>
                                         </div>
@@ -4588,7 +4590,7 @@
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Reasignar Turno a Inasistencia</h6>
                                     <div class="text-white-50" style="font-size:0.75rem;">Seleccionar fecha destino con Inasistencia limpia</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4" style="background:#f8fafc;">
@@ -4635,7 +4637,7 @@
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Registrar Viaje Largo</h6>
                                     <div class="text-white-50" style="font-size:0.75rem;">Bolsa Flexible - Unificación de Anomalías</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4" style="background:#f8fafc;">
@@ -4672,11 +4674,11 @@
                                     <div id="vl-box-retorno-manual" class="mt-2 p-2 rounded bg-light border shadow-xs" style="display:none;">
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <label for="vl-manual-retorno-fecha" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">📅 Fecha Retorno <span class="text-danger">*</span></label>
+                                                <label for="vl-manual-retorno-fecha" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;"><i class="bi bi-calendar3" aria-hidden="true"></i> Fecha Retorno <span class="text-danger">*</span></label>
                                                 <input type="date" class="form-control form-control-sm" id="vl-manual-retorno-fecha" onchange="window.updateViajeLargoCalculos()">
                                             </div>
                                             <div class="col-6">
-                                                <label for="vl-manual-retorno-hora" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;">⏰ Hora Retorno <span class="text-danger">*</span></label>
+                                                <label for="vl-manual-retorno-hora" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;"><i class="bi bi-alarm" aria-hidden="true"></i> Hora Retorno <span class="text-danger">*</span></label>
                                                 <input type="time" step="1" class="form-control form-control-sm" id="vl-manual-retorno-hora" onchange="window.updateViajeLargoCalculos()">
                                             </div>
                                         </div>
@@ -4692,7 +4694,7 @@
                                     <input type="text" class="form-control form-control-sm bg-light" id="vl-ciudad-origen" value="San Fernando (Planta Aguacol)" readonly>
                                 </div>
                                 <div class="col-6">
-                                    <label for="vl-ciudad-destino" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">📍 Ciudad Destino <span class="text-danger">*</span></label>
+                                    <label for="vl-ciudad-destino" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-geo-alt" aria-hidden="true"></i> Ciudad Destino <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control form-control-sm" id="vl-ciudad-destino" list="vl-ciudades-chile" placeholder="Ej: La Serena, Concepción..." oninput="window.onViajeLargoDestinoChange()">
                                     <datalist id="vl-ciudades-chile">
                                         <option value="Arica">Arica (~2.190 km)</option>
@@ -4752,15 +4754,15 @@
                             <!-- Hours Form -->
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
-                                    <label for="vl-hrs-manejo" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">⏱️ Hrs. Manejo <span class="text-danger">*</span></label>
+                                    <label for="vl-hrs-manejo" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-stopwatch" aria-hidden="true"></i> Hrs. Manejo <span class="text-danger">*</span></label>
                                     <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('manejo')">
                                 </div>
                                 <div class="col-4">
-                                    <label for="vl-hrs-descanso" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;">🛌 Hrs. Descanso</label>
+                                    <label for="vl-hrs-descanso" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-moon-stars" aria-hidden="true"></i> Hrs. Descanso</label>
                                     <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0" oninput="window.updateViajeLargoCalculos('descanso')">
                                 </div>
                                 <div class="col-4">
-                                    <label for="vl-hrs-reconocidas" class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;">💰 Acreditar Bolsa</label>
+                                    <label for="vl-hrs-reconocidas" class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;"><i class="bi bi-cash-coin" aria-hidden="true"></i> Acreditar Bolsa</label>
                                     <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('reconocidas')">
                                 </div>
                             </div>
@@ -4805,7 +4807,7 @@
                                         Resolución de 15 minutos (96 tramos diarios)
                                     </div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
                             </div>
                         </div>
 
@@ -4852,7 +4854,7 @@
                                     <div id="m180-ocr-status-box" class="alert py-2 px-3 mb-0 d-none" style="font-size:0.75rem; border-radius:8px;"></div>
                                     
                                     <div id="m180-ocr-preview-container" class="mt-2 d-none d-flex align-items-center gap-2 p-2 bg-white rounded border">
-                                        <img id="m180-ocr-preview-img" src="" alt="Foto de libreta física" style="max-height: 70px; border-radius:6px; object-fit: contain; border:1px solid #e2e8f0;">
+                                        <img id="m180-ocr-preview-img" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Foto de libreta física" style="max-height: 70px; border-radius:6px; object-fit: contain; border:1px solid #e2e8f0;">
                                         <div class="small text-muted flex-grow-1">
                                             <span class="fw-bold text-dark">Foto capturada</span> · Los 96 slots han sido volcados en la grilla inferior. Puedes ajustarlos o pulsar Guardar.
                                         </div>
@@ -4889,7 +4891,7 @@
                                         <div id="m180-brush-wrap" class="form-check form-switch m-0 d-none d-md-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
                                             <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
                                             <label class="form-check-label fw-bold small text-dark mb-0 user-select-none" for="m180-toggle-brush" style="font-size:0.75rem; cursor:pointer;" id="m180-brush-label">
-                                                🖌️ Pintar al pasar (Hover)
+                                                <i class="bi bi-brush" aria-hidden="true"></i> Pintar al pasar (Hover)
                                             </label>
                                         </div>
                                         <!-- Acciones Rápidas con protección m180-edit-btn -->
@@ -4989,21 +4991,21 @@
                             <!-- Panel de Resumen Legal (3 Bento Cards) -->
                             <div class="row g-2 mb-3">
                                 <div class="col-md-4">
-                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #059669 !important;">
+                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100">
                                         <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Jornada Efectiva Diaria</div>
                                         <div class="small text-muted" style="font-size: 0.75rem;">(Conducción + Labores Auxiliares)</div>
                                         <div class="fs-4 fw-extrabold text-dark mt-1 font-monospace" id="m180-res-jornada-efectiva">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #d97706 !important;">
+                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100">
                                         <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Tiempos de Espera del Día</div>
                                         <div class="small text-muted" style="font-size: 0.75rem;">(No imputables a jornada efectiva)</div>
                                         <div class="fs-4 fw-extrabold text-amber-700 mt-1 font-monospace" id="m180-res-horas-espera" style="color:#b45309;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #0284c7 !important;">
+                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100">
                                         <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Descanso Efectivo Registrado</div>
                                         <div class="small text-muted" style="font-size: 0.75rem;">(En tierra o litera adecuada)</div>
                                         <div class="fs-4 fw-extrabold text-sky-700 mt-1 font-monospace" id="m180-res-horas-descanso" style="color:#0369a1;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
@@ -5163,7 +5165,7 @@
                                     <h5 class="modal-title fw-bold mb-0">Validar Jornada Especial</h5>
                                     <div class="small opacity-75">Aprobación de días libres trabajados</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeValidationModal()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeValidationModal()"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4">
@@ -5183,7 +5185,7 @@
                         </div>
                         <div class="modal-footer">
                             <button class="btn btn-secondary" onclick="closeValidationModal()">Cancelar</button>
-                            <button class="btn btn-success" onclick="validateJornada()">✅ Validar Jornada</button>
+                            <button class="btn btn-success" onclick="validateJornada()"><i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i> Validar Jornada</button>
                         </div>
                     </div>
                 </div>
@@ -5196,8 +5198,8 @@
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-success text-white">
-                            <h5 class="modal-title fw-bold">🚀 Asistente de Reincorporación</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <h5 class="modal-title fw-bold"><i class="bi bi-rocket-takeoff" aria-hidden="true"></i> Asistente de Reincorporación</h5>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <!-- Stepper visual -->
@@ -5346,7 +5348,7 @@
                                     <p class="mb-0 text-white-50" style="font-size: 0.85rem;" id="lbl-desviaciones-subtitulo">Desglose de horas faltantes</p>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close btn-close-white ms-auto mb-auto" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4 bg-light">
                             <div class="table-responsive rounded shadow-sm bg-white" style="max-height: 400px; overflow-y: auto;">
@@ -5385,8 +5387,8 @@
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title fw-bold" id="modalUsuarioTitle">👤 Gestión de Usuario</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <h5 class="modal-title fw-bold" id="modalUsuarioTitle"><i class="bi bi-person" aria-hidden="true"></i> Gestión de Usuario</h5>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <form id="formUsuario">
@@ -5453,8 +5455,8 @@
                 <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-dark text-white">
-                            <h5 class="modal-title fw-bold" id="modalRolTitle">🔑 Configuración de Rol y Permisos</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <h5 class="modal-title fw-bold" id="modalRolTitle"><i class="bi bi-key" aria-hidden="true"></i> Configuración de Rol y Permisos</h5>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <form id="formRol">
@@ -5502,23 +5504,23 @@
     <!-- 📱 Barra Inferior Fija Nativa para Android / Móviles (< 768px) -->
     <nav class="mobile-bottom-nav d-md-none" id="mobile-bottom-nav" aria-label="Navegación móvil inferior">
         <button type="button" class="mobile-nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
-            <span class="mobile-nav-icon">📊</span>
+            <span class="mobile-nav-icon"><i class="bi bi-grid-1x2" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Dashboard</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="empleados" onclick="switchPage('empleados')">
-            <span class="mobile-nav-icon">👥</span>
+            <span class="mobile-nav-icon"><i class="bi bi-people" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Empleados</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="marcaciones" onclick="switchPage('marcaciones')">
-            <span class="mobile-nav-icon">⏰</span>
+            <span class="mobile-nav-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Asistencia</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="porteria" onclick="switchPage('porteria')">
-            <span class="mobile-nav-icon">🛡️</span>
+            <span class="mobile-nav-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Portería</span>
         </button>
         <button type="button" class="mobile-nav-item" id="mobile-nav-more-btn" onclick="document.getElementById('sidebar-toggle')?.click()">
-            <span class="mobile-nav-icon">☰</span>
+            <span class="mobile-nav-icon"><i class="bi bi-three-dots" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Más</span>
         </button>
     </nav>

@@ -342,7 +342,7 @@ function setupEventListeners() {
     if (btnSync.disabled) return;
     btnSync.disabled = true;
     const originalHTML = btnSync.innerHTML;
-    btnSync.innerHTML = '<span>🔄</span><span>Analizando...</span>';
+    btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Analizando...</span>';
     
     try {
       showBatchLoadingOverlay("Analizando integridad de áreas con BioAlba...");
@@ -399,7 +399,7 @@ function setupEventListeners() {
         // El usuario cerró SIN confirmar: registrar como omisión y avanzar
         console.warn('[Onboarding] Modal de turno cerrado sin confirmar — avanzando al siguiente empleado');
         if (window.showToast) {
-          showToast('⚠️ Asignación omitida. El empleado no tendrá turno asignado hasta regularizar.', 'warning');
+          showToast('Asignación omitida. El empleado no tendrá turno asignado hasta regularizar.', 'warning');
         }
         // Avanzar la cola (procesar el siguiente o cerrar el batch si era el último)
         if (typeof procesarColaOnboarding === 'function') {
@@ -528,14 +528,18 @@ function _executeSwitchPage(pageName) {
   // Update nav
   navItems.forEach(item => {
     item.classList.remove('active');
+    item.removeAttribute('aria-current');
     if (item.dataset.page === pageName) {
       item.classList.add('active');
+      item.setAttribute('aria-current', 'page');
     }
   });
 
   // Update mobile bottom nav
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.page === pageName);
+    const activo = item.dataset.page === pageName;
+    item.classList.toggle('active', activo);
+    if (activo) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
   });
 
   // Update pages
@@ -871,7 +875,7 @@ function renderBonosMatrix(data) {
       const hasBono = emp.asignaciones[col.id.toString()] === true;
       // Rojo suave si no, Verde suave si si
       const bgClass = hasBono ? 'bg-success-subtle text-success' : 'text-muted-light';
-      const icon = hasBono ? '✅' : '—';
+      const icon = hasBono ? '<i class="bi bi-check-circle-fill" aria-label="Tiene el bono"></i>' : '<i class="bi bi-dash-lg" aria-label="Sin bono"></i>';
       cells += `<td class="text-center ${bgClass}" style="font-size: 1.1em;">${icon}</td>`;
     });
 
@@ -1533,7 +1537,7 @@ async function saveEmpleado() {
               `[Batch] Emp INACTIVO omitido de cola de turnos: ${savedEmpleado.nombre}`
             );
             if (window.showToast) {
-              showToast(`⏭️ ${savedEmpleado.nombre} marcado como inactivo — omitido de asignación de turno`, 'warning');
+              showToast(`${savedEmpleado.nombre} marcado como inactivo — omitido de asignación de turno`, 'warning');
             }
           }
           // Avanzar al siguiente empleado en la cola de edición
@@ -1559,7 +1563,7 @@ async function saveEmpleado() {
             if (typeof openAsignarTurnoForzado === 'function') {
               openAsignarTurnoForzado(savedEmpleado.id, hoy, area, nombre, savedEmpleado.cargo || '');
             } else {
-              showToast(`⚠️ Asigne un turno a ${nombre} en Horarios → Asignación Masiva`, 'warning');
+              showToast(`Asigne un turno a ${nombre} en Horarios → Asignación Masiva`, 'warning');
             }
           };
 
@@ -1694,7 +1698,7 @@ window.editEmpleado = (id) => {
 };
 
 window.deleteEmpleado = async (id) => {
-  if (!await uiConfirm('⚠️ ¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
+  if (!await uiConfirm('¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
     return;
   }
 
@@ -1740,12 +1744,17 @@ window.showToast = function (message, type = 'info') {
 
   if (!toastEl || !toastMessage) return;
 
-  toastMessage.textContent = message;
+  const iconoToast = { success: 'check-circle-fill', error: 'x-circle-fill', danger: 'x-circle-fill', warning: 'exclamation-triangle-fill', info: 'info-circle-fill' }[type] || 'info-circle-fill';
+  toastMessage.textContent = '';
+  const iEl = document.createElement('i');
+  iEl.className = 'bi bi-' + iconoToast + ' me-2';
+  iEl.setAttribute('aria-hidden', 'true');
+  toastMessage.append(iEl, String(message).replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, ''));
 
   // Set color based on type
   toastEl.classList.remove('bg-primary', 'bg-success', 'bg-danger', 'bg-warning', 'bg-info', 'text-white');
   if (type === 'success') toastEl.classList.add('bg-success', 'text-white');
-  else if (type === 'error') toastEl.classList.add('bg-danger', 'text-white');
+  else if (type === 'error' || type === 'danger') toastEl.classList.add('bg-danger', 'text-white');
   else if (type === 'warning') toastEl.classList.add('bg-warning', 'text-dark');
   else if (type === 'info') toastEl.classList.add('bg-info', 'text-white');
   else toastEl.classList.add('bg-primary', 'text-white');
@@ -1849,7 +1858,7 @@ function procesarColaOnboarding() {
   console.log(`Iniciando onboarding para: ${nextEmp.nombre} (ID: ${nextEmp.id})`);
 
   if (window.showToast) {
-    window.showToast(`⚠️ Configuración obligatoria: ${nextEmp.nombre} — Complete los datos y asigne un turno.`, 'warning');
+    window.showToast(`Configuración obligatoria: ${nextEmp.nombre} — Complete los datos y asigne un turno.`, 'warning');
   }
 
   _isOnboardingFlow = true;
@@ -1982,7 +1991,7 @@ function _iniciarBatchTurnosPhase() {
   console.log(`[Batch/Turnos] Iniciando asignación de turnos: ${onboardingQueue.length} empleados`);
 
   showToast(
-    `📋 Asigne turno a cada empleado (${onboardingQueue.length} en total)`,
+    `Asigne turno a cada empleado (${onboardingQueue.length} en total)`,
     'info'
   );
 
@@ -2000,13 +2009,13 @@ async function _execBatchSync() {
   const payload = _batch.syncPayload;
 
   if (payload.length === 0) {
-    showToast('⚠️ No hay datos para sincronizar.', 'warning');
+    showToast('No hay datos para sincronizar.', 'warning');
     _resetBatchState();
     return;
   }
 
   showToast(
-    `☁️ Sincronizando ${payload.length} empleado(s) con BioAlba...`,
+    `Sincronizando ${payload.length} empleado(s) con BioAlba...`,
     'info'
   );
 
@@ -2019,7 +2028,7 @@ async function _execBatchSync() {
 
     if (!resp.ok) {
       const err = await resp.json();
-      showToast('❌ Error en batch-sync: ' + (err.detail || 'Error desconocido'), 'danger');
+      showToast('Error en batch-sync: ' + (err.detail || 'Error desconocido'), 'danger');
       _resetBatchState();
       return;
     }
@@ -2030,7 +2039,7 @@ async function _execBatchSync() {
     const total  = batchData.empleados || 0;
 
     showToast(
-      `✅ Batch iniciado: ${total} empleados, ${meses} mes(es) de BioAlba`,
+      `Batch iniciado: ${total} empleados, ${meses} mes(es) de BioAlba`,
       'success'
     );
 
@@ -2061,7 +2070,7 @@ async function _execBatchSync() {
 
   } catch (e) {
     console.error('[Batch] Error en batch-sync:', e);
-    showToast('❌ Error de conexión en batch-sync', 'danger');
+    showToast('Error de conexión en batch-sync', 'danger');
   } finally {
     _resetBatchState();
   }
@@ -2136,7 +2145,7 @@ async function fetchSyncPreviewData() {
   } catch (error) {
     console.error('Error en preview:', error);
     if (listContainer) {
-      listContainer.innerHTML = `<div class="text-danger p-3 text-center">❌ Error: ${error.message}</div>`;
+      listContainer.innerHTML = `<div class="text-danger p-3 text-center"><i class="bi bi-x-circle-fill text-danger" aria-hidden="true"></i> Error: ${error.message}</div>`;
     }
   }
 }
@@ -2260,13 +2269,13 @@ window.confirmSync = async function () {
   const allBoxes     = document.querySelectorAll('.sync-emp-item:not(.d-none) .sync-emp-checkbox');
 
   if (checkedBoxes.length === 0) {
-    alert('⚠️ Seleccione al menos un empleado para sincronizar.');
+    alert('Seleccione al menos un empleado para sincronizar.');
     return;
   }
 
   // ── LÍMITE MÁXIMO DE 10 EMPLEADOS ─────────────────────────────────────────
   if (checkedBoxes.length > MAX_BATCH_SYNC) {
-    alert(`⚠️ Límite de sincronización: máximo ${MAX_BATCH_SYNC} empleados por batch.\n` +
+    alert(`Límite de sincronización: máximo ${MAX_BATCH_SYNC} empleados por batch.\n` +
           `Has seleccionado ${checkedBoxes.length}. Desmarca algunos e intenta de nuevo.`);
     return;
   }
@@ -2292,7 +2301,7 @@ window.confirmSync = async function () {
   };
 
   const btnSync = document.getElementById('btn-sync');
-  btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
+  btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizando...</span>';
   btnSync.disabled = true;
 
   // 3. Mostrar spinner inicial
@@ -2309,7 +2318,7 @@ window.confirmSync = async function () {
     if (!response.ok) {
       hideBatchLoadingOverlay();
       const errData = await response.json().catch(() => ({}));
-      alert(`❌ Error: ${errData.detail || 'Error desconocido'}`);
+      alert(`Error: ${errData.detail || 'Error desconocido'}`);
       return;
     }
 
@@ -2357,7 +2366,7 @@ window.confirmSync = async function () {
             finalStats = eventData;
           } else if (eventType === 'error') {
             hideBatchLoadingOverlay();
-            alert(`❌ Error durante sincronización: ${eventData.message || 'Error desconocido'}`);
+            alert(`Error durante sincronización: ${eventData.message || 'Error desconocido'}`);
           }
           // Reset para el próximo evento
           eventType = null;
@@ -2384,7 +2393,7 @@ window.confirmSync = async function () {
           _batch.phase = 'edit';
           _batch.editedEmployees = [];
           _batch.syncPayload = [];
-          showToast(`🚀 Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
+          showToast(`Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
         } else {
           _batch.active = false;
         }
@@ -2398,7 +2407,7 @@ window.confirmSync = async function () {
       } else {
         // No hay nuevos empleados — cerrar spinner y mostrar resumen
         hideBatchLoadingOverlay();
-        let msg = `✅ Sincronización completada:\n` +
+        let msg = `Sincronización completada:\n` +
           `- Nuevos: ${stats.empleados_nuevos}\n` +
           `- Actualizados: ${stats.empleados_actualizados}\n` +
           `- Sin cambios: ${stats.empleados_sin_cambios || 0}\n` +
@@ -2415,9 +2424,9 @@ window.confirmSync = async function () {
   } catch (error) {
     hideBatchLoadingOverlay();
     console.error('Error en sync stream:', error);
-    alert('❌ Error de conexión al iniciar sincronización');
+    alert('Error de conexión al iniciar sincronización');
   } finally {
-    btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
+    btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizar</span>';
     btnSync.disabled = false;
   }
 }
@@ -2430,7 +2439,7 @@ window.confirmSync = async function () {
 window._executeSyncFromWizard = async function(payload) {
   const btnSync = document.getElementById('btn-sync');
   if (btnSync) {
-    btnSync.innerHTML = '<span>🔄</span><span>Sincronizando...</span>';
+    btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizando...</span>';
     btnSync.disabled = true;
   }
 
@@ -2446,7 +2455,7 @@ window._executeSyncFromWizard = async function(payload) {
     if (!response.ok) {
       hideBatchLoadingOverlay();
       const errData = await response.json().catch(() => ({}));
-      alert(`❌ Error: ${errData.detail || 'Error desconocido'}`);
+      alert(`Error: ${errData.detail || 'Error desconocido'}`);
       return;
     }
 
@@ -2479,7 +2488,7 @@ window._executeSyncFromWizard = async function(payload) {
             finalStats = eventData;
           } else if (eventType === 'error') {
             hideBatchLoadingOverlay();
-            alert(`❌ Error: ${eventData.message || 'Error desconocido'}`);
+            alert(`Error: ${eventData.message || 'Error desconocido'}`);
           }
           eventType = null;
           eventData = null;
@@ -2502,7 +2511,7 @@ window._executeSyncFromWizard = async function(payload) {
           _batch.phase = 'edit';
           _batch.editedEmployees = [];
           _batch.syncPayload = [];
-          showToast(`🚀 Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
+          showToast(`Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
         } else {
           _batch.active = false;
         }
@@ -2514,7 +2523,7 @@ window._executeSyncFromWizard = async function(payload) {
         setTimeout(() => { procesarColaOnboarding(); }, 1500);
       } else {
         hideBatchLoadingOverlay();
-        alert(`✅ Sincronización completada:\n` +
+        alert(`Sincronización completada:\n` +
           `- Nuevos: ${stats.empleados_nuevos}\n` +
           `- Actualizados: ${stats.empleados_actualizados}\n` +
           `- Sin cambios: ${stats.empleados_sin_cambios || 0}\n` +
@@ -2527,10 +2536,10 @@ window._executeSyncFromWizard = async function(payload) {
   } catch (error) {
     hideBatchLoadingOverlay();
     console.error('[Wizard→SSE] Error:', error);
-    alert('❌ Error de conexión al iniciar sincronización');
+    alert('Error de conexión al iniciar sincronización');
   } finally {
     if (btnSync) {
-      btnSync.innerHTML = '<span>🔄</span><span>Sincronizar</span>';
+      btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizar</span>';
       btnSync.disabled = false;
     }
   }
@@ -2682,7 +2691,7 @@ window.loadTurnosForNewArea = async function(areaName) {
     const turnoSelect = document.getElementById('area-pending-turno');
     if (!turnoSelect) return;
 
-    turnoSelect.innerHTML = '<option value="">⌛ Cargando turnos...</option>';
+    turnoSelect.innerHTML = '<option value="">Cargando turnos...</option>';
     console.log(`🔍 Cargando turnos para área: ${areaName}`);
     
     try {
@@ -2715,15 +2724,15 @@ window.loadTurnosForNewArea = async function(areaName) {
             turnoSelect.dispatchEvent(new Event('change'));
         } else {
             console.log("⚠️ No se encontraron turnos específicos. Buscando globales...");
-            turnoSelect.innerHTML = '<option value="">⚠️ Sin turnos en esta área</option>';
+            turnoSelect.innerHTML = '<option value="">Sin turnos en esta área</option>';
         }
     } catch (e) {
         console.error("❌ Error cargando turnos para nueva área:", e);
-        turnoSelect.innerHTML = '<option value="">❌ Error al cargar turnos</option>';
+        turnoSelect.innerHTML = '<option value="">Error al cargar turnos</option>';
     } finally {
         // Asegurar que si el dropdown quedó en "Cargando" por un error no controlado, se limpie
         if (turnoSelect.innerHTML.includes('Cargando')) {
-            turnoSelect.innerHTML = '<option value="">⚠️ Error de carga (Reintente)</option>';
+            turnoSelect.innerHTML = '<option value="">Error de carga (Reintente)</option>';
         }
     }
 }

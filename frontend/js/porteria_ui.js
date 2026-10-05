@@ -54,7 +54,7 @@ const PorteriaModule = (function () {
     function showToast(msg, type = "success") {
         if (type === "error") {
             if (typeof window.showError === 'function') window.showError(msg);
-            else alert("⚠️ " + msg);
+            else alert("" + msg);
         } else {
             if (typeof window.showNotification === 'function') window.showNotification(msg, type);
             else alert(msg);
@@ -286,12 +286,12 @@ const PorteriaModule = (function () {
         const rolEl = document.getElementById('porteria-guardia-rol');
 
         if (user) {
-            if (nombreEl) nombreEl.innerText = `👤 ${user.username.toUpperCase()}`;
+            if (nombreEl) nombreEl.innerText = `${user.username.toUpperCase()}`;
             if (rolEl) {
                 rolEl.innerText = user.rol_nombre || (user.is_superuser ? 'Super Administrador' : 'Guardia');
             }
         } else {
-            if (nombreEl) nombreEl.innerText = '👤 Sesión Expirada o Inválida';
+            if (nombreEl) nombreEl.innerText = 'Sesión Expirada o Inválida';
         }
     }
 
@@ -310,7 +310,7 @@ const PorteriaModule = (function () {
 
     function iniciarScanner() {
         const statusEl = document.getElementById('porteria-scanner-status');
-        if (statusEl) statusEl.innerText = "🎥 Iniciando cámara...";
+        if (statusEl) statusEl.innerText = "Iniciando cámara...";
         
         if (html5QrCode) {
             html5QrCode.stop().then(() => {
@@ -351,20 +351,20 @@ const PorteriaModule = (function () {
                     onQrScanError
                 ).then(() => {
                     const statusEl = document.getElementById('porteria-scanner-status');
-                    if (statusEl) statusEl.innerText = `🎥 Cámara activa: ${devices[currentCameraIndex].label}`;
+                    if (statusEl) statusEl.innerText = `Cámara activa: ${devices[currentCameraIndex].label}`;
                 }).catch(err => {
                     console.error("Error al iniciar cámara:", err);
                     const statusEl = document.getElementById('porteria-scanner-status');
-                    if (statusEl) statusEl.innerText = "❌ Error al activar la cámara.";
+                    if (statusEl) statusEl.innerText = "Error al activar la cámara.";
                 });
             } else {
                 const statusEl = document.getElementById('porteria-scanner-status');
-                if (statusEl) statusEl.innerText = "❌ No se detectaron cámaras.";
+                if (statusEl) statusEl.innerText = "No se detectaron cámaras.";
             }
         }).catch(err => {
             console.error("Error enumerando cámaras:", err);
             const statusEl = document.getElementById('porteria-scanner-status');
-            if (statusEl) statusEl.innerText = "❌ Error de permisos de cámara.";
+            if (statusEl) statusEl.innerText = "Error de permisos de cámara.";
         });
     }
 

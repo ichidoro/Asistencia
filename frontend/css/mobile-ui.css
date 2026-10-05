@@ -1,0 +1,282 @@
+/* ============================================================================
+   Móvil (<= 768px) — carga DESPUÉS de aguacol-theme.css y responsive.css.
+   Corrige lo que se veía colapsado en el teléfono:
+   - Matriz de asistencia: las columnas de día se forzaban a 32-40px aunque cada
+     celda lleva una ficha de 52px, y las columnas de resumen fijadas (sticky)
+     usaban offsets calculados con otro ancho, así que se montaban sobre los días.
+   - Tablas de datos (Bonos Asignados): el nombre se desbordaba bajo la ficha del cargo.
+   - Menú inferior: íconos de la misma familia que el resto de la app (Bootstrap Icons).
+   ============================================================================ */
+
+@media (max-width: 768px) {
+
+  /* ── Menú inferior ─────────────────────────────────────────────────────── */
+  .main-content { padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)) !important; }
+
+  .mobile-bottom-nav {
+    height: auto !important;
+    min-height: 62px !important;
+    background: rgba(20, 35, 92, 0.97) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 -6px 24px rgba(13, 26, 82, 0.28) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+    gap: 2px;
+  }
+  .mobile-nav-item {
+    color: rgba(234, 252, 255, 0.66) !important;
+    gap: 3px;
+    border-radius: 14px !important;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .18s ease-out, background-color .18s ease-out, transform .12s ease-out !important;
+  }
+  .mobile-nav-icon {
+    width: 52px; height: 30px;
+    display: inline-flex !important; align-items: center; justify-content: center;
+    border-radius: 15px;
+    font-size: 1.28rem !important;
+    line-height: 1 !important;
+    transition: background-color .18s ease-out !important;
+  }
+  .mobile-nav-icon .bi { line-height: 1; }
+  .mobile-nav-label {
+    font-family: var(--font-head);
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    letter-spacing: .02em !important;
+    margin-top: 0 !important;
+  }
+  .mobile-nav-item.active { color: #ffffff !important; }
+  .mobile-nav-item.active .mobile-nav-icon {
+    transform: none !important;
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  }
+  .mobile-nav-item.active .mobile-nav-icon .bi { color: var(--ag-green-lt, #5aad2e); filter: brightness(1.25); }
+  .mobile-nav-item:active { transform: scale(0.95) !important; }
+  .mobile-nav-item:focus-visible { outline: 2px solid rgba(255, 255, 255, .7) !important; outline-offset: -2px; }
+
+  /* ── Matriz de asistencia ──────────────────────────────────────────────── */
+  /* Aviso para deslizar: sin emoji, discreto. */
+  #page-marcaciones::before {
+    content: "Desliza hacia los lados para ver todos los días" !important;
+    background: none !important;
+    border: 0 !important;
+    color: var(--ag-muted, #5a6a6a) !important;
+    font-family: var(--font-sans);
+    font-size: .8125rem !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    padding: 0 4px 8px !important;
+    margin: 0 !important;
+  }
+
+  /* Columna de empleado: más angosta, nombre en hasta 2 líneas, área visible. */
+  .matrix-table-premium .sticky-col-analitica,
+  .matrix-table-premium td.sticky-col-analitica,
+  .matrix-table-premium th.sticky-col-analitica {
+    width: 132px !important; min-width: 132px !important; max-width: 132px !important;
+    white-space: normal !important;
+    padding: 6px 8px !important;
+    box-shadow: 8px 0 10px -8px rgba(13, 26, 82, 0.22);
+  }
+  .matrix-table-premium .sticky-col-analitica .emp-name-link {
+    max-width: none !important;
+    white-space: normal !important;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    font-size: .8125rem !important; font-weight: 600; line-height: 1.2;
+    color: var(--ag-ink, #1a2326);
+  }
+  .matrix-table-premium .sticky-col-analitica .emp-area-label {
+    display: block !important;
+    max-width: none !important;
+    font-size: .75rem !important;
+    margin-top: 2px;
+    color: var(--ag-muted, #5a6a6a);
+  }
+
+  /* Columnas de día: ancho que sí contiene la ficha (52px) y alto táctil. */
+  .matrix-table-premium .col-day,
+  .matrix-table-premium td.col-day,
+  .matrix-table-premium th.col-day {
+    width: 62px !important; min-width: 62px !important; max-width: 62px !important;
+    height: 44px !important;
+    padding: 3px 2px !important;
+    font-size: .75rem !important;
+  }
+  .matrix-table-premium th.col-day { height: auto !important; padding: 6px 2px !important; }
+
+  /* Columnas de resumen: dejan de fijarse (sus offsets no calzaban con el ancho
+     móvil y tapaban los días); quedan al final del deslizamiento, con aire. */
+  .matrix-table-premium .sticky-premium-col,
+  .matrix-table-premium td.sticky-premium-col,
+  .matrix-table-premium th.sticky-premium-col,
+  .matrix-table-premium .sticky-saldo-col {
+    left: auto !important;
+    width: 68px !important; min-width: 68px !important; max-width: 68px !important;
+    padding: 4px 6px !important;
+    font-size: .8125rem !important;
+    box-shadow: none !important;
+  }
+  .matrix-table-premium .th-bento,
+  .matrix-table-premium .th-bento-sub {
+    font-size: .75rem !important;
+    padding: 4px 6px !important;
+    line-height: 1.15;
+  }
+
+  /* Leyenda: dos columnas legibles en vez de una tira apretada. */
+  .va-legend-bar {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px !important;
+    padding: 10px 12px !important;
+    font-size: .8125rem !important;
+  }
+  .va-legend-bar .badge { font-size: .75rem !important; padding: 3px 6px !important; }
+
+  /* ── Tablas de datos (Empleados, Bonos Asignados, etc.) ───────────────── */
+  .data-table td:first-child,
+  .data-table th:first-child {
+    min-width: 160px;
+    max-width: 200px;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    box-shadow: 8px 0 10px -8px rgba(13, 26, 82, 0.16);
+  }
+  .data-table td:first-child .fw-bold { line-height: 1.25; }
+  .data-table td .badge { white-space: nowrap; }
+  .data-table td, .data-table th { vertical-align: middle; }
+  .data-table td:not(:first-child) { white-space: nowrap; }
+}
+
+/* ── Segunda pasada: composición de pantalla (cabeceras, filtros, matriz, dashboard) ── */
+@media (max-width: 768px) {
+
+  /* Menú inferior totalmente opaco: se transparentaba el contenido detrás. */
+  .mobile-bottom-nav {
+    background: #14235c !important;
+    opacity: 1 !important;
+    isolation: isolate;
+  }
+
+  /* Marcaciones · cabecera: título arriba a ancho completo, acciones en rejilla. */
+  .mx-page-head {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px;
+  }
+  .mx-page-title { font-size: 1.5rem !important; line-height: 1.15; }
+  .mx-page-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    width: 100%;
+  }
+  .mx-page-actions > * { min-width: 0; }
+  .mx-page-actions .btn { min-height: 44px; }
+  .mx-act-export { display: flex !important; grid-column: 1 / -1; }
+
+  /* El aviso de deslizar va sobre la matriz, no sobre el título de la página. */
+  #page-marcaciones::before { display: none !important; }
+  #marcaciones-view-container::before {
+    content: "Desliza hacia los lados para ver todos los días";
+    display: block;
+    font-family: var(--font-sans);
+    font-size: .8125rem;
+    font-weight: 500;
+    color: var(--ag-muted, #5a6a6a);
+    padding: 0 4px 8px;
+  }
+  .mx-act-export .btn { flex: 1 1 auto; }
+  .mx-act-sync { grid-column: 1 / -1; display: flex !important; }
+  .mx-act-sync > .btn:first-child { flex: 1 1 auto; }
+  .mx-act-switch { height: 44px !important; justify-content: center; }
+  .mx-act-wide { grid-column: 1 / -1; margin: 0 !important; justify-content: center; height: 44px !important; }
+
+  /* Marcaciones · filtros: rejilla de 2 columnas; período, fechas y empleado a ancho completo. */
+  .marcaciones-filter-bar { padding: 12px !important; }
+  .marcaciones-filter-bar > .row {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px !important;
+    margin: 0 !important;
+  }
+  .marcaciones-filter-bar > .row > [class*="col-"] {
+    width: auto !important; max-width: none !important; flex: none !important;
+    padding: 0 !important; margin: 0 !important;
+  }
+  .marcaciones-filter-bar > .row > .col-md-2:nth-child(1),
+  .marcaciones-filter-bar > .row > .col-md-3,
+  .marcaciones-filter-bar > .row > .col-md-2:nth-child(5),
+  .marcaciones-filter-bar > .row > .col-md-1 { grid-column: 1 / -1; }
+  .marcaciones-filter-bar .btn.w-100 { height: 46px !important; margin: 0 !important; }
+
+  /* Matriz · el resumen NO se fija nunca (sticky + offsets de escritorio tapaban los días).
+     La barra superior ya es sticky como bloque, así que las celdas no lo necesitan. */
+  .matrix-table-premium .sticky-premium-col,
+  .matrix-table-premium th.sticky-premium-col,
+  .matrix-table-premium td.sticky-premium-col,
+  .matrix-table-premium .sticky-saldo-col {
+    position: static !important;
+    z-index: auto !important;
+    left: auto !important;
+  }
+  /* Cabeceras de grupo (colspan): ancho según sus subcolumnas, no 68px. */
+  .matrix-table-premium th.sticky-premium-col[colspan] {
+    width: auto !important; min-width: 0 !important; max-width: none !important;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  /* Dashboard · "Estado de Asistencia y Dotación Hoy": chips en 2 columnas, tabla legible. */
+  .card-header .d-flex.gap-2:has(> .btn.rounded-pill) {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+  }
+  .card-header .d-flex.gap-2 > .btn.rounded-pill {
+    min-height: 44px;
+    white-space: nowrap;
+    padding-left: 10px !important; padding-right: 10px !important;
+  }
+  .card-header h5 { font-size: 1.125rem; line-height: 1.25; }
+  .card .table-responsive > .table.table-hover td,
+  .card .table-responsive > .table.table-hover th {
+    white-space: nowrap;
+    padding: 12px 12px !important;
+    height: auto !important;
+  }
+  .card .table-responsive > .table.table-hover td:first-child,
+  .card .table-responsive > .table.table-hover th:first-child {
+    min-width: 170px;
+    white-space: normal;
+  }
+}
+
+/* ── Tercera pasada (adapt): táctil y zona segura ─────────────────────────── */
+@media (max-width: 768px) {
+  /* Con viewport-fit=cover el contenido llega al borde: respetar la muesca arriba y los lados. */
+  .header { padding-top: max(12px, env(safe-area-inset-top, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .main-content { padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+}
+@media (max-width: 768px) and (pointer: coarse) {
+  /* Piso táctil de 44px también en controles chicos (antes 36/38px). */
+  .btn-sm, .form-control-sm, .form-select-sm, .page-link, .dropdown-item { min-height: 44px; }
+  .btn-sm { padding-left: 12px; padding-right: 12px; }
+  .btn-close { width: 44px; height: 44px; background-size: 14px; }
+}
+/* Ancho muy chico: la columna de empleado cede un poco, los días no. */
+@media (max-width: 400px) {
+  .matrix-table-premium .sticky-col-analitica,
+  .matrix-table-premium td.sticky-col-analitica,
+  .matrix-table-premium th.sticky-col-analitica {
+    width: 118px !important; min-width: 118px !important; max-width: 118px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-item, .mobile-nav-icon { transition: none !important; }
+}
