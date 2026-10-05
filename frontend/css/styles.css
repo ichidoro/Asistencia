@@ -30,13 +30,13 @@
     }
 
     html, body {
-        background-color: #F7F9FC !important;
+        background-color: var(--bg-color) !important;
         color: var(--ui-ink-deep) !important;
     }
 
     /* Elementos estructurales */
     .header, .main-content, .content-area {
-        background-color: #F7F9FC !important;
+        background-color: var(--bg-color) !important;
         color: var(--ui-ink-deep) !important;
     }
 
@@ -54,7 +54,7 @@
         color: var(--ui-ink-deep) !important;
     }
     .data-table thead, .table thead {
-        background-color: #F7F9FC !important;
+        background-color: var(--bg-color) !important;
     }
 
     /* Formularios */
@@ -88,7 +88,7 @@
     }
 
     /* Backgrounds utilitarios Bootstrap */
-    .bg-light { background-color: #F7F9FC !important; }
+    .bg-light { background-color: var(--bg-color) !important; }
     .bg-white { background-color: var(--ui-white) !important; }
 
     /* Pagination */
@@ -563,7 +563,7 @@ input[type="search"], .search-input, [class*="search"] input {
 
 .user-menu {
     padding: 6px 14px 6px 6px;
-    background: var(--primary-color, #4f46e5);
+    background: var(--primary-color, var(--primary-color));
     border: none;
     border-radius: 999px;
     color: #fff;
@@ -576,7 +576,7 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .user-menu:hover {
-    background: #4338ca;
+    background: var(--primary-hover);
     box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
     transform: translateY(-1px);
 }
@@ -1287,7 +1287,7 @@ input[type="search"], .search-input, [class*="search"] input {
 
 .bday-card-innovative.is-today {
     background: rgba(225, 29, 72, 0.1);
-    border: 2px solid #f43f5e;
+    border: 2px solid var(--danger-color);
     box-shadow: 0 0 40px rgba(244, 63, 94, 0.3);
 }
 
@@ -1295,7 +1295,7 @@ input[type="search"], .search-input, [class*="search"] input {
     content: "¡FESTEJADO! 🎂";
     position: absolute;
     top: -15px;
-    background: #f43f5e;
+    background: var(--danger-color);
     color: white;
     padding: 4px 16px;
     border-radius: 30px;
@@ -1471,21 +1471,21 @@ tfoot .sticky-col-analitica {
 .btn-vm:hover {
     background: #eef2ff !important;
     border-color: #818cf8 !important;
-    color: #4338ca !important;
+    color: var(--primary-hover) !important;
     box-shadow: 0 3px 8px rgba(99, 102, 241, 0.15) !important;
     transform: translateY(-1px);
 }
 
 .btn-vm.active {
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
-    border-color: #4338ca !important;
+    background: linear-gradient(135deg, #6366f1 0%, var(--primary-color) 100%) !important;
+    border-color: var(--primary-hover) !important;
     color: white !important;
     box-shadow: 0 3px 10px rgba(99, 102, 241, 0.35) !important;
     transform: translateY(-1px);
 }
 
 .btn-vm.active:hover {
-    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%) !important;
     box-shadow: 0 4px 14px rgba(99, 102, 241, 0.45) !important;
 }
 
@@ -1500,7 +1500,7 @@ tfoot .sticky-col-analitica {
 }
 
 .emp-name-cell:hover .emp-name-main {
-    color: #4338ca;
+    color: var(--primary-hover);
 }
 
 /* ─── Batch Approval Modal ─────────────────────────────────── */
@@ -1549,7 +1549,7 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-reject-all {
-    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+    background: linear-gradient(135deg, var(--danger-color) 0%, #e11d48 100%);
     border: none;
     color: white;
     font-weight: 700;
@@ -1715,7 +1715,7 @@ tfoot .sticky-col-analitica {
         min-width: 44px;
         min-height: 44px;
         font-size: 22px;
-        background: var(--primary-color, #4f46e5);
+        background: var(--primary-color, var(--primary-color));
         color: #fff;
         border: none;
         border-radius: 10px;
@@ -1725,7 +1725,7 @@ tfoot .sticky-col-analitica {
 
     .menu-toggle:hover,
     .menu-toggle:active {
-        background: #4338ca;
+        background: var(--primary-hover);
         transform: scale(1.05);
     }
 
@@ -2092,9 +2092,9 @@ tfoot .sticky-col-analitica {
 }
 
 .emp-filter-chip.active-danger {
-    background: #f43f5e;
+    background: var(--danger-color);
     color: white;
-    border-color: #f43f5e;
+    border-color: var(--danger-color);
 }
 
 /* --- 5. Tabs Pills Premium --- */
@@ -2512,7 +2512,7 @@ tfoot .sticky-col-analitica {
 }
 
 .data-table tbody tr.row-urgency-info {
-    border-left: 3px solid #0ea5e9;
+    border-left: 3px solid var(--info-color);
 }
 
 /* --- Filter Toolbar for Sub-views --- */
@@ -2591,7 +2591,7 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-reject-all {
-    background: linear-gradient(135deg, #dc2626, #f43f5e);
+    background: linear-gradient(135deg, #dc2626, var(--danger-color));
     color: white;
     border: none;
     border-radius: 8px;
@@ -2680,22 +2680,22 @@ tfoot .sticky-col-analitica {
 
 .btn-vm:hover {
     background: #e0e7ff;
-    color: #4338ca;
+    color: var(--primary-hover);
     border-color: #a5b4fc;
     transform: translateY(-1px);
     box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
 }
 
 .btn-vm.active {
-    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    background: linear-gradient(135deg, #6366f1, var(--primary-color));
     color: white;
-    border-color: #4f46e5;
+    border-color: var(--primary-color);
     box-shadow: 0 3px 8px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
     font-weight: 600;
 }
 
 .btn-vm.active:hover {
-    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
     transform: translateY(-1px);
 }
 
@@ -2808,7 +2808,7 @@ tfoot .sticky-col-analitica {
 
 .matrix-table-premium .btn-link:hover {
     background: rgba(99, 102, 241, 0.15);
-    color: #4f46e5 !important;
+    color: var(--primary-color) !important;
     border-color: rgba(99, 102, 241, 0.3);
     transform: scale(1.1);
 }
@@ -2889,7 +2889,7 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium .emp-name-link:hover {
-    color: #4f46e5;
+    color: var(--primary-color);
     text-decoration: underline;
 }
 
@@ -3050,7 +3050,7 @@ div[style*="overflow:auto"]::-webkit-scrollbar-thumb:hover {
     border: 1px solid #c7d2fe;
     border-radius: 20px;
     font-size: 0.75rem;
-    color: #4338ca;
+    color: var(--primary-hover);
     font-weight: 500;
     white-space: nowrap;
 }
@@ -3120,7 +3120,7 @@ tr:hover .emp-name-cell {
 
 .matrix-table-premium th .btn-link:hover {
     background: rgba(99, 102, 241, 0.12);
-    color: #4f46e5;
+    color: var(--primary-color);
 }
 
 .matrix-table-premium th .btn-link i {
@@ -3217,7 +3217,7 @@ tr:hover .emp-name-cell {
 
 .segmented-btn.active {
     background: var(--ui-white);
-    color: #4f46e5;
+    color: var(--primary-color);
     border-color: var(--ui-line-strong);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -3343,7 +3343,7 @@ tr:hover .emp-name-cell {
 }
 
 .color-indigo {
-    background: linear-gradient(135deg, #6366f1, #4338ca);
+    background: linear-gradient(135deg, #6366f1, var(--primary-hover));
     color: white;
     border: none;
 }

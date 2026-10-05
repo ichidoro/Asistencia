@@ -77,7 +77,7 @@
         min-width: 44px;
         min-height: 44px;
         font-size: 22px;
-        background: var(--primary-color, #4f46e5);
+        background: var(--primary-color, var(--primary-color));
         color: #fff;
         border: none;
         border-radius: 10px;
@@ -87,7 +87,7 @@
 
     .menu-toggle:hover,
     .menu-toggle:active {
-        background: #4338ca;
+        background: var(--primary-hover);
         transform: scale(1.05);
     }
 
