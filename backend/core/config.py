@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     EASYTIME_URL: str = ""
     EASYTIME_USER: str = ""
     EASYTIME_PASSWORD: str = ""
+    # False = no validar el certificado SSL de EasyTime (solo temporal, p.ej. si el proveedor lo dejo vencer).
+    EASYTIME_VERIFY_SSL: bool = True
     # Correos (separados por coma) que reciben las alertas de la sincronización. Si está vacío, SMTP_USER.
     ALERT_EMAIL_TO: str = ""
     
