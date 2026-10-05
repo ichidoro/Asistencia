@@ -228,13 +228,13 @@ async function initMarcacionesUI() {
 
 function renderMarcacionesToolbar(container) {
     container.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="mb-0 d-flex align-items-center gap-2">
+        <div class="d-flex justify-content-between align-items-center mb-3 mx-page-head">
+            <h2 class="mb-0 d-flex align-items-center gap-2 mx-page-title">
                 <i class="bi bi-calendar-check" style="color:#3f6fd6"></i>
                 <span style="font-weight:700;color:#1e293b">Control de Asistencia</span>
             </h2>
-            <div class="d-flex gap-2 align-items-center">
-                <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
+            <div class="d-flex gap-2 align-items-center mx-page-actions">
+                <div class="btn-group shadow-sm mx-act-export" style="border-radius:8px;overflow:hidden">
                     ${(typeof AuthService !== 'undefined' && AuthService.hasPermission('reportes.exportar')) ? `
                     <button class="btn btn-sm btn-outline-secondary bg-white" onclick="downloadExcelReport()" title="Exportar a Excel">
                         <i class="bi bi-file-earmark-excel text-success"></i> Excel
@@ -245,7 +245,7 @@ function renderMarcacionesToolbar(container) {
                     </button>
                 </div>
 
-                <div class="btn-group shadow-sm">
+                <div class="btn-group shadow-sm mx-act-sync">
                     <button class="btn btn-sm btn-outline-primary" onclick="syncMarcacionesBioAlba()">
                         <i class="bi bi-cloud-download"></i> Sincronizar BioAlba
                     </button>
@@ -270,7 +270,7 @@ function renderMarcacionesToolbar(container) {
                     </ul>
                 </div>
 
-                <div class="d-flex align-items-center bg-white border rounded-3 px-3 py-1 shadow-sm" style="height:38px;border-color:#e2e8f0 !important">
+                <div class="d-flex align-items-center bg-white border rounded-3 px-3 py-1 shadow-sm mx-act-switch" style="height:38px;border-color:#e2e8f0 !important">
                     <div class="form-check form-switch mb-0">
                         <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh-switch" 
                                ${stateMarcacionesApp.autoRefreshEnabled ? 'checked' : ''} onchange="toggleAutoRefresh(this.checked)">
@@ -282,7 +282,7 @@ function renderMarcacionesToolbar(container) {
                 </div>
 
                 ${AuthService.hasPermission("marcaciones.editar") ? `
-                <div class="d-flex align-items-center border rounded-3 px-3 py-1 shadow-sm" 
+                <div class="d-flex align-items-center border rounded-3 px-3 py-1 shadow-sm mx-act-switch" 
                      id="perdonazo-switch-wrapper"
                      style="height:38px; background: ${_perdonazoState.activo ? '#f0fdf4' : '#fff'}; border-color:${_perdonazoState.activo ? '#86efac' : '#e2e8f0'} !important; transition: background 0.3s;">
                     <div class="form-check form-switch mb-0">
@@ -299,7 +299,7 @@ function renderMarcacionesToolbar(container) {
                 ` : ''}
 
                 ${AuthService.hasPermission("marcaciones.intercambio") ? `
-                <button class="btn btn-sm btn-outline-primary shadow-sm ms-2" onclick="window.abrirModalIntercambio ? window.abrirModalIntercambio() : console.warn('Intercambios panel not loaded')" title="Registrar Día Compensatorio" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
+                <button class="btn btn-sm btn-outline-primary shadow-sm ms-2 mx-act-wide" onclick="window.abrirModalIntercambio ? window.abrirModalIntercambio() : console.warn('Intercambios panel not loaded')" title="Registrar Día Compensatorio" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
                     <i class="bi bi-arrow-left-right"></i> <span class="fw-bold">Días Compensatorios</span>
                 </button>
                 ` : ''}
@@ -363,7 +363,7 @@ function renderMarcacionesToolbar(container) {
                 <!-- Botón Ver -->
                 <div class="col-md-1">
                     <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#3f6fd6,#1b2f8f);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;" title="Ver">
-                        <i class="bi bi-search"></i>
+                        <i class="bi bi-search"></i><span class="d-md-none ms-2">Ver asistencia</span>
                     </button>
                 </div>
             </div>

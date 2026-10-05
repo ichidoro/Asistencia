@@ -151,6 +151,111 @@
   .data-table td:not(:first-child) { white-space: nowrap; }
 }
 
+/* ── Segunda pasada: composición de pantalla (cabeceras, filtros, matriz, dashboard) ── */
+@media (max-width: 768px) {
+
+  /* Menú inferior totalmente opaco: se transparentaba el contenido detrás. */
+  .mobile-bottom-nav {
+    background: #14235c !important;
+    opacity: 1 !important;
+    isolation: isolate;
+  }
+
+  /* Marcaciones · cabecera: título arriba a ancho completo, acciones en rejilla. */
+  .mx-page-head {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px;
+  }
+  .mx-page-title { font-size: 1.5rem !important; line-height: 1.15; }
+  .mx-page-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    width: 100%;
+  }
+  .mx-page-actions > * { min-width: 0; }
+  .mx-page-actions .btn { min-height: 44px; }
+  .mx-act-export { display: flex !important; grid-column: 1 / -1; }
+
+  /* El aviso de deslizar va sobre la matriz, no sobre el título de la página. */
+  #page-marcaciones::before { display: none !important; }
+  #marcaciones-view-container::before {
+    content: "Desliza hacia los lados para ver todos los días";
+    display: block;
+    font-family: var(--font-sans);
+    font-size: .8125rem;
+    font-weight: 500;
+    color: var(--ag-muted, #5a6a6a);
+    padding: 0 4px 8px;
+  }
+  .mx-act-export .btn { flex: 1 1 auto; }
+  .mx-act-sync { grid-column: 1 / -1; display: flex !important; }
+  .mx-act-sync > .btn:first-child { flex: 1 1 auto; }
+  .mx-act-switch { height: 44px !important; justify-content: center; }
+  .mx-act-wide { grid-column: 1 / -1; margin: 0 !important; justify-content: center; height: 44px !important; }
+
+  /* Marcaciones · filtros: rejilla de 2 columnas; período, fechas y empleado a ancho completo. */
+  .marcaciones-filter-bar { padding: 12px !important; }
+  .marcaciones-filter-bar > .row {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px !important;
+    margin: 0 !important;
+  }
+  .marcaciones-filter-bar > .row > [class*="col-"] {
+    width: auto !important; max-width: none !important; flex: none !important;
+    padding: 0 !important; margin: 0 !important;
+  }
+  .marcaciones-filter-bar > .row > .col-md-2:nth-child(1),
+  .marcaciones-filter-bar > .row > .col-md-3,
+  .marcaciones-filter-bar > .row > .col-md-2:nth-child(5),
+  .marcaciones-filter-bar > .row > .col-md-1 { grid-column: 1 / -1; }
+  .marcaciones-filter-bar .btn.w-100 { height: 46px !important; margin: 0 !important; }
+
+  /* Matriz · el resumen NO se fija nunca (sticky + offsets de escritorio tapaban los días).
+     La barra superior ya es sticky como bloque, así que las celdas no lo necesitan. */
+  .matrix-table-premium .sticky-premium-col,
+  .matrix-table-premium th.sticky-premium-col,
+  .matrix-table-premium td.sticky-premium-col,
+  .matrix-table-premium .sticky-saldo-col {
+    position: static !important;
+    z-index: auto !important;
+    left: auto !important;
+  }
+  /* Cabeceras de grupo (colspan): ancho según sus subcolumnas, no 68px. */
+  .matrix-table-premium th.sticky-premium-col[colspan] {
+    width: auto !important; min-width: 0 !important; max-width: none !important;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  /* Dashboard · "Estado de Asistencia y Dotación Hoy": chips en 2 columnas, tabla legible. */
+  .card-header .d-flex.gap-2:has(> .btn.rounded-pill) {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+  }
+  .card-header .d-flex.gap-2 > .btn.rounded-pill {
+    min-height: 44px;
+    white-space: nowrap;
+    padding-left: 10px !important; padding-right: 10px !important;
+  }
+  .card-header h5 { font-size: 1.125rem; line-height: 1.25; }
+  .card .table-responsive > .table.table-hover td,
+  .card .table-responsive > .table.table-hover th {
+    white-space: nowrap;
+    padding: 12px 12px !important;
+    height: auto !important;
+  }
+  .card .table-responsive > .table.table-hover td:first-child,
+  .card .table-responsive > .table.table-hover th:first-child {
+    min-width: 170px;
+    white-space: normal;
+  }
+}
+
 /* Ancho muy chico: la columna de empleado cede un poco, los días no. */
 @media (max-width: 400px) {
   .matrix-table-premium .sticky-col-analitica,
