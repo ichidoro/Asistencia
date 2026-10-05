@@ -3205,7 +3205,8 @@ async def save_libreta_180h(
 # ═══════════════════════════════════════════════════════════════════
 
 class LibretaOcrBase64Payload(BaseModel):
-    imagen_base64: str
+    imagen_base64: Optional[str] = None
+    image_base64: Optional[str] = None
     mime_type: Optional[str] = "image/jpeg"
     empleado_id: Optional[int] = None
     fecha: Optional[str] = None
@@ -3265,7 +3266,10 @@ async def ocr_libreta_180h_base64(
     Escanea la libreta física de chofer a partir de una cadena Base64 capturada directamente por la cámara web/móvil.
     """
     try:
-        raw_b64 = payload.imagen_base64
+        raw_b64 = payload.imagen_base64 or payload.image_base64
+        if not raw_b64:
+            raise HTTPException(status_code=400, detail="Se requiere la imagen en Base64 (imagen_base64 o image_base64).")
+
         if "," in raw_b64:
             header, raw_b64 = raw_b64.split(",", 1)
             if "png" in header:

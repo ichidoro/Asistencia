@@ -5037,12 +5037,12 @@
 
             <!-- MODAL ESCÁNER INTELIGENTE EN VIVO CON CÁMARA Y RECORTE TÁCTIL (CROPPER) -->
             <div class="modal fade" id="modalScannerLibreta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
-                    <div class="modal-content border-0 shadow-2xl overflow-hidden" style="border-radius:18px; background:#0f172a; color:#f8fafc;">
+                <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down scanner-modal-dialog">
+                    <div class="modal-content border-0 shadow-2xl scanner-modal-content" style="background:#0f172a; color:#f8fafc;">
                         <!-- Header del Escáner -->
-                        <div class="modal-header border-0 px-3 py-2.5 d-flex align-items-center justify-content-between" style="background:#1e293b;">
+                        <div class="modal-header border-0 px-3 py-2.5 d-flex align-items-center justify-content-between scanner-modal-header" style="background:#1e293b; border-bottom:1px solid #334155 !important;">
                             <div class="d-flex align-items-center gap-2">
-                                <div class="d-flex align-items-center justify-content-center text-white" style="width:32px;height:32px;background:#059669;border-radius:8px;">
+                                <div class="d-flex align-items-center justify-content-center text-white" style="width:34px;height:34px;background:#059669;border-radius:8px;">
                                     <i class="bi bi-camera-video-fill"></i>
                                 </div>
                                 <div>
@@ -5057,12 +5057,12 @@
                         </div>
 
                         <!-- Body del Escáner -->
-                        <div class="modal-body p-0 position-relative" style="min-height:360px; max-height:calc(85vh - 70px); overflow-y:auto;">
+                        <div class="modal-body p-0 position-relative scanner-modal-body">
                             
                             <!-- PASO 1: VISOR DE CÁMARA EN VIVO -->
-                            <div id="scanner-step-camera" class="position-relative w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-black" style="min-height:380px;">
+                            <div id="scanner-step-camera" class="w-100 h-100 position-relative d-flex flex-column align-items-center justify-content-center bg-black">
                                 <!-- Video en Vivo -->
-                                <video id="scanner-live-video" autoplay playsinline muted style="width:100%; max-height:65vh; object-fit:contain; background:#000; display:block;"></video>
+                                <video id="scanner-live-video" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; background:#000; display:block;"></video>
                                 
                                 <!-- Marco Guía / Retícula Superpuesta tipo CamScanner -->
                                 <div id="scanner-camera-overlay" class="position-absolute top-0 start-0 w-100 h-100 pointer-events-none d-flex flex-column align-items-center justify-content-center" style="pointer-events:none; z-index:5;">
@@ -5083,7 +5083,7 @@
                                 <!-- Barra de Controles en Vivo (Inferior flotante) -->
                                 <div class="position-absolute bottom-0 start-0 w-100 p-3 d-flex align-items-center justify-content-between gap-2" style="background:linear-gradient(transparent, rgba(0,0,0,0.85)); z-index:10;">
                                     <!-- Cambiar Cámara -->
-                                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center" id="scanner-btn-flip" onclick="window.scannerCambiarCamara()" style="width:42px;height:42px;" title="Cambiar Cámara">
+                                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center" id="scanner-btn-flip" onclick="window.scannerCambiarCamara()" style="width:44px;height:44px;" title="Cambiar Cámara">
                                         <i class="bi bi-camera-rotate fs-5"></i>
                                     </button>
 
@@ -5093,53 +5093,58 @@
                                     </button>
 
                                     <!-- Subir Archivo si no quiere usar cámara en vivo -->
-                                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center" onclick="document.getElementById('m180-gallery-input').click()" style="width:42px;height:42px;" title="Cargar desde Archivos">
+                                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center" onclick="document.getElementById('m180-gallery-input').click()" style="width:44px;height:44px;" title="Cargar desde Archivos">
                                         <i class="bi bi-folder2-open fs-5"></i>
                                     </button>
                                 </div>
                             </div>
 
                             <!-- PASO 2: RECORTADOR INTERACTIVO TÁCTIL (CROPPER) -->
-                            <div id="scanner-step-crop" class="d-none p-3 d-flex flex-column align-items-center" style="min-height:380px; background:#0b1329;">
-                                <div class="alert alert-info py-1.5 px-3 mb-2 w-100 d-flex align-items-center justify-content-between" style="font-size:0.75rem; background:#0f172a; border-color:#334155; color:#93c5fd;">
-                                    <span><i class="bi bi-crop me-1 text-warning"></i> <strong>Recorta los bordes:</strong> Arrastra el marco con los dedos para quitar la mesa y sombras.</span>
+                            <div id="scanner-step-crop" class="d-none d-flex flex-column w-100 h-100" style="background:#0b1329;">
+                                <!-- Barra de Instrucciones Superior -->
+                                <div class="scanner-crop-banner flex-shrink-0 px-3 py-2 d-flex align-items-center justify-content-between" style="background:#0f172a; border-bottom:1px solid #334155; font-size:0.75rem; color:#93c5fd;">
+                                    <span><i class="bi bi-crop me-1 text-warning"></i> <strong>Recorta los bordes:</strong> Arrastra las esquinas verdes sobre la cuadrícula.</span>
                                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Paso 2 / 2</span>
                                 </div>
 
-                                <!-- Contenedor para Cropper -->
-                                <div class="w-100 position-relative rounded-3 overflow-hidden d-flex align-items-center justify-content-center" style="max-height:55vh; min-height:260px; background:#000;">
-                                    <img id="scanner-crop-image" src="" alt="Captura para recortar" style="max-width:100%; max-height:55vh; display:block;">
+                                <!-- Contenedor del Cropper (Ocupa exactamente el espacio central sobrante) -->
+                                <div class="scanner-crop-viewport flex-grow-1 position-relative w-100 overflow-hidden d-flex align-items-center justify-content-center" style="background:#000; min-height:0;">
+                                    <img id="scanner-crop-image" src="" alt="Captura para recortar" style="display:block; max-width:100%; max-height:100%;">
                                 </div>
 
-                                <!-- Barra de Acciones del Recortador -->
-                                <div class="w-100 mt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
-                                    <div class="d-flex align-items-center gap-1.5">
-                                        <button type="button" class="btn btn-sm btn-outline-light" onclick="window.scannerRotar(90)" title="Rotar 90°">
-                                            <i class="bi bi-arrow-clockwise me-1"></i> Rotar 90°
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary text-white-50" onclick="window.scannerResetCrop()" title="Restablecer marco">
-                                            <i class="bi bi-arrow-counterclockwise me-1"></i> Reiniciar
-                                        </button>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-light" onclick="window.scannerVolverACamara()">
-                                            <i class="bi bi-arrow-left me-1"></i> Tomar de Nuevo
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 shadow-sm" onclick="window.scannerProcesarConGemini()">
-                                            <i class="bi bi-lightning-charge-fill me-1"></i> Escanear Planilla Recortada
+                                <!-- BARRA INFERIOR FIJA DE ACCIONES DEL RECORTADOR (SIEMPRE VISIBLE) -->
+                                <div class="scanner-crop-footer flex-shrink-0 p-2.5 d-flex flex-column gap-2" style="background:#0f172a; border-top:1px solid #334155; z-index:20;">
+                                    <!-- Fila de Herramientas Auxiliares -->
+                                    <div class="d-flex align-items-center justify-content-between gap-2">
+                                        <div class="d-flex align-items-center gap-1.5">
+                                            <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1 px-2.5 py-1.5" onclick="window.scannerRotar(90)" title="Rotar 90°">
+                                                <i class="bi bi-arrow-clockwise"></i> <span>Rotar 90°</span>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary text-white-50 px-2 py-1.5" onclick="window.scannerResetCrop()" title="Restablecer marco">
+                                                <i class="bi bi-arrow-counterclockwise"></i> Reiniciar
+                                            </button>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1 px-2.5 py-1.5" onclick="window.scannerVolverACamara()">
+                                            <i class="bi bi-camera"></i> <span>Tomar de Nuevo</span>
                                         </button>
                                     </div>
+
+                                    <!-- Botón Principal Prominente de Escaneo e Interpretación -->
+                                    <button type="button" class="btn btn-success fw-bold py-2.5 shadow-lg d-flex align-items-center justify-content-center gap-2 text-white" id="scanner-btn-procesar" onclick="window.scannerProcesarConGemini()" style="font-size:0.95rem; border-radius:10px; background:linear-gradient(135deg, #059669 0%, #10b981 100%); border:none;">
+                                        <i class="bi bi-lightning-charge-fill fs-5"></i>
+                                        <span>⚡ ESCANEAR Y VOLCAR A GRILLA</span>
+                                    </button>
                                 </div>
                             </div>
 
                             <!-- PASO 3: PROCESANDO CON IA GEMINI -->
-                            <div id="scanner-step-loading" class="d-none p-5 d-flex flex-column align-items-center justify-content-center text-center" style="min-height:380px;">
+                            <div id="scanner-step-loading" class="d-none d-flex flex-column align-items-center justify-content-center text-center p-4 w-100 h-100" style="background:#0b1329;">
                                 <div class="spinner-grow text-success mb-3" style="width:3.5rem; height:3.5rem;" role="status"></div>
                                 <h5 class="fw-bold text-white mb-2">Google Gemini Vision Analizando Planilla</h5>
                                 <p class="text-white-50 small mb-3" style="max-width:420px;">
-                                    Leyendo la cuadrícula de 24 horas y los 96 cuartos de hora de conducción, espera, auxiliares y descanso...
+                                    Leyendo la cuadrícula de 24 horas y reconociendo los 96 cuartos de hora de conducción, espera, auxiliares y descanso...
                                 </p>
-                                <div class="progress w-75" style="height:6px; background:#334155;">
+                                <div class="progress w-75" style="height:6px; background:#334155; border-radius:4px;">
                                     <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:100%"></div>
                                 </div>
                             </div>

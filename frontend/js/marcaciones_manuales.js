@@ -3057,6 +3057,7 @@ window.scannerProcesarConGemini = async function() {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
+                imagen_base64: base64Jpeg,
                 image_base64: base64Jpeg,
                 empleado_id: empId ? parseInt(empId) : null,
                 fecha: fecha || null
@@ -3093,12 +3094,18 @@ window.scannerProcesarConGemini = async function() {
             previewContainer.classList.remove('d-none');
         }
 
-        const statusBox = document.getElementById('m180-ocr-status-box');
-        const rh = data.resumen_horas || {};
-        const condH = rh.horas_conduccion || 0;
-        const espH = rh.horas_espera || 0;
-        const descH = rh.horas_descanso || 0;
+        // Cálculo exacto de horas basado en los 96 slots volcados
+        const condSlots = m180_slots.filter(s => s === 1).length;
+        const espSlots = m180_slots.filter(s => s === 2).length;
+        const auxSlots = m180_slots.filter(s => s === 3).length;
+        const descSlots = m180_slots.filter(s => s === 4).length;
 
+        const calcCondH = (condSlots * 15 / 60).toFixed(1);
+        const calcEspH = (espSlots * 15 / 60).toFixed(1);
+        const calcAuxH = (auxSlots * 15 / 60).toFixed(1);
+        const calcDescH = (descSlots * 15 / 60).toFixed(1);
+
+        const statusBox = document.getElementById('m180-ocr-status-box');
         if (statusBox) {
             statusBox.classList.remove('d-none', 'alert-danger', 'alert-warning');
             statusBox.classList.add('alert-success');
@@ -3106,8 +3113,8 @@ window.scannerProcesarConGemini = async function() {
                 <div class="d-flex align-items-start gap-2">
                     <i class="bi bi-check-circle-fill text-success fs-5 mt-0.5"></i>
                     <div class="small">
-                        <strong class="text-success">¡Planilla Recortada Procesada con Gemini Vision!</strong><br>
-                        <span>Se detectaron: <strong>${condH}h</strong> Conducción · <strong>${espH}h</strong> Espera · <strong>${descH}h</strong> Descanso.</span>
+                        <strong class="text-success">¡Planilla Procesada con Gemini Vision!</strong><br>
+                        <span>Se cargaron en la grilla: <strong>${calcCondH}h</strong> Conducción · <strong>${calcEspH}h</strong> Espera · <strong>${calcAuxH}h</strong> Auxiliares · <strong>${calcDescH}h</strong> Descanso.</span>
                     </div>
                 </div>
             `;
@@ -3116,18 +3123,37 @@ window.scannerProcesarConGemini = async function() {
         // Cerrar modal del escáner
         window.scannerCerrar();
 
-        // Notificación de éxito
+        // Notificación de éxito con opciones claras de guardado
         if (typeof Swal !== 'undefined') {
-            Swal.fire({
+            const swalRes = await Swal.fire({
                 icon: 'success',
-                title: 'Planilla Escaneada con Éxito',
-                html: `Los 96 cuartos de hora se volcaron en la grilla.<br><br>
-                       <strong>Conducción:</strong> ${condH} hrs<br>
-                       <strong>Espera:</strong> ${espH} hrs<br>
-                       <strong>Descanso:</strong> ${descH} hrs`,
-                confirmButtonText: 'Revisar y Guardar',
-                confirmButtonColor: '#059669'
+                title: '¡Planilla Escaneada con Éxito!',
+                html: `
+                    <p class="text-muted small mb-2">Google Gemini Vision reconoció las marcas de la planilla y las volcó en la cuadrícula de 24 horas:</p>
+                    <div class="d-flex justify-content-around text-center p-2 mb-3 bg-light rounded border">
+                        <div><strong class="text-success fs-5">${calcCondH}h</strong><div class="text-muted" style="font-size:0.7rem;">Conducción</div></div>
+                        <div><strong class="text-primary fs-5">${calcEspH}h</strong><div class="text-muted" style="font-size:0.7rem;">Espera</div></div>
+                        <div><strong class="text-warning fs-5">${calcAuxH}h</strong><div class="text-muted" style="font-size:0.7rem;">Auxiliares</div></div>
+                        <div><strong class="text-secondary fs-5">${calcDescH}h</strong><div class="text-muted" style="font-size:0.7rem;">Descanso</div></div>
+                    </div>
+                    <div class="alert alert-info py-2 px-3 small text-start mb-0" style="border-radius:8px;">
+                        <i class="bi bi-info-circle-fill me-1 text-primary"></i>
+                        <strong>¿Qué deseas hacer ahora?</strong><br>
+                        Puedes <strong>Guardar directamente</strong> en la base de datos o <strong>Revisar la grilla</strong> para verificar o ajustar algún tramo antes de guardar.
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-check-circle-fill me-1"></i> Guardar en Base de Datos',
+                confirmButtonColor: '#059669',
+                cancelButtonText: '<i class="bi bi-pencil-square me-1"></i> Revisar Grilla Primero',
+                cancelButtonColor: '#3b82f6',
+                focusConfirm: true
             });
+
+            if (swalRes.isConfirmed) {
+                // Guardar directamente en la base de datos cerrando el día
+                await window.guardarLibreta180h(true);
+            }
         } else if (typeof showToast === 'function') {
             showToast("Planilla procesada con éxito por Gemini Vision", "success");
         }
