@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from loguru import logger
 
+from backend.core.config import settings
+
 _CSRF_RE = re.compile(r"name=['\"]csrfmiddlewaretoken['\"]\s+value=['\"]([^'\"]+)['\"]")
 
 # EasyTime: 0 entrada, 1 salida, 2 salida a colación, 3 entrada de colación, 4 entrada HE, 5 salida HE
@@ -71,7 +73,11 @@ class EasyTimeClient:
         jar = aiohttp.CookieJar(unsafe=True)
         resultado: List[Dict[str, Any]] = []
         descartadas = 0
-        async with aiohttp.ClientSession(timeout=timeout, cookie_jar=jar) as session:
+        conector = None
+        if not settings.EASYTIME_VERIFY_SSL:
+            logger.warning("⚠️ EASYTIME_VERIFY_SSL=false: no se valida el certificado SSL de EasyTime (temporal)")
+            conector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(timeout=timeout, cookie_jar=jar, connector=conector) as session:
             await self._login(session)
             pagina = 1
             while pagina <= self.MAX_PAGES:
