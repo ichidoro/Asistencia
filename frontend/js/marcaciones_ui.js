@@ -5777,7 +5777,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         // los datos en memoria y el tooltip se arma al pasar el mouse (ver _getCellTipHtml).
         const tipKey = emp.id + '|' + d;
         (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp: Object.assign({}, emp, { stats: r }) });
-        return `<td class="col-day text-center p-0 align-middle cell-clickable" style="${bg}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
+        return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}, ${d}" style="${bg}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-tip="${tipKey}">
@@ -8423,3 +8423,12 @@ window.executeCondonacionMasiva = async function(empleadosIds, fechaInicio, fech
 
 
 
+
+// Accesibilidad: las celdas de la matriz se abren también con Enter o Espacio.
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const td = e.target && e.target.closest ? e.target.closest('td.cell-clickable') : null;
+    if (!td || e.target !== td) return;
+    e.preventDefault();
+    td.click();
+});

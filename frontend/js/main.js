@@ -528,14 +528,18 @@ function _executeSwitchPage(pageName) {
   // Update nav
   navItems.forEach(item => {
     item.classList.remove('active');
+    item.removeAttribute('aria-current');
     if (item.dataset.page === pageName) {
       item.classList.add('active');
+      item.setAttribute('aria-current', 'page');
     }
   });
 
   // Update mobile bottom nav
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.page === pageName);
+    const activo = item.dataset.page === pageName;
+    item.classList.toggle('active', activo);
+    if (activo) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
   });
 
   // Update pages

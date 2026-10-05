@@ -1073,7 +1073,7 @@
                                                 </div>
                                                 <div class="col-md-1">
                                                     <button class="btn btn-primary w-100"
-                                                        onclick="loadAsignacionesMatrix()">
+                                                        onclick="loadAsignacionesMatrix()" aria-label="Actualizar matriz de asignaciones" title="Actualizar matriz de asignaciones">
                                                         <i class="bi bi-arrow-clockwise"></i>
                                                     </button>
                                                 </div>
@@ -2406,7 +2406,7 @@
                             style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                             <h5 class="modal-title"><i class="bi bi-magic me-2"></i>Relleno Masivo de Asistencia
                             </h5>
-                            <button type="button" class="btn-close btn-close-white"
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white"
                                 onclick="closeBulkFillModal()"></button>
                         </div>
                         <div class="modal-body p-4">
@@ -2468,7 +2468,7 @@
                 <div class="modal-content" style="max-width: 900px; width: 95%;">
                     <div class="modal-header">
                         <h3 id="modal-title">Nuevo Empleado</h3>
-                        <button class="btn-close" id="btn-close-modal" onclick="closeModal()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" id="btn-close-modal" onclick="closeModal()">×</button>
                     </div>
                     <div class="modal-body">
                         <!-- Tabs Navigation -->
@@ -2657,7 +2657,7 @@
                         <div class="modal-header bg-warning text-dark">
                             <h5 class="modal-title fw-bold"><i class="bi bi-calendar-event me-2"></i>Validar Cambio de
                                 Área</h5>
-                            <button type="button" class="btn-close" onclick="closeConfirmarAreaModal()"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close" onclick="closeConfirmarAreaModal()"></button>
                         </div>
                         <div class="modal-body p-4">
                             <div id="area-pending-msg" class="alert alert-warning small mb-3">
@@ -2730,7 +2730,7 @@
                 <div class="modal-content">
                     <div class="modal-header bg-danger text-white">
                         <h3>Confirmar Baja de Empleado</h3>
-                        <button class="btn-close btn-close-white" onclick="closeBajaConfirmation()">×</button>
+                        <button aria-label="Cerrar" class="btn-close btn-close-white" onclick="closeBajaConfirmation()">×</button>
                     </div>
                     <div class="modal-body">
                         <p>Estás a punto de registrar la baja para: <strong id="baja-emp-nombre"></strong>.</p>
@@ -2769,7 +2769,7 @@
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
                         <h3 id="modal-periodo-title">Configurar Tramo de Cierre</h3>
-                        <button class="btn-close" onclick="closeModalPeriodo()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalPeriodo()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-periodo" onsubmit="event.preventDefault(); savePeriodoRRHH()">
@@ -2847,7 +2847,7 @@
                 <div class="modal-content" style="max-width: 700px;">
                     <div class="modal-header">
                         <h3 id="modal-bono-title">Configurar Bono</h3>
-                        <button class="btn-close" onclick="closeModalBono()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalBono()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-bono" onsubmit="event.preventDefault(); saveBono()">
@@ -2907,7 +2907,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 id="modal-tipo-j-title">Nuevo Tipo de Justificación</h3>
-                        <button class="btn-close" onclick="closeModalTipoJ()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalTipoJ()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-tipo-justificacion" onsubmit="event.preventDefault(); saveTipoJustificacion()">
@@ -3063,7 +3063,7 @@
                     <div class="modal-content shadow-lg border-0">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title fw-bold"><i class="bi bi-magic me-2"></i>Asistente de Sincronización BioAlba</h5>
-                            <button type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" onclick="closeSyncWizard()"></button>
                         </div>
                         <div class="modal-body p-4">
                             <!-- Stepper UI (10 pasos) -->
@@ -3499,7 +3499,7 @@
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
                         <h3>Gestionar Pagadores</h3>
-                        <button class="btn-close" onclick="closeModalGestionPagadores()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closeModalGestionPagadores()">×</button>
                     </div>
                     <div class="modal-body">
                         <p class="text-muted small">Defina las entidades responsables del pago de los beneficios o
@@ -3539,7 +3539,7 @@
                     <div class="modal-header">
                         <h3 class="fw-bold"><i class="bi bi-person-badge text-warning"></i> Registrar Permiso / Salida
                         </h3>
-                        <button class="btn-close" onclick="closePermissionModal()">×</button>
+                        <button aria-label="Cerrar" class="btn-close" onclick="closePermissionModal()">×</button>
                     </div>
                     <div class="modal-body">
                         <form id="form-registro-permiso">
@@ -3696,7 +3696,7 @@
                     <div class="modal-content shadow-lg border-0">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title fw-bold">Asignar Turno Oficial</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <input type="hidden" id="asig-indiv-empleado-id">
@@ -4058,7 +4058,7 @@
                                     <h5 class="modal-title fw-bold mb-0">Justificar Inasistencia</h5>
                                     <div class="small opacity-75">Ingrese los detalles de la justificación</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeModalJustify()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeModalJustify()"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4">
@@ -4114,7 +4114,7 @@
                     <div class="modal-content">
                         <div class="modal-header bg-danger text-white" id="modal-vencimiento-header">
                             <h3 class="mb-0">⚠️ Gestión de Vencimiento de Contrato</h3>
-                            <button class="btn-close btn-close-white" onclick="closeVencimientoModal()"></button>
+                            <button aria-label="Cerrar" class="btn-close btn-close-white" onclick="closeVencimientoModal()"></button>
                         </div>
                         <div class="modal-body">
                             <div class="d-flex align-items-center gap-3 mb-4 p-3 bg-light rounded shadow-sm">
@@ -4218,7 +4218,7 @@
                                     <h5 class="modal-title fw-bold mb-0">Corregir Anomalía de Asistencia</h5>
                                     <div class="small opacity-75">Ingrese las horas manualmente</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeManualEntryModal()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeManualEntryModal()"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4">
@@ -4331,7 +4331,7 @@
                                 <div>
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:0.95rem;letter-spacing:0.3px;">Acciones de Asistencia</h6>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size: 0.75rem;opacity:0.7;"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size: 0.75rem;opacity:0.7;"></button>
                             </div>
                         </div>
 
@@ -4587,7 +4587,7 @@
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Reasignar Turno a Inasistencia</h6>
                                     <div class="text-white-50" style="font-size:0.75rem;">Seleccionar fecha destino con Inasistencia limpia</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4" style="background:#f8fafc;">
@@ -4634,7 +4634,7 @@
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Registrar Viaje Largo</h6>
                                     <div class="text-white-50" style="font-size:0.75rem;">Bolsa Flexible - Unificación de Anomalías</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4" style="background:#f8fafc;">
@@ -4804,7 +4804,7 @@
                                         Resolución de 15 minutos (96 tramos diarios)
                                     </div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
                             </div>
                         </div>
 
@@ -4852,7 +4852,7 @@
                                     <div id="m180-ocr-status-box" class="alert py-2 px-3 mb-0 d-none" style="font-size:0.75rem; border-radius:8px;"></div>
                                     
                                     <div id="m180-ocr-preview-container" class="mt-2 d-none d-flex align-items-center gap-2 p-2 bg-white rounded border">
-                                        <img id="m180-ocr-preview-img" src="" alt="Foto de libreta física" style="max-height: 70px; border-radius:6px; object-fit: contain; border:1px solid #e2e8f0;">
+                                        <img id="m180-ocr-preview-img" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Foto de libreta física" style="max-height: 70px; border-radius:6px; object-fit: contain; border:1px solid #e2e8f0;">
                                         <div class="small text-muted flex-grow-1">
                                             <span class="fw-bold text-dark">Foto capturada</span> · Los 96 slots han sido volcados en la grilla inferior. Puedes ajustarlos o pulsar Guardar.
                                         </div>
@@ -5047,7 +5047,7 @@
                                     <h5 class="modal-title fw-bold mb-0">Validar Jornada Especial</h5>
                                     <div class="small opacity-75">Aprobación de días libres trabajados</div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeValidationModal()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeValidationModal()"></button>
                             </div>
                         </div>
                         <div class="modal-body p-4">
@@ -5081,7 +5081,7 @@
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-success text-white">
                             <h5 class="modal-title fw-bold">🚀 Asistente de Reincorporación</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <!-- Stepper visual -->
@@ -5230,7 +5230,7 @@
                                     <p class="mb-0 text-white-50" style="font-size: 0.85rem;" id="lbl-desviaciones-subtitulo">Desglose de horas faltantes</p>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close btn-close-white ms-auto mb-auto" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4 bg-light">
                             <div class="table-responsive rounded shadow-sm bg-white" style="max-height: 400px; overflow-y: auto;">
@@ -5270,7 +5270,7 @@
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-primary text-white">
                             <h5 class="modal-title fw-bold" id="modalUsuarioTitle">👤 Gestión de Usuario</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <form id="formUsuario">
@@ -5338,7 +5338,7 @@
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-dark text-white">
                             <h5 class="modal-title fw-bold" id="modalRolTitle">🔑 Configuración de Rol y Permisos</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">
                             <form id="formRol">

@@ -838,3 +838,29 @@ a:hover { color: var(--ag-navy-deep); }
     transition-property: color, background-color, border-color, box-shadow, opacity !important;
   }
 }
+
+/* ── Accesibilidad ──────────────────────────────────────────────────────────
+   Foco visible para teclado en todo lo interactivo (varias reglas históricas
+   anulan el outline; las entradas de texto conservan su propio anillo). */
+a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible, summary:focus-visible,
+.btn:focus-visible, .nav-link:focus-visible, .dropdown-item:focus-visible,
+.sidebar-item:focus-visible {
+  outline: 2px solid var(--ag-blue) !important;
+  outline-offset: 2px;
+}
+td.cell-clickable:focus-visible { outline-offset: -2px; }
+.sidebar a:focus-visible, .sidebar button:focus-visible, .mobile-bottom-nav :focus-visible {
+  outline-color: #ffffff !important;
+}
+
+/* Movimiento reducido: sin desplazamientos ni deslizamientos largos, pero el
+   cambio de estado se sigue notando (fundidos cortos, colores). */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  .sidebar { transition: none !important; }
+  .modal.fade .modal-dialog { transform: none !important; transition: opacity .15s linear !important; }
+  #modal-decision-asistencia .modal-dialog, .modal-bottom-sheet-mobile .modal-dialog { transition: opacity .15s linear !important; }
+  .animate-fade-up, [class*="animate-"] { animation: none !important; }
+  .mobile-nav-item:active { transform: none !important; }
+}
