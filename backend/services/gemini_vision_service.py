@@ -96,49 +96,69 @@ class GeminiVisionService:
                 "tramos": []
             }
 
-        prompt = f"""Eres un perito experto en lectura visual de planillas oficiales de asistencia laboral según la Resolución Exenta N° 1213 de la Dirección del Trabajo de Chile (Art. 25 bis del Código del Trabajo para choferes de carga/transporte).
+        prompt = f"""Eres un perito experto en lectura visual y análisis forense de planillas oficiales de asistencia laboral según la Resolución Exenta N° 1213 de la Dirección del Trabajo de Chile (Libreta de Control de Jornada de Choferes de Carga Terrestre - Art. 25 bis del Código del Trabajo).
 
-La imagen adjunta es una FOTOGRAFÍA de una hoja física de registro de jornada de un conductor.
-La hoja contiene una cuadrícula de 24 horas continuas (00:00 a 24:00) dividida en tramos de 15 minutos (96 slots diarios en total: :00, :15, :30, :45), organizada en 4 filas principales:
-1. CONDUCCIÓN (fila 1): Tiempo que el chofer pasa al volante manejando.
-2. ESPERA (fila 2): Tiempos de espera para carga, descarga o instrucción, sin conducir.
-3. LABORES AUXILIARES (fila 3): Mantenimiento del camión, revisión mecánica, estiba, papeleo.
-4. DESCANSO (fila 4): Descanso diario, pausas de colación, horas sin prestar servicios.
+La imagen adjunta es una FOTOGRAFÍA de la hoja física de registro diario de un conductor.
+
+ESTRUCTURA EXACTA DE LAS 4 FILAS IMPRESAS EN LA HOJA FÍSICA (De arriba hacia abajo):
+1. FILA 1 (Superior) = CONDUCCIÓN:
+   - Corresponde al tiempo manejando el camión al volante.
+   - En nuestro sistema se codifica con el número 1.
+
+2. FILA 2 = TIEMPO DE ESPERA:
+   - Tiempos de espera para carga, descarga o turno sin conducción.
+   - En nuestro sistema se codifica con el número 2.
+
+3. FILA 3 = DESCANSO:
+   - ¡ORDEN OFICIAL DE LA HOJA CHILENA! La tercera fila es DESCANSO.
+   - En nuestro sistema el descanso se codifica con el número 4.
+   - Si no hay trazo manuscrito en esta fila, sus slots son 0.
+
+4. FILA 4 (Inferior) = TAREAS AUXILIARES / LABORES AUXILIARES:
+   - ¡ATENCIÓN CRÍTICA! La cuarta fila (la de más abajo) corresponde a TAREAS AUXILIARES (revisión mecánica, estiba, papeleo, mantenimiento).
+   - En nuestro sistema las Labores/Tareas Auxiliares se codifican con el número 3.
+   - Cualquier línea continua, raya a lápiz o bloque en esta cuarta fila DEBE codificarse como 3 (Labores Auxiliares).
 
 {f"FECHA ESPERADA DE LA JORNADA: {fecha_esperada}" if fecha_esperada else ""}
 
-INSTRUCCIONES DE LECTURA VISUAL:
-1. Orienta mentalmente la foto si está inclinada, con sombras o tomada con celular.
-2. Observa con máxima atención las marcas manuscritas (líneas continuas trazadas a lápiz, rayas horizontales, cruces o bloques sombreados) en cada una de las 4 filas.
-3. Identifica a qué horas corresponden esas marcas en la regla de 24 horas (desde las 00:00 hasta las 24:00).
-4. Para CADA UNO de los 96 tramos de 15 minutos del día (índice 0 = 00:00-00:15, índice 1 = 00:15-00:30, ..., índice 95 = 23:45-24:00), asigna el código numérico:
-   - 1: Conducción
-   - 2: Espera
-   - 3: Labores Auxiliares
-   - 4: Descanso
-   - 0: Sin marcar (si el tramo está totalmente en blanco)
-5. Si un tramo no tiene ninguna marca manuscrita pero claramente el chofer estaba descansando (por ejemplo de madrugada 00:00 a 06:00), identifícalo o márcalo como 4 (Descanso) o déjalo en 0 si está vacío.
-6. Extrae los tramos continuos resumidos (ej. Conducción de 08:00 a 13:15).
+INSTRUCCIONES DE PRECISIÓN MILIMÉTRICA:
+1. ORIENTACIÓN: Si la fotografía fue tomada verticalmente (90 grados) o apaisada, oriéntala mentalmente para que la regla de horas (00 a 24) corra de izquierda a derecha y las 4 filas queden en su orden: 1. Conducción, 2. Espera, 3. Descanso, 4. Tareas Auxiliares.
+2. LECTURA DE LA REGLA DE 24 HORAS:
+   - La cuadrícula tiene 24 horas continuas (00:00 a 24:00) divididas en 96 tramos de 15 minutos (cada hora tiene 4 divisiones: :00, :15, :30, :45).
+   - CRITERIO INCLUSIVO DE BORDES: Si el chofer trazó una línea desde una marca de hora (ej. de 08:00 a 12:00), no recortes los extremos: cuenta las 4 horas completas (16 slots consecutivos de 15 minutos). Si eran 4 horas, deben ser exactamente 16 slots con código 1 (no 14 slots).
+3. DETECCIÓN DE TAREAS AUXILIARES (FILA 4):
+   - Examina con máxima atención la FILA 4 (Tareas Auxiliares). Si el conductor marcó un tramo largo (por ejemplo de 9.5 horas), cuenta cada uno de los 38 cuartos de hora correspondientes (9.5h * 4 = 38 slots) y asígnales el código 3.
+4. VERIFICACIÓN CRUZADA CON TOTALES ESCRITOS:
+   - Revisa si en la columna de totales (o al final/inicio de las filas) el conductor escribió números manuscritos con los totales del día (ejemplo: "4" o "04:00" en Conducción, "9.5" o "09:30" en Auxiliares).
+   - Si existen esos números, utilízalos para verificar y calibrar que la cantidad de slots coincida exactamente (4h = 16 slots, 9.5h = 38 slots).
+5. CASILLAS EN BLANCO:
+   - Si una fila o tramo no tiene ninguna línea o marca manuscrita trazada por el chofer, déjalo estrictamente en 0 (Vacío). NO inventes descansos si la fila de descanso está en blanco.
+
+CÓDIGOS DE CADA TRAMO PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
+- 1: Conducción (Fila 1)
+- 2: Espera (Fila 2)
+- 3: Tareas / Labores Auxiliares (Fila 4)
+- 4: Descanso (Fila 3)
+- 0: Sin marcar / Vacío
 
 RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 {{
   "exito": true,
-  "fecha_detectada": "YYYY-MM-DD o null si no se ve la fecha escrita",
+  "fecha_detectada": "YYYY-MM-DD o null si no se ve",
   "conductor_detectado": "Nombre del chofer si está escrito o null",
   "confianza": 0.95,
   "tramos": [
-    {{"inicio": "08:00", "fin": "13:15", "actividad": "CONDUCCION"}},
-    {{"inicio": "13:15", "fin": "14:30", "actividad": "DESCANSO"}},
-    {{"inicio": "14:30", "fin": "18:00", "actividad": "ESPERA"}}
+    {{"inicio": "HH:MM", "fin": "HH:MM", "actividad": "CONDUCCION", "duracion_horas": 4.0}},
+    {{"inicio": "HH:MM", "fin": "HH:MM", "actividad": "AUXILIARES", "duracion_horas": 9.5}}
   ],
-  "slots_96": [4, 4, 4, ..., 1, 1, 1, 2, 2, ...],
+  "slots_96": [0, 0, ..., 1, 1, ..., 3, 3, ...],
   "resumen_horas": {{
-    "minutos_conduccion": 315,
-    "minutos_espera": 210,
-    "minutos_auxiliares": 0,
-    "minutos_descanso": 915
+    "minutos_conduccion": 240,
+    "minutos_espera": 0,
+    "minutos_auxiliares": 570,
+    "minutos_descanso": 0
   }},
-  "observaciones": "Comentarios breves sobre la calidad de la foto o tramos dudosos"
+  "observaciones": "Detalles observados del trazo y lectura"
 }}"""
 
         # Codificar imagen a Base64
@@ -310,6 +330,7 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                 f"✅ GeminiVision: Éxito en lectura. "
                 f"Conducción: {parsed['resumen_horas']['horas_conduccion']}h, "
                 f"Espera: {parsed['resumen_horas']['horas_espera']}h, "
+                f"Auxiliares: {parsed['resumen_horas']['horas_auxiliares']}h, "
                 f"Descanso: {parsed['resumen_horas']['horas_descanso']}h"
             )
             return parsed
