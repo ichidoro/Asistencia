@@ -3018,18 +3018,22 @@ window.scannerVolverACamara = async function() {
 };
 
 window.scannerProcesarConGemini = async function() {
+    if (window._scannerEnProceso) return;
+    window._scannerEnProceso = true;
+
     let base64Jpeg = null;
 
     if (scannerCropperInstance) {
+        // Redimensionar a 1400px máx y compresión 0.82 para optimizar velocidad y evitar cuotas de tokens
         const croppedCanvas = scannerCropperInstance.getCroppedCanvas({
-            maxWidth: 2048,
-            maxHeight: 2048,
+            maxWidth: 1400,
+            maxHeight: 1400,
             fillColor: '#ffffff',
             imageSmoothingEnabled: true,
             imageSmoothingQuality: 'high'
         });
         if (croppedCanvas) {
-            base64Jpeg = croppedCanvas.toDataURL('image/jpeg', 0.88);
+            base64Jpeg = croppedCanvas.toDataURL('image/jpeg', 0.82);
         }
     } else {
         const cropImg = document.getElementById('scanner-crop-image');
@@ -3037,6 +3041,7 @@ window.scannerProcesarConGemini = async function() {
     }
 
     if (!base64Jpeg) {
+        window._scannerEnProceso = false;
         if (typeof showToast === 'function') showToast("No se pudo obtener la imagen recortada", "error");
         return;
     }
@@ -3171,6 +3176,8 @@ window.scannerProcesarConGemini = async function() {
         } else if (typeof showToast === 'function') {
             showToast(err.message, "error");
         }
+    } finally {
+        window._scannerEnProceso = false;
     }
 };
 

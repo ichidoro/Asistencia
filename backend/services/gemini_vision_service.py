@@ -2,6 +2,7 @@ import os
 import json
 import base64
 import re
+import asyncio
 from typing import Dict, Any, List, Optional
 from loguru import logger
 import aiohttp
@@ -165,41 +166,63 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
             }
         }
 
-        # Intentar llamada directa a la API de Google Gemini (v1beta)
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
-        
+        # Modelos a intentar en orden de preferencia y resiliencia ante alta demanda
+        candidate_models = [self.model]
+        for fallback_m in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"]:
+            if fallback_m not in candidate_models:
+                candidate_models.append(fallback_m)
+
+        timeout = aiohttp.ClientTimeout(total=40)
+        last_error = ""
+        last_status = 500
+
         try:
-            logger.info(f"📸 GeminiVisionService: Procesando imagen de Libreta 180h con {self.model} ({len(image_bytes)/1024:.1f} KB)...")
-            
-            timeout = aiohttp.ClientTimeout(total=45)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, json=payload) as resp:
-                    if resp.status != 200:
-                        err_text = await resp.text()
-                        logger.error(f"❌ Error en respuesta Gemini API ({resp.status}): {err_text}")
-                        
-                        # Fallback a gemini-3.1-flash-lite si 3.6 no está disponible o tiene spike
-                        if self.model != "gemini-3.1-flash-lite":
-                            logger.info("Intentando fallback a gemini-3.1-flash-lite...")
-                            url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={self.api_key}"
-                            async with session.post(url_fallback, json=payload) as resp_fb:
-                                if resp_fb.status == 200:
-                                    resp_data = await resp_fb.json()
-                                    return self._process_gemini_response(resp_data)
-                                else:
-                                    fb_err = await resp_fb.text()
-                                    logger.error(f"❌ Fallback Gemini (gemini-3.1-flash-lite) también falló: {fb_err}")
-                        
-                        return {
-                            "exito": False,
-                            "error": f"API_ERROR_{resp.status}",
-                            "mensaje": f"Google Gemini API respondió con error ({resp.status}): {err_text[:200]}",
-                            "slots_96": [0] * 96,
-                            "tramos": []
-                        }
-                    
-                    resp_data = await resp.json()
-                    return self._process_gemini_response(resp_data)
+                for idx, model_name in enumerate(candidate_models):
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
+                    logger.info(f"📸 GeminiVision: Intento {idx+1}/{len(candidate_models)} con {model_name} ({len(image_bytes)/1024:.1f} KB)...")
+
+                    try:
+                        async with session.post(url, json=payload) as resp:
+                            if resp.status == 200:
+                                resp_data = await resp.json()
+                                logger.info(f"✅ GeminiVision: Modelo {model_name} respondió exitosamente (HTTP 200).")
+                                return self._process_gemini_response(resp_data)
+
+                            last_status = resp.status
+                            last_error = await resp.text()
+                            logger.warning(f"⚠️ GeminiVision: Modelo {model_name} devolvió HTTP {resp.status}: {last_error[:160]}")
+
+                            # Si es error 503 (sobrecarga/alta demanda) o 429 (límite temporal de peticiones)
+                            # esperar una breve pausa con backoff antes de probar el siguiente modelo del pool
+                            if resp.status in (429, 503) and idx < len(candidate_models) - 1:
+                                backoff_wait = 1.5 * (idx + 1)
+                                logger.info(f"⏳ Alta demanda en {model_name}. Esperando {backoff_wait}s antes de intentar con {candidate_models[idx+1]}...")
+                                await asyncio.sleep(backoff_wait)
+                                continue
+
+                    except aiohttp.ClientError as req_err:
+                        logger.warning(f"⚠️ GeminiVision: Error de red con {model_name}: {req_err}")
+                        last_error = str(req_err)
+                        if idx < len(candidate_models) - 1:
+                            await asyncio.sleep(1.0)
+                            continue
+
+            # Si todos los modelos de la cascada fallaron por saturación
+            logger.error(f"❌ Todos los modelos ({candidate_models}) fallaron. Último status: {last_status}")
+            es_demanda = "overload" in last_error.lower() or "demand" in last_error.lower() or last_status in (429, 503)
+            msg_usuario = (
+                "Google Gemini reporta alta demanda temporal en sus servidores gratuitos (HTTP 503/429). "
+                "Por favor espera 5 segundos y vuelve a presionar Escanear."
+                if es_demanda else f"Error ({last_status}) comunicando con Gemini Vision: {last_error[:180]}"
+            )
+            return {
+                "exito": False,
+                "error": "MODEL_OVERLOADED" if es_demanda else f"API_ERROR_{last_status}",
+                "mensaje": msg_usuario,
+                "slots_96": [0] * 96,
+                "tramos": []
+            }
 
         except aiohttp.ClientError as ce:
             logger.exception(f"❌ Error de red comunicando con Gemini API: {ce}")
