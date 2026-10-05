@@ -145,7 +145,7 @@ class Settings(BaseSettings):
     # GOOGLE GEMINI AI (Visión y Escaneo Libreta 180h)
     # ============================================
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     
     # ============================================
     # LOGGING

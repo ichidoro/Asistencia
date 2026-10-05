@@ -2714,3 +2714,51 @@
     }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   ESCÁNER INTERACTIVO EN VIVO TIPO CAMSCANNER & RECORTE (180H)
+   ═══════════════════════════════════════════════════════════════════ */
+.scanner-corner {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-color: #10b981;
+    border-style: solid;
+    pointer-events: none;
+}
+.scanner-corner.top-left { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-top-left-radius: 8px; }
+.scanner-corner.top-right { top: -2px; right: -2px; border-width: 4px 4px 0 0; border-top-right-radius: 8px; }
+.scanner-corner.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 8px; }
+.scanner-corner.bottom-right { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 8px; }
+
+.scanner-laser-line {
+    position: absolute;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #10b981, #34d399, transparent);
+    box-shadow: 0 0 14px #10b981;
+    animation: scannerLaserScan 2.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes scannerLaserScan {
+    0% { top: 3%; opacity: 0.15; }
+    50% { top: 95%; opacity: 1; }
+    100% { top: 3%; opacity: 0.15; }
+}
+
+/* Cropper styling enhancements */
+.cropper-view-box,
+.cropper-face {
+    border-radius: 4px;
+}
+.cropper-line {
+    background-color: #10b981 !important;
+}
+.cropper-point {
+    background-color: #10b981 !important;
+    width: 14px !important;
+    height: 14px !important;
+    border-radius: 50% !important;
+    opacity: 0.9 !important;
+}
+

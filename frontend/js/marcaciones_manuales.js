@@ -2851,130 +2851,319 @@ window.setLibretaTouchMode = function(mode) {
     }
 };
 
-window.m180HandleCameraUpload = async function(event) {
+// ═══════════════════════════════════════════════════════════════════
+// ESCÁNER INTELIGENTE EN VIVO CON CÁMARA Y RECORTE TÁCTIL (CROPPER.JS)
+// ═══════════════════════════════════════════════════════════════════
+
+let scannerStream = null;
+let scannerCropperInstance = null;
+let scannerFacingMode = "environment"; // trasera por defecto en móviles
+
+window.abrirScannerLibreta = async function() {
+    const modalEl = document.getElementById('modalScannerLibreta');
+    if (!modalEl) return;
+    
+    const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    bsModal.show();
+    
+    // Mostrar paso 1: cámara
+    document.getElementById('scanner-step-camera')?.classList.remove('d-none');
+    document.getElementById('scanner-step-crop')?.classList.add('d-none');
+    document.getElementById('scanner-step-loading')?.classList.add('d-none');
+    
+    await iniciarScannerCamara();
+};
+
+async function iniciarScannerCamara() {
+    detenerScannerCamara();
+    const video = document.getElementById('scanner-live-video');
+    if (!video) return;
+
+    try {
+        const constraints = {
+            video: {
+                facingMode: { ideal: scannerFacingMode },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+            audio: false
+        };
+
+        scannerStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = scannerStream;
+        await video.play();
+    } catch (err) {
+        console.warn("⚠️ No se pudo acceder a la cámara en vivo:", err);
+        if (typeof showToast === 'function') {
+            showToast("No se pudo iniciar la cámara en vivo. Puedes subir una foto directamente.", "warning");
+        }
+        document.getElementById('m180-gallery-input')?.click();
+    }
+}
+
+function detenerScannerCamara() {
+    if (scannerStream) {
+        scannerStream.getTracks().forEach(track => track.stop());
+        scannerStream = null;
+    }
+    const video = document.getElementById('scanner-live-video');
+    if (video) video.srcObject = null;
+}
+
+window.scannerCambiarCamara = async function() {
+    scannerFacingMode = scannerFacingMode === "environment" ? "user" : "environment";
+    await iniciarScannerCamara();
+};
+
+window.scannerCapturarFrame = function() {
+    const video = document.getElementById('scanner-live-video');
+    const canvas = document.getElementById('scanner-hidden-canvas');
+    if (!video || !canvas) return;
+
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    canvas.width = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+    // Detener cámara temporalmente para ahorrar batería y CPU
+    detenerScannerCamara();
+
+    // Pasar a modo recorte
+    activarRecorteImagen(dataUrl);
+};
+
+window.m180HandleFileForScanner = function(event) {
     const input = event.target;
     if (!input.files || input.files.length === 0) return;
     const file = input.files[0];
 
-    const empId = document.getElementById('m180-empleado-id').value;
-    const fecha = document.getElementById('m180-fecha-str').value;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const modalEl = document.getElementById('modalScannerLibreta');
+        if (modalEl) {
+            const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            bsModal.show();
+        }
+        detenerScannerCamara();
+        activarRecorteImagen(e.target.result);
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+};
 
-    const statusBox = document.getElementById('m180-ocr-status-box');
-    const previewImg = document.getElementById('m180-ocr-preview-img');
-    const previewContainer = document.getElementById('m180-ocr-preview-container');
+function activarRecorteImagen(imageSrc) {
+    document.getElementById('scanner-step-camera')?.classList.add('d-none');
+    document.getElementById('scanner-step-loading')?.classList.add('d-none');
+    const cropStep = document.getElementById('scanner-step-crop');
+    const cropImg = document.getElementById('scanner-crop-image');
+    
+    if (cropStep) cropStep.classList.remove('d-none');
+    if (cropImg) {
+        cropImg.src = imageSrc;
+        
+        // Destruir cropper previo si existe
+        if (scannerCropperInstance) {
+            scannerCropperInstance.destroy();
+            scannerCropperInstance = null;
+        }
 
-    // Previsualizar la imagen capturada de inmediato
-    if (previewImg && previewContainer) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            previewImg.src = e.target.result;
-            previewContainer.classList.remove('d-none');
-        };
-        reader.readAsDataURL(file);
+        // Inicializar Cropper.js
+        if (typeof Cropper !== 'undefined') {
+            setTimeout(() => {
+                scannerCropperInstance = new Cropper(cropImg, {
+                    viewMode: 1,
+                    dragMode: 'move',
+                    aspectRatio: NaN, // libre para que encuadre la cuadrícula
+                    autoCropArea: 0.88,
+                    restore: false,
+                    guides: true,
+                    center: true,
+                    highlight: true,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
+                    responsive: true,
+                    background: false
+                });
+            }, 100);
+        }
+    }
+}
+
+window.scannerRotar = function(deg) {
+    if (scannerCropperInstance) {
+        scannerCropperInstance.rotate(deg);
+    }
+};
+
+window.scannerResetCrop = function() {
+    if (scannerCropperInstance) {
+        scannerCropperInstance.reset();
+    }
+};
+
+window.scannerVolverACamara = async function() {
+    if (scannerCropperInstance) {
+        scannerCropperInstance.destroy();
+        scannerCropperInstance = null;
+    }
+    document.getElementById('scanner-step-crop')?.classList.add('d-none');
+    document.getElementById('scanner-step-loading')?.classList.add('d-none');
+    document.getElementById('scanner-step-camera')?.classList.remove('d-none');
+    await iniciarScannerCamara();
+};
+
+window.scannerProcesarConGemini = async function() {
+    let base64Jpeg = null;
+
+    if (scannerCropperInstance) {
+        const croppedCanvas = scannerCropperInstance.getCroppedCanvas({
+            maxWidth: 2048,
+            maxHeight: 2048,
+            fillColor: '#ffffff',
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+        if (croppedCanvas) {
+            base64Jpeg = croppedCanvas.toDataURL('image/jpeg', 0.88);
+        }
+    } else {
+        const cropImg = document.getElementById('scanner-crop-image');
+        if (cropImg) base64Jpeg = cropImg.src;
     }
 
-    if (statusBox) {
-        statusBox.classList.remove('d-none', 'alert-danger', 'alert-success', 'alert-warning');
-        statusBox.classList.add('alert-info');
-        statusBox.innerHTML = `
-            <div class="d-flex align-items-center gap-2">
-                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                <div class="small">
-                    <strong>Analizando libreta física con Google Gemini Vision...</strong><br>
-                    <span class="text-muted">Leyendo marcas de conducción, espera, labores auxiliares y descanso.</span>
-                </div>
-            </div>
-        `;
+    if (!base64Jpeg) {
+        if (typeof showToast === 'function') showToast("No se pudo obtener la imagen recortada", "error");
+        return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    if (empId) formData.append('empleado_id', empId);
-    if (fecha) formData.append('fecha', fecha);
+    // Mostrar loader
+    document.getElementById('scanner-step-crop')?.classList.add('d-none');
+    document.getElementById('scanner-step-loading')?.classList.remove('d-none');
+
+    const empId = document.getElementById('m180-empleado-id')?.value;
+    const fecha = document.getElementById('m180-fecha-str')?.value;
 
     try {
-        const resp = await fetch('/api/asistencia/libreta-180h/ocr-gemini/', {
+        const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+        const resp = await fetch('/api/asistencia/libreta-180h/ocr-gemini-base64/', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token') || localStorage.getItem('access_token') || ''}`
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
-            body: formData
+            body: JSON.stringify({
+                image_base64: base64Jpeg,
+                empleado_id: empId ? parseInt(empId) : null,
+                fecha: fecha || null
+            })
         });
 
         if (!resp.ok) {
             const errData = await resp.json().catch(() => ({}));
-            throw new Error(errData.detail || `Error ${resp.status} al procesar imagen`);
+            throw new Error(errData.detail || `Error ${resp.status} al procesar con IA`);
         }
 
         const data = await resp.json();
 
         if (!data.exito && data.error === 'GEMINI_API_KEY_MISSING') {
-            if (statusBox) {
-                statusBox.classList.remove('alert-info');
-                statusBox.classList.add('alert-warning');
-                statusBox.innerHTML = `
-                    <div class="small">
-                        <strong><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Requiere Clave Gemini (Free Tier):</strong><br>
-                        ${data.mensaje}<br>
-                        <span class="text-muted">Obtén tu API key gratuita en <a href="https://aistudio.google.com/" target="_blank" class="fw-bold">aistudio.google.com</a> y agrégala a <code>.env</code>.</span>
-                    </div>
-                `;
-            }
-            return;
+            throw new Error("Falta configurar GEMINI_API_KEY en .env");
         }
 
         if (!data.exito) {
-            throw new Error(data.mensaje || data.error || 'No se pudo interpretar la libreta');
+            throw new Error(data.mensaje || data.error || 'No se pudieron extraer los tramos');
         }
 
-        // Llenar automáticamente los 96 slots
+        // Llenar automáticamente los 96 slots en la libreta
         if (Array.isArray(data.slots_96) && data.slots_96.length === 96) {
+            m180PushHistory();
             m180_slots = data.slots_96.map(s => Number(s) || 0);
             refreshAllSlotsVisuals();
-            recalcLibretaTotales();
         }
 
+        // Mostrar previsualización en la tarjeta de la libreta
+        const previewImg = document.getElementById('m180-ocr-preview-img');
+        const previewContainer = document.getElementById('m180-ocr-preview-container');
+        if (previewImg && previewContainer) {
+            previewImg.src = base64Jpeg;
+            previewContainer.classList.remove('d-none');
+        }
+
+        const statusBox = document.getElementById('m180-ocr-status-box');
         const rh = data.resumen_horas || {};
         const condH = rh.horas_conduccion || 0;
         const espH = rh.horas_espera || 0;
         const descH = rh.horas_descanso || 0;
-        const cntTramos = (data.tramos && data.tramos.length) || 0;
 
         if (statusBox) {
-            statusBox.classList.remove('alert-info');
+            statusBox.classList.remove('d-none', 'alert-danger', 'alert-warning');
             statusBox.classList.add('alert-success');
             statusBox.innerHTML = `
                 <div class="d-flex align-items-start gap-2">
                     <i class="bi bi-check-circle-fill text-success fs-5 mt-0.5"></i>
                     <div class="small">
-                        <strong class="text-success">¡Lectura Completada con Éxito (Gemini Vision)!</strong><br>
-                        <span>Se detectaron <b>${cntTramos} tramos</b>: 🟢 Conducción ${condH}h · 🟡 Espera ${espH}h · ⚪ Descanso ${descH}h.</span><br>
-                        <span class="text-muted">Los 96 slots se han pintado automáticamente abajo. Compara con la foto, ajusta si es necesario y pulsa Guardar.</span>
+                        <strong class="text-success">¡Planilla Recortada Procesada con Gemini Vision!</strong><br>
+                        <span>Se detectaron: <strong>${condH}h</strong> Conducción · <strong>${espH}h</strong> Espera · <strong>${descH}h</strong> Descanso.</span>
                     </div>
                 </div>
             `;
         }
 
-        if (typeof showToast === 'function') {
-            showToast("Libreta digital rellenada automáticamente desde la foto", "success");
+        // Cerrar modal del escáner
+        window.scannerCerrar();
+
+        // Notificación de éxito
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Planilla Escaneada con Éxito',
+                html: `Los 96 cuartos de hora se volcaron en la grilla.<br><br>
+                       <strong>Conducción:</strong> ${condH} hrs<br>
+                       <strong>Espera:</strong> ${espH} hrs<br>
+                       <strong>Descanso:</strong> ${descH} hrs`,
+                confirmButtonText: 'Revisar y Guardar',
+                confirmButtonColor: '#059669'
+            });
+        } else if (typeof showToast === 'function') {
+            showToast("Planilla procesada con éxito por Gemini Vision", "success");
         }
 
     } catch (err) {
-        console.error("Error en escaneo de libreta:", err);
-        if (statusBox) {
-            statusBox.classList.remove('alert-info');
-            statusBox.classList.add('alert-danger');
-            statusBox.innerHTML = `
-                <div class="small">
-                    <strong><i class="bi bi-x-circle-fill text-danger me-1"></i> Error al escanear la libreta:</strong><br>
-                    ${err.message || 'Error desconocido'}<br>
-                    <span class="text-muted">Asegúrate de que la foto tenga buena luz y que la cuadrícula esté enfocada. También puedes pintar manualmente abajo.</span>
-                </div>
-            `;
+        console.error("❌ Error en scannerProcesarConGemini:", err);
+        document.getElementById('scanner-step-loading')?.classList.add('d-none');
+        document.getElementById('scanner-step-crop')?.classList.remove('d-none');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al Procesar Planilla',
+                text: err.message || 'No se pudo interpretar la planilla física.'
+            });
+        } else if (typeof showToast === 'function') {
+            showToast(err.message, "error");
         }
-    } finally {
-        input.value = ''; // Reset file input
     }
+};
+
+window.scannerCerrar = function() {
+    detenerScannerCamara();
+    if (scannerCropperInstance) {
+        scannerCropperInstance.destroy();
+        scannerCropperInstance = null;
+    }
+    const modalEl = document.getElementById('modalScannerLibreta');
+    if (modalEl) {
+        const bsModal = bootstrap.Modal.getInstance(modalEl);
+        if (bsModal) bsModal.hide();
+    }
+};
+
+// Fallback de subida directa tradicional
+window.m180HandleCameraUpload = async function(event) {
+    window.m180HandleFileForScanner(event);
 };
 
 window.aplicarTramoRango180h = function() {

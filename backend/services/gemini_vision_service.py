@@ -24,7 +24,7 @@ class GeminiVisionService:
             or os.environ.get("GOOGLE_API_KEY")
             or ""
         )
-        self.model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
+        self.model = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
 
     def is_configured(self) -> bool:
         """Verifica si la API Key de Gemini está configurada."""
@@ -143,17 +143,17 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                         err_text = await resp.text()
                         logger.error(f"❌ Error en respuesta Gemini API ({resp.status}): {err_text}")
                         
-                        # Fallback a gemini-1.5-flash si 2.0 no está disponible
-                        if self.model != "gemini-1.5-flash":
-                            logger.info("Intentando fallback a gemini-1.5-flash...")
-                            url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
+                        # Fallback a gemini-3.1-flash-lite si 3.6 no está disponible o tiene spike
+                        if self.model != "gemini-3.1-flash-lite":
+                            logger.info("Intentando fallback a gemini-3.1-flash-lite...")
+                            url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={self.api_key}"
                             async with session.post(url_fallback, json=payload) as resp_fb:
                                 if resp_fb.status == 200:
                                     resp_data = await resp_fb.json()
                                     return self._process_gemini_response(resp_data)
                                 else:
                                     fb_err = await resp_fb.text()
-                                    logger.error(f"❌ Fallback Gemini también falló: {fb_err}")
+                                    logger.error(f"❌ Fallback Gemini (gemini-3.1-flash-lite) también falló: {fb_err}")
                         
                         return {
                             "exito": False,
