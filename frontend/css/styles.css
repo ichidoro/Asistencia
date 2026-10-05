@@ -405,7 +405,7 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .brand-suffix-text {
-    font-size: 11px;
+    font-size: 0.75rem;
     font-weight: 300;
     color: rgba(255, 255, 255, 0.5);
     letter-spacing: 3px;
@@ -1343,7 +1343,7 @@ input[type="search"], .search-input, [class*="search"] input {
 
 .matrix-table th {
     background: var(--ui-surface);
-    font-size: 11px;
+    font-size: 0.75rem;
     text-transform: uppercase;
     font-weight: 700;
     color: var(--ui-text-muted);
@@ -2735,7 +2735,7 @@ tfoot .sticky-col-analitica {
     font-weight: 600;
     letter-spacing: 0.2px;
     text-transform: uppercase;
-    font-size: 0.6875rem !important;
+    font-size: 0.75rem !important;
     padding: 6px 4px !important;
     vertical-align: middle;
     border-bottom: 2px solid var(--ui-line-strong) !important;
@@ -2894,7 +2894,7 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium .emp-area-label {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--ui-text-soft);
     font-weight: 400;
     text-transform: uppercase;
@@ -3236,7 +3236,7 @@ tr:hover .emp-name-cell {
     justify-content: center;
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.3px;
     text-transform: uppercase;
@@ -3863,7 +3863,7 @@ tr:hover .emp-name-cell {
 .m180-overview-total { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; color:var(--ui-text-body); text-align:right; white-space:nowrap; align-self:center; }
 
 .m180-ruler-row { margin-bottom:4px; }
-.m180-ruler-label { font-size: 0.6875rem; letter-spacing:.06em; text-transform:uppercase; color:#8b98a9; font-weight:700; align-self:end; }
+.m180-ruler-label { font-size: 0.75rem; letter-spacing:.06em; text-transform:uppercase; color:#8b98a9; font-weight:700; align-self:end; }
 .m180-ruler-row .m180-lane-total { text-align:right; }
 .m180-ruler { display:grid; grid-template-columns:repeat(24, 1fr); }
 .m180-ruler-h { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight:600; color:#334155; padding-left:4px; border-left:1px solid #b8c4d2; font-variant-numeric:tabular-nums; user-select:none; }
