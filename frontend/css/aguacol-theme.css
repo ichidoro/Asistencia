@@ -864,3 +864,39 @@ td.cell-clickable:focus-visible { outline-offset: -2px; }
   .animate-fade-up, [class*="animate-"] { animation: none !important; }
   .mobile-nav-item:active { transform: none !important; }
 }
+
+/* Familias de estado y énfasis (mismos valores que estaban fijos en styles.css; ahora con nombre).
+   El índigo antiguo (#6366f1, #6c63ff, #eef2ff…) se resuelve con --primary-* de la marca. */
+:root {
+  --ui-success-strong: #059669;
+  --ui-success-ink: #047857;
+  --ui-success-deep: #065f46;
+  --ui-success-text: #166534;
+  --ui-success-soft: #dcfce7;
+  --ui-success-softer: #ecfdf5;
+  --ui-success-line: #bbf7d0;
+  --ui-success-line-2: #a7f3d0;
+  --ui-teal: #0d9488;
+  --ui-danger-strong: #dc2626;
+  --ui-danger-rose: #e11d48;
+  --ui-danger-deep: #b91c1c;
+  --ui-danger-soft: #fee2e2;
+  --ui-warning-strong: #d97706;
+  --ui-warning-deep: #92400e;
+  --ui-warning-soft: #fef3c7;
+  --ui-warning-line: #fde68a;
+  --ui-warning-softer: #fef9c3;
+  --ui-info-deep: #1e40af;
+  --ui-info-soft: #dbeafe;
+  --ui-info-line: #bfdbfe;
+  --ui-info-softer: #eff6ff;
+  --ui-sky-soft: #e0f2fe;
+  --ui-orange-soft: #ffedd5;
+  --ui-orange-line: #fed7aa;
+  --ui-orange-deep: #9a3412;
+  --ui-purple-soft: #f3e8ff;
+  --ui-purple-line: #e9d5ff;
+  --ui-purple-deep: #6b21a8;
+  --ui-ink-mid: #334155;
+  --primary-line: rgba(27, 47, 143, 0.24);
+}

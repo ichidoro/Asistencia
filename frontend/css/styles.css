@@ -1150,7 +1150,7 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .area-card-item.active {
-    background: #eff6ff;
+    background: var(--ui-info-softer);
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px var(--primary-color);
 }
@@ -1270,7 +1270,7 @@ input[type="search"], .search-input, [class*="search"] input {
 
 .bday-card-date {
     display: inline-block;
-    background: linear-gradient(135deg, #6366f1, #a855f7);
+    background: linear-gradient(135deg, var(--primary-color), #a855f7);
     color: white;
     padding: 4px 16px;
     border-radius: 30px;
@@ -1378,7 +1378,7 @@ input[type="search"], .search-input, [class*="search"] input {
     background: white !important;
     z-index: 20;
     box-shadow: 3px 0 8px rgba(0, 0, 0, 0.08);
-    border-right: 2px solid #c7d2fe !important;
+    border-right: 2px solid var(--primary-line) !important;
     width: 260px;
     min-width: 260px;
     max-width: 260px;
@@ -1402,11 +1402,11 @@ tfoot .sticky-col-analitica {
 
 /* Premium grid wrapper */
 .matrix-table-premium thead tr:first-child th {
-    background: linear-gradient(135deg, var(--ui-surface) 0%, #eef2ff 100%) !important;
+    background: linear-gradient(135deg, var(--ui-surface) 0%, var(--primary-light) 100%) !important;
     font-weight: 800;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    border-bottom: 2px solid #c7d2fe;
+    border-bottom: 2px solid var(--primary-line);
 }
 
 .matrix-table-premium thead tr:nth-child(2) th {
@@ -1421,12 +1421,12 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium tbody tr:hover {
-    background-color: #eef2ff !important;
+    background-color: var(--primary-light) !important;
     transition: background-color 0.15s ease;
 }
 
 .matrix-table-premium tbody tr:hover td {
-    border-color: #c7d2fe;
+    border-color: var(--primary-line);
 }
 
 /* Clickable cells premium */
@@ -1436,7 +1436,7 @@ tfoot .sticky-col-analitica {
 }
 
 .cell-clickable:hover {
-    background-color: #dbeafe !important;
+    background-color: var(--ui-info-soft) !important;
     box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.35);
     transform: scale(1.02);
 }
@@ -1469,15 +1469,15 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-vm:hover {
-    background: #eef2ff !important;
-    border-color: #818cf8 !important;
+    background: var(--primary-light) !important;
+    border-color: var(--primary-color) !important;
     color: var(--primary-hover) !important;
     box-shadow: 0 3px 8px rgba(99, 102, 241, 0.15) !important;
     transform: translateY(-1px);
 }
 
 .btn-vm.active {
-    background: linear-gradient(135deg, #6366f1 0%, var(--primary-color) 100%) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color) 100%) !important;
     border-color: var(--primary-hover) !important;
     color: white !important;
     box-shadow: 0 3px 10px rgba(99, 102, 241, 0.35) !important;
@@ -1496,7 +1496,7 @@ tfoot .sticky-col-analitica {
 }
 
 .emp-name-cell:hover {
-    background: #eef2ff !important;
+    background: var(--primary-light) !important;
 }
 
 .emp-name-cell:hover .emp-name-main {
@@ -1526,12 +1526,12 @@ tfoot .sticky-col-analitica {
 }
 
 .he-approval-row .form-check-input:checked {
-    background-color: #6366f1;
-    border-color: #6366f1;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
 .btn-approve-all {
-    background: linear-gradient(135deg, var(--ui-success) 0%, #059669 100%);
+    background: linear-gradient(135deg, var(--ui-success) 0%, var(--ui-success-strong) 100%);
     border: none;
     color: white;
     font-weight: 700;
@@ -1544,12 +1544,12 @@ tfoot .sticky-col-analitica {
 .btn-approve-all:hover {
     transform: translateY(-1px);
     box-shadow: 0 5px 15px rgba(16, 185, 129, 0.35);
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    background: linear-gradient(135deg, var(--ui-success-strong) 0%, var(--ui-success-ink) 100%);
     color: white;
 }
 
 .btn-reject-all {
-    background: linear-gradient(135deg, var(--danger-color) 0%, #e11d48 100%);
+    background: linear-gradient(135deg, var(--danger-color) 0%, var(--ui-danger-rose) 100%);
     border: none;
     color: white;
     font-weight: 700;
@@ -1562,7 +1562,7 @@ tfoot .sticky-col-analitica {
 .btn-reject-all:hover {
     transform: translateY(-1px);
     box-shadow: 0 5px 15px rgba(244, 63, 94, 0.35);
-    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+    background: linear-gradient(135deg, var(--ui-danger-rose) 0%, #be123c 100%);
     color: white;
 }
 
@@ -1602,42 +1602,42 @@ tfoot .sticky-col-analitica {
 /* Color Palette for Turnos */
 .t-color-0 {
     background: #ccfbf1;
-    color: #0d9488;
+    color: var(--ui-teal);
     border: 1px solid #99f6e4;
 }
 
 .t-color-1 {
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
+    background: var(--ui-warning-soft);
+    color: var(--ui-warning-deep);
+    border: 1px solid var(--ui-warning-line);
 }
 
 .t-color-2 {
-    background: #dcfce7;
-    color: #166534;
-    border: 1px solid #bbf7d0;
+    background: var(--ui-success-soft);
+    color: var(--ui-success-text);
+    border: 1px solid var(--ui-success-line);
 }
 
 .t-color-3 {
-    background: #dbeafe;
-    color: #1e40af;
-    border: 1px solid #bfdbfe;
+    background: var(--ui-info-soft);
+    color: var(--ui-info-deep);
+    border: 1px solid var(--ui-info-line);
 }
 
 .t-color-4 {
-    background: #f3e8ff;
-    color: #6b21a8;
-    border: 1px solid #e9d5ff;
+    background: var(--ui-purple-soft);
+    color: var(--ui-purple-deep);
+    border: 1px solid var(--ui-purple-line);
 }
 
 .t-color-5 {
-    background: #ffedd5;
-    color: #9a3412;
-    border: 1px solid #fed7aa;
+    background: var(--ui-orange-soft);
+    color: var(--ui-orange-deep);
+    border: 1px solid var(--ui-orange-line);
 }
 
 .t-color-6 {
-    background: #e0f2fe;
+    background: var(--ui-sky-soft);
     color: #075985;
     border: 1px solid #bae6fd;
 }
@@ -1649,9 +1649,9 @@ tfoot .sticky-col-analitica {
 }
 
 .t-color-8 {
-    background: #ecfdf5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
+    background: var(--ui-success-softer);
+    color: var(--ui-success-deep);
+    border: 1px solid var(--ui-success-line-2);
 }
 
 .t-color-generic {
@@ -1661,9 +1661,9 @@ tfoot .sticky-col-analitica {
 }
 
 .t-color-9 {
-    background: #eef2ff;
+    background: var(--primary-light);
     color: #3730a3;
-    border: 1px solid #c7d2fe;
+    border: 1px solid var(--primary-line);
 }
 
 .matrix-wrapper {
@@ -1865,14 +1865,14 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-reincorporar-premium:hover {
-    background: #059669 !important;
+    background: var(--ui-success-strong) !important;
     transform: translateY(-1px);
 }
 
 .btn-edit-premium {
     color: var(--ui-info) !important;
-    background: #eff6ff !important;
-    border: 1px solid #dbeafe !important;
+    background: var(--ui-info-softer) !important;
+    border: 1px solid var(--ui-info-soft) !important;
 }
 
 .btn-edit-premium:hover {
@@ -1883,7 +1883,7 @@ tfoot .sticky-col-analitica {
 .btn-delete-premium {
     color: var(--ui-danger) !important;
     background: #fef2f2 !important;
-    border: 1px solid #fee2e2 !important;
+    border: 1px solid var(--ui-danger-soft) !important;
 }
 
 .btn-delete-premium:hover {
@@ -1980,33 +1980,33 @@ tfoot .sticky-col-analitica {
 }
 
 .area-badge-produccion {
-    background: #dbeafe;
-    color: #1e40af;
-    border: 1px solid #bfdbfe;
+    background: var(--ui-info-soft);
+    color: var(--ui-info-deep);
+    border: 1px solid var(--ui-info-line);
 }
 
 .area-badge-logistica-tradicional {
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
+    background: var(--ui-warning-soft);
+    color: var(--ui-warning-deep);
+    border: 1px solid var(--ui-warning-line);
 }
 
 .area-badge-seguridad {
-    background: #dcfce7;
-    color: #166534;
-    border: 1px solid #bbf7d0;
+    background: var(--ui-success-soft);
+    color: var(--ui-success-text);
+    border: 1px solid var(--ui-success-line);
 }
 
 .area-badge-mantencion {
-    background: #f3e8ff;
-    color: #6b21a8;
-    border: 1px solid #e9d5ff;
+    background: var(--ui-purple-soft);
+    color: var(--ui-purple-deep);
+    border: 1px solid var(--ui-purple-line);
 }
 
 .area-badge-logistica {
-    background: #ffedd5;
-    color: #9a3412;
-    border: 1px solid #fed7aa;
+    background: var(--ui-orange-soft);
+    color: var(--ui-orange-deep);
+    border: 1px solid var(--ui-orange-line);
 }
 
 .area-badge-default {
@@ -2343,12 +2343,12 @@ tfoot .sticky-col-analitica {
 }
 
 .data-table th.sortable-header:hover {
-    background: #eef2ff !important;
+    background: var(--primary-light) !important;
     color: var(--primary-color) !important;
 }
 
 .data-table th.sortable-header.sort-active {
-    background: #eef2ff !important;
+    background: var(--primary-light) !important;
     color: var(--primary-color) !important;
 }
 
@@ -2381,25 +2381,25 @@ tfoot .sticky-col-analitica {
 
 .status-pill-success {
     background: rgba(16, 185, 129, 0.12);
-    color: #059669;
+    color: var(--ui-success-strong);
     border-color: rgba(16, 185, 129, 0.2);
 }
 
 .status-pill-danger {
     background: rgba(244, 63, 94, 0.12);
-    color: #e11d48;
+    color: var(--ui-danger-rose);
     border-color: rgba(244, 63, 94, 0.2);
 }
 
 .status-pill-warning {
     background: rgba(245, 158, 11, 0.12);
-    color: #d97706;
+    color: var(--ui-warning-strong);
     border-color: rgba(245, 158, 11, 0.2);
 }
 
 .status-pill-critical {
     background: rgba(239, 68, 68, 0.12);
-    color: #dc2626;
+    color: var(--ui-danger-strong);
     border-color: rgba(239, 68, 68, 0.2);
 }
 
@@ -2492,7 +2492,7 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-action-outline:hover {
-    background: #eef2ff;
+    background: var(--primary-light);
     border-color: var(--primary-color);
     color: var(--primary-color);
 }
@@ -2572,7 +2572,7 @@ tfoot .sticky-col-analitica {
    HE Batch Approval Modal Styles
    ═══════════════════════════════════════════════════════ */
 .btn-approve-all {
-    background: linear-gradient(135deg, #059669, var(--ui-success));
+    background: linear-gradient(135deg, var(--ui-success-strong), var(--ui-success));
     color: white;
     border: none;
     border-radius: 8px;
@@ -2584,14 +2584,14 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-approve-all:hover {
-    background: linear-gradient(135deg, #047857, #059669);
+    background: linear-gradient(135deg, var(--ui-success-ink), var(--ui-success-strong));
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
     color: white;
 }
 
 .btn-reject-all {
-    background: linear-gradient(135deg, #dc2626, var(--danger-color));
+    background: linear-gradient(135deg, var(--ui-danger-strong), var(--danger-color));
     color: white;
     border: none;
     border-radius: 8px;
@@ -2603,7 +2603,7 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-reject-all:hover {
-    background: linear-gradient(135deg, #b91c1c, #dc2626);
+    background: linear-gradient(135deg, var(--ui-danger-deep), var(--ui-danger-strong));
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(244, 63, 94, 0.4);
     color: white;
@@ -2687,7 +2687,7 @@ tfoot .sticky-col-analitica {
 }
 
 .btn-vm.active {
-    background: linear-gradient(135deg, #6366f1, var(--primary-color));
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-color));
     color: white;
     border-color: var(--primary-color);
     box-shadow: 0 3px 8px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
@@ -2701,7 +2701,7 @@ tfoot .sticky-col-analitica {
 
 /* ── 3. CERRAR PERIODO BUTTON ──────────────────────────────── */
 .va-toolbar-premium .btn-warning {
-    background: linear-gradient(135deg, var(--ui-warning), #d97706) !important;
+    background: linear-gradient(135deg, var(--ui-warning), var(--ui-warning-strong)) !important;
     border: none !important;
     color: white !important;
     border-radius: 8px !important;
@@ -2710,7 +2710,7 @@ tfoot .sticky-col-analitica {
 }
 
 .va-toolbar-premium .btn-warning:hover:not(:disabled) {
-    background: linear-gradient(135deg, #d97706, #b45309) !important;
+    background: linear-gradient(135deg, var(--ui-warning-strong), #b45309) !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(245, 158, 11, 0.4);
 }
@@ -2743,46 +2743,46 @@ tfoot .sticky-col-analitica {
 }
 
 /* ── 5. SECTION HEADER BANDS (HE, Deudas, Incidencias, Bonos) */
-.matrix-table-premium th[style*="background:#dbeafe"] {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
-    color: #1e40af;
+.matrix-table-premium th[style*="background:var(--ui-info-soft)"] {
+    background: linear-gradient(135deg, var(--ui-info-soft) 0%, var(--ui-info-line) 100%) !important;
+    color: var(--ui-info-deep);
     font-weight: 700 !important;
     border-bottom: 2px solid #93c5fd !important;
 }
 
-.matrix-table-premium th[style*="background:#fee2e2"] {
-    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
+.matrix-table-premium th[style*="background:var(--ui-danger-soft)"] {
+    background: linear-gradient(135deg, var(--ui-danger-soft) 0%, #fecaca 100%) !important;
     color: #991b1b;
     font-weight: 700 !important;
     border-bottom: 2px solid #fca5a5 !important;
 }
 
-.matrix-table-premium th[style*="background:#fef9c3"] {
-    background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%) !important;
+.matrix-table-premium th[style*="background:var(--ui-warning-softer)"] {
+    background: linear-gradient(135deg, var(--ui-warning-softer) 0%, #fef08a 100%) !important;
     color: #854d0e;
     font-weight: 700 !important;
     border-bottom: 2px solid #fde047 !important;
 }
 
 .matrix-table-premium th[style*="background:#f0fdf4"] {
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
-    color: #166534;
+    background: linear-gradient(135deg, #f0fdf4 0%, var(--ui-success-soft) 100%) !important;
+    color: var(--ui-success-text);
     font-weight: 700 !important;
 }
 
-.matrix-table-premium th[style*="background:#dcfce7"] {
-    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-    color: #166534;
+.matrix-table-premium th[style*="background:var(--ui-success-soft)"] {
+    background: linear-gradient(135deg, var(--ui-success-soft) 0%, var(--ui-success-line) 100%) !important;
+    color: var(--ui-success-text);
 }
 
 .matrix-table-premium th[style*="background:#fef3f2"] {
-    background: linear-gradient(135deg, #fef3f2 0%, #fee2e2 100%) !important;
+    background: linear-gradient(135deg, #fef3f2 0%, var(--ui-danger-soft) 100%) !important;
     color: #7f1d1d;
 }
 
 .matrix-table-premium th[style*="background:#f0f7ff"] {
-    background: linear-gradient(135deg, #f0f7ff 0%, #e0f2fe 100%) !important;
-    color: #1e40af;
+    background: linear-gradient(135deg, #f0f7ff 0%, var(--ui-sky-soft) 100%) !important;
+    color: var(--ui-info-deep);
     font-weight: 600 !important;
 }
 
@@ -2838,7 +2838,7 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium tbody tr:hover .sticky-col-analitica {
-    background: #eef2ff !important;
+    background: var(--primary-light) !important;
 }
 
 /* New advanced sticky columns system */
@@ -2854,7 +2854,7 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium tbody tr:hover .sticky-premium-col {
-    background-color: #eef2ff !important;
+    background-color: var(--primary-light) !important;
 }
 
 .matrix-table-premium thead th.sticky-premium-col {
@@ -2917,7 +2917,7 @@ tfoot .sticky-col-analitica {
 }
 
 .matrix-table-premium tbody tr:hover {
-    background: #eef2ff !important;
+    background: var(--primary-light) !important;
 }
 
 .matrix-table-premium tbody td {
@@ -2957,12 +2957,12 @@ tfoot .sticky-col-analitica {
 
 /* ── 12. SALDO NETO COLUMN ─────────────────────────────────── */
 .matrix-table-premium td.fw-bold.text-success {
-    color: #059669 !important;
+    color: var(--ui-success-strong) !important;
     font-weight: 700 !important;
 }
 
 .matrix-table-premium td.fw-bold.text-danger {
-    color: #dc2626 !important;
+    color: var(--ui-danger-strong) !important;
     font-weight: 700 !important;
 }
 
@@ -2996,9 +2996,9 @@ tfoot .sticky-col-analitica {
 }
 
 /* ── 16. BONOS SECTION STYLING ─────────────────────────────── */
-.matrix-table-premium th[style*="background:#ecfdf5"] {
-    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
-    color: #065f46;
+.matrix-table-premium th[style*="background:var(--ui-success-softer)"] {
+    background: linear-gradient(135deg, var(--ui-success-softer) 0%, #d1fae5 100%) !important;
+    color: var(--ui-success-deep);
     font-weight: 600 !important;
 }
 
@@ -3027,7 +3027,7 @@ div[style*="overflow:auto"]::-webkit-scrollbar-thumb:hover {
 }
 
 /* ── 18. HE COLUMN EMPHASIS ────────────────────────────────── */
-.matrix-table-premium td[style*="color:#1e40af"] {
+.matrix-table-premium td[style*="color:var(--ui-info-deep)"] {
     font-weight: 700 !important;
 }
 
@@ -3047,7 +3047,7 @@ div[style*="overflow:auto"]::-webkit-scrollbar-thumb:hover {
     gap: 5px;
     padding: 4px 12px;
     background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf8 100%);
-    border: 1px solid #c7d2fe;
+    border: 1px solid var(--primary-line);
     border-radius: 20px;
     font-size: 0.75rem;
     color: var(--primary-hover);
@@ -3057,7 +3057,7 @@ div[style*="overflow:auto"]::-webkit-scrollbar-thumb:hover {
 
 .va-stats-chip i {
     font-size: 0.8rem;
-    color: #6366f1;
+    color: var(--primary-color);
 }
 
 /* ── 21. CELL CLICKABLE hover ──────────────────────────────── */
@@ -3081,12 +3081,12 @@ tr:nth-child(even) .emp-name-cell {
 }
 
 tr:hover .emp-name-cell {
-    background: #eef2ff !important;
+    background: var(--primary-light) !important;
 }
 
 /* ── 23. FILTER BAR (top filters toolbar) ──────────────────── */
 .marcaciones-filter-bar {
-    background: linear-gradient(135deg, var(--ui-surface) 0%, #eef2ff 100%);
+    background: linear-gradient(135deg, var(--ui-surface) 0%, var(--primary-light) 100%);
     border: 1px solid var(--ui-line);
     border-radius: 12px;
     padding: 16px 20px;
@@ -3104,7 +3104,7 @@ tr:hover .emp-name-cell {
 
 .marcaciones-filter-bar .form-control:focus,
 .marcaciones-filter-bar .form-select:focus {
-    border-color: #818cf8;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
@@ -3171,7 +3171,7 @@ tr:hover .emp-name-cell {
 
 /* ── 25.1. TIEMPO NO TRABAJADO & SALDO (High Contrast & Clear Hierarchy) ── */
 .matrix-cell-deuda {
-    color: #334155 !important;
+    color: var(--ui-ink-mid) !important;
     font-weight: 600 !important;
 }
 
@@ -3181,7 +3181,7 @@ tr:hover .emp-name-cell {
 }
 
 .matrix-cell-deuda-tot {
-    color: #dc2626 !important;
+    color: var(--ui-danger-strong) !important;
     font-weight: 700 !important;
 }
 
@@ -3270,21 +3270,21 @@ tr:hover .emp-name-cell {
 /* == COLORES SÓLIDOS (7 base) ================================== */
 .color-verde,
 .badge-state-success {
-    background: linear-gradient(135deg, var(--ui-success), #059669);
+    background: linear-gradient(135deg, var(--ui-success), var(--ui-success-strong));
     color: white;
     border: none;
 }
 
 .color-amarillo,
 .badge-state-warning {
-    background: linear-gradient(135deg, var(--ui-warning), #d97706);
+    background: linear-gradient(135deg, var(--ui-warning), var(--ui-warning-strong));
     color: white;
     border: none;
 }
 
 .color-rojo,
 .badge-state-danger {
-    background: linear-gradient(135deg, var(--ui-danger), #dc2626);
+    background: linear-gradient(135deg, var(--ui-danger), var(--ui-danger-strong));
     color: white;
     border: none;
 }
@@ -3343,13 +3343,13 @@ tr:hover .emp-name-cell {
 }
 
 .color-indigo {
-    background: linear-gradient(135deg, #6366f1, var(--primary-hover));
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
     color: white;
     border: none;
 }
 
 .color-teal {
-    background: linear-gradient(135deg, #14b8a6, #0d9488);
+    background: linear-gradient(135deg, #14b8a6, var(--ui-teal));
     color: white;
     border: none;
 }
@@ -3414,7 +3414,7 @@ tr:hover .emp-name-cell {
 
 .color-pulso-rojo,
 .badge-state-blink-red {
-    background: linear-gradient(135deg, var(--ui-danger), #b91c1c);
+    background: linear-gradient(135deg, var(--ui-danger), var(--ui-danger-deep));
     color: white;
     border: none;
     animation: ring-rojo 1.4s infinite;
@@ -3480,7 +3480,7 @@ tr:hover .emp-name-cell {
 .glass-popover-light .popover-body {
     padding: 12px 14px !important;
     font-size: 0.8rem !important;
-    color: #334155 !important;
+    color: var(--ui-ink-mid) !important;
 }
 
 .glass-popover-light .popover-body strong {
@@ -3549,17 +3549,17 @@ tr:hover .emp-name-cell {
 }
 
 .wiz-turno-card:hover {
-    border-color: #6c63ff;
+    border-color: var(--primary-color);
     background: #f8f7ff;
 }
 
 .wiz-turno-card.selected {
-    border-color: #6c63ff;
+    border-color: var(--primary-color);
     background: #f0eeff;
 }
 
 .wiz-turno-card input[type="radio"] {
-    accent-color: #6c63ff;
+    accent-color: var(--primary-color);
     width: 16px;
     height: 16px;
     flex-shrink: 0;
@@ -3608,7 +3608,7 @@ tr:hover .emp-name-cell {
 }
 
 .wiz-bono-chip.selected {
-    border-color: #6c63ff;
+    border-color: var(--primary-color);
     background: #f0eeff;
 }
 
@@ -3655,8 +3655,8 @@ tr:hover .emp-name-cell {
 }
 
 .wiz-bono-chip.selected .wiz-bono-chip-label::before {
-    background: #6c63ff;
-    border-color: #6c63ff;
+    background: var(--primary-color);
+    border-color: var(--primary-color);
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4l2.5 2.5L9 1' stroke='%23fff' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
@@ -3679,7 +3679,7 @@ tr:hover .emp-name-cell {
 }
 
 .wiz-bono-edit-btn:hover {
-    background: #6c63ff;
+    background: var(--primary-color);
     color: var(--ui-white);
 }
 
@@ -3866,7 +3866,7 @@ tr:hover .emp-name-cell {
 .m180-ruler-label { font-size: 0.75rem; letter-spacing:.06em; text-transform:uppercase; color:#8b98a9; font-weight:700; align-self:end; }
 .m180-ruler-row .m180-lane-total { text-align:right; }
 .m180-ruler { display:grid; grid-template-columns:repeat(24, 1fr); }
-.m180-ruler-h { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight:600; color:#334155; padding-left:4px; border-left:1px solid #b8c4d2; font-variant-numeric:tabular-nums; user-select:none; }
+.m180-ruler-h { font-family:'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; font-weight:600; color:var(--ui-ink-mid); padding-left:4px; border-left:1px solid #b8c4d2; font-variant-numeric:tabular-nums; user-select:none; }
 .m180-ruler-h small { color:var(--ui-text-soft); font-weight:400; }
 
 .m180-lane { margin-bottom:6px; }
@@ -3896,7 +3896,7 @@ tr:hover .emp-name-cell {
 .m180-ghost span { padding:2px 8px; border-radius:6px; background:rgba(15,23,42,.78); }
 
 .m180-progress { height:3px; margin:6px 16px 10px; border-radius:99px; background:#e7ecf2; overflow:hidden; }
-.m180-progress-fill { height:100%; background:linear-gradient(90deg,#059669,var(--ui-success)); transform-origin:left center; transform:scaleX(0); transition:transform .3s cubic-bezier(.2,.8,.2,1); }
+.m180-progress-fill { height:100%; background:linear-gradient(90deg,var(--ui-success-strong),var(--ui-success)); transform-origin:left center; transform:scaleX(0); transition:transform .3s cubic-bezier(.2,.8,.2,1); }
 
 @media (prefers-reduced-motion: reduce) {
     .m180-block.is-new { animation:none; }
@@ -3911,7 +3911,7 @@ tr:hover .emp-name-cell {
     .m180-card-head { padding: 8px 12px; }
 }
 
-.m180-lock-banner { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px 14px; border-radius:10px; background:#ecfdf5; color:#065f46; font-size:.82rem; border:1px solid #a7f3d0; }
+.m180-lock-banner { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px 14px; border-radius:10px; background:var(--ui-success-softer); color:var(--ui-success-deep); font-size:.82rem; border:1px solid var(--ui-success-line-2); }
 .m180-lock-banner i { font-size:1rem; }
 .m180-locked .m180-track { cursor:default; }
 .m180-locked .m180-hover { display:none; }
