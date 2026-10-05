@@ -366,7 +366,7 @@ async function triggerEngine() {
         filtroDesc += ` · Horario: ${turnoText}`;
     }
 
-    if (!confirm(`¿Reprocesar asistencia?\n\n${filtroDesc}\n\nEsta operación recalculará los datos del período con los filtros activos.`)) return;
+    if (!await uiConfirm(`¿Reprocesar asistencia?\n\n${filtroDesc}\n\nEsta operación recalculará los datos del período con los filtros activos.`)) return;
 
     // Loader visual en el botón
     const btn = document.querySelector('button[onclick="triggerEngine()"]');

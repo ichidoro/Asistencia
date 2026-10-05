@@ -53,13 +53,13 @@
                                         <label for="intercambio-fecha-destino" class="form-label fw-bold text-dark small">Fecha Libre (Día a trabajar)</label>
                                         <input type="date" id="intercambio-fecha-destino" class="form-control" required
                                                title="Día que el empleado debía descansar, pero que aceptó trabajar.">
-                                        <small class="text-muted" style="font-size:0.65rem;">Se pagará normal (sin H.E.)</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Se pagará normal (sin H.E.)</small>
                                     </div>
                                     <div class="col-6">
                                         <label for="intercambio-fecha-origen" class="form-label fw-bold text-dark small">Fecha Laboral (Día a faltar)</label>
                                         <input type="date" id="intercambio-fecha-origen" class="form-control" required
                                                title="Día que el empleado debía trabajar, pero que se tomará libre en compensación.">
-                                        <small class="text-muted" style="font-size:0.65rem;">Se justificará sin deuda</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Se justificará sin deuda</small>
                                     </div>
                                 </div>
 
@@ -267,8 +267,8 @@ async function cargarIntercambiosEmpleado(empleadoId) {
             <div class="d-flex justify-content-between align-items-center p-2 mb-2 bg-white border rounded shadow-sm">
                 <div>
                     <div class="fw-bold small" style="color:#1b2f8f;">1x1: Faltó el ${i.fecha_origen} <i class="bi bi-arrow-right"></i> Trabajó el ${i.fecha_destino}</div>
-                    <div class="text-muted" style="font-size: 0.7rem;">${i.observaciones}</div>
-                    <div class="text-muted" style="font-size: 0.65rem;">Por: ${i.registrado_por_nombre || 'Admin'}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">${i.observaciones}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Por: ${i.registrado_por_nombre || 'Admin'}</div>
                 </div>
                 ${deleteBtnHtml}
             </div>

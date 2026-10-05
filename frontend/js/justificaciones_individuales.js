@@ -336,7 +336,7 @@ function _pollJustificacionJob(jobId, empId = null) {
 async function deleteJustificacionFromModal() {
     if (!justIndividualState.editJustificacionId) return;
 
-    const confirmDelete = confirm("¿Está seguro que desea ELIMINAR esta justificación?\n\nLa asistencia se recalculará automáticamente.");
+    const confirmDelete = await uiConfirm("¿Está seguro que desea ELIMINAR esta justificación?\n\nLa asistencia se recalculará automáticamente.");
     if (!confirmDelete) return;
 
     try {

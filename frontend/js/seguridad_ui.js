@@ -424,7 +424,7 @@ async function loadRoles() {
                             <div class="mb-3">${esGlobal}</div>
                             <h6 class="fw-bold small">Permisos:</h6>
                             <div class="d-flex flex-wrap gap-1" style="max-height: 160px; overflow-y: auto;">
-                                ${rol.permisos.map(p => `<span class="badge bg-light text-dark border" style="font-size:0.7rem">${p}</span>`).join('')}
+                                ${rol.permisos.map(p => `<span class="badge bg-light text-dark border" style="font-size: 0.75rem">${p}</span>`).join('')}
                             </div>
                         </div>
                         <div class="card-footer bg-white border-top d-flex gap-2">
@@ -528,9 +528,9 @@ function renderMatrizPermisos() {
             let alertHtml = '';
             if (details && details.alert) {
                 alertHtml = `
-                    <div class="mt-2 px-2 py-1 rounded" style="font-size: 0.72rem; background-color: #fef3c7; border-left: 3px solid #f59e0b;">
+                    <div class="mt-2 px-2 py-1 rounded" style="font-size: 0.75rem; background-color: #fef3c7; border-left: 3px solid #f59e0b;">
                         <strong style="color: #b45309;">⚠️ ${details.alert}</strong>
-                        <div class="text-muted" style="font-size: 0.7rem; line-height: 1.3;">${details.flow}</div>
+                        <div class="text-muted" style="font-size: 0.75rem; line-height: 1.3;">${details.flow}</div>
                     </div>
                 `;
             }
@@ -559,7 +559,7 @@ function renderMatrizPermisos() {
                     <div class="card-header bg-white pt-3 pb-2 px-4 border-bottom-0">
                         <h6 class="fw-bold mb-0 text-primary d-flex align-items-center" style="font-size: 0.95rem; color: #0d6efd !important;">
                             <span class="me-2">${moduleIcons[moduleName] || '🛡️'}</span>MÓDULO ${moduleName}
-                            <span class="badge bg-light text-secondary ms-2" style="font-size: 0.7rem;">${items.length} permisos</span>
+                            <span class="badge bg-light text-secondary ms-2" style="font-size: 0.75rem;">${items.length} permisos</span>
                         </h6>
                     </div>
                     <div class="card-body px-4 pt-2 pb-4">

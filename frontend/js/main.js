@@ -119,7 +119,7 @@ window.iniciarEdicionFecha = function(id, originalValue, element) {
     const handleUpdate = async () => {
         const newDate = input.value;
         if (newDate && newDate !== cleanValue) {
-            if (confirm(`¿Desea cambiar la fecha de inicio a ${window.formatFechaDDMMYYYY(newDate)}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
+            if (await uiConfirm(`¿Desea cambiar la fecha de inicio a ${window.formatFechaDDMMYYYY(newDate)}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
                 try {
                     // Feedback visual: deshabilitar y mostrar carga
                     element.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
@@ -992,7 +992,7 @@ function renderEmpleados(empleados) {
                         <div class="avatar-initials" style="background: ${avatarBg};">${initials}</div>
                         <div>
                             <div class="fw-bold" style="font-size: 0.85rem;">${fullName}</div>
-                            <div class="text-muted" style="font-size: 0.68rem;">${empleado.email || ''}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">${empleado.email || ''}</div>
                         </div>
                     </div>
                 </td>
@@ -1694,7 +1694,7 @@ window.editEmpleado = (id) => {
 };
 
 window.deleteEmpleado = async (id) => {
-  if (!confirm('⚠️ ¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
+  if (!await uiConfirm('⚠️ ¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
     return;
   }
 
@@ -1938,7 +1938,7 @@ function _mostrarBatchBonosModal() {
           <div class="flex-grow-1">
             <div class="fw-semibold text-dark" style="font-size:0.85rem;">${bonoNombre}</div>
           </div>
-          <span class="badge rounded-pill" style="background:#d97706;font-size:0.7rem;">
+          <span class="badge rounded-pill" style="background:#d97706;font-size: 0.75rem;">
             <i class="bi bi-check-lg me-1"></i>Asignado
           </span>
         `;
@@ -2180,7 +2180,7 @@ function renderSyncEmpleados(empleados) {
     }
 
     const areaChangeDetail = emp.cambio_area
-      ? `<span class="text-warning" style="font-size:0.7rem;"> (${emp.area_local} → ${emp.area})</span>`
+      ? `<span class="text-warning" style="font-size: 0.75rem;"> (${emp.area_local} → ${emp.area})</span>`
       : '';
 
     const label = document.createElement('label');
@@ -2280,7 +2280,7 @@ window.confirmSync = async function () {
     ? `${selectedRuts.length} empleado(s) seleccionado(s)` 
     : `Todos los ${allBoxes.length} empleado(s)`;
 
-  if (!confirm(`¿Iniciar sincronización?\n(${filterMsg})`)) return;
+  if (!await uiConfirm(`¿Iniciar sincronización?\n(${filterMsg})`)) return;
 
   closeModalSync();
 
@@ -2573,7 +2573,7 @@ window.confirmarBaja = async function () {
 
   if (!fecha) return alert("Debe seleccionar una fecha de salida.");
 
-  if (!confirm("¿Está seguro de registrar la baja? Esta acción puede desactivar al empleado.")) return;
+  if (!await uiConfirm("¿Está seguro de registrar la baja? Esta acción puede desactivar al empleado.")) return;
 
   try {
     const response = await fetch(`${API_BASE_URL}/empleados/${empId}/baja/`, {

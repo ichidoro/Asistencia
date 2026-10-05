@@ -52,14 +52,14 @@
                                     <div class="col-6">
                                         <label for="compensar-he-fecha-inasistencia" class="form-label fw-bold text-dark small">Fecha Inasistencia</label>
                                         <input type="date" id="compensar-he-fecha-inasistencia" class="form-control" required>
-                                        <small class="text-muted" style="font-size:0.65rem;">Día con falta o deuda a cubrir</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Día con falta o deuda a cubrir</small>
                                     </div>
                                     <div class="col-6">
                                         <div class="form-label fw-bold text-dark small">Bolsa HE Disponible (Periodo)</div>
                                         <div id="compensar-he-bolsa-badge-container" class="mt-1">
                                             <span class="badge p-2 bg-secondary text-white w-100">Seleccione empleado y fecha...</span>
                                         </div>
-                                        <small class="text-muted" style="font-size:0.65rem;">Saldo de HE aprobadas en el periodo</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Saldo de HE aprobadas en el periodo</small>
                                     </div>
                                 </div>
 
@@ -67,7 +67,7 @@
                                     <div class="col-12">
                                         <label for="compensar-he-tiempo" class="form-label fw-bold text-dark small">Tiempo a Compensar (HH:MM:SS)</label>
                                         <input type="text" id="compensar-he-tiempo" class="form-control" required placeholder="00:00:00">
-                                        <small class="text-muted" style="font-size:0.65rem;">Se sugiere automáticamente la jornada teórica del turno asignado</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Se sugiere automáticamente la jornada teórica del turno asignado</small>
                                     </div>
                                 </div>
 
@@ -386,8 +386,8 @@ async function cargarCompensacionesEmpleado(empleadoId) {
             <div class="d-flex justify-content-between align-items-center p-2 mb-2 bg-white border rounded shadow-sm" style="border-left: 3px solid #059669 !important;">
                 <div>
                     <div class="fw-bold small text-success">Falta ${c.fecha_inasistencia} cubierta con bolsa de H.E.</div>
-                    <div class="text-muted" style="font-size: 0.7rem;">Monto: <b>${minutesToTimeString(c.minutos)}</b> · ${c.observaciones}</div>
-                    <div class="text-muted" style="font-size: 0.65rem;">Autorizado por: ${c.registrado_por_nombre || 'Admin'}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Monto: <b>${minutesToTimeString(c.minutos)}</b> · ${c.observaciones}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Autorizado por: ${c.registrado_por_nombre || 'Admin'}</div>
                 </div>
                 ${deleteBtnHtml}
             </div>

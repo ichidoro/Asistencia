@@ -147,7 +147,7 @@ function renderContratosTable(empleados) {
         tr.innerHTML = `
             <td>
                 <div class="fw-bold" style="font-size: 0.85rem;">${emp.nombre_completo}</div>
-                <div class="text-muted" style="font-size: 0.72rem;">${emp.rut_formateado}</div>
+                <div class="text-muted" style="font-size: 0.75rem;">${emp.rut_formateado}</div>
             </td>
             <td class="text-center">
                 <span class="status-pill status-pill-muted">N° ${emp.cant_contratos || 1}</span>
@@ -323,7 +323,7 @@ async function confirmProcesarVencimiento() {
         confirmMsg = `¿Está seguro de procesar esta acción (${action}) para ${nombre}?`;
     }
 
-    if (!confirm(confirmMsg)) return;
+    if (!await uiConfirm(confirmMsg)) return;
 
     try {
         const response = await fetch(`/api/empleados/${currentEmpleadoVencimiento.id}/procesar-vencimiento/`, {
@@ -453,7 +453,7 @@ function renderHistorialTable(empleados) {
             <tr class="fade-in-row" style="animation-delay: ${idx * 0.03}s;">
                 <td>
                     <div class="fw-bold" style="font-size: 0.85rem;">${emp.nombre_completo}</div>
-                    <div class="text-muted" style="font-size: 0.72rem;">${rutFormatted}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">${rutFormatted}</div>
                 </td>
                 <td><div class="small">${emp.cargo || 'Sin Cargo'}</div></td>
                 <td class="fw-bold" style="font-size: 0.85rem;">

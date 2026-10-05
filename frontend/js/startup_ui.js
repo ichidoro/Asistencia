@@ -113,13 +113,13 @@ const StartupUI = {
                             @keyframes eeGlow{0%{box-shadow:0 0 20px rgba(255,215,0,.3)}50%{box-shadow:0 0 50px rgba(255,215,0,.6),0 0 80px rgba(255,165,0,.2)}100%{box-shadow:0 0 20px rgba(255,215,0,.3)}}
                             @keyframes eeTxt{from{transform:translateY(15px);opacity:0}to{transform:translateY(0);opacity:1}}
                             @keyframes eeFade{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-                            #easter-egg-overlay .ee-img{max-width:85vw;max-height:65vh;border-radius:16px;animation:eeImg .7s cubic-bezier(.34,1.56,.64,1),eeGlow 2.5s ease-in-out infinite;transition:opacity .3s}
+                            #easter-egg-overlay .ee-img{max-width:85vw;max-height:65vh;border-radius:16px;animation:eeImg .7s cubic-bezier(0.25, 1, 0.5, 1),eeGlow 2.5s ease-in-out infinite;transition:opacity .3s}
                             #easter-egg-overlay .ee-n{font-size:1.4rem;font-weight:600;background:linear-gradient(135deg,#FFD700,#FF8C00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:eeTxt .5s ease-out .6s both;opacity:0}
                             #easter-egg-overlay .ee-t{color:#fff;font-size:1rem;font-weight:300;text-align:center;letter-spacing:.5px;animation:eeTxt .5s ease-out .4s both;opacity:0}
                             #easter-egg-overlay .ee-dots{display:flex;gap:8px;animation:eeTxt .4s ease-out 1s both;opacity:0}
                             #easter-egg-overlay .ee-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .3s}
                             #easter-egg-overlay .ee-dot.active{background:#FFD700;transform:scale(1.3)}
-                            #easter-egg-overlay .ee-h{font-size:.7rem;color:rgba(255,255,255,.35);animation:eeTxt .4s ease-out 1.2s both;opacity:0}
+                            #easter-egg-overlay .ee-h{font-size: 0.75rem;color:rgba(255,255,255,.35);animation:eeTxt .4s ease-out 1.2s both;opacity:0}
                         </style>
                         <img class="ee-img" src="/huevo_1.jpg" alt="🥚">
                         <div class="ee-n">¡Encontraste el Huevo de Pascua! 🥚✨</div>

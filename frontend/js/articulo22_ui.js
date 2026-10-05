@@ -42,7 +42,7 @@ const Articulo22Module = (() => {
                 .art22-card-identity { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
                 .art22-card-info { min-width: 0; flex: 1; }
                 .art22-card-name { font-weight: 700; color: #0f172a; font-size: 0.9rem; line-height: 1.2; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .art22-card-cargo { font-size: 0.74rem; color: #64748b; margin-top: 2px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .art22-card-cargo { font-size: 0.75rem; color: #64748b; margin-top: 2px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                 .art22-card-meta-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; width: 100%; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
                 .art22-card-estadia { display: flex; align-items: center; gap: 6px; }
                 .art22-gantt-container { position: relative; padding: 50px 24px 24px 24px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.65); min-height: 130px; }
@@ -51,26 +51,26 @@ const Articulo22Module = (() => {
                 .art22-gantt-segment { height: 100%; position: absolute; background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-right: 1px solid rgba(255,255,255,0.2); border-left: 1px solid rgba(255,255,255,0.2); transition: all 0.3s ease; }
                 .art22-gantt-segment.ongoing { background: repeating-linear-gradient(45deg, #10b981, #10b981 8px, #34d399 8px, #34d399 16px); border-right: none; }
                 .art22-gantt-grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(148, 163, 184, 0.15); z-index: 1; }
-                .art22-gantt-grid-label { position: absolute; font-size: 0.58rem; font-weight: 700; color: #94a3b8; top: -16px; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; }
+                .art22-gantt-grid-label { position: absolute; font-size: 0.75rem; font-weight: 700; color: #94a3b8; top: -16px; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; }
                 @media (max-width: 768px) { .art22-gantt-grid-label.h-sub { display: none !important; } }
                 .art22-gantt-pulse-ring { position: absolute; top: 9px; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; border: 2px solid #10b981; animation: gantt-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite; pointer-events: none; z-index: 2; }
                 @keyframes gantt-ping { 75%, 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
-                .art22-gantt-empty-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 0.72rem; font-weight: 600; color: #64748b; font-style: italic; z-index: 2; pointer-events: none; }
+                .art22-gantt-empty-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 0.75rem; font-weight: 600; color: #64748b; font-style: italic; z-index: 2; pointer-events: none; }
                 .art22-gantt-track.empty { background: repeating-linear-gradient(-45deg, #f1f5f9, #f1f5f9 6px, #e2e8f0 6px, #e2e8f0 12px); border: 1px dashed #cbd5e1; }
-                .art22-area-badge { display: inline-block; padding: 2px 8px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.64rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 6px; }
-                .art22-estadia-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+                .art22-area-badge { display: inline-block; padding: 2px 8px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 6px; }
+                .art22-estadia-label { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
                 .art22-estadia-val { font-size: 0.95rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
                 .art22-section-header { background: rgba(248,250,252,0.5); padding: 0.9rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
                 .art22-section-title { font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
                 .art22-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
-                .art22-filter-bar label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
+                .art22-filter-bar label { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
                 .art22-hist-table thead tr { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-                .art22-hist-table thead th { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 10px 14px; }
+                .art22-hist-table thead th { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 10px 14px; }
                 .art22-hist-table tbody td { padding: 10px 14px; font-size: 0.82rem; }
                 .art22-hist-table tbody tr { transition: background 0.15s; }
                 .art22-hist-table tbody tr:hover { background: rgba(248,250,252,0.5); }
                 .art22-hist-table tbody tr:not(:last-child) td { border-bottom: 1px solid #f1f5f9; }
-                .art22-marcas-circle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: 0.72rem; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+                .art22-marcas-circle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: 0.75rem; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
 
                 /* ======================== REDISEÑO PREMIUM RADICAL ======================== */
                 /* Slide-to-Action Container */
@@ -127,7 +127,7 @@ const Articulo22Module = (() => {
 
                 /* Slide-to-Action Text */
                 .art22-slider-text {
-                    font-size: 0.65rem;
+                    font-size: 0.75rem;
                     font-weight: 700;
                     text-transform: uppercase;
                     letter-spacing: 0.04em;
@@ -223,7 +223,7 @@ const Articulo22Module = (() => {
                 /* Status Monospace Live Dashboard Widget */
                 .art22-status-widget {
                     font-family: 'JetBrains Mono', monospace;
-                    font-size: 0.58rem;
+                    font-size: 0.75rem;
                     font-weight: 700;
                     text-transform: uppercase;
                     letter-spacing: 0.08em;
@@ -342,7 +342,7 @@ const Articulo22Module = (() => {
                     border-color: rgba(255, 255, 255, 0.94) transparent transparent transparent;
                 }
                 .art22-gantt-tooltip .tt-label {
-                    font-size: 0.55rem;
+                    font-size: 0.75rem;
                     font-weight: 700;
                     text-transform: uppercase;
                     letter-spacing: 0.04em;
@@ -354,7 +354,7 @@ const Articulo22Module = (() => {
                 .art22-gantt-tooltip.s .tt-label { color: #dc2626; }
                 .art22-gantt-tooltip .tt-time {
                     font-family: 'JetBrains Mono', monospace;
-                    font-size: 0.72rem;
+                    font-size: 0.75rem;
                     font-weight: 800;
                     color: #1e293b;
                 }
@@ -383,7 +383,7 @@ const Articulo22Module = (() => {
                     border-radius: 2px;
                 }
                 .art22-log-title {
-                    font-size: 0.58rem;
+                    font-size: 0.75rem;
                     font-weight: 800;
                     text-transform: uppercase;
                     letter-spacing: 0.08em;
@@ -443,12 +443,12 @@ const Articulo22Module = (() => {
                 
                 .art22-log-time {
                     font-family: 'JetBrains Mono', monospace;
-                    font-size: 0.72rem;
+                    font-size: 0.75rem;
                     font-weight: 700;
                     color: #0f172a;
                 }
                 .art22-log-label {
-                    font-size: 0.52rem;
+                    font-size: 0.75rem;
                     font-weight: 600;
                     text-transform: uppercase;
                     letter-spacing: 0.04em;
@@ -1033,7 +1033,7 @@ const Articulo22Module = (() => {
                 return `<tr>
                     <td style="font-weight:500; color:#475569; white-space:nowrap">${fechaFmt}</td>
                     <td style="font-weight:600; color:#1e293b">${r.nombre}</td>
-                    <td style="color:#475569">${r.cargo || ''}<br><span style="font-size:0.72rem; color:#94a3b8">${r.area || ''}</span></td>
+                    <td style="color:#475569">${r.cargo || ''}<br><span style="font-size: 0.75rem; color:#94a3b8">${r.area || ''}</span></td>
                     <td style="color:#065f46; font-weight:500">${r.primera_entrada ? r.primera_entrada.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
                     <td style="color:#9f1239; font-weight:500">${r.ultima_salida ? r.ultima_salida.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
                     <td class="text-center"><span class="art22-marcas-circle">${r.total_marcas}</span></td>

@@ -132,14 +132,14 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
                         <span class="text-secondary"><i class="bi bi-clock me-1 text-primary"></i> Turno Base:</span>
                         <div class="text-end">
                             ${estadoBaseBadge}
-                            <span class="ms-1 text-muted" style="font-size:0.7rem;">${asistGeneral.hora_entrada_real || '--:--'} a ${asistGeneral.hora_salida_real || '--:--'}</span>
+                            <span class="ms-1 text-muted" style="font-size: 0.75rem;">${asistGeneral.hora_entrada_real || '--:--'} a ${asistGeneral.hora_salida_real || '--:--'}</span>
                         </div>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="text-secondary"><i class="bi bi-plus-circle me-1" style="color:#8b5cf6;"></i> Cobertura (+2):</span>
                         <div class="text-end">
                             ${estadoJaBadge}
-                            <span class="ms-1 text-muted" style="font-size:0.7rem;">${jaGeneral.hora_entrada || '--:--'} a ${jaGeneral.hora_salida || '--:--'} (${horasJa}h)</span>
+                            <span class="ms-1 text-muted" style="font-size: 0.75rem;">${jaGeneral.hora_entrada || '--:--'} a ${jaGeneral.hora_salida || '--:--'} (${horasJa}h)</span>
                         </div>
                     </div>
                 </div>
@@ -533,7 +533,7 @@ window.ejecutarReasignacionTurno = ejecutarReasignacionTurno;
 async function proceedToRevertExtra() {
     closeAsistenciaActionModal();
     
-    if (!confirm(`¿Está seguro que desea revertir esta jornada a 'Especial'?\n\nEsto eliminará la autorización de horas extras y restaurará el estado original de la validación.`)) {
+    if (!await uiConfirm(`¿Está seguro que desea revertir esta jornada a 'Especial'?\n\nEsto eliminará la autorización de horas extras y restaurará el estado original de la validación.`)) {
         return;
     }
 
@@ -1166,7 +1166,7 @@ async function validateJornada(accion = 'APROBAR') {
  * @param {string} fecha 
  */
 async function deleteManualJornada(empId, fecha) {
-    if (!confirm(`¿Está seguro que desea eliminar TODAS las marcaciones manuales ingresadas para el día ${window.formatFechaDDMMYYYY(fecha)}? Esta acción no se puede deshacer.`)) {
+    if (!await uiConfirm(`¿Está seguro que desea eliminar TODAS las marcaciones manuales ingresadas para el día ${window.formatFechaDDMMYYYY(fecha)}? Esta acción no se puede deshacer.`)) {
         return;
     }
 
@@ -2222,17 +2222,21 @@ window.submitViajeLargo = submitViajeLargo;
 // =========================================================================
 
 let m180_slots = new Array(96).fill(0);
-let m180_actividad_seleccionada = 1;
-let m180_is_pointer_down = false;
-let m180_drag_mode = 'paint'; // 'paint' | 'erase'
 let m180_brush_mode = false;  // Modo Pincel (marcar al pasar el cursor)
 let m180_grid_initialized = false;
+let m180_drag = null;         // { act, mode, startSlot, curSlot, track, pointerId }
+let m180_brush_stroke = false;
+let m180_history = [];
+let m180_dirty = false;
+let m180_force_close = false;
+let m180_prev_keys = new Set();
+let m180_locked = false;      // día cerrado: solo lectura
 
 const M180_ACTIVIDADES = {
-    1: { id: 1, name: 'CONDUCCIÓN', short: 'COND', bg: '#ecfdf5', border: '#059669', color: '#065f46', activeBg: '#059669', activeText: '#ffffff' },
-    2: { id: 2, name: 'ESPERA', short: 'ESP', bg: '#fffbeb', border: '#d97706', color: '#92400e', activeBg: '#d97706', activeText: '#ffffff' },
-    3: { id: 3, name: 'LABORES AUXILIARES', short: 'AUX', bg: '#eef2ff', border: '#4f46e5', color: '#3730a3', activeBg: '#4f46e5', activeText: '#ffffff' },
-    4: { id: 4, name: 'DESCANSO', short: 'DESC', bg: '#f0f9ff', border: '#0284c7', color: '#075985', activeBg: '#0284c7', activeText: '#ffffff' }
+    1: { id: 1, name: 'Conducción', short: 'COND', color: '#059669', soft: '#ecfdf5', ink: '#065f46' },
+    2: { id: 2, name: 'Espera', short: 'ESP', color: '#d97706', soft: '#fffbeb', ink: '#92400e' },
+    3: { id: 3, name: 'Labores auxiliares', short: 'AUX', color: '#4f46e5', soft: '#eef2ff', ink: '#3730a3' },
+    4: { id: 4, name: 'Descanso', short: 'DESC', color: '#0284c7', soft: '#f0f9ff', ink: '#075985' }
 };
 
 function formatMinToHHMM(minutos) {
@@ -2249,215 +2253,261 @@ function formatSlotToHHMM(slot) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function m180Runs(act) {
+    const runs = [];
+    let start = -1;
+    for (let s = 0; s <= 96; s++) {
+        const on = s < 96 && m180_slots[s] === act;
+        if (on && start < 0) start = s;
+        if (!on && start >= 0) { runs.push([start, s]); start = -1; }
+    }
+    return runs;
+}
+
+function m180CurrentKeys() {
+    const keys = new Set();
+    [1, 2, 3, 4].forEach(act => m180Runs(act).forEach(([a, b]) => keys.add(`${act}:${a}:${b}`)));
+    return keys;
+}
+
 function initLibreta180hGrid() {
-    const headerHours = document.getElementById('m180-header-hours');
-    const headerSlots = document.getElementById('m180-header-slots');
-    const tbody = document.getElementById('m180-grid-tbody');
-    if (!headerHours || !headerSlots || !tbody) return;
+    const ruler = document.getElementById('m180-ruler');
+    const lanes = document.getElementById('m180-lanes');
+    if (!ruler || !lanes) return;
 
-    // 1. Horas (24 bloques con colspan=4, ancho 152px cada hora = 4 * 38px)
-    let hoursHtml = `<th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:25; background:#e2e8f0; box-shadow: 2px 0 5px rgba(0,0,0,0.05); white-space:nowrap !important;">ACTIVIDAD</th>`;
+    let rulerHtml = '';
     for (let h = 0; h < 24; h++) {
-        const hh = String(h).padStart(2, '0');
-        hoursHtml += `<th colspan="4" class="align-middle text-center fw-bold" style="width:152px; min-width:152px; max-width:152px; font-size:0.78rem; background:#0f172a; color:#f8fafc; border-left:2px solid #334155 !important; white-space:nowrap !important; padding:4px 0;">
-            <div class="d-flex align-items-center justify-content-center gap-1 font-monospace">
-                <i class="bi bi-clock text-warning" style="font-size:0.7rem;"></i><span>${hh}:00</span>
+        rulerHtml += `<span class="m180-ruler-h">${String(h).padStart(2, '0')}<small>:00</small></span>`;
+    }
+    ruler.innerHTML = rulerHtml;
+
+    lanes.innerHTML = [1, 2, 3, 4].map(actId => {
+        const c = M180_ACTIVIDADES[actId];
+        return `<div class="m180-lane" data-act="${actId}" style="--c:${c.color}; --soft:${c.soft}; --ink:${c.ink};">
+            <div class="m180-lane-label"><span class="m180-lane-dot"></span><span>${actId}. ${c.name}</span></div>
+            <div class="m180-track" data-act="${actId}">
+                <div class="m180-blocks"></div>
+                <div class="m180-hover"></div>
+                <div class="m180-ghost"><span></span></div>
             </div>
-        </th>`;
-    }
-    hoursHtml += `<th class="align-middle px-2 bg-slate-200 text-dark fw-bold text-center" style="width:90px; min-width:90px; background:#e2e8f0; white-space:nowrap !important;">TOTAL</th>`;
-    headerHours.innerHTML = hoursHtml;
+            <div class="m180-lane-total" id="m180-tot-act-${actId}">00:00</div>
+        </div>`;
+    }).join('');
 
-    // 2. Sub-tramos (96 columnas de 15 min, ancho 38px cada una, en una sola línea horizontal)
-    let slotsHtml = `<th class="text-start px-2 py-1 align-middle" style="position:sticky; left:0; z-index:25; background:#f8fafc; font-size:0.68rem; color:#475569; font-weight:700; box-shadow: 2px 0 5px rgba(0,0,0,0.05); white-space:nowrap !important;">SUB-TRAMO</th>`;
-    for (let s = 0; s < 96; s++) {
-        const minQ = (s % 4) * 15;
-        const mm = String(minQ).padStart(2, '0');
-        const isHourStart = (s % 4 === 0);
-        const borderStyle = isHourStart ? 'border-left:2px solid #334155 !important;' : 'border-left:1px solid #cbd5e1;';
-        const bgStyle = isHourStart ? 'background:#e2e8f0; color:#0f172a; font-weight:800;' : 'background:#f8fafc; color:#64748b; font-weight:600;';
-        slotsHtml += `<th class="text-center font-monospace" style="width:38px; min-width:38px; max-width:38px; ${borderStyle} ${bgStyle} font-size:0.65rem; padding:3px 0; white-space:nowrap !important; user-select:none;">:${mm}</th>`;
-    }
-    slotsHtml += `<th class="py-1 text-center align-middle font-monospace fw-bold" style="font-size:0.68rem; background:#f8fafc; color:#475569; white-space:nowrap !important;">HRS</th>`;
-    headerSlots.innerHTML = slotsHtml;
+    lanes.querySelectorAll('.m180-track').forEach(setupLibretaTrack);
 
-    // 3. Filas de actividades (4 filas, interacción directa por fila)
-    let rowsHtml = '';
-    const acts = [1, 2, 3, 4];
-    acts.forEach(actId => {
-        const cfg = M180_ACTIVIDADES[actId];
-        rowsHtml += `<tr id="m180-row-act-${actId}">
-            <td class="text-start px-2 align-middle fw-bold" style="position:sticky; left:0; z-index:20; background:${cfg.bg}; color:${cfg.color}; border-left:5px solid ${cfg.border}; width:190px; min-width:190px; max-width:190px; font-size:0.75rem; box-shadow: 2px 0 5px rgba(0,0,0,0.05); user-select:none; white-space:nowrap !important;">
-                <div class="d-flex align-items-center justify-content-between">
-                    <span>${actId}. ${cfg.name}</span>
-                    <span class="badge" style="background:${cfg.border}; color:#ffffff; font-size:0.6rem; padding:2px 4px;">${cfg.short}</span>
-                </div>
-            </td>`;
-        for (let s = 0; s < 96; s++) {
-            const isHourStart = (s % 4 === 0);
-            const borderStyle = isHourStart ? 'border-left:2px solid #334155 !important;' : 'border-left:1px solid #e2e8f0;';
-            const horaStr = formatSlotToHHMM(s);
-            const horaSigStr = formatSlotToHHMM(s + 1);
-            rowsHtml += `<td class="m180-slot-cell p-0 align-middle text-center" 
-                data-slot="${s}" 
-                data-act="${actId}" 
-                style="width:38px; min-width:38px; max-width:38px; height:34px; cursor:pointer; background:#ffffff; ${borderStyle} user-select:none; white-space:nowrap !important;"
-                title="${horaStr} - ${horaSigStr} (${cfg.name})">
-            </td>`;
+    // Ctrl+Z deshace mientras la libreta está abierta
+    document.addEventListener('keydown', (e) => {
+        const modalEl = document.getElementById('modalMarcacion180h');
+        if (!modalEl || !modalEl.classList.contains('show')) return;
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            libreta180hUndo();
         }
-        rowsHtml += `<td class="text-end px-2 align-middle font-monospace fw-bold" id="m180-tot-act-${actId}" style="background:${cfg.bg}; color:${cfg.color}; font-size:0.78rem; white-space:nowrap !important;">00:00</td>
-        </tr>`;
     });
-    tbody.innerHTML = rowsHtml;
 
-    setupLibretaGridInteractions();
     m180_grid_initialized = true;
 }
 
-function setupLibretaGridInteractions() {
-    const gridContainer = document.getElementById('m180-grid-scroll');
-    if (!gridContainer) return;
-
-    gridContainer.oncontextmenu = (e) => e.preventDefault();
-
-    function interactWithCell(cell, isClick = false) {
-        if (!cell) return;
-        const slot = parseInt(cell.dataset.slot);
-        const actOfCell = parseInt(cell.dataset.act);
-        if (isNaN(slot) || isNaN(actOfCell)) return;
-
-        if (isClick) {
-            // Clic directo: si ya está asignado a esta misma actividad, se apaga (toggle off)
-            if (m180_slots[slot] === actOfCell) {
-                m180_slots[slot] = 0;
-                m180_drag_mode = 'erase';
-            } else {
-                m180_slots[slot] = actOfCell;
-                m180_drag_mode = 'paint';
-            }
-        } else {
-            // Arrastre o modo pincel
-            if (m180_drag_mode === 'erase') {
-                if (m180_slots[slot] === actOfCell) {
-                    m180_slots[slot] = 0;
-                }
-            } else {
-                m180_slots[slot] = actOfCell;
-            }
-        }
-        updateSlotVisuals(slot);
-        recalcLibretaTotales();
-    }
-
-    gridContainer.addEventListener('pointerdown', (e) => {
-        const cell = e.target.closest('.m180-slot-cell');
-        if (!cell) return;
-        m180_is_pointer_down = true;
-        interactWithCell(cell, true);
-    });
-
-    gridContainer.addEventListener('pointerover', (e) => {
-        const cell = e.target.closest('.m180-slot-cell');
-        if (!cell) return;
-        if (m180_brush_mode) {
-            // Modo Pincel activo: pintar directamente al pasar el cursor
-            m180_drag_mode = 'paint';
-            interactWithCell(cell, false);
-        } else if (m180_is_pointer_down) {
-            // Arrastre con clic presionado
-            interactWithCell(cell, false);
-        }
-    });
-
-    // Soporte para arrastre táctil fluido en pantallas touch / tablets
-    gridContainer.addEventListener('touchmove', (e) => {
-        if (!m180_is_pointer_down && !m180_brush_mode) return;
-        const touch = e.touches[0];
-        if (!touch) return;
-        const elem = document.elementFromPoint(touch.clientX, touch.clientY);
-        const cell = elem ? elem.closest('.m180-slot-cell') : null;
-        if (cell) {
-            interactWithCell(cell, false);
-        }
-    }, { passive: true });
-
-    window.addEventListener('pointerup', () => {
-        m180_is_pointer_down = false;
-    });
-    window.addEventListener('pointercancel', () => {
-        m180_is_pointer_down = false;
-    });
+function m180SlotFromEvent(track, e) {
+    const rect = track.getBoundingClientRect();
+    const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width - 0.01);
+    return Math.floor((x / rect.width) * 96);
 }
 
-function updateSlotVisuals(slot) {
-    const act = m180_slots[slot];
-    [1, 2, 3, 4].forEach(actId => {
-        const cell = document.querySelector(`.m180-slot-cell[data-slot="${slot}"][data-act="${actId}"]`);
-        if (!cell) return;
-        const cfg = M180_ACTIVIDADES[actId];
-        if (act === actId) {
-            cell.style.background = cfg.activeBg;
-            cell.style.color = '#ffffff';
-            cell.innerHTML = `<span style="font-size:0.62rem; font-weight:800; font-family:monospace; line-height:1;">${cfg.short}</span>`;
-            cell.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,0.2)';
+function m180SetReadout(txt) {
+    const el = document.getElementById('m180-readout');
+    if (el) el.textContent = txt || 'Arrastre sobre una fila para marcar un rango · clic sobre un tramo marcado para quitarlo';
+}
+
+function m180RenderGhost() {
+    const d = m180_drag;
+    if (!d) return;
+    const a = Math.min(d.startSlot, d.curSlot);
+    const b = Math.max(d.startSlot, d.curSlot) + 1;
+    const g = d.track.querySelector('.m180-ghost');
+    g.style.left = `${(a / 96) * 100}%`;
+    g.style.width = `${((b - a) / 96) * 100}%`;
+    g.classList.toggle('is-erase', d.mode === 'erase');
+    g.classList.add('is-on');
+    g.firstElementChild.textContent = `${formatSlotToHHMM(a)} – ${formatSlotToHHMM(b)} · ${formatMinToHHMM((b - a) * 15)}`;
+    m180SetReadout(`${d.mode === 'erase' ? 'Quitando' : 'Marcando'} ${M180_ACTIVIDADES[d.act].name.toLowerCase()}: ${formatSlotToHHMM(a)} – ${formatSlotToHHMM(b)} (${formatMinToHHMM((b - a) * 15)})`);
+}
+
+function m180ClearGhost() {
+    document.querySelectorAll('#m180-lanes .m180-ghost').forEach(g => g.classList.remove('is-on'));
+}
+
+function m180PushHistory() {
+    m180_history.push(m180_slots.slice());
+    if (m180_history.length > 60) m180_history.shift();
+    m180_dirty = true;
+    m180UpdateUndoBtn();
+}
+
+function m180UpdateUndoBtn() {
+    const btn = document.getElementById('m180-btn-undo');
+    if (btn) btn.disabled = m180_history.length === 0;
+}
+
+function m180ApplyRange(act, a, bExcl, mode) {
+    for (let s = a; s < bExcl; s++) {
+        if (mode === 'erase') {
+            if (m180_slots[s] === act) m180_slots[s] = 0;
         } else {
-            cell.style.background = '#ffffff';
-            cell.style.color = 'transparent';
-            cell.innerHTML = '';
-            cell.style.boxShadow = 'none';
+            m180_slots[s] = act;
+        }
+    }
+}
+
+function setupLibretaTrack(track) {
+    const act = parseInt(track.dataset.act);
+    const scroller = document.getElementById('m180-grid-scroll');
+
+    track.addEventListener('pointerdown', (e) => {
+        if (m180_locked) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        const slot = m180SlotFromEvent(track, e);
+        const mode = m180_slots[slot] === act ? 'erase' : 'paint';
+        m180_drag = { act, mode, startSlot: slot, curSlot: slot, track, pointerId: e.pointerId };
+        try { track.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+        m180RenderGhost();
+    });
+
+    track.addEventListener('pointermove', (e) => {
+        const slot = m180SlotFromEvent(track, e);
+        const hov = track.querySelector('.m180-hover');
+        hov.style.left = `${(slot / 96) * 100}%`;
+        hov.style.width = `${100 / 96}%`;
+        hov.classList.add('is-on');
+
+        if (m180_drag && m180_drag.track === track) {
+            if (slot !== m180_drag.curSlot) {
+                m180_drag.curSlot = slot;
+                m180RenderGhost();
+            }
+            // Auto-scroll horizontal al acercarse a los bordes durante el arrastre
+            if (scroller) {
+                const r = scroller.getBoundingClientRect();
+                if (e.clientX > r.right - 48) scroller.scrollLeft += 14;
+                else if (e.clientX < r.left + 48 + 170) scroller.scrollLeft -= 14;
+            }
+            return;
+        }
+
+        if (m180_brush_mode && !m180_locked && e.pointerType !== 'touch') {
+            // Modo pincel: pinta el tramo bajo el cursor sin necesidad de presionar
+            if (m180_slots[slot] !== act) {
+                if (!m180_brush_stroke) { m180PushHistory(); m180_brush_stroke = true; }
+                m180_slots[slot] = act;
+                m180RenderBlocks();
+            }
+            m180SetReadout(`${formatSlotToHHMM(slot)} – ${formatSlotToHHMM(slot + 1)} · ${M180_ACTIVIDADES[act].name}`);
+        } else {
+            const actLeida = m180_slots[slot];
+            m180SetReadout(`${formatSlotToHHMM(slot)} – ${formatSlotToHHMM(slot + 1)}` + (m180_locked && actLeida ? ` · ${M180_ACTIVIDADES[actLeida].name}` : ''));
         }
     });
+
+    track.addEventListener('pointerleave', () => {
+        track.querySelector('.m180-hover').classList.remove('is-on');
+        m180_brush_stroke = false;
+        if (!m180_drag) m180SetReadout('');
+    });
+
+    const finish = (commit) => {
+        const d = m180_drag;
+        if (!d || d.track !== track) return;
+        m180_drag = null;
+        try { track.releasePointerCapture(d.pointerId); } catch (_) { /* noop */ }
+        m180ClearGhost();
+        m180SetReadout('');
+        if (!commit) return;
+        const a = Math.min(d.startSlot, d.curSlot);
+        const b = Math.max(d.startSlot, d.curSlot) + 1;
+        m180PushHistory();
+        m180ApplyRange(d.act, a, b, d.mode);
+        m180RenderBlocks();
+    };
+    track.addEventListener('pointerup', () => finish(true));
+    track.addEventListener('pointercancel', () => finish(false));
+}
+
+function m180RenderBlocks() {
+    [1, 2, 3, 4].forEach(act => {
+        const c = M180_ACTIVIDADES[act];
+        const host = document.querySelector(`.m180-track[data-act="${act}"] .m180-blocks`);
+        if (!host) return;
+        host.innerHTML = m180Runs(act).map(([a, b]) => {
+            const isNew = !m180_prev_keys.has(`${act}:${a}:${b}`);
+            const dur = formatMinToHHMM((b - a) * 15);
+            return `<div class="m180-block${isNew ? ' is-new' : ''}" style="left:${(a / 96) * 100}%; width:${((b - a) / 96) * 100}%;" title="${formatSlotToHHMM(a)} – ${formatSlotToHHMM(b)} · ${c.name} (${dur})"><b>${c.short}</b><i>${dur}</i></div>`;
+        }).join('');
+    });
+    m180_prev_keys = m180CurrentKeys();
+
+    // Barra resumen de 24h (todas las actividades en una sola línea)
+    const ov = document.getElementById('m180-overview');
+    if (ov) {
+        let html = '';
+        let s = 0;
+        while (s < 96) {
+            const act = m180_slots[s];
+            let e = s;
+            while (e < 96 && m180_slots[e] === act) e++;
+            html += `<span class="${act ? '' : 'is-empty'}" style="width:${((e - s) / 96) * 100}%; ${act ? `background:${M180_ACTIVIDADES[act].color};` : ''}"></span>`;
+            s = e;
+        }
+        ov.innerHTML = html;
+    }
+    recalcLibretaTotales();
 }
 
 function refreshAllSlotsVisuals() {
-    for (let s = 0; s < 96; s++) {
-        updateSlotVisuals(s);
-    }
+    m180_prev_keys = m180CurrentKeys(); // carga inicial: sin animación de entrada masiva
+    m180RenderBlocks();
 }
 
 function toggleLibretaBrushMode(enabled) {
     m180_brush_mode = Boolean(enabled);
-    const lbl = document.getElementById('m180-brush-label');
     const chk = document.getElementById('m180-toggle-brush');
     if (chk) chk.checked = m180_brush_mode;
-    if (lbl) {
-        if (m180_brush_mode) {
-            lbl.innerHTML = `<span class="text-success"><i class="bi bi-brush-fill me-1"></i> Modo Pincel: ACTIVO</span>`;
-        } else {
-            lbl.innerHTML = `<span>🖌️ Pintar al pasar (Hover)</span>`;
-        }
-    }
     const container = document.getElementById('m180-grid-scroll');
-    if (container) {
-        container.style.cursor = m180_brush_mode ? 'crosshair' : 'default';
-    }
+    if (container) container.classList.toggle('is-brush', m180_brush_mode);
 }
 
 function setLibretaActividad(actId) {
-    m180_actividad_seleccionada = actId;
+    /* compat: la marcación es directa por fila, no hay actividad "seleccionada" */
+}
+
+function libreta180hUndo() {
+    if (m180_locked || !m180_history.length) return;
+    m180_slots = m180_history.pop();
+    m180UpdateUndoBtn();
+    m180RenderBlocks();
 }
 
 function libreta180hAutoDescanso() {
-    let filled = 0;
+    if (m180_locked) return;
+    const empty = m180_slots.filter(s => s === 0).length;
+    if (!empty) return;
+    m180PushHistory();
     for (let s = 0; s < 96; s++) {
-        if (m180_slots[s] === 0) {
-            m180_slots[s] = 4;
-            updateSlotVisuals(s);
-            filled++;
-        }
+        if (m180_slots[s] === 0) m180_slots[s] = 4;
     }
-    recalcLibretaTotales();
+    m180RenderBlocks();
     if (typeof showToast === 'function') {
-        showToast(`Se rellenaron ${filled} tramos (${(filled * 15) / 60} hrs) como Descanso`, "info");
+        showToast(`Se rellenaron ${empty} tramos (${(empty * 15) / 60} hrs) como Descanso`, "info");
     }
 }
 
 function limpiarGrilla180h() {
+    if (m180_locked || !m180_slots.some(s => s !== 0)) return;
+    m180PushHistory();
     m180_slots.fill(0);
-    refreshAllSlotsVisuals();
-    recalcLibretaTotales();
+    m180RenderBlocks();
     if (typeof showToast === 'function') {
-        showToast("Grilla reiniciada a cero", "info");
+        showToast("Grilla reiniciada · Ctrl+Z para deshacer", "info");
     }
 }
 
@@ -2486,32 +2536,29 @@ function recalcLibretaTotales() {
     const minEfec = minCond + minAux;
     const minTot = minCond + minEsp + minAux + minDesc;
 
-    const elTot1 = document.getElementById('m180-tot-act-1');
-    if (elTot1) elTot1.textContent = formatMinToHHMM(minCond);
-    const elTot2 = document.getElementById('m180-tot-act-2');
-    if (elTot2) elTot2.textContent = formatMinToHHMM(minEsp);
-    const elTot3 = document.getElementById('m180-tot-act-3');
-    if (elTot3) elTot3.textContent = formatMinToHHMM(minAux);
-    const elTot4 = document.getElementById('m180-tot-act-4');
-    if (elTot4) elTot4.textContent = formatMinToHHMM(minDesc);
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setTxt('m180-tot-act-1', formatMinToHHMM(minCond));
+    setTxt('m180-tot-act-2', formatMinToHHMM(minEsp));
+    setTxt('m180-tot-act-3', formatMinToHHMM(minAux));
+    setTxt('m180-tot-act-4', formatMinToHHMM(minDesc));
 
+    const hrs = ' <span class="fs-6 fw-normal text-muted">hrs</span>';
     const elEfectiva = document.getElementById('m180-res-jornada-efectiva');
-    if (elEfectiva) elEfectiva.innerHTML = `${formatMinToHHMM(minEfec)} <span class="fs-6 fw-normal text-muted">hrs</span>`;
-
+    if (elEfectiva) elEfectiva.innerHTML = formatMinToHHMM(minEfec) + hrs;
     const elEspera = document.getElementById('m180-res-horas-espera');
-    if (elEspera) elEspera.innerHTML = `${formatMinToHHMM(minEsp)} <span class="fs-6 fw-normal text-muted">hrs</span>`;
-
+    if (elEspera) elEspera.innerHTML = formatMinToHHMM(minEsp) + hrs;
     const elDesc = document.getElementById('m180-res-horas-descanso');
-    if (elDesc) elDesc.innerHTML = `${formatMinToHHMM(minDesc)} <span class="fs-6 fw-normal text-muted">hrs</span>`;
+    if (elDesc) elDesc.innerHTML = formatMinToHHMM(minDesc) + hrs;
 
-    const elTotDia = document.getElementById('m180-tot-acumulado-dia');
-    if (elTotDia) elTotDia.textContent = `${formatMinToHHMM(minTot)} h (${(minTot/60).toFixed(1)} / 24.0 h)`;
+    setTxt('m180-tot-acumulado-dia', `${formatMinToHHMM(minTot)} / 24h`);
+    const prog = document.getElementById('m180-progress-fill');
+    if (prog) prog.style.transform = `scaleX(${Math.min(minTot / 1440, 1)})`;
 
     const msgCuadre = document.getElementById('m180-msg-cuadre');
     if (msgCuadre) {
         if (minTot === 1440) {
             msgCuadre.className = 'badge bg-success-subtle text-success border border-success-subtle px-2 py-1';
-            msgCuadre.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Cuadre Completo: 24:00 hrs';
+            msgCuadre.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Cuadre completo: 24:00 hrs';
         } else if (minTot < 1440) {
             const faltan = 1440 - minTot;
             msgCuadre.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1';
@@ -2526,11 +2573,105 @@ function recalcLibretaTotales() {
     if (alertaFatiga) {
         if (maxConsecCond > 20) {
             alertaFatiga.classList.remove('d-none');
-            alertaFatiga.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: Se detectó conducción continua de ${(maxConsecCond * 15 / 60).toFixed(2)} hrs (Límite legal: 5.0 hrs continuas sin descanso).`;
+            alertaFatiga.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: conducción continua de ${(maxConsecCond * 15 / 60).toFixed(2)} hrs (límite legal: 5.0 hrs continuas sin descanso).`;
         } else {
             alertaFatiga.classList.add('d-none');
         }
     }
+}
+
+function m180SetLocked(locked) {
+    m180_locked = Boolean(locked);
+    const modalEl = document.getElementById('modalMarcacion180h');
+    if (modalEl) modalEl.classList.toggle('m180-locked', m180_locked);
+    const banner = document.getElementById('m180-lock-banner');
+    if (banner) banner.classList.toggle('d-none', !m180_locked);
+    const obs = document.getElementById('m180-observaciones');
+    if (obs) obs.disabled = m180_locked;
+    if (m180_locked) toggleLibretaBrushMode(false);
+    const brush = document.getElementById('m180-toggle-brush');
+    if (brush) brush.disabled = m180_locked;
+    document.querySelectorAll('#modalMarcacion180h .m180-edit-btn').forEach(b => b.classList.toggle('d-none', m180_locked));
+    const wrap = document.getElementById('m180-brush-wrap');
+    if (wrap) wrap.classList.toggle('d-none', m180_locked);
+    const grp = document.getElementById('m180-save-group');
+    if (grp) grp.classList.toggle('d-none', m180_locked);
+    const cancel = document.getElementById('m180-btn-cancel');
+    if (cancel) cancel.textContent = m180_locked ? 'Cerrar' : 'Cancelar';
+    const reabrir = document.getElementById('m180-btn-reabrir');
+    if (reabrir) reabrir.classList.toggle('d-none', !(m180_locked && m180EsSuperAdmin()));
+}
+
+function m180EsSuperAdmin() {
+    try { return JSON.parse(localStorage.getItem('user'))?.is_superuser === true; } catch (_) { return false; }
+}
+
+async function libreta180hReabrir() {
+    if (!m180_locked || !m180EsSuperAdmin()) return;
+    const empId = parseInt(document.getElementById('m180-empleado-id').value);
+    const dateStr = document.getElementById('m180-fecha-str').value;
+    const ok = await uiConfirm('¿Reabrir este día?\n\nVuelve a borrador y se podrá editar de nuevo. Queda registrado quién lo reabrió.', { confirmText: 'Reabrir día', danger: false });
+    if (!ok) return;
+    const btn = document.getElementById('m180-btn-reabrir');
+    if (btn) btn.disabled = true;
+    try {
+        const resp = await fetch('/api/asistencia/libreta-180h/reabrir/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empleado_id: empId, fecha: dateStr })
+        });
+        if (!resp.ok) {
+            let msg = `Error ${resp.status}`;
+            try { const d = await resp.json(); if (typeof d.detail === 'string') msg = d.detail; } catch (_) { /* sin cuerpo */ }
+            throw new Error(msg);
+        }
+        m180SetBadge('borrador');
+        m180SetLocked(false);
+        if (typeof showToast === 'function') showToast('Día reabierto: ya puedes editarlo', 'success');
+        if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+    } catch (e) {
+        Swal.fire({ icon: 'error', title: 'No se pudo reabrir', text: e.message, confirmButtonColor: '#059669' });
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function m180SetBadge(kind) {
+    const badge = document.getElementById('m180-badge-estado');
+    if (!badge) return;
+    if (kind === 'cerrado') {
+        badge.className = 'badge bg-success-subtle text-success-emphasis border border-success px-2 py-1';
+        badge.textContent = 'DÍA CERRADO';
+    } else if (kind === 'borrador') {
+        badge.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1';
+        badge.textContent = 'BORRADOR / ABIERTO';
+    } else {
+        badge.className = 'badge bg-secondary-subtle text-secondary-emphasis border border-secondary px-2 py-1';
+        badge.textContent = 'SIN REGISTRO';
+    }
+}
+
+function m180AttachCloseGuard(modalEl) {
+    if (modalEl.dataset.m180Guard) return;
+    modalEl.dataset.m180Guard = '1';
+    modalEl.addEventListener('hide.bs.modal', (e) => {
+        if (!m180_dirty || m180_force_close || m180_locked) return;
+        e.preventDefault();
+        Swal.fire({
+            title: 'Hay cambios sin guardar',
+            text: 'Si cierras ahora se perderán los tramos marcados.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            confirmButtonText: 'Descartar y cerrar',
+            cancelButtonText: 'Seguir editando'
+        }).then(r => {
+            if (r.isConfirmed) {
+                m180_force_close = true;
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+        });
+    });
 }
 
 async function proceedToMarcacion180h() {
@@ -2549,54 +2690,45 @@ async function proceedToMarcacion180h() {
         initLibreta180hGrid();
     }
 
-    setLibretaActividad(1);
+    m180_history = [];
+    m180_dirty = false;
+    m180_force_close = false;
+    m180UpdateUndoBtn();
+    m180_slots = new Array(96).fill(0);
+    document.getElementById('m180-observaciones').value = '';
+    m180SetBadge('sin');
+    m180SetLocked(false);
 
     try {
         const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`);
         if (resp.ok) {
             const data = await resp.json();
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
-                m180_slots = [...data.slots_96];
+                m180_slots = data.slots_96.map(v => Number(v) || 0);
                 document.getElementById('m180-observaciones').value = data.observaciones || '';
-                const badge = document.getElementById('m180-badge-estado');
-                if (badge) {
-                    if (data.cerrado) {
-                        badge.className = 'badge bg-success-subtle text-success-emphasis border border-success px-2 py-1';
-                        badge.textContent = 'DÍA CERRADO';
-                    } else {
-                        badge.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1';
-                        badge.textContent = 'BORRADOR / ABIERTO';
-                    }
-                }
-            } else {
-                m180_slots = new Array(96).fill(0);
-                document.getElementById('m180-observaciones').value = '';
-                const badge = document.getElementById('m180-badge-estado');
-                if (badge) {
-                    badge.className = 'badge bg-secondary-subtle text-secondary-emphasis border border-secondary px-2 py-1';
-                    badge.textContent = 'SIN REGISTRO';
-                }
+                m180SetBadge(Number(data.cerrado) ? 'cerrado' : 'borrador');
+                m180SetLocked(Number(data.cerrado) === 1);
             }
         } else {
             console.warn(`GET libreta-180h returned status ${resp.status}`);
-            m180_slots = new Array(96).fill(0);
+            if (typeof showToast === 'function') showToast('No se pudo cargar el registro guardado de este día', 'warning');
         }
     } catch (e) {
         console.warn("No se pudo cargar registro previo de libreta 180h:", e);
-        m180_slots = new Array(96).fill(0);
+        if (typeof showToast === 'function') showToast('No se pudo cargar el registro guardado de este día', 'warning');
     }
 
     refreshAllSlotsVisuals();
-    recalcLibretaTotales();
 
     const modalEl = document.getElementById('modalMarcacion180h');
     if (modalEl) {
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+        m180AttachCloseGuard(modalEl);
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 }
 
 async function guardarLibreta180h(cerrarDia = false) {
+    if (m180_locked) return;
     const empId = parseInt(document.getElementById('m180-empleado-id').value);
     const dateStr = document.getElementById('m180-fecha-str').value;
     const obs = document.getElementById('m180-observaciones').value.trim();
@@ -2604,14 +2736,14 @@ async function guardarLibreta180h(cerrarDia = false) {
     const minTot = m180_slots.filter(s => s > 0).length * 15;
     if (cerrarDia && minTot < 1440) {
         const result = await Swal.fire({
-            title: "Jornada Diaria Incompleta",
+            title: "Jornada diaria incompleta",
             html: `Se han registrado <b>${formatMinToHHMM(minTot)} hrs</b> de las 24:00 hrs requeridas por la Libreta del Art. 25 bis DT.<br><br>¿Deseas rellenar automáticamente los tramos vacíos con <b>Descanso</b> antes de cerrar el día?`,
             icon: "warning",
             showCancelButton: true,
             showDenyButton: true,
             confirmButtonColor: "#059669",
             denyButtonColor: "#3b82f6",
-            confirmButtonText: "Rellenar Descanso y Cerrar",
+            confirmButtonText: "Rellenar descanso y cerrar",
             denyButtonText: "Cerrar con faltante",
             cancelButtonText: "Seguir editando"
         });
@@ -2631,9 +2763,9 @@ async function guardarLibreta180h(cerrarDia = false) {
         observaciones: obs
     };
 
+    const buttons = document.querySelectorAll('#modalMarcacion180h .m180-save-btn');
     try {
-        const btnSave = document.getElementById('btn-cerrar-guardar-180h');
-        if (btnSave) btnSave.disabled = true;
+        buttons.forEach(b => b.disabled = true);
 
         const resp = await fetch('/api/asistencia/libreta-180h/', {
             method: 'POST',
@@ -2660,10 +2792,9 @@ async function guardarLibreta180h(cerrarDia = false) {
             throw new Error(errMsg);
         }
 
+        m180_dirty = false;
         if (typeof showToast === 'function') {
-            showToast(cerrarDia ? "Día cerrado y guardado correctamente en Libreta Art. 25 bis" : "Borrador de Libreta 180h guardado", "success");
-        } else {
-            alert(cerrarDia ? "Día cerrado y guardado exitosamente" : "Borrador guardado");
+            showToast(cerrarDia ? "Día cerrado y guardado en la Libreta Art. 25 bis" : "Borrador de Libreta 180h guardado", "success");
         }
 
         const modalEl = document.getElementById('modalMarcacion180h');
@@ -2680,18 +2811,19 @@ async function guardarLibreta180h(cerrarDia = false) {
 
     } catch (e) {
         console.error("Error guardando Libreta 180h:", e);
-        alert("Error al guardar: " + e.message);
+        Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: e.message, confirmButtonColor: '#059669' });
     } finally {
-        const btnSave = document.getElementById('btn-cerrar-guardar-180h');
-        if (btnSave) btnSave.disabled = false;
+        buttons.forEach(b => b.disabled = false);
     }
 }
 
 window.proceedToMarcacion180h = proceedToMarcacion180h;
 window.setLibretaActividad = setLibretaActividad;
 window.libreta180hAutoDescanso = libreta180hAutoDescanso;
+window.libreta180hUndo = libreta180hUndo;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
+window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 
 // ═══════════════════════════════════════════════════════════════════

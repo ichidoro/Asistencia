@@ -220,7 +220,7 @@ const AuthService = {
                 // Rol con badge
                 if (ddRol) {
                     const alcance = user.alcance_global ? 'Alcance Global' : 'Zonal';
-                    ddRol.innerHTML = `${user.rol_nombre || 'Usuario'} <span class="badge ${user.alcance_global ? 'bg-primary' : 'bg-secondary'}" style="font-size:0.6rem; vertical-align:middle;">${alcance}</span>`;
+                    ddRol.innerHTML = `${user.rol_nombre || 'Usuario'} <span class="badge ${user.alcance_global ? 'bg-primary' : 'bg-secondary'}" style="font-size: 0.75rem; vertical-align:middle;">${alcance}</span>`;
                 }
 
                 // Áreas

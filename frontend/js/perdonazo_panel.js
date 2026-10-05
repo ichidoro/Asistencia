@@ -20,7 +20,7 @@
             transition: right 0.35s cubic-bezier(.4,0,.2,1);
             display: flex; flex-direction: column;
             border-left: 3px solid #10b981;
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font-sans);
             overflow: hidden;
         }
         #panel-perdonazo.abierto { right: 0; }
@@ -49,7 +49,7 @@
         #panel-perdonazo .emp-row:hover { background: #f0fdf4; border-color: #86efac; }
         #panel-perdonazo .emp-row.seleccionado { background: #dcfce7; border-color: #22c55e; }
         #panel-perdonazo .badge-estado {
-            font-size: 0.6rem; font-weight: 700; padding: 2px 6px;
+            font-size: 0.75rem; font-weight: 700; padding: 2px 6px;
             border-radius: 999px; display: inline-block;
         }
         #panel-perdonazo .badge-deuda { background: #fee2e2; color: #dc2626; }
@@ -111,7 +111,7 @@
                         <i class="bi bi-x-circle"></i> Revocar
                     </button>
                 </div>
-                <div id="panel-seleccion-info" style="text-align:center;font-size:0.7rem;color:#6b7280;margin-top:6px;">Seleccione empleados arriba</div>
+                <div id="panel-seleccion-info" style="text-align:center;font-size: 0.75rem;color:#6b7280;margin-top:6px;">Seleccione empleados arriba</div>
             </div>
         `;
         document.body.appendChild(panel);
@@ -295,7 +295,7 @@ window.renderizarListaPerdonazo = function() {
         if (hasAtrasos) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#374151;background:#f1f5f9;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
                 <span>⏳ ATRASOS</span>
-                <span style="font-size:0.6rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${atrasosPendientes.length}</span>
+                <span style="font-size: 0.75rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${atrasosPendientes.length}</span>
             </div>`;
 
             // Pendientes
@@ -315,7 +315,7 @@ window.renderizarListaPerdonazo = function() {
 
             // Condonados
             if (atrasosCondonados.length > 0) {
-                html += `<div style="font-size:0.65rem;font-weight:700;color:#16a34a;margin:6px 0 4px;padding-left:10px;">Atrasos Condonados (${atrasosCondonados.length})</div>`;
+                html += `<div style="font-size: 0.75rem;font-weight:700;color:#16a34a;margin:6px 0 4px;padding-left:10px;">Atrasos Condonados (${atrasosCondonados.length})</div>`;
                 for (const { emp, asist } of atrasosCondonados) {
                     const isSel = window._perdonazoState.seleccionados.has(emp.id);
                     html += `
@@ -340,7 +340,7 @@ window.renderizarListaPerdonazo = function() {
         if (hasSalidas) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#374151;background:#f1f5f9;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:18px 0 6px;display:flex;justify-content:space-between;align-items:center;">
                 <span>🚶 SALIDAS ADELANTADAS</span>
-                <span style="font-size:0.6rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${salidasPendientes.length}</span>
+                <span style="font-size: 0.75rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${salidasPendientes.length}</span>
             </div>`;
 
             // Pendientes
@@ -360,7 +360,7 @@ window.renderizarListaPerdonazo = function() {
 
             // Condonados
             if (salidasCondonadas.length > 0) {
-                html += `<div style="font-size:0.65rem;font-weight:700;color:#16a34a;margin:6px 0 4px;padding-left:10px;">Salidas Condonadas (${salidasCondonadas.length})</div>`;
+                html += `<div style="font-size: 0.75rem;font-weight:700;color:#16a34a;margin:6px 0 4px;padding-left:10px;">Salidas Condonadas (${salidasCondonadas.length})</div>`;
                 for (const { emp, asist } of salidasCondonadas) {
                     const isSel = window._perdonazoState.seleccionados.has(emp.id);
                     html += `
@@ -385,7 +385,7 @@ window.renderizarListaPerdonazo = function() {
         if (hasAusencias) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#92400e;background:#fef3c7;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
                 <span>🚪 CIERRES DE TURNO / AUSENCIAS (INASISTENCIA ➔ OK)</span>
-                <span style="font-size:0.6rem;background:#fde68a;padding:2px 6px;border-radius:999px;color:#92400e;">Pendientes: ${ausenciasPendientes.length}</span>
+                <span style="font-size: 0.75rem;background:#fde68a;padding:2px 6px;border-radius:999px;color:#92400e;">Pendientes: ${ausenciasPendientes.length}</span>
             </div>`;
 
             // Pendientes
@@ -399,7 +399,7 @@ window.renderizarListaPerdonazo = function() {
                         <div style="font-weight:600;font-size:0.8rem;color:#1e293b;">${emp.nombre_completo || emp.nombre || 'Empleado'}</div>
                         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">
                             <span class="badge-estado badge-deuda">Inasistencia ${horarioTeorico}</span>
-                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:0.65rem;">Candidato a Cierre de Turno</span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size: 0.75rem;">Candidato a Cierre de Turno</span>
                         </div>
                     </div>
                 </div>`;
@@ -407,7 +407,7 @@ window.renderizarListaPerdonazo = function() {
 
             // Condonados
             if (ausenciasCondonadas.length > 0) {
-                html += `<div style="font-size:0.65rem;font-weight:700;color:#16a34a;margin:10px 0 4px;padding-left:10px;">Turnos Condonados (${ausenciasCondonadas.length})</div>`;
+                html += `<div style="font-size: 0.75rem;font-weight:700;color:#16a34a;margin:10px 0 4px;padding-left:10px;">Turnos Condonados (${ausenciasCondonadas.length})</div>`;
                 for (const { emp, asist } of ausenciasCondonadas) {
                     const isSel = window._perdonazoState.seleccionados.has(emp.id);
                     html += `

@@ -504,11 +504,18 @@ async def system_health() -> Dict[str, Any]:
     except Exception:
         cloud_ok = False
 
+    try:
+        from backend.services import sync_monitor
+        marcaciones = await sync_monitor.estado_actual()
+    except Exception:
+        marcaciones = None
+
     result = {
         "status": "ok" if local_ok and cloud_ok else "degraded",
         "local_db": "online" if local_ok else "offline",
         "cloud_db": "online" if cloud_ok else "offline",
-        "sync_enabled": db.use_turso
+        "sync_enabled": db.use_turso,
+        "marcaciones": marcaciones
     }
 
     _health_cache["data"] = result
@@ -713,7 +720,9 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
     # y ajustes de turnos que cruzan la medianoche.
     from datetime import timedelta
     hoy = _dt.now()
-    ayer = hoy - timedelta(days=1)
+    # Los primeros 3 días del mes se repasan también los últimos días del mes anterior:
+    # así una caída larga de EasyTime que cruce el cambio de mes no deja marcas sin traer.
+    ayer = hoy - timedelta(days=3 if hoy.day <= 3 else 1)
     
     fecha_inicio = ayer.strftime("%Y-%m-%d")
     fecha_fin = hoy.strftime("%Y-%m-%d")
@@ -726,6 +735,16 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
             areas=request.areas,
             force_recalculate=True # Asegura que se recalculen las horas del día de ayer/hoy
         )
+        error_sync = stats.get('error_global') if isinstance(stats, dict) else None
+        from backend.services import sync_monitor
+        await sync_monitor.registrar_ciclo(
+            ok=not error_sync,
+            nuevas=int(stats.get('marcaciones_nuevas', 0)) if isinstance(stats, dict) else 0,
+            error=error_sync,
+        )
+        if error_sync:
+            logger.error(f"❌ [Cron Sync] La sincronización terminó con error: {error_sync}")
+            return {"status": "error", "message": f"La sincronización falló: {error_sync}", "stats": stats}
         logger.success(f"✅ [Cron Sync] Sincronización automática completada: {stats}")
         return {
             "status": "ok",
@@ -734,6 +753,8 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
         }
     except Exception as e:
         logger.error(f"❌ [Cron Sync] Error en ejecución automática: {e}")
+        from backend.services import sync_monitor
+        await sync_monitor.registrar_ciclo(ok=False, error=str(e))
         raise HTTPException(
             status_code=500,
             detail=f"Error en sincronización automática: {str(e)}"

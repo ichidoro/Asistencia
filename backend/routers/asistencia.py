@@ -3,6 +3,7 @@ Router - Asistencia
 Endpoints para procesar y consultar asistencia
 """
 
+import json
 from backend.core.fast_json import fast_json
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
@@ -3081,6 +3082,46 @@ async def get_libreta_180h(
         raise HTTPException(status_code=500, detail=f"Error obteniendo Libreta 180h: {str(e)}")
 
 
+class Libreta180hReabrirRequest(BaseModel):
+    empleado_id: int
+    fecha: str
+
+
+@router.post("/libreta-180h/reabrir/")
+async def reabrir_libreta_180h(
+    payload: Libreta180hReabrirRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Reabre un día cerrado de la libreta Art. 25 bis (vuelve a borrador, conserva los tramos).
+    Solo super administradores.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Solo un super administrador puede reabrir un día cerrado.")
+    try:
+        row = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
+        if not row:
+            raise HTTPException(status_code=404, detail="No hay libreta registrada para ese día.")
+        if int(row.get('cerrado') or 0) == 0:
+            return {"status": "success", "message": "El día ya estaba abierto.", "cerrado": 0}
+
+        val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+        await service.repository.db.execute(
+            "UPDATE libreta_art25bis_dias SET cerrado = 0, validador_id = ?, updated_at = datetime('now') "
+            "WHERE empleado_id = ? AND fecha = ?",
+            (val_id, payload.empleado_id, payload.fecha)
+        )
+        await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
+        logger.warning(f"🔓 Libreta 180h reabierta por {current_user.username}: emp={payload.empleado_id} fecha={payload.fecha}")
+        return {"status": "success", "message": "Día reabierto: vuelve a borrador.", "cerrado": 0}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error en reabrir_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
+        raise HTTPException(status_code=500, detail=f"Error reabriendo Libreta 180h: {str(e)}")
+
+
 @router.post("/libreta-180h/")
 async def save_libreta_180h(
     payload: Libreta180hRequest,
@@ -3091,6 +3132,10 @@ async def save_libreta_180h(
     Guarda la libreta diaria de 96 slots, persiste cómputos y sincroniza en asistencias.
     """
     try:
+        existente = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
+        if existente and int(existente.get('cerrado') or 0) == 1:
+            raise HTTPException(status_code=409, detail="El día está cerrado: la libreta es de solo lectura.")
+
         slots = list(payload.slots_96)
         if len(slots) < 96:
             slots.extend([0] * (96 - len(slots)))
@@ -3148,6 +3193,8 @@ async def save_libreta_180h(
                 "resultado_asistencia": res_dia
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"❌ Error en save_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
         raise HTTPException(status_code=500, detail=f"Error guardando Libreta 180h: {str(e)}")

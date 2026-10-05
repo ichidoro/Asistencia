@@ -197,7 +197,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
         const monthStr = String(month).padStart(2, '0');
         const dateStr = `${day}-${monthStr}-${year}`;
 
-        headerHtml += `<th style="background: ${isWeekend ? '#f8fafc' : ''}; text-align: center; font-size: 10px;">
+        headerHtml += `<th style="background: ${isWeekend ? '#f8fafc' : ''}; text-align: center; font-size: 0.75rem;">
             <div style="font-weight: 600;">${dateStr}</div>
             <small style="color: #64748b;">${dayName}</small>
         </th>`;
@@ -223,7 +223,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
         bodyHtml += `<tr>`;
         bodyHtml += `<td class="sticky-col">
             <div class="fw-bold text-uppercase" style="font-size: 11px;">${emp.nombre}</div>
-            <div class="text-muted" style="font-size: 9px;">${emp.area}</div>
+            <div class="text-muted" style="font-size: 0.75rem;">${emp.area}</div>
         </td>`;
 
         emp.dias.forEach(dia => {
@@ -253,7 +253,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
                 cellContent = `
                     <div class="turno-badge-cell ${classColor} ${isLibre ? 'opacity-75' : ''}" 
                          title="${turno.nombre}" 
-                         style="width: 100%; height: auto; padding: 4px 2px; font-size: 9px; line-height: 1; ${highlightStyle} ${dimStyle}">
+                         style="width: 100%; height: auto; padding: 4px 2px; font-size: 0.75rem; line-height: 1; ${highlightStyle} ${dimStyle}">
                         ${displayLabel}
                     </div>
                 `;
@@ -277,7 +277,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
         [...turnosInMatrix.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach((info) => {
             legendHtml += `
                 <div class="d-flex align-items-center gap-1">
-                    <div class="turno-badge-cell ${info.class}" style="width: auto; height: 20px; font-size: 9px; padding: 0 8px;">
+                    <div class="turno-badge-cell ${info.class}" style="width: auto; height: 20px; font-size: 0.75rem; padding: 0 8px;">
                         ${info.nombre}
                     </div>
                 </div>

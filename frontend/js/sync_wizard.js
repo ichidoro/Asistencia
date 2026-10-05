@@ -608,7 +608,7 @@ function renderWizardStep2() {
             // Mostrar a qué área(s) pertenece este cargo como ayuda visual
             const areasTag = (cargosPorArea[cargo] || [])
                 .filter(a => areasSeleccionadas.has(a))
-                .map(a => `<span class="badge bg-secondary me-1" style="font-size:0.7rem;">${a}</span>`)
+                .map(a => `<span class="badge bg-secondary me-1" style="font-size: 0.75rem;">${a}</span>`)
                 .join('');
 
             const tr = document.createElement('tr');
@@ -658,7 +658,7 @@ function renderWizardStep2() {
             const isImport = window._wizardState.resoluciones.cargos_conocidos[cargo] !== false;
             const areasTag = (cargosConocidosPorArea[cargo] || [])
                 .filter(a => areasSeleccionadas.has(a))
-                .map(a => `<span class="badge bg-secondary me-1" style="font-size:0.7rem;">${a}</span>`)
+                .map(a => `<span class="badge bg-secondary me-1" style="font-size: 0.75rem;">${a}</span>`)
                 .join('');
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -2975,7 +2975,7 @@ window.renderWizardStep10 = async function() {
                            style="width: 120px;"
                            onchange="window.saveTempIndividualFecha(${emp.id}, this.value)">
                     <button type="button" class="btn btn-outline-secondary btn-sm" 
-                            onclick="window.setFechaAsigHoy(${emp.id})" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;">
+                            onclick="window.setFechaAsigHoy(${emp.id})" style="padding: 0.15rem 0.35rem; font-size: 0.75rem;">
                         Hoy
                     </button>
                 </div>

@@ -16,6 +16,7 @@
     <link rel="apple-touch-icon" href="/static/assets/img/icons/icon-192.png">
     <!-- Premium UI (Fase V11) -->
     <script src="/static/js/sweetalert2.all.min.js" defer></script>
+    <script src="/static/js/ui_dialogs.js?v={{ startup_id }}" defer></script>
 
     <title>Sistema de Gestión de Asistencia</title>
     
@@ -42,9 +43,7 @@
     <script src="/static/js/auth.js?v={{ startup_id }}" defer></script>
     <script src="/static/js/update_banner.js?v={{ startup_id }}" defer></script>
     
-    <!-- PDF Generation Libraries -->
-    <script src="/static/js/jspdf.umd.min.js" defer></script>
-    <script src="/static/js/jspdf.plugin.autotable.min.js" defer></script>
+    <!-- jsPDF, html5-qrcode y Tesseract se cargan bajo demanda (ui_dialogs.js → ensureLib) -->
 
     <!-- Critical Splash CSS (Prevents Initial Flash) -->
     <style>
@@ -225,6 +224,7 @@
 
         <!-- Main Content -->
         <main class="main-content" id="main-content" role="main">
+            <h1 class="visually-hidden-h1">Sistema de Gestión de Asistencia</h1>
             <!-- Header Principal -->
             <header class="header">
                 <div class="header-left">
@@ -279,12 +279,12 @@
                                 <div class="d-flex align-items-center gap-2 mb-2" style="font-size:0.78rem;">
                                     <i class="bi bi-geo-alt" style="color:var(--primary-color); font-size:1rem;"></i>
                                     <span class="text-muted">Áreas:</span>
-                                    <span class="fw-600" id="dropdown-areas" style="font-size:0.72rem;">—</span>
+                                    <span class="fw-600" id="dropdown-areas" style="font-size: 0.75rem;">—</span>
                                 </div>
                                 <div class="d-flex align-items-center gap-2" style="font-size:0.78rem;">
                                     <i class="bi bi-clock-history" style="color:var(--primary-color); font-size:1rem;"></i>
                                     <span class="text-muted">Último acceso:</span>
-                                    <span class="fw-600" id="dropdown-ultimo-acceso" style="font-size:0.72rem;">—</span>
+                                    <span class="fw-600" id="dropdown-ultimo-acceso" style="font-size: 0.75rem;">—</span>
                                 </div>
                             </div>
                             <hr class="my-0">
@@ -297,8 +297,8 @@
                             <hr class="my-0">
                             <!-- Footer: versión + cerrar sesión -->
                             <div style="padding:10px 16px; background:#f8fafc;" class="d-flex justify-content-between align-items-center">
-                                <span style="font-size:0.65rem; color:#94a3b8; font-weight:600;">v2.8 • Producción</span>
-                                <a class="btn btn-sm btn-outline-danger fw-bold" href="#" onclick="AuthService.logout()" style="font-size:0.72rem; border-radius:8px; padding:4px 14px;">
+                                <span style="font-size: 0.75rem; color:#94a3b8; font-weight:600;">v2.8 • Producción</span>
+                                <a class="btn btn-sm btn-outline-danger fw-bold" href="#" onclick="AuthService.logout()" style="font-size: 0.75rem; border-radius:8px; padding:4px 14px;">
                                     <i class="bi bi-box-arrow-right me-1"></i>Salir
                                 </a>
                             </div>
@@ -363,24 +363,24 @@
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-gender-ambiguous me-1 text-primary"></i>Paridad de Género</h6>
-                                        <span class="badge bg-light text-muted" style="font-size: 0.65rem;" title="Distribución de género de la dotación activa">ℹ️</span>
+                                        <span class="badge bg-light text-muted" style="font-size: 0.75rem;" title="Distribución de género de la dotación activa">ℹ️</span>
                                     </div>
-                                    <p class="text-muted mb-2" style="font-size: 0.68rem; line-height: 1.3;">Proporción hombres/mujeres del personal activo. Un ratio equilibrado indica diversidad organizacional.</p>
+                                    <p class="text-muted mb-2" style="font-size: 0.75rem; line-height: 1.3;">Proporción hombres/mujeres del personal activo. Un ratio equilibrado indica diversidad organizacional.</p>
                                     <div class="d-flex justify-content-around align-items-center mb-2">
                                         <div class="text-center">
                                             <i class="bi bi-gender-male text-primary" style="font-size: 1.5rem;"></i>
                                             <div class="fw-bold fs-5" id="lbl-paridad-hombres">0</div>
-                                            <small class="text-muted" style="font-size: 0.7rem;">Masculino</small>
+                                            <small class="text-muted" style="font-size: 0.75rem;">Masculino</small>
                                         </div>
                                         <div class="text-center">
                                             <i class="bi bi-gender-female" style="font-size: 1.5rem; color: #ec4899;"></i>
                                             <div class="fw-bold fs-5" id="lbl-paridad-mujeres">0</div>
-                                            <small class="text-muted" style="font-size: 0.7rem;">Femenino</small>
+                                            <small class="text-muted" style="font-size: 0.75rem;">Femenino</small>
                                         </div>
                                         <div class="text-center border-start ps-2">
                                             <i class="bi bi-people-fill text-dark" style="font-size: 1.5rem;"></i>
                                             <div class="fw-bold fs-5" id="lbl-paridad-total">0</div>
-                                            <small class="text-muted" style="font-size: 0.7rem;">Total</small>
+                                            <small class="text-muted" style="font-size: 0.75rem;">Total</small>
                                         </div>
                                     </div>
                                     <div class="progress" style="height: 10px; border-radius: 5px;">
@@ -388,8 +388,8 @@
                                         <div id="bar-paridad-f" class="progress-bar" style="width: 50%; background: #ec4899;"></div>
                                     </div>
                                     <div class="d-flex justify-content-between mt-1">
-                                        <small class="fw-bold" style="color: #3b82f6; font-size: 0.7rem;" id="lbl-paridad-pct-m">0%</small>
-                                        <small class="fw-bold" style="color: #ec4899; font-size: 0.7rem;" id="lbl-paridad-pct-f">0%</small>
+                                        <small class="fw-bold" style="color: #3b82f6; font-size: 0.75rem;" id="lbl-paridad-pct-m">0%</small>
+                                        <small class="fw-bold" style="color: #ec4899; font-size: 0.75rem;" id="lbl-paridad-pct-f">0%</small>
                                     </div>
                                 </div>
                             </div>
@@ -399,9 +399,9 @@
                             <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #8b5cf6 !important;">
                                 <div class="card-body p-3">
                                     <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-bar-chart-fill me-1" style="color: #8b5cf6;"></i>Distribución por Edades</h6>
-                                    <p class="text-muted mb-1" style="font-size: 0.68rem; line-height: 1.3;">Pirámide etaria del personal. Bandas mayoritarias indican concentración generacional.</p>
+                                    <p class="text-muted mb-1" style="font-size: 0.75rem; line-height: 1.3;">Pirámide etaria del personal. Bandas mayoritarias indican concentración generacional.</p>
                                     <div class="d-flex align-items-center mb-1">
-                                        <span class="badge bg-light text-dark" style="font-size: 0.7rem;">Edad Promedio: <strong id="lbl-edad-promedio">0</strong> años</span>
+                                        <span class="badge bg-light text-dark" style="font-size: 0.75rem;">Edad Promedio: <strong id="lbl-edad-promedio">0</strong> años</span>
                                     </div>
                                     <div style="height: 105px; width: 100%;"><canvas id="chart-edades"></canvas></div>
                                 </div>
@@ -413,24 +413,24 @@
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-shield-check me-1 text-success"></i>Permanencia y Retención</h6>
-                                        <span class="badge rounded-pill" style="font-size: 0.65rem; background: #fef3c7; color: #92400e;" id="badge-rotacion">Rotación: 0%</span>
+                                        <span class="badge rounded-pill" style="font-size: 0.75rem; background: #fef3c7; color: #92400e;" id="badge-rotacion">Rotación: 0%</span>
                                     </div>
-                                    <p class="text-muted mb-2" style="font-size: 0.68rem; line-height: 1.3;">Antigüedad laboral segmentada. Alta concentración en >5 años indica estabilidad.</p>
+                                    <p class="text-muted mb-2" style="font-size: 0.75rem; line-height: 1.3;">Antigüedad laboral segmentada. Alta concentración en >5 años indica estabilidad.</p>
                                     <div class="d-flex flex-column gap-1">
                                         <div>
-                                            <div class="d-flex justify-content-between" style="font-size: 0.72rem;"><span>&lt; 1 año</span><span class="fw-bold text-info" id="seniority-1">0%</span></div>
+                                            <div class="d-flex justify-content-between" style="font-size: 0.75rem;"><span>&lt; 1 año</span><span class="fw-bold text-info" id="seniority-1">0%</span></div>
                                             <div class="progress" style="height: 5px;"><div id="bar-seniority-1" class="progress-bar bg-info" style="width: 0%"></div></div>
                                         </div>
                                         <div>
-                                            <div class="d-flex justify-content-between" style="font-size: 0.72rem;"><span>1 - 3 años</span><span class="fw-bold text-success" id="seniority-2">0%</span></div>
+                                            <div class="d-flex justify-content-between" style="font-size: 0.75rem;"><span>1 - 3 años</span><span class="fw-bold text-success" id="seniority-2">0%</span></div>
                                             <div class="progress" style="height: 5px;"><div id="bar-seniority-2" class="progress-bar bg-success" style="width: 0%"></div></div>
                                         </div>
                                         <div>
-                                            <div class="d-flex justify-content-between" style="font-size: 0.72rem;"><span>3 - 5 años</span><span class="fw-bold" style="color: #f59e0b;" id="seniority-3">0%</span></div>
+                                            <div class="d-flex justify-content-between" style="font-size: 0.75rem;"><span>3 - 5 años</span><span class="fw-bold" style="color: #f59e0b;" id="seniority-3">0%</span></div>
                                             <div class="progress" style="height: 5px;"><div id="bar-seniority-3" class="progress-bar" style="width: 0%; background: #f59e0b;"></div></div>
                                         </div>
                                         <div>
-                                            <div class="d-flex justify-content-between" style="font-size: 0.72rem;"><span>&gt; 5 años</span><span class="fw-bold text-danger" id="seniority-4">0%</span></div>
+                                            <div class="d-flex justify-content-between" style="font-size: 0.75rem;"><span>&gt; 5 años</span><span class="fw-bold text-danger" id="seniority-4">0%</span></div>
                                             <div class="progress" style="height: 5px;"><div id="bar-seniority-4" class="progress-bar bg-danger" style="width: 0%"></div></div>
                                         </div>
                                     </div>
@@ -443,14 +443,14 @@
                                 <div class="card-body p-3">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <h6 class="fw-bold text-muted mb-0" style="font-size: 0.8rem;"><i class="bi bi-file-earmark-text me-1" style="color: #f59e0b;"></i>Configuración Contractual</h6>
-                                        <span class="badge rounded-pill" style="font-size: 0.65rem; background: #fee2e2; color: #991b1b;" id="badge-vencer">0 por vencer</span>
+                                        <span class="badge rounded-pill" style="font-size: 0.75rem; background: #fee2e2; color: #991b1b;" id="badge-vencer">0 por vencer</span>
                                     </div>
-                                    <p class="text-muted mb-1" style="font-size: 0.68rem; line-height: 1.3;">Mix contractual vigente. Contratos próximos a vencer requieren gestión proactiva.</p>
+                                    <p class="text-muted mb-1" style="font-size: 0.75rem; line-height: 1.3;">Mix contractual vigente. Contratos próximos a vencer requieren gestión proactiva.</p>
                                     <div style="height: 115px; width: 100%; position: relative;">
                                         <canvas id="chart-contratos"></canvas>
                                         <div style="position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); text-align: center;">
                                             <div class="fw-bold fs-4" id="lbl-contratos-total">0</div>
-                                            <div style="font-size: 0.6rem; color: #94a3b8;">activos</div>
+                                            <div style="font-size: 0.75rem; color: #94a3b8;">activos</div>
                                         </div>
                                     </div>
                                 </div>
@@ -468,19 +468,19 @@
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <div>
                                             <h5 class="card-title fw-bold m-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Evolución de Asistencia y Puntualidad</h5>
-                                            <p class="text-muted mb-0" style="font-size: 0.72rem;">Tendencia diaria de asistencia vs puntualidad. La brecha entre ambas líneas indica indisciplina horaria sin inasistencia.</p>
+                                            <p class="text-muted mb-0" style="font-size: 0.75rem;">Tendencia diaria de asistencia vs puntualidad. La brecha entre ambas líneas indica indisciplina horaria sin inasistencia.</p>
                                         </div>
                                         <div class="d-flex gap-3">
                                             <div class="text-center px-3 py-1 rounded" style="background: #ecfdf5;">
-                                                <div class="small text-muted mb-0" style="font-size: 0.68rem;">Asistencia Real</div>
+                                                <div class="small text-muted mb-0" style="font-size: 0.75rem;">Asistencia Real</div>
                                                 <span class="fs-5 fw-bold text-success" id="kpi-asistencia-real">0%</span>
                                             </div>
                                             <div class="text-center px-3 py-1 rounded" style="background: #eff6ff;">
-                                                <div class="small text-muted mb-0" style="font-size: 0.68rem;">Puntualidad</div>
+                                                <div class="small text-muted mb-0" style="font-size: 0.75rem;">Puntualidad</div>
                                                 <span class="fs-5 fw-bold" style="color: #3f6fd6;" id="kpi-puntualidad">0%</span>
                                             </div>
                                             <div class="text-center px-3 py-1 rounded" style="background: #fef2f2;">
-                                                <div class="small text-muted mb-0" style="font-size: 0.68rem;">Fugas Globales</div>
+                                                <div class="small text-muted mb-0" style="font-size: 0.75rem;">Fugas Globales</div>
                                                 <span class="fs-5 fw-bold text-danger" id="kpi-fugas-globales">0%</span>
                                             </div>
                                         </div>
@@ -500,7 +500,7 @@
                             <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body">
                                     <h5 class="card-title fw-bold mb-1" style="font-size: 0.95rem;"><i class="bi bi-bar-chart-steps text-warning me-2"></i>Desglose de Ausentismo (Por Responsabilidad Financiera)</h5>
-                                    <p class="text-muted mb-3" style="font-size: 0.68rem;">Días de ausencia justificada agrupados por motivo de origen.</p>
+                                    <p class="text-muted mb-3" style="font-size: 0.75rem;">Días de ausencia justificada agrupados por motivo de origen.</p>
                                     <div id="trellis-ausentismo-container" class="w-100 d-flex flex-column gap-1" style="min-height: 260px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding-right: 5px;">
                                         <!-- Renderizado dinámico desde JS -->
                                     </div>
@@ -512,7 +512,7 @@
                             <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body">
                                     <h5 class="card-title fw-bold mb-1" style="font-size: 0.95rem;"><i class="bi bi-bullseye text-danger me-2"></i>Cumplimiento y Desviación</h5>
-                                    <p class="text-muted mb-3" style="font-size: 0.68rem;">Meta Programada vs Horas Reales (Gráfico de Bala).</p>
+                                    <p class="text-muted mb-3" style="font-size: 0.75rem;">Meta Programada vs Horas Reales (Gráfico de Bala).</p>
                                     
                                     <!-- Contenedor del Gráfico de Bala -->
                                     <div id="bullet-chart-container" style="min-height: 200px;">
@@ -520,7 +520,7 @@
                                     </div>
                                     
                                     <div class="text-center mt-2">
-                                        <span class="badge rounded-pill" style="background: #ecfdf5; color: #065f46; font-size: 0.7rem;" id="badge-eficiencia">Indicador de Cumplimiento: 0%</span>
+                                        <span class="badge rounded-pill" style="background: #ecfdf5; color: #065f46; font-size: 0.75rem;" id="badge-eficiencia">Indicador de Cumplimiento: 0%</span>
                                     </div>
                                 </div>
                             </div>
@@ -530,7 +530,7 @@
                             <div class="card border-0 shadow-sm h-100">
                                 <div class="card-body d-flex flex-column">
                                     <h5 class="card-title fw-bold mb-1" style="font-size: 0.95rem;"><i class="bi bi-grid-3x3-gap-fill text-danger me-2"></i>Mapa de Calor: Fugas por Área × Día</h5>
-                                    <p class="text-muted mb-2" style="font-size: 0.68rem;">Intensidad de fugas (minutos) cruzando áreas con días de la semana. Rojo = crítico.</p>
+                                    <p class="text-muted mb-2" style="font-size: 0.75rem;">Intensidad de fugas (minutos) cruzando áreas con días de la semana. Rojo = crítico.</p>
                                     <div id="heatmap-grid" class="flex-grow-1" style="max-height: 270px; overflow-y: auto;">
                                         <!-- Renderizado por JS -->
                                     </div>
@@ -546,7 +546,7 @@
                             <div class="card border-0 shadow-sm h-100" style="border-top: 3px solid #ef4444;">
                                 <div class="card-body">
                                     <h5 class="card-title fw-bold mb-1" style="font-size: 0.95rem;"><i class="bi bi-exclamation-octagon-fill text-danger me-2"></i>Top 10 Infractores (Conductual)</h5>
-                                    <p class="text-muted mb-3" style="font-size: 0.68rem;">Ranking por frecuencia de eventos de fuga (>5 min). Empleados con más atrasos y salidas anticipadas.</p>
+                                    <p class="text-muted mb-3" style="font-size: 0.75rem;">Ranking por frecuencia de eventos de fuga (>5 min). Empleados con más atrasos y salidas anticipadas.</p>
                                     <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
                                         <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem;">
                                             <thead class="sticky-top" style="background: #fef2f2;">
@@ -573,7 +573,7 @@
                             <div class="card border-0 shadow-sm h-100" style="border-top: 3px solid #f59e0b;">
                                 <div class="card-body">
                                     <h5 class="card-title fw-bold mb-1" style="font-size: 0.95rem;"><i class="bi bi-cash-coin text-warning me-2"></i>Top 10 Deudores (Financiero)</h5>
-                                    <p class="text-muted mb-3" style="font-size: 0.68rem;">Ranking por acumulación de deuda horaria. Impacto financiero directo en la nómina.</p>
+                                    <p class="text-muted mb-3" style="font-size: 0.75rem;">Ranking por acumulación de deuda horaria. Impacto financiero directo en la nómina.</p>
                                     <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
                                         <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem;">
                                             <thead class="sticky-top" style="background: #fffbeb;">
@@ -608,21 +608,21 @@
                                     <div class="stat-accent-icon" style="background: #eff6ff; color: #3b82f6;"><i class="bi bi-calendar2-check"></i></div>
                                     <div>
                                         <h6 class="mb-0 fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">Estado Diario</h6>
-                                        <p class="text-muted mb-0" style="font-size: 0.68rem;">Asistencia del día en curso</p>
+                                        <p class="text-muted mb-0" style="font-size: 0.75rem;">Asistencia del día en curso</p>
                                     </div>
                                 </div>
                                 <div class="d-flex justify-content-around text-center">
                                     <div>
                                         <div class="stat-metric text-success" id="stat-presentes">0</div>
-                                        <small class="text-muted" style="font-size: 0.7rem;">Presentes</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Presentes</small>
                                     </div>
                                     <div class="border-start border-end px-3">
                                         <div class="stat-metric text-warning" id="stat-atrasos">0</div>
-                                        <small class="text-muted" style="font-size: 0.7rem;">Atrasos</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Atrasos</small>
                                     </div>
                                     <div>
                                         <div class="stat-metric text-danger" id="stat-inasistencias">0</div>
-                                        <small class="text-muted" style="font-size: 0.7rem;">Ausentes</small>
+                                        <small class="text-muted" style="font-size: 0.75rem;">Ausentes</small>
                                     </div>
                                 </div>
                             </div>
@@ -650,7 +650,7 @@
                                     <div class="stat-accent-icon" style="background: #ecfdf5; color: #10b981;"><i class="bi bi-diagram-3-fill"></i></div>
                                     <div>
                                         <h6 class="mb-0 fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">Distribución por Área</h6>
-                                        <p class="text-muted mb-0" style="font-size: 0.68rem;">Empleados activos por área</p>
+                                        <p class="text-muted mb-0" style="font-size: 0.75rem;">Empleados activos por área</p>
                                     </div>
                                 </div>
                                 <div id="areas-breakdown" class="d-flex flex-wrap gap-2">
@@ -1614,7 +1614,7 @@
                                                                 </div>
 
                                                                 <div class="mb-3 d-none position-relative" id="porteria-preview-container">
-                                                                    <img id="porteria-foto-preview" src="" class="img-fluid rounded border shadow-sm" style="max-height: 150px; object-fit: cover;">
+                                                                    <img id="porteria-foto-preview" alt="Vista previa de la foto" class="img-fluid rounded border shadow-sm" style="max-height: 150px; object-fit: cover;">
                                                                     <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2 rounded-circle" onclick="PorteriaModule.eliminarFotoCapturada()" title="Eliminar Foto">
                                                                         <i class="bi bi-x"></i>
                                                                     </button>
@@ -3080,7 +3080,7 @@
                                 <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-9">9</div>
                                 <div class="step-indicator bg-light text-muted border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px; z-index: 1; font-size: 0.75rem;" id="indicator-step-10">10</div>
                             </div>
-                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold text-center" style="font-size: 0.65rem;">
+                            <div class="d-flex justify-content-between mb-4 text-muted small fw-bold text-center" style="font-size: 0.75rem;">
                                 <span style="width: 10%;">Áreas</span>
                                 <span style="width: 10%;">Cargos</span>
                                 <span style="width: 10%;">Pagadores</span>
@@ -3316,39 +3316,39 @@
                                                         </div>
                                                         <div class="card-body p-3 text-secondary" style="font-size: 0.78rem; line-height: 1.5; max-height: 480px; overflow-y: auto;">
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">RUT Sincronizado</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">RUT Sincronizado</span>
                                                                 <span id="text-wizard-rut-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Nombre Completo</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Nombre Completo</span>
                                                                 <span id="text-wizard-nombre-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Área BioAlba</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Área BioAlba</span>
                                                                 <span id="text-wizard-area-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Cargo BioAlba</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Cargo BioAlba</span>
                                                                 <span id="text-wizard-cargo-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Compañía BioAlba</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Compañía BioAlba</span>
                                                                 <span id="text-wizard-compania-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Email</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Email</span>
                                                                 <span id="text-wizard-email-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Teléfono</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Teléfono</span>
                                                                 <span id="text-wizard-telefono-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 border-bottom pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Género BioAlba</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Género BioAlba</span>
                                                                 <span id="text-wizard-genero-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                             <div class="mb-2 pb-1">
-                                                                <span class="text-muted d-block small" style="font-size:0.7rem;">Fecha Ingreso Origen</span>
+                                                                <span class="text-muted d-block small" style="font-size: 0.75rem;">Fecha Ingreso Origen</span>
                                                                 <span id="text-wizard-fecha-ingreso-bioalba" class="fw-bold text-dark">-</span>
                                                             </div>
                                                         </div>
@@ -3844,7 +3844,7 @@
                                 </div>
                                 <div id="repr-log"
                                      class="p-3 font-monospace"
-                                     style="font-size:0.72rem;max-height:120px;overflow-y:auto;
+                                     style="font-size: 0.75rem;max-height:120px;overflow-y:auto;
                                             background:#0f172a;color:#94a3b8;line-height:1.7;">
                                     <span class="text-blue-400">⟳</span> Esperando inicio del proceso...
                                 </div>
@@ -3879,18 +3879,18 @@
                    animation:batchSpinAnim 0.85s linear infinite; flex-shrink:0;"></div>
               <!-- Título principal -->
               <p id="batch-loading-msg" style="color:#e2e8f0; font-size:1.1rem;
-                 font-family:'Inter',sans-serif; font-weight:600; letter-spacing:0.01em;
+                 font-family: var(--font-sans); font-weight:600; letter-spacing:0.01em;
                  margin:0; text-align:center; max-width:380px; line-height:1.4;">
                 Preparando empleados...
               </p>
               <!-- Nombre del empleado actual -->
               <p id="batch-loading-emp" style="color:#94a3b8; font-size:0.88rem;
-                 font-family:'Inter',sans-serif; margin:0; text-align:center;
+                 font-family: var(--font-sans); margin:0; text-align:center;
                  max-width:360px; line-height:1.5; min-height:1.3em; transition:all 0.2s ease;">
               </p>
               <!-- Contador N / Total -->
               <p id="batch-loading-counter" style="color:#60a5fa; font-size:0.82rem;
-                 font-family:'Inter',sans-serif; font-weight:700; margin:0; letter-spacing:0.05em;">
+                 font-family: var(--font-sans); font-weight:700; margin:0; letter-spacing:0.05em;">
               </p>
               <!-- Barra de progreso -->
               <div style="width:280px; height:4px; background:rgba(255,255,255,0.1); border-radius:99px; overflow:hidden;">
@@ -4279,7 +4279,7 @@
                                 <div class="col-12 mb-1">
                                     <h6 class="text-primary fw-bold mb-0 small"><i class="bi bi-bus-front"></i> Tramos
                                         de Conducción (Bolsa)</h6>
-                                    <small class="text-muted" style="font-size: 0.7rem;">Desglose de jornada (Art. 25
+                                    <small class="text-muted" style="font-size: 0.75rem;">Desglose de jornada (Art. 25
                                         Bis)</small>
                                 </div>
                                 <div class="col-6">
@@ -4329,7 +4329,7 @@
                                 <div>
                                     <h6 class="modal-title fw-bold mb-0" style="font-size:0.95rem;letter-spacing:0.3px;">Acciones de Asistencia</h6>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size:0.65rem;opacity:0.7;"></button>
+                                <button type="button" class="btn-close btn-close-white ms-auto" onclick="closeAsistenciaActionModal()" style="font-size: 0.75rem;opacity:0.7;"></button>
                             </div>
                         </div>
 
@@ -4341,8 +4341,8 @@
                                     <div style="min-width:0;">
                                         <div id="decision-emp-nombre" class="fw-bold text-dark text-truncate" style="font-size:0.88rem;line-height:1.3;"></div>
                                         <div class="d-flex align-items-center gap-2 mt-1">
-                                            <span id="decision-fecha" class="badge" style="background:#eff6ff;color:#3b82f6;border:1px solid #bfdbfe;font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
-                                            <span id="decision-estado-badge" class="badge bg-secondary-subtle text-secondary border d-none" style="font-size:0.7rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
+                                            <span id="decision-fecha" class="badge" style="background:#eff6ff;color:#3b82f6;border:1px solid #bfdbfe;font-size: 0.75rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
+                                            <span id="decision-estado-badge" class="badge bg-secondary-subtle text-secondary border d-none" style="font-size: 0.75rem;font-weight:600;padding:3px 8px;border-radius:6px;"></span>
                                         </div>
                                     </div>
                                 </div>
@@ -4375,9 +4375,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Justificar Ausencia</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Vacaciones, licencia, permisos</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Vacaciones, licencia, permisos</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4391,9 +4391,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark title-permiso" style="font-size:0.82rem;line-height:1.2;">Registrar Permiso / Salida</div>
-                                            <div class="text-muted sub-permiso" style="font-size:0.68rem;line-height:1.3;">Trámites personales, retiro</div>
+                                            <div class="text-muted sub-permiso" style="font-size: 0.75rem;line-height:1.3;">Trámites personales, retiro</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4406,9 +4406,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Ingreso Manual</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Corregir entrada o salida</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Corregir entrada o salida</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4421,9 +4421,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Relleno (Turno)</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Auto-completar según turno</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Auto-completar según turno</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4437,9 +4437,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Registrar Viaje Largo</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Unir salida y retorno de viaje</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Unir salida y retorno de viaje</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4453,9 +4453,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Marcación 180 Horas (Art. 25 bis)</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Libreta digital: conducción, espera, descanso</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Libreta digital: conducción, espera, descanso</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4469,9 +4469,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Reasignar / Mover Turno</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Mover marcaciones nocturnas a inasistencia</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Mover marcaciones nocturnas a inasistencia</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4489,9 +4489,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Editar / Eliminar Justificación</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Modificar justificación existente</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Modificar justificación existente</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4505,9 +4505,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Gestionar Horas Extras</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Aprobar o rechazar HE del día</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Aprobar o rechazar HE del día</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4521,9 +4521,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Revertir Jornada a Especial</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Deshacer autorización de HE</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Deshacer autorización de HE</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4537,9 +4537,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Compensar con Horas Extras</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Usar saldo HE para cubrir falta</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Usar saldo HE para cubrir falta</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
 
@@ -4553,9 +4553,9 @@
                                         </div>
                                         <div>
                                             <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Validar Jornada Especial</div>
-                                            <div class="text-muted" style="font-size:0.68rem;line-height:1.3;">Aprobar dia libre trabajado</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Aprobar dia libre trabajado</div>
                                         </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:0.7rem;opacity:0.5;"></i>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
                                 </button>
                             </div>
@@ -4677,7 +4677,7 @@
                                                 <input type="time" step="1" class="form-control form-control-sm" id="vl-manual-retorno-hora" onchange="window.updateViajeLargoCalculos()">
                                             </div>
                                         </div>
-                                        <small class="text-muted d-block mt-1" style="font-size:0.7rem;">Se creará automáticamente la marcación de salida y se unirá al viaje.</small>
+                                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Se creará automáticamente la marcación de salida y se unirá al viaje.</small>
                                     </div>
                                 </div>
                             </div>
@@ -4737,11 +4737,11 @@
                                     <div class="fw-bold text-success" style="font-size:0.76rem;" id="vl-ruta-distancia-txt">
                                         <i class="bi bi-geo-alt-fill me-1"></i> San Fernando ➔ La Serena: ~610 km
                                     </div>
-                                    <button type="button" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size:0.72rem; border-radius:6px;" onclick="window.aplicarSugerenciaRuta()">
+                                    <button type="button" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.75rem; border-radius:6px;" onclick="window.aplicarSugerenciaRuta()">
                                         <i class="bi bi-magic me-1"></i> Aplicar Sugerencia
                                     </button>
                                 </div>
-                                <div class="text-secondary" style="font-size:0.72rem;" id="vl-ruta-estimado-txt">
+                                <div class="text-secondary" style="font-size: 0.75rem;" id="vl-ruta-estimado-txt">
                                     Estimado Transporte: ~18.0h manejo / ~27.5h descanso
                                 </div>
                             </div>
@@ -4769,7 +4769,7 @@
                             </div>
 
                             <!-- Banner alert -->
-                            <div class="alert alert-info py-2 px-3 mb-0" style="font-size:0.72rem;border-radius:10px;" id="vl-alert-info">
+                            <div class="alert alert-info py-2 px-3 mb-0" style="font-size: 0.75rem;border-radius:10px;" id="vl-alert-info">
                                 <i class="bi bi-info-circle-fill me-1"></i> Se eliminarán las falsas inasistencias en ruta y se acreditarán las horas de manejo en la Bolsa Flexible.
                             </div>
                         </div>
@@ -4794,7 +4794,7 @@
                                 <div class="flex-grow-1">
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
                                         <h5 class="modal-title fw-extrabold mb-0" style="font-size:1.1rem; letter-spacing:-0.2px;">Libreta de Control de Jornada Art. 25 bis DT</h5>
-                                        <span id="m180-badge-estado" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1" style="font-size:0.7rem;">ABIERTO</span>
+                                        <span id="m180-badge-estado" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1" style="font-size: 0.75rem;">ABIERTO</span>
                                     </div>
                                     <div class="text-white-75 mt-0.5" style="font-size:0.75rem;">
                                         <span id="m180-conductor-nombre" class="fw-bold text-white">—</span> · 
@@ -4809,6 +4809,14 @@
                         <div class="modal-body p-3 p-md-4" style="background:#f8fafc;">
                             <input type="hidden" id="m180-empleado-id">
                             <input type="hidden" id="m180-fecha-str">
+
+                            <div id="m180-lock-banner" class="m180-lock-banner d-none" role="status">
+                                <i class="bi bi-lock-fill"></i>
+                                <span><strong>Día cerrado · solo lectura.</strong> Las horas ya fueron registradas y no se pueden modificar.</span>
+                                <button type="button" id="m180-btn-reabrir" class="btn btn-sm btn-outline-success ms-auto d-none" onclick="window.libreta180hReabrir()">
+                                    <i class="bi bi-unlock me-1"></i> Reabrir día
+                                </button>
+                            </div>
 
                             <!-- Barra de Herramientas y Leyenda Directa -->
                             <!-- 1. BLOQUE DE ESCANEO INTELIGENTE CON CÁMARA (GEMINI VISION AI) -->
@@ -4855,31 +4863,41 @@
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom">
                                     <!-- Controles Táctiles de Modo: Desplazar vs Pintar -->
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <span class="fw-bold small text-muted">Modo Táctil:</span>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <button type="button" class="btn btn-outline-primary active" id="m180-btn-mode-scroll" onclick="window.setLibretaTouchMode('scroll')" title="Desplazar libremente por las 24 horas con el dedo">
-                                                <i class="bi bi-hand-index me-1"></i> 🖐️ Desplazar 24h
-                                            </button>
-                                            <button type="button" class="btn btn-outline-primary" id="m180-btn-mode-paint" onclick="window.setLibretaTouchMode('paint')" title="Pintar slots al arrastrar el dedo">
-                                                <i class="bi bi-pencil-fill me-1"></i> ✏️ Pintar Slots
-                                            </button>
+                                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle px-2.5 py-1.5 fw-bold" style="font-size:0.78rem;">
+                                            <i class="bi bi-hand-index-thumb me-1"></i> Marcación Directa por Fila
+                                        </span>
+                                        <span class="text-secondary d-none d-md-inline" style="font-size:0.75rem;">
+                                            Arrastre sobre la fila de la actividad para marcar un rango; clic sobre un tramo marcado lo quita.
+                                        </span>
+                                        <!-- Controles Táctiles de Modo: Desplazar vs Pintar (Móvil) -->
+                                        <div class="d-inline-flex align-items-center gap-1 ms-1">
+                                            <span class="fw-bold small text-muted d-none d-sm-inline">Modo:</span>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" class="btn btn-outline-primary active py-0.5 px-2" id="m180-btn-mode-scroll" onclick="window.setLibretaTouchMode('scroll')" title="Desplazar libremente por las 24 horas con el dedo">
+                                                    <i class="bi bi-hand-index me-1"></i> Desplazar 24h
+                                                </button>
+                                                <button type="button" class="btn btn-outline-primary py-0.5 px-2" id="m180-btn-mode-paint" onclick="window.setLibretaTouchMode('paint')" title="Pintar slots al arrastrar el dedo">
+                                                    <i class="bi bi-pencil-fill me-1"></i> Pintar Slots
+                                                </button>
+                                            </div>
                                         </div>
-
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
                                         <!-- Switch Modo Pincel (Hover to Paint) para Desktop -->
-                                        <div class="form-check form-switch m-0 d-none d-md-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
+                                        <div id="m180-brush-wrap" class="form-check form-switch m-0 d-none d-md-flex align-items-center gap-1.5 bg-light px-2.5 py-1 rounded border shadow-sm">
                                             <input class="form-check-input m-0" type="checkbox" role="switch" id="m180-toggle-brush" onchange="window.toggleLibretaBrushMode(this.checked)" style="cursor:pointer; width:2em; height:1.1em;">
                                             <label class="form-check-label fw-bold small text-dark mb-0 user-select-none" for="m180-toggle-brush" style="font-size:0.75rem; cursor:pointer;" id="m180-brush-label">
                                                 🖌️ Pintar al pasar (Hover)
                                             </label>
                                         </div>
-                                    </div>
-
-                                    <!-- Acciones Rápidas -->
-                                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
+                                        <!-- Acciones Rápidas con protección m180-edit-btn -->
+                                        <button type="button" id="m180-btn-undo" class="btn btn-sm btn-outline-secondary py-1 px-2.5 m180-edit-btn" style="font-size:0.75rem;" onclick="window.libreta180hUndo()" title="Deshacer último cambio (Ctrl+Z)" disabled>
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i> Deshacer
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2.5 m180-edit-btn" style="font-size:0.75rem;" onclick="window.libreta180hAutoDescanso()" title="Pre-llenar horas no asignadas como Descanso">
                                             <i class="bi bi-magic me-1"></i> Rellenar Vacíos con Descanso
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-1 px-2 m180-edit-btn" style="font-size:0.75rem;" onclick="window.limpiarGrilla180h()" title="Limpiar todos los slots del día">
                                             <i class="bi bi-trash3 me-1"></i> Limpiar Todo
                                         </button>
                                     </div>
@@ -4908,68 +4926,60 @@
 
                                 <!-- Leyenda Informativa de Actividades -->
                                 <div class="d-flex flex-wrap gap-2 pt-1" id="m180-palette-container">
-                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#059669 !important; background:#ecfdf5; color:#065f46; font-size:0.74rem; font-weight:700;">
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#059669 !important; background:#ecfdf5; color:#065f46; font-size: 0.75rem; font-weight:700;">
                                         <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#059669;"></span>
                                         1. CONDUCCIÓN <span class="fw-normal opacity-75">(Máx. 5h continuas)</span>
                                     </div>
-                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#d97706 !important; background:#fffbeb; color:#92400e; font-size:0.74rem; font-weight:700;">
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#d97706 !important; background:#fffbeb; color:#92400e; font-size: 0.75rem; font-weight:700;">
                                         <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#d97706;"></span>
                                         2. ESPERA <span class="fw-normal opacity-75">(Máx. 88h/mes retribuidas)</span>
                                     </div>
-                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#4f46e5 !important; background:#eef2ff; color:#3730a3; font-size:0.74rem; font-weight:700;">
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#4f46e5 !important; background:#eef2ff; color:#3730a3; font-size: 0.75rem; font-weight:700;">
                                         <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#4f46e5;"></span>
                                         3. LABORES AUXILIARES <span class="fw-normal opacity-75">(Carga, estiba, mtto)</span>
                                     </div>
-                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#0284c7 !important; background:#f0f9ff; color:#075985; font-size:0.74rem; font-weight:700;">
+                                    <div class="px-2.5 py-1 rounded border d-flex align-items-center gap-1.5" style="border-color:#0284c7 !important; background:#f0f9ff; color:#075985; font-size: 0.75rem; font-weight:700;">
                                         <span class="d-inline-block rounded-circle" style="width:9px;height:9px;background:#0284c7;"></span>
                                         4. DESCANSO <span class="fw-normal opacity-75">(Intermedio 2h / Diario 8h)</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- 3. GRILLA CONTINUA DE 24 HORAS EN TRAMOS DE 15 MINUTOS (96 SLOTS) -->
-                            <div class="card border border-dark-subtle shadow-sm mb-3 overflow-hidden" style="border-radius:12px;">
-                                <div class="bg-dark text-white py-1.5 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2" style="font-size:0.75rem;">
-                                    <span class="fw-bold text-uppercase"><i class="bi bi-clock-history me-1 text-warning"></i> Grilla Continua 24 Horas (Tramos de 15 Minutos)</span>
-                                    <span class="text-white-50" style="font-size:0.7rem;">Pase el cursor o toque directamente la fila para pintar</span>
-                                </div>
-                                <div class="table-responsive m180-grid-container" id="m180-grid-scroll" style="max-height:380px; user-select:none; touch-action: pan-x pan-y;">
-                                    <table class="table table-bordered table-sm mb-0 text-center m180-table" style="font-size:0.72rem; border-collapse:separate; border-spacing:0;">
-                                        <thead style="position:sticky; top:0; z-index:10; background:#f1f5f9;">
-                                            <tr id="m180-header-hours">
-                                                <th class="text-start px-2 align-middle bg-slate-200 text-dark fw-bold" style="width:190px; min-width:190px; max-width:190px; position:sticky; left:0; z-index:25;">ACTIVIDAD</th>
-                                                <!-- 24 Horas con colspan="4" generadas por JS -->
-                                                <th class="align-middle px-2 bg-slate-200 text-dark fw-bold text-center" style="width:90px; min-width:90px;">TOTAL</th>
-                                            </tr>
-                                            <tr id="m180-header-slots" style="font-size:0.65rem; color:#64748b; background:#f8fafc;">
-                                                <th class="text-start px-2 py-0 align-middle" style="position:sticky; left:0; z-index:25; background:#f8fafc;">SUB-TRAMO</th>
-                                                <!-- 96 sub-tramos generados por JS -->
-                                                <th class="py-0 align-middle">HRS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="m180-grid-tbody">
-                                            <!-- 4 filas de actividades generadas dinámicamente -->
-                                        </tbody>
-                                        <tfoot style="position:sticky; bottom:0; z-index:10; background:#f8fafc; font-weight:700;">
-                                            <tr>
-                                                <td class="text-start px-2 text-dark bg-slate-100" style="position:sticky; left:0; z-index:20;">TOTAL ACUMULADO DÍA:</td>
-                                                <td id="m180-footer-slots-indicator" colspan="96" class="text-end px-2 text-muted" style="font-size:0.7rem;">Suma total de los 96 tramos:</td>
-                                                <td class="text-end px-2 font-monospace text-dark bg-slate-100" id="m180-tot-acumulado-dia" style="font-size:0.85rem;">00:00 h</td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                            <!-- Línea de tiempo 24 h: un carril por actividad, marcación por arrastre (tramos de 15 min) -->
+                            <div class="m180-card mb-3">
+                                <div class="m180-card-head">
+                                    <span class="m180-card-title"><i class="bi bi-clock-history"></i> Línea de tiempo 24 horas · tramos de 15 min</span>
+                                    <span id="m180-readout" class="m180-readout">Arrastre sobre una fila para marcar un rango · clic sobre un tramo marcado para quitarlo</span>
                                 </div>
 
-                                <!-- Barra de Cuadre y Alerta Legal -->
-                                <div class="p-2.5 bg-light border-top d-flex flex-wrap align-items-center justify-content-between gap-2" style="font-size:0.78rem;">
+                                <div class="m180-grid-container" id="m180-grid-scroll" style="touch-action: pan-x pan-y;">
+                                    <div class="m180-board">
+                                        <div class="m180-overview-row">
+                                            <div class="m180-lane-label m180-overview-label">Día completo</div>
+                                            <div id="m180-overview" class="m180-overview"></div>
+                                            <div class="m180-lane-total m180-overview-total" id="m180-tot-acumulado-dia">00:00 h</div>
+                                        </div>
+                                        <div class="m180-ruler-row">
+                                            <div class="m180-lane-label m180-ruler-label">Actividad</div>
+                                            <div id="m180-ruler" class="m180-ruler"></div>
+                                            <div class="m180-lane-total m180-ruler-label">Hrs</div>
+                                        </div>
+                                        <div id="m180-lanes"></div>
+                                    </div>
+                                </div>
+
+                                <div class="m180-progress" aria-hidden="true"><div id="m180-progress-fill" class="m180-progress-fill"></div></div>
+
+                                <!-- Barra de cuadre y alerta legal -->
+                                <div class="m180-card-foot">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="fw-bold text-secondary">Cuadre de Jornada:</span>
+                                        <span class="fw-semibold text-secondary">Cuadre de jornada:</span>
                                         <span id="m180-msg-cuadre" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
                                             Faltan 24:00 hrs por registrar
                                         </span>
                                     </div>
                                     <div id="m180-alerta-fatiga" class="d-none text-danger fw-bold bg-danger-subtle border border-danger-subtle px-2 py-1 rounded">
-                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: Se detectó conducción continua superior a 5 horas sin descanso.
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: conducción continua superior a 5 horas sin descanso.
                                     </div>
                                 </div>
                             </div>
@@ -4978,22 +4988,22 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-md-4">
                                     <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #059669 !important;">
-                                        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.68rem; letter-spacing:0.5px;">Jornada Efectiva Diaria</div>
-                                        <div class="small text-muted" style="font-size:0.7rem;">(Conducción + Labores Auxiliares)</div>
+                                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Jornada Efectiva Diaria</div>
+                                        <div class="small text-muted" style="font-size: 0.75rem;">(Conducción + Labores Auxiliares)</div>
                                         <div class="fs-4 fw-extrabold text-dark mt-1 font-monospace" id="m180-res-jornada-efectiva">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #d97706 !important;">
-                                        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.68rem; letter-spacing:0.5px;">Tiempos de Espera del Día</div>
-                                        <div class="small text-muted" style="font-size:0.7rem;">(No imputables a jornada efectiva)</div>
+                                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Tiempos de Espera del Día</div>
+                                        <div class="small text-muted" style="font-size: 0.75rem;">(No imputables a jornada efectiva)</div>
                                         <div class="fs-4 fw-extrabold text-amber-700 mt-1 font-monospace" id="m180-res-horas-espera" style="color:#b45309;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="p-3 rounded-3 border bg-white shadow-sm h-100" style="border-left: 4px solid #0284c7 !important;">
-                                        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.68rem; letter-spacing:0.5px;">Descanso Efectivo Registrado</div>
-                                        <div class="small text-muted" style="font-size:0.7rem;">(En tierra o litera adecuada)</div>
+                                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Descanso Efectivo Registrado</div>
+                                        <div class="small text-muted" style="font-size: 0.75rem;">(En tierra o litera adecuada)</div>
                                         <div class="fs-4 fw-extrabold text-sky-700 mt-1 font-monospace" id="m180-res-horas-descanso" style="color:#0369a1;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
                                     </div>
                                 </div>
@@ -5007,12 +5017,12 @@
                         </div>
 
                         <div class="modal-footer border-0 p-3 bg-white d-flex justify-content-between">
-                            <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3" onclick="window.guardarLibreta180h(false)">
+                            <button type="button" id="m180-btn-cancel" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
+                            <div class="d-flex gap-2" id="m180-save-group">
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-3 m180-save-btn" onclick="window.guardarLibreta180h(false)">
                                     <i class="bi bi-save me-1"></i> Guardar Borrador
                                 </button>
-                                <button type="button" id="btn-cerrar-guardar-180h" class="btn btn-sm btn-success fw-bold px-4 shadow-sm" onclick="window.guardarLibreta180h(true)">
+                                <button type="button" id="btn-cerrar-guardar-180h" class="btn btn-sm btn-success fw-bold px-4 shadow-sm m180-save-btn" onclick="window.guardarLibreta180h(true)">
                                     <i class="bi bi-check-circle-fill me-1"></i> Cerrar y Guardar Día
                                 </button>
                             </div>
@@ -5192,11 +5202,9 @@
             <script src="/static/js/seguridad_ui.js?v={{ startup_id }}" defer></script>
 
             <!-- Módulo Portería y Control de Ronda -->
-            <script src="/static/js/libs/html5-qrcode.min.js" defer></script>
             <script src="/static/js/libs/qrcode.min.js" defer></script>
             <script src="/static/js/porteria_ui.js?v={{ startup_id }}_v4" defer></script>
     <script src="/static/js/articulo22_ui.js?v={{ startup_id }}_v10" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
     <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v2" defer></script>
     <script src="/static/js/llaves_ui.js?v={{ startup_id }}_v1" defer></script>
     <script src="/static/js/flota_ui.js?v={{ startup_id }}_v3" defer></script>
