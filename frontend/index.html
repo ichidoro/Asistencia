@@ -141,6 +141,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="/static/css/aguacol-theme.css?v={{ startup_id }}">
+    <!-- Ajustes móviles (después del tema y de responsive.css) -->
+    <link rel="stylesheet" href="/static/css/mobile-ui.css?v={{ startup_id }}">
 </head>
 
 <body>
@@ -5384,23 +5386,23 @@
     <!-- 📱 Barra Inferior Fija Nativa para Android / Móviles (< 768px) -->
     <nav class="mobile-bottom-nav d-md-none" id="mobile-bottom-nav" aria-label="Navegación móvil inferior">
         <button type="button" class="mobile-nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
-            <span class="mobile-nav-icon">📊</span>
+            <span class="mobile-nav-icon"><i class="bi bi-grid-1x2" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Dashboard</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="empleados" onclick="switchPage('empleados')">
-            <span class="mobile-nav-icon">👥</span>
+            <span class="mobile-nav-icon"><i class="bi bi-people" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Empleados</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="marcaciones" onclick="switchPage('marcaciones')">
-            <span class="mobile-nav-icon">⏰</span>
+            <span class="mobile-nav-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Asistencia</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="porteria" onclick="switchPage('porteria')">
-            <span class="mobile-nav-icon">🛡️</span>
+            <span class="mobile-nav-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Portería</span>
         </button>
         <button type="button" class="mobile-nav-item" id="mobile-nav-more-btn" onclick="document.getElementById('sidebar-toggle')?.click()">
-            <span class="mobile-nav-icon">☰</span>
+            <span class="mobile-nav-icon"><i class="bi bi-three-dots" aria-hidden="true"></i></span>
             <span class="mobile-nav-label">Más</span>
         </button>
     </nav>

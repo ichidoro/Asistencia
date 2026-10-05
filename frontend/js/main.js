@@ -871,7 +871,7 @@ function renderBonosMatrix(data) {
       const hasBono = emp.asignaciones[col.id.toString()] === true;
       // Rojo suave si no, Verde suave si si
       const bgClass = hasBono ? 'bg-success-subtle text-success' : 'text-muted-light';
-      const icon = hasBono ? '✅' : '—';
+      const icon = hasBono ? '<i class="bi bi-check-circle-fill" aria-label="Tiene el bono"></i>' : '<i class="bi bi-dash-lg" aria-label="Sin bono"></i>';
       cells += `<td class="text-center ${bgClass}" style="font-size: 1.1em;">${icon}</td>`;
     });
 
