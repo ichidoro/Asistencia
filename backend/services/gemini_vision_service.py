@@ -59,8 +59,9 @@ class GeminiVisionService:
         return (
             getattr(settings, "GEMINI_MODEL", None)
             or os.environ.get("GEMINI_MODEL")
-            or "gemini-3.6-flash"
+            or "gemini-flash-latest"
         )
+
 
     def is_configured(self) -> bool:
         """Verifica si la API Key de Gemini está configurada."""
@@ -203,9 +204,10 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 
         # Modelos a intentar en orden de preferencia y resiliencia ante alta demanda
         candidate_models = [self.model]
-        for fallback_m in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"]:
+        for fallback_m in ["gemini-flash-latest", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]:
             if fallback_m not in candidate_models:
                 candidate_models.append(fallback_m)
+
 
         timeout = aiohttp.ClientTimeout(total=40)
         last_error = ""
