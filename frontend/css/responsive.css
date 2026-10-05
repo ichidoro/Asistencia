@@ -2730,7 +2730,25 @@
 .scanner-corner.bottom-left { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 8px; }
 .scanner-corner.bottom-right { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 8px; }
 
-/* Silueta inteligente para encuadre de 1 día (proporción ~5.2:1 de la libreta física) */
+/* Silueta panorámica amplia e inmersiva (aprovecha 100% de la pantalla móvil y PC) */
+.scanner-guide-box-panoramic {
+    width: 92% !important;
+    height: 55% !important;
+    max-height: 480px;
+    border: 2px dashed rgba(16, 185, 129, 0.8) !important;
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+    transition: all 0.3s ease;
+}
+@media (orientation: landscape), (min-width: 768px) {
+    .scanner-guide-box-panoramic {
+        width: 86% !important;
+        height: 68% !important;
+        max-height: 520px;
+    }
+}
+
+/* Silueta inteligente previa */
 .scanner-guide-box {
     transition: width 0.3s ease, height 0.3s ease;
 }
@@ -2747,6 +2765,7 @@
         max-height: 240px;
     }
 }
+
 .scanner-1day-lanes {
     position: absolute;
     inset: 0;

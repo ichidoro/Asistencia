@@ -97,75 +97,63 @@ class GeminiVisionService:
                 "tramos": []
             }
 
-        prompt = f"""Eres un perito experto en lectura visual y análisis forense de planillas oficiales de asistencia laboral según la Resolución Exenta N° 1213 de la Dirección del Trabajo de Chile (Libreta de Control de Jornada de Choferes de Carga Terrestre - Art. 25 bis del Código del Trabajo).
+        prompt = f"""Eres un perito experto en lectura visual forense de Libretas Oficiales de Control de Asistencia de Choferes de Carga Terrestre (Chile, Resolución Exenta N° 1213 de la Dirección del Trabajo / Art. 25 bis del Código del Trabajo).
 
-La imagen adjunta es una FOTOGRAFÍA de la hoja física de registro diario de un conductor.
+CONTEXTO Y ANATOMÍA DE LA HOJA FÍSICA:
+- La fotografía capturada corresponde a una hoja de control de jornada.
+- En la hoja física suele haber 5 bloques impresos en paralelo (uno para cada día).
+- La aplicación y el usuario YA TIENEN ASIGNADO el día y chofer a ingresar{f" (Fecha esperada: {fecha_esperada})" if fecha_esperada else ""}.
+- TU OBJETIVO: Analizar el bloque principal de 24 horas visible en la imagen (o el bloque central/más destacado si hay varios visibles) y extraer con precisión milimétrica los trazos manuscritos del chofer sobre la regleta horaria.
 
-ESTRUCTURA EXACTA DE LAS 4 FILAS IMPRESAS EN LA HOJA FÍSICA (De arriba hacia abajo):
-1. FILA 1 (Superior) = CONDUCCIÓN:
-   - Corresponde al tiempo manejando el camión al volante.
-   - En nuestro sistema se codifica con el número 1.
+ESTRUCTURA DE LAS 4 FILAS IMPRESAS EN CADA BLOQUE (De arriba hacia abajo):
+1. FILA 1 (Superior) = CONDUCCIÓN (Código 1):
+   - Tiempo manejando al volante. Línea azul/negra manuscrita en este carril = Código 1.
+2. FILA 2 = TIEMPO DE ESPERA (Código 2):
+   - Espera en andén, fiscalización o turno sin conducir. Línea en este carril = Código 2.
+3. FILA 3 = DESCANSO (Código 4):
+   - Pausa legal, colación o reposo. Línea en este carril = Código 4.
+4. FILA 4 (Inferior) = TAREAS AUXILIARES / LABORES AUXILIARES (Código 3):
+   - ¡PRIORIDAD CRÍTICA! La cuarta fila (la de más abajo) corresponde a TAREAS AUXILIARES (revisión mecánica, estiba, carga/descarga, papeleo).
+   - Cualquier trazo horizontal manuscrito en esta cuarta fila DEBE codificarse obligatoriamente con el código 3.
 
-2. FILA 2 = TIEMPO DE ESPERA:
-   - Tiempos de espera para carga, descarga o turno sin conducción.
-   - En nuestro sistema se codifica con el número 2.
+REGLAS DE PRECISIÓN MILIMÉTRICA Y ANCLAJE GEOMÉTRICO:
+1. ORIENTACIÓN Y ANCLAJE HORIZONTAL (0 A 23):
+   - Las fotos pueden venir en vertical o giradas 90°. Oriéntala mentalmente para que la regleta de 0 a 23 vaya de izquierda a derecha.
+   - EXTREMO IZQUIERDO: La línea vertical divisoria que separa los textos ("CONDUCCION", etc.) de la columna "0" es el inicio del día: 00:00.
+   - EXTREMO DERECHO: La línea vertical que cierra la columna "23" antes de "DESTINO/Resumen" es el fin del día: 24:00.
 
-3. FILA 3 = DESCANSO:
-   - ¡ORDEN OFICIAL DE LA HOJA CHILENA! La tercera fila es DESCANSO.
-   - En nuestro sistema el descanso se codifica con el número 4.
-   - Si no hay trazo manuscrito en esta fila, sus slots son 0.
+2. SUBDIVISIONES DE 15 MINUTOS Y MEDIA HORA:
+   - Línea divisoria vertical entre columnas horarias (atraviesa las 4 filas) = :00 (hora en punto).
+   - Primer tick corto = :15.
+   - Segundo tick (marca central más larga) = :30 (media hora).
+   - Tercer tick corto = :45.
+   - CRITERIO INCLUSIVO DE HORAS COMPLETAS: Si una línea manuscrita cubre una columna "H" completa hasta rozar o tocar la divisoria con la siguiente hora, abarca los 4 cuartos de hora de esa columna.
+     * Ejemplo: Si Conducción cubre columnas 6, 7, 8 y 9 hasta la divisoria con el 10, el tramo va de 06:00 a 10:00 (EXACTAMENTE 4.0 HORAS = 16 slots con código 1). NO recortes a 3.5h ni a 09:30.
+     * Ejemplo: Si Tareas Auxiliares inicia en el tick :30 de la columna 10 (10:30) y corre continuo cubriendo 11, 12, 13, 14, 15, 16, 17, 18, 19 hasta la línea divisoria del 20 (20:00), el tramo va de 10:30 a 20:00 (EXACTAMENTE 9.5 HORAS = 38 slots con código 3).
 
-4. FILA 4 (Inferior) = TAREAS AUXILIARES / LABORES AUXILIARES:
-   - ¡ATENCIÓN CRÍTICA! La cuarta fila (la de más abajo) corresponde a TAREAS AUXILIARES (revisión mecánica, estiba, papeleo, mantenimiento).
-   - En nuestro sistema las Labores/Tareas Auxiliares se codifican con el número 3.
-   - Cualquier línea continua, raya a lápiz o bloque en esta cuarta fila DEBE codificarse como 3 (Labores Auxiliares).
+3. TOLERANCIA A HOJAS ARRUGADAS, DOBLADAS O EN ÁNGULO:
+   - Sigue el carril de forma topológica local: los ticks de la regleta y la tinta del lápiz se deforman juntos con el papel.
+   - Distingue la tinta de bolígrafo pasta (azul/negra orgánica, trazada por el centro del carril) de las líneas finas de imprenta de la cuadrícula.
 
-{f"FECHA ESPERADA DE LA JORNADA: {fecha_esperada}" if fecha_esperada else ""}
+4. ESPACIOS VACÍOS:
+   - Si no hay trazo físico en una fila (ej. Espera o Descanso vacías), sus slots son estrictamente 0.
 
-INSTRUCCIONES DE PRECISIÓN MILIMÉTRICA:
-1. ORIENTACIÓN DE LA FOTOGRAFÍA:
-   - Las fotos tomadas con celulares muchas veces vienen giradas 90° (verticales) o invertidas.
-   - Detecta la orientación correcta identificando los textos impresos:
-     * El texto "ACTIVIDAD" y las 4 etiquetas ("CONDUCCION", "ESPERA", "DESCANSO", "TAREAS AUXILIARES") definen el eje vertical de las filas.
-     * La regleta con los números del "0" al "23" define el eje horizontal del tiempo (de 00:00 a 24:00, de izquierda a derecha).
-   - Lee mentalmente la planilla en su orientación natural horizontal (horas de izquierda a derecha).
-
-2. SISTEMA DE COORDENADAS DE LA REGLETA (0 A 23) Y SUBDIVISIONES DE 15 MINUTOS:
-   - Cada número "H" (del 0 al 23) es el encabezado de esa columna horaria, abarcando desde H:00 hasta (H+1):00.
-   - Dentro de cada columna horaria hay 4 marcas o subdivisiones de 15 minutos:
-     * Borde izquierdo de la columna: :00
-     * Segundo tick: :15
-     * Tercer tick (marca central más larga): :30
-     * Cuarto tick: :45
-     * Borde derecho (línea divisoria vertical con la siguiente hora): :00 de la siguiente hora.
-   - CRITERIO INCLUSIVO DE COLUMNAS COMPLETAS:
-     * Si una línea manuscrita cubre una columna "H" completa hasta la línea divisoria derecha, abarca los 4 cuartos de hora de esa columna.
-     * EJEMPLO CONDUCCIÓN (FILA 1): Si el trazo cubre las columnas 6, 7, 8 y 9 hasta la línea divisoria con el 10, el tramo va de 06:00 a 10:00 (EXACTAMENTE 4.0 HORAS = 16 slots con código 1). No recortes a 09:30 ni a 09:00.
-     * EJEMPLO TAREAS AUXILIARES (FILA 4): Si el trazo en la Fila 4 inicia en el tick central (:30) de la columna 10 (10:30) y corre continuo cubriendo 11, 12, 13, 14, 15, 16, 17, 18, 19 hasta la línea vertical divisoria de la columna 20 (20:00), el tramo va de 10:30 a 20:00 (EXACTAMENTE 9.5 HORAS = 38 slots con código 3).
-
-3. DETECCIÓN RIGUROSA DE TAREAS AUXILIARES (FILA 4 - INFERIOR):
-   - La cuarta fila (la de más abajo) corresponde a TAREAS AUXILIARES.
-   - Cualquier trazo o línea a lápiz/bolígrafo en esta fila DEBE codificarse obligatoriamente con el código 3.
-
-4. CASILLAS EN BLANCO:
-   - Si una fila o tramo no tiene ninguna línea o marca manuscrita trazada por el chofer (ej. Fila 2 Espera o Fila 3 Descanso vacías), déjala estrictamente en 0 (Vacío). NO inventes marcas donde no hay trazo físico.
-
-CÓDIGOS DE CADA TRAMO PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
+CÓDIGOS PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
 - 1: Conducción (Fila 1)
 - 2: Espera (Fila 2)
 - 3: Tareas Auxiliares (Fila 4)
 - 4: Descanso (Fila 3)
-- 0: Sin marcar / Vacío
+- 0: Vacío / Sin actividad
 
 RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 {{
   "exito": true,
-  "fecha_detectada": "YYYY-MM-DD o null si no se ve",
+  "fecha_detectada": "YYYY-MM-DD o null si no se ve clara",
   "conductor_detectado": "Nombre del chofer si está escrito o null",
   "confianza": 0.95,
   "tramos": [
-    {{"inicio": "HH:MM", "fin": "HH:MM", "actividad": "CONDUCCION", "duracion_horas": 4.0}},
-    {{"inicio": "HH:MM", "fin": "HH:MM", "actividad": "AUXILIARES", "duracion_horas": 9.5}}
+    {{"inicio": "06:00", "fin": "10:00", "actividad": "CONDUCCION", "duracion_horas": 4.0}},
+    {{"inicio": "10:30", "fin": "20:00", "actividad": "AUXILIARES", "duracion_horas": 9.5}}
   ],
   "slots_96": [0, 0, ..., 1, 1, ..., 3, 3, ...],
   "resumen_horas": {{
@@ -342,6 +330,36 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                 "horas_auxiliares": round(a_min / 60.0, 2),
                 "horas_descanso": round(d_min / 60.0, 2)
             }
+
+            # Detectar brechas intermedias vacías entre actividades para sugerir autocompletado de descanso
+            active_indices = [i for i, s in enumerate(slots) if s in (1, 2, 3)]
+            brechas_vacias = []
+            if active_indices:
+                first_act = min(active_indices)
+                last_act = max(active_indices)
+                gap_start = None
+                for i in range(first_act, last_act + 1):
+                    if slots[i] == 0:
+                        if gap_start is None:
+                            gap_start = i
+                    else:
+                        if gap_start is not None:
+                            h_ini = f"{gap_start * 15 // 60:02d}:{(gap_start * 15) % 60:02d}"
+                            h_fin = f"{i * 15 // 60:02d}:{(i * 15) % 60:02d}"
+                            gap_len = i - gap_start
+                            brechas_vacias.append({
+                                "slot_inicio": gap_start,
+                                "slot_fin": i - 1,
+                                "inicio": h_ini,
+                                "fin": h_fin,
+                                "minutos": gap_len * 15,
+                                "horas": round(gap_len * 15 / 60.0, 1)
+                            })
+                            gap_start = None
+
+            parsed["brechas_vacias"] = brechas_vacias
+            parsed["sugerir_autocompletar_descanso"] = len(brechas_vacias) > 0
+
 
             logger.info(
                 f"✅ GeminiVision: Éxito en lectura. "

@@ -4833,19 +4833,17 @@
                                                 <i class="bi bi-camera-fill fs-6"></i>
                                             </div>
                                             <div>
-                                                <span class="fw-bold text-dark" style="font-size:0.85rem;">Escaneo Automático con Cámara (Gemini Vision AI)</span>
-                                                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle ms-1" style="font-size:0.65rem;">FREE TIER</span>
-                                                <p class="text-muted mb-0" style="font-size:0.72rem;">Saca una foto a la hoja física de papel y la grilla de 96 slots se llenará sola.</p>
+                                                <span class="fw-bold text-dark" style="font-size:0.85rem;">Escaneo Inteligente de Libreta (Gemini Vision AI)</span>
+                                                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle ms-1" style="font-size:0.65rem;">IA ALTA PRIORIDAD</span>
+                                                <p class="text-muted mb-0" style="font-size:0.72rem;">Saca una foto al bloque de hoy (o sube imagen de WhatsApp) y la grilla se llenará sola.</p>
                                             </div>
                                         </div>
 
                                         <div class="d-flex align-items-center gap-2 flex-wrap">
                                             <input type="file" id="m180-gallery-input" accept="image/*" style="display:none;" onchange="window.m180HandleFileForScanner(event)">
-                                            <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 shadow-sm d-flex align-items-center gap-1.5" style="border-radius:8px;" onclick="window.abrirScannerLibreta()">
-                                                <i class="bi bi-camera-video-fill"></i> 📷 Abrir Escáner en Vivo
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary bg-white px-2.5 py-1.5" style="border-radius:8px; font-size:0.75rem;" onclick="document.getElementById('m180-gallery-input').click()">
-                                                <i class="bi bi-folder2-open"></i> Subir Imagen
+                                            <button type="button" class="btn btn-sm btn-success fw-bold px-3 py-1.5 shadow-sm d-flex align-items-center gap-2" style="border-radius:8px;" onclick="window.abrirScannerLibreta()" title="Escanear con cámara o subir imagen">
+                                                <i class="bi bi-camera-fill fs-6"></i>
+                                                <span>Escanear / Cargar Hoja</span>
                                             </button>
                                         </div>
                                     </div>
@@ -5035,172 +5033,87 @@
                 </div>
             </div>
 
-            <!-- MODAL ESCÁNER INTELIGENTE EN VIVO CON CÁMARA Y RECORTE TÁCTIL (CROPPER) -->
+            <!-- MODAL ESCÁNER INTELIGENTE EN VIVO CON CÁMARA INMERSIVA A PANTALLA COMPLETA -->
             <div class="modal fade" id="modalScannerLibreta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down scanner-modal-dialog">
-                    <div class="modal-content border-0 shadow-2xl scanner-modal-content" style="background:#0f172a; color:#f8fafc;">
-                        <!-- Header del Escáner -->
-                        <div class="modal-header border-0 px-3 py-2.5 d-flex align-items-center justify-content-between scanner-modal-header" style="background:#1e293b; border-bottom:1px solid #334155 !important;">
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="d-flex align-items-center justify-content-center text-white" style="width:34px;height:34px;background:#059669;border-radius:8px;">
-                                    <i class="bi bi-camera-video-fill"></i>
-                                </div>
-                                <div>
-                                    <h6 class="modal-title fw-bold text-white mb-0" style="font-size:0.9rem;" id="scanner-modal-title">Escáner en Vivo de Libreta 180h</h6>
-                                    <span class="text-white-50" style="font-size:0.7rem;" id="scanner-modal-subtitle">Visor con encuadre óptico y herramienta de recorte táctil</span>
-                                </div>
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle d-none d-sm-inline" style="font-size:0.65rem;">Gemini Vision AI</span>
-                                <button type="button" class="btn-close btn-close-white" onclick="window.scannerCerrar()" aria-label="Cerrar"></button>
-                            </div>
-                        </div>
-
-                        <!-- Body del Escáner -->
-                        <div class="modal-body p-0 position-relative scanner-modal-body">
-                            
-                            <!-- PASO 1: VISOR DE CÁMARA EN VIVO -->
-                            <div id="scanner-step-camera" class="w-100 h-100 position-relative d-flex flex-column align-items-center justify-content-center bg-black">
-                                <!-- Barra Superior de Modo de Encuadre -->
-                                <div class="position-absolute top-0 start-0 w-100 p-2.5 d-flex justify-content-between align-items-center" style="z-index:10; background:linear-gradient(rgba(0,0,0,0.8), transparent);">
-                                    <div class="btn-group btn-group-sm bg-dark rounded border border-secondary p-0.5" role="group">
-                                        <button type="button" class="btn btn-sm btn-success py-1 px-2.5 fw-bold" id="scanner-mode-1day-btn" onclick="window.scannerSetCameraGuideMode('1day')">
-                                            <i class="bi bi-aspect-ratio me-1"></i> 1 Día (Fila 24h)
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-light py-1 px-2.5" id="scanner-mode-page-btn" onclick="window.scannerSetCameraGuideMode('page')">
-                                            <i class="bi bi-file-earmark-text me-1"></i> Hoja Completa
-                                        </button>
-                                    </div>
-                                    <span class="badge bg-dark bg-opacity-75 text-warning border border-warning-subtle small d-none d-sm-inline">
-                                        <i class="bi bi-phone-landscape me-1"></i> Gira celular a horizontal
-                                    </span>
-                                </div>
-
-                                <!-- Video en Vivo -->
-                                <video id="scanner-live-video" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; background:#000; display:block;"></video>
-                                
-                                <!-- Marco Guía / Retícula Superpuesta tipo CamScanner con Stencil de 1 Día -->
-                                <div id="scanner-camera-overlay" class="position-absolute top-0 start-0 w-100 h-100 pointer-events-none d-flex flex-column align-items-center justify-content-center" style="pointer-events:none; z-index:5;">
-                                    <div class="scanner-guide-box mode-1day position-relative" id="scanner-guide-box" style="box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);">
-                                        <!-- Esquinas de mira óptica -->
-                                        <div class="scanner-corner top-left"></div>
-                                        <div class="scanner-corner top-right"></div>
-                                        <div class="scanner-corner bottom-left"></div>
-                                        <div class="scanner-corner bottom-right"></div>
-
-                                        <!-- Silueta de Carriles de 1 Día -->
-                                        <div class="scanner-1day-lanes" id="scanner-guide-lanes">
-                                            <div class="scanner-1day-lane"><span>1. CONDUCCIÓN</span><span style="font-size:0.55rem; opacity:0.7;">00:00 ── 24:00</span></div>
-                                            <div class="scanner-1day-lane"><span>2. ESPERA</span></div>
-                                            <div class="scanner-1day-lane"><span>3. DESCANSO</span></div>
-                                            <div class="scanner-1day-lane"><span>4. TAREAS AUXILIARES</span></div>
-                                        </div>
-
-                                        <!-- Línea láser animada de escaneo -->
-                                        <div class="scanner-laser-line"></div>
-                                    </div>
-
-                                    <div class="badge bg-dark text-white bg-opacity-85 mt-2 px-3 py-1.5 fw-normal" id="scanner-guide-help" style="font-size:0.75rem; border:1px solid rgba(255,255,255,0.25);">
-                                        <i class="bi bi-bullseye me-1 text-success"></i> Calza la fila del día dentro del marco verde
-                                    </div>
-                                </div>
-
-                                <!-- Barra de Controles en Vivo (Inferior flotante) -->
-                                <div class="position-absolute bottom-0 start-0 w-100 p-3 d-flex align-items-center justify-content-between gap-2" style="background:linear-gradient(transparent, rgba(0,0,0,0.85)); z-index:10;">
-                                    <!-- Cambiar Cámara -->
-                                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center" id="scanner-btn-flip" onclick="window.scannerCambiarCamara()" style="width:44px;height:44px;" title="Cambiar Cámara">
-                                        <i class="bi bi-camera-rotate fs-5"></i>
-                                    </button>
-
-                                    <!-- Botón Disparador Principal -->
-                                    <button type="button" class="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0" onclick="window.scannerCapturarFrame()" style="width:68px;height:68px;border:4px solid white;" title="Capturar Fotograma">
-                                        <i class="bi bi-camera-fill fs-2"></i>
-                                    </button>
-
-                                    <!-- Subir Archivo si no quiere usar cámara en vivo -->
-                                    <button type="button" class="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center" onclick="document.getElementById('m180-gallery-input').click()" style="width:44px;height:44px;" title="Cargar desde Archivos">
-                                        <i class="bi bi-folder2-open fs-5"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- PASO 2: RECORTADOR INTERACTIVO TÁCTIL (CROPPER) -->
-                            <div id="scanner-step-crop" class="d-none d-flex flex-column w-100 h-100" style="background:#0b1329;">
-                                <!-- Barra de Selección Rápida de Días y Proporción -->
-                                <div class="scanner-crop-banner flex-shrink-0 px-2.5 py-1.5 d-flex flex-wrap align-items-center justify-content-between gap-1" style="background:#0f172a; border-bottom:1px solid #334155; font-size:0.75rem; color:#93c5fd;">
-                                    <div class="d-flex align-items-center gap-1 overflow-x-auto py-0.5" style="scrollbar-width:none;">
-                                        <span class="small fw-bold text-white me-1 text-nowrap"><i class="bi bi-calendar-week text-warning me-1"></i>Auto-Día:</span>
-                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(1)">1 (Lun)</button>
-                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(2)">2 (Mar)</button>
-                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(3)">3 (Mié)</button>
-                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(4)">4 (Jue)</button>
-                                        <button type="button" class="btn btn-xs btn-outline-light py-0.5 px-2 text-nowrap" onclick="window.scannerSeleccionarDia(5)">5 (Vie)</button>
-                                    </div>
-                                    <button type="button" id="scanner-btn-lock-ratio" class="btn btn-xs btn-success py-0.5 px-2 text-nowrap" onclick="window.scannerToggleAspectRatio()" title="Bloquea la proporción para que no se deforme la tabla">
-                                        <i class="bi bi-lock-fill me-1"></i> Proporción 1 Día (5.2:1)
-                                    </button>
-                                </div>
-
-                                <!-- Contenedor del Cropper (Ocupa exactamente el espacio central sobrante) -->
-                                <div class="scanner-crop-viewport flex-grow-1 position-relative w-100 overflow-hidden d-flex align-items-center justify-content-center" style="background:#000; min-height:0;">
-                                    <img id="scanner-crop-image" src="" alt="Captura para recortar" style="display:block; max-width:100%; max-height:100%;">
-                                </div>
-
-                                <!-- BARRA INFERIOR FIJA DE ACCIONES DEL RECORTADOR (SIEMPRE VISIBLE) -->
-                                <div class="scanner-crop-footer flex-shrink-0 p-2 d-flex flex-column gap-1.5" style="background:#0f172a; border-top:1px solid #334155; z-index:20;">
-                                    <!-- Fila de Micro-Ajustes Táctiles (D-Pad, Zoom, Rotar) -->
-                                    <div class="d-flex align-items-center justify-content-between gap-1 flex-wrap">
-                                        <!-- Micro-ajustes D-Pad para celular -->
-                                        <div class="d-flex align-items-center gap-1">
-                                            <div class="btn-group btn-group-sm" role="group" title="Mover marco">
-                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(0, -15)" title="Subir marco"><i class="bi bi-arrow-up"></i></button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(0, 15)" title="Bajar marco"><i class="bi bi-arrow-down"></i></button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(-15, 0)" title="Mover izquierda"><i class="bi bi-arrow-left"></i></button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerMoverCrop(15, 0)" title="Mover derecha"><i class="bi bi-arrow-right"></i></button>
-                                            </div>
-                                            <div class="btn-group btn-group-sm ms-1" role="group" title="Escalar tamaño">
-                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerEscalarCrop(1.05)" title="Agrandar marco"><i class="bi bi-zoom-in"></i></button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary text-white px-2 py-1" onclick="window.scannerEscalarCrop(0.95)" title="Achicar marco"><i class="bi bi-zoom-out"></i></button>
-                                            </div>
-                                        </div>
-
-                                        <!-- Rotación y Volver -->
-                                        <div class="d-flex align-items-center gap-1">
-                                            <button type="button" class="btn btn-sm btn-outline-light px-2 py-1" onclick="window.scannerRotar(90)" title="Rotar 90°">
-                                                <i class="bi bi-arrow-clockwise"></i> <span class="d-none d-sm-inline">Rotar</span>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary text-white-50 px-2 py-1" onclick="window.scannerResetCrop()" title="Restablecer">
-                                                <i class="bi bi-arrow-counterclockwise"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-light px-2 py-1" onclick="window.scannerVolverACamara()">
-                                                <i class="bi bi-camera"></i> <span class="d-none d-sm-inline">Reintentar</span>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Botón Principal Prominente de Escaneo e Interpretación -->
-                                    <button type="button" class="btn btn-success fw-bold py-2.5 shadow-lg d-flex align-items-center justify-content-center gap-2 text-white" id="scanner-btn-procesar" onclick="window.scannerProcesarConGemini()" style="font-size:0.95rem; border-radius:10px; background:linear-gradient(135deg, #059669 0%, #10b981 100%); border:none;">
-                                        <i class="bi bi-lightning-charge-fill fs-5"></i>
-                                        <span>⚡ ESCANEAR Y VOLCAR A GRILLA</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- PASO 3: PROCESANDO CON IA GEMINI -->
-                            <div id="scanner-step-loading" class="d-none d-flex flex-column align-items-center justify-content-center text-center p-4 w-100 h-100" style="background:#0b1329;">
-                                <div class="spinner-grow text-success mb-3" style="width:3.5rem; height:3.5rem;" role="status"></div>
-                                <h5 class="fw-bold text-white mb-2">Google Gemini Vision Analizando Planilla</h5>
-                                <p class="text-white-50 small mb-3" style="max-width:440px;">
-                                    Leyendo los 96 cuartos de hora de conducción, espera, auxiliares y descanso. Si Google reporta alta demanda, el escáner reintenta automáticamente en segundos...
-                                </p>
-                                <div class="progress w-75" style="height:6px; background:#334155; border-radius:4px;">
-                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:100%"></div>
-                                </div>
-                            </div>
-
-                        </div>
+                <div class="modal-dialog modal-fullscreen m-0 p-0">
+                    <div class="modal-content border-0 bg-black text-white w-100 h-100 position-relative overflow-hidden">
                         
-                        <canvas id="scanner-hidden-canvas" style="display:none;"></canvas>
+                        <!-- PASO 1: VISOR DE CÁMARA EN VIVO (100% PANTALLA) -->
+                        <div id="scanner-step-camera" class="w-100 h-100 position-relative d-flex align-items-center justify-content-center bg-black overflow-hidden">
+                            
+                            <!-- Video en Vivo (Ocupa el 100% real de la pantalla del teléfono) -->
+                            <video id="scanner-live-video" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; background:#000; display:block; position:absolute; inset:0;"></video>
+                            <canvas id="scanner-hidden-canvas" style="display:none;"></canvas>
+
+                            <!-- HUD SUPERIOR FLOTANTE (TRANSPARENTE) -->
+                            <div class="position-absolute top-0 start-0 w-100 p-3 d-flex align-items-center justify-content-between pointer-events-none" style="z-index:20; background:linear-gradient(rgba(0,0,0,0.65), transparent);">
+                                <!-- Botón Cerrar -->
+                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" style="width:40px; height:40px; pointer-events:auto;" onclick="window.scannerCerrar()" aria-label="Cerrar">
+                                    <i class="bi bi-x-lg fs-5"></i>
+                                </button>
+
+                                <!-- Indicador Central Discreto -->
+                                <div class="badge bg-dark bg-opacity-75 text-white px-3 py-2 rounded-pill border border-white border-opacity-25 d-flex align-items-center gap-1.5 shadow" style="font-size:0.75rem; pointer-events:auto;">
+                                    <i class="bi bi-phone-landscape text-warning fs-6"></i>
+                                    <span>Enfoca de cerca el bloque de hoy (horizontal)</span>
+                                </div>
+
+                                <!-- Badge IA -->
+                                <span class="badge bg-success bg-opacity-80 text-white px-2.5 py-1.5 rounded-pill border border-success-subtle shadow d-none d-sm-inline" style="font-size:0.7rem; pointer-events:auto;">
+                                    <i class="bi bi-stars me-1"></i>Gemini Flash IA
+                                </span>
+                            </div>
+
+                            <!-- GUÍA RETÍCULA VISUAL PANORÁMICA (AMPLIA, NO RESTRICTIVA) -->
+                            <div id="scanner-camera-overlay" class="position-absolute top-0 start-0 w-100 h-100 pointer-events-none d-flex flex-column align-items-center justify-content-center" style="pointer-events:none; z-index:10;">
+                                <div class="scanner-guide-box-panoramic position-relative" id="scanner-guide-box">
+                                    <!-- Esquinas de mira óptica -->
+                                    <div class="scanner-corner top-left"></div>
+                                    <div class="scanner-corner top-right"></div>
+                                    <div class="scanner-corner bottom-left"></div>
+                                    <div class="scanner-corner bottom-right"></div>
+
+                                    <!-- Indicador visual interior sutil -->
+                                    <div class="position-absolute bottom-0 start-0 w-100 text-center pb-2 text-white-50" style="font-size:0.68rem; text-shadow:0 1px 3px rgba(0,0,0,0.9);">
+                                        Cuadra la regleta horaria dentro de este marco
+                                    </div>
+
+                                    <!-- Línea láser animada de escaneo -->
+                                    <div class="scanner-laser-line"></div>
+                                </div>
+                            </div>
+
+                            <!-- HUD INFERIOR FLOTANTE DE DISPARO (TRANSPARENTE) -->
+                            <div class="position-absolute bottom-0 start-0 w-100 p-3 pb-4 d-flex align-items-center justify-content-around" style="z-index:20; background:linear-gradient(transparent, rgba(0,0,0,0.8));">
+                                <!-- Botón de Galería / Archivo (Izquierda) -->
+                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" onclick="document.getElementById('m180-gallery-input').click()" style="width:48px;height:48px;" title="Cargar foto desde galería o WhatsApp">
+                                    <i class="bi bi-images fs-5"></i>
+                                </button>
+
+                                <!-- Botón Disparador Principal (Centro, Grande y Cómodo para el pulgar) -->
+                                <button type="button" class="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0" onclick="window.scannerCapturarFrameDirecto()" style="width:74px;height:74px;border:4px solid white;box-shadow:0 0 25px rgba(16,185,129,0.7) !important;" title="Capturar y Procesar con IA">
+                                    <i class="bi bi-camera-fill fs-2"></i>
+                                </button>
+
+                                <!-- Botón Cambiar Cámara (Derecha) -->
+                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" id="scanner-btn-flip" onclick="window.scannerCambiarCamara()" style="width:48px;height:48px;" title="Cambiar Cámara">
+                                    <i class="bi bi-camera-rotate fs-5"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- PASO 2: PROCESANDO CON IA GEMINI (SPINNER A PANTALLA COMPLETA) -->
+                        <div id="scanner-step-loading" class="d-none d-flex flex-column align-items-center justify-content-center text-center p-4 w-100 h-100" style="background:#0b1329;">
+                            <div class="spinner-grow text-success mb-3" style="width:3.5rem; height:3.5rem;" role="status"></div>
+                            <h5 class="fw-bold text-white mb-2">Google Gemini Vision Analizando Planilla</h5>
+                            <p class="text-white-50 small mb-3" style="max-width:440px;">
+                                Leyendo las 4 filas reglamentarias y auditando los 96 cuartos de hora de conducción y labores auxiliares...
+                            </p>
+                            <div class="progress w-75" style="height:6px; background:#334155; border-radius:4px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:100%"></div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -5382,6 +5295,10 @@
     <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v2" defer></script>
     <script src="/static/js/llaves_ui.js?v={{ startup_id }}_v1" defer></script>
     <script src="/static/js/flota_ui.js?v={{ startup_id }}_v3" defer></script>
+
+            <!-- Visión por Computadora Open Source (OpenCV.js y jscanify para aplanamiento automático de hojas) -->
+            <script src="https://docs.opencv.org/4.7.0/opencv.js" async type="text/javascript"></script>
+            <script src="https://cdn.jsdelivr.net/gh/puffinsoft/jscanify@1.2.0/src/jscanify.min.js" defer type="text/javascript"></script>
 
             <!-- Inicializador Principal -->
             <script src="/static/js/productos_4.js?v={{ startup_id }}" defer></script>

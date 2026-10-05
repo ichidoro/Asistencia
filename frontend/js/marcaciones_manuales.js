@@ -2949,25 +2949,58 @@ window.scannerCambiarCamara = async function() {
     await iniciarScannerCamara();
 };
 
-window.scannerCapturarFrame = function() {
+let _jscanifyInstance = null;
+function getJscanifyInstance() {
+    if (typeof jscanify !== 'undefined') {
+        if (!_jscanifyInstance) {
+            try {
+                _jscanifyInstance = new jscanify();
+                console.log("✅ jscanify cargado y listo para aplanar documentos");
+            } catch (e) {
+                console.warn("⚠️ No se pudo inicializar jscanify:", e);
+            }
+        }
+        return _jscanifyInstance;
+    }
+    return null;
+}
+
+window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
     const video = document.getElementById('scanner-live-video');
     const canvas = document.getElementById('scanner-hidden-canvas');
     if (!video || !canvas) return;
 
-    const w = video.videoWidth || 1280;
-    const h = video.videoHeight || 720;
+    const w = video.videoWidth || 1920;
+    const h = video.videoHeight || 1080;
     canvas.width = w;
     canvas.height = h;
 
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
-    // Detener cámara temporalmente para ahorrar batería y CPU
+    // Intentar aplanar y recortar la hoja con jscanify (OpenCV) si está disponible
+    let finalDataUrl = null;
+    const scanner = getJscanifyInstance();
+    if (scanner) {
+        try {
+            const paperCanvas = scanner.extractPaper(canvas, 1800, 500);
+            if (paperCanvas) {
+                finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.92);
+                console.log("📄 OpenCV/jscanify: Hoja enderezada y aplanada automáticamente.");
+            }
+        } catch (e) {
+            console.warn("⚠️ Fallback jscanify extractPaper:", e);
+        }
+    }
+
+    if (!finalDataUrl) {
+        finalDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+    }
+
     detenerScannerCamara();
 
-    // Pasar a modo recorte
-    activarRecorteImagen(dataUrl);
+    // Procesar directo con Gemini Vision AI (cero recorte manual)
+    window.scannerProcesarConGemini(finalDataUrl);
 };
 
 window.m180HandleFileForScanner = function(event) {
@@ -2983,11 +3016,14 @@ window.m180HandleFileForScanner = function(event) {
             bsModal.show();
         }
         detenerScannerCamara();
-        activarRecorteImagen(e.target.result);
+
+        // Procesar directo la imagen subida sin obligar a recortar con los dedos
+        window.scannerProcesarConGemini(e.target.result);
     };
     reader.readAsDataURL(file);
     input.value = '';
 };
+
 
 function activarRecorteImagen(imageSrc) {
     document.getElementById('scanner-step-camera')?.classList.add('d-none');
@@ -3161,41 +3197,48 @@ window.scannerVolverACamara = async function() {
     await iniciarScannerCamara();
 };
 
-window.scannerProcesarConGemini = async function() {
+window.scannerProcesarConGemini = async function(directBase64 = null) {
     if (window._scannerEnProceso) return;
     window._scannerEnProceso = true;
 
-    let base64Jpeg = null;
+    let base64Jpeg = directBase64;
 
-    if (scannerCropperInstance) {
-        // Redimensionar a 1400px máx y compresión 0.82 para optimizar velocidad y evitar cuotas de tokens
-        const croppedCanvas = scannerCropperInstance.getCroppedCanvas({
-            maxWidth: 1400,
-            maxHeight: 1400,
-            fillColor: '#ffffff',
-            imageSmoothingEnabled: true,
-            imageSmoothingQuality: 'high'
-        });
-        if (croppedCanvas) {
-            base64Jpeg = croppedCanvas.toDataURL('image/jpeg', 0.82);
+    if (!base64Jpeg) {
+        if (scannerCropperInstance) {
+            const croppedCanvas = scannerCropperInstance.getCroppedCanvas({
+                maxWidth: 1800,
+                maxHeight: 1400,
+                fillColor: '#ffffff',
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high'
+            });
+            if (croppedCanvas) {
+                base64Jpeg = croppedCanvas.toDataURL('image/jpeg', 0.88);
+            }
+        } else {
+            const cropImg = document.getElementById('scanner-crop-image');
+            if (cropImg) base64Jpeg = cropImg.src;
         }
-    } else {
-        const cropImg = document.getElementById('scanner-crop-image');
-        if (cropImg) base64Jpeg = cropImg.src;
     }
 
     if (!base64Jpeg) {
         window._scannerEnProceso = false;
-        if (typeof showToast === 'function') showToast("No se pudo obtener la imagen recortada", "error");
+        if (typeof showToast === 'function') showToast("No se pudo obtener la imagen", "error");
         return;
     }
 
-    // Mostrar loader
+    // Mostrar loader a pantalla completa
+    document.getElementById('scanner-step-camera')?.classList.add('d-none');
     document.getElementById('scanner-step-crop')?.classList.add('d-none');
-    document.getElementById('scanner-step-loading')?.classList.remove('d-none');
+    const loadingStep = document.getElementById('scanner-step-loading');
+    if (loadingStep) {
+        loadingStep.classList.remove('d-none');
+        loadingStep.classList.add('d-flex');
+    }
 
     const empId = document.getElementById('m180-empleado-id')?.value;
     const fecha = document.getElementById('m180-fecha-str')?.value;
+
 
     try {
         const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
