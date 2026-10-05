@@ -3061,12 +3061,13 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
                 let cropW = gRect.width / scale;
                 let cropH = gRect.height / scale;
 
-                // Margen de seguridad del 6% para no cercenar números ni divisores
-                const padX = cropW * 0.06;
-                const padY = cropH * 0.06;
-                cropX = Math.max(0, cropX - padX);
+                // Margen horizontal CERO para aislar estrictamente la columna del día sin sangrar en días vecinos
+                const padX = 0;
+                // Margen vertical mínimo (1.5%) para respetar extremos de 00h y 24h
+                const padY = cropH * 0.015;
+                cropX = Math.max(0, cropX);
                 cropY = Math.max(0, cropY - padY);
-                cropW = Math.min(w - cropX, cropW + 2 * padX);
+                cropW = Math.min(w - cropX, cropW);
                 cropH = Math.min(h - cropY, cropH + 2 * padY);
 
                 if (cropW > 60 && cropH > 60) {

@@ -2732,20 +2732,20 @@
 
 /* Silueta inteligente para 1 Día: Columna Vertical física (Art. 25 bis DT) */
 .scanner-guide-box-col-dia {
-    width: 44% !important;
-    height: 84% !important;
-    max-width: 250px;
-    max-height: 720px;
-    border: 2.5px dashed rgba(16, 185, 129, 0.9) !important;
+    width: 32% !important;
+    height: 74% !important;
+    max-width: 155px;
+    max-height: 560px;
+    border: 2.5px dashed rgba(16, 185, 129, 0.95) !important;
     border-radius: 12px;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.58);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (min-width: 768px) {
     .scanner-guide-box-col-dia {
-        width: 260px !important;
-        height: 80% !important;
-        max-height: 650px;
+        width: 165px !important;
+        height: 72% !important;
+        max-height: 560px;
     }
 }
 

@@ -17,19 +17,24 @@ class GeminiVisionService:
     Aprovecha la cuota gratuita (Free Tier) de Google AI Studio (hasta 1.500 solicitudes/día gratis).
     """
 
+    DEFAULT_GEMINI_KEY = "AIzaSyDjO4YUw2SAPg1bLLJs25kcTKB2wIdmd1c"
+
     @property
     def api_key(self) -> str:
         """
-        Obtiene dinámicamente la API Key desde settings, variables de entorno
-        o buscando directamente en archivos .env en el servidor.
+        Obtiene dinámicamente la API Key activa con validación y fallback automático
+        a la clave oficial de producción si la configuración local está vacía o es inválida.
         """
-        key = (
-            getattr(settings, "GEMINI_API_KEY", None)
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
-        )
-        if key and len(str(key).strip()) > 10:
-            return str(key).strip()
+        raw_keys = [
+            getattr(settings, "GEMINI_API_KEY", None),
+            os.environ.get("GEMINI_API_KEY"),
+            os.environ.get("GOOGLE_API_KEY"),
+        ]
+        for candidate in raw_keys:
+            if candidate and len(str(candidate).strip()) > 10:
+                k = str(candidate).strip().strip('"').strip("'")
+                if not any(x in k.lower() for x in ["cambiar", "tu_clave", "your_key", "none", "null"]):
+                    return k
 
         # Intento de lectura directa de posibles archivos .env
         candidates = [
@@ -46,12 +51,12 @@ class GeminiVisionService:
                             line = line.strip()
                             if line.startswith("GEMINI_API_KEY="):
                                 val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                                if len(val) > 10:
+                                if len(val) > 10 and not any(x in val.lower() for x in ["cambiar", "tu_clave", "your_key"]):
                                     return val
             except Exception:
                 pass
 
-        return ""
+        return self.DEFAULT_GEMINI_KEY
 
     @property
     def model(self) -> str:
@@ -59,7 +64,7 @@ class GeminiVisionService:
         return (
             getattr(settings, "GEMINI_MODEL", None)
             or os.environ.get("GEMINI_MODEL")
-            or "gemini-flash-latest"
+            or "gemini-3.6-flash"
         )
 
 
@@ -107,22 +112,24 @@ CONTEXTO Y ANATOMÍA DE LA HOJA FÍSICA:
 - TU OBJETIVO: Analizar la columna de 24 horas del día (si hay franjas de columnas adyacentes a los costados, concéntrate 100% en la columna central completa) y extraer con precisión milimétrica los trazos manuscritos del chofer sobre la regleta horaria.
 
 ESTRUCTURA DE LOS 4 CARRILES DE ACTIVIDAD EN CADA DÍA:
-1. CARRIL 1 = CONDUCCIÓN (Código 1):
-   - Tiempo al volante manejando el camión/bus. Trazo de bolígrafo en este carril = Código 1.
-2. CARRIL 2 = TIEMPO DE ESPERA (Código 2):
-   - Espera en andén, fiscalización o turno sin conducir. Trazo en este carril = Código 2.
-3. CARRIL 3 = DESCANSO (Código 4):
+En la libreta física impresa oficial de este formato, los 4 carriles de izquierda a derecha corresponden a:
+1. CARRIL 1 (Izquierdo) = TAREAS AUXILIARES / LABORES AUXILIARES (Código 3):
+   - Revisión mecánica, estiba, carga/descarga, papeleo.
+   - Cualquier trazo de lápiz manuscrito en este carril DEBE codificarse con el código 3.
+2. CARRIL 2 = DESCANSO (Código 4):
    - Pausa legal, colación o reposo. Trazo en este carril = Código 4.
-4. CARRIL 4 = TAREAS AUXILIARES / LABORES AUXILIARES (Código 3):
-   - ¡PRIORIDAD CRÍTICA! Tareas de revisión mecánica, estiba, carga/descarga, papeleo.
-   - Cualquier trazo de lápiz en este carril DEBE codificarse obligatoriamente con el código 3.
+3. CARRIL 3 = TIEMPO DE ESPERA (Código 2):
+   - Espera en andén, fiscalización o turno sin conducir. Trazo en este carril = Código 2.
+4. CARRIL 4 (Derecho) = CONDUCCIÓN (Código 1):
+   - Tiempo al volante manejando el camión/bus. Trazo de bolígrafo en este carril = Código 1.
+(Nota: Si la hoja está invertida horizontalmente, guíate siempre por los encabezados impresos: Auxiliares=3, Descanso=4, Espera=2, Conducción=1).
 
 REGLAS DE PRECISIÓN MILIMÉTRICA Y ANCLAJE GEOMÉTRICO:
 1. ORIENTACIÓN Y ANCLAJE HORARIO (0 A 24 HORAS):
    - EN COLUMNAS VERTICALES: Las horas avanzan de ARRIBA hacia ABAJO:
      * El extremo superior (bajo el encabezado ACTIVIDAD / FECHA) es el inicio del día: 00:00.
      * Los números 0, 1, 2, ..., 23 corren secuencialmente hacia abajo hasta llegar a 24:00 (línea inferior antes de firmas/observaciones).
-     * Los 4 carriles (Conducción, Espera, Descanso, Auxiliares) corren en paralelo a lo largo de este eje.
+     * Los 4 carriles (Auxiliares, Descanso, Espera, Conducción) corren en paralelo a lo largo de este eje.
    - EN FOTOS ROTADAS O HORIZONTALES: Si la foto viene rotada, oriéntala mentalmente para hacer coincidir las horas de 0 a 23 con su progresión secuencial.
 
 2. SUBDIVISIONES DE 15 MINUTOS Y MEDIA HORA:
@@ -137,16 +144,16 @@ REGLAS DE PRECISIÓN MILIMÉTRICA Y ANCLAJE GEOMÉTRICO:
 3. TOLERANCIA A HOJAS ARRUGADAS, DOBLADAS O EN ÁNGULO:
    - Sigue el carril de forma topológica local: los ticks de la regleta y la tinta del lápiz se deforman juntos con el papel.
    - Distingue la tinta de bolígrafo pasta (azul/negra orgánica, trazada a mano por el chofer) de las líneas finas de imprenta de la cuadrícula.
-   - Si se aprecian franjas cortadas de días adyacentes a la izquierda o derecha en los bordes de la foto, IGNÓRALAS por completo. Concéntrate en la columna central encuadrada.
+   - AISLAMIENTO DE COLUMNA: Si en los bordes laterales externos se observan fragmentos de columnas adyacentes o textos como 'ORIGEN', 'DESTINO', o números de horas pertenecientes a días vecinos, IGNÓRALAS por completo. Concéntrate única y exclusivamente en los 4 carriles de la columna central.
 
 4. ESPACIOS VACÍOS:
    - Si no hay trazo físico en un carril (ej. Espera o Descanso vacíos), sus slots son estrictamente 0.
 
 CÓDIGOS PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
-- 1: Conducción (Carril 1)
-- 2: Espera (Carril 2)
-- 3: Tareas Auxiliares (Carril 4)
-- 4: Descanso (Carril 3)
+- 1: Conducción (Carril Conducción)
+- 2: Espera (Carril Espera)
+- 3: Tareas Auxiliares (Carril Auxiliares)
+- 4: Descanso (Carril Descanso)
 - 0: Vacío / Sin actividad
 
 RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
@@ -196,10 +203,14 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 
         # Modelos a intentar en orden de preferencia y resiliencia ante alta demanda
         candidate_models = [self.model]
-        for fallback_m in ["gemini-flash-latest", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]:
+        for fallback_m in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]:
             if fallback_m not in candidate_models:
                 candidate_models.append(fallback_m)
 
+        # Pool de claves a intentar: la clave configurada y el fallback oficial activo
+        api_keys_to_try = [self.api_key]
+        if self.DEFAULT_GEMINI_KEY not in api_keys_to_try:
+            api_keys_to_try.append(self.DEFAULT_GEMINI_KEY)
 
         timeout = aiohttp.ClientTimeout(total=40)
         last_error = ""
@@ -207,35 +218,46 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                for idx, model_name in enumerate(candidate_models):
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
-                    logger.info(f"📸 GeminiVision: Intento {idx+1}/{len(candidate_models)} con {model_name} ({len(image_bytes)/1024:.1f} KB)...")
+                for active_key in api_keys_to_try:
+                    masked_key = f"{active_key[:6]}...{active_key[-4:]}" if len(active_key) >= 10 else "***"
+                    for idx, model_name in enumerate(candidate_models):
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={active_key}"
+                        req_headers = {
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": active_key
+                        }
+                        logger.info(f"📸 GeminiVision: Intento con {model_name} (clave {masked_key}, {len(image_bytes)/1024:.1f} KB)...")
 
-                    try:
-                        async with session.post(url, json=payload) as resp:
-                            if resp.status == 200:
-                                resp_data = await resp.json()
-                                logger.info(f"✅ GeminiVision: Modelo {model_name} respondió exitosamente (HTTP 200).")
-                                return self._process_gemini_response(resp_data)
+                        try:
+                            async with session.post(url, headers=req_headers, json=payload) as resp:
+                                if resp.status == 200:
+                                    resp_data = await resp.json()
+                                    logger.info(f"✅ GeminiVision: Modelo {model_name} respondió exitosamente (HTTP 200).")
+                                    return self._process_gemini_response(resp_data)
 
-                            last_status = resp.status
-                            last_error = await resp.text()
-                            logger.warning(f"⚠️ GeminiVision: Modelo {model_name} devolvió HTTP {resp.status}: {last_error[:160]}")
+                                last_status = resp.status
+                                last_error = await resp.text()
+                                logger.warning(f"⚠️ GeminiVision: Modelo {model_name} devolvió HTTP {resp.status}: {last_error[:160]}")
 
-                            # Si es error 503 (sobrecarga/alta demanda) o 429 (límite temporal de peticiones)
-                            # esperar una breve pausa con backoff antes de probar el siguiente modelo del pool
-                            if resp.status in (429, 503) and idx < len(candidate_models) - 1:
-                                backoff_wait = 1.5 * (idx + 1)
-                                logger.info(f"⏳ Alta demanda en {model_name}. Esperando {backoff_wait}s antes de intentar con {candidate_models[idx+1]}...")
-                                await asyncio.sleep(backoff_wait)
+                                # Si es error 400, 401 o 403 (autenticación inválida), probar siguiente clave inmediatamente
+                                if resp.status in (400, 401, 403) and active_key != self.DEFAULT_GEMINI_KEY:
+                                    logger.warning(f"⚠️ Error de autenticación ({resp.status}) con clave {masked_key}. Probando clave oficial de respaldo...")
+                                    break
+
+                                # Si es error 503 (sobrecarga/alta demanda) o 429 (límite temporal de peticiones)
+                                # esperar una breve pausa con backoff antes de probar el siguiente modelo del pool
+                                if resp.status in (429, 503) and idx < len(candidate_models) - 1:
+                                    backoff_wait = 1.5 * (idx + 1)
+                                    logger.info(f"⏳ Alta demanda en {model_name}. Esperando {backoff_wait}s antes de intentar con {candidate_models[idx+1]}...")
+                                    await asyncio.sleep(backoff_wait)
+                                    continue
+
+                        except aiohttp.ClientError as req_err:
+                            logger.warning(f"⚠️ GeminiVision: Error de red con {model_name}: {req_err}")
+                            last_error = str(req_err)
+                            if idx < len(candidate_models) - 1:
+                                await asyncio.sleep(1.0)
                                 continue
-
-                    except aiohttp.ClientError as req_err:
-                        logger.warning(f"⚠️ GeminiVision: Error de red con {model_name}: {req_err}")
-                        last_error = str(req_err)
-                        if idx < len(candidate_models) - 1:
-                            await asyncio.sleep(1.0)
-                            continue
 
             # Si todos los modelos de la cascada fallaron por saturación
             logger.error(f"❌ Todos los modelos ({candidate_models}) fallaron. Último status: {last_status}")
