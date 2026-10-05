@@ -2235,7 +2235,7 @@ let m180_locked = false;      // día cerrado: solo lectura
 const M180_ACTIVIDADES = {
     1: { id: 1, name: 'Conducción', short: 'COND', color: '#059669', soft: '#ecfdf5', ink: '#065f46' },
     2: { id: 2, name: 'Espera', short: 'ESP', color: '#d97706', soft: '#fffbeb', ink: '#92400e' },
-    3: { id: 3, name: 'Labores auxiliares', short: 'AUX', color: '#4f46e5', soft: '#eef2ff', ink: '#3730a3' },
+    3: { id: 3, name: 'Tareas auxiliares', short: 'AUX', color: '#4f46e5', soft: '#eef2ff', ink: '#3730a3' },
     4: { id: 4, name: 'Descanso', short: 'DESC', color: '#0284c7', soft: '#f0f9ff', ink: '#075985' }
 };
 
@@ -2281,10 +2281,11 @@ function initLibreta180hGrid() {
     }
     ruler.innerHTML = rulerHtml;
 
-    lanes.innerHTML = [1, 2, 3, 4].map(actId => {
+    // Orden exacto de la libreta física chilena: 1. Conducción, 2. Espera, 3. Descanso, 4. Tareas Auxiliares
+    lanes.innerHTML = [1, 2, 4, 3].map((actId, idx) => {
         const c = M180_ACTIVIDADES[actId];
         return `<div class="m180-lane" data-act="${actId}" style="--c:${c.color}; --soft:${c.soft}; --ink:${c.ink};">
-            <div class="m180-lane-label"><span class="m180-lane-dot"></span><span>${actId}. ${c.name}</span></div>
+            <div class="m180-lane-label"><span class="m180-lane-dot"></span><span>${idx + 1}. ${c.name}</span></div>
             <div class="m180-track" data-act="${actId}">
                 <div class="m180-blocks"></div>
                 <div class="m180-hover"></div>
@@ -2753,6 +2754,28 @@ async function guardarLibreta180h(cerrarDia = false) {
         } else if (!result.isDenied) {
             return;
         }
+    } else if (!cerrarDia && minTot < 1440 && minTot > 0) {
+        // Preguntar al guardar borrador si desea autollenar el descanso (aplica para móvil o computador)
+        const faltanMins = 1440 - minTot;
+        const result = await Swal.fire({
+            title: "¿Rellenar Descanso en el Borrador?",
+            html: `Tienes <b>${formatMinToHHMM(minTot)} hrs</b> registradas y quedan <b>${formatMinToHHMM(faltanMins)} hrs</b> vacías.<br><br>¿Deseas rellenar automáticamente las horas restantes vacías con <b>Descanso</b> antes de guardar el borrador?`,
+            icon: "question",
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonColor: "#059669",
+            denyButtonColor: "#3b82f6",
+            cancelButtonColor: "#64748b",
+            confirmButtonText: '<i class="bi bi-moon-stars me-1"></i> Rellenar descanso y guardar',
+            denyButtonText: '<i class="bi bi-save me-1"></i> Guardar solo lo marcado',
+            cancelButtonText: 'Seguir editando'
+        });
+
+        if (result.isConfirmed) {
+            libreta180hAutoDescanso();
+        } else if (!result.isDenied) {
+            return;
+        }
     }
 
     const payload = {
@@ -3128,36 +3151,47 @@ window.scannerProcesarConGemini = async function() {
         // Cerrar modal del escáner
         window.scannerCerrar();
 
-        // Notificación de éxito con opciones claras de guardado
+        // Notificación de éxito con opciones claras de guardado y autollenado
         if (typeof Swal !== 'undefined') {
+            const emptySlots = m180_slots.filter(s => s === 0).length;
+            const emptyHours = (emptySlots * 15 / 60).toFixed(1);
+
             const swalRes = await Swal.fire({
                 icon: 'success',
                 title: '¡Planilla Escaneada con Éxito!',
                 html: `
-                    <p class="text-muted small mb-2">Google Gemini Vision reconoció las marcas de la planilla y las volcó en la cuadrícula de 24 horas:</p>
+                    <p class="text-muted small mb-2">Google Gemini Vision reconoció las marcas de la planilla y las volcó a la grilla de 24 horas:</p>
                     <div class="d-flex justify-content-around text-center p-2 mb-3 bg-light rounded border">
                         <div><strong class="text-success fs-5">${calcCondH}h</strong><div class="text-muted" style="font-size:0.7rem;">Conducción</div></div>
-                        <div><strong class="text-primary fs-5">${calcEspH}h</strong><div class="text-muted" style="font-size:0.7rem;">Espera</div></div>
-                        <div><strong class="text-warning fs-5">${calcAuxH}h</strong><div class="text-muted" style="font-size:0.7rem;">Auxiliares</div></div>
-                        <div><strong class="text-secondary fs-5">${calcDescH}h</strong><div class="text-muted" style="font-size:0.7rem;">Descanso</div></div>
+                        <div><strong class="text-warning fs-5">${calcEspH}h</strong><div class="text-muted" style="font-size:0.7rem;">Espera</div></div>
+                        <div><strong class="text-info fs-5">${calcDescH}h</strong><div class="text-muted" style="font-size:0.7rem;">Descanso</div></div>
+                        <div><strong class="text-primary fs-5">${calcAuxH}h</strong><div class="text-muted" style="font-size:0.7rem;">Tareas Aux.</div></div>
                     </div>
-                    <div class="alert alert-info py-2 px-3 small text-start mb-0" style="border-radius:8px;">
-                        <i class="bi bi-info-circle-fill me-1 text-primary"></i>
-                        <strong>¿Qué deseas hacer ahora?</strong><br>
-                        Puedes <strong>Guardar directamente</strong> en la base de datos o <strong>Revisar la grilla</strong> para verificar o ajustar algún tramo antes de guardar.
+                    ${emptySlots > 0 ? `
+                    <div class="alert alert-warning py-2 px-3 small text-start mb-0" style="border-radius:8px;">
+                        <i class="bi bi-info-circle-fill me-1 text-warning"></i>
+                        Quedan <strong>${emptyHours} hrs</strong> sin marcar. Según la DT los tramos sin marcar corresponden a descanso legal.
                     </div>
+                    ` : ''}
                 `,
                 showCancelButton: true,
-                confirmButtonText: '<i class="bi bi-check-circle-fill me-1"></i> Guardar en Base de Datos',
+                showDenyButton: true,
+                confirmButtonText: '<i class="bi bi-moon-stars-fill me-1"></i> Rellenar Descanso y Guardar',
                 confirmButtonColor: '#059669',
-                cancelButtonText: '<i class="bi bi-pencil-square me-1"></i> Revisar Grilla Primero',
-                cancelButtonColor: '#3b82f6',
+                denyButtonText: '<i class="bi bi-save me-1"></i> Guardar Borrador (tal cual)',
+                denyButtonColor: '#3b82f6',
+                cancelButtonText: '<i class="bi bi-pencil-square me-1"></i> Revisar en Grilla',
+                cancelButtonColor: '#64748b',
                 focusConfirm: true
             });
 
             if (swalRes.isConfirmed) {
-                // Guardar directamente en la base de datos cerrando el día
+                // Rellenar automáticamente los vacíos con descanso y guardar en base de datos
+                libreta180hAutoDescanso();
                 await window.guardarLibreta180h(true);
+            } else if (swalRes.isDenied) {
+                // Guardar como borrador tal como se detectó
+                await window.guardarLibreta180h(false);
             }
         } else if (typeof showToast === 'function') {
             showToast("Planilla procesada con éxito por Gemini Vision", "success");

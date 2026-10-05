@@ -122,22 +122,37 @@ ESTRUCTURA EXACTA DE LAS 4 FILAS IMPRESAS EN LA HOJA FÍSICA (De arriba hacia ab
 {f"FECHA ESPERADA DE LA JORNADA: {fecha_esperada}" if fecha_esperada else ""}
 
 INSTRUCCIONES DE PRECISIÓN MILIMÉTRICA:
-1. ORIENTACIÓN: Si la fotografía fue tomada verticalmente (90 grados) o apaisada, oriéntala mentalmente para que la regla de horas (00 a 24) corra de izquierda a derecha y las 4 filas queden en su orden: 1. Conducción, 2. Espera, 3. Descanso, 4. Tareas Auxiliares.
-2. LECTURA DE LA REGLA DE 24 HORAS:
-   - La cuadrícula tiene 24 horas continuas (00:00 a 24:00) divididas en 96 tramos de 15 minutos (cada hora tiene 4 divisiones: :00, :15, :30, :45).
-   - CRITERIO INCLUSIVO DE BORDES: Si el chofer trazó una línea desde una marca de hora (ej. de 08:00 a 12:00), no recortes los extremos: cuenta las 4 horas completas (16 slots consecutivos de 15 minutos). Si eran 4 horas, deben ser exactamente 16 slots con código 1 (no 14 slots).
-3. DETECCIÓN DE TAREAS AUXILIARES (FILA 4):
-   - Examina con máxima atención la FILA 4 (Tareas Auxiliares). Si el conductor marcó un tramo largo (por ejemplo de 9.5 horas), cuenta cada uno de los 38 cuartos de hora correspondientes (9.5h * 4 = 38 slots) y asígnales el código 3.
-4. VERIFICACIÓN CRUZADA CON TOTALES ESCRITOS:
-   - Revisa si en la columna de totales (o al final/inicio de las filas) el conductor escribió números manuscritos con los totales del día (ejemplo: "4" o "04:00" en Conducción, "9.5" o "09:30" en Auxiliares).
-   - Si existen esos números, utilízalos para verificar y calibrar que la cantidad de slots coincida exactamente (4h = 16 slots, 9.5h = 38 slots).
-5. CASILLAS EN BLANCO:
-   - Si una fila o tramo no tiene ninguna línea o marca manuscrita trazada por el chofer, déjalo estrictamente en 0 (Vacío). NO inventes descansos si la fila de descanso está en blanco.
+1. ORIENTACIÓN DE LA FOTOGRAFÍA:
+   - Las fotos tomadas con celulares muchas veces vienen giradas 90° (verticales) o invertidas.
+   - Detecta la orientación correcta identificando los textos impresos:
+     * El texto "ACTIVIDAD" y las 4 etiquetas ("CONDUCCION", "ESPERA", "DESCANSO", "TAREAS AUXILIARES") definen el eje vertical de las filas.
+     * La regleta con los números del "0" al "23" define el eje horizontal del tiempo (de 00:00 a 24:00, de izquierda a derecha).
+   - Lee mentalmente la planilla en su orientación natural horizontal (horas de izquierda a derecha).
+
+2. SISTEMA DE COORDENADAS DE LA REGLETA (0 A 23) Y SUBDIVISIONES DE 15 MINUTOS:
+   - Cada número "H" (del 0 al 23) es el encabezado de esa columna horaria, abarcando desde H:00 hasta (H+1):00.
+   - Dentro de cada columna horaria hay 4 marcas o subdivisiones de 15 minutos:
+     * Borde izquierdo de la columna: :00
+     * Segundo tick: :15
+     * Tercer tick (marca central más larga): :30
+     * Cuarto tick: :45
+     * Borde derecho (línea divisoria vertical con la siguiente hora): :00 de la siguiente hora.
+   - CRITERIO INCLUSIVO DE COLUMNAS COMPLETAS:
+     * Si una línea manuscrita cubre una columna "H" completa hasta la línea divisoria derecha, abarca los 4 cuartos de hora de esa columna.
+     * EJEMPLO CONDUCCIÓN (FILA 1): Si el trazo cubre las columnas 6, 7, 8 y 9 hasta la línea divisoria con el 10, el tramo va de 06:00 a 10:00 (EXACTAMENTE 4.0 HORAS = 16 slots con código 1). No recortes a 09:30 ni a 09:00.
+     * EJEMPLO TAREAS AUXILIARES (FILA 4): Si el trazo en la Fila 4 inicia en el tick central (:30) de la columna 10 (10:30) y corre continuo cubriendo 11, 12, 13, 14, 15, 16, 17, 18, 19 hasta la línea vertical divisoria de la columna 20 (20:00), el tramo va de 10:30 a 20:00 (EXACTAMENTE 9.5 HORAS = 38 slots con código 3).
+
+3. DETECCIÓN RIGUROSA DE TAREAS AUXILIARES (FILA 4 - INFERIOR):
+   - La cuarta fila (la de más abajo) corresponde a TAREAS AUXILIARES.
+   - Cualquier trazo o línea a lápiz/bolígrafo en esta fila DEBE codificarse obligatoriamente con el código 3.
+
+4. CASILLAS EN BLANCO:
+   - Si una fila o tramo no tiene ninguna línea o marca manuscrita trazada por el chofer (ej. Fila 2 Espera o Fila 3 Descanso vacías), déjala estrictamente en 0 (Vacío). NO inventes marcas donde no hay trazo físico.
 
 CÓDIGOS DE CADA TRAMO PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
 - 1: Conducción (Fila 1)
 - 2: Espera (Fila 2)
-- 3: Tareas / Labores Auxiliares (Fila 4)
+- 3: Tareas Auxiliares (Fila 4)
 - 4: Descanso (Fila 3)
 - 0: Sin marcar / Vacío
 
