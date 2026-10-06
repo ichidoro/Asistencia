@@ -67,7 +67,7 @@ class CierreService:
             query_he, tuple([fecha_inicio, fecha_fin] + params_area)
         )
 
-        # ── HARD STOP 2: Anomalías sin corregir ───────────────────────────────
+        # ── HARD STOP 2: Anomalías sin corregir y Días Pendientes ────────────
         # Excluye anomalías que tienen JE aprobada (EXTRA) con ambas marcas → no son bloqueantes
         query_anomalias = f"""
             SELECT a.id, a.empleado_id, a.fecha, a.hora_entrada_real, a.hora_salida_real,
@@ -80,14 +80,16 @@ class CierreService:
                 AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE a.fecha BETWEEN ? AND ?
-              AND a.estado = 'ANOMALIA'
-              AND NOT EXISTS (
-                  SELECT 1 FROM jornadas_especiales je
-                  WHERE je.empleado_id = a.empleado_id
-                    AND je.fecha = a.fecha
-                    AND je.estado = 'EXTRA'
-                    AND je.hora_entrada IS NOT NULL
-                    AND je.hora_salida IS NOT NULL
+              AND (
+                  (a.estado = 'ANOMALIA' AND NOT EXISTS (
+                      SELECT 1 FROM jornadas_especiales je
+                      WHERE je.empleado_id = a.empleado_id
+                        AND je.fecha = a.fecha
+                        AND je.estado = 'EXTRA'
+                        AND je.hora_entrada IS NOT NULL
+                        AND je.hora_salida IS NOT NULL
+                  ))
+                  OR a.estado = 'PENDIENTE'
               )
             {filtro_area}
             ORDER BY e.apellido_paterno, a.fecha
@@ -203,10 +205,14 @@ class CierreService:
         )
         empleados_matriz = matrix_data.get("empleados", [])
         emp_matrix = matrix_data.get("matrix", {})
+        feriados = matrix_data.get("feriados", [])
+        feriados_set = {f['fecha'] for f in feriados}
 
         total_he_fijos_min = 0.0
         total_he_fijos_count = 0
         total_exceso_bolsa_min = 0.0
+        total_espera_min = 0.0
+        total_exceso_espera_min = 0.0
 
         total_deuda_fijos_min = 0.0
         total_deuda_atrasos_min = 0.0
@@ -220,11 +226,51 @@ class CierreService:
             es_bolsa = emp.get("tipo_programacion") in ("BOLSA_FLEXIBLE", "FLEXIBLE_BOLSA")
             dias_dict = emp_matrix.get(str(emp_id)) or emp_matrix.get(emp_id) or {}
 
-            meta_min = emp.get("meta_mensual_minutos") or (40 * 60)
-            if emp.get("meta_ajustada_minutos_descuento"):
-                meta_min = max(0, meta_min - emp.get("meta_ajustada_minutos_descuento"))
+            if es_bolsa:
+                meta_original = emp.get("meta_mensual_minutos")
+                if not meta_original:
+                    meta_original = round(float(emp.get("meta_horas_semanales") or 180.0) * 60)
+
+                dias_programados = 0
+                dias_justificados = 0
+                estados_justificados = ['VACACIONES', 'LICENCIA', 'LIC_COMUN', 'LIC_MUTUAL', 'CUMPLEAÑOS', 'DUELO', 'PERMISO', 'NO NACIDO', 'DEFUNCION']
+
+                for d in rango_dias:
+                    f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
+                    is_fer = f_str in feriados_set
+                    di_check = dias_dict.get(f_str, {})
+                    day_db = d.weekday()
+                    turno_dias = emp.get("turno_dias", {})
+                    day_info = turno_dias.get(str(day_db), {}) or turno_dias.get(day_db, {})
+                    is_structurally_libre = day_info.get("es_libre") == 1
+                    is_descanso = is_fer or is_structurally_libre or (di_check.get("estado") == 'LIBRE')
+
+                    if not is_descanso:
+                        dias_programados += 1
+                        di_estado = (di_check.get("estado") or "").upper()
+                        di_nomen = (di_check.get("nomenclatura") or "").strip().upper()
+                        is_justificado = (
+                            any(ej in di_estado for ej in estados_justificados) or
+                            (bool(di_nomen) and di_nomen not in ('DEOP', 'LIB', 'FER', 'OK', 'VIAJE'))
+                        )
+                        if is_justificado:
+                            dias_justificados += 1
+
+                if dias_programados > 0 and dias_justificados > 0:
+                    valor_turno_min = meta_original / dias_programados
+                    meta_min = round(meta_original - (valor_turno_min * dias_justificados))
+                else:
+                    meta_min = meta_original
+
+                if emp.get("meta_ajustada_minutos_descuento") and dias_justificados == 0:
+                    meta_min = max(0, meta_min - emp.get("meta_ajustada_minutos_descuento"))
+            else:
+                meta_min = emp.get("meta_mensual_minutos") or round(float(emp.get("meta_horas_semanales") or 45.0) * 60)
+                if emp.get("meta_ajustada_minutos_descuento"):
+                    meta_min = max(0, meta_min - emp.get("meta_ajustada_minutos_descuento"))
 
             acum_bolsa = 0
+            acum_espera = 0
             viajes_sumados_ids = set()
 
             for d in rango_dias:
@@ -252,6 +298,8 @@ class CierreService:
                 if es_bolsa:
                     if not is_esp:
                         acum_bolsa += trab
+                    if di.get("minutos_espera"):
+                        acum_espera += float(di.get("minutos_espera") or 0.0)
                 else:
                     if not is_esp:
                         if di.get("estado_he") == 'APROBADO':
@@ -300,10 +348,17 @@ class CierreService:
                 elif acum_bolsa < meta_min:
                     total_deficit_bolsa_min += (meta_min - acum_bolsa)
 
+                # 88h Espera (Art. 25 bis)
+                meta_espera_min = round(float(emp.get("meta_horas_espera") if emp.get("meta_horas_espera") is not None else 88.0) * 60)
+                total_espera_min += acum_espera
+                if acum_espera > meta_espera_min:
+                    total_exceso_espera_min += (acum_espera - meta_espera_min)
+
         # Haberes (recargo 50% Art. 32 CdT)
         he_fijos_hrs = round(total_he_fijos_min / 60.0, 2)
         he_bolsa_hrs = round(total_exceso_bolsa_min / 60.0, 2)
-        he_total_hrs = round(he_fijos_hrs + he_bolsa_hrs, 2)
+        he_espera_hrs = round(total_exceso_espera_min / 60.0, 2)
+        he_total_hrs = round(he_fijos_hrs + he_bolsa_hrs + he_espera_hrs, 2)
 
         # Débitos (tiempo no trabajado 100%)
         deuda_fijos_hrs = round(total_deuda_fijos_min / 60.0, 2)
@@ -317,6 +372,8 @@ class CierreService:
         resumen['he_aprobadas_fijos_horas'] = he_fijos_hrs
         resumen['he_aprobadas_fijos_count'] = total_he_fijos_count
         resumen['he_exceso_bolsa_horas'] = he_bolsa_hrs
+        resumen['he_exceso_espera_horas'] = he_espera_hrs
+        resumen['espera_total_horas'] = round(total_espera_min / 60.0, 2)
         resumen['he_total_haberes_horas'] = he_total_hrs
 
         resumen['deuda_fijos_horas'] = deuda_fijos_hrs

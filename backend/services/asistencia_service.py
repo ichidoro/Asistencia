@@ -3122,41 +3122,35 @@ class AsistenciaService:
             f_ini = max(f_ini_asig, fecha_desde)
             f_fin = min(f_fin_asig, hoy_str) if f_fin_asig else hoy_str
 
-            if f_ini > f_fin:
-                continue
-
-            # Purga en logs_raw: solo marcas de reloj biométrico (manual = 0 o manual IS NULL)
-            dt_ini_str = f"{f_ini} 00:00:00"
-            dt_fin_str = f"{f_fin} 23:59:59"
-
-            # Contar antes de borrar para observabilidad
-            q_cnt = """
-                SELECT COUNT(*) as cnt FROM logs_raw
-                WHERE empleado_id = ?
-                  AND fecha_hora >= ?
-                  AND fecha_hora <= ?
-                  AND (manual = 0 OR manual IS NULL)
-            """
-            cnt_row = await db.fetch_one(q_cnt, (emp_id, dt_ini_str, dt_fin_str))
-            cnt_borrar = cnt_row['cnt'] if cnt_row else 0
-
-            if cnt_borrar > 0:
-                q_del = """
-                    DELETE FROM logs_raw
-                    WHERE empleado_id = ?
-                      AND fecha_hora >= ?
-                      AND fecha_hora <= ?
-                      AND (manual = 0 OR manual IS NULL)
-                """
-                await db.execute(q_del, (emp_id, dt_ini_str, dt_fin_str))
-                total_marcas_borradas += cnt_borrar
-                logger.info(f"🗑️ [Libreta 180h] Eliminadas {cnt_borrar} marcas de reloj para empleado {emp_id} entre {f_ini} y {f_fin}.")
-
-            # Expandir días para recálculo
+            # Expandir días y purgar únicamente en períodos abiertos (respetando cierres)
             cur_dt = datetime.strptime(f_ini, "%Y-%m-%d")
             fin_dt = datetime.strptime(f_fin, "%Y-%m-%d")
             while cur_dt <= fin_dt:
-                emp_fechas_a_recalcular.add((emp_id, cur_dt.strftime("%Y-%m-%d")))
+                cur_s = cur_dt.strftime("%Y-%m-%d")
+                if not await self.repository.check_fecha_cerrada(cur_s, emp_id):
+                    dt_ini_str = f"{cur_s} 00:00:00"
+                    dt_fin_str = f"{cur_s} 23:59:59"
+                    q_cnt = """
+                        SELECT COUNT(*) as cnt FROM logs_raw
+                        WHERE empleado_id = ?
+                          AND fecha_hora >= ?
+                          AND fecha_hora <= ?
+                          AND (manual = 0 OR manual IS NULL)
+                    """
+                    cnt_row = await db.fetch_one(q_cnt, (emp_id, dt_ini_str, dt_fin_str))
+                    cnt_borrar = cnt_row['cnt'] if cnt_row else 0
+                    if cnt_borrar > 0:
+                        q_del = """
+                            DELETE FROM logs_raw
+                            WHERE empleado_id = ?
+                              AND fecha_hora >= ?
+                              AND fecha_hora <= ?
+                              AND (manual = 0 OR manual IS NULL)
+                        """
+                        await db.execute(q_del, (emp_id, dt_ini_str, dt_fin_str))
+                        total_marcas_borradas += cnt_borrar
+                        logger.info(f"🗑️ [Libreta 180h] Eliminadas {cnt_borrar} marcas de reloj para emp {emp_id} fecha {cur_s}.")
+                    emp_fechas_a_recalcular.add((emp_id, cur_s))
                 cur_dt += timedelta(days=1)
 
         # 2. Recalcular días afectados

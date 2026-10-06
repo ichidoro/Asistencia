@@ -82,12 +82,6 @@ async def _recalcular_periodo_activo():
         asist_repo = AsistenciaRepository(db)
         asist_service = AsistenciaService(asist_repo)
 
-        # ── Blindaje & Purga Libreta 180h (Art. 25 bis / Sin Reloj desde 01-10-2026) ──
-        try:
-            await asist_service.purgar_y_recalcular_libreta_180h(fecha_desde="2026-10-01")
-        except Exception as err_purga:
-            logger.warning(f"⚠️ [Startup] Error ejecutando purga preventiva de libreta 180h: {err_purga}")
-
         dias_a_recalc = []
         # Incluir el último día de cierre (día puente) para que turnos nocturnos que cruzan la medianoche
         # sincronicen y propaguen sus marcas consumidas hacia el primer día del período abierto.
@@ -201,49 +195,6 @@ async def lifespan(app: FastAPI):
                 he_repo = HoraExtraRepository(db)
                 await he_repo.run_backfill()
                 logger.info("✅ [Startup] Backfill de horas extras completado")
-
-                # Migración: Auto-aprobar intercambios pendientes y reprocesar asistencia
-                try:
-                    pendientes = await db.fetch_all("SELECT * FROM intercambios_dias WHERE estado = 'PENDIENTE'")
-                    if pendientes:
-                        logger.info(f"🔄 [Startup Migration] Detectados {len(pendientes)} intercambios PENDIENTES. Actualizando a APROBADO...")
-                        await db.execute("UPDATE intercambios_dias SET estado = 'APROBADO' WHERE estado = 'PENDIENTE'")
-                        
-                        from backend.services.asistencia_service import AsistenciaService
-                        from backend.repositories.asistencia import AsistenciaRepository
-                        asist_service = AsistenciaService(AsistenciaRepository(db))
-                        
-                        for p in pendientes:
-                            emp_id = p['empleado_solicitante_id']
-                            asyncio.create_task(asist_service.reprocesar_periodo_empleado(
-                                empleado_id=emp_id,
-                                fecha_inicio=p['fecha_origen'],
-                                fecha_fin=p['fecha_origen'],
-                                force=True
-                            ))
-                            asyncio.create_task(asist_service.reprocesar_periodo_empleado(
-                                empleado_id=emp_id,
-                                fecha_inicio=p['fecha_destino'],
-                                fecha_fin=p['fecha_destino'],
-                                force=True
-                            ))
-                        logger.success("✅ [Startup Migration] Auto-aprobación de intercambios completada y reprocesamientos en cola")
-                except Exception as mig_err:
-                    logger.warning(f"⚠️ [Startup Migration] Error al migrar intercambios: {mig_err}")
-
-                # Limpieza puntual de prueba solicitada para Rafael Arroyo Pérez (01-10-2026)
-                try:
-                    emp_arr = await db.fetch_one("SELECT id FROM empleados WHERE nombre LIKE '%ARROYO PEREZ%RAFAEL%' LIMIT 1")
-                    if emp_arr:
-                        arr_id = emp_arr['id']
-                        await db.execute("DELETE FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha = '2026-10-01'", (arr_id,))
-                        from pathlib import Path
-                        foto_p = Path("downloads") / "libretas_180h" / f"{arr_id}_2026-10-01.jpg"
-                        if foto_p.exists():
-                            foto_p.unlink(missing_ok=True)
-                        logger.info(f"🧹 [Startup] Registro de prueba libreta 180h 01-10-2026 limpiado para empleado {arr_id}")
-                except Exception as arr_err:
-                    logger.warning(f"⚠️ Error limpiando prueba Arroyo: {arr_err}")
 
                 # ── Rolling Window Sync de Feriados ──────────────────────────────
                 # Garantiza año actual completo + 2 meses adelante.
