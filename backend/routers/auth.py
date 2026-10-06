@@ -11,30 +11,8 @@ from backend.core.security import get_current_user, SecurityContext
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
-# ── Rate Limiting en memoria ─────────────────────────────────────────────────
-import time as _time
-_login_attempts: dict = {}  # {ip: [timestamp, ...]}
-_MAX_ATTEMPTS = 5
-_WINDOW_SECONDS = 300  # 5 minutos
-
-def _check_rate_limit(ip: str) -> None:
-    """Verifica y aplica rate limiting por IP. Lanza HTTPException 429 si excede."""
-    now = _time.time()
-    # Limpiar entradas viejas
-    cutoff = now - _WINDOW_SECONDS
-    if ip in _login_attempts:
-        _login_attempts[ip] = [t for t in _login_attempts[ip] if t > cutoff]
-        if not _login_attempts[ip]:
-            del _login_attempts[ip]
-    # Verificar límite
-    attempts = _login_attempts.get(ip, [])
-    if len(attempts) >= _MAX_ATTEMPTS:
-        raise HTTPException(
-            status_code=429,
-            detail="Demasiados intentos de inicio de sesión. Intente nuevamente en 5 minutos."
-        )
-    # Registrar intento
-    _login_attempts.setdefault(ip, []).append(now)
+# Límite de intentos: ver backend/core/login_limiter.py (solo fallos, por IP real + usuario).
+from backend.core import login_limiter as _limiter
 
 def get_repo():
     return SeguridadRepository(db)
@@ -46,10 +24,20 @@ async def login_for_access_token(
     repo: SeguridadRepository = Depends(get_repo)
 ) -> Any:
     """OAuth2 compatible token login, get an access token for future requests"""
-    _check_rate_limit(request.client.host if request.client else "unknown")
+    ip = _limiter.ip_cliente(request)
+    try:
+        _limiter.verificar(ip, form_data.username)
+    except _limiter.LoginBloqueado as bloqueo:
+        logger.warning(f"[Auth] Login bloqueado por demasiados fallos: usuario={form_data.username!r} ip={ip} ({bloqueo.segundos}s)")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos. Intente nuevamente en {bloqueo.minutos} minuto{'s' if bloqueo.minutos != 1 else ''}.",
+            headers={"Retry-After": str(bloqueo.segundos)},
+        )
     user_data = await repo.get_user_by_username(form_data.username)
     
     if not user_data:
+        _limiter.registrar_fallo(ip, form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
@@ -57,12 +45,16 @@ async def login_for_access_token(
         )
         
     if not repo.verify_password(form_data.password, user_data["password_hash"]):
+        _limiter.registrar_fallo(ip, form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
         
+    # Contraseña correcta: no cuenta como intento fallido (aunque el usuario esté inactivo).
+    _limiter.limpiar(ip, form_data.username)
+
     if not user_data["activo"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
