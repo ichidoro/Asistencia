@@ -46,7 +46,7 @@ class GoogleDriveService:
                 except Exception as file_err:
                     logger.error(f"❌ Error al cargar archivo de credenciales de Google: {file_err}")
 
-            # 3. Fallback a credenciales por defecto de Google Cloud (ADC - útil si se asocia al container en Cloud Run)
+            # 3. Fallback a credenciales por defecto (ADC) si existen en el entorno
             try:
                 import google.auth
                 credentials, project = google.auth.default(scopes=self.scopes)

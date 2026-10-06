@@ -1,5 +1,5 @@
 """
-PostgresDatabase — reemplazo de TursoDatabase (mismo contrato público).
+PostgresDatabase — acceso a la base de datos PostgreSQL propia (asyncpg).
 
 El código de repositorios sigue escribiendo SQL estilo SQLite con '?'; `sql_compat`
 lo traduce a PostgreSQL. Las fechas se guardan como TEXT ISO, igual que antes.
@@ -44,7 +44,7 @@ def _translate_cached(query: str) -> tuple:
 
 
 class Result:
-    """Emula el cursor de libsql que los repositorios esperan (lastrowid, rowcount, fetchall)."""
+    """Resultado tipo cursor que los repositorios esperan (lastrowid, rowcount, fetchall)."""
 
     def __init__(self, rows: Optional[List[Dict[str, Any]]] = None, rowcount: int = 0, lastrowid: Optional[int] = None):
         self._rows = rows or []
@@ -118,11 +118,6 @@ class PostgresDatabase:
         self._id_tables: Optional[set] = None
         self._connect_lock: Optional[asyncio.Lock] = None
         self.last_activity_time: float = 0.0
-        self._last_sync: Optional[datetime] = None
-        # Compat con código que consultaba estos flags (routers/sync, configuracion)
-        self.use_turso = False
-        self._realtime_sync_active = False
-        self._batch_in_progress = False
 
     # ───────────── conexión ─────────────
     async def connect(self, retry: bool = True) -> None:
@@ -162,28 +157,9 @@ class PostgresDatabase:
         self._connected = False
         logger.info("👋 Pool de PostgreSQL cerrado")
 
-    async def enable_realtime_sync(self, interval: int = 3) -> None:
-        self._realtime_sync_active = True
-
-    async def sync_from_cloud(self) -> None:
-        return
-
-    async def sync_to_cloud_explicit(self, max_retries: int = 3) -> bool:
-        return True
-
-    async def initialize_v2_sync(self) -> None:
-        return
-
-    async def _execute_turso(self, query: str, params: Optional[Tuple] = None) -> Any:
-        return await self.execute(query, params)
-
     @property
     def is_connected(self) -> bool:
         return self._connected
-
-    @property
-    def sync_supported(self) -> bool:
-        return False
 
     # ───────────── ejecución de bajo nivel ─────────────
     @asynccontextmanager
@@ -269,7 +245,7 @@ class PostgresDatabase:
                 self._id_tables.add(table)
         return table in self._id_tables
 
-    # ───────────── API pública (contrato TursoDatabase) ─────────────
+    # ───────────── API pública ─────────────
     async def execute(self, query: str, params: Optional[Union[tuple, list]] = None) -> Any:
         return await self._do(query, params)
 
@@ -295,16 +271,14 @@ class PostgresDatabase:
                 finally:
                     _tx_conn.reset(token)
 
-    async def execute_batch(self, operations: List[Tuple[str, Optional[Union[tuple, list]]]],
-                            suppress_auto_sync: bool = False) -> None:
+    async def execute_batch(self, operations: List[Tuple[str, Optional[Union[tuple, list]]]]) -> None:
         if not operations:
             return
         async with self.transaction():
             for query, params in operations:
                 await self.execute(query, params)
 
-    async def executemany(self, query: str, params_list: List[Union[tuple, list]],
-                          suppress_auto_sync: bool = False) -> None:
+    async def executemany(self, query: str, params_list: List[Union[tuple, list]]) -> None:
         if not params_list:
             return
         async with self.transaction():
@@ -357,18 +331,16 @@ class PostgresDatabase:
     async def health_check(self) -> Dict[str, Any]:
         try:
             if not self._connected:
-                return {"status": "disconnected", "turso": False, "local": False}
+                return {"status": "disconnected", "local": False}
             r = await self.fetch_one("SELECT 1 AS ok")
             ok = r is not None and r.get("ok") == 1
-            return {"status": "healthy" if ok else "degraded", "local": ok, "turso": False, "mode": "postgres"}
+            return {"status": "healthy" if ok else "degraded", "local": ok, "mode": "postgres"}
         except Exception as e:
-            return {"status": "error", "error": str(e), "local": False, "turso": False}
+            return {"status": "error", "error": str(e), "local": False}
 
 
-# Alias de compatibilidad (el código importa 'Database' / 'HybridDatabase' / 'TursoDatabase')
+# Alias usado por repositorios y routers
 Database = PostgresDatabase
-HybridDatabase = PostgresDatabase
-TursoDatabase = PostgresDatabase
 
 # Singleton global
 db = PostgresDatabase()

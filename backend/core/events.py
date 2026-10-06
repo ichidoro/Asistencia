@@ -264,13 +264,9 @@ async def lifespan(app: FastAPI):
                 # Recalcular automáticamente el período activo para refrescar la tabla asistencias
                 asyncio.create_task(_recalcular_periodo_activo())
 
-                # Fase 2: Activar sync en tiempo real ahora que las tablas existen
-                await db.enable_realtime_sync(interval=3)
-
                 # 4. Iniciar Sincronización Automática
                 if settings.SYNC_ENABLED:
                     logger.info(f"⏰ Iniciando Sync Scheduler (Intervalo: {settings.SYNC_INTERVAL_SECONDS}s)")
-                # turso_sync eliminado — en modo Cloud directo no hay réplica que sincronizar
                     # Rolling Window de feriados — intervalo relativo al inicio del servidor.
                     # No usa hora fija: si el servidor arranca a las 2 PM, dispara cada 12h
                     # desde ese momento. Independiente de si hay usuarios conectados.
@@ -356,7 +352,7 @@ async def lifespan(app: FastAPI):
                     )
 
                     scheduler.start()
-                    logger.success("✅ Sync Scheduler en ejecución (turso_sync + feriados_rolling + purgas)")
+                    logger.success("✅ Sync Scheduler en ejecución (feriados_rolling + purgas)")
 
 
 

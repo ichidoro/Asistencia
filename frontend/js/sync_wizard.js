@@ -2329,7 +2329,7 @@ window.startWizardSSESync = async function(payload) {
 
         if (!finalStats) {
             // FALLBACK: El stream se cerró sin enviar evento 'done'.
-            // Esto puede pasar si Cloud Run cierra la conexión prematuramente,
+            // Esto puede pasar si el servidor cierra la conexión prematuramente,
             // o si hay buffering intermedio (proxies, CDN).
             // Los empleados YA se sincronizaron en el backend — solo se perdió la señal.
             console.warn('[Wizard] Stream cerrado sin evento done — activando fallback');

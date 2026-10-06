@@ -87,7 +87,7 @@ class ConfiguracionService:
 
         OPTIMIZACIÓN BATCH: Toda la lógica de evaluación se hace primero en
         memoria, luego las escrituras a BD van en un único execute_batch()
-        → 1 adquisición del _db_lock + 1 commit + 1 sync a Turso por empleado.
+        → 1 adquisición del _db_lock + 1 commit por empleado.
         Antes: (2 + N_bonos) llamadas execute() individuales con su propio lock.
         """
         bonos_asignados: List[str] = []

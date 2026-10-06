@@ -4006,7 +4006,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
             if (!r.ok) return;
             const s = await r.json();
 
-            // Job perdido (típicamente porque Cloud Run reemplazó la instancia durante un deploy)
+            // Job perdido (típicamente porque el contenedor se reinició durante un deploy)
             if (s.status === 'not_found') {
                 clearInterval(_reprocesoPollingTimer);
                 const bar = el('repr-progress-bar');

@@ -267,14 +267,6 @@ async def update_justificacion(
             await service._recalcular_dias_justificacion(
                 j.empleado_id, str(j.fecha_inicio), str(j.fecha_fin))
             logger.info(f"✅ Recálculo post-update completado para justificación {justificacion_id}")
-            # Forzar sync para que las lecturas inmediatas vean los datos actualizados
-            try:
-                db_inst = service.repository.db
-                if db_inst.sync_supported:
-                    import asyncio as _aio
-                    await _aio.to_thread(db_inst.conn.sync)
-            except Exception:
-                pass
             _update_job(jid, status="done")
         except Exception as e:
             logger.error(f"⚠️ Error en recálculo post-update: {e}")
@@ -323,14 +315,6 @@ async def delete_justificacion(
             await service._recalcular_dias_justificacion(
                 existing['empleado_id'], existing['fecha_inicio'], existing['fecha_fin'])
             logger.info(f"✅ Recálculo post-delete completado para justificación {justificacion_id}")
-            # Forzar sync para que las lecturas inmediatas vean los datos actualizados
-            try:
-                db_inst = service.repository.db
-                if db_inst.sync_supported:
-                    import asyncio as _aio
-                    await _aio.to_thread(db_inst.conn.sync)
-            except Exception:
-                pass
             _update_job(jid, status="done")
         except Exception as e:
             logger.error(f"⚠️ Error en recálculo post-delete: {e}")
@@ -576,51 +560,6 @@ async def delete_feriado(
 ):
     service = CalendarioService()
     return await service.delete_holiday(id)
-
-# --- DIAGNÓSTICO (MENÚ SECRETO 7890) ---
-@router.get("/diagnostico/db-mode/")
-async def get_db_mode(
-    db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("superuser"))
-):
-    """Obtener modo de DB (Hybrid vs Cloud-Only)"""
-    return {
-        "mode": "cloud" if getattr(db, "_force_turso_only", False) else "hybrid",
-        "turso_enabled": db.use_turso
-    }
-
-@router.post("/diagnostico/db-mode/")
-async def set_db_mode(
-    payload: Dict[str, Any] = Body(...),
-    db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("superuser"))
-):
-    """Modo Cloud es permanente — no se permite cambiar."""
-    return {"status": "ok", "mode": "cloud", "message": "Turso Cloud es el único modo permitido"}
-
-@router.post("/diagnostico/sync-speed/")
-async def set_sync_speed(
-    payload: Dict[str, Any] = Body(...),
-    db: Database = Depends(get_db),
-    current_user: SecurityContext = Depends(RequirePermission("superuser"))
-):
-    """Cambiar velocidad de sincronización (polling)"""
-    seconds = payload.get("seconds", 30)
-    
-    # Validar rango seguro
-    if seconds < 1: seconds = 1
-    
-    try:
-        # Modificar el job en el scheduler global
-        if scheduler.get_job('turso_sync'):
-            scheduler.reschedule_job('turso_sync', trigger='interval', seconds=seconds)
-            logger.warning(f"🧪 DIAGNÓSTICO: Sync Interval cambiado a {seconds}s")
-            return {"status": "ok", "interval": seconds}
-        else:
-            return {"status": "error", "message": "Job turso_sync no encontrado"}
-    except Exception as e:
-        logger.error(f"❌ Error cambiando velocidad de sync: {e}")
-        return {"status": "error", "message": str(e)}
 
 
 # ──────────────────────────────────────────────────────────────────────────────

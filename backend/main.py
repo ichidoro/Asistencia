@@ -388,10 +388,10 @@ if __name__ == "__main__":
     import uvicorn
     import time
     
-    is_cloud = bool(os.environ.get("K_SERVICE"))
+    es_escritorio_windows = os.name == "nt"
     port = int(os.environ.get("PORT", settings.API_PORT))
     
-    if not is_cloud:
+    if es_escritorio_windows:
         # Solo en ejecución local (Windows): limpiar puerto y abrir navegador
         import webbrowser
         import threading
@@ -442,7 +442,7 @@ if __name__ == "__main__":
         "backend.main:app",
         host=settings.API_HOST,
         port=port,
-        reload=settings.API_RELOAD and settings.is_development and not is_cloud,
+        reload=settings.API_RELOAD and settings.is_development,
         log_level=settings.LOG_LEVEL.lower(),
         access_log=True
     )

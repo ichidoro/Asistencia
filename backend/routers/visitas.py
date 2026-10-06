@@ -49,7 +49,7 @@ async def _ensure_table(db: Database):
         )
     """)
     # Solo idx_visitas_rut_fecha: necesario para E/S toggle y consulta diaria
-    # Compuesto = 1 índice, no 2, minimiza overhead de escritura en Turso
+    # Compuesto = 1 índice, no 2, minimiza overhead de escritura
     await db.execute(
         "CREATE INDEX IF NOT EXISTS idx_visitas_rut_fecha ON visitas_registros(rut, fecha)"
     )

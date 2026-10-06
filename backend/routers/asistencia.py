@@ -329,10 +329,7 @@ async def post_asignacion_individual(
             (data.empleado_id, data.fecha)
         )
 
-        # 4. Asegurar persistencia y sync inmediato a la nube
-        await db.sync_to_cloud_explicit()
-
-        # 5. Obtener RUT del empleado para el sync individual
+        # 4. Obtener RUT del empleado para el sync individual
         emp_row = await db.fetch_one("SELECT rut FROM empleados WHERE id = ?", (data.empleado_id,))
         empleado_rut = emp_row['rut'] if emp_row else None
 
@@ -414,8 +411,7 @@ async def post_asignacion_individual(
                     force=True,
                     job_id=job_id,
                 )
-                await db.sync_to_cloud_explicit()
-                logger.info(f"✅ [BG] Cálculo completado y sincronizado a Turso Cloud: {stats.get('procesados', 0)} días [job={job_id}]")
+                logger.info(f"✅ [BG] Cálculo completado: {stats.get('procesados', 0)} días [job={job_id}]")
 
             except Exception as bg_err:
                 logger.error(f"❌ [BG] Error en job {job_id}: {bg_err}")
@@ -523,11 +519,6 @@ async def post_batch_sync(
             from backend.services.sync_service import SyncService
             from backend.core.database import db as _db
 
-            # ── Pausar el scheduler sync_from_cloud durante el batch ────────
-            # El scheduler comparte _db_lock con execute_batch → timeouts.
-            # Seteamos una flag para que sync_from_cloud se salte su turno.
-            _db._batch_in_progress = True
-            logger.info(f"[Batch {batch_job_id}] Scheduler sync pausado durante el batch")
 
             # ── FASE A: Descargar Excels únicos (→4 50% del progreso total) ──
             for i, (mes_key, ruts) in enumerate(meses_ruts.items()):
@@ -652,7 +643,7 @@ async def post_batch_sync(
                         
                     # 2. Guardar y eliminar horas extras
                     if all_he_to_save:
-                        await service.he_repo.batch_upsert(all_he_to_save, suppress_auto_sync=True)
+                        await service.he_repo.batch_upsert(all_he_to_save)
                     if all_he_to_delete:
                         for eid_del, f_str in all_he_to_delete:
                             await service.he_repo.delete_by_empleado_fecha(eid_del, f_str)
@@ -667,7 +658,7 @@ async def post_batch_sync(
                             
                     elapsed_save = int((_time_mod.time() - t_save) * 1000)
                     logger.info(
-                        f"[⚡ Batch] WAL local: guardado completado en {elapsed_save}ms"
+                        f"[⚡ Batch] Guardado completado en {elapsed_save}ms"
                     )
                 except Exception as save_err:
                     logger.error(f"❌ [Batch] Error en commit masivo: {save_err}. Intentando fallback por empleado...")
@@ -679,26 +670,6 @@ async def post_batch_sync(
                             except Exception as fb_err:
                                 logger.error(f"❌ [Batch Fallback] emp {item.empleado_id}: {fb_err}")
 
-            # ── FASE FINAL: 1 ÚNICO sync a Turso Cloud ──────────────────────────
-            # Empuja TODO el WAL acumulado de una sola vez:
-            #   - marcaciones Mes 1 + Mes 2 + ... + asistencia calculada (Fase B)
-            # Se ejecuta DESPUÉS de que toda la escritura local está completa.
-            # Ahorro vs diseño anterior: N-1 syncs intermedios eliminados.
-            for jid in job_ids.values():
-                _update_job(jid, phase_label="Sincronizando con Turso Cloud...", pct=97)
-            try:
-                import time as _time_mod
-                t_sync = _time_mod.time()
-                logger.info(f"☁️ [Batch] Iniciando sync final único a Turso Cloud...")
-                await _db.sync_to_cloud_explicit()
-                elapsed_sync = int((_time_mod.time() - t_sync) * 1000)
-                logger.info(
-                    f"☁️ [Batch] Sync final completado en {elapsed_sync}ms "
-                    f"({len(all_results_to_save)} asistencia + marcaciones acumuladas → Turso Cloud)"
-                )
-            except Exception as sync_err:
-                logger.error(f"❌ [Batch] Error en sync final a cloud: {sync_err}. Datos seguros en WAL local.")
-
             # Marcar todos los jobs como completados
             for jid in job_ids.values():
                 _update_job(jid, status="done", pct=100, phase_label="Completado")
@@ -707,9 +678,6 @@ async def post_batch_sync(
             logger.error(f"❌ [Batch {batch_job_id}] Error global: {bg_err}")
             for jid in job_ids.values():
                 _update_job(jid, status="error", error=str(bg_err))
-        finally:
-            _db._batch_in_progress = False
-            logger.info(f"[Batch {batch_job_id}] Scheduler sync restaurado")
 
     asyncio.create_task(_batch_bg())
 
@@ -821,11 +789,7 @@ async def condonar_deuda(
                 fecha=fecha_str,
                 force=True,
                 empleado_ids=set(request.empleados_ids),
-                suppress_sync=True
             )
-        
-        # 3. Forzar sincronización final una sola vez para toda la operación
-        await service.repository.db.sync_to_cloud_explicit()
 
         accion = "condonada" if request.tipo_condonacion > 0 else "revocada"
         return {"success": True, "message": f"Deuda {accion} correctamente para {len(request.empleados_ids)} empleado(s) en {dias_totales} día(s)."}
@@ -2022,17 +1986,6 @@ async def reprocesar_empleado_endpoint(
     current_user.verificar_acceso_area(emp.area, "este empleado")
     try:
         stats = await service.reprocesar_periodo_empleado(empleado_id, fecha_inicio, fecha_fin, force=force)
-
-        # Forzar sync explícito a Turso inmediatamente después del reproceso.
-        # Sin esto, los datos locales correctos pueden ser sobreescritos por el
-        # sync automático en el próximo reinicio si Turso aún tiene datos viejos.
-        try:
-            await service.repository.db.sync_from_cloud()
-            from loguru import logger as _log
-            _log.info(f"✅ Sync post-reproceso a Turso completado (empleado {empleado_id})")
-        except Exception as sync_err:
-            from loguru import logger as _log
-            _log.warning(f"⚠️ Sync post-reproceso no crítico: {sync_err}")
 
         return {
             "success": True,

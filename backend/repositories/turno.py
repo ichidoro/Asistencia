@@ -113,8 +113,8 @@ class TurnoRepository:
             """)
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_turno_areas_area ON turno_areas(area_id)")
 
-        # [ELIMINADO] turno_segmentos — tabla fantasma, nunca usada (causa corrupción en Turso)
-        # [ELIMINADO] plantillas_planificacion — tabla fantasma, nunca usada (causa corrupción en Turso)
+        # [ELIMINADO] turno_segmentos — tabla fantasma, nunca usada
+        # [ELIMINADO] plantillas_planificacion — tabla fantasma, nunca usada
 
         # 5. Tabla Asignación Turnos
         if not await self.db.table_exists("asignacion_turnos"):
@@ -149,7 +149,7 @@ class TurnoRepository:
             except Exception as e:
                 logger.debug(f"[Migration] semana_inicio en asignacion_turnos: {e}")
 
-        # [ELIMINADO] bolsa_horas_resumen — tabla fantasma sin INSERT, causa corrupción en Turso
+        # [ELIMINADO] bolsa_horas_resumen — tabla fantasma sin INSERT
 
         # 7. Tabla Asistencias (Marcaciones Procesadas)
         if not await self.db.table_exists("asistencias"):
@@ -825,7 +825,7 @@ class TurnoRepository:
     async def delete_turno(self, turno_id: int) -> bool:
         """Elimina un turno and sus dependencias (días)"""
         try:
-            # Cloud Sync: Usar db.execute
+            # Persistencia vía db.execute
             cursor = await self.db.execute("DELETE FROM turnos WHERE id = ?", (turno_id,))
             if hasattr(cursor, 'rowcount') and cursor.rowcount == 0:
                 return False
@@ -840,9 +840,9 @@ class TurnoRepository:
         """
         return await self.save_raw_logs([data])
 
-    async def save_raw_logs(self, data_list: List[Dict[str, Any]], suppress_auto_sync: bool = False) -> bool:
+    async def save_raw_logs(self, data_list: List[Dict[str, Any]]) -> bool:
         """
-        Guarda múltiples marcaciones crudas en un solo batch de Turso.
+        Guarda múltiples marcaciones crudas en un solo batch.
         Optimización crítica para BioAlba Sync.
         """
         if not data_list:
@@ -894,9 +894,7 @@ class TurnoRepository:
                 chunk_size = 100
                 for i in range(0, len(batch_params), chunk_size):
                     chunk = batch_params[i:i + chunk_size]
-                    await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)
-                    # Pause to allow Turso Sync Rust engine to flush frames cleanly
-                    await asyncio.sleep(0.2)
+                    await self.db.executemany(query, chunk)
                 return True
             return False
             

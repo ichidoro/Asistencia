@@ -1307,18 +1307,9 @@ class SyncService:
                 self.stats['duracion_segundos'] = (datetime.now() - start_time).total_seconds()
                 return self.stats
 
-            # [ATOMIC_SYNC_TRANSACTION]: WAL-only — sin sync a cloud aquí
-            #
-            # ARQUITECTURA: Todos los meses escriben en WAL local (~2ms cada uno).
-            # El caller (_batch_bg) ejecuta 1 SOLO conn.sync() al final de la
-            # Fase B, después del batch_upsert de asistencia. Esto elimina los
-            # bloqueos intermedios de 23-87s por mes.
-            #
-            # En sync individual (scheduler), el scheduler llama conn.sync()
-            # automáticamente dentro de su propio ciclo de 30s.
             if logs_to_save:
-                logger.info(f"🚀 Guardando batch de {len(logs_to_save)} nuevas marcaciones en WAL local...")
-                success = await turno_repo.save_raw_logs(logs_to_save, suppress_auto_sync=True)
+                logger.info(f"🚀 Guardando batch de {len(logs_to_save)} nuevas marcaciones...")
+                success = await turno_repo.save_raw_logs(logs_to_save)
                 if not success:
                     self.stats['errores'] += len(logs_to_save)
 
@@ -1371,8 +1362,6 @@ class SyncService:
                             force=force_recalculate,
                             feriados_preloaded=feriados_batch
                         )
-                        # Pequeña pausa para permitir que el sync engine de LibSQL respire
-                        await asyncio.sleep(0.05)
                     except Exception as calc_err:
                         logger.error(f"❌ Error recalculando empleado {emp_id}: {calc_err}")
                         self.stats['errores'] += 1

@@ -314,10 +314,6 @@ class PorteriaRepository:
                 logger.error(f"❌ Error al sincronizar ronda offline {uuid_offline}: {e}")
                 errores += 1
 
-        # Realizar un sync explícito al final del lote para garantizar almacenamiento en Turso Cloud
-        if sincronizadas > 0:
-            await self.db.sync_to_cloud_explicit()
-
         return {
             "sincronizadas": sincronizadas,
             "duplicadas": duplicadas,

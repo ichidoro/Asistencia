@@ -182,13 +182,11 @@ class AsistenciaRepository:
         await self.batch_upsert_asistencia([]) # just in case
         await self.db.execute_batch([(query, (tipo_condonacion, empleado_id, fecha))])
 
-    async def batch_upsert_asistencia(self, data_list: List[Dict[str, Any]], bypass_cierre_check: bool = False, suppress_auto_sync: bool = False) -> None:
+    async def batch_upsert_asistencia(self, data_list: List[Dict[str, Any]], bypass_cierre_check: bool = False) -> None:
         """
         Guarda o actualiza mÃºltiples registros de asistencia procesada.
         Incluye validaciÃ³n de periodos cerrados para integridad histÃ³rica.
 
-        suppress_auto_sync=True: No dispara conn.sync() al terminar (WAL local).
-        Usar cuando el caller harÃ¡ sync_to_cloud_explicit() al final del batch masivo.
         """
         if not data_list:
             return
@@ -286,7 +284,7 @@ class AsistenciaRepository:
         chunk_size = 50
         for i in range(0, len(params_list), chunk_size):
             chunk = params_list[i:i + chunk_size]
-            await self.db.executemany(query, chunk, suppress_auto_sync=suppress_auto_sync)
+            await self.db.executemany(query, chunk)
 
 
 

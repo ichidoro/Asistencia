@@ -473,7 +473,7 @@ _HEALTH_TTL_SECONDS = 15
 @router.get(
     "/health/",
     summary="Estado de salud del sistema",
-    description="Verifica la conectividad con la base de datos local y la nube (Turso)"
+    description="Verifica la conectividad con la base de datos PostgreSQL y el estado de las marcaciones"
 )
 async def system_health() -> Dict[str, Any]:
     """
@@ -487,7 +487,6 @@ async def system_health() -> Dict[str, Any]:
 
     # ── Cache miss: hacer los pings reales ───────────────────────────────
     local_ok = False
-    cloud_ok = False
 
     try:
         await db.fetch_one("SELECT 1")
@@ -496,25 +495,14 @@ async def system_health() -> Dict[str, Any]:
         local_ok = False
 
     try:
-        if db.use_turso:
-            await db._execute_turso("SELECT 1")
-            cloud_ok = True
-        else:
-            cloud_ok = True  # Sin Turso → sin nube → OK local
-    except Exception:
-        cloud_ok = False
-
-    try:
         from backend.services import sync_monitor
         marcaciones = await sync_monitor.estado_actual()
     except Exception:
         marcaciones = None
 
     result = {
-        "status": "ok" if local_ok and cloud_ok else "degraded",
+        "status": "ok" if local_ok else "degraded",
         "local_db": "online" if local_ok else "offline",
-        "cloud_db": "online" if cloud_ok else "offline",
-        "sync_enabled": db.use_turso,
         "marcaciones": marcaciones
     }
 
@@ -703,8 +691,8 @@ class SyncCronRequest(BaseModel):
 
 @router.post(
     "/cron/",
-    summary="Sincronización automática de marcaciones (Cloud Scheduler)",
-    description="Invocado de forma programada por Google Cloud Scheduler usando una clave secreta."
+    summary="Sincronización automática de marcaciones (cron del servidor)",
+    description="Invocado periódicamente por cron-sync.sh en el servidor propio usando una clave secreta."
 )
 async def ejecutar_cron_sync(request: SyncCronRequest):
     if not request.cron_secret or request.cron_secret != settings.CRON_SECRET:
@@ -714,7 +702,7 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
             detail="No autorizado: Clave secreta inválida o ausente"
         )
     
-    logger.info("⏰ [Cron Sync] Iniciando sincronización automática desde Cloud Scheduler...")
+    logger.info("⏰ [Cron Sync] Iniciando sincronización automática (cron del servidor)...")
     
     # Rango de fechas por defecto: día de ayer y hoy para cubrir marcaciones del día en curso
     # y ajustes de turnos que cruzan la medianoche.
@@ -832,20 +820,6 @@ async def get_sync_logs(
     except Exception as e:
         logger.error(f"❌ Error obteniendo sync_logs: {e}")
         return []
-
-
-@router.post(
-    "/admin/reset-replica/",
-    summary="No-op: No hay réplica local en modo Turso Cloud",
-)
-async def reset_turso_replica(
-    current_user: SecurityContext = Depends(RequirePermission("configuracion.seguridad"))
-) -> Dict[str, Any]:
-    """No-op: En modo Turso Cloud directo no existe réplica local que resetear."""
-    return {
-        "status": "ok",
-        "message": "No hay réplica local — Turso Cloud es la única fuente de verdad.",
-    }
 
 
 

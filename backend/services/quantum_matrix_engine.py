@@ -747,7 +747,7 @@ class QuantumShiftWeekMatcher:
 
 
 def _flag(value: Any) -> bool:
-    """Normaliza banderas provenientes de SQLite/Turso/JSON (0/1, '1', 'true', True...)."""
+    """Normaliza banderas provenientes de la BD/JSON (0/1, '1', 'true', True...)."""
     if value is None:
         return False
     if isinstance(value, bool):

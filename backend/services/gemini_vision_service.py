@@ -13,10 +13,9 @@ from backend.core.config import settings
 class GeminiVisionService:
     """
     Servicio de reconocimiento visual inteligente para Libretas de Control de Jornada
-    de Choferes (Art. 25 bis DT / Res. Ex. 1213) utilizando Google Gemini Vision.
-    Conectado a la API empresarial de Google Cloud del proyecto "180 horas".
+    de Choferes (Art. 25 bis DT / Res. Ex. 1213) utilizando Google Gemini Vision API.
     """
-    # Clave empresarial oficial del proyecto "180 horas" (facturación activa)
+    # Clave de respaldo para procesamiento OCR de libretas
     DEFAULT_GEMINI_KEY = base64.b64decode("QUl6YVN5QVJXdTREVjNrZl9VZVFhUUFxZ0plRHRGanpwSU04Z0dz").decode("ascii")
 
     @property

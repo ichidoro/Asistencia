@@ -1,7 +1,7 @@
 /**
  * Módulo de Portería - Rondas Nocturnas (Offline-first)
  * Maneja IndexedDB local, compresión de fotos en cliente, escaneo de códigos QR,
- * sincronización resiliente con Google Drive y la base de datos de la planta (Turso).
+ * sincronización resiliente con Google Drive y la base de datos de la planta.
  */
 
 const PorteriaModule = (function () {

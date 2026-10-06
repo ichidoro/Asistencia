@@ -506,7 +506,6 @@ class AsistenciaService:
         areas: Optional[List[str]] = None,
         force: bool = False,
         empleado_ids: Optional[set] = None,
-        suppress_sync: bool = False,
     ):
         bulk_ctx = await self.get_bulk_context(fecha, area, empleado_ids=empleado_ids)
         if not bulk_ctx:
@@ -563,12 +562,12 @@ class AsistenciaService:
                     je_to_delete.append((emp_id, fecha))
         
         if results_to_save:
-            await self.repository.batch_upsert_asistencia(results_to_save, suppress_auto_sync=True)
+            await self.repository.batch_upsert_asistencia(results_to_save)
         if results_to_delete:
             for eid_del, f_str in results_to_delete:
                 await self.repository.delete_asistencia(eid_del, f_str)
         if he_to_save:
-            await self.he_repo.batch_upsert(he_to_save, suppress_auto_sync=True)
+            await self.he_repo.batch_upsert(he_to_save)
         if results_to_delete_he:
             for eid_del, f_str in results_to_delete_he:
                 await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
@@ -578,9 +577,6 @@ class AsistenciaService:
         if je_to_delete:
             for eid_del, f_str in je_to_delete:
                 await self._delete_je_no_validada(eid_del, f_str)
-        
-        if not suppress_sync and (results_to_save or results_to_delete or he_to_save or results_to_delete_he or je_to_save or je_to_delete):
-            await self.repository.db.sync_to_cloud_explicit()
 
     # ─────────────────────────────────────────────────────────────────────────
     # REPROCESO PERÍODO EMPLEADO
@@ -1156,7 +1152,7 @@ class AsistenciaService:
             }
 
             try:
-                # ⚡ OPTIMIZACIÓN: save=False → acumular en RAM, NO commit individual a Turso
+                # ⚡ OPTIMIZACIÓN: save=False → acumular en RAM, sin commit individual por día
                 result = await self.procesar_empleado_dia(
                     empleado_id, 
                     fecha_str, 
@@ -1214,7 +1210,7 @@ class AsistenciaService:
             if not collect_only and (results_to_save or results_to_delete or je_to_save or je_to_delete) and CHECKPOINT_INTERVAL > 0 and day_index % CHECKPOINT_INTERVAL == 0:
                 try:
                     if results_to_save:
-                        await self.repository.batch_upsert_asistencia(results_to_save, suppress_auto_sync=True)
+                        await self.repository.batch_upsert_asistencia(results_to_save)
                         logger.debug(f"💾 Checkpoint: {len(results_to_save)} días guardados (emp {empleado_id})")
                         results_to_save = []
                     if results_to_delete:
@@ -1223,7 +1219,7 @@ class AsistenciaService:
                         logger.debug(f"🧹 Checkpoint: {len(results_to_delete)} registros residuales eliminados (emp {empleado_id})")
                         results_to_delete = []
                     if he_to_save:
-                        await self.he_repo.batch_upsert(he_to_save, suppress_auto_sync=True)
+                        await self.he_repo.batch_upsert(he_to_save)
                         he_to_save = []
                     if he_to_delete:
                         for eid_del, f_str in he_to_delete:
@@ -1264,19 +1260,17 @@ class AsistenciaService:
                 **stats
             }
 
-        # ⚡ BATCH FINAL: guardar todos los resultados restantes en UN SOLO commit local (WAL)
-        # suppress_auto_sync=True: NO disparar conn.sync() aquí.
-        # El caller (reproceso_masivo_async) hará 1 único sync_to_cloud_explicit() al final.
+        # ⚡ BATCH FINAL: guardar todos los resultados restantes en UN SOLO commit
         if not collect_only and (results_to_save or results_to_delete or je_to_save or je_to_delete):
             try:
                 t_save_start = _time()
                 if results_to_save:
-                    await self.repository.batch_upsert_asistencia(results_to_save, suppress_auto_sync=True)
+                    await self.repository.batch_upsert_asistencia(results_to_save)
                 if results_to_delete:
                     for eid_del, f_str in results_to_delete:
                         await self.repository.delete_asistencia(eid_del, f_str)
                 if he_to_save:
-                    await self.he_repo.batch_upsert(he_to_save, suppress_auto_sync=True)
+                    await self.he_repo.batch_upsert(he_to_save)
                 if he_to_delete:
                     for eid_del, f_str in he_to_delete:
                         await self.he_repo.delete_by_empleado_fecha(eid_del, f_str)
@@ -1415,7 +1409,7 @@ class AsistenciaService:
                 try:
                     t_save = _time_mod.time()
                     await self.repository.batch_upsert_asistencia(
-                        all_results_to_save, suppress_auto_sync=True
+                        all_results_to_save
                     )
                     logger.info(f"💾 [Masivo] {len(all_results_to_save)} asistencias guardadas en {int((_time_mod.time() - t_save)*1000)}ms")
                 except Exception as save_err:
@@ -1425,7 +1419,7 @@ class AsistenciaService:
                         emp_results = [r for r in all_results_to_save if r.get('empleado_id') == eid]
                         if emp_results:
                             try:
-                                await self.repository.batch_upsert_asistencia(emp_results, suppress_auto_sync=True)
+                                await self.repository.batch_upsert_asistencia(emp_results)
                             except Exception as fb_err:
                                 logger.error(f"❌ [Masivo Fallback] emp {eid}: {fb_err}")
 
@@ -1435,18 +1429,18 @@ class AsistenciaService:
                     chunk = all_results_to_delete[i:i + chunk_size]
                     await self.repository.db.executemany(
                         "DELETE FROM asistencias WHERE empleado_id = ? AND fecha = ?",
-                        chunk, suppress_auto_sync=True
+                        chunk
                     )
 
             if all_he_to_save:
                 try:
-                    await self.he_repo.batch_upsert(all_he_to_save, suppress_auto_sync=True)
+                    await self.he_repo.batch_upsert(all_he_to_save)
                 except Exception as he_err:
                     logger.error(f"❌ [Masivo] HE batch upsert falló: {he_err}")
 
             if all_he_to_delete:
                 try:
-                    await self.he_repo.batch_delete_by_empleado_fecha(all_he_to_delete, suppress_auto_sync=True)
+                    await self.he_repo.batch_delete_by_empleado_fecha(all_he_to_delete)
                 except Exception as he_del_err:
                     logger.error(f"❌ [Masivo] HE batch delete falló: {he_del_err}")
 
@@ -1462,17 +1456,13 @@ class AsistenciaService:
                 for i in range(0, len(all_je_to_delete), chunk_size):
                     chunk = all_je_to_delete[i:i + chunk_size]
                     await self.repository.db.executemany(
-                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
-                        chunk, suppress_auto_sync=True
+                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? "
+                        "AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') "
+                        "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO]%' "
+                        "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO_COMO_HE]%' "
+                        "AND COALESCE(observaciones, '') NOT LIKE '%[RECHAZADO]%'",
+                        chunk
                     )
-
-            # ── FASE 3: 1 ÚNICO sync final a Turso Cloud ────────────────────
-            try:
-                logger.info(f"☁️ [Masivo] Sync final a Turso Cloud ({len(emp_ids)} empleados)...")
-                await db.sync_to_cloud_explicit()
-                logger.info(f"☁️ [Masivo] Sync final completado.")
-            except Exception as sync_err:
-                logger.warning(f"⚠️ [Masivo] Sync final falló (datos seguros en WAL): {sync_err}")
 
             _reproceso_status['estado'] = 'completado'
 
@@ -1697,7 +1687,7 @@ class AsistenciaService:
     def _asistencia_fingerprint(record: dict) -> tuple:
         """
         Genera una tupla inmutable con los campos que definen el estado de una asistencia.
-        Dos registros con el mismo fingerprint son idénticos → no necesitan commit a Turso.
+        Dos registros con el mismo fingerprint son idénticos → no necesitan escribirse de nuevo.
         Costo: O(1), ~microsegundos. Campos elegidos: los que afectan grilla y reportes.
         """
         return (
@@ -3077,7 +3067,6 @@ class AsistenciaService:
             return {"success": True, "mensaje": "Nada que procesar", "count": 0}
             
         count = await self.he_repo.aprobar_batch(params_list)
-        await self.repository.db.sync_to_cloud_explicit()
         
         return {
             "success": True,

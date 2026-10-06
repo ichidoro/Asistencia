@@ -172,10 +172,6 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"
-        
-    @property
-    def is_cloud(self) -> bool:
-        return bool(os.environ.get("K_SERVICE"))
     
     @model_validator(mode="after")
     def _exigir_secretos(self):

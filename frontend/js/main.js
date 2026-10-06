@@ -2610,7 +2610,7 @@ window.confirmarBaja = async function () {
     alert("Error de conexión al registrar baja.");
   }
 }
-// --- DIAGNÓSTICO (deshabilitado — Turso Cloud es el único modo) ---
+// --- DIAGNÓSTICO (deshabilitado) ---
 // Listener 7890 y modal de diagnóstico eliminados.
 
 // ==========================================
@@ -2820,7 +2820,7 @@ window.executeConfirmarCambioArea = async function () {
   }
 }
 
-// openDiagnostico y toggleDbMode eliminados — Turso Cloud es el único modo permitido.
+// openDiagnostico y toggleDbMode eliminados.
 
 
 async function setSyncSpeed(speed) {

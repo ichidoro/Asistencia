@@ -13,12 +13,12 @@ sys.path.insert(0, os.path.abspath('.venv/Lib/site-packages'))
 sys.path.insert(0, os.path.abspath('.'))
 import dotenv
 dotenv.load_dotenv()
-from backend.core.database import TursoDatabase
+from backend.core.database import Database
 from backend.repositories.asistencia import AsistenciaRepository
 from backend.services.asistencia_service import AsistenciaService
 
 async def main():
-    db = TursoDatabase()
+    db = Database()
     await db.connect()
     repo = AsistenciaRepository(db)
     service = AsistenciaService(repo)

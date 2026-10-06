@@ -1,4 +1,4 @@
-# Asistencia Aguacol — app + PostgreSQL 16 (BD propia, sin Turso).
+# Asistencia Aguacol — app + PostgreSQL 16 (BD propia).
 #   cp .env.example .env   (completar secretos)   →   docker compose up -d --build
 # Actualización desde GitHub: ./deploy.sh  (o el timer de autodeploy, ver docs/DEPLOY_DOCKER_POSTGRES.md)
 services:

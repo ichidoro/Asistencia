@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sincroniza marcaciones desde BioAlba (reemplaza a Google Cloud Scheduler). Llama a POST /api/sync/cron/,
+# Sincroniza marcaciones desde BioAlba periódicamente. Llama a POST /api/sync/cron/,
 # que descarga ayer+hoy, procesa y recalcula. Se activa con SYNC_CRON_ENABLED=true en .env.
 # cron sugerido (cada 5 min):  */5 * * * * bash /ruta/asistencia/cron-sync.sh >> /ruta/asistencia/logs/cron_sync.log 2>&1
 set -euo pipefail
