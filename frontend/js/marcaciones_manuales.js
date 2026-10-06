@@ -3091,6 +3091,26 @@ window.scannerCambiarCamara = async function() {
     await iniciarScannerCamara();
 };
 
+// OpenCV.js (~9 MB) y jscanify solo se descargan cuando alguien usa el modo "Hoja completa" del escáner.
+// Antes se cargaban en cada visita a la página aunque nadie escaneara. Si no alcanzan a cargar,
+// la captura cae al comportamiento normal (foto sin aplanar), igual que antes.
+let _visionDocPromise = null;
+window.cargarVisionDocumentos = function () {
+    if (_visionDocPromise) return _visionDocPromise;
+    const cargar = (src) => new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+        document.head.appendChild(s);
+    });
+    _visionDocPromise = cargar('https://docs.opencv.org/4.7.0/opencv.js')
+        .then(() => cargar('https://cdn.jsdelivr.net/gh/puffinsoft/jscanify@1.2.0/src/jscanify.min.js'))
+        .catch((e) => { console.warn('⚠️ Visión de documentos no disponible:', e.message); _visionDocPromise = null; });
+    return _visionDocPromise;
+};
+
 let _jscanifyInstance = null;
 function getJscanifyInstance() {
     if (typeof jscanify !== 'undefined') {
@@ -3120,6 +3140,7 @@ window.scannerToggleModoGuia = function() {
 
     if (window.scannerModoActual === 'dia') {
         window.scannerModoActual = 'hoja';
+        if (typeof window.cargarVisionDocumentos === 'function') window.cargarVisionDocumentos();
         if (box) {
             box.classList.remove('scanner-guide-box-col-dia');
             box.classList.add('scanner-guide-box-panoramic');

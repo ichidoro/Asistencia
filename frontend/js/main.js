@@ -519,6 +519,12 @@ function _mostrarDashboardNoCargo(motivo) {
 }
 
 function switchPage(pageName) {
+  // Las pantallas secundarias se cargan en segundo plano tras pintar el dashboard (ver index.html).
+  // Si se navega antes de que terminen, se espera y se reintenta, en vez de abrir una pantalla sin su lógica.
+  if (pageName !== 'dashboard' && window.__lazyDone === false && window.__lazyPromise) {
+    window.__lazyPromise.then(() => switchPage(pageName));
+    return;
+  }
   // Validar permisos antes de cambiar de página
   const sidebarItem = document.querySelector(`.sidebar-item[data-page="${pageName}"]`);
   if (sidebarItem && typeof AuthService !== 'undefined') {

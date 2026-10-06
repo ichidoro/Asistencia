@@ -45,7 +45,6 @@
     <!-- Módulo de Seguridad (Centralizado) -->
     <script src="/static/js/auth.js?v={{ startup_id }}" defer></script>
     <script src="/static/js/update_banner.js?v={{ startup_id }}" defer></script>
-    <script src="/static/js/cropper.min.js" defer></script>
     
     <!-- jsPDF, html5-qrcode y Tesseract se cargan bajo demanda (ui_dialogs.js → ensureLib) -->
 
@@ -5285,49 +5284,99 @@
             </div>
 
             <!-- Librerías Externas -->
-            <script src="/static/js/chart.js" defer></script>
-            <script src="/static/js/chartjs-plugin-datalabels.min.js" defer></script>
             <script src="/static/js/bootstrap.bundle.min.js" defer></script>
 
             <!-- Componentes de UI (Orden de dependencia) -->
             <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/horarios.js?v={{ startup_id }}_v18" defer></script>
-            <script src="/static/js/asistencia.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/configuracion_ui.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/calendario_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/reincorporacion_ui.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/justificaciones_individuales.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/marcaciones_manuales.js?v={{ startup_id }}_v20" defer></script>
-            <script src="/static/js/marcaciones_ui.js?v={{ startup_id }}_v23" defer></script>
-            <script src="/static/js/perdonazo_panel.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/intercambios_panel.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/compensaciones_he_panel.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/dashboard_react.js?v={{ startup_id }}" defer></script>
 
 
             <!-- Consola de Seguridad y Cierre -->
-            <script src="/static/js/seguridad_ui.js?v={{ startup_id }}" defer></script>
 
             <!-- Módulo Portería y Control de Ronda -->
-            <script src="/static/js/libs/qrcode.min.js" defer></script>
-            <script src="/static/js/porteria_ui.js?v={{ startup_id }}_v4" defer></script>
-    <script src="/static/js/articulo22_ui.js?v={{ startup_id }}_v10" defer></script>
-    <script src="/static/js/visitas_ui.js?v={{ startup_id }}_v2" defer></script>
-    <script src="/static/js/llaves_ui.js?v={{ startup_id }}_v1" defer></script>
-    <script src="/static/js/flota_ui.js?v={{ startup_id }}_v3" defer></script>
 
             <!-- Visión por Computadora Open Source (OpenCV.js y jscanify para aplanamiento automático de hojas) -->
-            <script src="https://docs.opencv.org/4.7.0/opencv.js" async type="text/javascript"></script>
-            <script src="https://cdn.jsdelivr.net/gh/puffinsoft/jscanify@1.2.0/src/jscanify.min.js" defer type="text/javascript"></script>
 
             <!-- Inicializador Principal -->
-            <script src="/static/js/productos_4.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/sync_wizard.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/main.js?v={{ startup_id }}" defer></script>
+
+    <!-- Carga diferida de pantallas secundarias (rendimiento): se descargan de a una, con el navegador
+         libre, DESPUÉS de pintar el dashboard. switchPage() espera a __lazyPromise si alguien navega antes. -->
+    <script>
+    (function () {
+      var QUEUE = [
+        "/static/js/cropper.min.js",
+        "/static/js/chart.js",
+        "/static/js/chartjs-plugin-datalabels.min.js",
+        "/static/js/horarios.js?v={{ startup_id }}_v18",
+        "/static/js/asistencia.js?v={{ startup_id }}_v15",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v15",
+        "/static/js/calendario_ui.js?v={{ startup_id }}_v15",
+        "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v15",
+        "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v15",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v20",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v23",
+        "/static/js/perdonazo_panel.js?v={{ startup_id }}",
+        "/static/js/intercambios_panel.js?v={{ startup_id }}",
+        "/static/js/compensaciones_he_panel.js?v={{ startup_id }}",
+        "/static/js/seguridad_ui.js?v={{ startup_id }}",
+        "/static/js/libs/qrcode.min.js",
+        "/static/js/porteria_ui.js?v={{ startup_id }}_v4",
+        "/static/js/articulo22_ui.js?v={{ startup_id }}_v10",
+        "/static/js/visitas_ui.js?v={{ startup_id }}_v2",
+        "/static/js/llaves_ui.js?v={{ startup_id }}_v1",
+        "/static/js/flota_ui.js?v={{ startup_id }}_v3",
+        "/static/js/productos_4.js?v={{ startup_id }}",
+        "/static/js/sync_wizard.js?v={{ startup_id }}"
+];
+      var started = false, appReady = false, idx = 0;
+      window.__lazyDone = false;
+      var resolveAll;
+      window.__lazyPromise = new Promise(function (r) { resolveAll = r; });
+      document.addEventListener('app:ready', function () { appReady = true; setTimeout(start, 350); }, { once: true });
+      setTimeout(start, 8000); // red de seguridad si app:ready no llega
+
+      function idle(fn) {
+        if (window.requestIdleCallback) window.requestIdleCallback(fn, { timeout: 400 });
+        else setTimeout(fn, 60);
+      }
+      function start() {
+        if (started) return; started = true;
+        // Los scripts diferidos registran DOMContentLoaded/load/app:ready: como esos eventos ya pasaron,
+        // se ejecutan de inmediato en vez de perderse.
+        var dAdd = document.addEventListener, wAdd = window.addEventListener;
+        function fire(ctx, f, type) { setTimeout(function () { try { f.call(ctx, new Event(type)); } catch (e) { console.error(e); } }, 0); }
+        document.addEventListener = function (t, f, o) {
+          if (typeof f === 'function' && (t === 'DOMContentLoaded' || (t === 'app:ready' && appReady))) { fire(document, f, t); return; }
+          return dAdd.call(document, t, f, o);
+        };
+        window.addEventListener = function (t, f, o) {
+          if (typeof f === 'function' && t === 'load' && document.readyState === 'complete') { fire(window, f, t); return; }
+          return wAdd.call(window, t, f, o);
+        };
+        function finish() {
+          document.addEventListener = dAdd; window.addEventListener = wAdd;
+          window.__lazyDone = true; resolveAll();
+          if (typeof window._loadEstadosAsistencia === 'function') { try { window._loadEstadosAsistencia(); } catch (e) { console.error(e); } }
+          document.dispatchEvent(new CustomEvent('lazy:ready'));
+        }
+        function next() {
+          if (idx >= QUEUE.length) { finish(); return; }
+          idle(function () {
+            var s = document.createElement('script');
+            s.src = QUEUE[idx++];
+            s.onload = s.onerror = next; // un fallo no frena al resto
+            document.body.appendChild(s);
+          });
+        }
+        next();
+      }
+    })();
+    </script>
 
             <!-- Modal de Detalle de Desviaciones (Dashboard) -->
             <div id="modal-desviaciones-detalle" class="modal fade" tabindex="-1" aria-hidden="true">
