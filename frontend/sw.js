@@ -2,7 +2,7 @@
 // Versión mínima: cache de assets estáticos para instalabilidad.
 // No intercepta API calls para evitar datos obsoletos.
 
-const CACHE_NAME = 'aguacol-v19-flush';
+const CACHE_NAME = 'aguacol-v20-icono';
 const STATIC_ASSETS = [
   '/',
   '/static/css/bootstrap.min.css',
