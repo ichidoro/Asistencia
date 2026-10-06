@@ -892,8 +892,11 @@ class DashboardAnalytics:
         """Embudo de productividad: Horas Programadas → Fugas → Trabajadas → Sobretiempo."""
         try:
             params = [fecha_inicio, fecha_fin] + filters['params'] + filters['horario_params']
-            # Duplicamos TODOS los parámetros para las subqueries (mismos filtros de fecha, área, horario)
-            params_full = params + params
+            # La consulta tiene 3 bloques (asistencias + 2 subqueries de jornadas especiales) y cada uno
+            # lleva los mismos placeholders: fechas + área(s) + horario. Antes el 3er bloque solo recibía
+            # las 2 fechas, así que con filtro de área/horario (o un jefe de área) la consulta fallaba
+            # ("expects 9 arguments, 8 were passed") y el embudo de productividad salía en cero.
+            params_full = params * 3
             
             # Adaptamos los filtros para el alias j en lugar de a
             j_join = filters['asis_join'].replace('a.empleado_id', 'j.empleado_id').replace('a.fecha', 'j.fecha')
@@ -944,9 +947,7 @@ class DashboardAnalytics:
                 FROM all_productividad
             """
             
-            # Ajustamos los parámetros porque ahora hay otra subquery que necesita 2 fechas
-            params_full_con_count = params_full + [fecha_inicio, fecha_fin]
-            res = await self.db.fetch_one(query, tuple(params_full_con_count))
+            res = await self.db.fetch_one(query, tuple(params_full))
             
             if not res:
                 return {"programadas": 0, "trabajadas": 0, "horas_fuga": 0, "horas_ausencia": 0, "he_regulares_min": 0, "jornadas_especiales_min": 0, "jornadas_especiales_count": 0, "eficiencia_pct": 0}
