@@ -3030,6 +3030,11 @@ async def get_libreta_180h(
     Obtiene la libreta Art. 25 bis del día (96 slots de 15 minutos y desglose de horas).
     """
     try:
+        from pathlib import Path
+        foto_path = Path("downloads") / "libretas_180h" / f"{empleado_id}_{fecha}.jpg"
+        tiene_foto = foto_path.is_file()
+        foto_url = f"/api/asistencia/libreta-180h/foto/?empleado_id={empleado_id}&fecha={fecha}" if tiene_foto else None
+
         row = await service.repository.get_libreta_180h(empleado_id, fecha)
         if not row:
             return {
@@ -3046,7 +3051,9 @@ async def get_libreta_180h(
                 "horas_espera": 0.0,
                 "horas_descanso": 0.0,
                 "cerrado": 0,
-                "observaciones": ""
+                "observaciones": "",
+                "tiene_foto": tiene_foto,
+                "foto_url": foto_url
             }
 
         raw_s = row.get('slots_96', '[]')
@@ -3075,11 +3082,30 @@ async def get_libreta_180h(
             "horas_espera": round(min_esp / 60.0, 2),
             "horas_descanso": round(min_desc / 60.0, 2),
             "cerrado": row.get('cerrado', 0),
-            "observaciones": row.get('observaciones') or ""
+            "observaciones": row.get('observaciones') or "",
+            "tiene_foto": tiene_foto,
+            "foto_url": foto_url
         }
     except Exception as e:
         logger.exception(f"❌ Error en get_libreta_180h (emp={empleado_id}, fecha={fecha}): {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo Libreta 180h: {str(e)}")
+
+
+@router.get("/libreta-180h/foto/")
+async def get_libreta_foto(
+    empleado_id: int = Query(...),
+    fecha: str = Query(...),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """
+    Retorna la fotografía física escaneada de la libreta para auditoría visual.
+    """
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    foto_path = Path("downloads") / "libretas_180h" / f"{empleado_id}_{fecha}.jpg"
+    if not foto_path.is_file():
+        raise HTTPException(status_code=404, detail="No existe fotografía de respaldo archivada para este día.")
+    return FileResponse(str(foto_path), media_type="image/jpeg")
 
 
 class Libreta180hReabrirRequest(BaseModel):
@@ -3170,6 +3196,23 @@ async def save_libreta_180h(
         }
 
         await service.repository.upsert_libreta_180h(data)
+
+        # Guardar fotografía de respaldo físico si viene adjunta
+        if payload.imagen_base64:
+            try:
+                import base64
+                from pathlib import Path
+                b64 = payload.imagen_base64
+                if "," in b64:
+                    _, b64 = b64.split(",", 1)
+                img_data = base64.b64decode(b64)
+                libretas_dir = Path("downloads") / "libretas_180h"
+                libretas_dir.mkdir(parents=True, exist_ok=True)
+                foto_file = libretas_dir / f"{payload.empleado_id}_{payload.fecha}.jpg"
+                foto_file.write_bytes(img_data)
+                logger.info(f"📸 Foto de respaldo guardada en servidor: {foto_file}")
+            except Exception as img_save_err:
+                logger.warning(f"⚠️ No se pudo guardar foto de respaldo en disco: {img_save_err}")
 
         # Proyección atómica al motor de asistencia
         res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
@@ -3287,11 +3330,28 @@ async def ocr_libreta_180h_base64(
         except Exception as b64_err:
             raise HTTPException(status_code=400, detail=f"Base64 inválido: {b64_err}")
 
+        # Archivar foto en servidor si viene empleado y fecha
+        foto_url = None
+        if payload.empleado_id and payload.fecha:
+            try:
+                from pathlib import Path
+                libretas_dir = Path("downloads") / "libretas_180h"
+                libretas_dir.mkdir(parents=True, exist_ok=True)
+                foto_file = libretas_dir / f"{payload.empleado_id}_{payload.fecha}.jpg"
+                foto_file.write_bytes(image_bytes)
+                foto_url = f"/api/asistencia/libreta-180h/foto/?empleado_id={payload.empleado_id}&fecha={payload.fecha}"
+                logger.info(f"📸 Foto de libreta archivada en: {foto_file}")
+            except Exception as auto_save_err:
+                logger.warning(f"⚠️ Error archivando foto preventivamente: {auto_save_err}")
+
         resultado = await gemini_vision_service.parse_libreta_180h_image(
             image_bytes=image_bytes,
             mime_type=mime_type,
             fecha_esperada=payload.fecha
         )
+        if isinstance(resultado, dict):
+            resultado["tiene_foto"] = bool(foto_url)
+            resultado["foto_url"] = foto_url
         return resultado
     except HTTPException:
         raise

@@ -86,5 +86,6 @@ class Libreta180hRequest(BaseModel):
     slots_96: List[int]
     cerrado: bool = True
     observaciones: Optional[str] = None
+    imagen_base64: Optional[str] = None
 
 

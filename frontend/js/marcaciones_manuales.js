@@ -2618,6 +2618,11 @@ function m180EsSuperAdmin() {
     try { return JSON.parse(localStorage.getItem('user'))?.is_superuser === true; } catch (_) { return false; }
 }
 
+function getLibretaAuthHeaders() {
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token') || window.AuthToken || '';
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 async function libreta180hReabrir() {
     if (!m180_locked || !m180EsSuperAdmin()) return;
     const empId = parseInt(document.getElementById('m180-empleado-id').value);
@@ -2629,7 +2634,10 @@ async function libreta180hReabrir() {
     try {
         const resp = await fetch('/api/asistencia/libreta-180h/reabrir/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...getLibretaAuthHeaders()
+            },
             body: JSON.stringify({ empleado_id: empId, fecha: dateStr })
         });
         if (!resp.ok) {
@@ -2712,7 +2720,9 @@ async function proceedToMarcacion180h() {
     m180SetLocked(false);
 
     try {
-        const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`);
+        const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`, {
+            headers: getLibretaAuthHeaders()
+        });
         if (resp.ok) {
             const data = await resp.json();
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
@@ -2720,6 +2730,25 @@ async function proceedToMarcacion180h() {
                 document.getElementById('m180-observaciones').value = data.observaciones || '';
                 m180SetBadge(Number(data.cerrado) ? 'cerrado' : 'borrador');
                 m180SetLocked(Number(data.cerrado) === 1);
+            }
+
+            // Previsualización de fotografía archivada en el servidor (si existe)
+            const previewContainer = document.getElementById('m180-ocr-preview-container');
+            const previewImg = document.getElementById('m180-ocr-preview-img');
+            if (data.foto_url && previewContainer && previewImg) {
+                previewImg.src = data.foto_url;
+                previewContainer.classList.remove('d-none');
+                const textEl = previewContainer.querySelector('.small');
+                if (textEl) {
+                    textEl.innerHTML = `
+                        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                            <div><strong class="text-dark">Foto física archivada</strong> · Planilla respaldada en el servidor.</div>
+                            <a href="${data.foto_url}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right me-1"></i>Ver en Grande</a>
+                        </div>
+                    `;
+                }
+            } else if (previewContainer && !window.m180_last_scanned_image) {
+                previewContainer.classList.add('d-none');
             }
         } else {
             console.warn(`GET libreta-180h returned status ${resp.status}`);
@@ -2739,53 +2768,55 @@ async function proceedToMarcacion180h() {
     }
 }
 
-async function guardarLibreta180h(cerrarDia = false) {
+async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
     if (m180_locked) return;
     const empId = parseInt(document.getElementById('m180-empleado-id').value);
     const dateStr = document.getElementById('m180-fecha-str').value;
     const obs = document.getElementById('m180-observaciones').value.trim();
 
     const minTot = m180_slots.filter(s => s > 0).length * 15;
-    if (cerrarDia && minTot < 1440) {
-        const result = await Swal.fire({
-            title: "Jornada diaria incompleta",
-            html: `Se han registrado <b>${formatMinToHHMM(minTot)} hrs</b> de las 24:00 hrs requeridas por la Libreta del Art. 25 bis DT.<br><br>¿Deseas rellenar automáticamente los tramos vacíos con <b>Descanso</b> antes de cerrar el día?`,
-            icon: "warning",
-            showCancelButton: true,
-            showDenyButton: true,
-            confirmButtonColor: "#059669",
-            denyButtonColor: "#3b82f6",
-            confirmButtonText: "Rellenar descanso y cerrar",
-            denyButtonText: "Cerrar con faltante",
-            cancelButtonText: "Seguir editando"
-        });
+    if (!skipPrompt) {
+        if (cerrarDia && minTot < 1440) {
+            const result = await Swal.fire({
+                title: "Jornada diaria incompleta",
+                html: `Se han registrado <b>${formatMinToHHMM(minTot)} hrs</b> de las 24:00 hrs requeridas por la Libreta del Art. 25 bis DT.<br><br>¿Deseas rellenar automáticamente los tramos vacíos con <b>Descanso</b> antes de cerrar el día?`,
+                icon: "warning",
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonColor: "#059669",
+                denyButtonColor: "#3b82f6",
+                confirmButtonText: "Rellenar descanso y cerrar",
+                denyButtonText: "Cerrar con faltante",
+                cancelButtonText: "Seguir editando"
+            });
 
-        if (result.isConfirmed) {
-            libreta180hAutoDescanso();
-        } else if (!result.isDenied) {
-            return;
-        }
-    } else if (!cerrarDia && minTot < 1440 && minTot > 0) {
-        // Preguntar al guardar borrador si desea autollenar el descanso (aplica para móvil o computador)
-        const faltanMins = 1440 - minTot;
-        const result = await Swal.fire({
-            title: "¿Rellenar Descanso en el Borrador?",
-            html: `Tienes <b>${formatMinToHHMM(minTot)} hrs</b> registradas y quedan <b>${formatMinToHHMM(faltanMins)} hrs</b> vacías.<br><br>¿Deseas rellenar automáticamente las horas restantes vacías con <b>Descanso</b> antes de guardar el borrador?`,
-            icon: "question",
-            showCancelButton: true,
-            showDenyButton: true,
-            confirmButtonColor: "#059669",
-            denyButtonColor: "#3b82f6",
-            cancelButtonColor: "#64748b",
-            confirmButtonText: '<i class="bi bi-moon-stars me-1"></i> Rellenar descanso y guardar',
-            denyButtonText: '<i class="bi bi-save me-1"></i> Guardar solo lo marcado',
-            cancelButtonText: 'Seguir editando'
-        });
+            if (result.isConfirmed) {
+                libreta180hAutoDescanso();
+            } else if (!result.isDenied) {
+                return;
+            }
+        } else if (!cerrarDia && minTot < 1440 && minTot > 0) {
+            // Preguntar al guardar borrador si desea autollenar el descanso (aplica para móvil o computador)
+            const faltanMins = 1440 - minTot;
+            const result = await Swal.fire({
+                title: "¿Rellenar Descanso en el Borrador?",
+                html: `Tienes <b>${formatMinToHHMM(minTot)} hrs</b> registradas y quedan <b>${formatMinToHHMM(faltanMins)} hrs</b> vacías.<br><br>¿Deseas rellenar automáticamente las horas restantes vacías con <b>Descanso</b> antes de guardar el borrador?`,
+                icon: "question",
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonColor: "#059669",
+                denyButtonColor: "#3b82f6",
+                cancelButtonColor: "#64748b",
+                confirmButtonText: '<i class="bi bi-moon-stars me-1"></i> Rellenar descanso y guardar',
+                denyButtonText: '<i class="bi bi-save me-1"></i> Guardar solo lo marcado',
+                cancelButtonText: 'Seguir editando'
+            });
 
-        if (result.isConfirmed) {
-            libreta180hAutoDescanso();
-        } else if (!result.isDenied) {
-            return;
+            if (result.isConfirmed) {
+                libreta180hAutoDescanso();
+            } else if (!result.isDenied) {
+                return;
+            }
         }
     }
 
@@ -2794,7 +2825,8 @@ async function guardarLibreta180h(cerrarDia = false) {
         fecha: dateStr,
         slots_96: m180_slots,
         cerrado: Boolean(cerrarDia),
-        observaciones: obs
+        observaciones: obs,
+        imagen_base64: window.m180_last_scanned_image || null
     };
 
     const buttons = document.querySelectorAll('#modalMarcacion180h .m180-save-btn');
@@ -2803,7 +2835,10 @@ async function guardarLibreta180h(cerrarDia = false) {
 
         const resp = await fetch('/api/asistencia/libreta-180h/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...getLibretaAuthHeaders()
+            },
             body: JSON.stringify(payload)
         });
 
@@ -2827,6 +2862,7 @@ async function guardarLibreta180h(cerrarDia = false) {
         }
 
         m180_dirty = false;
+        window.m180_last_scanned_image = null;
         if (typeof showToast === 'function') {
             showToast(cerrarDia ? "Día cerrado y guardado en la Libreta Art. 25 bis" : "Borrador de Libreta 180h guardado", "success");
         }
@@ -2850,6 +2886,7 @@ async function guardarLibreta180h(cerrarDia = false) {
         buttons.forEach(b => b.disabled = false);
     }
 }
+
 
 window.proceedToMarcacion180h = proceedToMarcacion180h;
 window.setLibretaActividad = setLibretaActividad;
@@ -3076,7 +3113,7 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
                     cropCanvas.height = Math.round(cropH);
                     const cCtx = cropCanvas.getContext('2d');
                     cCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
-                    finalDataUrl = cropCanvas.toDataURL('image/jpeg', 0.94);
+                    finalDataUrl = cropCanvas.toDataURL('image/jpeg', 0.85);
                     console.log(`📸 Columna 1 Día recortada con éxito en alta resolución: ${cropCanvas.width}x${cropCanvas.height}px`);
                 }
             }
@@ -3092,7 +3129,7 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
             try {
                 const paperCanvas = scanner.extractPaper(canvas, 1600, 1000);
                 if (paperCanvas) {
-                    finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.92);
+                    finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.85);
                     console.log("📄 Hoja completa aplanada con OpenCV/jscanify.");
                 }
             } catch (e) {
@@ -3102,7 +3139,7 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
     }
 
     if (!finalDataUrl) {
-        finalDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+        finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
     }
 
     detenerScannerCamara();
@@ -3335,6 +3372,9 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
         return;
     }
 
+    // Guardar referencia en memoria de la foto recién capturada para enviarla al persistir
+    window.m180_last_scanned_image = base64Jpeg;
+
     // Mostrar loader a pantalla completa
     document.getElementById('scanner-step-camera')?.classList.add('d-none');
     document.getElementById('scanner-step-crop')?.classList.add('d-none');
@@ -3346,7 +3386,6 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
 
     const empId = document.getElementById('m180-empleado-id')?.value;
     const fecha = document.getElementById('m180-fecha-str')?.value;
-
 
     try {
         const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
@@ -3390,8 +3429,17 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
         const previewImg = document.getElementById('m180-ocr-preview-img');
         const previewContainer = document.getElementById('m180-ocr-preview-container');
         if (previewImg && previewContainer) {
-            previewImg.src = base64Jpeg;
+            previewImg.src = data.foto_url || base64Jpeg;
             previewContainer.classList.remove('d-none');
+            const textEl = previewContainer.querySelector('.small');
+            if (textEl && data.foto_url) {
+                textEl.innerHTML = `
+                    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                        <div><strong class="text-dark">Foto física archivada</strong> · Planilla respaldada en el servidor.</div>
+                        <a href="${data.foto_url}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right me-1"></i>Ver en Grande</a>
+                    </div>
+                `;
+            }
         }
 
         // Cálculo exacto de horas basado en los 96 slots volcados
@@ -3458,12 +3506,18 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
             });
 
             if (swalRes.isConfirmed) {
-                // Rellenar automáticamente los vacíos con descanso y guardar en base de datos
+                // Rellenar automáticamente los vacíos con descanso y guardar en base de datos directamente
                 libreta180hAutoDescanso();
-                await window.guardarLibreta180h(true);
+                await window.guardarLibreta180h(true, true);
             } else if (swalRes.isDenied) {
-                // Guardar como borrador tal como se detectó
-                await window.guardarLibreta180h(false);
+                // Guardar como borrador tal como se detectó (sin repetir popups)
+                await window.guardarLibreta180h(false, true);
+            } else {
+                // El usuario eligió revisar en grilla antes de guardar
+                m180_dirty = true;
+                if (typeof showToast === 'function') {
+                    showToast('Tramos cargados en la grilla. Recuerda pulsar "Guardar Borrador" o "Cerrar Día" para persistir los cambios.', 'info', 6000);
+                }
             }
         } else if (typeof showToast === 'function') {
             showToast("Planilla procesada con éxito por Gemini Vision", "success");
