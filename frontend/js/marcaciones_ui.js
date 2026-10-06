@@ -6765,6 +6765,10 @@ function _analiticaCellBadge(di) {
         'badge-state-info', 
         '<i class="bi bi-pause-circle-fill me-1"></i>DEOP'
     ];
+    badgeMap['PENDIENTE'] = [
+        'badge-state-warning', 
+        '<i class="bi bi-hourglass-split me-1"></i>PEN'
+    ];
 
     // Fallback hardcodeado (si la caché aún no cargó)
     if (Object.keys(badgeMap).length === 0) {
@@ -6779,6 +6783,7 @@ function _analiticaCellBadge(di) {
             'EXTRA':            ['badge-state-info',     '<i class="bi bi-plus-circle-fill me-1"></i>EXT'],
             'ANOMALIA':         ['bg-dark text-white',   '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'],
             'VIAJE_LARGO':      ['bg-info text-dark font-monospace fw-bold', '<i class="bi bi-truck me-1"></i>VIAJE'],
+            'PENDIENTE':        ['badge-state-warning',  '<i class="bi bi-hourglass-split me-1"></i>PEN'],
             'JORNADA_ESPECIAL': ['badge-state-info',     '<i class="bi bi-star-fill me-1"></i>ESP'],
             'EN_CURSO':         ['badge-state-success',  '<i class="bi bi-play-circle-fill me-1"></i>CUR'],
             'INASISTENCIA_COMPENSADA_INTERCAMBIO': ['badge-compensatorio', '<i class="bi bi-arrow-left-right me-1"></i>COMP'],
@@ -7578,8 +7583,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     // ─────────────────────────────────────────────────────────────────────────
     // DETECCIÓN EXCLUSIVA: HORARIOS ART. 25 BIS (TRANSPORTE / BOLSA FLEXIBLE 180H)
     // ─────────────────────────────────────────────────────────────────────────
-    const isEmpBolsa = (empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA' || empInfo._esBolsaFlag)) ||
-                       (di && (di.tipo_programacion === 'BOLSA_FLEXIBLE' || di.tipo_programacion === 'FLEXIBLE_BOLSA' || di.origen === 'LIBRETA_180H')) ||
+    const isEmpBolsa = (empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA' || empInfo._esBolsaFlag || empInfo.modalidad_control === 'LIBRETA_180H' || (empInfo.modalidad_control && empInfo.modalidad_control.toUpperCase() === 'LIBRETA_180H'))) ||
+                       (di && (di.tipo_programacion === 'BOLSA_FLEXIBLE' || di.tipo_programacion === 'FLEXIBLE_BOLSA' || di.origen === 'LIBRETA_180H' || di.modalidad_control === 'LIBRETA_180H')) ||
                        (empInfo && empInfo.turno && empInfo.turno.toUpperCase().includes('TRANSPORTE')) ||
                        (di && di.turno_nombre && di.turno_nombre.toUpperCase().includes('TRANSPORTE')) ||
                        (di && di.slots_96);

@@ -239,6 +239,7 @@ class AsistenciaService:
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'permite_viajes_largos', 'rotacion_dinamica_diaria',
+                'modalidad_control', 'meta_horas_espera',
             ]
 
             # Construir dict {turno_id: {campo: valor}} desde los datos de asig_rows
@@ -830,6 +831,7 @@ class AsistenciaService:
                 'tipo_programacion', 'nombre', 'permite_viajes_largos',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'rotacion_dinamica_diaria',
+                'modalidad_control', 'meta_horas_espera',
             ]
             for td in td_rows:
                 tid = td['turno_id']
@@ -2150,6 +2152,8 @@ class AsistenciaService:
 
             libreta_180h = None
             if es_180h:
+                # Blindaje absoluto: no evaluar marcas de reloj biométrico en modalidad Libreta 180h
+                marcas_candidatas = []
                 if bulk_ctx and 'libretas_180h' in bulk_ctx:
                     libreta_180h = bulk_ctx['libretas_180h'].get(empleado_id, {}).get(fecha)
                 else:
@@ -3072,6 +3076,116 @@ class AsistenciaService:
             "success": True,
             "mensaje": f"Se procesaron {count} registros de horas extra",
             "count": count
+        }
+
+    async def purgar_y_recalcular_libreta_180h(self, fecha_desde: str = "2026-10-01") -> Dict[str, Any]:
+        """
+        Purga todas las marcaciones biométricas de reloj físico (logs_raw donde manual=0 o manual IS NULL)
+        para todos los empleados asignados a turnos cuya modalidad de control sea 'LIBRETA_180H'
+        o de tipo Bolsa Flexible a partir de `fecha_desde`.
+
+        Luego recalcula la asistencia día por día para los empleados afectados, garantizando
+        que los días sin libreta digital queden estrictamente en 'PENDIENTE' (esperando libreta),
+        con 0 horas trabajadas, 0 deuda y sin marcas de reloj.
+        """
+        db = self.repository.db
+        logger.info(f"🧹 [Libreta 180h] Iniciando purga de marcas de reloj y recálculo desde {fecha_desde}...")
+
+        # 1. Buscar asignaciones relevantes
+        q_asigs = """
+            SELECT ast.empleado_id, ast.fecha_inicio, ast.fecha_fin,
+                   t.id as turno_id, t.nombre as turno_nombre,
+                   t.modalidad_control, t.tipo_programacion
+            FROM asignacion_turnos ast
+            JOIN turnos t ON ast.turno_id = t.id
+            WHERE (
+                UPPER(COALESCE(t.modalidad_control, 'RELOJ')) = 'LIBRETA_180H'
+                OR UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
+            )
+            AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?)
+        """
+        asig_rows = await db.fetch_all(q_asigs, (fecha_desde,))
+        if not asig_rows:
+            logger.info("ℹ️ [Libreta 180h] No se encontraron asignaciones en modalidad libreta 180h desde esa fecha.")
+            return {"success": True, "marcas_purgadas": 0, "dias_recalculados": 0, "empleados_afectados": 0}
+
+        total_marcas_borradas = 0
+        emp_fechas_a_recalcular = set()
+        hoy_str = datetime.now().strftime("%Y-%m-%d")
+
+        for asig in asig_rows:
+            emp_id = asig['empleado_id']
+            f_ini_asig = str(asig['fecha_inicio'])[:10]
+            f_fin_asig = str(asig['fecha_fin'])[:10] if asig['fecha_fin'] else None
+
+            # Rango efectivo para esta asignación a partir de fecha_desde
+            f_ini = max(f_ini_asig, fecha_desde)
+            f_fin = min(f_fin_asig, hoy_str) if f_fin_asig else hoy_str
+
+            if f_ini > f_fin:
+                continue
+
+            # Purga en logs_raw: solo marcas de reloj biométrico (manual = 0 o manual IS NULL)
+            dt_ini_str = f"{f_ini} 00:00:00"
+            dt_fin_str = f"{f_fin} 23:59:59"
+
+            # Contar antes de borrar para observabilidad
+            q_cnt = """
+                SELECT COUNT(*) as cnt FROM logs_raw
+                WHERE empleado_id = ?
+                  AND fecha_hora >= ?
+                  AND fecha_hora <= ?
+                  AND (manual = 0 OR manual IS NULL)
+            """
+            cnt_row = await db.fetch_one(q_cnt, (emp_id, dt_ini_str, dt_fin_str))
+            cnt_borrar = cnt_row['cnt'] if cnt_row else 0
+
+            if cnt_borrar > 0:
+                q_del = """
+                    DELETE FROM logs_raw
+                    WHERE empleado_id = ?
+                      AND fecha_hora >= ?
+                      AND fecha_hora <= ?
+                      AND (manual = 0 OR manual IS NULL)
+                """
+                await db.execute(q_del, (emp_id, dt_ini_str, dt_fin_str))
+                total_marcas_borradas += cnt_borrar
+                logger.info(f"🗑️ [Libreta 180h] Eliminadas {cnt_borrar} marcas de reloj para empleado {emp_id} entre {f_ini} y {f_fin}.")
+
+            # Expandir días para recálculo
+            cur_dt = datetime.strptime(f_ini, "%Y-%m-%d")
+            fin_dt = datetime.strptime(f_fin, "%Y-%m-%d")
+            while cur_dt <= fin_dt:
+                emp_fechas_a_recalcular.add((emp_id, cur_dt.strftime("%Y-%m-%d")))
+                cur_dt += timedelta(days=1)
+
+        # 2. Recalcular días afectados
+        dias_recalculados = 0
+        empleados_afectados = len({e for e, _ in emp_fechas_a_recalcular})
+
+        for emp_id, fecha_str in sorted(list(emp_fechas_a_recalcular), key=lambda x: (x[0], x[1])):
+            try:
+                await self.procesar_empleado_dia(
+                    empleado_id=emp_id,
+                    fecha=fecha_str,
+                    save=True,
+                    force=True
+                )
+                dias_recalculados += 1
+            except Exception as e_rec:
+                logger.error(f"❌ Error recalculando emp {emp_id} fecha {fecha_str} post-purga: {e_rec}")
+
+        logger.success(
+            f"✅ [Libreta 180h] Purga y recálculo finalizado: {total_marcas_borradas} marcas de reloj eliminadas, "
+            f"{dias_recalculados} días recalculados para {empleados_afectados} empleados."
+        )
+
+        return {
+            "success": True,
+            "marcas_purgadas": total_marcas_borradas,
+            "dias_recalculados": dias_recalculados,
+            "empleados_afectados": empleados_afectados,
+            "fecha_desde": fecha_desde
         }
 
     # Alias de compatibilidad

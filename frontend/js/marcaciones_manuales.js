@@ -307,8 +307,12 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     const btnMarcacion180h = document.getElementById('btn-marcacion-180h');
     if (btnMarcacion180h) {
         const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
+        const di = stateMarcacionesApp.data && stateMarcacionesApp.data.matriz && stateMarcacionesApp.data.matriz[empId] ? stateMarcacionesApp.data.matriz[empId][dateStr] : null;
         const isBolsa = Boolean(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'));
-        const isLibreta = Boolean(empInfo && (empInfo.modalidad_control === 'LIBRETA_180H' || isBolsa));
+        const isLibreta = Boolean(
+            (empInfo && (empInfo.modalidad_control === 'LIBRETA_180H' || (empInfo.modalidad_control && empInfo.modalidad_control.toUpperCase() === 'LIBRETA_180H') || isBolsa)) ||
+            (di && (di.modalidad_control === 'LIBRETA_180H' || di.origen === 'LIBRETA_180H' || di.slots_96))
+        );
 
         if (isLibreta) {
             btnMarcacion180h.classList.remove('d-none');

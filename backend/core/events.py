@@ -82,6 +82,12 @@ async def _recalcular_periodo_activo():
         asist_repo = AsistenciaRepository(db)
         asist_service = AsistenciaService(asist_repo)
 
+        # ── Blindaje & Purga Libreta 180h (Art. 25 bis / Sin Reloj desde 01-10-2026) ──
+        try:
+            await asist_service.purgar_y_recalcular_libreta_180h(fecha_desde="2026-10-01")
+        except Exception as err_purga:
+            logger.warning(f"⚠️ [Startup] Error ejecutando purga preventiva de libreta 180h: {err_purga}")
+
         dias_a_recalc = []
         # Incluir el último día de cierre (día puente) para que turnos nocturnos que cruzan la medianoche
         # sincronicen y propaguen sus marcas consumidas hacia el primer día del período abierto.

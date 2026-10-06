@@ -1141,17 +1141,21 @@ class SyncService:
                 rut_ph = ','.join('?' * len(valid_ruts))
                 gate_params = list(valid_ruts) + [fecha_fin_mes, fecha_ini_mes]
                 asigs_raw = await db.fetch_all(f"""
-                    SELECT e.id as emp_id, e.rut, ast.fecha_inicio, ast.fecha_fin 
+                    SELECT e.id as emp_id, e.rut, ast.fecha_inicio, ast.fecha_fin,
+                           t.modalidad_control, t.tipo_programacion
                     FROM asignacion_turnos ast
                     JOIN empleados e ON ast.empleado_id = e.id
+                    JOIN turnos t ON ast.turno_id = t.id
                     WHERE e.rut IN ({rut_ph})
                       AND (ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))
                 """, tuple(gate_params))
             else:
                 asigs_raw = await db.fetch_all("""
-                    SELECT e.id as emp_id, e.rut, ast.fecha_inicio, ast.fecha_fin 
+                    SELECT e.id as emp_id, e.rut, ast.fecha_inicio, ast.fecha_fin,
+                           t.modalidad_control, t.tipo_programacion
                     FROM asignacion_turnos ast
                     JOIN empleados e ON ast.empleado_id = e.id
+                    JOIN turnos t ON ast.turno_id = t.id
                     WHERE (ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))
                 """, (fecha_fin_mes, fecha_ini_mes))
             
@@ -1167,8 +1171,10 @@ class SyncService:
                 r_key = str(r['rut']).replace(".", "").replace("-", "").strip()
                 first_assignments_map[r_key] = r['min_f']
 
-            # Mapa de [rut_limpio] -> set(fechas_con_turno)
+            # Mapa de [rut_limpio] -> set(fechas_con_turno_reloj)
             asig_map_gate = {}
+            # Mapa de [rut_limpio] -> set(fechas_con_libreta_180h)
+            libreta_dates_gate = {}
             # Mapa de [rut_limpio] -> empleado_id (para acotar recálculo al batch)
             rut_to_emp_id = {}
             from datetime import timedelta
@@ -1177,18 +1183,30 @@ class SyncService:
                 rut_to_emp_id[rut_key] = asig['emp_id']
                 if rut_key not in asig_map_gate:
                     asig_map_gate[rut_key] = set()
+                if rut_key not in libreta_dates_gate:
+                    libreta_dates_gate[rut_key] = set()
                 
                 # Expandir fechas de la asignación dentro del RANGO REAL
                 start_dt = max(datetime.strptime(asig['fecha_inicio'], "%Y-%m-%d"), datetime.strptime(fecha_ini_mes, "%Y-%m-%d"))
                 end_str = asig['fecha_fin'] or fecha_fin_mes
                 end_dt = min(datetime.strptime(end_str, "%Y-%m-%d"), datetime.strptime(fecha_fin_mes, "%Y-%m-%d"))
                 
+                mod_control = str(asig.get('modalidad_control') or 'RELOJ').strip().upper()
+                tipo_prog = str(asig.get('tipo_programacion') or '').strip().upper()
+                is_libreta_shift = (mod_control == 'LIBRETA_180H')
+                is_bolsa = tipo_prog in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
+
                 curr = start_dt
                 while curr <= end_dt:
-                    asig_map_gate[rut_key].add(curr.strftime("%Y-%m-%d"))
+                    c_str = curr.strftime("%Y-%m-%d")
+                    # Blindaje: los días bajo Libreta 180h / Sin Reloj van a libreta_dates_gate y NO al reloj
+                    if is_libreta_shift or (is_bolsa and c_str >= '2026-10-01'):
+                        libreta_dates_gate[rut_key].add(c_str)
+                    else:
+                        asig_map_gate[rut_key].add(c_str)
                     curr += timedelta(days=1)
             
-            logger.info(f"🛡️ Protection Gate: {len(asig_map_gate)} empleados con asignaciones detectados.")
+            logger.info(f"🛡️ Protection Gate: {len(asig_map_gate)} empleados reloj, {len(libreta_dates_gate)} con libreta 180h detectados.")
 
             fechas_afectadas = set()
             
@@ -1233,6 +1251,12 @@ class SyncService:
                         count_closed_blocked += 1
                         continue
                     
+                    # REGLA 1.5: BLINDAJE LIBRETA DIGITAL ART. 25 BIS (180h / Sin Reloj)
+                    # Jamás persistir marcaciones biométricas del reloj para choferes en modalidad Libreta 180h
+                    if rut_clean in libreta_dates_gate and fecha_str in libreta_dates_gate[rut_clean]:
+                        count_gate_blocked += 1
+                        continue
+
                     # REGLA 2+3: BIOALBA GATE — Solo marcaciones con turno activo en esa fecha
                     # Si el empleado no tiene turno asignado O la fecha es anterior a su fecha_inicio,
                     # la marcación se descarta. count_gate_blocked queda para observabilidad en sync_logs.

@@ -965,23 +965,172 @@ class LibretaArt25BisResolver:
         }
 
     @staticmethod
-    def reconcile_without_libreta(res: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def resolve_sin_libreta(
+        empleado_id: int,
+        fecha: str,
+        horas_teoricas: float,
+        is_holiday: bool = False,
+        holiday_desc: Optional[str] = None,
+        es_libre_dia: bool = False,
+        viaje_largo_info: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
-        Chofer Art. 25 bis SIN libreta cargada:
-        - Si el reloj biométrico registró actividad -> se respeta la resolución cuántica del reloj.
-        - Si es un día laborable pasado sin marcas -> PENDIENTE (espera libreta), nunca INASISTENCIA.
-        - Feriado / libre / justificado / futuro -> se respeta el resultado del motor.
+        Día bajo modalidad Libreta Digital 180h (Art. 25 bis / Sin Reloj) SIN libreta registrada aún.
+        Blindaje inviolable: JAMÁS se resuelve con reloj biométrico.
+        - Viaje largo activo -> VIAJE_LARGO
+        - Feriado -> FERIADO
+        - Libre programado -> LIBRE
+        - Día hábil -> PENDIENTE (espera registro de libreta digital / escaneo / manual)
         """
-        if not res:
-            return res
-        if res.get('estado') == 'INASISTENCIA' and not res.get('hora_entrada_real') and not res.get('hora_salida_real'):
-            res['estado'] = 'PENDIENTE'
-            res['observaciones'] = '[Pendiente Marcación Libreta 180h]'
-            res['origen'] = 'TURNO'
-        elif res.get('hora_entrada_real') or res.get('hora_salida_real'):
-            if '[Sin libreta 180h' not in (res.get('observaciones') or ''):
-                res['observaciones'] = (res.get('observaciones') or '') + '[Sin libreta 180h: resuelto con reloj biométrico] '
-        return res
+        if viaje_largo_info:
+            return {
+                'empleado_id': empleado_id,
+                'fecha': fecha,
+                'hora_entrada_real': None,
+                'hora_salida_real': None,
+                'hora_salida_colacion': None,
+                'hora_entrada_colacion': None,
+                'hora_inicio_permiso': None,
+                'hora_termino_permiso': None,
+                'horas_teoricas': horas_teoricas,
+                'horas_trabajadas': 0.0,
+                'minutos_espera': 0,
+                'minutos_conduccion': 0,
+                'minutos_auxiliares': 0,
+                'minutos_descanso': 0,
+                'minutos_colacion': 0,
+                'minutos_colacion_real': 0,
+                'minutos_colacion_auto': 0,
+                'minutos_exceso_colacion': 0,
+                'minutos_permisos_detectados': 0,
+                'minutos_permiso_personal_deuda': 0,
+                'minutos_atraso': 0.0,
+                'minutos_salida_adelantada': 0.0,
+                'minutos_extra_bruto': 0.0,
+                'minutos_deuda': 0.0,
+                'tiene_atraso': 0,
+                'tiene_salida_adelantada': 0,
+                'tiene_permiso': 0,
+                'alerta_atraso': False,
+                'estado': 'VIAJE_LARGO',
+                'observaciones': '[En Viaje Largo de Ruta]',
+                'origen': 'VIAJE_LARGO',
+                'marcas_consumidas_ids': [],
+                '_jornada_especial': None,
+                '_jornada_adicional': None,
+            }
+        if is_holiday:
+            obs = f"Feriado: {holiday_desc}" if holiday_desc else "Feriado Legal"
+            return {
+                'empleado_id': empleado_id,
+                'fecha': fecha,
+                'hora_entrada_real': None,
+                'hora_salida_real': None,
+                'hora_salida_colacion': None,
+                'hora_entrada_colacion': None,
+                'hora_inicio_permiso': None,
+                'hora_termino_permiso': None,
+                'horas_teoricas': 0.0,
+                'horas_trabajadas': 0.0,
+                'minutos_espera': 0,
+                'minutos_conduccion': 0,
+                'minutos_auxiliares': 0,
+                'minutos_descanso': 0,
+                'minutos_colacion': 0,
+                'minutos_colacion_real': 0,
+                'minutos_colacion_auto': 0,
+                'minutos_exceso_colacion': 0,
+                'minutos_permisos_detectados': 0,
+                'minutos_permiso_personal_deuda': 0,
+                'minutos_atraso': 0.0,
+                'minutos_salida_adelantada': 0.0,
+                'minutos_extra_bruto': 0.0,
+                'minutos_deuda': 0.0,
+                'tiene_atraso': 0,
+                'tiene_salida_adelantada': 0,
+                'tiene_permiso': 0,
+                'alerta_atraso': False,
+                'estado': 'FERIADO',
+                'observaciones': obs,
+                'origen': 'FERIADO',
+                'marcas_consumidas_ids': [],
+                '_jornada_especial': None,
+                '_jornada_adicional': None,
+            }
+        if es_libre_dia:
+            return {
+                'empleado_id': empleado_id,
+                'fecha': fecha,
+                'hora_entrada_real': None,
+                'hora_salida_real': None,
+                'hora_salida_colacion': None,
+                'hora_entrada_colacion': None,
+                'hora_inicio_permiso': None,
+                'hora_termino_permiso': None,
+                'horas_teoricas': 0.0,
+                'horas_trabajadas': 0.0,
+                'minutos_espera': 0,
+                'minutos_conduccion': 0,
+                'minutos_auxiliares': 0,
+                'minutos_descanso': 0,
+                'minutos_colacion': 0,
+                'minutos_colacion_real': 0,
+                'minutos_colacion_auto': 0,
+                'minutos_exceso_colacion': 0,
+                'minutos_permisos_detectados': 0,
+                'minutos_permiso_personal_deuda': 0,
+                'minutos_atraso': 0.0,
+                'minutos_salida_adelantada': 0.0,
+                'minutos_extra_bruto': 0.0,
+                'minutos_deuda': 0.0,
+                'tiene_atraso': 0,
+                'tiene_salida_adelantada': 0,
+                'tiene_permiso': 0,
+                'alerta_atraso': False,
+                'estado': 'LIBRE',
+                'observaciones': 'Día libre programado',
+                'origen': 'TURNO',
+                'marcas_consumidas_ids': [],
+                '_jornada_especial': None,
+                '_jornada_adicional': None,
+            }
+
+        return {
+            'empleado_id': empleado_id,
+            'fecha': fecha,
+            'hora_entrada_real': None,
+            'hora_salida_real': None,
+            'hora_salida_colacion': None,
+            'hora_entrada_colacion': None,
+            'hora_inicio_permiso': None,
+            'hora_termino_permiso': None,
+            'horas_teoricas': horas_teoricas,
+            'horas_trabajadas': 0.0,
+            'minutos_espera': 0,
+            'minutos_conduccion': 0,
+            'minutos_auxiliares': 0,
+            'minutos_descanso': 0,
+            'minutos_colacion': 0,
+            'minutos_colacion_real': 0,
+            'minutos_colacion_auto': 0,
+            'minutos_exceso_colacion': 0,
+            'minutos_permisos_detectados': 0,
+            'minutos_permiso_personal_deuda': 0,
+            'minutos_atraso': 0.0,
+            'minutos_salida_adelantada': 0.0,
+            'minutos_extra_bruto': 0.0,
+            'minutos_deuda': 0.0,
+            'tiene_atraso': 0,
+            'tiene_salida_adelantada': 0,
+            'tiene_permiso': 0,
+            'alerta_atraso': False,
+            'estado': 'PENDIENTE',
+            'observaciones': '[Pendiente Marcación Libreta 180h]',
+            'origen': 'LIBRETA_180H',
+            'marcas_consumidas_ids': [],
+            '_jornada_especial': None,
+            '_jornada_adicional': None,
+        }
 
 
 class AttendanceAdjustmentResolver:
@@ -1189,8 +1338,19 @@ class QuantumMatrixEngine:
         j_full = JustificationTensorResolver.select_full_day(full_justs, is_holiday, es_libre_dia)
 
         # ── Capa 1: Fuente de tiempo (Libreta Art. 25 bis o Reloj) ──
-        if es_modalidad_180h and libreta_180h:
-            res = LibretaArt25BisResolver.resolve(empleado_id, fecha, libreta_180h, horas_teo_dia)
+        if es_modalidad_180h:
+            if libreta_180h:
+                res = LibretaArt25BisResolver.resolve(empleado_id, fecha, libreta_180h, horas_teo_dia)
+            else:
+                res = LibretaArt25BisResolver.resolve_sin_libreta(
+                    empleado_id=empleado_id,
+                    fecha=fecha,
+                    horas_teoricas=horas_teo_dia,
+                    is_holiday=is_holiday,
+                    holiday_desc=holiday_desc,
+                    es_libre_dia=es_libre_dia,
+                    viaje_largo_info=viaje_largo_info,
+                )
         else:
             res = cls._solve_core(
                 fecha=fecha,
@@ -1206,8 +1366,6 @@ class QuantumMatrixEngine:
                 todos_ciclos_dia=todos_ciclos_dia,
                 holiday_desc=holiday_desc,
             )
-            if es_modalidad_180h and not viaje_largo_info:
-                res = LibretaArt25BisResolver.reconcile_without_libreta(res)
 
         # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
         # Un día dentro de un viaje largo registrado no es ausencia ni anomalía.

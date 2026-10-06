@@ -3270,6 +3270,43 @@ async def delete_libreta_180h(
         raise HTTPException(status_code=500, detail=f"Error eliminando registro de Libreta 180h: {str(e)}")
 
 
+class PurgaMarcasRelojRequest(BaseModel):
+    fecha_desde: Optional[str] = "2026-10-01"
+
+
+@router.post("/libreta-180h/purgar-marcas-reloj/")
+async def purgar_marcas_reloj_libreta_180h(
+    payload: Optional[PurgaMarcasRelojRequest] = None,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Purga todas las marcas biométricas del reloj físico (logs_raw donde manual=0 o NULL)
+    para empleados con turnos en modalidad 'LIBRETA_180H' o Bolsa Flexible a partir de fecha_desde.
+    Recalcula la asistencia para todos los días afectados garantizando que días sin libreta digital
+    permanezcan estrictamente como PENDIENTE sin marcas de reloj.
+    """
+    try:
+        f_desde = (payload.fecha_desde if payload and payload.fecha_desde else "2026-10-01")
+        resultado = await service.purgar_y_recalcular_libreta_180h(fecha_desde=f_desde)
+
+        try:
+            val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+            val_user = getattr(current_user, 'username', 'sistema')
+            await service.repository.db.execute("""
+                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+                VALUES (?, ?, ?, ?, ?)
+            """, (val_id, val_user, 'PURGA_MARCAS_RELOJ_LIBRETA_180H', 'Marcaciones',
+                  f"Purga de marcas de reloj para turnos Libreta 180h desde {f_desde}: {resultado.get('marcas_purgadas')} marcas eliminadas, {resultado.get('dias_recalculados')} días recalculados."))
+        except Exception:
+            pass
+
+        return resultado
+    except Exception as e:
+        logger.error(f"❌ Error en purgar_marcas_reloj_libreta_180h: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error purgando marcas de reloj: {str(e)}")
+
+
 # ═══════════════════════════════════════════════════════════════════
 # ESCANEO INTELIGENTE LIBRETA 180H CON GOOGLE GEMINI VISION (AI)
 # ═══════════════════════════════════════════════════════════════════
