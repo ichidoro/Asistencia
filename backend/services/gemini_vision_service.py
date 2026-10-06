@@ -96,7 +96,7 @@ class GeminiVisionService:
                 "error": "GEMINI_API_KEY_MISSING",
                 "mensaje": (
                     "No se ha configurado la API Key de Google Gemini. "
-                    "Por favor agrega tu clave gratuita de Google AI Studio en el archivo .env como GEMINI_API_KEY=tu_clave"
+                    "Por favor agrega tu clave en el archivo .env como GEMINI_API_KEY=tu_clave"
                 ),
                 "slots_96": [0] * 96,
                 "tramos": []
@@ -156,17 +156,22 @@ CÓDIGOS PARA EL ARRAY `slots_96` (Exactamente 96 números de 0 a 4):
 - 4: Descanso (Carril Descanso)
 - 0: Vacío / Sin actividad
 
-RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
+RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO (RFC 8259) SIN COMENTARIOS NI TEXTO ADICIONAL:
+- Todas las cadenas deben ir entre comillas dobles obligatoriamente.
+- No uses comas decimales (usa 0.95 con punto).
+- No uses comentarios ni comas finales antes de cerrar llaves o corchetes.
+- Si un campo no se detecta, usa null sin comillas o cadena vacía "".
+ESQUEMA EXACTO:
 {{
   "exito": true,
-  "fecha_detectada": "YYYY-MM-DD o null si no se ve clara",
-  "conductor_detectado": "Nombre del chofer si está escrito o null",
+  "fecha_detectada": "YYYY-MM-DD",
+  "conductor_detectado": "Nombre del chofer",
   "confianza": 0.95,
   "tramos": [
     {{"inicio": "06:00", "fin": "10:00", "actividad": "CONDUCCION", "duracion_horas": 4.0}},
     {{"inicio": "10:30", "fin": "20:00", "actividad": "AUXILIARES", "duracion_horas": 9.5}}
   ],
-  "slots_96": [0, 0, ..., 1, 1, ..., 3, 3, ...],
+  "slots_96": [0, 0, 1, 1, 3, 3],
   "resumen_horas": {{
     "minutos_conduccion": 240,
     "minutos_espera": 0,
@@ -197,7 +202,7 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
             "generationConfig": {
                 "response_mime_type": "application/json",
                 "temperature": 0.1,
-                "max_output_tokens": 1200
+                "max_output_tokens": 4096
             }
         }
 
@@ -304,6 +309,95 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                 "tramos": []
             }
 
+    def _robust_json_loads(self, text: str) -> Dict[str, Any]:
+        """Extrae y parsea JSON de forma ultra-resiliente ante variaciones y errores menores de LLMs."""
+        if not text or not text.strip():
+            raise ValueError("Respuesta vacía recibida del modelo Gemini.")
+
+        text_clean = text.strip()
+        # Eliminar envoltorios markdown ```json ... ```
+        text_clean = re.sub(r"^```(?:json)?\s*", "", text_clean, flags=re.MULTILINE)
+        text_clean = re.sub(r"\s*```$", "", text_clean, flags=re.MULTILINE)
+
+        # Buscar el primer '{' y el último '}'
+        start_idx = text_clean.find('{')
+        end_idx = text_clean.rfind('}')
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            text_clean = text_clean[start_idx:end_idx + 1]
+
+        # 1. Intentar parseo directo estándar
+        try:
+            return json.loads(text_clean)
+        except Exception:
+            pass
+
+        # 2. Sanitizaciones automáticas para corregir fallos típicos de modelos
+        sane = text_clean
+        # a) Eliminar comentarios estilo // o /* ... */
+        sane = re.sub(r"//.*$", "", sane, flags=re.MULTILINE)
+        sane = re.sub(r"/\*.*?\*/", "", sane, flags=re.DOTALL)
+
+        # b) Fechas sin comillas como : 2026-10-01
+        sane = re.sub(r":\s*(\d{4}-\d{2}-\d{2})\b", r': "\1"', sane)
+
+        # c) Números con coma decimal como 0,95 -> 0.95
+        sane = re.sub(r":\s*(\d+),(\d+)\b", r": \1.\2", sane)
+
+        # d) Valores especiales comunes
+        sane = re.sub(r":\s*(None|undefined)\b", ": null", sane, flags=re.IGNORECASE)
+        sane = re.sub(r":\s*(NaN)\b", ": 0", sane, flags=re.IGNORECASE)
+        sane = re.sub(r":\s*(True)\b", ": true", sane)
+        sane = re.sub(r":\s*(False)\b", ": false", sane)
+
+        # e) Citar identificadores de texto no entrecomillados (ej: "confianza": alta o "confianza": N/A)
+        def repl_ident(m):
+            val = m.group(1).strip()
+            if val.lower() in ('true', 'false', 'null'):
+                return f': {val.lower()}'
+            return f': "{val}"'
+        sane = re.sub(r':\s*([a-zA-Z_][a-zA-Z0-9_\-\/]*)\s*(?=[,}\]\n])', repl_ident, sane)
+
+        # f) Comillas simples a dobles
+        sane = re.sub(r"(?<=[:\[,])\s*'([^']*)'\s*(?=[,\]}])", r' "\1"', sane)
+        sane = re.sub(r"'([^']+)'\s*:", r'"\1":', sane)
+
+        # g) Comas finales antes de } o ]
+        sane = re.sub(r",\s*([}\]])", r"\1", sane)
+
+        try:
+            return json.loads(sane)
+        except Exception:
+            pass
+
+        # 3. Fallback con ast.literal_eval si se parece a estructura Python
+        import ast
+        try:
+            val = ast.literal_eval(sane)
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+
+        # 4. Fallback de rescate directo de slots_96 mediante regex
+        slots_match = re.search(r'["\']?slots_96["\']?\s*:\s*\[([0-4,\s]+)\]', text)
+        if slots_match:
+            raw_nums = re.findall(r'[0-4]', slots_match.group(1))
+            if len(raw_nums) >= 20:
+                slots = [int(x) for x in raw_nums]
+                if len(slots) < 96:
+                    slots.extend([0] * (96 - len(slots)))
+                logger.warning("⚠️ GeminiVision: JSON malformado recuperado con éxito vía rescate directo de slots_96.")
+                return {
+                    "exito": True,
+                    "slots_96": slots[:96],
+                    "confianza": 0.85,
+                    "tramos": [],
+                    "observaciones": "Planilla leída y recuperada mediante extractor resiliente de slots."
+                }
+
+        # Si todo falló, intentar json.loads para generar la traza descriptiva
+        return json.loads(sane)
+
     def _process_gemini_response(self, resp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extrae y normaliza la respuesta JSON de Gemini."""
         try:
@@ -329,11 +423,7 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                 }
 
             text = parts[0].get("text", "")
-            # Limpiar posible markdown wrapper ```json ... ```
-            cleaned_text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
-            cleaned_text = re.sub(r"\s*```$", "", cleaned_text.strip(), flags=re.MULTILINE)
-
-            parsed = json.loads(cleaned_text)
+            parsed = self._robust_json_loads(text)
 
             # Validar y sanear el array slots_96
             slots = parsed.get("slots_96", [])
