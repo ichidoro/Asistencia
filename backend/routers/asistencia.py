@@ -3334,7 +3334,7 @@ async def ocr_libreta_180h_upload(
 ):
     """
     Escanea y reconoce visualmente la libreta física de chofer (Art. 25 bis DT)
-    mediante Google Gemini Vision (Free Tier) a partir de una foto subida por multipart/form-data.
+    mediante Google Gemini Vision a partir de una foto subida por multipart/form-data.
     """
     try:
         content = await file.read()

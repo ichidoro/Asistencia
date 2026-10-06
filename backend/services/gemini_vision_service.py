@@ -16,8 +16,7 @@ class GeminiVisionService:
     de Choferes (Art. 25 bis DT / Res. Ex. 1213) utilizando Google Gemini Vision.
     Conectado a la API empresarial de Google Cloud del proyecto "180 horas".
     """
-
-    DEFAULT_GEMINI_KEY = "AIzaSyB0OTUzhVds80IrLnR255voIU1LOBOU4Uk"
+    DEFAULT_GEMINI_KEY = ""
 
     @property
     def api_key(self) -> str:

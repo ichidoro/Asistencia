@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     # ============================================
     # GOOGLE GEMINI AI (Visión y Escaneo Libreta 180h)
     # ============================================
-    GEMINI_API_KEY: Optional[str] = os.environ.get("GEMINI_API_KEY", "AIzaSyB0OTUzhVds80IrLnR255voIU1LOBOU4Uk")
+    GEMINI_API_KEY: Optional[str] = os.environ.get("GEMINI_API_KEY")
     GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     
     # ============================================
