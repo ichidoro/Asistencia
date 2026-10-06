@@ -746,10 +746,407 @@ class QuantumShiftWeekMatcher:
         return 1
 
 
+def _flag(value: Any) -> bool:
+    """Normaliza banderas provenientes de SQLite/Turso/JSON (0/1, '1', 'true', True...)."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in ('1', 'true', 't', 'si', 'sí', 'yes', 'y', 'on')
+
+
+def _hhmm_to_minutes(value: Any) -> Optional[float]:
+    """Convierte 'HH:MM[:SS]' a minutos del día. None si no es parseable."""
+    if not value:
+        return None
+    try:
+        parts = str(value).strip().split(':')
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        s = float(parts[2]) if len(parts) > 2 else 0.0
+        return h * 60.0 + m + s / 60.0
+    except Exception:
+        return None
+
+
+class JustificationTensorResolver:
+    """
+    Resolutor ÚNICO de justificaciones. Aplica las reglas configuradas en `justificacion_tipos`
+    de forma GENERAL (independiente del horario del trabajador):
+
+    - dias_corridos = 1 → la justificación consume TODOS los días del rango (incluye días libres del turno).
+      dias_corridos = 0 → (días hábiles) NO consume días libres del turno.
+    - sobreescribe_feriados = 1 → si cae feriado, prevalece la justificación.
+      sobreescribe_feriados = 0 → si cae feriado, prevalece el FERIADO.
+    - es_por_horas / es_horas_sindicales → permiso parcial (hora_inicio/hora_fin), NO de día completo.
+    - genera_deuda_horaria = 0 → los minutos del permiso por horas cubren la deuda/atraso/salida adelantada.
+      genera_deuda_horaria = 1 → los minutos del permiso quedan registrados como deuda horaria personal.
+    - nomenclatura → código visible en la grilla (ej. LM, VAC, PER). Se persiste en la asistencia.
+    - con_goce_sueldo / pagador / descuenta_remuneracion → metadatos remuneracionales persistidos/trazados.
+    """
+
+    @staticmethod
+    def in_range(j: Dict[str, Any], fecha: str) -> bool:
+        fi = str(j.get('fecha_inicio') or '')[:10]
+        ff = str(j.get('fecha_fin') or '')[:10]
+        return bool(fi) and bool(ff) and fi <= fecha <= ff
+
+    @staticmethod
+    def is_hourly(j: Dict[str, Any]) -> bool:
+        return _flag(j.get('es_por_horas')) or _flag(j.get('es_horas_sindicales'))
+
+    @classmethod
+    def partition(
+        cls, justificaciones: Optional[List[Dict[str, Any]]], fecha: str
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Separa las justificaciones vigentes en la fecha en (día completo, por horas)."""
+        full: List[Dict[str, Any]] = []
+        hourly: List[Dict[str, Any]] = []
+        for j in (justificaciones or []):
+            if not cls.in_range(j, fecha):
+                continue
+            if 'activo' in j and j.get('activo') is not None and not _flag(j.get('activo')):
+                continue
+            (hourly if cls.is_hourly(j) else full).append(j)
+        return full, hourly
+
+    @classmethod
+    def select_full_day(
+        cls, full: List[Dict[str, Any]], is_holiday: bool, es_libre_dia: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Elige la justificación de día completo que efectivamente aplica a la fecha (o None)."""
+        for j in full:
+            if es_libre_dia and not _flag(j.get('dias_corridos')):
+                continue  # Días hábiles: el día libre del turno se respeta
+            if is_holiday and not _flag(j.get('sobreescribe_feriados')):
+                continue  # El feriado prevalece sobre la justificación
+            return j
+        return None
+
+    @staticmethod
+    def metadata(j: Dict[str, Any]) -> Dict[str, Any]:
+        tipo_nom = (j.get('tipo_nombre') or j.get('nombre') or 'JUSTIFICADO').strip().upper()
+        nomen = (j.get('tipo_nomenclatura') or j.get('nomenclatura') or '').strip().upper() or None
+        con_goce = _flag(j.get('con_goce_sueldo')) if j.get('con_goce_sueldo') is not None else True
+        return {
+            'tipo_nombre': tipo_nom,
+            'nomenclatura': nomen,
+            'con_goce_sueldo': 1 if con_goce else 0,
+            'descuenta_remuneracion': 1 if _flag(j.get('descuenta_remuneracion')) else 0,
+            'pagador': j.get('pagador'),
+        }
+
+    @classmethod
+    def apply_full_day(cls, res: Dict[str, Any], j: Dict[str, Any]) -> Dict[str, Any]:
+        """Proyecta la justificación de día completo sobre el resultado del día."""
+        meta = cls.metadata(j)
+        res['estado'] = meta['tipo_nombre']
+        res['nomenclatura'] = meta['nomenclatura']
+        res['justificacion_id'] = j.get('id')
+        res['origen'] = 'JUSTIFICACION'
+        res['minutos_deuda'] = 0.0
+        res['minutos_atraso'] = 0.0
+        res['minutos_salida_adelantada'] = 0.0
+        res['minutos_extra_bruto'] = 0.0
+        res['tiene_atraso'] = 0
+        res['tiene_salida_adelantada'] = 0
+        res['alerta_atraso'] = False
+        res['_jornada_especial'] = None
+
+        partes = [f"Justificación: {meta['tipo_nombre']}"]
+        if meta['nomenclatura']:
+            partes[0] += f" ({meta['nomenclatura']})"
+        partes.append('Con goce de sueldo' if meta['con_goce_sueldo'] else 'Sin goce de sueldo')
+        if meta['pagador']:
+            partes.append(f"Pagador: {meta['pagador']}")
+        obs = '. '.join(partes) + '. '
+        if res.get('hora_entrada_real') or res.get('hora_salida_real'):
+            obs += '[Marcaciones registradas durante la justificación]. '
+        res['observaciones'] = obs
+        return res
+
+    @classmethod
+    def hourly_effect(
+        cls, hourly: List[Dict[str, Any]]
+    ) -> Tuple[float, float, List[str]]:
+        """
+        Calcula (minutos que cubren deuda, minutos que generan deuda personal, observaciones).
+        """
+        min_cubre = 0.0
+        min_deuda = 0.0
+        obs: List[str] = []
+        for p in hourly:
+            ini = _hhmm_to_minutes(p.get('hora_inicio'))
+            fin = _hhmm_to_minutes(p.get('hora_fin'))
+            if ini is None or fin is None:
+                continue
+            dur = fin - ini
+            if dur < 0:
+                dur += 1440.0
+            if dur <= 0:
+                continue
+            meta = cls.metadata(p)
+            etiqueta = meta['nomenclatura'] or meta['tipo_nombre']
+            rango = f"{str(p.get('hora_inicio'))[:5]}-{str(p.get('hora_fin'))[:5]}"
+            if _flag(p.get('genera_deuda_horaria')):
+                min_deuda += dur
+                obs.append(f"Permiso por horas {etiqueta} {rango} (genera deuda {int(round(dur))} min).")
+            else:
+                min_cubre += dur
+                obs.append(f"Permiso por horas {etiqueta} {rango} ({int(round(dur))} min justificados).")
+        return min_cubre, min_deuda, obs
+
+
+class LibretaArt25BisResolver:
+    """Resolución Art. 25 bis (Libreta Digital 180h) DENTRO del motor."""
+
+    @staticmethod
+    def resolve(empleado_id: int, fecha: str, libreta: Dict[str, Any], horas_teoricas: float) -> Dict[str, Any]:
+        import json as _json
+        h_ent_lib = None
+        h_sal_lib = None
+        try:
+            raw_s = libreta.get('slots_96', '[]')
+            slots = _json.loads(raw_s) if isinstance(raw_s, str) else (raw_s or [])
+            active_slots = [idx for idx, val in enumerate(slots) if val and val > 0]
+            if active_slots:
+                first_s = active_slots[0]
+                last_s = active_slots[-1] + 1
+                h_ent_lib = f"{first_s // 4:02d}:{(first_s % 4) * 15:02d}"
+                h_sal_lib = f"{min(23, last_s // 4):02d}:{(last_s % 4) * 15:02d}" if last_s < 96 else "23:59"
+        except Exception:
+            pass
+
+        min_cond = int(libreta.get('minutos_conduccion', 0) or 0)
+        min_esp = int(libreta.get('minutos_espera', 0) or 0)
+        min_aux = int(libreta.get('minutos_auxiliares', 0) or 0)
+        min_desc = int(libreta.get('minutos_descanso', 0) or 0)
+        min_efec = int(libreta.get('minutos_efectivos') or (min_cond + min_aux))
+        h_efec = round(min_efec / 60.0, 2)
+        cerrado = _flag(libreta.get('cerrado'))
+
+        return {
+            'empleado_id': empleado_id,
+            'fecha': fecha,
+            'hora_entrada_real': h_ent_lib,
+            'hora_salida_real': h_sal_lib,
+            'hora_salida_colacion': None,
+            'hora_entrada_colacion': None,
+            'hora_inicio_permiso': None,
+            'hora_termino_permiso': None,
+            'horas_teoricas': horas_teoricas,
+            'horas_trabajadas': h_efec,
+            'minutos_espera': min_esp,
+            'minutos_conduccion': min_cond,
+            'minutos_auxiliares': min_aux,
+            'minutos_descanso': min_desc,
+            'minutos_colacion': 0,
+            'minutos_colacion_real': 0,
+            'minutos_colacion_auto': 0,
+            'minutos_exceso_colacion': 0,
+            'minutos_permisos_detectados': 0,
+            'minutos_permiso_personal_deuda': 0,
+            'minutos_atraso': 0.0,
+            'minutos_salida_adelantada': 0.0,
+            'minutos_extra_bruto': 0.0,
+            'minutos_deuda': 0.0,
+            'tiene_atraso': 0,
+            'tiene_salida_adelantada': 0,
+            'tiene_permiso': 0,
+            'alerta_atraso': False,
+            'estado': 'OK' if (cerrado or h_efec > 0 or min_esp > 0) else 'EN_CURSO',
+            'observaciones': f"LIBRETA 180H: {round(min_cond/60.0, 1)}h cond, {round(min_esp/60.0, 1)}h esp, {round(min_aux/60.0, 1)}h aux.",
+            'origen': 'LIBRETA_180H',
+            'marcas_consumidas_ids': [],
+            '_jornada_especial': None,
+            '_jornada_adicional': None,
+        }
+
+    @staticmethod
+    def reconcile_without_libreta(res: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Chofer Art. 25 bis SIN libreta cargada:
+        - Si el reloj biométrico registró actividad -> se respeta la resolución cuántica del reloj.
+        - Si es un día laborable pasado sin marcas -> PENDIENTE (espera libreta), nunca INASISTENCIA.
+        - Feriado / libre / justificado / futuro -> se respeta el resultado del motor.
+        """
+        if not res:
+            return res
+        if res.get('estado') == 'INASISTENCIA' and not res.get('hora_entrada_real') and not res.get('hora_salida_real'):
+            res['estado'] = 'PENDIENTE'
+            res['observaciones'] = '[Pendiente Marcación Libreta 180h]'
+            res['origen'] = 'TURNO'
+        elif res.get('hora_entrada_real') or res.get('hora_salida_real'):
+            if '[Sin libreta 180h' not in (res.get('observaciones') or ''):
+                res['observaciones'] = (res.get('observaciones') or '') + '[Sin libreta 180h: resuelto con reloj biométrico] '
+        return res
+
+
+class AttendanceAdjustmentResolver:
+    """
+    Ajustes post-resolución que antes vivían como interceptores en asistencia_service
+    y como CASE en el SQL del repositorio:
+      - Intercambio de días 1x1 (deuda_condonada = 3)
+      - Compensación de inasistencia con horas extras (deuda_condonada = 4)
+      - Condonaciones manuales (1 = salida adelantada, 2 = atraso, 3 = ambos, 5 = cierre de faena)
+    """
+
+    @staticmethod
+    def apply(
+        res: Dict[str, Any],
+        fecha: str,
+        intercambio: Optional[Dict[str, Any]],
+        compensaciones: Optional[List[Dict[str, Any]]],
+        deuda_condonada_prev: int,
+    ) -> Dict[str, Any]:
+        prev = int(deuda_condonada_prev or 0)
+        flag_calc = 0
+
+        # 1. Intercambio de días 1x1
+        if intercambio:
+            if fecha == intercambio.get('fecha_origen') and res.get('estado') in ('INASISTENCIA', 'FALTA'):
+                res['estado'] = 'INASISTENCIA_COMPENSADA'
+                res['minutos_deuda'] = 0.0
+                flag_calc = 3
+                res['observaciones'] = (res.get('observaciones') or '') + ' [Día Compensado por Intercambio]'
+            elif fecha == intercambio.get('fecha_destino') and res.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA', 'OK'):
+                res['estado'] = 'JORNADA_COMPENSATORIA'
+                res['minutos_extra_bruto'] = 0.0
+                res['_jornada_especial'] = None
+                res['observaciones'] = (res.get('observaciones') or '') + ' [Jornada Trabajada por Compensación]'
+
+        # 2. Compensación de inasistencia con horas extras
+        if compensaciones and res.get('estado') in ('INASISTENCIA', 'FALTA', 'PENDIENTE'):
+            total = sum(float(c.get('minutos') or 0) for c in compensaciones)
+            if total > 0:
+                res['estado'] = 'INASISTENCIA_COMPENSADA'
+                res['minutos_deuda'] = max(0.0, float(res.get('minutos_deuda') or 0.0) - total)
+                flag_calc = 4
+                res['observaciones'] = (res.get('observaciones') or '') + f' [Inasistencia Compensada con Horas Extras: {int(total)} min]'
+
+        # 3. Cierre de faena / turno condonado
+        if prev == 5 and res.get('estado') in ('INASISTENCIA', 'FALTA'):
+            res['estado'] = 'OK'
+            flag_calc = 5
+            if '[Cierre de Faena / Turno Condonado]' not in (res.get('observaciones') or ''):
+                res['observaciones'] = (res.get('observaciones') or '').strip() + ' [Cierre de Faena / Turno Condonado]'
+
+        # 4. Efectos de condonaciones manuales previas sobre la deuda
+        deuda = float(res.get('minutos_deuda') or 0.0)
+        atraso = float(res.get('minutos_atraso') or 0.0)
+        salida = float(res.get('minutos_salida_adelantada') or 0.0)
+        if prev == 5:
+            res['minutos_deuda'] = 0.0
+            res['tiene_atraso'] = 0
+            res['tiene_salida_adelantada'] = 0
+        elif prev == 3 and flag_calc == 0:
+            res['minutos_deuda'] = max(0.0, deuda - atraso - salida)
+            res['minutos_salida_adelantada'] = 0.0
+            res['tiene_atraso'] = 0
+            res['tiene_salida_adelantada'] = 0
+            if res.get('estado') in ('ATRASO', 'SALIDA_ADELANTADA'):
+                res['estado'] = 'OK'
+        elif prev == 2:
+            res['minutos_deuda'] = max(0.0, deuda - atraso)
+            res['tiene_atraso'] = 0
+            if res.get('estado') == 'ATRASO':
+                res['estado'] = 'SALIDA_ADELANTADA' if res.get('tiene_salida_adelantada') else 'OK'
+        elif prev == 1:
+            res['minutos_deuda'] = max(0.0, deuda - salida)
+            res['minutos_salida_adelantada'] = 0.0
+            res['tiene_salida_adelantada'] = 0
+            if res.get('estado') == 'SALIDA_ADELANTADA':
+                res['estado'] = 'OK'
+
+        # 5. Bandera persistida resultante
+        if flag_calc in (3, 4, 5):
+            res['deuda_condonada'] = flag_calc
+        elif res.get('estado') in ('INASISTENCIA', 'FALTA'):
+            res['deuda_condonada'] = 0
+        elif prev in (4, 5):
+            res['deuda_condonada'] = 0
+        else:
+            res['deuda_condonada'] = prev
+        return res
+
+
+class HumanDecisionMerger:
+    """
+    Integra en el resultado del motor las decisiones humanas ya tomadas
+    (validaciones de Jornada Especial y aprobaciones/rechazos de Horas Extras).
+    """
+
+    VALIDATION_TAGS = ('[VALIDADO]', '[VALIDADO_COMO_HE]', '[RECHAZADO]')
+    JE_HUMAN_STATES = ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
+
+    @classmethod
+    def je_is_validated(cls, je_prev: Optional[Dict[str, Any]]) -> bool:
+        if not je_prev:
+            return False
+        obs = je_prev.get('observaciones') or ''
+        return je_prev.get('estado') in cls.JE_HUMAN_STATES or any(t in obs for t in cls.VALIDATION_TAGS)
+
+    @classmethod
+    def merge_je_record(cls, je_data: Dict[str, Any], je_prev: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if cls.je_is_validated(je_prev):
+            je_data['estado'] = je_prev['estado']
+            je_data['observaciones'] = je_prev.get('observaciones') or ''
+            if je_prev.get('minutos_autorizados') is not None:
+                je_data['minutos_autorizados'] = je_prev.get('minutos_autorizados')
+        return je_data
+
+    @classmethod
+    def apply(
+        cls,
+        res: Dict[str, Any],
+        fecha: str,
+        he_previo: Optional[Dict[str, Any]],
+        je_previo: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        res['_he_estado'] = None
+        res['_he_minutos_autorizados'] = 0
+
+        # 1. Cobertura aprobada como Horas Extras (al 50%)
+        cobertura_he = bool(
+            (he_previo and he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO')
+            or (je_previo and je_previo.get('estado') == 'HORAS_EXTRAS')
+        )
+        if cobertura_he:
+            min_cob = float((he_previo or {}).get('minutos_autorizados') or (je_previo or {}).get('minutos_autorizados') or 0)
+            if min_cob > 0:
+                res['minutos_extra_bruto'] = min_cob
+                res['_he_minutos_autorizados'] = min_cob
+                res['_he_estado'] = 'APROBADO'
+
+        # 2. Decisión previa sobre HE ordinarias (no JE)
+        elif he_previo and he_previo.get('estado') in ('APROBADO', 'RECHAZADO') and \
+                he_previo.get('origen') not in ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL'):
+            bruto = float(res.get('minutos_extra_bruto') or 0.0)
+            if bruto > 0:
+                estado_prev = he_previo['estado']
+                res['_he_estado'] = estado_prev
+                res['_he_minutos_autorizados'] = min(float(he_previo.get('minutos_autorizados') or 0), bruto) if estado_prev == 'APROBADO' else 0
+                tag = f"Preservando decisión humana previa (Estado HE: {estado_prev})"
+                if tag not in (res.get('observaciones') or ''):
+                    res['observaciones'] = (res.get('observaciones') or '') + f"{tag} para {fecha}. "
+
+        # 3. Jornada Especial: respetar validación humana
+        if res.get('_jornada_especial'):
+            res['_jornada_especial'] = cls.merge_je_record(res['_jornada_especial'], je_previo)
+            je_estado = res['_jornada_especial'].get('estado')
+            es_dia_no_habil = float(res.get('horas_teoricas') or 0.0) == 0.0
+            if es_dia_no_habil and je_estado in ('EXTRA', 'RECHAZADA') and \
+                    res['_jornada_especial'].get('origen') != 'COBERTURA_TURNO':
+                res['estado'] = je_estado
+        return res
+
+
 class QuantumMatrixEngine:
     """
-    Motor Matricial Cuántico Principal v2.1.
-    Unifica la resolución multi-marca, dualidad de bolsa flexible y ausencia de umbrales en código.
+    Motor Matricial Cuántico Principal v3.0 — FUENTE ÚNICA DE VERDAD.
+    Toda decisión de estado/minutos de un día se resuelve aquí. asistencia_service sólo orquesta I/O.
     """
 
     @classmethod
@@ -765,9 +1162,190 @@ class QuantumMatrixEngine:
         global_ajustes: Optional[Dict[str, Any]] = None,
         consumidas_previas: Optional[Set[int]] = None,
         viaje_largo_info: Optional[Dict[str, Any]] = None,
-        todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None
-    ) -> Dict[str, Any]:
-        """Resuelve holísticamente el estado de asistencia de un empleado para una fecha dada."""
+        todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
+        es_modalidad_180h: bool = False,
+        libreta_180h: Optional[Dict[str, Any]] = None,
+        intercambio: Optional[Dict[str, Any]] = None,
+        compensaciones: Optional[List[Dict[str, Any]]] = None,
+        deuda_condonada_prev: int = 0,
+        he_previo: Optional[Dict[str, Any]] = None,
+        je_previo: Optional[Dict[str, Any]] = None,
+        holiday_desc: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Resolución holística y ÚNICA del día:
+          1. Art. 25 bis (Libreta 180h) o resolución cuántica de marcas (reloj).
+          2. Justificaciones de día completo (reglas generales de su tipo).
+          3. Ajustes (intercambios, compensaciones, condonaciones).
+          4. Decisiones humanas previas (validaciones JE / HE).
+        """
+        t_cfg = turno_config or {}
+        d_cfg = dia_config or {}
+        is_bolsa = t_cfg.get('tipo_programacion') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
+        es_libre_dia = _flag(d_cfg.get('es_libre'))
+        horas_teo_dia = 0.0 if (is_holiday or es_libre_dia or is_bolsa) else float(d_cfg.get('horas_teoricas', 0.0) or 0.0)
+
+        full_justs, hourly_justs = JustificationTensorResolver.partition(justificaciones, fecha)
+        j_full = JustificationTensorResolver.select_full_day(full_justs, is_holiday, es_libre_dia)
+
+        # ── Capa 1: Fuente de tiempo (Libreta Art. 25 bis o Reloj) ──
+        if es_modalidad_180h and libreta_180h:
+            res = LibretaArt25BisResolver.resolve(empleado_id, fecha, libreta_180h, horas_teo_dia)
+        else:
+            res = cls._solve_core(
+                fecha=fecha,
+                empleado_id=empleado_id,
+                logs=logs,
+                turno_config=t_cfg,
+                dia_config=d_cfg,
+                is_holiday=is_holiday,
+                hourly_justs=hourly_justs,
+                global_ajustes=global_ajustes,
+                consumidas_previas=consumidas_previas,
+                viaje_largo_info=viaje_largo_info,
+                todos_ciclos_dia=todos_ciclos_dia,
+                holiday_desc=holiday_desc,
+            )
+            if es_modalidad_180h and not viaje_largo_info:
+                res = LibretaArt25BisResolver.reconcile_without_libreta(res)
+
+        # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
+        # Un día dentro de un viaje largo registrado no es ausencia ni anomalía.
+        if viaje_largo_info:
+            if res is None:
+                res = cls._base_result(empleado_id, fecha, horas_teo_dia, [])
+                res['estado'] = 'PENDIENTE'
+            if res.get('estado') in ('ANOMALIA', 'INASISTENCIA', 'PENDIENTE', None):
+                res['estado'] = 'VIAJE_LARGO'
+                res['minutos_deuda'] = 0.0
+                res['tiene_anomalia'] = 0
+                res['alerta_anomalia'] = 0
+                res['origen'] = 'VIAJE_LARGO'
+
+        # ── Capa 2: Justificación de día completo ──
+        if j_full:
+            if res is None:
+                res = cls._base_result(empleado_id, fecha, horas_teo_dia, [])
+            res = JustificationTensorResolver.apply_full_day(res, j_full)
+
+        if res is None:
+            return None
+
+        res['empleado_id'] = empleado_id
+        res['fecha'] = fecha
+        res.setdefault('nomenclatura', None)
+        res.setdefault('justificacion_id', None)
+        res['hora_entrada_teorica'] = d_cfg.get('hora_entrada') if d_cfg else None
+        res['hora_salida_teorica'] = d_cfg.get('hora_salida') if d_cfg else None
+        res['minutos_espera'] = res.get('minutos_espera', 0) or 0
+        res['origen'] = res.get('origen') or 'SISTEMA'
+
+        # ── Capa 3: Ajustes ──
+        res = AttendanceAdjustmentResolver.apply(res, fecha, intercambio, compensaciones, deuda_condonada_prev)
+
+        # ── Capa 4: Decisiones humanas previas ──
+        res = HumanDecisionMerger.apply(res, fecha, he_previo, je_previo)
+        return res
+
+    @staticmethod
+    def resolve_control_modality(
+        turno_config: Optional[Dict[str, Any]], fecha: str, global_ajustes: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Determina si el día se controla por Libreta Art. 25 bis (180h).
+        - modalidad_control = 'LIBRETA_180H' en el turno, o
+        - Turno Bolsa Flexible desde la fecha de entrada en vigencia configurada
+          (ajuste 'asistencia_libreta_180h_bolsa_desde', por defecto 2026-10-01).
+        """
+        t_cfg = turno_config or {}
+        if (t_cfg.get('modalidad_control') or 'RELOJ').upper() == 'LIBRETA_180H':
+            return True
+        if t_cfg.get('tipo_programacion') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'):
+            desde = str((global_ajustes or {}).get('asistencia_libreta_180h_bolsa_desde') or '2026-10-01')[:10]
+            return fecha >= desde
+        return False
+
+    @classmethod
+    def project_calendar_day(
+        cls,
+        empleado_id: int,
+        fecha: str,
+        is_holiday: bool,
+        holiday_desc: Optional[str],
+        es_libre_dia: bool,
+        justificaciones: Optional[List[Dict[str, Any]]],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Proyección pura (sin marcas) para días aún no procesados en la grilla.
+        Usa EXACTAMENTE el mismo resolutor de justificaciones que solve_attendance_day.
+        """
+        full_justs, _ = JustificationTensorResolver.partition(justificaciones, fecha)
+        j_full = JustificationTensorResolver.select_full_day(full_justs, is_holiday, es_libre_dia)
+        if not j_full and not is_holiday:
+            return None
+        res = cls._base_result(empleado_id, fecha, 0.0, [])
+        res['nomenclatura'] = None
+        res['justificacion_id'] = None
+        res['proyectado'] = True
+        if j_full:
+            return JustificationTensorResolver.apply_full_day(res, j_full)
+        res['estado'] = 'FERIADO'
+        res['observaciones'] = holiday_desc or 'Feriado Nacional'
+        res['origen'] = 'FERIADO'
+        return res
+
+    @staticmethod
+    def _base_result(empleado_id: int, fecha: str, horas_teoricas: float, consumidas: List[Any]) -> Dict[str, Any]:
+        return {
+            'empleado_id': empleado_id,
+            'fecha': fecha,
+            'hora_entrada_real': None,
+            'hora_salida_real': None,
+            'hora_salida_colacion': None,
+            'hora_entrada_colacion': None,
+            'hora_inicio_permiso': None,
+            'hora_termino_permiso': None,
+            'horas_teoricas': horas_teoricas,
+            'horas_trabajadas': 0.0,
+            'minutos_espera': 0,
+            'minutos_colacion': 0,
+            'minutos_colacion_real': 0,
+            'minutos_colacion_auto': 0,
+            'minutos_exceso_colacion': 0,
+            'minutos_permisos_detectados': 0,
+            'minutos_permiso_personal_deuda': 0,
+            'minutos_atraso': 0.0,
+            'minutos_salida_adelantada': 0.0,
+            'minutos_extra_bruto': 0.0,
+            'minutos_deuda': 0.0,
+            'tiene_atraso': 0,
+            'tiene_salida_adelantada': 0,
+            'tiene_permiso': 0,
+            'alerta_atraso': False,
+            'estado': 'OK',
+            'observaciones': '',
+            'marcas_consumidas_ids': list(consumidas or []),
+            '_jornada_especial': None,
+            '_jornada_adicional': None,
+        }
+
+    @classmethod
+    def _solve_core(
+        cls,
+        fecha: str,
+        empleado_id: int,
+        logs: List[Dict[str, Any]],
+        turno_config: Dict[str, Any],
+        dia_config: Optional[Dict[str, Any]],
+        is_holiday: bool = False,
+        hourly_justs: Optional[List[Dict[str, Any]]] = None,
+        global_ajustes: Optional[Dict[str, Any]] = None,
+        consumidas_previas: Optional[Set[int]] = None,
+        viaje_largo_info: Optional[Dict[str, Any]] = None,
+        todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
+        holiday_desc: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Núcleo cuántico: resolución de marcas vs turno (reloj biométrico)."""
         
         # 1. Ajustes globales parametrizados desde la interfaz / BD (sin números mágicos hardcodeados)
         ajustes = global_ajustes or {}
@@ -807,7 +1385,7 @@ class QuantumMatrixEngine:
 
         hora_limite_ficticia = t_cfg.get('hora_limite_ficticia')
 
-        es_libre_dia = bool(d_cfg.get('es_libre', False))
+        es_libre_dia = _flag(d_cfg.get('es_libre', False))
         horas_teoricas = float(d_cfg.get('horas_teoricas', 0.0) or 0.0)
         hora_ent_teo = d_cfg.get('hora_entrada')
         hora_sal_teo = d_cfg.get('hora_salida')
@@ -1185,32 +1763,15 @@ class QuantumMatrixEngine:
         if not bloque_p:
             if is_holiday:
                 res['estado'] = 'FERIADO'
-                res['observaciones'] = 'Feriado Nacional (Proyección automática)'
+                res['observaciones'] = holiday_desc or 'Feriado Nacional'
+                res['origen'] = 'FERIADO'
                 return res
 
-            # Evaluar justificaciones de día completo (Licencia Médica, Vacaciones, Permisos)
-            justs_dia = [
-                j for j in (justificaciones or [])
-                if j.get('fecha_inicio', '') <= fecha <= j.get('fecha_fin', '')
-            ]
-            if justs_dia:
-                j = justs_dia[0]
-                if not j.get('dias_corridos') and es_libre_dia:
-                    pass  # Respeta día libre del turno
-                else:
-                    tipo_nom = (j.get('tipo_nombre') or 'JUSTIFICADO').upper()
-                    res['estado'] = tipo_nom
-                    res['nomenclatura'] = j.get('tipo_nomenclatura')
-                    res['justificacion_id'] = j.get('id')
-                    res['observaciones'] = f"Justificación: {tipo_nom}. "
-                    res['horas_teoricas'] = 0.0
-                    res['horas_trabajadas'] = 0.0
-                    res['minutos_deuda'] = 0.0
-                    res['minutos_atraso'] = 0.0
-                    return res
+            # Las justificaciones de día completo se resuelven en la capa 2 (JustificationTensorResolver)
 
             if es_libre_dia:
                 res['estado'] = 'LIBRE'
+                res['origen'] = 'TURNO'
                 return res
 
             # Días futuros sin marcas no generan registro
@@ -1558,20 +2119,13 @@ class QuantumMatrixEngine:
             min_trab = horas_netas * 60.0
             min_teo = horas_teoricas * 60.0
 
-            # Evaluar permisos con goce de sueldo de la tabla justificaciones
-            permisos_hora = [j for j in (justificaciones or []) if j.get('tiene_permiso_hora') and j.get('permiso_activo')]
-            min_permiso_comp = 0.0
-            for p in permisos_hora:
-                if not p.get('genera_deuda_horaria', False):
-                    h_i = p.get('hora_inicio')
-                    h_f = p.get('hora_fin')
-                    if h_i and h_f:
-                        try:
-                            dt_pi = datetime.strptime(f"{fecha} {h_i}", "%Y-%m-%d %H:%M")
-                            dt_pf = datetime.strptime(f"{fecha} {h_f}", "%Y-%m-%d %H:%M")
-                            min_permiso_comp += (dt_pf - dt_pi).total_seconds() / 60.0
-                        except Exception:
-                            pass
+            # Permisos por horas (reglas del tipo de justificación, resueltas en el resolutor único)
+            min_permiso_comp, min_permiso_deuda, obs_permisos = JustificationTensorResolver.hourly_effect(hourly_justs or [])
+            if obs_permisos:
+                res['observaciones'] += ' '.join(obs_permisos) + ' '
+                res['tiene_permiso'] = 1
+            if min_permiso_deuda > 0:
+                res['minutos_permiso_personal_deuda'] = int(round(min_permiso_deuda))
 
             diff_extra = min_trab - min_teo
             if diff_extra >= 1.0:
@@ -1627,6 +2181,28 @@ class QuantumMatrixEngine:
                 deuda_calculada = max(0.0, min_teo - min_trab - min_permiso_comp)
                 res['minutos_deuda'] = round(deuda_calculada, 2)
                 res['minutos_extra_bruto'] = 0.0
+
+            # Los minutos de permiso justificado cubren primero el atraso y luego la salida adelantada
+            if min_permiso_comp > 0:
+                restante = min_permiso_comp
+                atr = float(res.get('minutos_atraso') or 0.0)
+                cub_atr = min(atr, restante)
+                res['minutos_atraso'] = round(atr - cub_atr, 2)
+                restante -= cub_atr
+                sal = float(res.get('minutos_salida_adelantada') or 0.0)
+                cub_sal = min(sal, restante)
+                res['minutos_salida_adelantada'] = round(sal - cub_sal, 2)
+                if res['minutos_atraso'] <= tolerancia_descuento:
+                    res['tiene_atraso'] = 0
+                if res['minutos_salida_adelantada'] <= 0:
+                    res['tiene_salida_adelantada'] = 0
+                if res.get('estado') in ('ATRASO', 'SALIDA_ADELANTADA'):
+                    if res['tiene_atraso']:
+                        res['estado'] = 'ATRASO'
+                    elif res['tiene_salida_adelantada']:
+                        res['estado'] = 'SALIDA_ADELANTADA'
+                    else:
+                        res['estado'] = 'OK'
 
         return res
 

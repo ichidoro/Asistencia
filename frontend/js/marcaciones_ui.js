@@ -6755,18 +6755,24 @@ function _analiticaCellBadge(di) {
 
     const stdBadgeStyle = "width:52px; min-height:22px; display:inline-flex; align-items:center; justify-content:center; flex-direction:column; line-height:1.1;";
 
-    // ── Si tiene viaje largo registrado, forzar estado primario VIAJE_LARGO ──
+    // ── Estado PRIMARIO: viene resuelto por el motor cuántico (sin overrides en UI) ──
     const tieneViajeLargoRegistrado = Boolean(di.viaje_largo || di.tiene_viaje_largo || est === 'VIAJE_LARGO');
-    if (tieneViajeLargoRegistrado && (est === 'ANOMALIA' || est === 'INASISTENCIA' || !est)) {
-        est = 'VIAJE_LARGO';
-    }
 
     // ── Badge del estado PRIMARIO ─────────────────────────────────────────────
     let pillClass = 'badge-state-neutral';
     let label = (estadosCache[est] && estadosCache[est].short_label) || (est === 'JORNADA_ESPECIAL' ? 'ESP' : (est.length <= 3 ? est : est.substring(0,3)));
     let tooltipTitle = '';
 
-    if (badgeMap[est]) {
+    if (di.justificacion_id && di.nomenclatura) {
+        // Justificación resuelta por el motor: rótulo = nomenclatura del tipo configurado
+        const jInfo = di.justificacion || {};
+        const jNombre = (jInfo.tipo_nombre || est || '').toString();
+        const goce = (jInfo.con_goce_sueldo === 0 || jInfo.con_goce_sueldo === false) ? 'Sin goce de sueldo' : 'Con goce de sueldo';
+        const pagador = jInfo.pagador ? ` · Pagador: ${jInfo.pagador}` : '';
+        pillClass = (estadosCache[est] && _getEstadoColor(est)) || 'badge-state-info';
+        label = `<i class="bi bi-file-earmark-medical-fill me-1"></i>${di.nomenclatura}`;
+        tooltipTitle = `${jNombre} (${di.nomenclatura}) · ${goce}${pagador}`;
+    } else if (badgeMap[est]) {
         [pillClass, label] = badgeMap[est];
         if (est === 'LIBRE') tooltipTitle = 'Día Libre (Asignación automática)';
         else if (est === 'FERIADO') tooltipTitle = 'Feriado legal / Irrenunciable';

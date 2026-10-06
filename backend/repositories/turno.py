@@ -223,6 +223,9 @@ class TurnoRepository:
             ("deuda_condonada",          "INTEGER DEFAULT 0"),
             # ── [Art. 25 bis DT] Tiempos de Espera (88h) ─────
             ("minutos_espera",           "INTEGER DEFAULT 0"),
+            # ── Justificación resuelta por el motor cuántico (fuente única) ──
+            ("justificacion_id",         "INTEGER"),
+            ("nomenclatura",             "TEXT"),
         ]
 
         # Migraciones tabla asistencias: 1 get_column_names() en vez de 27 column_exists() individuales

@@ -1016,9 +1016,9 @@ window.renderTiposJustificacion = function () {
                     <div class="small text-muted" style="font-size: 0.75rem;">${tipo.descripcion || 'Sin descripción'}</div>
                 </td>
                 <td>
-                    <span class="badge ${tipo.dias_habiles ? 'bg-outline-primary bordered' : 'bg-outline-info bordered'}" 
+                    <span class="badge ${!tipo.dias_corridos ? 'bg-outline-primary bordered' : 'bg-outline-info bordered'}" 
                           style="color: #666; border: 1px solid #ddd;">
-                        ${tipo.dias_habiles ? 'Hábiles' : 'Corridos'}
+                        ${!tipo.dias_corridos ? 'Hábiles' : 'Corridos'}
                     </span>
                 </td>
                 <td>
@@ -1070,7 +1070,7 @@ window.openModalTipoJ = function(tipo = null) {
         document.getElementById('tipo-j-nomenclatura').value = tipo.nomenclatura || '';
         document.getElementById('tipo-j-descripcion').value = tipo.descripcion || '';
         document.getElementById('tipo-j-goce').value = tipo.con_goce_sueldo ? 'true' : 'false';
-        document.getElementById('tipo-j-periodo').value = tipo.dias_habiles ? 'true' : 'false';
+        document.getElementById('tipo-j-periodo').value = tipo.dias_corridos ? 'false' : 'true';
         document.getElementById('tipo-j-pagador').value = tipo.pagador || 'Empleador';
         document.getElementById('tipo-j-dias-defecto').value = tipo.dias_defecto !== undefined && tipo.dias_defecto !== null ? tipo.dias_defecto : '';
         document.getElementById('tipo-j-activo').value = tipo.activo ? 'true' : 'false';
@@ -1165,8 +1165,8 @@ async function saveTipoJustificacion() {
         con_goce_sueldo: document.getElementById('tipo-j-goce').value === 'true',
 
         // Mapeo UI -> Backend
-        dias_hábiles: document.getElementById('tipo-j-periodo').value === 'true', // Legacy field validation
-        dias_corridos: document.getElementById('tipo-j-periodo').value === 'false', // Inverso de dias_habiles en UI antigua
+        dias_habiles: document.getElementById('tipo-j-periodo').value === 'true', // Compatibilidad (inverso de dias_corridos)
+        dias_corridos: document.getElementById('tipo-j-periodo').value === 'false', // Fuente de verdad para el motor
 
         pagador: document.getElementById('tipo-j-pagador').value,
         dias_defecto: diasDefectoVal ? parseInt(diasDefectoVal) : null,

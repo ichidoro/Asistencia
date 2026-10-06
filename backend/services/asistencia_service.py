@@ -26,7 +26,8 @@ from backend.services.quantum_matrix_engine import (
     TensorMarkDeduplicator,
     MultiPointScheduleSolver,
     QuantumMatrixEngine,
-    QuantumShiftWeekMatcher
+    QuantumShiftWeekMatcher,
+    HumanDecisionMerger,
 )
 from asyncio import Lock
 
@@ -282,7 +283,7 @@ class AsistenciaService:
             f"SELECT estado, minutos_autorizados, origen, empleado_id FROM horas_extras WHERE empleado_id IN ({ids_placeholder}) AND fecha = ?",
             tuple(emp_ids) + (fecha,)
         )
-        horas_extras_hoy = {r['empleado_id']: dict(r) for r in he_rows}
+        horas_extras_hoy = {r['empleado_id']: {fecha: dict(r)} for r in he_rows}
 
         # Periodos de empleo
         per_rows = await db.fetch_all(
@@ -533,51 +534,32 @@ class AsistenciaService:
         
         for emp_id in emp_ids:
             resultado = await self.procesar_empleado_dia(emp_id, fecha, save=False, bulk_ctx=bulk_ctx, force=force)
+            je_prev = bulk_ctx.get('jornadas_especiales', {}).get(emp_id, {}).get(fecha)
             if resultado:
                 results_to_save.append(resultado)
 
-                # Gestión de Jornadas Especiales (+2 o cobertura de turno)
-                je_data = resultado.get('_jornada_especial')
-                je_prev = bulk_ctx.get('jornadas_especiales', {}).get(emp_id, {}).get(fecha)
-                has_validated_je = bool(
-                    je_prev and (
-                        '[VALIDADO]' in (je_prev.get('observaciones') or '')
-                        or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                        or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
-                    )
-                )
-                if je_data:
-                    if has_validated_je and je_prev:
-                        je_data['estado'] = je_prev['estado']
-                        je_data['observaciones'] = je_prev.get('observaciones') or ''
-                    je_to_save.append(je_data)
-                elif je_prev and not has_validated_je:
-                    je_to_delete.append((emp_id, fecha))
+                # Jornadas Especiales: decididas y fusionadas por el motor (HumanDecisionMerger)
+                if not resultado.get('_manual_override'):
+                    if resultado.get('_jornada_especial'):
+                        je_to_save.append(resultado['_jornada_especial'])
+                    elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                        je_to_delete.append((emp_id, fecha))
 
-                he_estado = resultado.get('_he_estado')
-                minutos_bruto = resultado.get('minutos_extra_bruto', 0)
+                minutos_bruto = float(resultado.get('minutos_extra_bruto') or 0)
                 if minutos_bruto > 0:
                     he_to_save.append({
                         'empleado_id': emp_id,
                         'fecha': fecha,
                         'minutos_bruto': minutos_bruto,
                         'minutos_autorizados': resultado.get('_he_minutos_autorizados', 0),
-                        'estado': he_estado or 'PENDIENTE'
+                        'estado': resultado.get('_he_estado') or 'PENDIENTE'
                     })
                 else:
                     results_to_delete_he.append((emp_id, fecha))
             else:
                 results_to_delete.append((emp_id, fecha))
                 results_to_delete_he.append((emp_id, fecha))
-                je_prev = bulk_ctx.get('jornadas_especiales', {}).get(emp_id, {}).get(fecha)
-                has_validated_je = bool(
-                    je_prev and (
-                        '[VALIDADO]' in (je_prev.get('observaciones') or '')
-                        or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                        or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
-                    )
-                )
-                if je_prev and not has_validated_je:
+                if je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
                     je_to_delete.append((emp_id, fecha))
         
         if results_to_save:
@@ -595,10 +577,7 @@ class AsistenciaService:
                 await self.repository.upsert_jornada_especial(je_item)
         if je_to_delete:
             for eid_del, f_str in je_to_delete:
-                await self.repository.db.execute(
-                    "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
-                    (eid_del, f_str)
-                )
+                await self._delete_je_no_validada(eid_del, f_str)
         
         if not suppress_sync and (results_to_save or results_to_delete or he_to_save or results_to_delete_he or je_to_save or je_to_delete):
             await self.repository.db.sync_to_cloud_explicit()
@@ -1196,62 +1175,33 @@ class AsistenciaService:
                         stats['sin_cambio'] += 1
                     else:
                         results_to_save.append(result)
-                    # ── FASE 2: Doble escritura a horas_extras (path batch save=False) ──
-                    he_estado = result.get('_he_estado')
-                    minutos_bruto = result.get('minutos_extra_bruto', 0)
-                    if minutos_bruto > 0:
+                    # ── PERSISTENCIA DIFERIDA: horas_extras (decidido por el motor) ──
+                    if float(result.get('minutos_extra_bruto') or 0) > 0:
                         he_to_save.append({
                             'empleado_id': empleado_id,
                             'fecha': fecha_str,
-                            'minutos_bruto': minutos_bruto,
+                            'minutos_bruto': result.get('minutos_extra_bruto', 0),
                             'minutos_autorizados': result.get('_he_minutos_autorizados', 0),
-                            'estado': he_estado or 'PENDIENTE',
+                            'estado': result.get('_he_estado') or 'PENDIENTE',
                         })
                     else:
-                        # Sin HE brutas ordinarias: si no hay Cobertura validada como HE, marcar para eliminar
-                        he_prev_batch = static_ctx.get('horas_extras', {}).get(empleado_id, {}).get(fecha_str)
-                        if he_prev_batch and he_prev_batch.get('origen') == 'COBERTURA_TURNO' and he_prev_batch.get('estado') == 'APROBADO':
-                            result['minutos_extra_bruto'] = he_prev_batch.get('minutos_autorizados', 0)
-                            result['estado_he'] = 'APROBADO'
-                        else:
-                            he_to_delete.append((empleado_id, fecha_str))
-                    # ── BATCH SAVE FOR JORNADAS ESPECIALES ──
-                    if result.get('_jornada_especial'):
-                        je_rec = result['_jornada_especial']
+                        he_to_delete.append((empleado_id, fecha_str))
+                    # ── PERSISTENCIA DIFERIDA: jornadas_especiales (decidido por el motor) ──
+                    if not result.get('_manual_override'):
                         je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                        if je_prev and (je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') or '[VALIDADO]' in (je_prev.get('observaciones') or '') or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '')):
-                            je_rec['estado'] = je_prev['estado']
-                            je_rec['observaciones'] = je_prev.get('observaciones') or ''
-                            if je_prev.get('minutos_autorizados') is not None:
-                                je_rec['minutos_autorizados'] = je_prev.get('minutos_autorizados')
-                        je_to_save.append(je_rec)
-                    else:
-                        je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                        if je_prev:
-                            has_val_je = bool(
-                                '[VALIDADO]' in (je_prev.get('observaciones') or '')
-                                or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '')
-                                or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                                or je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
-                            )
-                            if not has_val_je:
-                                je_to_delete.append((empleado_id, fecha_str))
+                        if result.get('_jornada_especial'):
+                            je_to_save.append(result['_jornada_especial'])
+                        elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                            je_to_delete.append((empleado_id, fecha_str))
                     asistencias_map[fecha_str] = result
                 else:
                     existing = asistencias_map.get(fecha_str)
                     if existing:
                         results_to_delete.append((empleado_id, fecha_str))
-                        # No agregamos a stats['sin_cambio'] porque estamos eliminando el registro
                     he_to_delete.append((empleado_id, fecha_str))
                     je_prev = jornadas_especiales_por_fecha.get(fecha_str)
-                    if je_prev:
-                        has_val_je = bool(
-                            '[VALIDADO]' in (je_prev.get('observaciones') or '')
-                            or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                            or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')
-                        )
-                        if not has_val_je:
-                            je_to_delete.append((empleado_id, fecha_str))
+                    if je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                        je_to_delete.append((empleado_id, fecha_str))
                 stats['procesados'] += 1
             except Exception as e:
                 import traceback
@@ -1597,7 +1547,6 @@ class AsistenciaService:
             }
 
         es_dia_habil = asist and float(asist.get('horas_teoricas') or 0.0) > 0.0
-        es_cobertura = (jornada_dict.get('origen') == 'COBERTURA_TURNO') or (es_dia_habil and float(asist.get('horas_trabajadas') or 0.0) > 0.0)
 
         # REGLA DE NEGOCIO: Transformar a Horas Extras al 50%
         # SOLO permitido para Ciclos Inteligentes en días hábiles programados (horas_teoricas > 0).
@@ -1666,15 +1615,8 @@ class AsistenciaService:
                 (obs_je, min_auth, validador_id, empleado_id, fecha)
             )
 
-            # 3. Sincronizar asistencias con minutos_extra_bruto
-            await db.execute(
-                """
-                UPDATE asistencias
-                SET minutos_extra_bruto = ?, updated_at = datetime('now')
-                WHERE empleado_id = ? AND fecha = ?
-                """,
-                (min_auth, empleado_id, fecha)
-            )
+            # 3. El motor cuántico integra la decisión (HumanDecisionMerger) al recalcular
+            await self._recalcular_tras_decision_humana(empleado_id, fecha)
             return {'success': True, 'estado_he': estado_ret, 'minutos_extra_autorizados': min_auth}
 
         elif accion == 'REVERTIR':
@@ -1683,8 +1625,6 @@ class AsistenciaService:
                 'observaciones': obs,
                 'estado': 'JORNADA_ESPECIAL'
             }
-            # Al revertir, si es cobertura el estado de asistencias se mantiene
-            estado_asistencia = asist.get('estado') if es_cobertura else ('JORNADA_ESPECIAL' if jornada_dict.get('hora_salida') else 'ANOMALIA')
             estado_ret = 'REVERTIDO'
             minutos_ret = 0
 
@@ -1702,27 +1642,16 @@ class AsistenciaService:
                 "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
                 (empleado_id, fecha)
             )
-            # Limpiar asistencias
-            await db.execute(
-                """
-                UPDATE asistencias
-                SET minutos_extra_bruto = 0, updated_at = datetime('now')
-                WHERE empleado_id = ? AND fecha = ?
-                """,
-                (empleado_id, fecha)
-            )
         else:
             estado_nuevo = 'EXTRA' if accion == 'APROBAR' else 'RECHAZADA'
 
             if accion == 'APROBAR':
                 min_auth = float(minutos_autorizados) if minutos_autorizados is not None else float(jornada_dict.get('minutos_trabajados') or 0)
                 tag_obs = '[VALIDADO]'
-                estado_asistencia = asist.get('estado') if es_cobertura else 'EXTRA'
                 estado_ret = 'APROBADO'
             else:
                 min_auth = 0.0
                 tag_obs = '[RECHAZADO]'
-                estado_asistencia = asist.get('estado') if es_cobertura else ('INASISTENCIA' if not es_dia_habil else asist.get('estado'))
                 estado_ret = 'RECHAZADO'
 
             # REGLA DE NEGOCIO: Las jornadas especiales (coberturas +2 y días libres) validadas como Jornada Especial
@@ -1730,14 +1659,6 @@ class AsistenciaService:
             # Asegurar limpieza preventiva en horas_extras
             await db.execute(
                 "DELETE FROM horas_extras WHERE empleado_id = ? AND fecha = ? AND origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
-                (empleado_id, fecha)
-            )
-            await db.execute(
-                """
-                UPDATE asistencias
-                SET minutos_extra_bruto = 0, updated_at = datetime('now')
-                WHERE empleado_id = ? AND fecha = ?
-                """,
                 (empleado_id, fecha)
             )
 
@@ -1757,25 +1678,16 @@ class AsistenciaService:
                 (update_data['estado'], update_data['observaciones'], min_auth, validador_id, empleado_id, fecha)
             )
 
-        # ─── EFECTO DOMINÓ: Sincronizar asistencias.estado SOLO si NO es cobertura en día hábil ─────
-        # En cobertura (+2), el turno base ordinario (ej: OK) se preserva y no se pisa con EXTRA.
-        if not es_cobertura:
-            await db.execute(
-                """
-                UPDATE asistencias
-                SET estado = ?, updated_at = datetime('now')
-                WHERE empleado_id = ? AND fecha = ?
-                """,
-                (estado_asistencia, empleado_id, fecha)
-            )
+        # La asistencia NO se edita a mano: el motor cuántico recalcula e integra la decisión humana
+        await self._recalcular_tras_decision_humana(empleado_id, fecha)
+        return {'success': True, 'estado_he': estado_ret, 'minutos_extra_autorizados': minutos_ret}
 
-        # Refrescar recálculo de HE y saldos
+    async def _recalcular_tras_decision_humana(self, empleado_id: int, fecha: str) -> None:
+        """Recalcula el día a través del motor cuántico tras una validación humana (JE/HE)."""
         try:
             await self.reprocesar_periodo_empleado(empleado_id, fecha, fecha)
         except Exception as e:
-            pass
-            
-        return {'success': True, 'estado_he': estado_ret, 'minutos_extra_autorizados': minutos_ret}
+            logger.error(f"Error recalculando {empleado_id} {fecha} tras decisión humana: {e}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # DELTA FINGERPRINT (para comparación eficiente de asistencias)
@@ -1809,6 +1721,13 @@ class AsistenciaService:
             record.get('hora_inicio_permiso'),
             record.get('hora_termino_permiso'),
             record.get('minutos_permisos_detectados'),
+            record.get('justificacion_id'),
+            record.get('nomenclatura'),
+            record.get('deuda_condonada'),
+            record.get('tiene_atraso'),
+            record.get('tiene_salida_adelantada'),
+            record.get('minutos_permiso_personal_deuda'),
+            record.get('origen'),
         )
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -2135,7 +2054,7 @@ class AsistenciaService:
         if is_bolsa and is_pvl:
             if bulk_ctx and 'viajes_largos' in bulk_ctx:
                 vl_list = bulk_ctx['viajes_largos'].get(empleado_id, [])
-                viaje_largo = next((v for v in vl_list if v.get('fecha_inicio', '') <= fecha <= v.get('fecha_fin', '')), None)
+                viaje_largo = next((v for v in vl_list if str(v.get('fecha_inicio') or '')[:10] <= fecha <= str(v.get('fecha_fin') or '')[:10]), None)
             else:
                 viaje_largo = await self.repository.get_viaje_largo_activo(empleado_id, fecha)
 
@@ -2202,525 +2121,146 @@ class AsistenciaService:
 
         # ── MARCAS DISPONIBLES EN LA VENTANA DE OBSERVACIÓN ──────────────────
         marcas_candidatas = [l for l in raw_logs if l.get('id') not in consumidas_emp]
-        logs = marcas_candidatas
 
-        # ── VALIDACIÓN DE OVERRIDE MANUAL Y CALCULO PREVIO ──────────────────
-        asist_actual = None
+        # ── CONTEXTO PREVIO (I/O PURO — sin decisiones de negocio) ───────────
         if bulk_ctx:
             asist_actual = bulk_ctx.get('asistencias_hoy', {}).get(empleado_id)
         else:
             asist_actual = await self.repository.get_asistencia(empleado_id, fecha)
 
-        he_previo = None
         if bulk_ctx and 'horas_extras' in bulk_ctx:
             he_previo = bulk_ctx['horas_extras'].get(empleado_id, {}).get(fecha)
-        if he_previo is None and (not bulk_ctx or 'horas_extras' not in bulk_ctx):
+        else:
             he_previo = await self.he_repo.get_estado_previo(empleado_id, fecha)
 
-        manual_override = False
-        if asist_actual:
-            obs_prev = asist_actual.get('observaciones') or ''
-            if ('[VALIDADO]' in obs_prev or '[RECHAZADO]' in obs_prev) and not force:
-                manual_override = True
+        if bulk_ctx and 'jornadas_especiales' in bulk_ctx:
+            je_prev = bulk_ctx['jornadas_especiales'].get(empleado_id, {}).get(fecha)
+        else:
+            je_row = await db.fetch_one(
+                "SELECT * FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
+                (empleado_id, fecha)
+            )
+            je_prev = dict(je_row) if je_row else None
+
+        if bulk_ctx and 'global_ajustes' in bulk_ctx:
+            global_ajustes_ctx = bulk_ctx['global_ajustes']
+        else:
+            aj_rows = await db.fetch_all("SELECT clave, valor FROM ajustes")
+            global_ajustes_ctx = {r['clave']: r['valor'] for r in aj_rows}
+
+        obs_prev = (asist_actual or {}).get('observaciones') or ''
+        manual_override = bool(asist_actual) and not force and ('[VALIDADO]' in obs_prev or '[RECHAZADO]' in obs_prev)
 
         if manual_override:
-            logger.debug(f"🛡️ Blindaje Manual Aplicado (MODO OVERRIDE) para {empleado_id} - {fecha}")
-            resultado = dict(asist_actual)
+            # Blindaje: registro sellado por decisión humana. No se recalcula.
+            logger.debug(f"Blindaje Manual Aplicado (MODO OVERRIDE) para {empleado_id} - {fecha}")
+            resultado = HumanDecisionMerger.apply(dict(asist_actual), fecha, he_previo, None)
         else:
-            # ── EVALUACIÓN LIBRETA ART. 25 BIS (180 HORAS DINÁMICA) ─────────
-            modalidad_ctrl = (asignacion.get('modalidad_control') or 'RELOJ').upper() if asignacion else 'RELOJ'
-            tipo_prog_emp = asignacion.get('tipo_programacion') if asignacion else ''
-            is_bolsa_emp = (tipo_prog_emp in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
-            es_180h_dt = (modalidad_ctrl == 'LIBRETA_180H') or (is_bolsa_emp and fecha >= '2026-10-01')
+            es_180h = QuantumMatrixEngine.resolve_control_modality(asignacion or {}, fecha, global_ajustes_ctx)
 
             libreta_180h = None
-            if es_180h_dt:
+            if es_180h:
                 if bulk_ctx and 'libretas_180h' in bulk_ctx:
                     libreta_180h = bulk_ctx['libretas_180h'].get(empleado_id, {}).get(fecha)
                 else:
                     libreta_180h = await self.repository.get_libreta_180h(empleado_id, fecha)
 
-            if es_180h_dt and libreta_180h:
-                # ── Resolución desde Libreta Digital Art. 25 bis ──
-                h_ent_lib = None
-                h_sal_lib = None
-                try:
-                    raw_s = libreta_180h.get('slots_96', '[]')
-                    slots = json.loads(raw_s) if isinstance(raw_s, str) else (raw_s or [])
-                    active_slots = [idx for idx, val in enumerate(slots) if val > 0]
-                    if active_slots:
-                        first_s = active_slots[0]
-                        last_s = active_slots[-1] + 1
-                        h_ent_lib = f"{first_s // 4:02d}:{(first_s % 4) * 15:02d}"
-                        h_sal_lib = f"{min(23, last_s // 4):02d}:{(last_s % 4) * 15:02d}" if last_s < 96 else "23:59"
-                except Exception:
-                    pass
-
-                min_cond = int(libreta_180h.get('minutos_conduccion', 0) or 0)
-                min_esp = int(libreta_180h.get('minutos_espera', 0) or 0)
-                min_aux = int(libreta_180h.get('minutos_auxiliares', 0) or 0)
-                min_desc = int(libreta_180h.get('minutos_descanso', 0) or 0)
-                min_efec = int(libreta_180h.get('minutos_efectivos', min_cond + min_aux) or (min_cond + min_aux))
-                h_efec = round(min_efec / 60.0, 2)
-                cerrado = bool(libreta_180h.get('cerrado', 0))
-
-                resultado = {
-                    'empleado_id': empleado_id,
-                    'fecha': fecha,
-                    'hora_entrada_real': h_ent_lib,
-                    'hora_salida_real': h_sal_lib,
-                    'hora_salida_colacion': None,
-                    'hora_entrada_colacion': None,
-                    'hora_inicio_permiso': None,
-                    'hora_termino_permiso': None,
-                    'horas_teoricas': 0.0,
-                    'horas_trabajadas': h_efec,
-                    'minutos_espera': min_esp,
-                    'minutos_conduccion': min_cond,
-                    'minutos_auxiliares': min_aux,
-                    'minutos_descanso': min_desc,
-                    'minutos_colacion': 0,
-                    'minutos_colacion_real': 0,
-                    'minutos_colacion_auto': 0,
-                    'minutos_exceso_colacion': 0,
-                    'minutos_permisos_detectados': 0,
-                    'minutos_permiso_personal_deuda': 0,
-                    'minutos_atraso': 0.0,
-                    'minutos_salida_adelantada': 0.0,
-                    'minutos_extra_bruto': 0.0,
-                    'minutos_deuda': 0.0,
-                    'tiene_atraso': 0,
-                    'tiene_salida_adelantada': 0,
-                    'tiene_permiso': 0,
-                    'alerta_atraso': False,
-                    'estado': 'OK' if (cerrado or h_efec > 0 or min_esp > 0) else 'EN_CURSO',
-                    'observaciones': f"🚚 LIBRETA 180H: {round(min_cond/60.0, 1)}h cond, {round(min_esp/60.0, 1)}h esp, {round(min_aux/60.0, 1)}h aux.",
-                    'origen': 'LIBRETA_180H',
-                    'marcas_consumidas_ids': [],
-                    '_jornada_especial': None,
-                    '_jornada_adicional': None
-                }
-            elif es_180h_dt and not (is_bolsa and viaje_largo):
-                # Chofer 180h sin libreta cargada (y sin viaje largo activo).
-                # Verificar primero justificaciones, feriado y descanso programado en el turno.
-                justs_dia = [
-                    j for j in (justificaciones or [])
-                    if j.get('fecha_inicio', '') <= fecha <= j.get('fecha_fin', '')
-                ]
-                if justs_dia:
-                    j = justs_dia[0]
-                    tipo_nom = (j.get('tipo_nombre') or 'JUSTIFICADO').upper()
-                    resultado = {
-                        'empleado_id': empleado_id,
-                        'fecha': fecha,
-                        'hora_entrada_real': None,
-                        'hora_salida_real': None,
-                        'hora_salida_colacion': None,
-                        'hora_entrada_colacion': None,
-                        'hora_inicio_permiso': None,
-                        'hora_termino_permiso': None,
-                        'horas_teoricas': 0.0,
-                        'horas_trabajadas': 0.0,
-                        'minutos_espera': 0,
-                        'minutos_colacion': 0,
-                        'minutos_colacion_real': 0,
-                        'minutos_colacion_auto': 0,
-                        'minutos_exceso_colacion': 0,
-                        'minutos_permisos_detectados': 0,
-                        'minutos_permiso_personal_deuda': 0,
-                        'minutos_atraso': 0.0,
-                        'minutos_salida_adelantada': 0.0,
-                        'minutos_extra_bruto': 0.0,
-                        'minutos_deuda': 0.0,
-                        'tiene_atraso': 0,
-                        'tiene_salida_adelantada': 0,
-                        'tiene_permiso': 0,
-                        'alerta_atraso': False,
-                        'estado': tipo_nom,
-                        'nomenclatura': j.get('tipo_nomenclatura'),
-                        'justificacion_id': j.get('id'),
-                        'observaciones': f"Justificación: {tipo_nom}. ",
-                        'origen': 'JUSTIFICACION',
-                        'marcas_consumidas_ids': [],
-                        '_jornada_especial': None,
-                        '_jornada_adicional': None
-                    }
-                elif is_holiday:
-                    desc_fer = feriados_dict.get(fecha, 'Feriado Legal')
-                    resultado = {
-                        'empleado_id': empleado_id,
-                        'fecha': fecha,
-                        'hora_entrada_real': None,
-                        'hora_salida_real': None,
-                        'hora_salida_colacion': None,
-                        'hora_entrada_colacion': None,
-                        'hora_inicio_permiso': None,
-                        'hora_termino_permiso': None,
-                        'horas_teoricas': 0.0,
-                        'horas_trabajadas': 0.0,
-                        'minutos_espera': 0,
-                        'minutos_colacion': 0,
-                        'minutos_colacion_real': 0,
-                        'minutos_colacion_auto': 0,
-                        'minutos_exceso_colacion': 0,
-                        'minutos_permisos_detectados': 0,
-                        'minutos_permiso_personal_deuda': 0,
-                        'minutos_atraso': 0.0,
-                        'minutos_salida_adelantada': 0.0,
-                        'minutos_extra_bruto': 0.0,
-                        'minutos_deuda': 0.0,
-                        'tiene_atraso': 0,
-                        'tiene_salida_adelantada': 0,
-                        'tiene_permiso': 0,
-                        'alerta_atraso': False,
-                        'estado': 'FERIADO',
-                        'observaciones': f"Feriado: {desc_fer}",
-                        'origen': 'FERIADO',
-                        'marcas_consumidas_ids': [],
-                        '_jornada_especial': None,
-                        '_jornada_adicional': None
-                    }
-                elif config_dia and config_dia.get('es_libre'):
-                    resultado = {
-                        'empleado_id': empleado_id,
-                        'fecha': fecha,
-                        'hora_entrada_real': None,
-                        'hora_salida_real': None,
-                        'hora_salida_colacion': None,
-                        'hora_entrada_colacion': None,
-                        'hora_inicio_permiso': None,
-                        'hora_termino_permiso': None,
-                        'horas_teoricas': 0.0,
-                        'horas_trabajadas': 0.0,
-                        'minutos_espera': 0,
-                        'minutos_colacion': 0,
-                        'minutos_colacion_real': 0,
-                        'minutos_colacion_auto': 0,
-                        'minutos_exceso_colacion': 0,
-                        'minutos_permisos_detectados': 0,
-                        'minutos_permiso_personal_deuda': 0,
-                        'minutos_atraso': 0.0,
-                        'minutos_salida_adelantada': 0.0,
-                        'minutos_extra_bruto': 0.0,
-                        'minutos_deuda': 0.0,
-                        'tiene_atraso': 0,
-                        'tiene_salida_adelantada': 0,
-                        'tiene_permiso': 0,
-                        'alerta_atraso': False,
-                        'estado': 'LIBRE',
-                        'observaciones': 'Día Libre según Turno',
-                        'origen': 'TURNO',
-                        'marcas_consumidas_ids': [],
-                        '_jornada_especial': None,
-                        '_jornada_adicional': None
-                    }
-                else:
-                    today_str = _get_now_local().strftime("%Y-%m-%d")
-                    if fecha >= today_str:
-                        resultado = None
-                    else:
-                        resultado = {
-                            'empleado_id': empleado_id,
-                            'fecha': fecha,
-                            'hora_entrada_real': None,
-                            'hora_salida_real': None,
-                            'hora_salida_colacion': None,
-                            'hora_entrada_colacion': None,
-                            'hora_inicio_permiso': None,
-                            'hora_termino_permiso': None,
-                            'horas_teoricas': 0.0,
-                            'horas_trabajadas': 0.0,
-                            'minutos_espera': 0,
-                            'minutos_colacion': 0,
-                            'minutos_colacion_real': 0,
-                            'minutos_colacion_auto': 0,
-                            'minutos_exceso_colacion': 0,
-                            'minutos_permisos_detectados': 0,
-                            'minutos_permiso_personal_deuda': 0,
-                            'minutos_atraso': 0.0,
-                            'minutos_salida_adelantada': 0.0,
-                            'minutos_extra_bruto': 0.0,
-                            'minutos_deuda': 0.0,
-                            'tiene_atraso': 0,
-                            'tiene_salida_adelantada': 0,
-                            'tiene_permiso': 0,
-                            'alerta_atraso': False,
-                            'estado': 'PENDIENTE',
-                            'observaciones': '[Pendiente Marcación Libreta 180h]',
-                            'origen': 'TURNO',
-                            'marcas_consumidas_ids': [],
-                            '_jornada_especial': None,
-                            '_jornada_adicional': None
-                        }
+            if bulk_ctx and 'intercambios' in bulk_ctx:
+                intercambio = bulk_ctx['intercambios'].get(empleado_id, {}).get(fecha)
             else:
-                todos_ciclos_dia = None
-                if asignacion and 'turnos_src' in locals() and turnos_src:
-                    todos_ciclos_dia = [
-                        turnos_src[s][dia_semana]
-                        for s in sorted(turnos_src.keys())
-                        if isinstance(turnos_src[s], dict) and dia_semana in turnos_src[s]
-                    ]
+                intercambio = await self.repository.get_intercambio_por_fecha(empleado_id, fecha)
 
-                if bulk_ctx and 'global_ajustes' in bulk_ctx:
-                    global_ajustes_ctx = bulk_ctx['global_ajustes']
-                else:
-                    aj_rows = await db.fetch_all("SELECT clave, valor FROM ajustes")
-                    global_ajustes_ctx = {r['clave']: r['valor'] for r in aj_rows}
+            if bulk_ctx and 'compensaciones' in bulk_ctx:
+                compensaciones = bulk_ctx['compensaciones'].get(empleado_id, {}).get(fecha, [])
+            else:
+                compensaciones = await self.repository.get_compensacion_por_fecha(empleado_id, fecha)
 
-                # ── INVOCACIÓN MATRICIAL CUÁNTICA PURA ──────────────────────────
-                resultado = QuantumMatrixEngine.solve_attendance_day(
-                    fecha=fecha,
-                    empleado_id=empleado_id,
-                    logs=marcas_candidatas,
-                    turno_config=asignacion or {},
-                    dia_config=config_dia,
-                    is_holiday=is_holiday,
-                    justificaciones=justificaciones,
-                    global_ajustes=global_ajustes_ctx,
-                    consumidas_previas=consumidas_emp,
-                    viaje_largo_info=viaje_largo,
-                    todos_ciclos_dia=todos_ciclos_dia,
-                )
+            todos_ciclos_dia = None
+            if asignacion and turnos_src:
+                todos_ciclos_dia = [
+                    turnos_src[s][dia_semana]
+                    for s in sorted(turnos_src.keys())
+                    if isinstance(turnos_src[s], dict) and dia_semana in turnos_src[s]
+                ]
 
-        if resultado:
-            resultado['empleado_id'] = empleado_id
-            resultado['fecha'] = fecha
-            resultado['minutos_espera'] = resultado.get('minutos_espera', 0)
-            resultado['turno_asignado_id'] = (asignacion.get('id') or asignacion.get('turno_id')) if asignacion else None
-            resultado['hora_entrada_teorica'] = config_dia.get('hora_entrada') if config_dia else None
-            resultado['hora_salida_teorica'] = config_dia.get('hora_salida') if config_dia else None
-            resultado['horas_teoricas'] = float(config_dia.get('horas_teoricas', 0.0) or 0.0) if config_dia else 0.0
-            resultado['origen'] = resultado.get('origen') or 'SISTEMA'
-            resultado['num_semana_ganadora'] = semana_ganadora
+            # ── INVOCACIÓN MATRICIAL CUÁNTICA ÚNICA ─────────────────────────
+            resultado = QuantumMatrixEngine.solve_attendance_day(
+                fecha=fecha,
+                empleado_id=empleado_id,
+                logs=marcas_candidatas,
+                turno_config=asignacion or {},
+                dia_config=config_dia,
+                is_holiday=is_holiday,
+                justificaciones=justificaciones,
+                global_ajustes=global_ajustes_ctx,
+                consumidas_previas=consumidas_emp,
+                viaje_largo_info=viaje_largo,
+                todos_ciclos_dia=todos_ciclos_dia,
+                es_modalidad_180h=es_180h,
+                libreta_180h=libreta_180h,
+                intercambio=intercambio,
+                compensaciones=compensaciones,
+                deuda_condonada_prev=int((asist_actual or {}).get('deuda_condonada') or 0),
+                he_previo=he_previo,
+                je_previo=je_prev,
+                holiday_desc=feriados_dict.get(fecha),
+            )
 
         if resultado is None:
-            if save and asist_actual:
-                logger.info(f"🧹 Limpiando registro residual por recalculo: Emp {empleado_id} en {fecha}")
-                await self.repository.delete_asistencia(empleado_id, fecha)
+            if save:
+                if asist_actual:
+                    logger.info(f"Limpiando registro residual por recalculo: Emp {empleado_id} en {fecha}")
+                    await self.repository.delete_asistencia(empleado_id, fecha)
+                await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                if je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                    await self._delete_je_no_validada(empleado_id, fecha)
             return None
 
-        # ── INTERCEPTOR: DÍA COMPENSATORIO (Intercambio de Días 1x1) ───────────
-        if bulk_ctx and 'intercambios' in bulk_ctx:
-            intercambio = bulk_ctx['intercambios'].get(empleado_id, {}).get(fecha)
-        else:
-            intercambio = await self.repository.get_intercambio_por_fecha(empleado_id, fecha)
-        if intercambio:
-            if fecha == intercambio['fecha_origen'] and resultado.get('estado') in ('INASISTENCIA', 'FALTA'):
-                resultado['estado'] = 'INASISTENCIA_COMPENSADA'
-                resultado['minutos_deuda'] = 0
-                resultado['deuda_condonada'] = 3
-                resultado['observaciones'] = resultado.get('observaciones', '') + ' [Día Compensado por Intercambio]'
-            elif fecha == intercambio['fecha_destino'] and resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA', 'OK'):
-                resultado['estado'] = 'JORNADA_COMPENSATORIA'
-                resultado['minutos_extra_bruto'] = 0
-                resultado['observaciones'] = resultado.get('observaciones', '') + ' [Jornada Trabajada por Compensación]'
+        # ── METADATOS DE CONTEXTO (no son cálculo) ───────────────────────────
+        resultado['empleado_id'] = empleado_id
+        resultado['fecha'] = fecha
+        if not manual_override:
+            resultado['turno_asignado_id'] = (asignacion.get('id') or asignacion.get('turno_id')) if asignacion else None
+        resultado['num_semana_ganadora'] = semana_ganadora
+        resultado['_manual_override'] = manual_override
 
-        # ── INTERCEPTOR: COMPENSACIÓN CON HORAS EXTRAS ────────────────────────
-        if bulk_ctx and 'compensaciones' in bulk_ctx:
-            compensaciones = bulk_ctx['compensaciones'].get(empleado_id, {}).get(fecha, [])
-        else:
-            compensaciones = await self.repository.get_compensacion_por_fecha(empleado_id, fecha)
-        if compensaciones and resultado and resultado.get('estado') in ('INASISTENCIA', 'FALTA', 'PENDIENTE'):
-            total_compensado = sum(c['minutos'] for c in compensaciones)
-            if total_compensado > 0:
-                resultado['estado'] = 'INASISTENCIA_COMPENSADA'
-                deuda_original = resultado.get('minutos_deuda', 0)
-                resultado['minutos_deuda'] = max(0, deuda_original - total_compensado)
-                resultado['deuda_condonada'] = 4
-                resultado['observaciones'] = resultado.get('observaciones', '') + f' [Inasistencia Compensada con Horas Extras: {total_compensado} min]'
+        # ── AGOTAMIENTO ATÓMICO DE MARCAS (MEMORIA DE SESIÓN) ────────────────
+        raw_c_ids = resultado.get('marcas_consumidas_ids') or []
+        if isinstance(raw_c_ids, str):
+            try:
+                raw_c_ids = json.loads(raw_c_ids)
+            except Exception:
+                raw_c_ids = []
+        ids_consumidos = []
+        for mid in raw_c_ids:
+            if mid:
+                m_int = int(mid)
+                ids_consumidos.append(m_int)
+                consumidas_emp.add(m_int)
+        m_auth_previo = resultado.get('_log_id_entrada')
+        if m_auth_previo:
+            ids_consumidos.append(int(m_auth_previo))
+            consumidas_emp.add(int(m_auth_previo))
+        resultado['marcas_consumidas_ids'] = json.dumps(ids_consumidos)
 
-        # ── INTERCEPTOR: CONDONACIÓN DE JORNADA / CIERRE DE FAENA (deuda_condonada = 5) ──
-        condonada_prev = (asist_actual.get('deuda_condonada') or 0) if asist_actual else 0
-        if condonada_prev == 5 and resultado and resultado.get('estado') in ('INASISTENCIA', 'FALTA'):
-            resultado['estado'] = 'OK'
-            resultado['minutos_deuda'] = 0.0
-            resultado['deuda_condonada'] = 5
-            resultado['tiene_atraso'] = 0
-            resultado['tiene_salida_adelantada'] = 0
-            if '[Cierre de Faena / Turno Condonado]' not in (resultado.get('observaciones') or ''):
-                resultado['observaciones'] = (resultado.get('observaciones') or '').strip() + ' [Cierre de Faena / Turno Condonado]'
+        # ── TRAZABILIDAD DE REASIGNACIÓN MANUAL ──────────────────────────────
+        if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL':
+            resultado['origen'] = 'MANUAL'
+            obs_manual = asist_row_manual.get('observaciones') or ''
+            if ('Reasignado' in obs_manual or 'reasignada' in obs_manual or '[MANUAL]' in obs_manual) \
+                    and obs_manual not in (resultado.get('observaciones') or ''):
+                resultado['observaciones'] = f"{obs_manual} | {resultado.get('observaciones', '')}".strip(" |")
 
-        # ── APLICACIÓN DE AGOTAMIENTO ATÓMICO (MEMORIA) ───────────────────────
-        if resultado:
-            resultado['num_semana_ganadora'] = semana_ganadora
-            raw_c_ids = resultado.get('marcas_consumidas_ids') or []
-            if isinstance(raw_c_ids, str):
-                try:
-                    raw_c_ids = json.loads(raw_c_ids)
-                except Exception:
-                    raw_c_ids = []
+        # ── PERSISTENCIA (I/O PURO) ──────────────────────────────────────────
+        if save:
+            if not manual_override:
+                je_data = resultado.get('_jornada_especial')
+                if je_data:
+                    await self.repository.upsert_jornada_especial(je_data)
+                elif je_prev and not HumanDecisionMerger.je_is_validated(je_prev):
+                    await self._delete_je_no_validada(empleado_id, fecha)
 
-            ids_consumidos = []
-            for mid in raw_c_ids:
-                if mid:
-                    m_int = int(mid)
-                    ids_consumidos.append(m_int)
-                    consumidas_emp.add(m_int)
-
-            m_auth_previo = resultado.get('_log_id_entrada')
-            if m_auth_previo:
-                ids_consumidos.append(int(m_auth_previo))
-                consumidas_emp.add(int(m_auth_previo))
-
-            resultado['marcas_consumidas_ids'] = json.dumps(ids_consumidos)
-
-        # ── INTERCEPTAR JORNADAS ESPECIALES ───────────────────────────────────
-        # Fetch existing to check for manual validation
-        if bulk_ctx and 'jornadas_especiales' in bulk_ctx:
-            je_prev = bulk_ctx['jornadas_especiales'].get(empleado_id, {}).get(fecha)
-        else:
-            je_prev = await self.repository.db.fetch_one(
-                "SELECT estado, observaciones FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
-                (empleado_id, fecha)
-            )
-
-        has_validated_je = bool(
-            je_prev and (
-                '[VALIDADO]' in (je_prev.get('observaciones') or '')
-                or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '')
-                or '[RECHAZADO]' in (je_prev.get('observaciones') or '')
-                or je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
-            )
-        )
-
-        # ── FASE 2 (Fix B2): PRESERVACIÓN DE DECISIONES HUMANAS ───────────────
-        # Caso Cobertura validada como Horas Extras:
-        is_cobertura_aprobada_he = bool(
-            (he_previo and he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO')
-            or (je_prev and je_prev.get('estado') == 'HORAS_EXTRAS')
-        )
-        if is_cobertura_aprobada_he and resultado:
-            min_cobertura = (he_previo.get('minutos_autorizados') if he_previo else None) or (je_prev.get('minutos_autorizados') if je_prev else None) or 0
-            if min_cobertura > 0:
-                resultado['minutos_extra_bruto'] = min_cobertura
-                resultado['_he_minutos_autorizados'] = min_cobertura
-                resultado['_he_estado'] = 'APROBADO'
-
-        # Fuente primaria: horas_extras (solo sobretiempo ordinario o cobertura aprobada)
-        _pres_estado = None
-        _pres_auth = 0
-        if he_previo and he_previo['estado'] in ('APROBADO', 'RECHAZADO'):
-            if he_previo.get('origen') not in ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL') or (he_previo.get('origen') == 'COBERTURA_TURNO' and he_previo.get('estado') == 'APROBADO'):
-                _pres_estado = he_previo['estado']
-                _pres_auth = he_previo.get('minutos_autorizados') or 0
-
-        if resultado and _pres_estado:
-            nuevo_bruto = resultado.get('minutos_extra_bruto', 0)
-            if nuevo_bruto > 0:
-                resultado['_he_estado'] = _pres_estado
-                if _pres_estado == 'APROBADO':
-                    resultado['_he_minutos_autorizados'] = min(_pres_auth, nuevo_bruto)
-                else:
-                    resultado['_he_minutos_autorizados'] = 0
-                
-                if f"Preservando decisión humana previa (Estado HE: {_pres_estado})" not in (resultado.get('observaciones') or ''):
-                    resultado['observaciones'] = (resultado.get('observaciones') or '') + f"Preservando decisión humana previa (Estado HE: {_pres_estado}) para {fecha}. "
-            else:
-                resultado['_he_estado'] = None
-                resultado['_he_minutos_autorizados'] = 0
-        elif not is_cobertura_aprobada_he:
-            if resultado:
-                resultado['_he_estado'] = None
-                resultado['_he_minutos_autorizados'] = 0
-
-        es_cobertura_dia = bool(je_prev and je_prev.get('origen') == 'COBERTURA_TURNO') or bool(resultado and resultado.get('_jornada_especial')) or (float(resultado.get('horas_teoricas') or 0.0) > 0.0 and float(resultado.get('horas_trabajadas') or 0.0) > 0.0 and has_validated_je)
-
-        ht_val = float(resultado.get('horas_teoricas') or 0.0) if resultado else 0.0
-
-        if resultado and resultado.get('_jornada_especial'):
-            je_data = resultado['_jornada_especial']
-            if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[VALIDADO_COMO_HE]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')):
-                je_data['estado'] = je_prev['estado']
-                je_data['observaciones'] = je_prev.get('observaciones') or ''
-                if je_prev.get('minutos_autorizados') is not None:
-                    je_data['minutos_autorizados'] = je_prev.get('minutos_autorizados')
-            if save:
-                await self.repository.upsert_jornada_especial(je_data)
-        elif resultado and not es_cobertura_dia and (resultado.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA') or (has_validated_je and ht_val == 0.0)):
-            is_bolsa = bool(asignacion and asignacion.get('tipo_programacion') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
-            es_candidato = False
-            
-            if is_bolsa:
-                es_candidato = False
-            elif ht_val == 0.0:
-                # Feriado o Día Libre
-                es_candidato = True
-            elif ht_val > 0.0 and resultado.get('estado') == 'EXTRA' and ('Cambio de turno irregular' in (resultado.get('observaciones') or '') or 'Turno de seguridad' in (resultado.get('observaciones') or '')):
-                # Desfase total o casos manuales movidos a EXTRA pero que operan como especial
-                es_candidato = True
-            elif ht_val > 0.0 and resultado.get('estado') == 'JORNADA_ESPECIAL':
-                # Anomalia forzada a jornada especial
-                es_candidato = True
-                
-            if es_candidato:
-                # [REGLA DE NEGOCIO]: Las jornadas especiales o extras no generan horas extras ordinarias ni deudas horarias
-                resultado['minutos_extra_bruto'] = 0.0
-                resultado['minutos_extra_autorizados'] = 0.0
-                resultado['minutos_deuda'] = 0.0
-                resultado['tiene_atraso'] = 0
-                resultado['tiene_salida_adelantada'] = 0
-
-                min_trab = int(resultado.get('horas_trabajadas', 0) * 60) if 'horas_trabajadas' in resultado and resultado['horas_trabajadas'] > 0 else 0
-                
-                estado_je = resultado.get('estado')
-                obs_je = resultado.get('observaciones') or ''
-                
-                if je_prev and ('[VALIDADO]' in (je_prev.get('observaciones') or '') or '[RECHAZADO]' in (je_prev.get('observaciones') or '') or je_prev.get('estado') in ('EXTRA', 'RECHAZADA')):
-                    estado_je = je_prev['estado']
-                    if estado_je == 'PENDIENTE':
-                        estado_je = 'JORNADA_ESPECIAL'
-                    # Keep original validation observation
-                    obs_je = je_prev.get('observaciones') or ''
-                    # Si ya estaba validado en el pasado, preservamos el estado en asistencias solo en días libres
-                    if ht_val == 0.0:
-                        resultado['estado'] = estado_je
-                    
-                # Determinar origen trazable
-                if is_holiday:
-                    _origen_je = 'FERIADO'
-                elif ht_val == 0.0:
-                    _origen_je = 'DIA_LIBRE'
-                else:
-                    _origen_je = 'SISTEMA'
-
-                j_record = {
-                    'empleado_id': empleado_id,
-                    'fecha': fecha,
-                    'hora_entrada': resultado.get('hora_entrada_real'),
-                    'hora_salida': resultado.get('hora_salida_real'),
-                    'minutos_trabajados': min_trab,
-                    'estado': estado_je,
-                    'origen': _origen_je,
-                    'observaciones': obs_je
-                }
-                if je_prev and has_validated_je and je_prev.get('minutos_autorizados') is not None:
-                    j_record['minutos_autorizados'] = je_prev.get('minutos_autorizados')
-                if save:
-                    await self.repository.upsert_jornada_especial(j_record)
-                else:
-                    resultado['_jornada_especial'] = j_record
-                
-                # NOTA ARQUITECTURA: Ya no borramos los datos de "resultado" (hora_entrada_real, etc)
-                # para que "asistencias" se mantenga como la FUENTE DE VERDAD con el registro JORNADA_ESPECIAL completo.
-            else:
-                # Si el día es hábil ordinario (ht_val > 0) y no es JE validada, limpiar propuesta huérfana
-                if save and je_prev and not has_validated_je:
-                    await self.repository.db.execute(
-                        "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[VALIDADO_COMO_HE]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
-                        (empleado_id, fecha)
-                    )
-        else:
-            # Si el día no es jornada especial ni doble turno (+2), limpiar propuesta huérfana
-            if save and je_prev and not has_validated_je:
-                await self.repository.db.execute(
-                    "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[VALIDADO_COMO_HE]%' AND observaciones NOT LIKE '%[RECHAZADO]%'",
-                    (empleado_id, fecha)
-                )
-
-        # ── FASE 2 (Paso D): DOBLE ESCRITURA A horas_extras ───────────────────
-        # Fix 3: Post-interceptor JE. Si fue interceptado, minutos_extra_bruto ya es 0
-        if save and resultado:
-            if resultado.get('minutos_extra_bruto', 0) > 0:
+            if float(resultado.get('minutos_extra_bruto') or 0) > 0:
                 await self.he_repo.upsert(
                     empleado_id=empleado_id,
                     fecha=fecha,
@@ -2729,53 +2269,22 @@ class AsistenciaService:
                     estado=resultado.get('_he_estado') or 'PENDIENTE',
                 )
             else:
-                # Si las HE son 0 (o día sin sobretiempo ordinario), limpiar cualquier registro huérfano en horas_extras
                 await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
 
-        if asist_row_manual and asist_row_manual.get('origen') == 'MANUAL':
-            resultado['origen'] = 'MANUAL'
-            if asist_row_manual.get('observaciones'):
-                obs_prev = asist_row_manual['observaciones']
-                if 'Reasignado' in obs_prev or 'reasignada' in obs_prev or '[MANUAL]' in obs_prev:
-                    if obs_prev not in (resultado.get('observaciones') or ''):
-                        resultado['observaciones'] = f"{obs_prev} | {resultado.get('observaciones', '')}".strip(" |")
-
-        # ── ESCRITURA LEGACY (Paso E): asistencias (DESPUÉS de horas_extras) ──
-        if save:
-
             await self.repository.upsert_asistencia(resultado)
-            
-            # ── NUEVA REGLA: Segmentar exceso de horas extras diarias en días hábiles ordinarios ──
-            try:
-                db = self.repository.db
-                ht_val = float(resultado.get('horas_teoricas') or 0.0)
-                est_asist = resultado.get('estado')
-                he_bruta = float(resultado.get('minutos_extra_bruto', 0.0))
-                
-                # Solo aplica en días hábiles programados (horas_teoricas > 0) y no en libres, feriados o inasistencias
-                if ht_val > 0.0 and est_asist not in ('LIBRE', 'FERIADO', 'INASISTENCIA') and he_bruta > 0.0:
-                    # Horas Extras brutos permanecen intactas en la columna de Horas Extras Pendientes
-                    pass
-            except Exception as e_regla:
-                logger.error(f"⚠️ Error aplicando regla de exceso de HE en día hábil: {e_regla}")
-
-        # Si existe una jornada especial registrada para esta fecha y la asistencia base era LIBRE,
-        # pisar el estado en la tabla asistencias a JORNADA_ESPECIAL
-        try:
-            ht_val_check = float(resultado.get('horas_teoricas') or 0.0)
-            if ht_val_check == 0.0:
-                je_check = await self.repository.db.fetch_one(
-                    "SELECT id, estado FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?",
-                    (empleado_id, fecha)
-                )
-                if je_check and resultado and resultado.get('estado') == 'LIBRE':
-                    resultado['estado'] = 'JORNADA_ESPECIAL'
-                    if save:
-                        await self.repository.upsert_asistencia(resultado)
-        except Exception as _e_je:
-            logger.error(f"Error superponiendo JORNADA_ESPECIAL en asistencia: {_e_je}")
 
         return resultado
+
+    async def _delete_je_no_validada(self, empleado_id: int, fecha: str) -> None:
+        """Elimina una propuesta de Jornada Especial huérfana que NO tenga decisión humana."""
+        await self.repository.db.execute(
+            "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? "
+            "AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') "
+            "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO]%' "
+            "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO_COMO_HE]%' "
+            "AND COALESCE(observaciones, '') NOT LIKE '%[RECHAZADO]%'",
+            (empleado_id, fecha)
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # MATRIZ / DATOS DE GRILLA
@@ -2958,7 +2467,9 @@ class AsistenciaService:
         """
         
         q_just = f"""
-            SELECT j.*, jt.nombre AS tipo_nombre, jt.con_goce_sueldo, jt.pagador, jt.nomenclatura AS tipo_nomenclatura
+            SELECT j.*, jt.nombre AS tipo_nombre, jt.con_goce_sueldo, jt.pagador, jt.nomenclatura AS tipo_nomenclatura,
+                   jt.nomenclatura, jt.dias_corridos, jt.sobreescribe_feriados, jt.es_por_horas,
+                   jt.es_horas_sindicales, jt.genera_deuda_horaria, jt.descuenta_remuneracion
             FROM justificaciones j
             JOIN justificacion_tipos jt ON j.tipo_id = jt.id
             WHERE j.empleado_id IN ({ids_ph})
@@ -3069,147 +2580,73 @@ class AsistenciaService:
 
 
         hoy_str = _get_now_local().strftime("%Y-%m-%d")
+        justificaciones = [dict(j) for j in just_rows]
+        just_by_id = {j.get('id'): j for j in justificaciones}
+
+        # ── PROYECCIÓN PURA DE LA BD ─────────────────────────────────────────
+        # La grilla NO decide estados. Sólo muestra lo que el motor cuántico persistió.
+        # Registros obsoletos (EN_CURSO de días pasados o libretas sin asistencia) se
+        # recalculan A TRAVÉS DEL MOTOR, nunca se parchean en memoria.
+        pendientes_recalculo: List[tuple] = []
 
         for a in asistencias:
             eid = a['empleado_id']
-            if eid in matrix:
-                f_asist = a.get('fecha')
-                # [FIX EN_CURSO DIAS PASADOS]: Un día pasado NUNCA puede permanecer en EN_CURSO
-                # a menos que sea un turno nocturno activo de ayer durante su ventana matutina.
-                if a.get('estado') == 'EN_CURSO' and f_asist and f_asist < hoy_str:
-                    es_nocturno_activo = False
-                    ayer_dt = _get_now_local() - timedelta(days=1)
-                    if f_asist == ayer_dt.strftime("%Y-%m-%d"):
-                        h_sal_teo = a.get('hora_salida_teorica')
-                        h_ent_teo = a.get('hora_entrada_teorica')
-                        if h_sal_teo and h_ent_teo:
-                            h_sal_norm = str(h_sal_teo).strip()[:5]
-                            h_ent_norm = str(h_ent_teo).strip()[:5]
-                            # Si cruza medianoche (hora_salida < hora_entrada)
-                            if h_sal_norm < h_ent_norm:
-                                try:
-                                    dt_sal_hoy = datetime.strptime(f"{hoy_str} {h_sal_norm}", "%Y-%m-%d %H:%M")
-                                    if _get_now_local() < dt_sal_hoy + timedelta(hours=3):
-                                        es_nocturno_activo = True
-                                except Exception:
-                                    pass
+            if eid not in matrix:
+                continue
+            f_asist = a.get('fecha')
+            if a.get('estado') == 'EN_CURSO' and f_asist and f_asist < hoy_str:
+                pendientes_recalculo.append((eid, f_asist))
+            matrix[eid][f_asist] = a
 
-                    if not es_nocturno_activo:
-                        if a.get('hora_entrada_real') and a.get('hora_salida_real'):
-                            a['estado'] = 'ATRASO' if a.get('tiene_atraso') else 'OK'
-                        elif a.get('hora_entrada_real') and not a.get('hora_salida_real'):
-                            a['estado'] = 'ANOMALIA'
-                            a['observaciones'] = (a.get('observaciones') or '').replace('Jornada en curso (falta salida).', 'Solo una marcación (falta salida).')
-                        elif not a.get('hora_entrada_real'):
-                            a['estado'] = 'INASISTENCIA'
-
-                if (eid, f_asist) in libretas_map:
-                    lib_info = libretas_map[(eid, f_asist)]
-                    a['slots_96'] = lib_info.get('slots_96')
-                    a['libreta_cerrada'] = bool(lib_info.get('cerrado'))
-                    a['libreta_obs'] = lib_info.get('observaciones')
-                    if lib_info.get('minutos_conduccion') is not None:
-                        a['minutos_conduccion'] = lib_info.get('minutos_conduccion')
-                    if lib_info.get('minutos_espera') is not None:
-                        a['minutos_espera'] = lib_info.get('minutos_espera')
-                    if lib_info.get('minutos_auxiliares') is not None:
-                        a['minutos_auxiliares'] = lib_info.get('minutos_auxiliares')
-                    if lib_info.get('minutos_descanso') is not None:
-                        a['minutos_descanso'] = lib_info.get('minutos_descanso')
-                    if lib_info.get('minutos_efectivos') is not None:
-                        a['horas_trabajadas'] = round(float(lib_info.get('minutos_efectivos', 0)) / 60.0, 2)
-                    a['origen'] = 'LIBRETA_180H'
-
-                matrix[eid][f_asist] = a
-
-        # Enriquecer o insertar días que tengan Libreta Art. 25 bis pero no asistencias registradas
-        for (eid, f_lib), lib_info in libretas_map.items():
+        for (eid, f_lib) in libretas_map.keys():
             if eid in matrix and f_lib not in matrix[eid]:
-                min_cond = int(lib_info.get('minutos_conduccion') or 0)
-                min_esp = int(lib_info.get('minutos_espera') or 0)
-                min_aux = int(lib_info.get('minutos_auxiliares') or 0)
-                min_desc = int(lib_info.get('minutos_descanso') or 0)
-                min_efec = int(lib_info.get('minutos_efectivos') or (min_cond + min_aux))
-                matrix[eid][f_lib] = {
-                    'empleado_id': eid,
-                    'fecha': f_lib,
-                    'estado': 'OK' if lib_info.get('cerrado') else 'EN_CURSO',
-                    'origen': 'LIBRETA_180H',
-                    'slots_96': lib_info.get('slots_96'),
-                    'libreta_cerrada': bool(lib_info.get('cerrado')),
-                    'minutos_conduccion': min_cond,
-                    'minutos_espera': min_esp,
-                    'minutos_auxiliares': min_aux,
-                    'minutos_descanso': min_desc,
-                    'horas_trabajadas': round(min_efec / 60.0, 2),
-                    'minutos_deuda': 0.0,
-                    'minutos_atraso': 0.0,
-                    'minutos_extra_bruto': 0.0,
-                    'observaciones': lib_info.get('observaciones') or f"🚚 LIBRETA 180H: {round(min_cond/60.0, 1)}h cond, {round(min_esp/60.0, 1)}h esp."
-                }
+                pendientes_recalculo.append((eid, f_lib))
 
-        # Superponer jornadas especiales — enriquecer marcas, NO pisar asistencias.estado
-        # Tabla jornadas_especiales.estado es un estado INTERNO de flujo de validación:
-        #   PENDIENTE → interno: ESP con 2 marcas esperando validación de jefe
-        #   JORNADA_ESPECIAL → interno: ESP confirmada por motor
-        #   EXTRA → validada por jefe  → SÍ se muestra en grilla
-        #   RECHAZADA → rechazada por jefe → SÍ se muestra en grilla
-        # La grilla siempre toma asistencias.estado como fuente de verdad.
-        # Solo EXTRA y RECHAZADA del flujo JE pueden cambiar el estado visual.
-        ESTADOS_JE_QUE_PISAN = {'EXTRA', 'RECHAZADA'}
+        MAX_RECALCULO_LECTURA = 300
+        for (eid, f_rec) in pendientes_recalculo[:MAX_RECALCULO_LECTURA]:
+            try:
+                rec = await self.procesar_empleado_dia(eid, f_rec, save=True)
+                if rec:
+                    rec = {k: v for k, v in rec.items() if not str(k).startswith('_')}
+                    prev_cell = matrix[eid].get(f_rec) or {}
+                    for k_keep in ('turno_nombre', 'estado_he', 'minutos_extra_autorizados', 'minutos_compensados_he', 'etiqueta_bloque'):
+                        if k_keep in prev_cell and k_keep not in rec:
+                            rec[k_keep] = prev_cell[k_keep]
+                    matrix[eid][f_rec] = rec
+                else:
+                    matrix[eid].pop(f_rec, None)
+            except Exception as e_rec:
+                logger.warning(f"[Matrix] No se pudo recalcular {eid} {f_rec} vía motor: {e_rec}")
 
+        # Metadatos de visualización de la Libreta 180h (sin alterar cálculos)
+        for (eid, f_lib), lib_info in libretas_map.items():
+            if eid in matrix and f_lib in matrix[eid]:
+                cell = matrix[eid][f_lib]
+                cell['slots_96'] = lib_info.get('slots_96')
+                cell['libreta_cerrada'] = bool(lib_info.get('cerrado'))
+                cell['libreta_obs'] = lib_info.get('observaciones')
+
+        # Jornadas especiales: se adjuntan como metadato (celda dividida). El estado lo decidió el motor.
         for j in jornadas_especiales:
             eid = j['empleado_id']
-            if eid in matrix:
-                is_emp_bolsa = (matrix[eid].get('info', {}).get('tipo_programacion') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'))
-                if is_emp_bolsa:
-                    continue
-                f_str = j['fecha']
-                je_estado = j['estado']
+            if eid not in matrix:
+                continue
+            if matrix[eid].get('info', {}).get('tipo_programacion') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'):
+                continue
+            f_str = j['fecha']
+            if f_str in matrix[eid]:
+                matrix[eid][f_str]['jornada_adicional'] = {
+                    'id': j['id'],
+                    'estado': j['estado'],
+                    'origen': j.get('origen', 'SISTEMA'),
+                    'hora_entrada': j['hora_entrada'],
+                    'hora_salida': j['hora_salida'],
+                    'minutos_trabajados': j['minutos_trabajados'],
+                    'minutos_autorizados': j.get('minutos_autorizados', 0),
+                    'observaciones': j.get('observaciones') or ''
+                }
 
-                if f_str in matrix[eid]:
-                    # Inyectar metadatos para renderizado de Celda Dividida (Split Cell) en el frontend
-                    matrix[eid][f_str]['jornada_adicional'] = {
-                        'id': j['id'],
-                        'estado': j['estado'],
-                        'origen': j.get('origen', 'SISTEMA'),
-                        'hora_entrada': j['hora_entrada'],
-                        'hora_salida': j['hora_salida'],
-                        'minutos_trabajados': j['minutos_trabajados'],
-                        'minutos_autorizados': j.get('minutos_autorizados', 0),
-                        'observaciones': j.get('observaciones') or ''
-                    }
-                    
-                    # Conservar el estado ordinario a la izquierda. Si la JE está validada (EXTRA/RECHAZADA),
-                    # enriquecer o pisar según lógica tradicional
-                    if je_estado in ESTADOS_JE_QUE_PISAN:
-                        es_dia_habil = float(matrix[eid][f_str].get('horas_teoricas') or 0.0) > 0.0
-                        if es_dia_habil:
-                            # En día hábil ordinario, NO pisamos la asistencia ordinaria de la mañana.
-                            # Queremos conservar el estado ordinario a la izquierda (ej: OK, ATRASO, etc.)
-                            pass
-                        else:
-                            matrix[eid][f_str]['estado'] = je_estado
-                            # Enriquecer horas reales SOLO si la JE las tiene definidas.
-                            if j['hora_entrada'] is not None:
-                                matrix[eid][f_str]['hora_entrada_real'] = j['hora_entrada']
-                            if j['hora_salida'] is not None:
-                                matrix[eid][f_str]['hora_salida_real'] = j['hora_salida']
-                            matrix[eid][f_str]['minutos_extra_bruto'] = 0
-                            matrix[eid][f_str]['minutos_extra_autorizados'] = 0
-                            matrix[eid][f_str]['minutos_deuda'] = 0
-                            matrix[eid][f_str]['horas_trabajadas'] = (j['minutos_trabajados'] or 0) / 60.0
-                            matrix[eid][f_str]['observaciones'] = j.get('observaciones') or ''
-                    else:
-                        # Si la JE está PENDIENTE en un día sin turno ordinario efectivo (LIBRE),
-                        # asignar su estado visual como JORNADA_ESPECIAL para sustituir la etiqueta LIBRE
-                        if matrix[eid][f_str].get('estado') == 'LIBRE' or not matrix[eid][f_str].get('hora_entrada_real'):
-                            matrix[eid][f_str]['estado'] = 'JORNADA_ESPECIAL'
-                    # Nota: no existe rama else (JE sin asistencias).
-                    # El motor siempre crea ambos registros juntos. Si faltara asistencias
-                    # sería un bug de integridad que debe investigarse, no silenciarse.
-
-        # Superponer viajes_largos para adjuntar objeto viaje_largo a las celdas del primer día
+        # Viajes largos: se adjunta el objeto del viaje como metadato (el estado VIAJE_LARGO lo decide el motor)
         q_vl = f"""
             SELECT * FROM viajes_largos
             WHERE empleado_id IN ({ids_ph})
@@ -3219,129 +2656,92 @@ class AsistenciaService:
         for vl in vl_rows:
             v_dict = dict(vl)
             eid = v_dict['empleado_id']
-            f_ini_vl = v_dict['fecha_inicio']
-            f_fin_vl = v_dict['fecha_fin']
-            if eid in matrix:
-                try:
-                    d_cur = datetime.strptime(f_ini_vl[:10], '%Y-%m-%d')
-                    d_end = datetime.strptime(f_fin_vl[:10], '%Y-%m-%d')
+            if eid not in matrix:
+                continue
+            try:
+                d_cur = datetime.strptime(v_dict['fecha_inicio'][:10], '%Y-%m-%d')
+                d_end = datetime.strptime(v_dict['fecha_fin'][:10], '%Y-%m-%d')
+                tiene_feriado_en_ruta = False
+                tiene_domingo_en_ruta = False
+                d_chk = d_cur
+                while d_chk <= d_end:
+                    if d_chk.strftime('%Y-%m-%d') in feriados_dict:
+                        tiene_feriado_en_ruta = True
+                    if d_chk.weekday() == 6:
+                        tiene_domingo_en_ruta = True
+                    d_chk += timedelta(days=1)
+                v_dict['feriado_en_ruta'] = tiene_feriado_en_ruta
+                v_dict['domingo_en_ruta'] = tiene_domingo_en_ruta
 
-                    # Chequear si cruza domingos o feriados
-                    tiene_feriado_en_ruta = False
-                    tiene_domingo_en_ruta = False
-                    d_chk = d_cur
-                    while d_chk <= d_end:
-                        ds_c = d_chk.strftime('%Y-%m-%d')
-                        if ds_c in feriados_dict:
-                            tiene_feriado_en_ruta = True
-                        if d_chk.weekday() == 6:
-                            tiene_domingo_en_ruta = True
-                        d_chk += timedelta(days=1)
+                ds_fin = d_end.strftime('%Y-%m-%d')
+                if ds_fin in matrix[eid]:
+                    h_salida_vl = v_dict['fecha_fin'][11:16] if (v_dict.get('fecha_fin') and len(v_dict['fecha_fin']) > 10) else None
+                    h_ent_local = matrix[eid][ds_fin].get('hora_entrada_real')
+                    if h_salida_vl and h_ent_local:
+                        try:
+                            dt_ret = datetime.strptime(f"{ds_fin} {h_salida_vl[:5]}", "%Y-%m-%d %H:%M")
+                            dt_ent = datetime.strptime(f"{ds_fin} {h_ent_local[:5]}", "%Y-%m-%d %H:%M")
+                            if dt_ent > dt_ret:
+                                diff_descanso = round((dt_ent - dt_ret).total_seconds() / 3600.0, 1)
+                                v_dict['descanso_post_viaje_horas'] = diff_descanso
+                                if diff_descanso < 8.0:
+                                    v_dict['alerta_descanso_post_viaje'] = True
+                                else:
+                                    v_dict['cumple_descanso_post_viaje'] = True
+                        except Exception:
+                            pass
 
-                    v_dict['feriado_en_ruta'] = tiene_feriado_en_ruta
-                    v_dict['domingo_en_ruta'] = tiene_domingo_en_ruta
+                while d_cur <= d_end:
+                    ds = d_cur.strftime('%Y-%m-%d')
+                    if ds in matrix[eid]:
+                        matrix[eid][ds]['viaje_largo'] = v_dict
+                        matrix[eid][ds]['tiene_viaje_largo'] = 1
+                    d_cur += timedelta(days=1)
+            except Exception:
+                pass
 
-                    # Evaluar descanso post-viaje en el día de retorno
-                    ds_fin = d_end.strftime('%Y-%m-%d')
-                    if ds_fin in matrix[eid]:
-                        cell_retorno = matrix[eid][ds_fin]
-                        h_salida_vl = v_dict['fecha_fin'][11:16] if (v_dict.get('fecha_fin') and len(v_dict['fecha_fin']) > 10) else None
-                        h_ent_local = cell_retorno.get('hora_entrada_real')
-                        if h_salida_vl and h_ent_local:
-                            try:
-                                dt_ret = datetime.strptime(f"{ds_fin} {h_salida_vl[:5]}", "%Y-%m-%d %H:%M")
-                                dt_ent = datetime.strptime(f"{ds_fin} {h_ent_local[:5]}", "%Y-%m-%d %H:%M")
-                                if dt_ent > dt_ret:
-                                    diff_descanso = round((dt_ent - dt_ret).total_seconds() / 3600.0, 1)
-                                    v_dict['descanso_post_viaje_horas'] = diff_descanso
-                                    if diff_descanso < 8.0:
-                                        v_dict['alerta_descanso_post_viaje'] = True
-                                    else:
-                                        v_dict['cumple_descanso_post_viaje'] = True
-                            except Exception:
-                                pass
+        # Justificaciones: metadato de la justificación resuelta por el motor (por justificacion_id)
+        for eid, emp_cells in matrix.items():
+            for f_key, cell in emp_cells.items():
+                if f_key == 'info' or not isinstance(cell, dict):
+                    continue
+                j_id = cell.get('justificacion_id')
+                if j_id and j_id in just_by_id:
+                    cell['justificacion'] = just_by_id[j_id]
 
-                    while d_cur <= d_end:
-                        ds = d_cur.strftime('%Y-%m-%d')
-                        if ds in matrix[eid]:
-                            cell = matrix[eid][ds]
-                            cell['viaje_largo'] = v_dict
-                            cell['tiene_viaje_largo'] = 1
-                            cell['tiene_anomalia'] = 0
-                            cell['alerta_anomalia'] = 0
-                            if cell.get('estado') in ('ANOMALIA', 'INASISTENCIA', 'PENDIENTE', None):
-                                cell['estado'] = 'VIAJE_LARGO'
-                        d_cur += timedelta(days=1)
-                except Exception:
-                    pass
+        # Días aún no procesados: proyección con el MISMO resolutor del motor (feriados y justificaciones)
+        just_por_emp: Dict[int, List[Dict[str, Any]]] = {}
+        for j in justificaciones:
+            just_por_emp.setdefault(j.get('empleado_id'), []).append(j)
 
-        # Proyectar feriados no procesados
         cur = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         fin_dt = datetime.strptime(fecha_fin, "%Y-%m-%d")
         while cur <= fin_dt:
             f_str = cur.strftime("%Y-%m-%d")
-            if f_str in feriados_dict:
-                for eid in matrix:
-                    if f_str not in matrix[eid]:
-                        matrix[eid][f_str] = {
-                            'empleado_id': eid,
-                            'fecha': f_str,
-                            'estado': 'FERIADO',
-                            'observaciones': feriados_dict[f_str],
-                            'hora_entrada_real': None,
-                            'hora_salida_real': None,
-                            'horas_trabajadas': 0,
-                        }
+            weekday_db = cur.weekday()
+            is_fer = f_str in feriados_dict
+            for eid, emp_cells in matrix.items():
+                if f_str in emp_cells:
+                    continue
+                emp_justs = just_por_emp.get(eid, [])
+                if not is_fer and not emp_justs:
+                    continue
+                td_cfg = (emp_cells.get('info', {}).get('turno_dias') or {})
+                td_dia = td_cfg.get(weekday_db) or td_cfg.get(str(weekday_db)) or {}
+                proy = QuantumMatrixEngine.project_calendar_day(
+                    empleado_id=eid,
+                    fecha=f_str,
+                    is_holiday=is_fer,
+                    holiday_desc=feriados_dict.get(f_str),
+                    es_libre_dia=bool(td_dia.get('es_libre')),
+                    justificaciones=emp_justs,
+                )
+                if proy:
+                    proy = {k: v for k, v in proy.items() if not str(k).startswith('_')}
+                    if proy.get('justificacion_id') in just_by_id:
+                        proy['justificacion'] = just_by_id[proy['justificacion_id']]
+                    emp_cells[f_str] = proy
             cur += timedelta(days=1)
-
-        # Justificaciones del período (precargadas concurrentemente arriba)
-        justificaciones = [dict(j) for j in just_rows]
-
-        # Inyectar nomenclaturas y justificaciones en la matriz a partir de justificaciones
-        for just in justificaciones:
-            eid = just.get('empleado_id')
-            if eid in matrix:
-                try:
-                    cur_dt = datetime.strptime(just['fecha_inicio'][:10], "%Y-%m-%d")
-                    end_dt = datetime.strptime(just['fecha_fin'][:10], "%Y-%m-%d")
-                    nomen = (just.get('tipo_nomenclatura') or just.get('nomenclatura') or 'DEOP').upper()
-                    t_nombre = (just.get('tipo_nombre') or just.get('nombre') or 'DESCANSO OPERATIVO').upper()
-                    es_corrido = bool(just.get('dias_corridos'))
-                    sobreescribe_fer = bool(just.get('sobreescribe_feriados'))
-                    emp_td = matrix[eid].get('info', {}).get('turno_dias', {})
-
-                    while cur_dt <= end_dt:
-                        f_str = cur_dt.strftime("%Y-%m-%d")
-                        if f_str in matrix[eid]:
-                            cell = matrix[eid][f_str]
-                            is_fer = (f_str in feriados_dict) or cell.get('estado') == 'FERIADO'
-                            weekday_db = cur_dt.weekday()  # 0=Lun .. 6=Dom
-                            td_cfg = emp_td.get(str(weekday_db)) or emp_td.get(weekday_db) or {}
-                            is_struct_libre = bool(td_cfg.get('es_libre'))
-                            is_cell_libre = (cell.get('estado') == 'LIBRE')
-                            has_work_punches = bool(cell.get('hora_entrada_real') or cell.get('hora_salida_real'))
-
-                            # Si es feriado y la justificación NO sobreescribe feriados -> Mantener FERIADO
-                            if is_fer and not sobreescribe_fer:
-                                if not has_work_punches:
-                                    cell['estado'] = 'FERIADO'
-                                    cell['observaciones'] = feriados_dict.get(f_str, 'Feriado Nacional')
-                                    cell.pop('justificacion_id', None)
-                                    cell.pop('nomenclatura', None)
-                            # Si es día libre (estructural o en celda) sin marcas y la justificación NO es por días corridos -> Mantener LIBRE
-                            elif (is_struct_libre or is_cell_libre) and not es_corrido and not has_work_punches:
-                                cell['estado'] = 'LIBRE'
-                                cell['observaciones'] = 'Día Libre de Turno'
-                                cell.pop('justificacion_id', None)
-                                cell.pop('nomenclatura', None)
-                            else:
-                                cell['justificacion_id'] = just.get('id')
-                                cell['justificacion'] = just
-                                cell['nomenclatura'] = nomen
-                                cell['estado'] = t_nombre
-                        cur_dt += timedelta(days=1)
-                except Exception as _exc:
-                    logger.debug(f"[Matrix] Error inyectando justificacion: {_exc}")
 
         # Determinar si el periodo/rango actual está cerrado
         # Si es un cierre por área específica, se busca en cierres_periodos.

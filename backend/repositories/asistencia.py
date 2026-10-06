@@ -197,6 +197,8 @@ class AsistenciaRepository:
         # Si bypass_cierre_check es False, el repositorio asume que la data ya fue filtrada o validada.
         pass
 
+        # PERSISTENCIA PURA: el motor cuántico ya resolvió condonaciones, intercambios,
+        # compensaciones y justificaciones. Este SQL NO decide nada.
         query = """
             INSERT INTO asistencias (
                 empleado_id, fecha, turno_asignado_id, 
@@ -211,8 +213,8 @@ class AsistenciaRepository:
                 hora_termino_permiso, minutos_permisos_detectados,
                 tiene_atraso, tiene_salida_adelantada, tiene_permiso,
                 num_semana_ganadora, marcas_consumidas_ids, deuda_condonada,
-                minutos_espera
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                minutos_espera, justificacion_id, nomenclatura
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 turno_asignado_id=excluded.turno_asignado_id,
                 hora_entrada_teorica=excluded.hora_entrada_teorica,
@@ -224,31 +226,11 @@ class AsistenciaRepository:
                 minutos_colacion=excluded.minutos_colacion,
                 minutos_colacion_real=excluded.minutos_colacion_real,
                 horas_trabajadas=excluded.horas_trabajadas,
-                minutos_deuda=CASE 
-                    WHEN asistencias.deuda_condonada = 5 THEN 0
-                    WHEN asistencias.deuda_condonada = 3 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_atraso - excluded.minutos_salida_adelantada)
-                    WHEN asistencias.deuda_condonada = 2 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_atraso)
-                    WHEN asistencias.deuda_condonada = 1 THEN MAX(0, excluded.minutos_deuda - excluded.minutos_salida_adelantada)
-                    ELSE excluded.minutos_deuda 
-                END,
+                minutos_deuda=excluded.minutos_deuda,
                 minutos_extra_bruto=excluded.minutos_extra_bruto,
-                minutos_salida_adelantada=CASE 
-                    WHEN asistencias.deuda_condonada IN (1, 3) THEN 0 
-                    ELSE excluded.minutos_salida_adelantada 
-                END,
-                estado=CASE 
-                    WHEN asistencias.deuda_condonada = 5 AND excluded.estado IN ('INASISTENCIA', 'FALTA') THEN 'OK'
-                    WHEN asistencias.deuda_condonada = 3 AND excluded.estado IN ('ATRASO', 'SALIDA_ADELANTADA') THEN 'OK'
-                    WHEN asistencias.deuda_condonada = 2 AND excluded.estado = 'ATRASO' AND excluded.tiene_salida_adelantada = 0 THEN 'OK'
-                    WHEN asistencias.deuda_condonada = 2 AND excluded.estado = 'ATRASO' AND excluded.tiene_salida_adelantada = 1 THEN 'SALIDA_ADELANTADA'
-                    WHEN asistencias.deuda_condonada = 1 AND excluded.estado = 'SALIDA_ADELANTADA' THEN 'OK'
-                    ELSE excluded.estado 
-                END,
-                observaciones=CASE
-                    WHEN asistencias.deuda_condonada = 5 AND excluded.estado IN ('INASISTENCIA', 'FALTA')
-                        THEN CASE WHEN excluded.observaciones LIKE '%[Cierre de Faena / Turno Condonado]%' THEN excluded.observaciones ELSE excluded.observaciones || ' [Cierre de Faena / Turno Condonado]' END
-                    ELSE excluded.observaciones
-                END,
+                minutos_salida_adelantada=excluded.minutos_salida_adelantada,
+                estado=excluded.estado,
+                observaciones=excluded.observaciones,
                 origen=excluded.origen,
                 minutos_exceso_colacion=excluded.minutos_exceso_colacion,
                 minutos_colacion_auto=excluded.minutos_colacion_auto,
@@ -258,18 +240,15 @@ class AsistenciaRepository:
                 hora_inicio_permiso=excluded.hora_inicio_permiso,
                 hora_termino_permiso=excluded.hora_termino_permiso,
                 minutos_permisos_detectados=excluded.minutos_permisos_detectados,
-                tiene_atraso=CASE WHEN asistencias.deuda_condonada IN (2, 3) THEN 0 ELSE excluded.tiene_atraso END,
-                tiene_salida_adelantada=CASE WHEN asistencias.deuda_condonada IN (1, 3) THEN 0 ELSE excluded.tiene_salida_adelantada END,
+                tiene_atraso=excluded.tiene_atraso,
+                tiene_salida_adelantada=excluded.tiene_salida_adelantada,
                 tiene_permiso=excluded.tiene_permiso,
                 num_semana_ganadora=excluded.num_semana_ganadora,
                 marcas_consumidas_ids=excluded.marcas_consumidas_ids,
-                deuda_condonada=CASE 
-                    WHEN excluded.deuda_condonada IN (3, 4, 5) THEN excluded.deuda_condonada
-                    WHEN excluded.deuda_condonada = 0 AND excluded.estado IN ('INASISTENCIA', 'FALTA') THEN 0
-                    WHEN excluded.deuda_condonada = 0 AND asistencias.deuda_condonada IN (4, 5) THEN 0
-                    ELSE asistencias.deuda_condonada
-                END,
+                deuda_condonada=excluded.deuda_condonada,
                 minutos_espera=excluded.minutos_espera,
+                justificacion_id=excluded.justificacion_id,
+                nomenclatura=excluded.nomenclatura,
                 updated_at=datetime('now')
         """
         
@@ -297,8 +276,10 @@ class AsistenciaRepository:
                 d.get('tiene_permiso', 0),
                 d.get('num_semana_ganadora', 1),
                 json.dumps(list(d['marcas_consumidas_ids'])) if isinstance(d.get('marcas_consumidas_ids'), (list, set)) else str(d.get('marcas_consumidas_ids') or '[]'),
-                d.get('deuda_condonada', 0),
+                d.get('deuda_condonada', 0) or 0,
                 d.get('minutos_espera', 0),
+                d.get('justificacion_id'),
+                d.get('nomenclatura'),
             )
             params_list.append(params)
 
@@ -895,7 +876,7 @@ class AsistenciaRepository:
         """Busca si existe un viaje largo activo que cubra una fecha específica para un empleado."""
         query = """
             SELECT * FROM viajes_largos
-            WHERE empleado_id = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+            WHERE empleado_id = ? AND date(fecha_inicio) <= date(?) AND date(fecha_fin) >= date(?)
             ORDER BY id DESC LIMIT 1
         """
         return await self.db.fetch_one(query, (empleado_id, fecha, fecha))

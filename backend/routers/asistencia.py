@@ -663,7 +663,7 @@ async def post_batch_sync(
                             await service.repository.upsert_jornada_especial(je_rec)
                     if all_je_to_delete:
                         for eid_del, f_str in all_je_to_delete:
-                            await service.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ?", (eid_del, f_str))
+                            await service._delete_je_no_validada(eid_del, f_str)
                             
                     elapsed_save = int((_time_mod.time() - t_save) * 1000)
                     logger.info(
