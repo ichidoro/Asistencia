@@ -3509,11 +3509,14 @@ tr:hover .emp-name-cell {
     z-index: 2150 !important;
 }
 
-/* Ajuste de z-index para backdrops apilados dinámicamente en Bootstrap 5 */
-.modal-backdrop:nth-of-type(2) {
+/* Ajuste de z-index para backdrops apilados dinámicamente en Bootstrap 5.
+   Se elige por CUÁNTOS velos hay (hermanos .modal-backdrop previos), no por la posición entre los <div> del
+   body: con :nth-of-type(3) el velo del aviso de bloqueo caía como "tercer div" al terminar el splash, quedaba
+   en z-index 2140 por ENCIMA del modal (2050) y dejaba la pantalla apagada y sin poder tocar nada. */
+.modal-backdrop ~ .modal-backdrop {
     z-index: 2090 !important;
 }
-.modal-backdrop:nth-of-type(3) {
+.modal-backdrop ~ .modal-backdrop ~ .modal-backdrop {
     z-index: 2140 !important;
 }
 .swal2-container {
