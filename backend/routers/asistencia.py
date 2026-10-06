@@ -3108,6 +3108,38 @@ async def get_libreta_foto(
     return FileResponse(str(foto_path), media_type="image/jpeg")
 
 
+@router.delete("/libreta-180h/")
+async def delete_libreta_180h(
+    empleado_id: int = Query(...),
+    fecha: str = Query(...),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Elimina los registros de la libreta Art. 25 bis para un empleado en una fecha dada,
+    remueve la foto asociada y recalcula la asistencia del día dejándolo en estado limpio/pendiente.
+    """
+    try:
+        await service.repository.db.execute(
+            "DELETE FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha = ?",
+            (empleado_id, fecha)
+        )
+        from pathlib import Path
+        foto_path = Path("downloads") / "libretas_180h" / f"{empleado_id}_{fecha}.jpg"
+        if foto_path.is_file():
+            try:
+                foto_path.unlink()
+            except Exception:
+                pass
+
+        await service.procesar_empleado_dia(empleado_id, fecha, save=True, force=True)
+        logger.info(f"🗑️ Libreta 180h eliminada exitosamente para emp={empleado_id} fecha={fecha} por {current_user.username}")
+        return {"status": "success", "message": "Registro de libreta del día eliminado con éxito."}
+    except Exception as e:
+        logger.exception(f"❌ Error eliminando libreta 180h (emp={empleado_id}, fecha={fecha}): {e}")
+        raise HTTPException(status_code=500, detail=f"Error eliminando libreta 180h: {str(e)}")
+
+
 class Libreta180hReabrirRequest(BaseModel):
     empleado_id: int
     fecha: str

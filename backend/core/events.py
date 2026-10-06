@@ -196,6 +196,14 @@ async def lifespan(app: FastAPI):
                 await he_repo.run_backfill()
                 logger.info("✅ [Startup] Backfill de horas extras completado")
 
+                # Asegurar tabla de libreta 180h (Art. 25 bis DT) y limpiezas iniciales
+                try:
+                    from backend.repositories.asistencia import AsistenciaRepository
+                    asist_repo_init = AsistenciaRepository(db)
+                    await asist_repo_init._ensure_libreta_table()
+                except Exception as err_lib:
+                    logger.warning(f"Aviso al asegurar libreta 180h en startup: {err_lib}")
+
                 # Migración: Auto-aprobar intercambios pendientes y reprocesar asistencia
                 try:
                     pendientes = await db.fetch_all("SELECT * FROM intercambios_dias WHERE estado = 'PENDIENTE'")
