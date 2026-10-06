@@ -1,0 +1,330 @@
+/* ============================================================================
+   Refinamiento visual: Empleados, Reportes, 4 Productos y Portería
+   Mismo sistema que el Dashboard (neutros azulados, un acento de marca, color solo para estado).
+   Solo toca estas cuatro pantallas (selectores por id) y no cambia ids ni comportamiento.
+   Movimiento: transform/opacity, ease-out fuerte, <= 200 ms, apagado con prefers-reduced-motion.
+   ========================================================================== */
+
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) {
+  --pg-ink: #14203b;
+  --pg-ink-2: #4a5878;
+  --pg-ink-3: #77839d;
+  --pg-line: #e2e7f0;
+  --pg-line-2: #edf0f6;
+  --pg-fill: #eef1f7;
+  --pg-brand: #1f3a9e;
+  --pg-brand-soft: #e8edfb;
+  --pg-ok: #157a3f;
+  --pg-ok-soft: #e1f4e8;
+  --pg-warn: #9a5400;
+  --pg-warn-soft: #fcefd9;
+  --pg-bad: #b8222d;
+  --pg-bad-soft: #fde7e9;
+  --pg-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  color: var(--pg-ink);
+  font-variant-numeric: tabular-nums;
+  max-width: 1280px;
+  margin-inline: auto;
+}
+
+/* ── Tarjetas: una sola familia, sin sombras pesadas ni franjas laterales ── */
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .card {
+  background: #fff;
+  border: 1px solid var(--pg-line) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .card-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--pg-line-2) !important;
+}
+
+/* ── Controles de formulario ─────────────────────────────────────────────── */
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.form-control, .form-select) {
+  height: 40px;
+  border: 1px solid var(--pg-line);
+  border-radius: 10px;
+  background-color: #fff;
+  color: var(--pg-ink);
+  font-size: 14px;
+  box-shadow: none;
+  transition: border-color 140ms var(--pg-ease), box-shadow 140ms var(--pg-ease);
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.form-control, .form-select):focus {
+  border-color: var(--pg-brand);
+  box-shadow: 0 0 0 3px rgba(31, 58, 158, 0.16);
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.form-label, label.small) {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pg-ink-3);
+  margin-bottom: 4px;
+}
+
+/* ── Botones ─────────────────────────────────────────────────────────────── */
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn {
+  border-radius: 10px;
+  font-weight: 600;
+  transition: transform 120ms var(--pg-ease), background-color 150ms var(--pg-ease), border-color 150ms var(--pg-ease), color 150ms var(--pg-ease);
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn:active { transform: scale(0.97); }
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn:not(.btn-sm) { min-height: 40px; }
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn-primary {
+  background: var(--pg-brand);
+  border-color: var(--pg-brand);
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn-light {
+  background: #fff;
+  border-color: var(--pg-line) !important;
+  color: var(--pg-ink-2);
+  box-shadow: none !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  :is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn-primary:hover { background: #18307f; border-color: #18307f; }
+  :is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .btn-light:hover { background: #f6f8fc; color: var(--pg-ink); }
+}
+
+/* ── Pestañas: subrayado limpio en vez de píldoras sólidas ───────────────── */
+:is(#empleadosTabs, #porteriaTabs, #productos-4-tabs) {
+  display: flex;
+  flex-wrap: nowrap !important;
+  gap: 2px !important;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid var(--pg-line) !important;
+}
+:is(#empleadosTabs, #porteriaTabs, #productos-4-tabs)::-webkit-scrollbar { display: none; }
+:is(#empleadosTabs, #porteriaTabs, #productos-4-tabs) .nav-link {
+  position: relative;
+  flex: none;
+  background: transparent !important;
+  color: var(--pg-ink-2) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 12px 16px !important;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: none !important;
+  transition: color 150ms var(--pg-ease);
+}
+:is(#empleadosTabs, #porteriaTabs, #productos-4-tabs) .nav-link::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pg-brand);
+  transform: scaleX(0);
+  transition: transform 200ms var(--pg-ease);
+}
+:is(#empleadosTabs, #porteriaTabs, #productos-4-tabs) .nav-link.active { color: var(--pg-brand) !important; }
+:is(#empleadosTabs, #porteriaTabs, #productos-4-tabs) .nav-link.active::after { transform: scaleX(1); }
+@media (hover: hover) and (pointer: fine) {
+  :is(#empleadosTabs, #porteriaTabs, #productos-4-tabs) .nav-link:not(.active):hover { color: var(--pg-ink) !important; }
+}
+#page-productos_4 > .mb-4:has(#productos-4-tabs) { margin-bottom: 16px !important; }
+
+/* ── Cabeceras duplicadas: el título ya está en la barra superior ────────── */
+.pg-dup-title { display: none !important; }
+#page-productos_4 > .d-flex:first-child,
+#page-porteria > .row:first-child { border-bottom: 0 !important; margin-bottom: 14px !important; padding-bottom: 0 !important; }
+
+/* ── Tablas ──────────────────────────────────────────────────────────────── */
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.data-table, .table) {
+  font-size: 13.5px;
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.data-table, .table) thead th {
+  background: #fafbfd !important;
+  color: var(--pg-ink-3) !important;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--pg-line) !important;
+  white-space: nowrap;
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.data-table, .table) tbody td {
+  border-color: var(--pg-line-2) !important;
+  vertical-align: middle;
+}
+@media (hover: hover) and (pointer: fine) {
+  :is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.data-table, .table) tbody tr:hover > * { background: #f8faff !important; }
+}
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .table-container,
+:is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) .table-responsive {
+  border: 1px solid var(--pg-line);
+  border-radius: 12px;
+  overflow: auto;
+}
+
+/* ── EMPLEADOS: resumen compacto, sin franjas ni arcoíris ────────────────── */
+#page-empleados > .row:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr) minmax(0, 4fr);
+  gap: 12px;
+  margin: 0 0 16px !important;
+}
+#page-empleados > .row:first-child > * { width: auto; max-width: none; padding: 0; margin: 0; }
+#page-empleados .emp-stat-card {
+  background: #fff;
+  border: 1px solid var(--pg-line);
+  border-radius: 14px;
+  box-shadow: none;
+  padding: 16px 18px;
+}
+#page-empleados .emp-stat-card h6 { font-size: 13px !important; font-weight: 650; color: var(--pg-ink-2) !important; }
+#page-empleados .emp-stat-card .text-muted { color: var(--pg-ink-3) !important; }
+#page-empleados .stat-accent-icon {
+  background: var(--pg-fill) !important;
+  color: var(--pg-ink-2) !important;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+}
+#page-empleados .stat-metric { font-weight: 700; letter-spacing: -0.02em; }
+#page-empleados #areas-breakdown { gap: 6px !important; }
+#page-empleados :is(#areas-breakdown, #active-filter-container) .area-badge {
+  background: #fff;
+  color: var(--pg-ink-2);
+  border: 1px solid var(--pg-line);
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px !important;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#page-empleados #areas-breakdown .area-badge strong { color: var(--pg-ink-3); font-weight: 600; }
+#page-empleados #areas-breakdown .area-badge.active,
+#page-empleados #active-filter-container .area-badge {
+  background: var(--pg-ink);
+  border-color: var(--pg-ink);
+  color: #fff;
+  box-shadow: none !important;
+}
+#page-empleados #areas-breakdown .area-badge.active strong { color: rgba(255, 255, 255, 0.7); }
+@media (hover: hover) and (pointer: fine) {
+  #page-empleados #areas-breakdown .area-badge:not(.active):hover { border-color: #c6cfe0; color: var(--pg-ink); }
+}
+#page-empleados .card-body { padding: 18px !important; }
+#page-empleados .emp-toolbar { gap: 10px; }
+#page-empleados .emp-search-group { border: 1px solid var(--pg-line); border-radius: 10px; background: #fff; }
+#page-empleados .emp-filter-chip {
+  border: 1px solid var(--pg-line);
+  border-radius: 99px;
+  background: #fff;
+  color: var(--pg-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 120ms var(--pg-ease), background-color 150ms var(--pg-ease), color 150ms var(--pg-ease);
+}
+#page-empleados .emp-filter-chip:active { transform: scale(0.97); }
+#page-empleados .emp-filter-chip.active { background: var(--pg-ink); border-color: var(--pg-ink); color: #fff; }
+#page-empleados .emp-inner-tab { font-weight: 600; color: var(--pg-ink-2); }
+#page-empleados .emp-inner-tab.active { color: var(--pg-brand); }
+
+/* ── REPORTES: filtros ordenados y acciones con nombre ───────────────────── */
+#page-reportes > .card:first-child .card-body { padding: 18px !important; }
+#page-reportes .pg-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+#page-reportes .pg-actions .btn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px; font-size: 13.5px; }
+#page-reportes .btn-success { background: var(--pg-ok); border-color: var(--pg-ok); }
+#page-reportes .btn-warning { background: #fff; border-color: #cfd6e4; color: var(--pg-ink-2); }
+#page-reportes .btn-info { background: #fff; border-color: #cfd6e4; color: var(--pg-ink-2) !important; }
+@media (hover: hover) and (pointer: fine) {
+  #page-reportes .btn-warning:hover, #page-reportes .btn-info:hover { background: #f6f8fc; color: var(--pg-ink) !important; }
+}
+
+/* ── 4 PRODUCTOS ─────────────────────────────────────────────────────────── */
+/* Buscador: ícono y campo como una sola pieza (antes: caja gris de 31 px + campo de 40 px, con costura) */
+#filtro-p4-container-buscar .input-group { flex-wrap: nowrap; }
+#filtro-p4-container-buscar .input-group-text {
+  height: 40px;
+  background: #fff;
+  border: 1px solid var(--pg-line);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  color: var(--pg-ink-3);
+}
+#filtro-p4-container-buscar .form-control {
+  background: #fff !important;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  padding-left: 4px;
+  min-width: 0;
+}
+#filtro-p4-container-buscar .input-group:focus-within .input-group-text { border-color: var(--pg-brand); }
+#page-productos_4 .card-body, #page-productos_4 .card { border-radius: 14px; }
+#page-productos_4 .btn-warning { background: #fff; border: 1px solid #cfd6e4; color: var(--pg-ink-2); }
+#page-productos_4 > .d-flex:first-child .btn { border-radius: 10px !important; box-shadow: none !important; }
+
+/* ── PORTERÍA ────────────────────────────────────────────────────────────── */
+#porteria-sync-badge {
+  background: var(--pg-ok-soft) !important;
+  color: var(--pg-ok) !important;
+  box-shadow: none !important;
+  border: 1px solid #cfe9d9;
+  border-radius: 99px !important;
+  padding: 6px 12px !important;
+  font-weight: 600;
+}
+#porteria-sync-badge .status-dot { background: var(--pg-ok) !important; width: 8px; height: 8px; border-radius: 50%; }
+#porteria-sync-text { color: var(--pg-ok); }
+#porteria-guardia-rol { background: var(--pg-brand-soft) !important; color: var(--pg-brand) !important; font-weight: 650; }
+#page-porteria #porteria-auth-guardia-container .mt-3 { display: flex; justify-content: center; }
+#page-porteria #porteria-auth-guardia-container > .card { background: #fff !important; }
+
+/* ── Teléfono ────────────────────────────────────────────────────────────── */
+@media (max-width: 991px) {
+  #page-empleados > .row:first-child { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  #page-empleados > .row:first-child > :first-child { grid-column: 1 / -1; }
+  #page-empleados > .row:first-child > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  #page-empleados > .row:first-child { grid-template-columns: minmax(0, 1fr); }
+  #page-empleados > .row:first-child > * { grid-column: 1 / -1; min-width: 0; max-width: 100%; }
+  #page-empleados .emp-stat-card { min-width: 0; overflow: hidden; }
+  #page-empleados .emp-stat-card { padding: 14px; }
+  #page-empleados #stat-total { font-size: 1.6rem; line-height: 1.1; }
+
+  /* Filtros en dos columnas en vez de una fila por campo */
+  #page-reportes > .card:first-child .row,
+  #page-productos_4 .card:has(#productos-4-filtro-anio) .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0;
+  }
+  #page-reportes > .card:first-child .row > *,
+  #page-productos_4 .card:has(#productos-4-filtro-anio) .row > * { width: auto; max-width: none; padding: 0; margin: 0; min-width: 0; }
+  #page-reportes > .card:first-child .row :is(.form-control, .form-select),
+  #page-productos_4 .card:has(#productos-4-filtro-anio) .row :is(.form-control, .form-select) { width: 100%; min-width: 0; max-width: 100%; }
+  #page-reportes > .card:first-child .row > :nth-child(5),
+  #page-reportes > .card:first-child .row > :nth-child(6),
+  #page-productos_4 .card:has(#productos-4-filtro-anio) .row > :first-child,
+  #page-productos_4 .card:has(#productos-4-filtro-anio) .row > :last-child { grid-column: 1 / -1; }
+  #page-empleados .emp-stat-card .stat-accent-icon { display: none; }
+  #page-empleados .emp-stat-card p.text-muted { display: none; }
+  #page-empleados .emp-stat-card .mb-3 { margin-bottom: 8px !important; }
+  /* Las áreas pasan a una sola fila deslizable en vez de ocupar media pantalla */
+  #page-empleados #areas-breakdown { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 2px 14px; }
+  #page-empleados #areas-breakdown::-webkit-scrollbar { display: none; }
+  #page-empleados #areas-breakdown .area-badge { flex: none; white-space: nowrap; }
+  #page-empleados .card-body { padding: 14px !important; }
+  #page-reportes .pg-actions { width: 100%; }
+  #page-reportes .pg-actions .btn { flex: 1 1 calc(50% - 8px); justify-content: center; height: 44px; }
+  #page-reportes .pg-actions { margin-top: 2px; }
+  :is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) :is(.form-control, .form-select) { height: 44px; font-size: 15px; }
+  #page-productos_4 > .d-flex:first-child { flex-direction: column; align-items: stretch !important; gap: 10px; }
+  #page-porteria > .row:first-child > div { flex-direction: column; align-items: stretch !important; }
+  #porteria-sync-badge { align-self: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(#page-empleados, #page-reportes, #page-productos_4, #page-porteria) * { transition-duration: 0.01ms !important; }
+}

@@ -135,6 +135,23 @@ const Productos4Module = {
         this.refrescarVistaActiva();
     },
 
+    // Búsqueda por texto: el filtrado es local (el servidor no recibe el texto), así que NO hay que volver a
+    // pedir la planilla en cada letra. Antes cada tecla disparaba refrescarVistaActiva(): consulta del período
+    // + evaluación completa + spinner que borraba la grilla, con respuestas que podían llegar en desorden.
+    _buscarTimer: null,
+    buscarConRetardo() {
+        clearTimeout(this._buscarTimer);
+        this._buscarTimer = setTimeout(() => {
+            if (this.activeTab === 'asignacion' && Array.isArray(this.evaluaciones) && this.evaluaciones.length) {
+                this.renderizarEvaluaciones();
+            } else if (this.activeTab === 'entrega' && Array.isArray(this.entregas)) {
+                this.renderizarEntrega(this.entregas);
+            } else {
+                this.refrescarVistaActiva();
+            }
+        }, 220);
+    },
+
     async refrescarVistaActiva() {
         await this.verificarEstadoPeriodo();
         if (this.activeTab === 'asignacion') {
@@ -1044,6 +1061,7 @@ const Productos4Module = {
             if (!response.ok) throw new Error("Error al obtener la lista de entregas.");
             const data = await response.json();
             
+            this.entregas = data;
             this.renderizarEntrega(data);
         } catch (error) {
             content.innerHTML = `

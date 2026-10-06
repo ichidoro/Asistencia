@@ -146,6 +146,7 @@
     <link rel="stylesheet" href="/static/css/aguacol-theme.css?v={{ startup_id }}">
     <!-- Ajustes móviles (después del tema y de responsive.css) -->
     <link rel="stylesheet" href="/static/css/mobile-ui.css?v={{ startup_id }}">
+    <link rel="stylesheet" href="/static/css/pages-refresh.css?v={{ startup_id }}">
 </head>
 
 <body>
@@ -608,7 +609,7 @@
                     <div class="row g-3 mb-4">
                         <!-- Estado Diario -->
                         <div class="col-lg-5 col-md-6">
-                            <div class="emp-stat-card h-100" style="border-left-color: #3b82f6 !important;">
+                            <div class="emp-stat-card h-100">
                                 <div class="d-flex align-items-center gap-2 mb-3">
                                     <div class="stat-accent-icon" style="background: #eff6ff; color: #3b82f6;"><i class="bi bi-calendar2-check"></i></div>
                                     <div>
@@ -635,7 +636,7 @@
 
                         <!-- Total Empleados -->
                         <div class="col-lg-3 col-md-6">
-                            <div class="emp-stat-card h-100" style="border-left-color: #3f6fd6 !important;">
+                            <div class="emp-stat-card h-100">
                                 <div class="d-flex align-items-center gap-2 mb-3">
                                     <div class="stat-accent-icon" style="background: #eaf0fb; color: #3f6fd6;"><i class="bi bi-people-fill"></i></div>
                                     <h6 class="mb-0 fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">Total Empleados</h6>
@@ -650,7 +651,7 @@
 
                         <!-- Distribución por Área -->
                         <div class="col-lg-4 col-12">
-                            <div class="emp-stat-card h-100" style="border-left-color: #10b981 !important;" id="stat-card-areas">
+                            <div class="emp-stat-card h-100" id="stat-card-areas">
                                 <div class="d-flex align-items-center gap-2 mb-3">
                                     <div class="stat-accent-icon" style="background: #ecfdf5; color: #10b981;"><i class="bi bi-diagram-3-fill"></i></div>
                                     <div>
@@ -1251,22 +1252,22 @@
                                         <option value="">Todos</option>
                                     </select>
                                 </div>
-                                <div class="col-md-auto d-flex align-items-end gap-2">
-                                    <button class="btn btn-primary btn-sm flex-grow-1" onclick="loadReporte()" title="Filtrar">
-                                        <i class="bi bi-search"></i>
+                                <div class="col-md-auto d-flex align-items-end gap-2 pg-actions">
+                                    <button class="btn btn-primary btn-sm" onclick="loadReporte()" title="Filtrar">
+                                        <i class="bi bi-search"></i> Buscar
                                     </button>
                                     <button class="btn btn-success btn-sm" onclick="downloadExcelReport()"
                                         title="Descargar Excel" id="btn-descargar-excel" data-permiso="reportes.exportar">
-                                        <i class="bi bi-file-earmark-excel"></i>
+                                        <i class="bi bi-file-earmark-excel"></i> Excel
                                     </button>
                                     <button class="btn btn-warning btn-sm" onclick="triggerEngine()" title="Reprocesar"
                                         id="btn-reportes-reprocesar" data-permiso="reportes.reprocesar">
-                                        <i class="bi bi-gear-fill"></i>
+                                        <i class="bi bi-gear-fill"></i> Reprocesar
                                     </button>
                                     <button class="btn btn-info btn-sm text-white" onclick="openSyncAsistenciaModal()"
                                         title="Sincronizar Asistencia"
                                         id="btn-reportes-sincronizar" data-permiso="reportes.sincronizar">
-                                        <i class="bi bi-cloud-arrow-down-fill"></i>
+                                        <i class="bi bi-cloud-arrow-down-fill"></i> Sincronizar
                                     </button>
 
                                 </div>
@@ -1346,7 +1347,7 @@
                     <!-- Cabecera Premium -->
                     <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                         <div>
-                            <h2 class="fw-bold mb-1"><i class="bi bi-gift me-2" aria-hidden="true"></i>4 Productos</h2>
+                            <h2 class="fw-bold mb-1 pg-dup-title"><i class="bi bi-gift me-2" aria-hidden="true"></i>4 Productos</h2>
                             <p class="text-muted mb-0 small">Planilla de asignación, consolidación y entrega de productos de fabricación propia para personal calificado.</p>
                         </div>
                         <div class="d-flex align-items-center gap-2">
@@ -1382,11 +1383,11 @@
                     <div class="card shadow-sm border-0 mb-4 bg-white" style="border-radius: 12px;">
                         <div class="card-body p-3">
                             <div class="row g-3 align-items-end">
-                                <div class="col-lg-2 col-md-4" id="filtro-p4-container-buscar">
+                                <div class="col-lg-3 col-md-6" id="filtro-p4-container-buscar">
                                     <label for="productos-4-search" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar Empleado</label>
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light border-end-0"><i class="bi bi-funnel text-muted"></i></span>
-                                        <input type="text" id="productos-4-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="Productos4Module.refrescarVistaActiva()">
+                                        <input type="text" id="productos-4-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="Productos4Module.buscarConRetardo()" autocomplete="off">
                                     </div>
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-sm-6" id="filtro-p4-container-area">
@@ -1422,7 +1423,7 @@
                                         <option value="2028">2028</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-3 col-md-4" id="filtro-p4-container-estado">
+                                <div class="col-lg-2 col-md-4" id="filtro-p4-container-estado">
                                     <label for="productos-4-filtro-estado" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-filter-circle me-1"></i>Filtrar Estado</label>
                                     <select id="productos-4-filtro-estado" class="form-select form-select-sm bg-light" onchange="Productos4Module.refrescarVistaActiva()">
                                         <option value="todos">Todos los Empleados</option>
@@ -1484,7 +1485,7 @@
                     <div class="row mb-4">
                         <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
-                                <h2 class="fw-bold mb-1"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Portería y Control de Ronda</h2>
+                                <h2 class="fw-bold mb-1 pg-dup-title"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Portería y Control de Ronda</h2>
                                 <p class="text-muted mb-0">Módulo de control de rondas nocturnas perimetrales en planta.</p>
                             </div>
                             <!-- Indicador Offline/Sincronización -->
