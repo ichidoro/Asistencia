@@ -12,9 +12,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aguacol">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/static/assets/img/icons/icon-192.png?v=20">
-    <link rel="icon" href="/static/favicon.ico?v=20">
+    <link rel="manifest" href="/manifest.json?v=21">
+    <link rel="apple-touch-icon" href="/static/assets/img/icons/app-icon-192.png">
+    <link rel="icon" href="/static/favicon.ico?v=21">
     <!-- Premium UI (Fase V11) -->
     <script src="/static/js/sweetalert2.all.min.js" defer></script>
     <script src="/static/js/ui_dialogs.js?v={{ startup_id }}" defer></script>
@@ -5533,7 +5533,7 @@
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register("/sw.js?v=20", { scope: '/' })
+        navigator.serviceWorker.register("/sw.js?v=21", { scope: '/' })
             .then(reg => console.log('✅ [PWA] Service Worker registrado:', reg.scope))
             .catch(err => console.warn('⚠️ [PWA] Error registrando SW:', err));
     });
