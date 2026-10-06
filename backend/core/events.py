@@ -224,7 +224,21 @@ async def lifespan(app: FastAPI):
                         logger.success("✅ [Startup Migration] Auto-aprobación de intercambios completada y reprocesamientos en cola")
                 except Exception as mig_err:
                     logger.warning(f"⚠️ [Startup Migration] Error al migrar intercambios: {mig_err}")
-                
+
+                # Limpieza puntual de prueba solicitada para Rafael Arroyo Pérez (01-10-2026)
+                try:
+                    emp_arr = await db.fetch_one("SELECT id FROM empleados WHERE nombre LIKE '%ARROYO PEREZ%RAFAEL%' LIMIT 1")
+                    if emp_arr:
+                        arr_id = emp_arr['id']
+                        await db.execute("DELETE FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha = '2026-10-01'", (arr_id,))
+                        from pathlib import Path
+                        foto_p = Path("downloads") / "libretas_180h" / f"{arr_id}_2026-10-01.jpg"
+                        if foto_p.exists():
+                            foto_p.unlink(missing_ok=True)
+                        logger.info(f"🧹 [Startup] Registro de prueba libreta 180h 01-10-2026 limpiado para empleado {arr_id}")
+                except Exception as arr_err:
+                    logger.warning(f"⚠️ Error limpiando prueba Arroyo: {arr_err}")
+
                 # ── Rolling Window Sync de Feriados ──────────────────────────────
                 # Garantiza año actual completo + 2 meses adelante.
                 # Barato si ya están cargados (solo COUNT queries).

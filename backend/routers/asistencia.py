@@ -3243,6 +3243,61 @@ async def save_libreta_180h(
         raise HTTPException(status_code=500, detail=f"Error guardando Libreta 180h: {str(e)}")
 
 
+
+@router.delete("/libreta-180h/")
+async def delete_libreta_180h(
+    empleado_id: int = Query(...),
+    fecha: str = Query(...),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Elimina el registro de la libreta Art. 25 bis para un empleado y fecha.
+    Elimina la fotografía archivada en el servidor y recalcula la asistencia
+    del día devolviéndolo a su estado natural (LIBRE o PENDIENTE).
+    """
+    try:
+        deleted = await service.repository.delete_libreta_180h(empleado_id, fecha)
+        if not deleted:
+            logger.warning(f"⚠️ No se encontró registro de libreta para emp={empleado_id}, fecha={fecha}")
+
+        # Eliminar archivo de foto en disco si existe
+        try:
+            from pathlib import Path
+            libretas_dir = Path("downloads") / "libretas_180h"
+            foto_file = libretas_dir / f"{empleado_id}_{fecha}.jpg"
+            if foto_file.exists():
+                foto_file.unlink(missing_ok=True)
+                logger.info(f"🗑️ Fotografía física de libreta eliminada: {foto_file}")
+        except Exception as photo_del_err:
+            logger.warning(f"⚠️ Error eliminando foto física en disco: {photo_del_err}")
+
+        # Recalcular asistencia para volver al estado natural (LIBRE o PENDIENTE)
+        res_dia = await service.procesar_empleado_dia(empleado_id, fecha, save=True, force=True)
+
+        try:
+            val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+            val_user = getattr(current_user, 'username', 'sistema')
+            await service.repository.db.execute("""
+                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+                VALUES (?, ?, ?, ?, ?)
+            """, (val_id, val_user, 'DELETE_LIBRETA_180H', 'Marcaciones',
+                  f"Eliminado registro de Libreta 180h de empleado {empleado_id} en fecha {fecha}"))
+        except Exception:
+            pass
+
+        return {
+            "status": "success",
+            "message": f"Registro de libreta del {fecha} eliminado correctamente.",
+            "resultado_asistencia": res_dia
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error en delete_libreta_180h (emp={empleado_id}, fecha={fecha}): {e}")
+        raise HTTPException(status_code=500, detail=f"Error eliminando registro de Libreta 180h: {str(e)}")
+
+
 # ═══════════════════════════════════════════════════════════════════
 # ESCANEO INTELIGENTE LIBRETA 180H CON GOOGLE GEMINI VISION (AI)
 # ═══════════════════════════════════════════════════════════════════

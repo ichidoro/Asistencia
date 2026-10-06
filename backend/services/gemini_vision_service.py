@@ -14,10 +14,10 @@ class GeminiVisionService:
     """
     Servicio de reconocimiento visual inteligente para Libretas de Control de Jornada
     de Choferes (Art. 25 bis DT / Res. Ex. 1213) utilizando Google Gemini Vision.
-    Aprovecha la cuota gratuita (Free Tier) de Google AI Studio (hasta 1.500 solicitudes/día gratis).
+    Conectado a la API empresarial de Google Cloud del proyecto "180 horas".
     """
 
-    DEFAULT_GEMINI_KEY = "AIzaSyDjO4YUw2SAPg1bLLJs25kcTKB2wIdmd1c"
+    DEFAULT_GEMINI_KEY = "AIzaSyB0OTUzhVds80IrLnR255voIU1LOBOU4Uk"
 
     @property
     def api_key(self) -> str:
@@ -64,7 +64,7 @@ class GeminiVisionService:
         return (
             getattr(settings, "GEMINI_MODEL", None)
             or os.environ.get("GEMINI_MODEL")
-            or "gemini-3.6-flash"
+            or "gemini-2.5-flash"
         )
 
 
@@ -203,7 +203,7 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 
         # Modelos a intentar en orden de preferencia y resiliencia ante alta demanda
         candidate_models = [self.model]
-        for fallback_m in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]:
+        for fallback_m in ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.6-flash", "gemini-2.5-pro"]:
             if fallback_m not in candidate_models:
                 candidate_models.append(fallback_m)
 

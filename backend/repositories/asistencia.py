@@ -452,6 +452,21 @@ class AsistenciaRepository:
                 logger.error(f"❌ Error en upsert_libreta_180h: {e}")
                 raise
 
+    async def delete_libreta_180h(self, empleado_id: int, fecha: str) -> bool:
+        """
+        Elimina el registro de la libreta Art. 25 bis para un empleado y fecha.
+        """
+        query = "DELETE FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha = ?"
+        try:
+            await self.db.execute(query, (empleado_id, fecha))
+            return True
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "no such table" in err_msg:
+                return True
+            logger.error(f"❌ Error en delete_libreta_180h: {e}")
+            return False
+
     async def get_libretas_periodo(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """
         Obtiene todas las libretas de un empleado en un rango de fechas.

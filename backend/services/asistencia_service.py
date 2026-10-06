@@ -2300,13 +2300,16 @@ class AsistenciaService:
                     '_jornada_especial': None,
                     '_jornada_adicional': None
                 }
-            elif es_180h_dt:
-                # Empleado 180h sin libreta cargada: desde el 01-10-2026 se controla SOLO por libreta ("sin reloj").
-                # Las marcas del reloj se ignoran aunque existan; el día queda pendiente hasta registrar la libreta.
-                today_str = _get_now_local().strftime("%Y-%m-%d")
-                if fecha >= today_str:
-                    resultado = None
-                else:
+            elif es_180h_dt and not (is_bolsa and viaje_largo):
+                # Chofer 180h sin libreta cargada (y sin viaje largo activo).
+                # Verificar primero justificaciones, feriado y descanso programado en el turno.
+                justs_dia = [
+                    j for j in (justificaciones or [])
+                    if j.get('fecha_inicio', '') <= fecha <= j.get('fecha_fin', '')
+                ]
+                if justs_dia:
+                    j = justs_dia[0]
+                    tipo_nom = (j.get('tipo_nombre') or 'JUSTIFICADO').upper()
                     resultado = {
                         'empleado_id': empleado_id,
                         'fecha': fecha,
@@ -2333,13 +2336,122 @@ class AsistenciaService:
                         'tiene_salida_adelantada': 0,
                         'tiene_permiso': 0,
                         'alerta_atraso': False,
-                        'estado': 'PENDIENTE',
-                        'observaciones': '[Pendiente Marcación Libreta 180h]',
-                        'origen': 'LIBRETA_180H',
+                        'estado': tipo_nom,
+                        'nomenclatura': j.get('tipo_nomenclatura'),
+                        'justificacion_id': j.get('id'),
+                        'observaciones': f"Justificación: {tipo_nom}. ",
+                        'origen': 'JUSTIFICACION',
                         'marcas_consumidas_ids': [],
                         '_jornada_especial': None,
                         '_jornada_adicional': None
                     }
+                elif is_holiday:
+                    desc_fer = feriados_dict.get(fecha, 'Feriado Legal')
+                    resultado = {
+                        'empleado_id': empleado_id,
+                        'fecha': fecha,
+                        'hora_entrada_real': None,
+                        'hora_salida_real': None,
+                        'hora_salida_colacion': None,
+                        'hora_entrada_colacion': None,
+                        'hora_inicio_permiso': None,
+                        'hora_termino_permiso': None,
+                        'horas_teoricas': 0.0,
+                        'horas_trabajadas': 0.0,
+                        'minutos_espera': 0,
+                        'minutos_colacion': 0,
+                        'minutos_colacion_real': 0,
+                        'minutos_colacion_auto': 0,
+                        'minutos_exceso_colacion': 0,
+                        'minutos_permisos_detectados': 0,
+                        'minutos_permiso_personal_deuda': 0,
+                        'minutos_atraso': 0.0,
+                        'minutos_salida_adelantada': 0.0,
+                        'minutos_extra_bruto': 0.0,
+                        'minutos_deuda': 0.0,
+                        'tiene_atraso': 0,
+                        'tiene_salida_adelantada': 0,
+                        'tiene_permiso': 0,
+                        'alerta_atraso': False,
+                        'estado': 'FERIADO',
+                        'observaciones': f"Feriado: {desc_fer}",
+                        'origen': 'FERIADO',
+                        'marcas_consumidas_ids': [],
+                        '_jornada_especial': None,
+                        '_jornada_adicional': None
+                    }
+                elif config_dia and config_dia.get('es_libre'):
+                    resultado = {
+                        'empleado_id': empleado_id,
+                        'fecha': fecha,
+                        'hora_entrada_real': None,
+                        'hora_salida_real': None,
+                        'hora_salida_colacion': None,
+                        'hora_entrada_colacion': None,
+                        'hora_inicio_permiso': None,
+                        'hora_termino_permiso': None,
+                        'horas_teoricas': 0.0,
+                        'horas_trabajadas': 0.0,
+                        'minutos_espera': 0,
+                        'minutos_colacion': 0,
+                        'minutos_colacion_real': 0,
+                        'minutos_colacion_auto': 0,
+                        'minutos_exceso_colacion': 0,
+                        'minutos_permisos_detectados': 0,
+                        'minutos_permiso_personal_deuda': 0,
+                        'minutos_atraso': 0.0,
+                        'minutos_salida_adelantada': 0.0,
+                        'minutos_extra_bruto': 0.0,
+                        'minutos_deuda': 0.0,
+                        'tiene_atraso': 0,
+                        'tiene_salida_adelantada': 0,
+                        'tiene_permiso': 0,
+                        'alerta_atraso': False,
+                        'estado': 'LIBRE',
+                        'observaciones': 'Día Libre según Turno',
+                        'origen': 'TURNO',
+                        'marcas_consumidas_ids': [],
+                        '_jornada_especial': None,
+                        '_jornada_adicional': None
+                    }
+                else:
+                    today_str = _get_now_local().strftime("%Y-%m-%d")
+                    if fecha >= today_str:
+                        resultado = None
+                    else:
+                        resultado = {
+                            'empleado_id': empleado_id,
+                            'fecha': fecha,
+                            'hora_entrada_real': None,
+                            'hora_salida_real': None,
+                            'hora_salida_colacion': None,
+                            'hora_entrada_colacion': None,
+                            'hora_inicio_permiso': None,
+                            'hora_termino_permiso': None,
+                            'horas_teoricas': 0.0,
+                            'horas_trabajadas': 0.0,
+                            'minutos_espera': 0,
+                            'minutos_colacion': 0,
+                            'minutos_colacion_real': 0,
+                            'minutos_colacion_auto': 0,
+                            'minutos_exceso_colacion': 0,
+                            'minutos_permisos_detectados': 0,
+                            'minutos_permiso_personal_deuda': 0,
+                            'minutos_atraso': 0.0,
+                            'minutos_salida_adelantada': 0.0,
+                            'minutos_extra_bruto': 0.0,
+                            'minutos_deuda': 0.0,
+                            'tiene_atraso': 0,
+                            'tiene_salida_adelantada': 0,
+                            'tiene_permiso': 0,
+                            'alerta_atraso': False,
+                            'estado': 'PENDIENTE',
+                            'observaciones': '[Pendiente Marcación Libreta 180h]',
+                            'origen': 'TURNO',
+                            'marcas_consumidas_ids': [],
+                            '_jornada_especial': None,
+                            '_jornada_adicional': None
+                        }
             else:
                 todos_ciclos_dia = None
                 if asignacion and 'turnos_src' in locals() and turnos_src:
