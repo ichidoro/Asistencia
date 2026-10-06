@@ -160,24 +160,14 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO (RFC 8259) SIN COMENTARIOS NI
 - Todas las cadenas deben ir entre comillas dobles obligatoriamente.
 - No uses comas decimales (usa 0.95 con punto).
 - No uses comentarios ni comas finales antes de cerrar llaves o corchetes.
-- Si un campo no se detecta, usa null sin comillas o cadena vacía "".
+- slots_96 DEBE ser un arreglo plano de exactamente 96 números enteros (0, 1, 2, 3 o 4).
 ESQUEMA EXACTO:
 {{
   "exito": true,
+  "slots_96": [0, 0, 1, 1, 1, 1, 2, 2, 0, 0],
   "fecha_detectada": "YYYY-MM-DD",
   "conductor_detectado": "Nombre del chofer",
   "confianza": 0.95,
-  "tramos": [
-    {{"inicio": "06:00", "fin": "10:00", "actividad": "CONDUCCION", "duracion_horas": 4.0}},
-    {{"inicio": "10:30", "fin": "20:00", "actividad": "AUXILIARES", "duracion_horas": 9.5}}
-  ],
-  "slots_96": [0, 0, 1, 1, 3, 3],
-  "resumen_horas": {{
-    "minutos_conduccion": 240,
-    "minutos_espera": 0,
-    "minutos_auxiliares": 570,
-    "minutos_descanso": 0
-  }},
   "observaciones": "Detalles observados del trazo y lectura"
 }}"""
 
@@ -361,7 +351,17 @@ ESQUEMA EXACTO:
         sane = re.sub(r"(?<=[:\[,])\s*'([^']*)'\s*(?=[,\]}])", r' "\1"', sane)
         sane = re.sub(r"'([^']+)'\s*:", r'"\1":', sane)
 
-        # g) Comas finales antes de } o ]
+        # g) Comas faltantes entre objetos adyacentes: } { -> }, {
+        sane = re.sub(r'\}\s*\{', '}, {', sane)
+        sane = re.sub(r'\]\s*\[', '], [', sane)
+
+        # h) Comas faltantes entre pares clave-valor en líneas distintas
+        sane = re.sub(r'("(?:[^"\\]|\\.)*")\s*\n\s*(")', r'\1,\n\2', sane)
+        sane = re.sub(r'(\d+(?:\.\d+)?|true|false|null)\s*\n\s*(")', r'\1,\n\2', sane)
+        sane = re.sub(r'(\})\s*\n\s*(")', r'\1,\n\2', sane)
+        sane = re.sub(r'(\])\s*\n\s*(")', r'\1,\n\2', sane)
+
+        # i) Comas finales antes de } o ]
         sane = re.sub(r",\s*([}\]])", r"\1", sane)
 
         try:
@@ -378,8 +378,8 @@ ESQUEMA EXACTO:
         except Exception:
             pass
 
-        # 4. Fallback de rescate directo de slots_96 mediante regex
-        slots_match = re.search(r'["\']?slots_96["\']?\s*:\s*\[([0-4,\s]+)\]', text)
+        # 4. Fallback de rescate directo de slots_96 mediante regex sobre el texto original
+        slots_match = re.search(r'["\']?slots_96["\']?\s*:\s*\[([^\]]+)\]', text)
         if slots_match:
             raw_nums = re.findall(r'[0-4]', slots_match.group(1))
             if len(raw_nums) >= 20:
@@ -397,6 +397,49 @@ ESQUEMA EXACTO:
 
         # Si todo falló, intentar json.loads para generar la traza descriptiva
         return json.loads(sane)
+
+    def _build_tramos_from_slots(self, slots_96: List[int]) -> List[Dict[str, Any]]:
+        """Calcula y agrupa matemáticamente los tramos horarios continuos desde los 96 slots."""
+        act_names = {
+            1: "CONDUCCION",
+            2: "ESPERA",
+            3: "AUXILIARES",
+            4: "DESCANSO"
+        }
+        tramos = []
+        if not slots_96 or len(slots_96) != 96:
+            return tramos
+
+        curr_act = None
+        start_slot = 0
+
+        for s_idx, act in enumerate(slots_96):
+            if act != curr_act:
+                if curr_act and curr_act in act_names:
+                    start_h = f"{start_slot * 15 // 60:02d}:{start_slot * 15 % 60:02d}"
+                    end_h = f"{s_idx * 15 // 60:02d}:{s_idx * 15 % 60:02d}"
+                    dur_h = round((s_idx - start_slot) * 15 / 60.0, 2)
+                    tramos.append({
+                        "inicio": start_h,
+                        "fin": end_h,
+                        "actividad": act_names[curr_act],
+                        "duracion_horas": dur_h
+                    })
+                curr_act = act
+                start_slot = s_idx
+
+        if curr_act and curr_act in act_names:
+            start_h = f"{start_slot * 15 // 60:02d}:{start_slot * 15 % 60:02d}"
+            end_h = "24:00"
+            dur_h = round((96 - start_slot) * 15 / 60.0, 2)
+            tramos.append({
+                "inicio": start_h,
+                "fin": end_h,
+                "actividad": act_names[curr_act],
+                "duracion_horas": dur_h
+            })
+
+        return tramos
 
     def _process_gemini_response(self, resp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extrae y normaliza la respuesta JSON de Gemini."""
@@ -438,6 +481,7 @@ ESQUEMA EXACTO:
                     slots = slots[:96]
 
             parsed["slots_96"] = slots
+            parsed["tramos"] = self._build_tramos_from_slots(slots)
             parsed["exito"] = True
 
             # Recalcular totales precisos basados en los slots

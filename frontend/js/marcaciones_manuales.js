@@ -2747,14 +2747,16 @@ async function proceedToMarcacion180h() {
             const previewContainer = document.getElementById('m180-ocr-preview-container');
             const previewImg = document.getElementById('m180-ocr-preview-img');
             if (data.foto_url && previewContainer && previewImg) {
-                previewImg.src = data.foto_url;
+                const authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+                const authFotoUrl = authToken ? `${data.foto_url}&token=${encodeURIComponent(authToken)}` : data.foto_url;
+                previewImg.src = authFotoUrl;
                 previewContainer.classList.remove('d-none');
                 const textEl = previewContainer.querySelector('.small');
                 if (textEl) {
                     textEl.innerHTML = `
                         <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
                             <div><strong class="text-dark">Foto física archivada</strong> · Planilla respaldada en el servidor.</div>
-                            <a href="${data.foto_url}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right me-1"></i>Ver en Grande</a>
+                            <a href="${authFotoUrl}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right me-1"></i>Ver en Grande</a>
                         </div>
                     `;
                 }
@@ -3508,14 +3510,16 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
         const previewImg = document.getElementById('m180-ocr-preview-img');
         const previewContainer = document.getElementById('m180-ocr-preview-container');
         if (previewImg && previewContainer) {
-            previewImg.src = data.foto_url || base64Jpeg;
+            const authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+            const authFotoUrl = (data.foto_url && authToken) ? `${data.foto_url}&token=${encodeURIComponent(authToken)}` : (data.foto_url || base64Jpeg);
+            previewImg.src = base64Jpeg || authFotoUrl;
             previewContainer.classList.remove('d-none');
             const textEl = previewContainer.querySelector('.small');
-            if (textEl && data.foto_url) {
+            if (textEl && authFotoUrl) {
                 textEl.innerHTML = `
                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
                         <div><strong class="text-dark">Foto física archivada</strong> · Planilla respaldada en el servidor.</div>
-                        <a href="${data.foto_url}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right me-1"></i>Ver en Grande</a>
+                        <a href="${authFotoUrl}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:0.75rem;"><i class="bi bi-box-arrow-up-right me-1"></i>Ver en Grande</a>
                     </div>
                 `;
             }

@@ -3095,6 +3095,7 @@ async def get_libreta_180h(
 async def get_libreta_foto(
     empleado_id: int = Query(...),
     fecha: str = Query(...),
+    token: Optional[str] = Query(None, description="Token JWT para previsualización directa en navegador"),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
 ):
     """
