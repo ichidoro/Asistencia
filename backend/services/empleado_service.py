@@ -491,6 +491,19 @@ class EmpleadoService:
         """Obtener metadatos únicos con RLS"""
         return await self.repository.get_unique_metadata(areas=areas_permitidas)
 
+    async def get_areas_con_horario(
+        self,
+        areas_permitidas: Optional[List[str]] = None,
+        fecha_desde: Optional[str] = None,
+        fecha_hasta: Optional[str] = None
+    ) -> List[str]:
+        """Obtener áreas con empleados activos que tienen turnos/horarios asignados"""
+        return await self.repository.get_areas_con_horario(
+            areas=areas_permitidas,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta
+        )
+
     async def get_lookup(self, area: Optional[str] = None, activo: Optional[bool] = None, areas_permitidas: Optional[List[str]] = None) -> List[dict]:
         """Obtener lista mínima de empleados para dropdowns"""
         return await self.repository.get_lookup(area, activo, areas_permitidas)

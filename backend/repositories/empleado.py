@@ -4,7 +4,7 @@ Capa de acceso a datos para Empleados
 """
 
 from typing import List, Optional, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 from loguru import logger
 
 from backend.core.database import Database
@@ -978,6 +978,9 @@ class EmpleadoRepository:
         else:
             metadata["areas"] = [r["nombre"] for r in await self.db.fetch_all("SELECT nombre FROM areas ORDER BY nombre")]
         
+        # Áreas con empleados que tienen horarios asignados (para grilla de asistencia)
+        metadata["areas_con_horario"] = await self.get_areas_con_horario(areas=areas)
+        
         # Compañías
         # Apply area filter to companies as well.
         companias_query = f"SELECT DISTINCT compania FROM empleados {area_filter_clause}"
@@ -988,6 +991,56 @@ class EmpleadoRepository:
         metadata["companias"] = [r["compania"] for r in await self.db.fetch_all(companias_query, tuple(area_params) if area_params else None)]
         
         return metadata
+
+    async def get_areas_con_horario(
+        self,
+        areas: Optional[List[str]] = None,
+        fecha_desde: Optional[str] = None,
+        fecha_hasta: Optional[str] = None
+    ) -> List[str]:
+        """
+        Obtiene las áreas que tienen empleados activos con turnos/horarios asignados.
+        Si se proporcionan fechas (periodo), valida que el turno esté vigente en ese rango.
+        Si no, toma asignaciones activas/recientes.
+        """
+        limit_date = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+        
+        query = """
+            SELECT DISTINCT COALESCE(a_hist.nombre, a_emp.nombre) AS area
+            FROM empleados e
+            JOIN asignacion_turnos ast ON e.id = ast.empleado_id
+            LEFT JOIN (
+                SELECT empleado_id, MAX(area_id) as area_id
+                FROM historial_areas
+                WHERE es_actual = 1 AND validado = 1
+                GROUP BY empleado_id
+            ) ha ON e.id = ha.empleado_id
+            LEFT JOIN areas a_hist ON ha.area_id = a_hist.id
+            LEFT JOIN areas a_emp ON e.area_id = a_emp.id
+            WHERE (e.activo = 1 OR (e.activo = 0 AND e.fecha_salida IS NOT NULL AND e.fecha_salida >= ?))
+              AND (e.excluido_asistencia = 0 OR e.excluido_asistencia IS NULL)
+        """
+        params: list = [limit_date]
+
+        if fecha_desde and fecha_hasta:
+            query += " AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin = '' OR ast.fecha_fin >= ?)"
+            params.extend([fecha_hasta, fecha_desde])
+        else:
+            query += " AND (ast.fecha_fin IS NULL OR ast.fecha_fin = '' OR ast.fecha_fin >= ?)"
+            params.append(limit_date)
+
+        if areas and len(areas) > 0:
+            placeholders = ",".join(["?"] * len(areas))
+            query += f" AND COALESCE(a_hist.nombre, a_emp.nombre) IN ({placeholders})"
+            params.extend(areas)
+
+        query += """
+            AND COALESCE(a_hist.nombre, a_emp.nombre) IS NOT NULL
+            AND COALESCE(a_hist.nombre, a_emp.nombre) != ''
+            ORDER BY area ASC
+        """
+        rows = await self.db.fetch_all(query, tuple(params))
+        return [r["area"] for r in rows if r["area"]]
 
     async def get_lookup(self, area: Optional[str] = None, activo: Optional[bool] = None, areas_permitidas: Optional[List[str]] = None) -> List[dict]:
         """

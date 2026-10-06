@@ -1177,12 +1177,14 @@ async def get_filters_data(
     turno_id: Optional[int] = Query(None),
     mes: Optional[int] = Query(None),
     anio: Optional[int] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
     emp_service: EmpleadoService = Depends(get_empleado_service),
     turno_service: TurnoService = Depends(get_turno_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
 ):
     """
-    Endpoint consolidado para obtener empleados y turnos para los filtros con RLS.
+    Endpoint consolidado para obtener empleados, turnos y áreas filtradas para los filtros con RLS.
     Soporta cascada 4 niveles: Mes/Año → Área → Horario → Empleado.
     Optimiza la performance al reducir el número de peticiones.
     """
@@ -1191,6 +1193,21 @@ async def get_filters_data(
         current_user.verificar_acceso_area(area, "el área solicitada")
     areas_permitidas = current_user.get_areas_filter()
     
+    # 0. Áreas con empleados que tienen horarios/turnos asignados
+    f_desde = fecha_inicio
+    f_hasta = fecha_fin
+    if not f_desde and mes and anio:
+        import calendar as _cal
+        _, ult = _cal.monthrange(anio, mes)
+        f_desde = f"{anio:04d}-{mes:02d}-01"
+        f_hasta = f"{anio:04d}-{mes:02d}-{ult:02d}"
+
+    areas_con_horario = await emp_service.get_areas_con_horario(
+        areas_permitidas=areas_permitidas,
+        fecha_desde=f_desde,
+        fecha_hasta=f_hasta
+    )
+
     # 1. Obtener turnos del área (sin detalles de días para velocidad)
     turnos = await turno_service.get_all_turnos(area=area, include_details=False, areas_permitidas=areas_permitidas)
     
@@ -1226,6 +1243,7 @@ async def get_filters_data(
         empleados = await emp_service.get_lookup(area=area, activo=True, areas_permitidas=areas_permitidas)
     
     return {
+        "areas": areas_con_horario,
         "empleados": empleados,
         "turnos": turnos
     }

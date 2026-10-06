@@ -200,11 +200,16 @@ async function initMarcacionesUI() {
             // Fix #A: usar caché — no ir a la BD si ya tenemos los datos
             const metadata = await getMetadata();
             const areaSelect = document.getElementById('marcacion-area');
-            if (areaSelect && metadata.areas) {
+            const areasList = (metadata.areas_con_horario && metadata.areas_con_horario.length > 0)
+                ? metadata.areas_con_horario
+                : (metadata.areas || []);
+            if (areaSelect && areasList) {
                 const currentVal = areaSelect.value;
                 areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
-                    metadata.areas.map(a => `<option value="${a}">${a}</option>`).join('');
-                if (currentVal) areaSelect.value = currentVal;
+                    areasList.map(a => `<option value="${a}">${a}</option>`).join('');
+                if (currentVal && areasList.includes(currentVal)) {
+                    areaSelect.value = currentVal;
+                }
             }
         } catch (e) {
             console.error('Error cargando metadatos de filtros:', e);
@@ -478,12 +483,20 @@ async function loadMarcacionesFilters() {
         const metadata = await getMetadata();
 
         const areaSelect = document.getElementById('marcacion-area');
-        if (areaSelect && metadata.areas) {
+        const areasList = (metadata.areas_con_horario && metadata.areas_con_horario.length > 0)
+            ? metadata.areas_con_horario
+            : (metadata.areas || []);
+        if (areaSelect && areasList) {
             // Preservar valor si existe
             const currentVal = areaSelect.value;
             areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
-                metadata.areas.map(a => `<option value="${a}">${a}</option>`).join('');
-            if (currentVal) areaSelect.value = currentVal;
+                areasList.map(a => `<option value="${a}">${a}</option>`).join('');
+            if (currentVal && areasList.includes(currentVal)) {
+                areaSelect.value = currentVal;
+            } else if (currentVal && !areasList.includes(currentVal)) {
+                areaSelect.value = "";
+                stateMarcacionesApp.area = "";
+            }
         }
 
         // Cargar Dependientes (Empleados y Turnos) en una sola llamada
@@ -512,6 +525,9 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
 
         // Endpoint consolidado con soporte de cascada
         let url = `/api/asistencia/filters-data/?area=${encodeURIComponent(stateMarcacionesApp.area || '')}`;
+        if (stateMarcacionesApp.fechaInicioRRHH && stateMarcacionesApp.fechaFinRRHH) {
+            url += `&fecha_inicio=${encodeURIComponent(stateMarcacionesApp.fechaInicioRRHH)}&fecha_fin=${encodeURIComponent(stateMarcacionesApp.fechaFinRRHH)}`;
+        }
         if (onlyEmployees && stateMarcacionesApp.turnoId) {
             url += `&turno_id=${encodeURIComponent(stateMarcacionesApp.turnoId)}`;
         }
@@ -520,6 +536,23 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
         const data = await resp.json();
         const empleados = data.empleados || [];
         const turnos = data.turnos || [];
+        const areas = data.areas || [];
+
+        // Renderizar Áreas (solo áreas con horarios asignados)
+        if (!onlyEmployees && areas.length > 0) {
+            const areaSelect = document.getElementById('marcacion-area');
+            if (areaSelect) {
+                const currentVal = areaSelect.value;
+                areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
+                    areas.map(a => `<option value="${a}">${a}</option>`).join('');
+                if (currentVal && areas.includes(currentVal)) {
+                    areaSelect.value = currentVal;
+                } else if (currentVal && !areas.includes(currentVal)) {
+                    areaSelect.value = "";
+                    stateMarcacionesApp.area = "";
+                }
+            }
+        }
 
         // Renderizar Turnos (solo si no es carga parcial de empleados)
         if (!onlyEmployees && turnoSelect) {
@@ -581,6 +614,8 @@ function updateMarcacionesState(key, value) {
         stateMarcacionesApp.empleadoId = "";
         const areaSelect = document.getElementById('marcacion-area');
         if (areaSelect) areaSelect.value = "";
+        shouldLoadFilters = true;
+    } else if (key === 'fechaInicioRRHH' || key === 'fechaFinRRHH') {
         shouldLoadFilters = true;
     } else if (key === 'area') {
         // Nivel 2 cambió: resetear niveles 3-4 y recargar turnos+empleados
