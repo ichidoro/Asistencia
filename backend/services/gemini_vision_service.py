@@ -63,7 +63,7 @@ class GeminiVisionService:
         return (
             getattr(settings, "GEMINI_MODEL", None)
             or os.environ.get("GEMINI_MODEL")
-            or "gemini-2.5-flash"
+            or "gemini-3.6-flash"
         )
 
 
@@ -202,7 +202,7 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
 
         # Modelos a intentar en orden de preferencia y resiliencia ante alta demanda
         candidate_models = [self.model]
-        for fallback_m in ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.6-flash", "gemini-2.5-pro"]:
+        for fallback_m in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash"]:
             if fallback_m not in candidate_models:
                 candidate_models.append(fallback_m)
 
