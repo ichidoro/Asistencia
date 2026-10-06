@@ -464,6 +464,60 @@ function setupEventListeners() {
   }
 }
 
+// ── Guardia del Dashboard ────────────────────────────────────────────────
+// El dashboard (React) vive en dashboard_react.js, un bundle de ~590 KB con `defer`. Si en el celular
+// no alcanzó a cargar (red intermitente, service worker viejo) `initDashboard` no existe y la pantalla
+// quedaba en blanco para siempre sin ningún aviso. Ahora se reintenta unos segundos y, si sigue sin
+// montar, se muestra el motivo (último error de JS) y un botón que limpia caché + service worker.
+let _dashUltimoError = '';
+window.addEventListener('error', (e) => { _dashUltimoError = (e && e.message) ? String(e.message) : _dashUltimoError; });
+window.addEventListener('unhandledrejection', (e) => { _dashUltimoError = (e && e.reason) ? String(e.reason.message || e.reason) : _dashUltimoError; });
+
+window.limpiarCacheYRecargar = async function () {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) { console.warn('No se pudo limpiar la caché:', e); }
+  location.reload();
+};
+
+function _montarDashboardConGuardia(intento = 0) {
+  if (typeof initDashboard === 'function') {
+    initDashboard();
+    // Verificar que React realmente pintó algo
+    setTimeout(() => {
+      const root = document.getElementById('react-dashboard-root');
+      if (root && root.children.length > 0) return;
+      _mostrarDashboardNoCargo('El dashboard no pudo dibujarse.');
+    }, 6000);
+    return;
+  }
+  if (intento < 20) { // ~10 s esperando que termine de descargar el bundle
+    setTimeout(() => _montarDashboardConGuardia(intento + 1), 500);
+    return;
+  }
+  _mostrarDashboardNoCargo('No terminó de descargarse el módulo del dashboard.');
+}
+
+function _mostrarDashboardNoCargo(motivo) {
+  const cont = document.getElementById('page-dashboard');
+  if (!cont) return;
+  const detalle = _dashUltimoError ? `<div class="small text-muted mt-2" style="word-break:break-word">Detalle: ${String(_dashUltimoError).replace(/[<>&]/g, '')}</div>` : '';
+  cont.innerHTML = `
+    <div class="p-4 text-center">
+      <div class="fw-bold mb-1">${motivo}</div>
+      <div class="small text-muted">Suele pasar con conexión lenta o con una versión antigua guardada en el dispositivo.</div>
+      ${detalle}
+      <button type="button" class="btn btn-primary mt-3" onclick="limpiarCacheYRecargar()">Limpiar y recargar</button>
+    </div>`;
+}
+
 function switchPage(pageName) {
   // Validar permisos antes de cambiar de página
   const sidebarItem = document.querySelector(`.sidebar-item[data-page="${pageName}"]`);
@@ -569,7 +623,7 @@ function _executeSwitchPage(pageName) {
   // Initialize specific page logic
   if (pageName === 'dashboard') {
     console.log('📊 Inicializando Dashboard...');
-    if (typeof initDashboard === 'function') initDashboard();
+    _montarDashboardConGuardia();
   } else if (pageName === 'configuracion') {
     console.log('⚙️ Inicializando Configuración...');
     if (typeof initHorarios === 'function') initHorarios();
