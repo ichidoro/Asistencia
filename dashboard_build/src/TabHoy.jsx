@@ -1,269 +1,219 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { In, Meter, Skeleton, fmt, hhmm, num } from './ui';
 
-export default function TabHoy({ pulse, detail, loading }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
-  const [selectedArea, setSelectedArea] = useState('Todas');
+const PAGE = 40;
 
-  if (loading && !pulse) {
-    return (
-      <div className="d-flex justify-content-center align-items-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Cargando...</span>
+const norm = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+
+// Clasificación de cada fila (misma lógica de siempre, ahora tolerante a nulos)
+function rowStatus(item) {
+  const estado = String(item.estado || '').toUpperCase().trim();
+  if (item.hora_entrada_real) return num(item.minutos_atraso) > 0 ? 'ATRASO' : 'OK';
+  if (estado === 'INASISTENCIA' || estado.includes('FALTA')) return 'AUSENTE';
+  if (estado === 'EN_CURSO') return 'EN_CURSO';
+  if (item.hora_entrada_teorica) return 'INASISTENCIA';
+  return estado || 'SIN MARCA';
+}
+
+const isAusente = (s) => s === 'AUSENTE' || s === 'INASISTENCIA';
+
+// Lo que requiere atención va primero
+const SEVERIDAD = { AUSENTE: 0, INASISTENCIA: 0, ATRASO: 1, EN_CURSO: 2, OK: 4 };
+const sev = (s) => (s in SEVERIDAD ? SEVERIDAD[s] : 3);
+
+function State({ status }) {
+  if (status === 'OK') return <span className="dx-state" data-tone="ok">Puntual</span>;
+  if (status === 'ATRASO') return <span className="dx-state" data-tone="warn">Atraso</span>;
+  if (isAusente(status)) return <span className="dx-state" data-tone="bad">Ausente</span>;
+  if (status === 'EN_CURSO') return <span className="dx-state" data-tone="info">En turno</span>;
+  const txt = String(status || 'Sin marca').replace(/_/g, ' ').toLowerCase();
+  return <span className="dx-state" data-tone="mute">{txt.charAt(0).toUpperCase() + txt.slice(1)}</span>;
+}
+
+function HoySkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Cargando datos de hoy">
+      <div className="dx-hero">
+        <div className="dx-panel dx-live"><Skeleton h={18} w="40%" /><Skeleton h={64} w="55%" /><Skeleton h={8} r={99} /><Skeleton h={14} w="70%" /></div>
+        <div className="dx-stats">
+          {[0, 1, 2].map((i) => <div key={i} className="dx-panel dx-stat"><Skeleton h={14} w="60%" /><Skeleton h={36} w="40%" /></div>)}
         </div>
       </div>
-    );
-  }
+      <div className="dx-panel dx-sec" style={{ padding: 18 }}>
+        {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={38} style={{ marginTop: i ? 10 : 0 }} />)}
+      </div>
+    </div>
+  );
+}
 
-  // Get distinct areas from today's details for local filtering
-  const areas = ['Todas', ...new Set(detail.map(d => d.area).filter(Boolean))];
+export default function TabHoy({ pulse, detail, loading }) {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('todos');
+  const [limit, setLimit] = useState(PAGE);
 
-  // Helper to classify row status
-  const getRowStatus = (item) => {
-    const estado = (item.estado || '').toUpperCase().trim();
-    if (item.hora_entrada_real) {
-      if (item.minutos_atraso > 0) return 'ATRASO';
-      return 'OK';
-    }
-    // Si no ha entrado
-    if (estado === 'INASISTENCIA' || estado.includes('FALTA')) {
-      return 'AUSENTE';
-    }
-    if (estado === 'EN_CURSO') {
-      return 'EN_CURSO';
-    }
-    if (item.hora_entrada_teorica) {
-      // Si ya pasó el horario y no hay marca, y no tiene justificación
-      return 'INASISTENCIA';
-    }
-    return estado || 'SIN MARCA';
-  };
+  const rows = useMemo(
+    () => (Array.isArray(detail) ? detail : []).map((d) => ({ ...d, _s: rowStatus(d || {}) })),
+    [detail]
+  );
 
-  // Filter details
-  const filteredDetail = detail.filter(item => {
-    const matchesSearch = item.empleado.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesArea = selectedArea === 'Todas' || item.area === selectedArea;
-    
-    const status = getRowStatus(item);
-    let matchesStatus = true;
-    if (statusFilter === 'presentes') {
-      matchesStatus = !!item.hora_entrada_real;
-    } else if (statusFilter === 'atrasos') {
-      matchesStatus = item.hora_entrada_real && item.minutos_atraso > 0;
-    } else if (statusFilter === 'ausentes') {
-      matchesStatus = !item.hora_entrada_real && (status === 'AUSENTE' || status === 'INASISTENCIA');
-    } else if (statusFilter === 'otros') {
-      matchesStatus = !item.hora_entrada_real && status !== 'AUSENTE' && status !== 'INASISTENCIA';
-    }
+  const counts = useMemo(() => {
+    let presentes = 0, atrasos = 0, ausentes = 0;
+    rows.forEach((r) => {
+      if (r.hora_entrada_real) presentes += 1;
+      if (r._s === 'ATRASO') atrasos += 1;
+      if (!r.hora_entrada_real && isAusente(r._s)) ausentes += 1;
+    });
+    return { todos: rows.length, presentes, atrasos, ausentes };
+  }, [rows]);
 
-    return matchesSearch && matchesArea && matchesStatus;
-  });
+  const visible = useMemo(() => {
+    const q = norm(query);
+    return rows
+      .filter((r) => {
+        if (q && !norm(r.empleado).includes(q)) return false;
+        if (filter === 'presentes') return !!r.hora_entrada_real;
+        if (filter === 'atrasos') return r._s === 'ATRASO';
+        if (filter === 'ausentes') return !r.hora_entrada_real && isAusente(r._s);
+        return true;
+      })
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => sev(a.r._s) - sev(b.r._s) || a.i - b.i)
+      .map((x) => x.r);
+  }, [rows, query, filter]);
+
+  if (loading && !pulse) return <HoySkeleton />;
+
+  const tasa = num(pulse && pulse.tasa_asistencia);
+  const presentes = num(pulse && pulse.presentes);
+  const esperados = num(pulse && pulse.esperados);
+  const turno = (pulse && pulse.turno_actual) || '';
+
+  const CHIPS = [
+    ['todos', 'Todos', counts.todos],
+    ['presentes', 'Presentes', counts.presentes],
+    ['atrasos', 'Atrasos', counts.atrasos],
+    ['ausentes', 'Ausentes', counts.ausentes],
+  ];
+
+  const shown = visible.slice(0, limit);
 
   return (
     <div>
-      {/* Live Pulse KPI Cards */}
-      <div className="row g-3 mb-4">
-        {/* Attendance Rate Card */}
-        <div className="col-12 col-md-3">
-          <div className="card h-100 bg-white border border-light shadow-sm rounded p-3">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <span className="text-muted small fw-bold">TASA DE ASISTENCIA</span>
-              <span className="badge bg-success-subtle text-success rounded-pill px-2 py-1">En Vivo</span>
-            </div>
-            <div className="d-flex align-items-baseline gap-2">
-              <h3 className="mb-0 fw-bold text-dark">{pulse?.tasa_asistencia ?? 0}%</h3>
-            </div>
-            <p className="text-muted small mt-2 mb-0">Asistencia real sobre personal esperado</p>
+      <div className="dx-hero">
+        <In i={0} className="dx-panel dx-live">
+          <div className="dx-live-top">
+            <span className="dx-livetag"><span className="dx-dot" aria-hidden="true" /> En vivo</span>
+            {turno && turno !== 'N/A' && <span className="dx-tag" data-tone="mute">Turno {turno}</span>}
           </div>
-        </div>
+          <div>
+            <div className="dx-big">{fmt(tasa, 1)}<small>%</small></div>
+            <p style={{ marginTop: 6 }}>Asistencia sobre el personal esperado</p>
+          </div>
+          <div>
+            <Meter value={tasa} />
+            <p style={{ marginTop: 10 }}><b>{fmt(presentes)}</b> presentes de <b>{fmt(esperados)}</b> esperados</p>
+          </div>
+        </In>
 
-        {/* Expected vs Present Card */}
-        <div className="col-12 col-md-3">
-          <div className="card h-100 bg-white border border-light shadow-sm rounded p-3">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <span className="text-muted small fw-bold">PERSONAL HOY</span>
-              <span className="badge bg-primary-subtle text-primary rounded-pill px-2 py-1">Turno {pulse?.turno_actual ?? 'N/A'}</span>
-            </div>
-            <div className="d-flex align-items-baseline gap-2">
-              <h3 className="mb-0 fw-bold text-dark">{pulse?.presentes ?? 0} <span className="fs-5 text-muted fw-normal">/ {pulse?.esperados ?? 0}</span></h3>
-            </div>
-            <p className="text-muted small mt-2 mb-0">Presentes frente a dotación esperada</p>
-          </div>
-        </div>
-
-        {/* Late Arrivals Card */}
-        <div className="col-12 col-md-3">
-          <div className="card h-100 bg-white border border-light shadow-sm rounded p-3">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <span className="text-muted small fw-bold">ATRASOS DETECTADOS</span>
-              <span className="badge bg-warning-subtle text-warning rounded-pill px-2 py-1">Entrada</span>
-            </div>
-            <div className="d-flex align-items-baseline gap-2">
-              <h3 className="mb-0 fw-bold text-dark">{pulse?.atrasos ?? 0}</h3>
-            </div>
-            <p className="text-muted small mt-2 mb-0">Colaboradores ingresados fuera de horario</p>
-          </div>
-        </div>
-
-        {/* Active Alerts Card */}
-        <div className="col-12 col-md-3">
-          <div className="card h-100 bg-white border border-light shadow-sm rounded p-3">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <span className="text-muted small fw-bold">ALERTAS ACTIVAS</span>
-              <span className="badge bg-danger-subtle text-danger rounded-pill px-2 py-1">En Curso</span>
-            </div>
-            <div className="d-flex align-items-baseline gap-2">
-              <h3 className="mb-0 fw-bold text-dark">{pulse?.alertas_en_curso ?? 0}</h3>
-            </div>
-            <p className="text-muted small mt-2 mb-0">Turnos iniciados pendientes de cierre</p>
-          </div>
+        <div className="dx-stats">
+          <In i={1} className="dx-panel dx-stat">
+            <div className="dx-stat-label"><span className="dx-mark" data-tone="warn" />Atrasos</div>
+            <div className="dx-stat-num">{fmt(pulse && pulse.atrasos)}</div>
+            <div className="dx-stat-hint">Ingresaron fuera de horario</div>
+          </In>
+          <In i={2} className="dx-panel dx-stat">
+            <div className="dx-stat-label"><span className="dx-mark" data-tone="bad" />Ausentes</div>
+            <div className="dx-stat-num">{fmt(counts.ausentes)}</div>
+            <div className="dx-stat-hint">Sin marca y sin justificación</div>
+          </In>
+          <In i={3} className="dx-panel dx-stat">
+            <div className="dx-stat-label"><span className="dx-mark" data-tone="info" />En curso</div>
+            <div className="dx-stat-num">{fmt(pulse && pulse.alertas_en_curso)}</div>
+            <div className="dx-stat-hint">Turnos iniciados, pendientes de cierre</div>
+          </In>
         </div>
       </div>
 
-      {/* Today Detail Interactive Section */}
-      <div className="card bg-white border border-light shadow-sm rounded mb-4">
-        <div className="card-header bg-white border-bottom border-light p-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
-          <h5 className="mb-0 fw-bold text-dark">
-            <i className="bi bi-people-fill text-muted me-2"></i>
-            Estado de Asistencia y Dotación Hoy
-          </h5>
-
-          {/* Status Filter Chips */}
-          <div className="d-flex gap-2">
-            <button
-              onClick={() => setStatusFilter('todos')}
-              className={`btn btn-sm rounded-pill px-3 ${statusFilter === 'todos' ? 'btn-secondary text-white' : 'btn-outline-secondary'}`}
-              type="button"
-            >
-              Todos ({detail.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('presentes')}
-              className={`btn btn-sm rounded-pill px-3 ${statusFilter === 'presentes' ? 'btn-success text-white' : 'btn-outline-success'}`}
-              type="button"
-            >
-              Presentes ({detail.filter(d => d.hora_entrada_real).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('atrasos')}
-              className={`btn btn-sm rounded-pill px-3 ${statusFilter === 'atrasos' ? 'btn-warning text-white' : 'btn-outline-warning'}`}
-              type="button"
-            >
-              Atrasos ({detail.filter(d => d.hora_entrada_real && d.minutos_atraso > 0).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('ausentes')}
-              className={`btn btn-sm rounded-pill px-3 ${statusFilter === 'ausentes' ? 'btn-danger text-white' : 'btn-outline-danger'}`}
-              type="button"
-            >
-              Faltas/Ausentes ({detail.filter(d => !d.hora_entrada_real && (getRowStatus(d) === 'AUSENTE' || getRowStatus(d) === 'INASISTENCIA')).length})
-            </button>
+      <In i={4} className="dx-panel dx-sec" style={{ padding: 0 }}>
+        <div className="dx-roster-head">
+          <div className="dx-roster-title">
+            <h2 className="dx-sec-title">Dotación de hoy</h2>
+            <span className="dx-sec-sub">{fmt(visible.length)} de {fmt(rows.length)}</span>
           </div>
-        </div>
-
-        <div className="card-body p-3">
-          {/* Sub-Filters: Search and Area filter */}
-          <div className="row g-3 mb-3">
-            <div className="col-12 col-md-8">
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light border-light text-muted" id="tabhoy-search-addon">
-                  <i className="bi bi-search" aria-hidden="true"></i>
-                </span>
-                <label htmlFor="tabhoy-search-input" className="visually-hidden">Buscar colaborador por nombre</label>
-                <input
-                  id="tabhoy-search-input"
-                  aria-label="Buscar colaborador por nombre"
-                  aria-describedby="tabhoy-search-addon"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="form-control form-control-sm border-light bg-light"
-                  placeholder="Buscar colaborador por nombre..."
-                />
-              </div>
-            </div>
-            <div className="col-12 col-md-4">
-              <label htmlFor="tabhoy-select-area" className="visually-hidden">Filtrar por Área</label>
-              <select
-                id="tabhoy-select-area"
-                aria-label="Filtrar por Área (Todas)"
-                value={selectedArea}
-                onChange={(e) => setSelectedArea(e.target.value)}
-                className="form-select form-select-sm border-light bg-light"
+          <div className="dx-chips" role="group" aria-label="Filtrar por estado">
+            {CHIPS.map(([key, label, n]) => (
+              <button
+                key={key}
+                type="button"
+                className="dx-chip"
+                aria-pressed={filter === key}
+                onClick={() => { setFilter(key); setLimit(PAGE); }}
               >
-                <option value="Todas">Filtrar por Área (Todas)</option>
-                {areas.filter(a => a !== 'Todas').map((a, i) => (
-                  <option key={i} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
+                {label} <em>{fmt(n)}</em>
+              </button>
+            ))}
           </div>
-
-          {/* Table list */}
-          <div className="table-responsive rounded border border-light">
-            <table className="table table-hover align-middle mb-0" style={{ fontSize: '0.85rem' }}>
-              <thead className="table-light text-muted">
-                <tr>
-                  <th className="py-2 px-3">Colaborador</th>
-                  <th className="py-2">Área</th>
-                  <th className="py-2 text-center">Horario Teórico</th>
-                  <th className="py-2 text-center">Entrada Real</th>
-                  <th className="py-2 text-center">Atraso</th>
-                  <th className="py-2 text-end px-3">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr>
-                    <td colSpan="6" className="text-center py-4">
-                      <div className="spinner-border spinner-border-sm text-secondary me-2" role="status"></div>
-                      Cargando detalles...
-                    </td>
-                  </tr>
-                )}
-                {!loading && filteredDetail.length === 0 && (
-                  <tr>
-                    <td colSpan="6" className="text-center py-4 text-muted">
-                      No se encontraron colaboradores para los filtros seleccionados.
-                    </td>
-                  </tr>
-                )}
-                {!loading && filteredDetail.map((item, idx) => {
-                  const status = getRowStatus(item);
-                  let statusBadge = '';
-                  
-                  if (status === 'OK') {
-                    statusBadge = <span className="badge bg-success-subtle text-success rounded px-2 py-1">Puntual</span>;
-                  } else if (status === 'ATRASO') {
-                    statusBadge = <span className="badge bg-warning-subtle text-warning rounded px-2 py-1">Atraso</span>;
-                  } else if (status === 'AUSENTE' || status === 'INASISTENCIA') {
-                    statusBadge = <span className="badge bg-danger-subtle text-danger rounded px-2 py-1">Ausente</span>;
-                  } else if (status === 'EN_CURSO') {
-                    statusBadge = <span className="badge bg-info-subtle text-info rounded px-2 py-1">En Turno</span>;
-                  } else {
-                    statusBadge = <span className="badge bg-secondary-subtle text-secondary rounded px-2 py-1">{status}</span>;
-                  }
-
-                  return (
-                    <tr key={idx}>
-                      <td className="fw-semibold text-dark py-2 px-3">{item.empleado}</td>
-                      <td className="text-muted">{item.area}</td>
-                      <td className="text-center fw-mono">{item.hora_entrada_teorica ? item.hora_entrada_teorica.substring(0, 5) : '-'}</td>
-                      <td className="text-center fw-mono">{item.hora_entrada_real ? item.hora_entrada_real.substring(0, 5) : '-'}</td>
-                      <td className="text-center">
-                        {item.hora_entrada_real && item.minutos_atraso > 0 ? (
-                          <span className="text-warning fw-semibold">+{item.minutos_atraso} min</span>
-                        ) : '-'}
-                      </td>
-                      <td className="text-end px-3">{statusBadge}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <label className="dx-search">
+            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Buscar colaborador por nombre</span>
+            <i className="bi bi-search" aria-hidden="true" />
+            <input
+              id="tabhoy-search-input"
+              className="dx-input"
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              placeholder="Buscar colaborador"
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }}
+            />
+          </label>
         </div>
-      </div>
+
+        <div className="dx-cols" aria-hidden="true">
+          <span>Colaborador</span><span>Área</span>
+          <span className="dx-num">Horario</span><span className="dx-num">Entrada</span><span className="dx-num">Atraso</span>
+          <span className="dx-end">Estado</span>
+        </div>
+
+        <div role="list">
+          {shown.map((r, idx) => {
+            const atraso = r.hora_entrada_real && num(r.minutos_atraso) > 0 ? `+${fmt(r.minutos_atraso)} min` : '';
+            return (
+              <div className="dx-row" role="listitem" key={`${r.empleado || 'x'}-${idx}`}>
+                <span className="dx-name" title={r.empleado || ''}>{r.empleado || 'Sin nombre'}</span>
+                <span className="dx-muted dx-hide-sm">{r.area || '–'}</span>
+                <span className="dx-num dx-hide-sm">{hhmm(r.hora_entrada_teorica)}</span>
+                <span className="dx-num dx-hide-sm">{hhmm(r.hora_entrada_real)}</span>
+                <span className={`dx-num dx-hide-sm ${atraso ? 'dx-late' : ''}`}>{atraso || '–'}</span>
+                <State status={r._s} />
+                <span className="dx-meta">
+                  {r.area || 'Sin área'} · Horario <b>{hhmm(r.hora_entrada_teorica)}</b> · Entrada <b>{hhmm(r.hora_entrada_real)}</b>
+                  {atraso ? <> · <b style={{ color: 'var(--dx-warn)' }}>{atraso}</b></> : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {visible.length === 0 && (
+          <div className="dx-empty">
+            <b>{rows.length === 0 ? 'Sin datos para hoy' : 'Nadie coincide con el filtro'}</b>
+            {rows.length === 0 ? 'Aún no hay turnos programados para esta área.' : 'Prueba con otro estado o borra la búsqueda.'}
+          </div>
+        )}
+
+        {visible.length > shown.length && (
+          <div className="dx-more">
+            <button type="button" className="dx-btn dx-ghost" onClick={() => setLimit((l) => l + PAGE)}>
+              Mostrar {Math.min(PAGE, visible.length - shown.length)} más
+            </button>
+          </div>
+        )}
+      </In>
     </div>
   );
 }

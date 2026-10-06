@@ -1,48 +1,64 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import TabHoy from './TabHoy';
 import TabPeriodo from './TabPeriodo';
+import { DX_CSS } from './styles';
+import { ErrorBoundary, Seg, horaActual } from './ui';
 
 const API_BASE_URL = '/api';
 
-export default function DashboardApp() {
+// Inyecta los estilos una sola vez (el bundle es un único .js, no hay hoja aparte)
+function useDashboardStyles() {
+  useEffect(() => {
+    if (document.getElementById('dx-styles')) return;
+    const el = document.createElement('style');
+    el.id = 'dx-styles';
+    el.textContent = DX_CSS;
+    document.head.appendChild(el);
+  }, []);
+}
+
+function Dashboard() {
+  useDashboardStyles();
+
   const [activeTab, setActiveTab] = useState('hoy');
   const [selectedArea, setSelectedArea] = useState('Todas');
   const [selectedHorario, setSelectedHorario] = useState('Todos');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  
+
   const [areasList, setAreasList] = useState([]);
   const [horariosList, setHorariosList] = useState([]);
-  
+
   const [todayPulse, setTodayPulse] = useState(null);
   const [todayDetail, setTodayDetail] = useState([]);
   const [todayLoading, setTodayLoading] = useState(false);
-  
+
   const [periodData, setPeriodData] = useState(null);
   const [periodLoading, setPeriodLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
 
-  // Get Auth headers
+  // Evita que una respuesta lenta pise a una más nueva (cambios rápidos de filtro)
+  const reqId = useRef(0);
+
   const getHeaders = useCallback(() => {
     const token = localStorage.getItem('access_token');
     return {
       'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : ''
+      Authorization: token ? `Bearer ${token}` : '',
     };
   }, []);
 
-  // Fetch areas on mount
+  // Áreas del filtro
   useEffect(() => {
     async function fetchAreas() {
       try {
         const token = localStorage.getItem('access_token');
         if (!token) return;
-
-        // Fetch areas
-        const areasRes = await fetch(`${API_BASE_URL}/empleados/stats/`, { headers: getHeaders() });
-        if (areasRes.ok) {
-          const stats = await areasRes.json();
-          setAreasList(stats.areas || []);
+        const res = await fetch(`${API_BASE_URL}/empleados/stats/`, { headers: getHeaders() });
+        if (res.ok) {
+          const stats = await res.json();
+          setAreasList(Array.isArray(stats && stats.areas) ? stats.areas : []);
         }
       } catch (err) {
         console.error('Error fetching areas filter:', err);
@@ -51,17 +67,16 @@ export default function DashboardApp() {
     fetchAreas();
   }, [getHeaders]);
 
-  // Fetch turnos dynamically when selectedArea changes
+  // Turnos según el área elegida
   useEffect(() => {
     async function fetchTurnos() {
       try {
         const token = localStorage.getItem('access_token');
         if (!token) return;
-
         const areaParam = selectedArea === 'Todas' ? '' : `?area=${encodeURIComponent(selectedArea)}`;
-        const turnosRes = await fetch(`${API_BASE_URL}/turnos/${areaParam}`, { headers: getHeaders() });
-        if (turnosRes.ok) {
-          const turnos = await turnosRes.json();
+        const res = await fetch(`${API_BASE_URL}/turnos/${areaParam}`, { headers: getHeaders() });
+        if (res.ok) {
+          const turnos = await res.json();
           setHorariosList(Array.isArray(turnos) ? turnos : []);
           setSelectedHorario('Todos');
         }
@@ -72,15 +87,13 @@ export default function DashboardApp() {
     fetchTurnos();
   }, [selectedArea, getHeaders]);
 
-  // Sync dates with the active period when selected area changes
+  // Fechas del período activo del área
   useEffect(() => {
     async function loadActivePeriod() {
       if (activeTab === 'hoy') return;
       try {
         const areaName = selectedArea || 'Todas';
-        const res = await fetch(`${API_BASE_URL}/configuracion/periodos/activo/${encodeURIComponent(areaName)}/`, {
-          headers: getHeaders()
-        });
+        const res = await fetch(`${API_BASE_URL}/configuracion/periodos/activo/${encodeURIComponent(areaName)}/`, { headers: getHeaders() });
         if (res.ok) {
           const period = await res.json();
           if (period && period.fecha_inicio && period.fecha_fin) {
@@ -95,213 +108,146 @@ export default function DashboardApp() {
     loadActivePeriod();
   }, [selectedArea, activeTab, getHeaders]);
 
-  // Load Today's Data
   const loadTodayData = useCallback(async () => {
+    const mine = ++reqId.current;
     setTodayLoading(true);
     setError(null);
     try {
       const areaParam = selectedArea !== 'Todas' ? `?area=${encodeURIComponent(selectedArea)}` : '';
-      
       const [pulseRes, detailRes] = await Promise.all([
         fetch(`${API_BASE_URL}/dashboard/pulse/${areaParam}`, { headers: getHeaders() }),
-        fetch(`${API_BASE_URL}/dashboard/pulse/detail/${areaParam}`, { headers: getHeaders() })
+        fetch(`${API_BASE_URL}/dashboard/pulse/detail/${areaParam}`, { headers: getHeaders() }),
       ]);
-
-      if (pulseRes.ok && detailRes.ok) {
-        const pulseJson = await pulseRes.json();
-        const detailJson = await detailRes.json();
-        
-        setTodayPulse(pulseJson.data || null);
-        setTodayDetail(detailJson.data || []);
-      } else {
-        throw new Error('Error al cargar datos en vivo de hoy.');
-      }
+      if (!(pulseRes.ok && detailRes.ok)) throw new Error('No se pudieron cargar los datos en vivo de hoy.');
+      const pulseJson = await pulseRes.json();
+      const detailJson = await detailRes.json();
+      if (mine !== reqId.current) return;
+      setTodayPulse((pulseJson && pulseJson.data) || null);
+      setTodayDetail(Array.isArray(detailJson && detailJson.data) ? detailJson.data : []);
+      setUpdatedAt(new Date());
     } catch (err) {
-      setError(err.message);
+      if (mine === reqId.current) setError(err.message);
     } finally {
-      setTodayLoading(false);
+      if (mine === reqId.current) setTodayLoading(false);
     }
   }, [selectedArea, getHeaders]);
 
-  // Load Period Data
   const loadPeriodData = useCallback(async () => {
     if (!fechaInicio || !fechaFin) return;
+    const mine = ++reqId.current;
     setPeriodLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-        area: selectedArea,
-        horario: selectedHorario
-      });
-      const res = await fetch(`${API_BASE_URL}/dashboard/analytics/?${params.toString()}`, {
-        headers: getHeaders()
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setPeriodData(json.data || null);
-      } else {
-        throw new Error('Error al cargar métricas analíticas del período.');
-      }
+      const params = new URLSearchParams({ fecha_inicio: fechaInicio, fecha_fin: fechaFin, area: selectedArea, horario: selectedHorario });
+      const res = await fetch(`${API_BASE_URL}/dashboard/analytics/?${params.toString()}`, { headers: getHeaders() });
+      if (!res.ok) throw new Error('No se pudieron cargar las métricas del período.');
+      const json = await res.json();
+      if (mine !== reqId.current) return;
+      setPeriodData((json && json.data) || null);
+      setUpdatedAt(new Date());
     } catch (err) {
-      setError(err.message);
+      if (mine === reqId.current) setError(err.message);
     } finally {
-      setPeriodLoading(false);
+      if (mine === reqId.current) setPeriodLoading(false);
     }
   }, [fechaInicio, fechaFin, selectedArea, selectedHorario, getHeaders]);
 
-  // Load data based on selected tab and filters
   useEffect(() => {
-    if (activeTab === 'hoy') {
-      loadTodayData();
-    } else {
-      loadPeriodData();
-    }
+    if (activeTab === 'hoy') loadTodayData();
+    else loadPeriodData();
   }, [activeTab, selectedArea, selectedHorario, fechaInicio, fechaFin, loadTodayData, loadPeriodData]);
 
-  return (
-    <div className="container-fluid p-0" style={{ minHeight: '80vh' }}>
-      {/* Top Filter and Tab Selection Bar */}
-      <div className="filter-bar d-flex flex-wrap justify-content-between align-items-center mb-4 bg-white p-3 rounded border border-light shadow-sm gap-3">
-        <div className="d-flex align-items-center gap-2">
-          {/* Segmented Control Tabs */}
-          <div className="btn-group p-1 bg-light rounded" role="tablist" aria-label="Selector de Vista del Dashboard" style={{ padding: '3px !important' }}>
-            <button
-              onClick={() => setActiveTab('hoy')}
-              className={`btn btn-sm rounded ${activeTab === 'hoy' ? 'btn-white bg-white shadow-sm font-semibold' : 'btn-link text-muted border-0'}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'hoy'}
-              aria-label="Ver datos de Hoy"
-              style={{ fontWeight: activeTab === 'hoy' ? '600' : '400' }}
-            >
-              <i className="bi bi-clock-history me-1" aria-hidden="true"></i> Hoy
-            </button>
-            <button
-              onClick={() => setActiveTab('periodo')}
-              className={`btn btn-sm rounded ${activeTab === 'periodo' ? 'btn-white bg-white shadow-sm font-semibold' : 'btn-link text-muted border-0'}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'periodo'}
-              aria-label="Ver análisis del período"
-              style={{ fontWeight: activeTab === 'periodo' ? '600' : '400' }}
-            >
-              <i className="bi bi-calendar3 me-1" aria-hidden="true"></i> Análisis Período
-            </button>
-          </div>
-        </div>
+  const busy = todayLoading || periodLoading;
+  const refresh = activeTab === 'hoy' ? loadTodayData : loadPeriodData;
 
-        {/* Global Filters */}
-        <div className="d-flex flex-wrap align-items-center gap-3">
-          <div className="filter-group">
-            <label htmlFor="dash-global-area-select" className="fw-bold small text-muted mb-1 d-block">
-              <i className="bi bi-geo-alt me-1" aria-hidden="true"></i> Área
-            </label>
+  return (
+    <div className="dx">
+      <div className="dx-bar">
+        <Seg
+          value={activeTab}
+          onChange={setActiveTab}
+          label="Vista del dashboard"
+          options={[{ value: 'hoy', label: 'Hoy' }, { value: 'periodo', label: 'Análisis del período' }]}
+        />
+
+        <div className="dx-filters">
+          <label className="dx-field">
+            <span>Área</span>
             <select
               id="dash-global-area-select"
-              aria-label="Todas las Áreas"
+              className="dx-input"
+              aria-label="Área"
               value={selectedArea}
               onChange={(e) => setSelectedArea(e.target.value)}
-              className="form-select form-select-sm border-light bg-light"
-              style={{ minWidth: '150px' }}
             >
-              <option value="Todas">Todas las Áreas</option>
+              <option value="Todas">Todas las áreas</option>
               {areasList.map((a, i) => (
                 <option key={i} value={a.area}>{a.area}</option>
               ))}
             </select>
-          </div>
+          </label>
 
           {activeTab === 'periodo' && (
             <>
-              <div className="filter-group">
-                <label htmlFor="dash-global-turno-select" className="fw-bold small text-muted mb-1 d-block">
-                  <i className="bi bi-person-badge me-1" aria-hidden="true"></i> Turno
-                </label>
+              <label className="dx-field">
+                <span>Turno</span>
                 <select
                   id="dash-global-turno-select"
-                  aria-label="Todos los Turnos"
+                  className="dx-input"
+                  aria-label="Turno"
                   value={selectedHorario}
                   onChange={(e) => setSelectedHorario(e.target.value)}
-                  className="form-select form-select-sm border-light bg-light"
-                  style={{ minWidth: '150px' }}
                 >
-                  <option value="Todos">Todos los Turnos</option>
+                  <option value="Todos">Todos los turnos</option>
                   {horariosList.map((t) => (
                     <option key={t.id} value={t.id}>{t.nombre}</option>
                   ))}
                 </select>
-              </div>
-
-              <div className="filter-group">
-                <label htmlFor="dash-fecha-inicio-input" className="fw-bold small text-muted mb-1 d-block">
-                  <i className="bi bi-calendar-event me-1" aria-hidden="true"></i> Desde
-                </label>
-                <input
-                  id="dash-fecha-inicio-input"
-                  aria-label="Fecha Desde"
-                  type="date"
-                  value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
-                  className="form-control form-control-sm border-light bg-light"
-                  style={{ maxWidth: '140px' }}
-                />
-              </div>
-
-              <div className="filter-group">
-                <label htmlFor="dash-fecha-fin-input" className="fw-bold small text-muted mb-1 d-block">
-                  <i className="bi bi-calendar-check me-1" aria-hidden="true"></i> Hasta
-                </label>
-                <input
-                  id="dash-fecha-fin-input"
-                  aria-label="Fecha Hasta"
-                  type="date"
-                  value={fechaFin}
-                  onChange={(e) => setFechaFin(e.target.value)}
-                  className="form-control form-control-sm border-light bg-light"
-                  style={{ maxWidth: '140px' }}
-                />
-              </div>
+              </label>
+              <label className="dx-field">
+                <span>Desde</span>
+                <input id="dash-fecha-inicio-input" className="dx-input" type="date" aria-label="Fecha desde" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+              </label>
+              <label className="dx-field">
+                <span>Hasta</span>
+                <input id="dash-fecha-fin-input" className="dx-input" type="date" aria-label="Fecha hasta" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+              </label>
             </>
           )}
 
-          {/* Manual Refresh Button */}
-          <button
-            onClick={activeTab === 'hoy' ? loadTodayData : loadPeriodData}
-            className="btn btn-outline-secondary btn-sm rounded-circle d-flex align-items-center justify-content-center"
-            style={{ width: '31px', height: '31px', marginTop: '19px' }}
-            type="button"
-            title="Refrescar datos"
-            aria-label="Refrescar datos del dashboard"
-          >
-            <i className={`bi bi-arrow-clockwise ${(todayLoading || periodLoading) ? 'spin' : ''}`} aria-hidden="true"></i>
-          </button>
+          <div className={`dx-field ${activeTab === 'periodo' ? 'dx-wide' : ''}`}>
+            <span className="dx-stamp" style={{ minHeight: 16 }}>{updatedAt ? `Actualizado ${horaActual(updatedAt)}` : ' '}</span>
+            <button type="button" className="dx-iconbtn" onClick={refresh} aria-label="Actualizar datos del dashboard" title="Actualizar datos">
+              <i className={`bi bi-arrow-clockwise ${busy ? 'dx-spin' : ''}`} aria-hidden="true" />
+              Actualizar
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="alert alert-danger d-flex align-items-center mb-4 rounded border border-danger-subtle p-3" role="alert">
-          <i className="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-          <div>{error}</div>
+        <div className="dx-alert" role="alert">
+          <i className="bi bi-exclamation-triangle-fill" aria-hidden="true" />
+          <div><b>No se pudo actualizar</b>{error}</div>
+          <button type="button" className="dx-iconbtn" onClick={refresh}>Reintentar</button>
         </div>
       )}
 
-      {/* Tab Contents */}
-      {activeTab === 'hoy' ? (
-        <TabHoy
-          pulse={todayPulse}
-          detail={todayDetail}
-          loading={todayLoading}
-          onRefresh={loadTodayData}
-        />
-      ) : (
-        <TabPeriodo
-          data={periodData}
-          loading={periodLoading}
-          onRefresh={loadPeriodData}
-        />
-      )}
+      <ErrorBoundary key={activeTab}>
+        {activeTab === 'hoy' ? (
+          <TabHoy pulse={todayPulse} detail={todayDetail} loading={todayLoading} />
+        ) : (
+          <TabPeriodo data={periodData} loading={periodLoading} />
+        )}
+      </ErrorBoundary>
     </div>
+  );
+}
+
+export default function DashboardApp() {
+  return (
+    <ErrorBoundary>
+      <Dashboard />
+    </ErrorBoundary>
   );
 }
