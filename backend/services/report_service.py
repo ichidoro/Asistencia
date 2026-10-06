@@ -42,15 +42,8 @@ class ReportService:
             return ("", "000000", False)
         
         di_estado = di.get("estado") or ""
-        
-        # 1. Normalización para Bolsa Flexible (atrasos se absorben en la jornada si no hay turnos fijos)
-        if es_bolsa and di_estado in ('ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'):
-            di_estado = 'OK'
-            
-        # 2. Si tiene viaje largo registrado y el estado es anómalo/inasistencia o vacío
+        # El estado viene resuelto por el motor cuántico (Bolsa Flexible y Viaje Largo incluidos).
         tiene_vl = bool(di.get("viaje_largo") or di.get("tiene_viaje_largo") or di_estado == 'VIAJE_LARGO')
-        if tiene_vl and (di_estado in ('ANOMALIA', 'INASISTENCIA') or not di_estado):
-            di_estado = 'VIAJE_LARGO'
             
         # 3. Label primario y color
         lbl = di_estado
