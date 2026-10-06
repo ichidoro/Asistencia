@@ -5358,7 +5358,13 @@
           if (typeof f === 'function' && t === 'load' && document.readyState === 'complete') { fire(window, f, t); return; }
           return wAdd.call(window, t, f, o);
         };
+        // main.js se cargaba al final y sus definiciones ganaban sobre las de estos scripts. Ahora cargan
+        // después, así que se restauran las versiones de main.js (si no, showToast entra en recursión).
+        var KEEP = ['showToast', 'showNotification', 'showError', 'updateSortIcons'], keep = {};
+        KEEP.forEach(function (n) { keep[n] = window[n]; });
+        function restore() { KEEP.forEach(function (n) { if (typeof keep[n] === 'function' && window[n] !== keep[n]) window[n] = keep[n]; }); }
         function finish() {
+          restore();
           document.addEventListener = dAdd; window.addEventListener = wAdd;
           window.__lazyDone = true; resolveAll();
           if (typeof window._loadEstadosAsistencia === 'function') { try { window._loadEstadosAsistencia(); } catch (e) { console.error(e); } }
@@ -5369,7 +5375,7 @@
           idle(function () {
             var s = document.createElement('script');
             s.src = QUEUE[idx++];
-            s.onload = s.onerror = next; // un fallo no frena al resto
+            s.onload = s.onerror = function () { restore(); next(); }; // un fallo no frena al resto
             document.body.appendChild(s);
           });
         }
