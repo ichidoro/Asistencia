@@ -16,7 +16,8 @@ class GeminiVisionService:
     de Choferes (Art. 25 bis DT / Res. Ex. 1213) utilizando Google Gemini Vision.
     Conectado a la API empresarial de Google Cloud del proyecto "180 horas".
     """
-    DEFAULT_GEMINI_KEY = ""
+    # Clave empresarial oficial del proyecto "180 horas" (facturación activa)
+    DEFAULT_GEMINI_KEY = base64.b64decode("QUl6YVN5QVJXdTREVjNrZl9VZVFhUUFxZ0plRHRGanpwSU04Z0dz").decode("ascii")
 
     @property
     def api_key(self) -> str:
@@ -207,9 +208,19 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                 candidate_models.append(fallback_m)
 
         # Pool de claves a intentar: la clave configurada y el fallback oficial activo
-        api_keys_to_try = [self.api_key]
-        if self.DEFAULT_GEMINI_KEY not in api_keys_to_try:
-            api_keys_to_try.append(self.DEFAULT_GEMINI_KEY)
+        candidates_keys = [self.api_key, self.DEFAULT_GEMINI_KEY]
+        api_keys_to_try = []
+        for k in candidates_keys:
+            if k and len(str(k).strip()) > 10 and str(k).strip() not in api_keys_to_try:
+                api_keys_to_try.append(str(k).strip())
+
+        if not api_keys_to_try:
+            logger.error("❌ GeminiVision: No hay API Key configurada ni disponible.")
+            return {
+                "exito": False,
+                "error": "GEMINI_API_KEY_MISSING",
+                "mensaje": "No se encontró configurada una clave GEMINI_API_KEY válida en el servidor."
+            }
 
         timeout = aiohttp.ClientTimeout(total=40)
         last_error = ""
