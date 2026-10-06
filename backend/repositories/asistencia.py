@@ -379,35 +379,6 @@ class AsistenciaRepository:
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_emp_fecha ON libreta_art25bis_dias (empleado_id, fecha)")
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_fecha ON libreta_art25bis_dias (fecha)")
             await self.db.clear_schema_cache()
-            
-            # Limpieza puntual de marcaciones de prueba para Rafael Arroyo (01-10-2026)
-            try:
-                await self.db.execute("""
-                    DELETE FROM libreta_art25bis_dias 
-                    WHERE fecha = '2026-10-01' 
-                      AND empleado_id IN (
-                          SELECT id FROM empleados 
-                          WHERE UPPER(apellido_paterno) LIKE '%ARROYO%'
-                      )
-                """)
-                await self.db.execute("""
-                    DELETE FROM asistencias 
-                    WHERE fecha = '2026-10-01' 
-                      AND empleado_id IN (
-                          SELECT id FROM empleados 
-                          WHERE UPPER(apellido_paterno) LIKE '%ARROYO%'
-                      )
-                """)
-                import glob, os
-                for f in glob.glob("downloads/libretas_180h/*2026-10-01*"):
-                    try:
-                        os.remove(f)
-                    except Exception:
-                        pass
-                logger.info("🧹 Limpieza de pruebas para Rafael Arroyo (01-10-2026) ejecutada.")
-            except Exception as clean_err:
-                logger.warning(f"Aviso en limpieza Rafael Arroyo: {clean_err}")
-
             logger.info("✨ Tabla 'libreta_art25bis_dias' e índices asegurados con éxito")
         except Exception as e:
             logger.error(f"❌ Error en _ensure_libreta_table: {e}")
@@ -522,12 +493,7 @@ class AsistenciaRepository:
                 a.tiene_atraso, a.tiene_salida_adelantada, a.tiene_permiso, a.deuda_condonada,
                 e.nombre, e.apellido_paterno, e.apellido_materno, e.rut, a_table.nombre as area, e.activo,
                 t.nombre as turno_nombre,
-                td.etiqueta_bloque,
-                lib.slots_96,
-                lib.cerrado as libreta_cerrada,
-                lib.minutos_conduccion,
-                lib.minutos_auxiliares,
-                lib.minutos_descanso
+                td.etiqueta_bloque
             FROM asistencias a
             JOIN empleados e ON a.empleado_id = e.id
             LEFT JOIN horas_extras he ON he.empleado_id = a.empleado_id AND he.fecha = a.fecha
@@ -535,7 +501,6 @@ class AsistenciaRepository:
                 AND a.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
             LEFT JOIN areas a_table ON h.area_id = a_table.id
             LEFT JOIN turnos t ON a.turno_asignado_id = t.id
-            LEFT JOIN libreta_art25bis_dias lib ON lib.empleado_id = a.empleado_id AND lib.fecha = a.fecha
             LEFT JOIN turno_dias td ON td.turno_id = a.turno_asignado_id 
                 AND td.num_semana = a.num_semana_ganadora 
                 AND td.dia_semana = (CASE strftime('%w', a.fecha) WHEN '0' THEN 6 ELSE CAST(strftime('%w', a.fecha) AS INTEGER) - 1 END)

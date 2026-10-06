@@ -64,7 +64,7 @@ class GeminiVisionService:
         return (
             getattr(settings, "GEMINI_MODEL", None)
             or os.environ.get("GEMINI_MODEL")
-            or "gemini-2.5-flash"
+            or "gemini-3.6-flash"
         )
 
 
@@ -201,11 +201,11 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
             }
         }
 
-        # Modelos oficiales estándar Google Gemini Free Tier en estricto orden de estabilidad
-        candidate_models = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
-        invalid_or_deprecated = {"gemini-3.6-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"}
-        if self.model and self.model not in candidate_models and self.model not in invalid_or_deprecated:
-            candidate_models.insert(0, self.model)
+        # Modelos a intentar en orden de preferencia y resiliencia ante alta demanda
+        candidate_models = [self.model]
+        for fallback_m in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]:
+            if fallback_m not in candidate_models:
+                candidate_models.append(fallback_m)
 
         # Pool de claves a intentar: la clave configurada y el fallback oficial activo
         api_keys_to_try = [self.api_key]
@@ -238,10 +238,6 @@ RESPONDE OBLIGATORIAMENTE EN FORMATO JSON ESTRICTO CON ESTE ESQUEMA EXACTO:
                                 last_status = resp.status
                                 last_error = await resp.text()
                                 logger.warning(f"⚠️ GeminiVision: Modelo {model_name} devolvió HTTP {resp.status}: {last_error[:160]}")
-                                
-                                # Si la clave está revocada (403) o es inválida (400), pasar de inmediato a la siguiente clave
-                                if resp.status in (400, 403):
-                                    break
 
                                 # Si es error 400, 401 o 403 (autenticación inválida), probar siguiente clave inmediatamente
                                 if resp.status in (400, 401, 403) and active_key != self.DEFAULT_GEMINI_KEY:

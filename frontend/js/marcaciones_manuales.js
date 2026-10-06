@@ -2612,10 +2612,6 @@ function m180SetLocked(locked) {
     if (cancel) cancel.textContent = m180_locked ? 'Cerrar' : 'Cancelar';
     const reabrir = document.getElementById('m180-btn-reabrir');
     if (reabrir) reabrir.classList.toggle('d-none', !(m180_locked && m180EsSuperAdmin()));
-    const btnElim = document.getElementById('m180-btn-eliminar');
-    if (btnElim && m180_locked && !m180EsSuperAdmin()) {
-        btnElim.classList.add('d-none');
-    }
 }
 
 function m180EsSuperAdmin() {
@@ -2664,14 +2660,14 @@ function m180SetBadge(kind) {
     const badge = document.getElementById('m180-badge-estado');
     if (!badge) return;
     if (kind === 'cerrado') {
-        badge.className = 'badge bg-success text-white border border-success px-2 py-1';
-        badge.innerHTML = '<i class="bi bi-shield-check me-1"></i>DÍA CERRADO';
+        badge.className = 'badge bg-success-subtle text-success-emphasis border border-success px-2 py-1';
+        badge.textContent = 'DÍA CERRADO';
     } else if (kind === 'borrador') {
-        badge.className = 'badge bg-warning text-dark border border-warning px-2 py-1';
-        badge.innerHTML = '<i class="bi bi-pencil-square me-1"></i>BORRADOR 180H';
+        badge.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1';
+        badge.textContent = 'BORRADOR / ABIERTO';
     } else {
         badge.className = 'badge bg-secondary-subtle text-secondary-emphasis border border-secondary px-2 py-1';
-        badge.innerHTML = '<i class="bi bi-dash-circle me-1"></i>SIN REGISTRO';
+        badge.textContent = 'SIN REGISTRO';
     }
 }
 
@@ -2722,8 +2718,6 @@ async function proceedToMarcacion180h() {
     document.getElementById('m180-observaciones').value = '';
     m180SetBadge('sin');
     m180SetLocked(false);
-    const btnEliminar = document.getElementById('m180-btn-eliminar');
-    if (btnEliminar) btnEliminar.classList.add('d-none');
 
     try {
         const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`, {
@@ -2736,9 +2730,6 @@ async function proceedToMarcacion180h() {
                 document.getElementById('m180-observaciones').value = data.observaciones || '';
                 m180SetBadge(Number(data.cerrado) ? 'cerrado' : 'borrador');
                 m180SetLocked(Number(data.cerrado) === 1);
-                if (btnEliminar && (!Number(data.cerrado) || m180EsSuperAdmin())) {
-                    btnEliminar.classList.remove('d-none');
-                }
             }
 
             // Previsualización de fotografía archivada en el servidor (si existe)
@@ -2897,90 +2888,12 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
 }
 
 
-async function eliminarLibretaDia() {
-    const empId = parseInt(document.getElementById('m180-empleado-id').value);
-    const dateStr = document.getElementById('m180-fecha-str').value;
-    const empNombre = document.getElementById('m180-conductor-nombre')?.textContent || 'el colaborador';
-    
-    if (!empId || !dateStr) return;
-
-    const result = await Swal.fire({
-        title: '¿Borrar registro de este día?',
-        html: `Se eliminarán permanentemente las marcas de la libreta del día <strong>${window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(dateStr) : dateStr}</strong> para <strong>${empNombre}</strong>, junto con cualquier fotografía de respaldo asociada.<br><br>La asistencia del día volverá a su estado original (PENDIENTE / LIBRE según turno).`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#64748b',
-        confirmButtonText: '<i class="bi bi-trash3 me-1"></i> Sí, borrar registro',
-        cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) return;
-
-    const btnEliminar = document.getElementById('m180-btn-eliminar');
-    if (btnEliminar) {
-        btnEliminar.disabled = true;
-        btnEliminar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Borrando...';
-    }
-
-    try {
-        const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`, {
-            method: 'DELETE',
-            headers: getLibretaAuthHeaders()
-        });
-
-        if (!resp.ok) {
-            let msg = `Error ${resp.status}`;
-            try { const d = await resp.json(); if (d.detail) msg = d.detail; } catch (_) {}
-            throw new Error(msg);
-        }
-
-        m180_dirty = false;
-        m180_force_close = true;
-        
-        // Limpiar preview local
-        window.m180_last_scanned_image = null;
-        const previewContainer = document.getElementById('m180-ocr-preview-container');
-        if (previewContainer) previewContainer.classList.add('d-none');
-
-        // Cerrar modal
-        const modalEl = document.getElementById('modalMarcacion180h');
-        if (modalEl) {
-            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-        }
-
-        if (typeof showToast === 'function') {
-            showToast(`Registro del día ${window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(dateStr) : dateStr} eliminado con éxito`, 'success');
-        }
-
-        // Recargar datos en la UI
-        if (typeof window.reloadSingleEmployeeRow === 'function') {
-            await window.reloadSingleEmployeeRow(empId);
-        } else if (typeof window.loadMarcacionesData === 'function') {
-            window.loadMarcacionesData();
-        }
-    } catch (e) {
-        Swal.fire({
-            icon: 'error',
-            title: 'No se pudo eliminar el registro',
-            text: e.message || 'Error de conexión con el servidor',
-            confirmButtonColor: '#059669'
-        });
-    } finally {
-        if (btnEliminar) {
-            btnEliminar.disabled = false;
-            btnEliminar.innerHTML = '<i class="bi bi-trash3 me-1"></i> Borrar Registro del Día';
-        }
-    }
-}
-
 window.proceedToMarcacion180h = proceedToMarcacion180h;
 window.setLibretaActividad = setLibretaActividad;
 window.libreta180hAutoDescanso = libreta180hAutoDescanso;
 window.libreta180hUndo = libreta180hUndo;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
-window.eliminarLibretaDia = eliminarLibretaDia;
 window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 

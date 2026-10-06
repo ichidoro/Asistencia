@@ -6668,13 +6668,9 @@ function _analiticaCellBadge(di) {
         }
     }
 
-    // --- Lógica Bolsa Flexible / Libreta 180h: Distinguir Borrador vs Cerrado ---
-    const hasLibretaData = Boolean(di.slots_96 || (di.origen === 'LIBRETA_180H'));
-    const isLibretaCerrada = Boolean(di.libreta_cerrada || di.cerrado);
-    if (di._esBolsa || hasLibretaData) {
-        if (hasLibretaData && !isLibretaCerrada) {
-            est = 'BORRADOR_180H';
-        } else if (['ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'].includes(est)) {
+    // --- Lógica Bolsa Flexible: Suprimir estados de penalización de tiempo ---
+    if (di._esBolsa) {
+        if (['ATRASO', 'SALIDA_ADELANTADA', 'ATR_SAD'].includes(est)) {
             est = 'OK'; // Visualmente es un día trabajado normal
         }
         // Suprimir flags secundarios para que no rendericen badges apilados
@@ -6693,11 +6689,7 @@ function _analiticaCellBadge(di) {
         badgeMap[e.codigo] = [e.color_clase, icon + (e._badgeLabel || shortLabel)];
     });
 
-    // Inyectar mappings virtuales para los dos tipos de inasistencia compensada y borrador libreta
-    badgeMap['BORRADOR_180H'] = [
-        'badge-state-warning', 
-        '<i class="bi bi-pencil-square me-1"></i>BOR'
-    ];
+    // Inyectar mappings virtuales para los dos tipos de inasistencia compensada
     badgeMap['INASISTENCIA_COMPENSADA_INTERCAMBIO'] = [
         'badge-compensatorio', 
         '<i class="bi bi-arrow-left-right me-1"></i>COMP'
@@ -7282,7 +7274,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     if (isCerrado) {
         badgeHtml = `<span class="badge bg-success" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-shield-check me-1"></i>DÍA CERRADO</span>`;
     } else if (slotsData) {
-        badgeHtml = `<span class="badge bg-warning text-dark border border-warning" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-pencil-square me-1"></i>BORRADOR 180H</span>`;
+        badgeHtml = `<span class="badge bg-primary text-white" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-journal-check me-1"></i>REGISTRADO</span>`;
     } else if (est === 'LIBRE') {
         badgeHtml = `<span class="badge bg-secondary" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-cup-hot-fill me-1"></i>DÍA LIBRE</span>`;
     } else if (isFer) {
