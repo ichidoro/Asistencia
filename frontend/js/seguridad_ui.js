@@ -164,7 +164,10 @@ async function loadAreasParaSeguridad() {
     try {
         const res = await fetch('/api/empleados/areas/');
         if (res.ok) {
-            cacheSeguridad.areas = await res.json();
+            const data = await res.json();
+            cacheSeguridad.areas = Array.isArray(data) ? data : [];
+        } else {
+            console.error("Áreas: respuesta", res.status);
         }
     } catch (e) {
         console.error("Error cargando áreas:", e);
@@ -275,7 +278,77 @@ async function loadUsuarios() {
 }
 
 // Modales Usuarios
-window.openUserModal = function () {
+// Roles y áreas se cargan en segundo plano al abrir Seguridad. Antes, si el modal se abría antes de que llegaran
+// (o una carga fallaba, p. ej. mala señal en el celular) el selector quedaba en "Cargando roles..." y la lista de
+// áreas en "Cargando áreas..." para siempre: no se podía asignar rol ni áreas, y el precargado dependía de un
+// setTimeout. Ahora el modal espera (y reintenta) los catálogos antes de mostrarse.
+async function asegurarCatalogosUsuario() {
+    const tareas = [];
+    if (cacheSeguridad.roles.length === 0) tareas.push(loadRoles());
+    if (cacheSeguridad.areas.length === 0) tareas.push(loadAreasParaSeguridad());
+    if (tareas.length) await Promise.allSettled(tareas);
+    return cacheSeguridad.roles.length > 0 && cacheSeguridad.areas.length > 0;
+}
+
+const escHtml = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function prepararModalUsuario(areasUsuario) {
+    const ok = await asegurarCatalogosUsuario();
+    if (!ok) {
+        Swal.fire('No se pudieron cargar los roles o las áreas', 'Revise la conexión e intente nuevamente.', 'error');
+        return false;
+    }
+    poblarModalUsuario(areasUsuario || []);
+    return true;
+}
+
+function poblarModalUsuario(areasUsuario) {
+    const selRol = document.getElementById('user-rol');
+    if (selRol) {
+        selRol.innerHTML = cacheSeguridad.roles.map(r =>
+            `<option value="${r.id}" data-global="${r.alcance_global ? 1 : 0}">${escHtml(r.nombre)}${r.alcance_global ? ' (alcance global)' : ''}</option>`).join('');
+        if (!selRol.dataset.listo) {
+            selRol.addEventListener('change', actualizarAlcanceAreasUsuario);
+            selRol.dataset.listo = '1';
+        }
+    }
+
+    // Áreas (RLS): el catálogo + las que el usuario ya tiene guardadas aunque ya no estén en el catálogo
+    // (así guardar no se las borra sin avisar).
+    const chips = document.getElementById('user-areas-chips');
+    if (chips) {
+        const catalogo = new Set(cacheSeguridad.areas);
+        const extras = (areasUsuario || []).filter(a => !catalogo.has(a));
+        const todas = [...cacheSeguridad.areas, ...extras];
+        chips.innerHTML = todas.map(a => `
+            <div class="form-check form-check-inline">
+                <input class="form-check-input area-check" type="checkbox" value="${escHtml(a)}" id="area-${escHtml(a.replace(/\s+/g, '-'))}">
+                <label class="form-check-label small" for="area-${escHtml(a.replace(/\s+/g, '-'))}">${escHtml(a)}${extras.includes(a) ? ' <span class="text-warning">(fuera del catálogo)</span>' : ''}</label>
+            </div>
+        `).join('');
+    }
+}
+
+function rolSeleccionadoEsGlobal() {
+    const opt = document.getElementById('user-rol')?.selectedOptions?.[0];
+    return !!opt && opt.dataset.global === '1';
+}
+
+// Un rol de alcance global ve todas las áreas: se avisa para que no parezca que falta marcar algo.
+function actualizarAlcanceAreasUsuario() {
+    const nota = document.getElementById('user-areas-note');
+    if (nota) {
+        nota.textContent = rolSeleccionadoEsGlobal()
+            ? 'Este rol tiene alcance global: ve todas las áreas, no es necesario marcar ninguna.'
+            : 'Marque las áreas que este usuario podrá ver. Sin áreas no verá ningún empleado.';
+    }
+}
+
+window.marcarAreasUsuario = function (marcar) {
+    document.querySelectorAll('.area-check').forEach(ck => { ck.checked = !!marcar; });
+};
+
+window.openUserModal = async function () {
     ensureModalInstances();
     const title = document.getElementById('modalUsuarioTitle');
     if (title) title.textContent = "👤 Nuevo Usuario Operador";
@@ -286,40 +359,15 @@ window.openUserModal = function () {
     const pwHint = document.getElementById('user-pw-hint');
     if (pwHint) pwHint.textContent = "Contraseña inicial requerida.";
 
-    populateUserModal();
+    if (!(await prepararModalUsuario([]))) return;
+    actualizarAlcanceAreasUsuario();
     if (modalUserInstance) modalUserInstance.show();
 }
 
-function populateUserModal() {
-    // Roles - Usar cacheSeguridad.roles (debe estar cargado por loadRoles)
-    const selRol = document.getElementById('user-rol');
-    if (selRol) {
-        if (cacheSeguridad.roles.length === 0) {
-            selRol.innerHTML = '<option value="">Cargando roles...</option>';
-        } else {
-            selRol.innerHTML = cacheSeguridad.roles.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
-        }
-    }
-
-    // Áreas (RLS)
-    const chips = document.getElementById('user-areas-chips');
-    if (chips) {
-        if (cacheSeguridad.areas.length === 0) {
-            chips.innerHTML = '<div class="text-muted small">Cargando áreas...</div>';
-        } else {
-            chips.innerHTML = cacheSeguridad.areas.map(a => `
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input area-check" type="checkbox" value="${a}" id="area-${a.replace(/\s+/g, '-')}">
-                    <label class="form-check-label small" for="area-${a.replace(/\s+/g, '-')}">${a}</label>
-                </div>
-            `).join('');
-        }
-    }
-}
-
-window.editUsuario = function (id) {
+window.editUsuario = async function (id) {
     const user = cacheSeguridad.usuarios.find(u => u.id === id);
     if (!user) return;
+    ensureModalInstances();
 
     document.getElementById('modalUsuarioTitle').textContent = `👤 Editando: ${user.username}`;
     document.getElementById('user-id').value = user.id;
@@ -332,26 +380,12 @@ window.editUsuario = function (id) {
     document.getElementById('user-pw-hint').textContent = "Dejar vacío para mantener contraseña actual.";
     document.getElementById('user-activo').value = user.activo ? "1" : "0";
 
-    // Poblar y LUEGO asignar valor
-    populateUserModal();
-
-    // Pequeño delay o asignación directa si ya hay roles
-    if (cacheSeguridad.roles.length > 0) {
-        document.getElementById('user-rol').value = user.rol_id;
-    } else {
-        // Fallback: intentar asignar cuando terminen de cargar (raro pero posible)
-        setTimeout(() => {
-            document.getElementById('user-rol').value = user.rol_id;
-        }, 500);
-    }
-
-    // Check areas
-    const user_areas = user.areas || [];
-    setTimeout(() => {
-        document.querySelectorAll('.area-check').forEach(ck => {
-            ck.checked = user_areas.includes(ck.value);
-        });
-    }, 50);
+    // Primero los catálogos (espera si aún no llegaron), recién ahí se asignan rol y áreas: sin setTimeout.
+    const userAreas = Array.isArray(user.areas) ? user.areas : [];
+    if (!(await prepararModalUsuario(userAreas))) return;
+    document.getElementById('user-rol').value = String(user.rol_id);
+    document.querySelectorAll('.area-check').forEach(ck => { ck.checked = userAreas.includes(ck.value); });
+    actualizarAlcanceAreasUsuario();
 
     if (modalUserInstance) modalUserInstance.show();
 }
@@ -359,12 +393,26 @@ window.editUsuario = function (id) {
 window.saveUsuario = async function () {
     const userId = document.getElementById('user-id').value;
     const areasSelected = Array.from(document.querySelectorAll('.area-check:checked')).map(ck => ck.value);
+    const rolId = parseInt(document.getElementById('user-rol').value);
+    if (!Number.isInteger(rolId)) {
+        Swal.fire('Falta el rol', 'Seleccione el rol del usuario antes de guardar.', 'warning');
+        return;
+    }
+    // Un rol zonal sin áreas deja al usuario sin ver ningún empleado (y guardar así le borra las que tenía).
+    if (!rolSeleccionadoEsGlobal() && areasSelected.length === 0) {
+        const r = await Swal.fire({
+            title: 'Usuario sin áreas',
+            text: 'Con este rol y sin ninguna área marcada, el usuario no verá ningún empleado. ¿Guardar igual?',
+            icon: 'warning', showCancelButton: true, confirmButtonText: 'Guardar igual', cancelButtonText: 'Volver',
+        });
+        if (!r.isConfirmed) return;
+    }
 
     const payload = {
         username: document.getElementById('user-username').value,
         nombre_completo: document.getElementById('user-nombre').value,
         email: document.getElementById('user-email').value,
-        rol_id: parseInt(document.getElementById('user-rol').value),
+        rol_id: rolId,
         activo: document.getElementById('user-activo').value === "1",
         areas: areasSelected
     };

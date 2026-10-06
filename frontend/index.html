@@ -5425,7 +5425,15 @@
                                         </select>
                                     </div>
                                     <div class="col-12" id="user-areas-container">
-                                        <p class="form-label fw-bold mb-2">Áreas Permitidas (Scope RLS)</p>
+                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                            <p class="form-label fw-bold mb-0">Áreas Permitidas (Scope RLS)</p>
+                                            <span class="small">
+                                                <a href="#" class="text-decoration-none" onclick="marcarAreasUsuario(true); return false;">Marcar todas</a>
+                                                <span class="text-muted mx-1">·</span>
+                                                <a href="#" class="text-decoration-none" onclick="marcarAreasUsuario(false); return false;">Ninguna</a>
+                                            </span>
+                                        </div>
+                                        <small id="user-areas-note" class="text-muted d-block mb-2"></small>
                                         <div id="user-areas-chips"
                                             class="d-flex flex-wrap gap-2 p-3 bg-light border rounded">
                                             <!-- Cargado por JS -->
