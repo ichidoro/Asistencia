@@ -2236,6 +2236,7 @@ let m180_force_close = false;
 let m180_prev_keys = new Set();
 let m180_locked = false;      // día cerrado: solo lectura
 let m180_acomp = [];          // IDs de peonetas que copian la libreta del chofer
+let m180_acomp_ocupados = [];  // peonetas ya asignados a otro chofer ese día
 
 function m180Esc(t) {
     return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2260,7 +2261,7 @@ function m180AcompCandidatos() {
     const choferId = parseInt(document.getElementById('m180-empleado-id').value);
     let cand = emps.filter(e => /peoneta/i.test(e.cargo || ''));
     if (!cand.length) cand = emps;  // sin cargo "peoneta" reconocible: listar a todos
-    return cand.filter(e => e.id != choferId && !m180_acomp.includes(Number(e.id)))
+    return cand.filter(e => e.id != choferId && !m180_acomp.includes(Number(e.id)) && !m180_acomp_ocupados.includes(Number(e.id)))
         .sort((a, b) => m180AcompNombre(a.id).localeCompare(m180AcompNombre(b.id)));
 }
 
@@ -2845,6 +2846,7 @@ async function proceedToMarcacion180h() {
     m180UpdateUndoBtn();
     m180_slots = new Array(96).fill(0);
     m180_acomp = [];
+    m180_acomp_ocupados = [];
     document.getElementById('m180-observaciones').value = '';
     m180SetBadge('sin');
     m180SetLocked(false);
@@ -2867,6 +2869,7 @@ async function proceedToMarcacion180h() {
             }
 
             m180_acomp = (data.acompanantes || []).map(Number);
+            m180_acomp_ocupados = (data.acompanantes_ocupados || []).map(Number);
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
                 document.getElementById('m180-observaciones').value = data.observaciones || '';

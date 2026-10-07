@@ -3024,6 +3024,7 @@ async def get_libreta_180h(
                 "cerrado": 0,
                 "observaciones": "",
                 "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
+                "acompanantes_ocupados": list((await service.repository.get_acompanantes_ocupados_180h(fecha, empleado_id)).keys()),
                 "tiene_foto": tiene_foto,
                 "foto_url": foto_url
             }
@@ -3056,6 +3057,7 @@ async def get_libreta_180h(
             "cerrado": row.get('cerrado', 0),
             "observaciones": row.get('observaciones') or "",
             "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
+                "acompanantes_ocupados": list((await service.repository.get_acompanantes_ocupados_180h(fecha, empleado_id)).keys()),
             "tiene_foto": tiene_foto,
             "foto_url": foto_url
         }
@@ -3169,10 +3171,17 @@ async def save_libreta_180h(
             'observaciones': payload.observaciones or ""
         }
 
+        acomp_ids = [a for a in dict.fromkeys(payload.acompanantes or []) if a != payload.empleado_id]
+        acomp_omitidos = []
+        if payload.acompanantes is not None:
+            ocupados = await service.repository.get_acompanantes_ocupados_180h(payload.fecha, payload.empleado_id)
+            choque = [a for a in acomp_ids if a in ocupados]
+            if choque:
+                raise HTTPException(status_code=409, detail="Uno o más acompañantes ya están asignados a otro chofer ese día. Reabre la libreta para actualizar la lista.")
+
         await service.repository.upsert_libreta_180h(data)
 
         # Acompañantes (peonetas): copian los horarios del chofer
-        acomp_ids = [a for a in dict.fromkeys(payload.acompanantes or []) if a != payload.empleado_id]
         acomp_omitidos = []
         if payload.acompanantes is not None:
             await service.repository.set_acompanantes_180h(payload.empleado_id, payload.fecha, acomp_ids)
@@ -3250,6 +3259,7 @@ async def delete_libreta_180h(
     """
     try:
         deleted = await service.repository.delete_libreta_180h(empleado_id, fecha)
+        await service.repository.set_acompanantes_180h(empleado_id, fecha, [])
         if not deleted:
             logger.warning(f"⚠️ No se encontró registro de libreta para emp={empleado_id}, fecha={fecha}")
 

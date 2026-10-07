@@ -476,6 +476,20 @@ class AsistenciaRepository:
             return []
         return [int(r['acompanante_id']) for r in rows]
 
+    async def get_acompanantes_ocupados_180h(self, fecha: str, excluir_chofer_id: int) -> Dict[int, int]:
+        """{acompanante_id: chofer_id} de peonetas ya asignados a OTRO chofer en la fecha."""
+        query = "SELECT acompanante_id, chofer_id FROM libreta_acompanantes WHERE fecha = ? AND chofer_id <> ?"
+        try:
+            rows = await self.db.fetch_all(query, (fecha, excluir_chofer_id))
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "no such table" in err_msg:
+                await self._ensure_acompanantes_table()
+                return {}
+            logger.error(f"❌ Error en get_acompanantes_ocupados_180h: {e}")
+            return {}
+        return {int(r['acompanante_id']): int(r['chofer_id']) for r in rows}
+
     async def set_acompanantes_180h(self, chofer_id: int, fecha: str, ids: List[int]) -> None:
         """Reemplaza la lista de acompañantes del chofer en la fecha."""
         await self._ensure_acompanantes_table()
