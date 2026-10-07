@@ -3337,60 +3337,7 @@ async def purgar_marcas_reloj_libreta_180h(
         raise HTTPException(status_code=500, detail=f"Error purgando marcas de reloj: {str(e)}")
 
 
-@router.post("/libreta-180h/replicar-juan-a-enzo/")
-async def replicar_libreta_juan_a_enzo(
-    service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
-):
-    """
-    Replica de forma puntual y atómica las libretas Art. 25 bis de Juan Paredes hacia Enzo Donoso
-    para el período del 2026-10-01 al 2026-10-05, recalculando la matriz de asistencia.
-    """
-    try:
-        db = service.repository.db
-        origen = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 86 OR (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
-        )
-        destino = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 80 OR (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
-        )
 
-        if not origen:
-            raise HTTPException(status_code=404, detail="No se encontró al empleado Juan Paredes en el sistema.")
-        if not destino:
-            raise HTTPException(status_code=404, detail="No se encontró al empleado Enzo Donoso en el sistema.")
-
-        nom_origen = f"{origen.get('nombre', '')} {origen.get('apellido_paterno', '')}".strip()
-        nom_destino = f"{destino.get('nombre', '')} {destino.get('apellido_paterno', '')}".strip()
-
-        resultado = await service.replicar_libreta_chofer(
-            empleado_origen_id=origen['id'],
-            empleado_destino_id=destino['id'],
-            fecha_desde="2026-10-01",
-            fecha_hasta="2026-10-05",
-            observacion_override=f"Copia autorizada idéntica desde {nom_origen} (01 al 05 Oct 2026)"
-        )
-
-        resultado["origen"] = {"id": origen['id'], "nombre": nom_origen}
-        resultado["destino"] = {"id": destino['id'], "nombre": nom_destino}
-
-        try:
-            val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
-            val_user = getattr(current_user, 'username', 'sistema')
-            await db.execute("""
-                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
-                VALUES (?, ?, ?, ?, ?)
-            """, (val_id, val_user, 'REPLICA_LIBRETA_180H', 'Marcaciones',
-                  f"Replicación de libreta Art. 25 bis: {nom_origen} (ID {origen['id']}) -> {nom_destino} (ID {destino['id']}) para 01-10-2026 al 05-10-2026: {resultado.get('dias_replicados')} días replicados."))
-        except Exception:
-            pass
-
-        return resultado
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error en replicar_libreta_juan_a_enzo: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error en replicación de libreta: {str(e)}")
 
 
 # ═══════════════════════════════════════════════════════════════════
