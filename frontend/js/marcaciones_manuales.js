@@ -2235,6 +2235,55 @@ let m180_dirty = false;
 let m180_force_close = false;
 let m180_prev_keys = new Set();
 let m180_locked = false;      // día cerrado: solo lectura
+let m180_acomp = [];          // IDs de peonetas que copian la libreta del chofer
+
+function m180Esc(t) {
+    return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function m180AcompNombre(id) {
+    const emps = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data && stateMarcacionesApp.data.empleados) || [];
+    const e = emps.find(x => x.id == id);
+    if (!e) return `Empleado ${id}`;
+    return e.nombre_completo || e.nombre || [e.nombres, e.apellidos].filter(Boolean).join(' ') || `Empleado ${id}`;
+}
+
+function m180AcompRender() {
+    const emps = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data && stateMarcacionesApp.data.empleados) || [];
+    const choferId = parseInt(document.getElementById('m180-empleado-id').value);
+    const esPeoneta = e => /peoneta/i.test(e.cargo || '');
+    let candidatos = emps.filter(esPeoneta);
+    if (!candidatos.length) candidatos = emps;  // sin cargo "peoneta" reconocible: listar a todos
+    const sel = document.getElementById('m180-acomp-select');
+    if (sel) {
+        sel.innerHTML = '<option value="">+ Agregar acompañante...</option>' + candidatos
+            .filter(e => e.id != choferId && !m180_acomp.includes(Number(e.id)))
+            .sort((a, b) => m180AcompNombre(a.id).localeCompare(m180AcompNombre(b.id)))
+            .map(e => `<option value="${e.id}">${m180Esc(m180AcompNombre(e.id))}</option>`).join('');
+    }
+    const chips = document.getElementById('m180-acomp-chips');
+    if (chips) {
+        chips.innerHTML = m180_acomp.map(id => `
+            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:0.75rem;">
+                ${m180Esc(m180AcompNombre(id))}
+                <button type="button" class="btn-close m180-edit-btn" style="font-size:0.5rem;" aria-label="Quitar" onclick="window.m180AcompQuitar(${id})"></button>
+            </span>`).join('');
+    }
+}
+
+window.m180AcompAgregar = function(id) {
+    id = Number(id);
+    if (!id || m180_locked || m180_acomp.includes(id)) return;
+    m180_acomp.push(id);
+    m180_dirty = true;
+    m180AcompRender();
+};
+window.m180AcompQuitar = function(id) {
+    if (m180_locked) return;
+    m180_acomp = m180_acomp.filter(x => x !== Number(id));
+    m180_dirty = true;
+    m180AcompRender();
+};
 
 const M180_ACTIVIDADES = {
     1: { id: 1, name: 'Conducción', short: 'COND', color: '#059669', soft: '#ecfdf5', ink: '#065f46' },
@@ -2719,6 +2768,7 @@ async function proceedToMarcacion180h() {
     m180_force_close = false;
     m180UpdateUndoBtn();
     m180_slots = new Array(96).fill(0);
+    m180_acomp = [];
     document.getElementById('m180-observaciones').value = '';
     m180SetBadge('sin');
     m180SetLocked(false);
@@ -2740,6 +2790,7 @@ async function proceedToMarcacion180h() {
                 }
             }
 
+            m180_acomp = (data.acompanantes || []).map(Number);
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
                 document.getElementById('m180-observaciones').value = data.observaciones || '';
@@ -2777,6 +2828,7 @@ async function proceedToMarcacion180h() {
     }
 
     refreshAllSlotsVisuals();
+    m180AcompRender();
 
     const modalEl = document.getElementById('modalMarcacion180h');
     if (modalEl) {
@@ -2843,6 +2895,7 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         slots_96: m180_slots,
         cerrado: Boolean(cerrarDia),
         observaciones: obs,
+        acompanantes: m180_acomp,
         imagen_base64: window.m180_last_scanned_image || null
     };
 
@@ -2882,6 +2935,11 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         window.m180_last_scanned_image = null;
         if (typeof showToast === 'function') {
             showToast(cerrarDia ? "Día cerrado y guardado en la Libreta Art. 25 bis" : "Borrador de Libreta 180h guardado", "success");
+        }
+        let omitidos = [];
+        try { omitidos = (await resp.json()).data.acompanantes_omitidos || []; } catch (_) {}
+        if (omitidos.length && typeof showToast === 'function') {
+            showToast('No se copió a (día ya cerrado): ' + omitidos.map(m180AcompNombre).join(', '), 'warning');
         }
 
         const modalEl = document.getElementById('modalMarcacion180h');

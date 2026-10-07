@@ -5012,6 +5012,17 @@
                                 </div>
                             </div>
 
+                            <!-- Acompañantes (peonetas): copian el horario del chofer -->
+                            <div class="mb-3 p-3 rounded-3 border bg-white shadow-sm" id="m180-acomp-box">
+                                <label for="m180-acomp-select" class="form-label fw-semibold text-secondary mb-1" style="font-size:0.75rem;">
+                                    <i class="bi bi-people-fill me-1"></i>Acompañantes (peonetas) · se les copian los horarios del chofer
+                                </label>
+                                <select id="m180-acomp-select" class="form-select form-select-sm m180-edit-btn" onchange="window.m180AcompAgregar(this.value); this.value='';">
+                                    <option value="">+ Agregar acompañante...</option>
+                                </select>
+                                <div id="m180-acomp-chips" class="d-flex flex-wrap gap-2 mt-2"></div>
+                            </div>
+
                             <!-- Observaciones -->
                             <div class="mb-0">
                                 <label for="m180-observaciones" class="form-label fw-semibold text-secondary mb-1" style="font-size:0.75rem;">Observaciones del Día (Opcional)</label>

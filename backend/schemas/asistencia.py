@@ -87,5 +87,6 @@ class Libreta180hRequest(BaseModel):
     cerrado: bool = True
     observaciones: Optional[str] = None
     imagen_base64: Optional[str] = None
+    acompanantes: Optional[List[int]] = None
 
 

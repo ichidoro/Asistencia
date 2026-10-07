@@ -446,6 +446,45 @@ class AsistenciaRepository:
             logger.error(f"❌ Error en delete_libreta_180h: {e}")
             return False
 
+    async def _ensure_acompanantes_table(self) -> None:
+        """Crea la tabla libreta_acompanantes (peonetas que copian la libreta del chofer)."""
+        try:
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS libreta_acompanantes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chofer_id INTEGER NOT NULL,
+                    fecha TEXT NOT NULL,
+                    acompanante_id INTEGER NOT NULL,
+                    UNIQUE(chofer_id, fecha, acompanante_id)
+                )
+            """)
+            await self.db.clear_schema_cache()
+        except Exception as e:
+            logger.error(f"❌ Error en _ensure_acompanantes_table: {e}")
+
+    async def get_acompanantes_180h(self, chofer_id: int, fecha: str) -> List[int]:
+        """IDs de los acompañantes (peonetas) asignados al chofer en la fecha."""
+        query = "SELECT acompanante_id FROM libreta_acompanantes WHERE chofer_id = ? AND fecha = ? ORDER BY id"
+        try:
+            rows = await self.db.fetch_all(query, (chofer_id, fecha))
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "no such table" in err_msg:
+                await self._ensure_acompanantes_table()
+                return []
+            logger.error(f"❌ Error en get_acompanantes_180h: {e}")
+            return []
+        return [int(r['acompanante_id']) for r in rows]
+
+    async def set_acompanantes_180h(self, chofer_id: int, fecha: str, ids: List[int]) -> None:
+        """Reemplaza la lista de acompañantes del chofer en la fecha."""
+        await self._ensure_acompanantes_table()
+        await self.db.execute("DELETE FROM libreta_acompanantes WHERE chofer_id = ? AND fecha = ?", (chofer_id, fecha))
+        for aid in ids:
+            await self.db.execute(
+                "INSERT INTO libreta_acompanantes (chofer_id, fecha, acompanante_id) VALUES (?, ?, ?)",
+                (chofer_id, fecha, aid))
+
     async def get_libretas_periodo(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         """
         Obtiene todas las libretas de un empleado en un rango de fechas.

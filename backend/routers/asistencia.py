@@ -3023,6 +3023,7 @@ async def get_libreta_180h(
                 "horas_descanso": 0.0,
                 "cerrado": 0,
                 "observaciones": "",
+                "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
                 "tiene_foto": tiene_foto,
                 "foto_url": foto_url
             }
@@ -3054,6 +3055,7 @@ async def get_libreta_180h(
             "horas_descanso": round(min_desc / 60.0, 2),
             "cerrado": row.get('cerrado', 0),
             "observaciones": row.get('observaciones') or "",
+            "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
             "tiene_foto": tiene_foto,
             "foto_url": foto_url
         }
@@ -3169,6 +3171,23 @@ async def save_libreta_180h(
 
         await service.repository.upsert_libreta_180h(data)
 
+        # Acompañantes (peonetas): copian los horarios del chofer
+        acomp_ids = [a for a in dict.fromkeys(payload.acompanantes or []) if a != payload.empleado_id]
+        acomp_omitidos = []
+        if payload.acompanantes is not None:
+            await service.repository.set_acompanantes_180h(payload.empleado_id, payload.fecha, acomp_ids)
+            for aid in acomp_ids:
+                ex_a = await service.repository.get_libreta_180h(aid, payload.fecha)
+                if ex_a and int(ex_a.get('cerrado') or 0) == 1:
+                    acomp_omitidos.append(aid)
+                    continue
+                await service.repository.upsert_libreta_180h({
+                    **data,
+                    'empleado_id': aid,
+                    'observaciones': (payload.observaciones or "") + (" · " if payload.observaciones else "") + f"Acompañante del chofer ID {payload.empleado_id}"
+                })
+                await service.procesar_empleado_dia(aid, payload.fecha, save=True, force=True)
+
         # Guardar fotografía de respaldo físico si viene adjunta
         if payload.imagen_base64:
             try:
@@ -3205,6 +3224,7 @@ async def save_libreta_180h(
                 "horas_descanso": round(min_desc / 60.0, 2),
                 "total_horas_dia": round((min_efec + min_esp + min_desc) / 60.0, 2),
                 "cerrado": data['cerrado'],
+                "acompanantes_omitidos": acomp_omitidos,
                 "resultado_asistencia": res_dia
             }
         }
