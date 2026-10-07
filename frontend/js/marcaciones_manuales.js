@@ -3158,6 +3158,8 @@ window.abrirScannerLibreta = async function() {
     
     // Resetear banderas de bloqueo de captura
     window._scannerEnProceso = false;
+    window._scannerCapturando = false;
+    window._scannerProcesandoApi = false;
     const shutterBtn = document.getElementById('scanner-btn-shutter');
     if (shutterBtn) {
         shutterBtn.classList.remove('disabled', 'opacity-50');
@@ -3333,8 +3335,8 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function(e) {
     }
     _scannerLastCaptureTime = now;
 
-    if (window._scannerEnProceso) {
-        console.warn("⚠️ Captura ya en proceso, ignorando pulsación duplicada.");
+    if (window._scannerCapturando || window._scannerProcesandoApi) {
+        console.warn("⚠️ Captura o procesamiento ya en curso, ignorando pulsación duplicada.");
         return;
     }
 
@@ -3357,7 +3359,7 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function(e) {
         shutterBtn.classList.add('disabled', 'opacity-50');
     }
 
-    window._scannerEnProceso = true;
+    window._scannerCapturando = true;
 
     // 3. Cambiar inmediatamente la vista al spinner para que la pantalla NUNCA quede inmóvil
     document.getElementById('scanner-step-camera')?.classList.add('d-none');
@@ -3445,12 +3447,15 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function(e) {
             }
 
             detenerScannerCamara();
+            window._scannerCapturando = false;
 
             // Procesar directo con Gemini Vision AI
             window.scannerProcesarConGemini(finalDataUrl);
 
         } catch (captureErr) {
             console.error("❌ Error en captura de frame:", captureErr);
+            window._scannerCapturando = false;
+            window._scannerProcesandoApi = false;
             window._scannerEnProceso = false;
             if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
 
@@ -3660,7 +3665,11 @@ window.scannerVolverACamara = async function() {
 };
 
 window.scannerProcesarConGemini = async function(directBase64 = null) {
-    if (window._scannerEnProceso) return;
+    if (window._scannerProcesandoApi) {
+        console.warn("⚠️ Ya se está procesando una planilla con Gemini.");
+        return;
+    }
+    window._scannerProcesandoApi = true;
     window._scannerEnProceso = true;
 
     let base64Jpeg = directBase64;
@@ -3684,6 +3693,7 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
     }
 
     if (!base64Jpeg) {
+        window._scannerProcesandoApi = false;
         window._scannerEnProceso = false;
         if (typeof showToast === 'function') showToast("No se pudo obtener la imagen", "error");
         return;
@@ -3704,6 +3714,9 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
     const empId = document.getElementById('m180-empleado-id')?.value;
     const fecha = document.getElementById('m180-fecha-str')?.value;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     try {
         const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
         const resp = await fetch('/api/asistencia/libreta-180h/ocr-gemini-base64/', {
@@ -3717,8 +3730,10 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
                 image_base64: base64Jpeg,
                 empleado_id: empId ? parseInt(empId) : null,
                 fecha: fecha || null
-            })
+            }),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         if (!resp.ok) {
             const errData = await resp.json().catch(() => ({}));
@@ -3843,25 +3858,29 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
         }
 
     } catch (err) {
+        clearTimeout(timeoutId);
         console.error("❌ Error en scannerProcesarConGemini:", err);
-        document.getElementById('scanner-step-loading')?.classList.add('d-none');
-        document.getElementById('scanner-step-camera')?.classList.remove('d-none');
-        const shutterBtn = document.getElementById('scanner-btn-shutter');
-        if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
+        // Cerrar modal del escáner para que el usuario nunca quede atrapado en pantalla de carga
+        window.scannerCerrar();
+
+        const errMsg = err.name === 'AbortError'
+            ? 'Tiempo de espera agotado (30s) al conectar con Gemini Vision. Por favor reintenta.'
+            : (err.message || 'No se pudo interpretar la planilla física.');
 
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',
                 title: 'Error al Procesar Planilla con IA',
-                text: err.message || 'No se pudo interpretar la planilla física.',
+                text: errMsg,
                 confirmButtonColor: '#ef4444'
             });
         } else if (typeof showToast === 'function') {
-            showToast(err.message, "error");
+            showToast(errMsg, "error");
         }
-        // Reiniciar stream de cámara para permitir reintentar de inmediato
-        try { await iniciarScannerCamara(); } catch(camErr) {}
     } finally {
+        clearTimeout(timeoutId);
+        window._scannerProcesandoApi = false;
+        window._scannerCapturando = false;
         window._scannerEnProceso = false;
         const shutterBtn = document.getElementById('scanner-btn-shutter');
         if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
@@ -3869,6 +3888,8 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
 };
 
 window.scannerCerrar = function() {
+    window._scannerProcesandoApi = false;
+    window._scannerCapturando = false;
     window._scannerEnProceso = false;
     const shutterBtn = document.getElementById('scanner-btn-shutter');
     if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
@@ -3877,6 +3898,11 @@ window.scannerCerrar = function() {
         scannerCropperInstance.destroy();
         scannerCropperInstance = null;
     }
+    // Restaurar vistas del modal para futuros escaneos
+    document.getElementById('scanner-step-loading')?.classList.add('d-none');
+    document.getElementById('scanner-step-crop')?.classList.add('d-none');
+    document.getElementById('scanner-step-camera')?.classList.remove('d-none');
+
     // Restaurar eventos de backdrop para el modal de libreta inferior
     document.querySelectorAll('.modal-backdrop').forEach(b => {
         b.style.pointerEvents = '';

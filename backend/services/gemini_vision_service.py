@@ -216,7 +216,7 @@ ESQUEMA EXACTO:
                 "mensaje": "No se encontró configurada una clave GEMINI_API_KEY válida en el servidor."
             }
 
-        timeout = aiohttp.ClientTimeout(total=40)
+        timeout = aiohttp.ClientTimeout(total=25)
         last_error = ""
         last_status = 500
 
@@ -243,6 +243,10 @@ ESQUEMA EXACTO:
                                 last_error = await resp.text()
                                 logger.warning(f"⚠️ GeminiVision: Modelo {model_name} devolvió HTTP {resp.status}: {last_error[:160]}")
 
+                                # Si el modelo da 404 (deprecado o no existe), pasar de inmediato al siguiente sin demora
+                                if resp.status == 404:
+                                    continue
+
                                 # Si es error 400, 401 o 403 (autenticación inválida), probar siguiente clave inmediatamente
                                 if resp.status in (400, 401, 403) and active_key != self.DEFAULT_GEMINI_KEY:
                                     logger.warning(f"⚠️ Error de autenticación ({resp.status}) con clave {masked_key}. Probando clave oficial de respaldo...")
@@ -251,7 +255,7 @@ ESQUEMA EXACTO:
                                 # Si es error 503 (sobrecarga/alta demanda) o 429 (límite temporal de peticiones)
                                 # esperar una breve pausa con backoff antes de probar el siguiente modelo del pool
                                 if resp.status in (429, 503) and idx < len(candidate_models) - 1:
-                                    backoff_wait = 1.5 * (idx + 1)
+                                    backoff_wait = 1.0 * (idx + 1)
                                     logger.info(f"⏳ Alta demanda en {model_name}. Esperando {backoff_wait}s antes de intentar con {candidate_models[idx+1]}...")
                                     await asyncio.sleep(backoff_wait)
                                     continue
@@ -260,7 +264,7 @@ ESQUEMA EXACTO:
                             logger.warning(f"⚠️ GeminiVision: Error de red con {model_name}: {req_err}")
                             last_error = str(req_err)
                             if idx < len(candidate_models) - 1:
-                                await asyncio.sleep(1.0)
+                                await asyncio.sleep(0.5)
                                 continue
 
             # Si todos los modelos de la cascada fallaron por saturación
@@ -464,7 +468,7 @@ ESQUEMA EXACTO:
                     "tramos": []
                 }
 
-            text = parts[0].get("text", "")
+            text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and "text" in p)
             parsed = self._robust_json_loads(text)
 
             # Validar y sanear el array slots_96
