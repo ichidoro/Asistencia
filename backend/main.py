@@ -108,6 +108,40 @@ app.add_middleware(
 # Starlette excluye text/event-stream, así que los SSE de sync no se ven afectados.
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
+class _TiempoPeticionMiddleware:
+    """ASGI puro (sin BaseHTTPMiddleware, casi sin costo): agrega Server-Timing a las respuestas de /api y deja en el log
+    un WARNING con la ruta cuando una petición tarda más de SLOW_REQUEST_MS (por defecto 700 ms)."""
+    def __init__(self, app, umbral_ms: int = 700):
+        self.app = app
+        self.umbral = umbral_ms
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope.get("path", "").startswith("/api/"):
+            return await self.app(scope, receive, send)
+        import time as _t
+        t0 = _t.perf_counter()
+        estado = {"code": 0}
+
+        async def send_wrap(message):
+            if message["type"] == "http.response.start":
+                estado["code"] = message.get("status", 0)
+                ms = (_t.perf_counter() - t0) * 1000
+                headers = list(message.get("headers", []))
+                headers.append((b"server-timing", f"app;dur={ms:.0f}".encode()))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrap)
+        finally:
+            ms = (_t.perf_counter() - t0) * 1000
+            if ms >= self.umbral:
+                q = scope.get("query_string", b"").decode("latin-1")[:120]
+                logger.warning(f"🐢 Petición lenta {ms:.0f} ms · {scope.get('method')} {scope.get('path')}{'?' + q if q else ''} · HTTP {estado['code']}")
+
+import os as _os
+app.add_middleware(_TiempoPeticionMiddleware, umbral_ms=int(_os.environ.get("SLOW_REQUEST_MS", "700")))
+
 # Montar frontend (archivos estáticos)
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
@@ -115,6 +149,10 @@ if frontend_path.exists():
         """StaticFiles con Cache-Control: las URLs versionadas (?v=<startup_id>, que cambia en cada
         deploy) se cachean un año; fuentes/imagenes 7 dias; el resto se revalida por ETag (304)."""
         _LONG = (".woff2", ".woff", ".ttf", ".png", ".jpg", ".jpeg", ".ico", ".svg", ".webp", ".mp3")
+        # Librerías de terceros que no llevan ?v= (cambian solo al actualizar la librería, y ahí se cambia el archivo):
+        # 30 días en vez de revalidar contra el servidor en cada visita.
+        _VENDOR_SUFIJOS = (".min.js", ".min.css")
+        _VENDOR_NOMBRES = ("chart.js", "bootstrap-icons.css", "all.min.css")
 
         async def get_response(self, path, scope):
             resp = await super().get_response(path, scope)
@@ -123,6 +161,8 @@ if frontend_path.exists():
                     resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
                 elif path.lower().endswith(self._LONG):
                     resp.headers["Cache-Control"] = "public, max-age=604800"
+                elif path.lower().endswith(self._VENDOR_SUFIJOS) or path.rsplit("/", 1)[-1].lower() in self._VENDOR_NOMBRES or path.lower().startswith("js/libs/"):
+                    resp.headers["Cache-Control"] = "public, max-age=2592000"
                 else:
                     resp.headers["Cache-Control"] = "no-cache"
             return resp

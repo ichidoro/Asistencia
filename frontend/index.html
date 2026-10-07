@@ -5298,19 +5298,33 @@
         "/static/js/productos_4.js?v={{ startup_id }}",
         "/static/js/sync_wizard.js?v={{ startup_id }}"
 ];
-      var started = false, appReady = false, idx = 0;
+      var started = false, appReady = false, idx = 0, urgente = false;
       window.__lazyDone = false;
       var resolveAll;
       window.__lazyPromise = new Promise(function (r) { resolveAll = r; });
-      document.addEventListener('app:ready', function () { appReady = true; setTimeout(start, 350); }, { once: true });
+      // Si se va a restaurar una pantalla distinta del dashboard (recarga), o alguien navega antes de que termine,
+      // la carga arranca YA y sin pausas: esa persona está esperando.
+      document.addEventListener('app:ready', function () {
+        appReady = true;
+        var pg = window.__paginaInicial ? window.__paginaInicial() : 'dashboard';
+        if (pg && pg !== 'dashboard') { urgente = true; start(); } else setTimeout(start, 350);
+      }, { once: true });
+      window.__lazyStart = function () { urgente = true; start(); };
       setTimeout(start, 8000); // red de seguridad si app:ready no llega
 
       function idle(fn) {
+        if (urgente) { setTimeout(fn, 0); return; }
         if (window.requestIdleCallback) window.requestIdleCallback(fn, { timeout: 400 });
         else setTimeout(fn, 60);
       }
       function start() {
         if (started) return; started = true;
+        // Descarga en paralelo (antes: un archivo a la vez, esperando la red entre uno y otro). La ejecución sigue en orden.
+        QUEUE.forEach(function (u) {
+          var l = document.createElement('link');
+          l.rel = 'preload'; l.as = 'script'; l.href = u; l.setAttribute('fetchpriority', urgente ? 'high' : 'low');
+          document.head.appendChild(l);
+        });
         // Los scripts diferidos registran DOMContentLoaded/load/app:ready: como esos eventos ya pasaron,
         // se ejecutan de inmediato en vez de perderse.
         var dAdd = document.addEventListener, wAdd = window.addEventListener;

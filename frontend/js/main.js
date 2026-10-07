@@ -176,6 +176,69 @@ const searchInput = document.getElementById('search-input');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
 
+// ── Recordar la pantalla (y la pestaña) al recargar ─────────────────────────────────────────────
+// La pantalla actual queda en el hash de la URL (#/marcaciones) y en localStorage: sobrevive a F5 y a Ctrl+F5.
+// Al arrancar se abre esa pantalla si existe y el usuario tiene permiso; si no, el dashboard.
+const PAGINA_KEY = 'asistencia_pagina';
+window.__paginaInicial = function () {
+  try {
+    const hash = (location.hash || '').replace(/^#\/?/, '').split('/')[0];
+    const guardada = localStorage.getItem(PAGINA_KEY);
+    for (const cand of [hash, guardada]) {
+      if (!cand) continue;
+      const item = document.querySelector(`.sidebar-item[data-page="${cand}"]`);
+      if (!item || !document.getElementById(`page-${cand}`)) continue;
+      const permiso = item.getAttribute('data-permiso');
+      if (permiso && typeof AuthService !== 'undefined' && !AuthService.hasPermission(permiso)) continue;
+      return cand;
+    }
+  } catch (e) { /* storage bloqueado: dashboard */ }
+  return 'dashboard';
+};
+// Si alguien edita el hash a mano (#/empleados) o llega por un enlace con hash, se navega a esa pantalla.
+window.addEventListener('hashchange', () => {
+  const destino = window.__paginaInicial ? window.__paginaInicial() : null;
+  const actual = (document.querySelector('.page.active') || {}).id;
+  if (destino && actual && actual !== `page-${destino}`) switchPage(destino);
+});
+function _recordarPagina(pageName) {
+  try {
+    localStorage.setItem(PAGINA_KEY, pageName);
+    history.replaceState(null, '', `#/${pageName}`);
+  } catch (e) { /* sin storage / sin history: no pasa nada */ }
+}
+// Pestañas principales de cada pantalla (no las anidadas): se recuerda la última abierta y se reabre al volver.
+document.addEventListener('shown.bs.tab', (ev) => {
+  const btn = ev.target;
+  if (!btn || !btn.id || (btn.closest && btn.closest('.tab-pane'))) return;
+  const page = btn.closest && btn.closest('.page');
+  const lista = btn.closest && btn.closest('[role="tablist"], .nav');
+  if (!page || !lista || !lista.id) return;
+  try { localStorage.setItem(`asistencia_tab:${page.id}:${lista.id}`, btn.id); } catch (e) { /* ignorar */ }
+});
+const _pestanasRestauradas = new Set();
+function _restaurarPestanas(pageName) {
+  if (_pestanasRestauradas.has(pageName)) return;
+  _pestanasRestauradas.add(pageName);
+  const page = document.getElementById(`page-${pageName}`);
+  if (!page) return;
+  let guardadas = [];
+  try {
+    const pref = `asistencia_tab:page-${pageName}:`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(pref)) guardadas.push(localStorage.getItem(k));
+    }
+  } catch (e) { return; }
+  setTimeout(() => {
+    guardadas.forEach(id => {
+      const b = document.getElementById(id);
+      // click() (no Tab.show) para que corran los onclick que cargan los datos de cada pestaña
+      if (b && !b.classList.contains('active') && !b.classList.contains('d-none') && b.style.display !== 'none') b.click();
+    });
+  }, 150);
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   initializeApp();
@@ -222,8 +285,9 @@ async function initializeApp() {
   // por lo que no puede llamar switchPage() directamente. El evento garantiza que
   // esta función ya está definida cuando se intenta navegar al dashboard.
   document.addEventListener('app:ready', () => {
-    console.log('📊 [app:ready] Recibido → Cargando Dashboard inicial...');
-    switchPage('dashboard');
+    const inicial = window.__paginaInicial ? window.__paginaInicial() : 'dashboard';
+    console.log(`📊 [app:ready] Recibido → Abriendo pantalla inicial: ${inicial}`);
+    switchPage(inicial);
   }, { once: true }); // once:true evita múltiples disparos si se re-emite
 }
 
@@ -522,6 +586,7 @@ function switchPage(pageName) {
   // Las pantallas secundarias se cargan en segundo plano tras pintar el dashboard (ver index.html).
   // Si se navega antes de que terminen, se espera y se reintenta, en vez de abrir una pantalla sin su lógica.
   if (pageName !== 'dashboard' && window.__lazyDone === false && window.__lazyPromise) {
+    if (typeof window.__lazyStart === 'function') window.__lazyStart(); // alguien está esperando: sin pausas
     window.__lazyPromise.then(() => switchPage(pageName));
     return;
   }
@@ -625,6 +690,8 @@ function _executeSwitchPage(pageName) {
     'porteria': 'Portería y Control de Ronda'
   };
   document.getElementById('page-title').textContent = titles[pageName] || pageName;
+  _recordarPagina(pageName);
+  _restaurarPestanas(pageName);
 
   // Initialize specific page logic
   if (pageName === 'dashboard') {
