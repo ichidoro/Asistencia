@@ -3191,30 +3191,26 @@ class AsistenciaService:
         observacion_override: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Replica los registros de libreta_art25bis_dias entre dos empleados choferes para un rango
-        de fechas y recalcula atómicamente la tabla asistencias para el empleado destino.
+        Replica íntegramente las marcaciones, asistencias y libretas Art. 25 bis
+        del empleado origen al empleado destino para el rango indicado.
+        Garantiza que la grilla de asistencia refleje exactamente el mismo estado
+        (OK, horas trabajadas, esperas, libreta).
         """
         db = self.repository.db
-        logger.info(f"🔄 [Libreta 180h] Replicando libreta emp {empleado_origen_id} -> {empleado_destino_id} ({fecha_desde} al {fecha_hasta})...")
+        logger.info(f"🔄 [Replicación] Replicando datos emp {empleado_origen_id} -> {empleado_destino_id} ({fecha_desde} al {fecha_hasta})...")
 
-        # 1. Obtener registros de origen
+        # 0. Datos del empleado destino (RUT para logs_raw)
+        dest_emp = await db.fetch_one("SELECT id, rut, nombre, apellido_paterno FROM empleados WHERE id = ?", (empleado_destino_id,))
+        dest_rut = (dest_emp.get('rut') if dest_emp else '') or ''
+
+        # 1. Replicar libreta_art25bis_dias si existen registros
         q_lib = """
             SELECT * FROM libreta_art25bis_dias
             WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
             ORDER BY fecha ASC
         """
         libretas_origen = await db.fetch_all(q_lib, (empleado_origen_id, fecha_desde, fecha_hasta))
-        if not libretas_origen:
-            logger.warning(f"⚠️ [Libreta 180h] Origen emp_id={empleado_origen_id} no tiene registros de libreta entre {fecha_desde} y {fecha_hasta}.")
-            return {
-                "success": True,
-                "dias_encontrados": 0,
-                "dias_replicados": 0,
-                "detalles": [],
-                "mensaje": f"El empleado origen (ID {empleado_origen_id}) no tiene libretas registradas entre {fecha_desde} y {fecha_hasta}."
-            }
-
-        q_upsert = """
+        q_upsert_lib = """
             INSERT INTO libreta_art25bis_dias (
                 empleado_id, fecha, slots_96, minutos_conduccion, minutos_espera,
                 minutos_auxiliares, minutos_descanso, minutos_efectivos, cerrado,
@@ -3232,15 +3228,11 @@ class AsistenciaService:
                 observaciones = excluded.observaciones,
                 updated_at = CURRENT_TIMESTAMP
         """
-
-        dias_replicados = 0
-        detalles = []
         for l in libretas_origen:
-            f_dia = l['fecha']
             obs = observacion_override or f"Copia autorizada libreta Art. 25 bis desde empleado {empleado_origen_id} (regularización excepcional)"
             params = (
                 empleado_destino_id,
-                f_dia,
+                l['fecha'],
                 l['slots_96'],
                 l.get('minutos_conduccion', 0),
                 l.get('minutos_espera', 0),
@@ -3251,32 +3243,147 @@ class AsistenciaService:
                 l.get('validador_id'),
                 obs
             )
-            await db.execute(q_upsert, params)
+            await db.execute(q_upsert_lib, params)
 
-            # Recalcular inmediatamente en el motor de asistencia para persistir en la tabla asistencias
-            try:
-                res_calc = await self.procesar_empleado_dia(
-                    empleado_id=empleado_destino_id,
-                    fecha=f_dia,
-                    save=True,
-                    force=True
-                )
-                est = res_calc.get('estado') if res_calc else 'OK'
-                hrs = res_calc.get('horas_trabajadas') if res_calc else round(float(l.get('minutos_efectivos', 0))/60.0, 2)
-                esp = res_calc.get('minutos_espera') if res_calc else l.get('minutos_espera', 0)
-                detalles.append({"fecha": f_dia, "estado": est, "horas_efectivas": hrs, "minutos_espera": esp})
-                dias_replicados += 1
-            except Exception as e_calc:
-                logger.error(f"❌ Error recalculando día {f_dia} para emp {empleado_destino_id}: {e_calc}")
-                detalles.append({"fecha": f_dia, "error": str(e_calc)})
+        # 2. Replicar logs_raw (marcaciones físicas o manuales)
+        q_logs = """
+            SELECT * FROM logs_raw
+            WHERE empleado_id = ?
+              AND substr(fecha_hora, 1, 10) BETWEEN ? AND ?
+            ORDER BY fecha_hora ASC
+        """
+        logs_origen = await db.fetch_all(q_logs, (empleado_origen_id, fecha_desde, fecha_hasta))
+        for log in logs_origen:
+            fh = log['fecha_hora']
+            hash_rep = f"REPLICA_{empleado_destino_id}_{log.get('id', 0)}_{fh}"
+            q_ins_log = """
+                INSERT INTO logs_raw (
+                    empleado_id, rut, fecha_hora, tipo, equipo,
+                    hash_original, created_at, manual, observaciones, usuario_id
+                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1, ?, ?)
+                ON CONFLICT(hash_original) DO NOTHING
+            """
+            await db.execute(q_ins_log, (
+                empleado_destino_id,
+                dest_rut,
+                fh,
+                log.get('tipo'),
+                log.get('equipo'),
+                hash_rep,
+                f"Copia autorizada desde emp {empleado_origen_id}",
+                log.get('usuario_id')
+            ))
 
-        logger.success(f"✅ [Libreta 180h] Replicación exitosa: {dias_replicados} días replicados hacia emp {empleado_destino_id}.")
+        # 3. Replicar directamente la tabla asistencias (la que visualiza la grilla)
+        q_asis = """
+            SELECT * FROM asistencias
+            WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
+            ORDER BY fecha ASC
+        """
+        asist_origen = await db.fetch_all(q_asis, (empleado_origen_id, fecha_desde, fecha_hasta))
+        dias_replicados = 0
+        detalles = []
+
+        q_upsert_asis = """
+            INSERT INTO asistencias (
+                empleado_id, fecha, turno_asignado_id,
+                hora_entrada_teorica, hora_salida_teorica, horas_teoricas,
+                hora_entrada_real, hora_salida_real,
+                minutos_atraso, minutos_colacion, minutos_colacion_real, horas_trabajadas,
+                minutos_deuda, minutos_extra_bruto, minutos_salida_adelantada,
+                estado, observaciones, origen, updated_at,
+                minutos_exceso_colacion, minutos_colacion_auto, minutos_permiso_personal_deuda,
+                hora_salida_colacion, hora_entrada_colacion, hora_inicio_permiso,
+                hora_termino_permiso, minutos_permisos_detectados,
+                tiene_atraso, tiene_salida_adelantada, tiene_permiso,
+                num_semana_ganadora, marcas_consumidas_ids, deuda_condonada,
+                minutos_espera, justificacion_id, nomenclatura
+            ) VALUES (
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, CURRENT_TIMESTAMP,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?
+            )
+            ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                turno_asignado_id = excluded.turno_asignado_id,
+                hora_entrada_teorica = excluded.hora_entrada_teorica,
+                hora_salida_teorica = excluded.hora_salida_teorica,
+                horas_teoricas = excluded.horas_teoricas,
+                hora_entrada_real = excluded.hora_entrada_real,
+                hora_salida_real = excluded.hora_salida_real,
+                minutos_atraso = excluded.minutos_atraso,
+                minutos_colacion = excluded.minutos_colacion,
+                minutos_colacion_real = excluded.minutos_colacion_real,
+                horas_trabajadas = excluded.horas_trabajadas,
+                minutos_deuda = excluded.minutos_deuda,
+                minutos_extra_bruto = excluded.minutos_extra_bruto,
+                minutos_salida_adelantada = excluded.minutos_salida_adelantada,
+                estado = excluded.estado,
+                observaciones = excluded.observaciones,
+                origen = 'MANUAL',
+                minutos_exceso_colacion = excluded.minutos_exceso_colacion,
+                minutos_colacion_auto = excluded.minutos_colacion_auto,
+                minutos_permiso_personal_deuda = excluded.minutos_permiso_personal_deuda,
+                hora_salida_colacion = excluded.hora_salida_colacion,
+                hora_entrada_colacion = excluded.hora_entrada_colacion,
+                hora_inicio_permiso = excluded.hora_inicio_permiso,
+                hora_termino_permiso = excluded.hora_termino_permiso,
+                minutos_permisos_detectados = excluded.minutos_permisos_detectados,
+                tiene_atraso = excluded.tiene_atraso,
+                tiene_salida_adelantada = excluded.tiene_salida_adelantada,
+                tiene_permiso = excluded.tiene_permiso,
+                num_semana_ganadora = excluded.num_semana_ganadora,
+                marcas_consumidas_ids = excluded.marcas_consumidas_ids,
+                deuda_condonada = excluded.deuda_condonada,
+                minutos_espera = excluded.minutos_espera,
+                justificacion_id = excluded.justificacion_id,
+                nomenclatura = excluded.nomenclatura,
+                updated_at = CURRENT_TIMESTAMP
+        """
+
+        for a in asist_origen:
+            f_dia = a['fecha']
+            obs_dest = observacion_override or f"Copia autorizada idéntica desde empleado {empleado_origen_id} (regularización excepcional)"
+            params_asis = (
+                empleado_destino_id, f_dia, a.get('turno_asignado_id'),
+                a.get('hora_entrada_teorica'), a.get('hora_salida_teorica'), a.get('horas_teoricas', 0),
+                a.get('hora_entrada_real'), a.get('hora_salida_real'),
+                a.get('minutos_atraso', 0), a.get('minutos_colacion', 0), a.get('minutos_colacion_real', 0), a.get('horas_trabajadas', 0),
+                a.get('minutos_deuda', 0), a.get('minutos_extra_bruto', 0), a.get('minutos_salida_adelantada', 0),
+                a.get('estado', 'OK'), obs_dest, 'MANUAL',
+                a.get('minutos_exceso_colacion', 0), a.get('minutos_colacion_auto', 0), a.get('minutos_permiso_personal_deuda', 0),
+                a.get('hora_salida_colacion'), a.get('hora_entrada_colacion'), a.get('hora_inicio_permiso'),
+                a.get('hora_termino_permiso'), a.get('minutos_permisos_detectados', 0),
+                a.get('tiene_atraso', 0), a.get('tiene_salida_adelantada', 0), a.get('tiene_permiso', 0),
+                a.get('num_semana_ganadora', 1), a.get('marcas_consumidas_ids', '[]'), a.get('deuda_condonada', 0),
+                a.get('minutos_espera', 0), a.get('justificacion_id'), a.get('nomenclatura')
+            )
+            await db.execute(q_upsert_asis, params_asis)
+            dias_replicados += 1
+            detalles.append({
+                "fecha": f_dia,
+                "estado": a.get('estado', 'OK'),
+                "horas_trabajadas": a.get('horas_trabajadas', 0),
+                "hora_entrada": a.get('hora_entrada_real'),
+                "hora_salida": a.get('hora_salida_real'),
+                "minutos_espera": a.get('minutos_espera', 0)
+            })
+
+        logger.success(f"✅ [Replicación] Replicación completada: {dias_replicados} días replicados (libretas: {len(libretas_origen)}, logs: {len(logs_origen)}, asistencias: {len(asist_origen)}).")
         return {
             "success": True,
-            "dias_encontrados": len(libretas_origen),
+            "dias_encontrados": len(asist_origen) or len(libretas_origen),
             "dias_replicados": dias_replicados,
             "detalles": detalles,
-            "mensaje": f"Se replicaron {dias_replicados} días correctamente."
+            "mensaje": f"Se replicaron {dias_replicados} días idénticos desde Juan Paredes a Enzo Donoso."
         }
 
     # Alias de compatibilidad

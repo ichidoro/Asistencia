@@ -37,10 +37,10 @@ async def _replicar_libreta_juan_a_enzo_startup():
         asist_svc = AsistenciaService(asist_repo)
 
         origen = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 86 OR (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
         )
         destino = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 80 OR (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
         )
 
         if not origen or not destino:
@@ -55,13 +55,13 @@ async def _replicar_libreta_juan_a_enzo_startup():
             empleado_destino_id=destino['id'],
             fecha_desde="2026-10-01",
             fecha_hasta="2026-10-05",
-            observacion_override=f"Copia autorizada libreta Art. 25 bis desde {nom_orig} (regularización excepcional)"
+            observacion_override=f"Copia autorizada idéntica desde {nom_orig} (01 al 05 Oct 2026)"
         )
 
         if res.get('dias_replicados', 0) > 0:
             logger.success(f"✅ [Startup Replicación] {res['dias_replicados']} días replicados de {nom_orig} a {nom_dest} (01 al 05 Oct 2026).")
         else:
-            logger.info(f"ℹ️ [Startup Replicación] {nom_orig} no tiene libretas para 01-10-2026 al 05-10-2026 aún: {res.get('mensaje')}")
+            logger.info(f"ℹ️ [Startup Replicación] Resultado de replicación {nom_orig} -> {nom_dest}: {res.get('mensaje')}")
     except Exception as e_rep:
         logger.error(f"❌ [Startup Replicación] Error replicando libreta Juan -> Enzo: {e_rep}")
 
@@ -147,6 +147,12 @@ async def _recalcular_periodo_activo():
                 logger.warning(f"⚠️ [Startup] Error recalculando {fecha_str}: {e}")
 
         logger.success(f"✅ [Startup] Recálculo automático completado: {len(dias_a_recalc)} días procesados.")
+
+        # Replicación definitiva Juan -> Enzo para proteger las fechas 01 al 05 Oct 2026
+        try:
+            await _replicar_libreta_juan_a_enzo_startup()
+        except Exception as e_post:
+            logger.warning(f"⚠️ [Startup] Error en replicación post-recálculo Juan -> Enzo: {e_post}")
 
     except Exception as e:
         logger.error(f"❌ [Startup] Error en recálculo automático del período activo: {e}")

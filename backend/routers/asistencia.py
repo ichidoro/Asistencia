@@ -3349,10 +3349,10 @@ async def replicar_libreta_juan_a_enzo(
     try:
         db = service.repository.db
         origen = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 86 OR (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
         )
         destino = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 80 OR (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
         )
 
         if not origen:
@@ -3368,7 +3368,7 @@ async def replicar_libreta_juan_a_enzo(
             empleado_destino_id=destino['id'],
             fecha_desde="2026-10-01",
             fecha_hasta="2026-10-05",
-            observacion_override=f"Copia autorizada libreta Art. 25 bis desde {nom_origen} (regularización excepcional)"
+            observacion_override=f"Copia autorizada idéntica desde {nom_origen} (01 al 05 Oct 2026)"
         )
 
         resultado["origen"] = {"id": origen['id'], "nombre": nom_origen}
