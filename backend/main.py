@@ -321,6 +321,40 @@ async def app_version():
     return JSONResponse({"build": STARTUP_ID}, headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/diag/empleados-comparacion", tags=["Health"], include_in_schema=False)
+async def diag_empleados_comparacion(ejecutar_replica: int = 0):
+    from backend.repositories.asistencia import AsistenciaRepository
+    from backend.services.asistencia_service import AsistenciaService
+    asist_repo = AsistenciaRepository(db)
+    asist_svc = AsistenciaService(asist_repo)
+
+    emps = await db.fetch_all("SELECT id, rut, nombre, apellido_paterno, apellido_materno, cargo FROM empleados WHERE apellido_paterno ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%PAREDES%' OR nombre ILIKE '%DONOSO%' OR nombre ILIKE '%PAREDES%' OR id IN (80, 86)")
+    emp_ids = [e['id'] for e in emps]
+
+    replica_res = None
+    if ejecutar_replica == 1:
+        origen_id = next((e['id'] for e in emps if 'PAREDES' in (e.get('apellido_paterno') or '').upper() or e['id'] == 86), 86)
+        destino_id = next((e['id'] for e in emps if 'DONOSO' in (e.get('apellido_paterno') or '').upper() or e['id'] == 80), 80)
+        replica_res = await asist_svc.replicar_libreta_chofer(
+            empleado_origen_id=origen_id,
+            empleado_destino_id=destino_id,
+            fecha_desde="2026-10-01",
+            fecha_hasta="2026-10-05"
+        )
+
+    asis = await db.fetch_all("SELECT id, empleado_id, fecha, hora_entrada_real, hora_salida_real, horas_trabajadas, estado, observaciones, minutos_espera, origen FROM asistencias WHERE fecha BETWEEN '2026-10-01' AND '2026-10-05' ORDER BY fecha, empleado_id")
+    libs = await db.fetch_all("SELECT id, empleado_id, fecha, slots_96, minutos_conduccion, minutos_espera, minutos_efectivos, cerrado, observaciones FROM libreta_art25bis_dias WHERE fecha BETWEEN '2026-10-01' AND '2026-10-05' ORDER BY fecha, empleado_id")
+    logs = await db.fetch_all("SELECT id, empleado_id, rut, fecha_hora, tipo, equipo, manual, observaciones FROM logs_raw WHERE substr(fecha_hora, 1, 10) BETWEEN '2026-10-01' AND '2026-10-05' ORDER BY fecha_hora, empleado_id")
+
+    return JSONResponse({
+        "replica_ejecutada": replica_res,
+        "empleados": [dict(e) for e in emps],
+        "asistencias": [dict(a) for a in asis if a['empleado_id'] in emp_ids],
+        "libretas": [dict(l) for l in libs if l['empleado_id'] in emp_ids],
+        "logs_raw": [dict(lg) for lg in logs if lg['empleado_id'] in emp_ids],
+    })
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
