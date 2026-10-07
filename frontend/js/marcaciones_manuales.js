@@ -3156,6 +3156,13 @@ window.abrirScannerLibreta = async function() {
     const modalEl = document.getElementById('modalScannerLibreta');
     if (!modalEl) return;
     
+    // Resetear banderas de bloqueo de captura
+    window._scannerEnProceso = false;
+    const shutterBtn = document.getElementById('scanner-btn-shutter');
+    if (shutterBtn) {
+        shutterBtn.classList.remove('disabled', 'opacity-50');
+    }
+
     // Asegurar modo 1 Día (columna vertical) inicializado por defecto
     window.scannerModoActual = 'dia';
     const box = document.getElementById('scanner-guide-box');
@@ -3304,91 +3311,145 @@ window.scannerToggleModoGuia = function() {
 };
 
 window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
+    if (window._scannerEnProceso) {
+        console.warn("⚠️ Captura ya en proceso, ignorando pulsación duplicada.");
+        return;
+    }
+
     const video = document.getElementById('scanner-live-video');
     const canvas = document.getElementById('scanner-hidden-canvas');
-    if (!video || !canvas) return;
+    const shutterBtn = document.getElementById('scanner-btn-shutter');
 
-    const w = video.videoWidth || 1920;
-    const h = video.videoHeight || 1080;
-    canvas.width = w;
-    canvas.height = h;
+    if (!video || !canvas) {
+        console.error("❌ Elementos de video o canvas no disponibles en el DOM");
+        return;
+    }
 
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, w, h);
+    // 1. Feedback háptico inmediato en smartphones
+    if (navigator.vibrate) {
+        try { navigator.vibrate([45, 30, 45]); } catch(e){}
+    }
 
-    let finalDataUrl = null;
+    // 2. Feedback visual instantáneo en el botón disparador
+    if (shutterBtn) {
+        shutterBtn.classList.add('disabled', 'opacity-50');
+    }
 
-    // Recorte geométrico exacto de la columna visible en pantalla (1 Día)
-    const guideBox = document.getElementById('scanner-guide-box');
-    if (window.scannerModoActual === 'dia' && guideBox && typeof video.getBoundingClientRect === 'function') {
+    // 3. Validar estado del flujo de video
+    if (video.readyState < 2 || !video.videoWidth) {
+        if (typeof showToast === 'function') {
+            showToast("La cámara se está inicializando. Espere un segundo y vuelva a presionar.", "warning");
+        }
+        if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
+        return;
+    }
+
+    window._scannerEnProceso = true;
+
+    // 4. Cambiar inmediatamente la vista al spinner para que la pantalla NUNCA quede inmóvil
+    document.getElementById('scanner-step-camera')?.classList.add('d-none');
+    document.getElementById('scanner-step-crop')?.classList.add('d-none');
+    const loadingStep = document.getElementById('scanner-step-loading');
+    if (loadingStep) {
+        loadingStep.classList.remove('d-none');
+        loadingStep.classList.add('d-flex');
+    }
+
+    // 5. Procesar la captura y recorte dentro de requestAnimationFrame para asegurar renderizado previo del loader
+    requestAnimationFrame(() => {
         try {
-            const vRect = video.getBoundingClientRect();
-            const gRect = guideBox.getBoundingClientRect();
+            const w = video.videoWidth || 1920;
+            const h = video.videoHeight || 1080;
+            canvas.width = w;
+            canvas.height = h;
 
-            if (vRect.width > 0 && vRect.height > 0 && gRect.width > 0 && gRect.height > 0) {
-                // Mapeo exacto bajo escalado CSS object-fit: cover
-                const scale = Math.max(vRect.width / w, vRect.height / h);
-                const renderedW = w * scale;
-                const renderedH = h * scale;
-                const offsetX = (renderedW - vRect.width) / 2;
-                const offsetY = (renderedH - vRect.height) / 2;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, w, h);
 
-                const gx = gRect.left - vRect.left + offsetX;
-                const gy = gRect.top - vRect.top + offsetY;
+            let finalDataUrl = null;
 
-                let cropX = gx / scale;
-                let cropY = gy / scale;
-                let cropW = gRect.width / scale;
-                let cropH = gRect.height / scale;
+            // Recorte geométrico exacto de la columna visible en pantalla (1 Día)
+            const guideBox = document.getElementById('scanner-guide-box');
+            if (window.scannerModoActual === 'dia' && guideBox && typeof video.getBoundingClientRect === 'function') {
+                try {
+                    const vRect = video.getBoundingClientRect();
+                    const gRect = guideBox.getBoundingClientRect();
 
-                // Margen horizontal CERO para aislar estrictamente la columna del día sin sangrar en días vecinos
-                const padX = 0;
-                // Margen vertical mínimo (1.5%) para respetar extremos de 00h y 24h
-                const padY = cropH * 0.015;
-                cropX = Math.max(0, cropX);
-                cropY = Math.max(0, cropY - padY);
-                cropW = Math.min(w - cropX, cropW);
-                cropH = Math.min(h - cropY, cropH + 2 * padY);
+                    if (vRect.width > 0 && vRect.height > 0 && gRect.width > 0 && gRect.height > 0) {
+                        const scale = Math.max(vRect.width / w, vRect.height / h);
+                        const renderedW = w * scale;
+                        const renderedH = h * scale;
+                        const offsetX = (renderedW - vRect.width) / 2;
+                        const offsetY = (renderedH - vRect.height) / 2;
 
-                if (cropW > 60 && cropH > 60) {
-                    const cropCanvas = document.createElement('canvas');
-                    cropCanvas.width = Math.round(cropW);
-                    cropCanvas.height = Math.round(cropH);
-                    const cCtx = cropCanvas.getContext('2d');
-                    cCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
-                    finalDataUrl = cropCanvas.toDataURL('image/jpeg', 0.85);
-                    console.log(`📸 Columna 1 Día recortada con éxito en alta resolución: ${cropCanvas.width}x${cropCanvas.height}px`);
+                        const gx = gRect.left - vRect.left + offsetX;
+                        const gy = gRect.top - vRect.top + offsetY;
+
+                        let cropX = gx / scale;
+                        let cropY = gy / scale;
+                        let cropW = gRect.width / scale;
+                        let cropH = gRect.height / scale;
+
+                        const padY = cropH * 0.015;
+                        cropX = Math.max(0, cropX);
+                        cropY = Math.max(0, cropY - padY);
+                        cropW = Math.min(w - cropX, cropW);
+                        cropH = Math.min(h - cropY, cropH + 2 * padY);
+
+                        if (cropW > 60 && cropH > 60) {
+                            const cropCanvas = document.createElement('canvas');
+                            cropCanvas.width = Math.round(cropW);
+                            cropCanvas.height = Math.round(cropH);
+                            const cCtx = cropCanvas.getContext('2d');
+                            cCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
+                            finalDataUrl = cropCanvas.toDataURL('image/jpeg', 0.85);
+                            console.log(`📸 Columna 1 Día recortada con éxito: ${cropCanvas.width}x${cropCanvas.height}px`);
+                        }
+                    }
+                } catch (cropErr) {
+                    console.warn("⚠️ Fallback recorte inteligente:", cropErr);
                 }
             }
-        } catch (cropErr) {
-            console.warn("⚠️ Fallback recorte inteligente:", cropErr);
-        }
-    }
 
-    // Modo Hoja Completa: aplanar con jscanify si está disponible
-    if (!finalDataUrl && window.scannerModoActual === 'hoja') {
-        const scanner = getJscanifyInstance();
-        if (scanner) {
-            try {
-                const paperCanvas = scanner.extractPaper(canvas, 1600, 1000);
-                if (paperCanvas) {
-                    finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.85);
-                    console.log("📄 Hoja completa aplanada con OpenCV/jscanify.");
+            // Modo Hoja Completa: aplanar con jscanify si está disponible
+            if (!finalDataUrl && window.scannerModoActual === 'hoja') {
+                const scanner = typeof getJscanifyInstance === 'function' ? getJscanifyInstance() : null;
+                if (scanner) {
+                    try {
+                        const paperCanvas = scanner.extractPaper(canvas, 1600, 1000);
+                        if (paperCanvas) {
+                            finalDataUrl = paperCanvas.toDataURL('image/jpeg', 0.85);
+                            console.log("📄 Hoja completa aplanada con OpenCV/jscanify.");
+                        }
+                    } catch (e) {
+                        console.warn("⚠️ Fallback jscanify extractPaper:", e);
+                    }
                 }
-            } catch (e) {
-                console.warn("⚠️ Fallback jscanify extractPaper:", e);
+            }
+
+            if (!finalDataUrl) {
+                finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            }
+
+            detenerScannerCamara();
+
+            // Procesar directo con Gemini Vision AI
+            window.scannerProcesarConGemini(finalDataUrl);
+
+        } catch (captureErr) {
+            console.error("❌ Error en captura de frame:", captureErr);
+            window._scannerEnProceso = false;
+            if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
+
+            // Restaurar visor de cámara si falló la captura
+            document.getElementById('scanner-step-loading')?.classList.add('d-none');
+            document.getElementById('scanner-step-camera')?.classList.remove('d-none');
+
+            if (typeof showToast === 'function') {
+                showToast("Error al capturar imagen: " + (captureErr.message || captureErr), "error");
             }
         }
-    }
-
-    if (!finalDataUrl) {
-        finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    }
-
-    detenerScannerCamara();
-
-    // Procesar directo con Gemini Vision AI (cero recorte manual)
-    window.scannerProcesarConGemini(finalDataUrl);
+    });
 };
 
 window.m180HandleFileForScanner = function(event) {
@@ -3771,22 +3832,33 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
     } catch (err) {
         console.error("❌ Error en scannerProcesarConGemini:", err);
         document.getElementById('scanner-step-loading')?.classList.add('d-none');
-        document.getElementById('scanner-step-crop')?.classList.remove('d-none');
+        document.getElementById('scanner-step-camera')?.classList.remove('d-none');
+        const shutterBtn = document.getElementById('scanner-btn-shutter');
+        if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
+
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',
-                title: 'Error al Procesar Planilla',
-                text: err.message || 'No se pudo interpretar la planilla física.'
+                title: 'Error al Procesar Planilla con IA',
+                text: err.message || 'No se pudo interpretar la planilla física.',
+                confirmButtonColor: '#ef4444'
             });
         } else if (typeof showToast === 'function') {
             showToast(err.message, "error");
         }
+        // Reiniciar stream de cámara para permitir reintentar de inmediato
+        try { await iniciarScannerCamara(); } catch(camErr) {}
     } finally {
         window._scannerEnProceso = false;
+        const shutterBtn = document.getElementById('scanner-btn-shutter');
+        if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
     }
 };
 
 window.scannerCerrar = function() {
+    window._scannerEnProceso = false;
+    const shutterBtn = document.getElementById('scanner-btn-shutter');
+    if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
     detenerScannerCamara();
     if (scannerCropperInstance) {
         scannerCropperInstance.destroy();
@@ -3796,6 +3868,99 @@ window.scannerCerrar = function() {
     if (modalEl) {
         const bsModal = bootstrap.Modal.getInstance(modalEl);
         if (bsModal) bsModal.hide();
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// REPLICACIÓN PUNTUAL DE LIBRETA (JUAN PAREDES ➔ ENZO DONOSO)
+// ═══════════════════════════════════════════════════════════════════
+window.m180ReplicarJuanAEnzo = async function() {
+    const btn = document.getElementById('m180-btn-replicar-juan');
+    const empNombre = document.getElementById('m180-emp-nombre')?.textContent || 'Enzo Donoso';
+    
+    let confirmado = false;
+    if (typeof Swal !== 'undefined') {
+        const swalRes = await Swal.fire({
+            title: '¿Replicar Marcaciones de Chofer?',
+            html: `Se copiarán las jornadas de libreta Art. 25 bis de <strong>Juan Paredes</strong> hacia <strong>${empNombre}</strong> para los días <strong>01-10-2026 al 05-10-2026</strong>.<br><br><small class="text-muted">Operación excepcional de regularización autorizada de choferes.</small>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-copy me-1"></i> Sí, replicar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#059669',
+            cancelButtonColor: '#64748b'
+        });
+        confirmado = swalRes.isConfirmed;
+    } else {
+        confirmado = confirm(`¿Replicar marcaciones de Juan Paredes a ${empNombre} del 01 al 05 de Octubre 2026?`);
+    }
+
+    if (!confirmado) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Replicando...`;
+    }
+
+    try {
+        const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+        const resp = await fetch('/api/asistencia/libreta-180h/replicar-juan-a-enzo/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.detail || `Error ${resp.status} al replicar libreta`);
+        }
+
+        const data = await resp.json();
+        const diasRep = data.dias_replicados || 0;
+        const msg = data.mensaje || `Se replicaron ${diasRep} días correctamente.`;
+
+        if (typeof Swal !== 'undefined') {
+            await Swal.fire({
+                icon: diasRep > 0 ? 'success' : 'info',
+                title: diasRep > 0 ? 'Replicación Completada' : 'Aviso de Replicación',
+                html: `${msg}<br><br><small class="text-muted">La matriz de asistencia se refrescará con los nuevos valores calculados.</small>`,
+                confirmButtonColor: '#059669'
+            });
+        } else if (typeof showToast === 'function') {
+            showToast(msg, diasRep > 0 ? 'success' : 'info');
+        }
+
+        // Refrescar modal actual de libreta si está abierto para el día consultado
+        if (typeof m180CargarDia === 'function') {
+            try { await m180CargarDia(); } catch(e){}
+        }
+
+        // Refrescar grilla general de asistencia
+        if (typeof cargarMatrizAsistencia === 'function') {
+            await cargarMatrizAsistencia();
+        } else if (typeof renderizarMatriz === 'function') {
+            await renderizarMatriz();
+        }
+
+    } catch (err) {
+        console.error("❌ Error en m180ReplicarJuanAEnzo:", err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al Replicar',
+                text: err.message || 'No se pudo completar la replicación.',
+                confirmButtonColor: '#ef4444'
+            });
+        } else if (typeof showToast === 'function') {
+            showToast("Error: " + err.message, "error");
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="bi bi-copy fs-6 me-1"></i> Replicar Juan ➔ Enzo`;
+        }
     }
 };
 

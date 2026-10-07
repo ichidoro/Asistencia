@@ -25,6 +25,47 @@ if TYPE_CHECKING:
 scheduler = AsyncIOScheduler()
 
 
+async def _replicar_libreta_juan_a_enzo_startup():
+    """
+    Replicación automática y puntual de la libreta Art. 25 bis (180h) de Juan Paredes a Enzo Donoso
+    para el período 2026-10-01 al 2026-10-05. Corre durante el startup del servidor.
+    """
+    try:
+        from backend.repositories.asistencia import AsistenciaRepository
+        from backend.services.asistencia_service import AsistenciaService
+        asist_repo = AsistenciaRepository(db)
+        asist_svc = AsistenciaService(asist_repo)
+
+        origen = await db.fetch_one(
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
+        )
+        destino = await db.fetch_one(
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
+        )
+
+        if not origen or not destino:
+            logger.warning(f"⚠️ [Startup Replicación] Empleados no encontrados (Juan: {bool(origen)}, Enzo: {bool(destino)}).")
+            return
+
+        nom_orig = f"{origen.get('nombre', '')} {origen.get('apellido_paterno', '')}".strip()
+        nom_dest = f"{destino.get('nombre', '')} {destino.get('apellido_paterno', '')}".strip()
+
+        res = await asist_svc.replicar_libreta_chofer(
+            empleado_origen_id=origen['id'],
+            empleado_destino_id=destino['id'],
+            fecha_desde="2026-10-01",
+            fecha_hasta="2026-10-05",
+            observacion_override=f"Copia autorizada libreta Art. 25 bis desde {nom_orig} (regularización excepcional)"
+        )
+
+        if res.get('dias_replicados', 0) > 0:
+            logger.success(f"✅ [Startup Replicación] {res['dias_replicados']} días replicados de {nom_orig} a {nom_dest} (01 al 05 Oct 2026).")
+        else:
+            logger.info(f"ℹ️ [Startup Replicación] {nom_orig} no tiene libretas para 01-10-2026 al 05-10-2026 aún: {res.get('mensaje')}")
+    except Exception as e_rep:
+        logger.error(f"❌ [Startup Replicación] Error replicando libreta Juan -> Enzo: {e_rep}")
+
+
 async def _recalcular_periodo_activo():
     """
     Recalcula la tabla `asistencias` para el período activo al arrancar.
@@ -217,6 +258,12 @@ async def lifespan(app: FastAPI):
                 startup_manager.update(100, "Iniciando Dashboard...", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
+
+                # Replicación puntual Juan Paredes -> Enzo Donoso (01 al 05 Oct 2026)
+                try:
+                    await _replicar_libreta_juan_a_enzo_startup()
+                except Exception as e_rep:
+                    logger.warning(f"⚠️ [Startup] Error en replicación Juan -> Enzo: {e_rep}")
 
                 # Recalcular automáticamente el período activo para refrescar la tabla asistencias
                 asyncio.create_task(_recalcular_periodo_activo())

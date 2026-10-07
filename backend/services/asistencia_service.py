@@ -3182,6 +3182,103 @@ class AsistenciaService:
             "fecha_desde": fecha_desde
         }
 
+    async def replicar_libreta_chofer(
+        self,
+        empleado_origen_id: int,
+        empleado_destino_id: int,
+        fecha_desde: str = "2026-10-01",
+        fecha_hasta: str = "2026-10-05",
+        observacion_override: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Replica los registros de libreta_art25bis_dias entre dos empleados choferes para un rango
+        de fechas y recalcula atómicamente la tabla asistencias para el empleado destino.
+        """
+        db = self.repository.db
+        logger.info(f"🔄 [Libreta 180h] Replicando libreta emp {empleado_origen_id} -> {empleado_destino_id} ({fecha_desde} al {fecha_hasta})...")
+
+        # 1. Obtener registros de origen
+        q_lib = """
+            SELECT * FROM libreta_art25bis_dias
+            WHERE empleado_id = ? AND fecha BETWEEN ? AND ?
+            ORDER BY fecha ASC
+        """
+        libretas_origen = await db.fetch_all(q_lib, (empleado_origen_id, fecha_desde, fecha_hasta))
+        if not libretas_origen:
+            logger.warning(f"⚠️ [Libreta 180h] Origen emp_id={empleado_origen_id} no tiene registros de libreta entre {fecha_desde} y {fecha_hasta}.")
+            return {
+                "success": True,
+                "dias_encontrados": 0,
+                "dias_replicados": 0,
+                "detalles": [],
+                "mensaje": f"El empleado origen (ID {empleado_origen_id}) no tiene libretas registradas entre {fecha_desde} y {fecha_hasta}."
+            }
+
+        q_upsert = """
+            INSERT INTO libreta_art25bis_dias (
+                empleado_id, fecha, slots_96, minutos_conduccion, minutos_espera,
+                minutos_auxiliares, minutos_descanso, minutos_efectivos, cerrado,
+                validador_id, observaciones, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(empleado_id, fecha) DO UPDATE SET
+                slots_96 = excluded.slots_96,
+                minutos_conduccion = excluded.minutos_conduccion,
+                minutos_espera = excluded.minutos_espera,
+                minutos_auxiliares = excluded.minutos_auxiliares,
+                minutos_descanso = excluded.minutos_descanso,
+                minutos_efectivos = excluded.minutos_efectivos,
+                cerrado = excluded.cerrado,
+                validador_id = excluded.validador_id,
+                observaciones = excluded.observaciones,
+                updated_at = CURRENT_TIMESTAMP
+        """
+
+        dias_replicados = 0
+        detalles = []
+        for l in libretas_origen:
+            f_dia = l['fecha']
+            obs = observacion_override or f"Copia autorizada libreta Art. 25 bis desde empleado {empleado_origen_id} (regularización excepcional)"
+            params = (
+                empleado_destino_id,
+                f_dia,
+                l['slots_96'],
+                l.get('minutos_conduccion', 0),
+                l.get('minutos_espera', 0),
+                l.get('minutos_auxiliares', 0),
+                l.get('minutos_descanso', 0),
+                l.get('minutos_efectivos', 0),
+                l.get('cerrado', 0),
+                l.get('validador_id'),
+                obs
+            )
+            await db.execute(q_upsert, params)
+
+            # Recalcular inmediatamente en el motor de asistencia para persistir en la tabla asistencias
+            try:
+                res_calc = await self.procesar_empleado_dia(
+                    empleado_id=empleado_destino_id,
+                    fecha=f_dia,
+                    save=True,
+                    force=True
+                )
+                est = res_calc.get('estado') if res_calc else 'OK'
+                hrs = res_calc.get('horas_trabajadas') if res_calc else round(float(l.get('minutos_efectivos', 0))/60.0, 2)
+                esp = res_calc.get('minutos_espera') if res_calc else l.get('minutos_espera', 0)
+                detalles.append({"fecha": f_dia, "estado": est, "horas_efectivas": hrs, "minutos_espera": esp})
+                dias_replicados += 1
+            except Exception as e_calc:
+                logger.error(f"❌ Error recalculando día {f_dia} para emp {empleado_destino_id}: {e_calc}")
+                detalles.append({"fecha": f_dia, "error": str(e_calc)})
+
+        logger.success(f"✅ [Libreta 180h] Replicación exitosa: {dias_replicados} días replicados hacia emp {empleado_destino_id}.")
+        return {
+            "success": True,
+            "dias_encontrados": len(libretas_origen),
+            "dias_replicados": dias_replicados,
+            "detalles": detalles,
+            "mensaje": f"Se replicaron {dias_replicados} días correctamente."
+        }
+
     # Alias de compatibilidad
     procesar_dia_empleado = procesar_empleado_dia
 

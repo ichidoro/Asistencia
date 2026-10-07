@@ -4846,6 +4846,10 @@
                                                 <i class="bi bi-camera-fill fs-6"></i>
                                                 <span>Escanear / Cargar Hoja</span>
                                             </button>
+                                            <button type="button" id="m180-btn-replicar-juan" class="btn btn-sm btn-outline-primary fw-bold px-3 py-1.5 shadow-sm d-flex align-items-center gap-1.5" style="border-radius:8px;" onclick="window.m180ReplicarJuanAEnzo()" title="Replicar marcaciones desde Juan Paredes (01 al 05 Oct)">
+                                                <i class="bi bi-copy fs-6"></i>
+                                                <span>Replicar Juan ➔ Enzo</span>
+                                            </button>
                                         </div>
                                     </div>
 
@@ -5135,8 +5139,8 @@
                                 </button>
 
                                 <!-- Botón Disparador Principal (Centro, Grande y Cómodo para el pulgar) -->
-                                <button type="button" class="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0" onclick="window.scannerCapturarFrameDirecto()" style="width:74px;height:74px;border:4px solid white;box-shadow:0 0 25px rgba(16,185,129,0.7) !important;" title="Capturar y Procesar con IA">
-                                    <i class="bi bi-camera-fill fs-2"></i>
+                                <button type="button" id="scanner-btn-shutter" class="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0" onclick="window.scannerCapturarFrameDirecto()" style="width:74px;height:74px;border:4px solid white;box-shadow:0 0 25px rgba(16,185,129,0.7) !important; touch-action: manipulation; -webkit-tap-highlight-color: transparent;" title="Capturar y Procesar con IA">
+                                    <i class="bi bi-camera-fill fs-2" style="pointer-events: none;"></i>
                                 </button>
 
                                 <!-- Botón Cambiar Cámara (Derecha) -->
