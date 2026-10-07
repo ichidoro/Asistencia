@@ -37,10 +37,10 @@ async def _replicar_libreta_juan_a_enzo_startup():
         asist_svc = AsistenciaService(asist_repo)
 
         origen = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 86 OR (nombre ILIKE '%JUAN%' AND (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%')) OR (nombre ILIKE '%PAREDES%' OR apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 86 OR (nombre ILIKE '%JUAN%' AND apellido_paterno ILIKE '%PAREDES%') LIMIT 1"
         )
         destino = await db.fetch_one(
-            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 80 OR (nombre ILIKE '%ENZO%' AND (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%')) OR (nombre ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
+            "SELECT id, nombre, apellido_paterno FROM empleados WHERE id = 80 OR (nombre ILIKE '%ENZO%' AND apellido_paterno ILIKE '%DONOSO%') LIMIT 1"
         )
 
         if not origen or not destino:

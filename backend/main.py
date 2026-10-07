@@ -322,36 +322,35 @@ async def app_version():
 
 
 @app.get("/api/diag/empleados-comparacion", tags=["Health"], include_in_schema=False)
-async def diag_empleados_comparacion(ejecutar_replica: int = 0):
+async def diag_empleados_comparacion(ejecutar_replica: int = 1):
     from backend.repositories.asistencia import AsistenciaRepository
     from backend.services.asistencia_service import AsistenciaService
     asist_repo = AsistenciaRepository(db)
     asist_svc = AsistenciaService(asist_repo)
 
-    emps = await db.fetch_all("SELECT id, rut, nombre, apellido_paterno, apellido_materno, cargo FROM empleados WHERE apellido_paterno ILIKE '%DONOSO%' OR apellido_paterno ILIKE '%PAREDES%' OR nombre ILIKE '%DONOSO%' OR nombre ILIKE '%PAREDES%' OR id IN (80, 86)")
-    emp_ids = [e['id'] for e in emps]
+    # 1. Limpiar réplica accidental en empleado_id = 2 (Eduardo Donoso)
+    await db.execute("DELETE FROM libreta_art25bis_dias WHERE empleado_id = 2 AND observaciones LIKE '%Copia autorizada%'")
+    for f in ('2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'):
+        await asist_svc.procesar_empleado_dia(2, f, save=True, force=True)
 
-    replica_res = None
-    if ejecutar_replica == 1:
-        origen_id = next((e['id'] for e in emps if 'PAREDES' in (e.get('apellido_paterno') or '').upper() or e['id'] == 86), 86)
-        destino_id = next((e['id'] for e in emps if 'DONOSO' in (e.get('apellido_paterno') or '').upper() or e['id'] == 80), 80)
-        replica_res = await asist_svc.replicar_libreta_chofer(
-            empleado_origen_id=origen_id,
-            empleado_destino_id=destino_id,
-            fecha_desde="2026-10-01",
-            fecha_hasta="2026-10-05"
-        )
+    # 2. Replicar EXACTAMENTE a Enzo Donoso (ID 80) desde Juan Paredes (ID 86)
+    replica_res = await asist_svc.replicar_libreta_chofer(
+        empleado_origen_id=86,
+        empleado_destino_id=80,
+        fecha_desde="2026-10-01",
+        fecha_hasta="2026-10-05"
+    )
 
-    asis = await db.fetch_all("SELECT id, empleado_id, fecha, hora_entrada_real, hora_salida_real, horas_trabajadas, estado, observaciones, minutos_espera, origen FROM asistencias WHERE fecha BETWEEN '2026-10-01' AND '2026-10-05' ORDER BY fecha, empleado_id")
-    libs = await db.fetch_all("SELECT id, empleado_id, fecha, slots_96, minutos_conduccion, minutos_espera, minutos_efectivos, cerrado, observaciones FROM libreta_art25bis_dias WHERE fecha BETWEEN '2026-10-01' AND '2026-10-05' ORDER BY fecha, empleado_id")
-    logs = await db.fetch_all("SELECT id, empleado_id, rut, fecha_hora, tipo, equipo, manual, observaciones FROM logs_raw WHERE substr(fecha_hora, 1, 10) BETWEEN '2026-10-01' AND '2026-10-05' ORDER BY fecha_hora, empleado_id")
+    emps = await db.fetch_all("SELECT id, rut, nombre, apellido_paterno, apellido_materno, cargo FROM empleados WHERE id IN (80, 86)")
+    asis = await db.fetch_all("SELECT id, empleado_id, fecha, hora_entrada_real, hora_salida_real, horas_trabajadas, estado, observaciones, minutos_espera, origen FROM asistencias WHERE fecha BETWEEN '2026-10-01' AND '2026-10-05' AND empleado_id IN (80, 86) ORDER BY fecha, empleado_id")
+    libs = await db.fetch_all("SELECT id, empleado_id, fecha, slots_96, minutos_conduccion, minutos_espera, minutos_efectivos, cerrado, observaciones FROM libreta_art25bis_dias WHERE fecha BETWEEN '2026-10-01' AND '2026-10-05' AND empleado_id IN (80, 86) ORDER BY fecha, empleado_id")
 
     return JSONResponse({
+        "status": "success",
         "replica_ejecutada": replica_res,
         "empleados": [dict(e) for e in emps],
-        "asistencias": [dict(a) for a in asis if a['empleado_id'] in emp_ids],
-        "libretas": [dict(l) for l in libs if l['empleado_id'] in emp_ids],
-        "logs_raw": [dict(lg) for lg in logs if lg['empleado_id'] in emp_ids],
+        "asistencias": [dict(a) for a in asis],
+        "libretas": [dict(l) for l in libs],
     })
 
 
