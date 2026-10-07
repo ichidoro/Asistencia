@@ -193,6 +193,7 @@ class SeguridadRepository:
                 ('configuracion.wizard',         'Configuración',  'Botón "Empleados" del header -> Wizard de inicialización BioAlba'),
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
                 ('configuracion.flota',          'Configuración',  'Pestaña Flota Aguacol → gestionar vehículos de la flota (CRUD)'),
+                ('configuracion.editar',         'Configuración',  'Crear, editar y eliminar áreas, cargos y períodos; catálogo de Portería'),
 
                 # ── 4 Productos (4 permisos granulares) ──
                 ('productos_4.asignar',          '4 Productos',    'Ver y asignar 4 Productos a empleados (con RLS de área)'),
@@ -243,7 +244,8 @@ class SeguridadRepository:
             cnt_permisos = await self.db.fetch_one("SELECT COUNT(*) as c FROM permisos")
             cnt_permisos_bd = cnt_permisos['c'] if cnt_permisos else 0
 
-            if cnt_permisos_bd < total_esperado:
+            ids_en_bd = {r['id'] for r in (await self.db.fetch_all("SELECT id FROM permisos") or [])}
+            if any(p[0] not in ids_en_bd for p in permisos_base):
                 # Faltan permisos → primer arranque o nuevo permiso agregado al código
                 nuevos_permisos = 0
                 for perm_id, modulo, descripcion in permisos_base:
@@ -275,7 +277,8 @@ class SeguridadRepository:
                 )
                 cnt_rp_bd = cnt_rp['c'] if cnt_rp else 0
 
-                if cnt_rp_bd < total_esperado:
+                ids_rol1 = {r['permiso_id'] for r in (await self.db.fetch_all("SELECT permiso_id FROM rol_permisos WHERE rol_id = 1") or [])}
+                if any(p[0] not in ids_rol1 for p in permisos_base):
                     # Faltan asignaciones → primer arranque o permiso nuevo
                     rol1_perms_agregados = 0
                     for perm_id, _, _ in permisos_base:

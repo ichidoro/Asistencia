@@ -76,6 +76,7 @@ const MAPA_UI_PERMISOS = {
     'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
     'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
     'configuracion.flota':          { module: 'CONFIGURACIÓN', action: 'Pestaña Flota',     description: 'Gestionar vehículos de la flota (CRUD) de Aguacol', permissions: ['configuracion.flota'] },
+    'configuracion.editar':         { module: 'CONFIGURACIÓN', action: 'Áreas, Cargos y Períodos', description: 'Crear, editar y eliminar áreas, cargos y períodos de asistencia; catálogo de Portería', permissions: ['configuracion.editar'] },
 
     // ── MÓDULO 4 PRODUCTOS (4) ──
     'productos_4.asignar':          { module: '4 PRODUCTOS', action: 'Asignar',          description: 'Ver y asignar 4 Productos a empleados (con RLS de área)', permissions: ['productos_4.asignar'] },
@@ -444,49 +445,86 @@ window.saveUsuario = async function () {
 }
 
 // ================== ROLES ==================
+// Metadatos visuales de cada módulo (icono, tono HSL y qué cubre). El tono (--h) colorea tarjetas, navegación e interruptores.
+const RL_MODULOS = {
+    'DASHBOARD':     { label: 'Dashboard',     icon: 'bi-speedometer2',   hue: 239, desc: 'Indicadores y métricas del personal' },
+    'EMPLEADOS':     { label: 'Empleados',     icon: 'bi-people',         hue: 199, desc: 'Fichas, contratos, bajas, reincorporaciones y turnos' },
+    'MARCACIONES':   { label: 'Marcaciones',   icon: 'bi-clock-history',  hue: 160, desc: 'Asistencia diaria, justificaciones, horas extras, cierres y libreta 180h' },
+    'REPORTES':      { label: 'Reportes',      icon: 'bi-bar-chart-line', hue: 268, desc: 'Informes, exportaciones y recálculos masivos' },
+    'CONFIGURACIÓN': { label: 'Configuración', icon: 'bi-sliders',        hue: 218, desc: 'Parámetros del sistema, catálogos, seguridad y flota' },
+    '4 PRODUCTOS':   { label: '4 Productos',   icon: 'bi-box-seam',       hue: 32,  desc: 'Entrega de productos propios a empleados' },
+    'PORTERÍA':      { label: 'Portería',      icon: 'bi-shield-check',   hue: 174, desc: 'Rondas, llaves, visitas, proveedores, Art. 22 y flota' }
+};
+// Permisos que pueden dañar datos, abrir meses cerrados o dar control total: se marcan con un distintivo rojo / ámbar.
+const RL_CRITICOS = ['empleados.eliminar', 'configuracion.seguridad', 'marcaciones.bypass_cierre', 'configuracion.sistema', 'configuracion.editar'];
+const RL_CONTABLES = ['marcaciones.cierre_periodo', 'marcaciones.horas_extras', 'marcaciones.justificar', 'marcaciones.compensar'];
+
+function rlEsc(t) {
+    return String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// { 'MARCACIONES': ['marcaciones.ver', ...], ... } en el orden del catálogo
+function rlPorModulo() {
+    const mods = {};
+    Object.keys(MAPA_UI_PERMISOS).forEach(k => { (mods[MAPA_UI_PERMISOS[k].module] ||= []).push(k); });
+    return mods;
+}
+
 async function loadRoles() {
     const grid = document.getElementById('roles-grid');
     if (!grid) return;
-    grid.innerHTML = '<div class="col-12 text-center py-5"><span class="spinner-border spinner-border-sm"></span> Calculando Matriz RBAC...</div>';
+    grid.innerHTML = '<div class="rl-empty-state"><span class="spinner-border spinner-border-sm me-2"></span>Cargando roles…</div>';
 
     try {
         const response = await fetch('/api/seguridad/roles/');
         if (!response.ok) throw new Error('Error al cargar roles');
-
         cacheSeguridad.roles = await response.json();
 
-        grid.innerHTML = cacheSeguridad.roles.map(rol => {
-            const esGlobal = rol.alcance_global ? '<span class="badge bg-primary">Alcance Global</span>' : '<span class="badge bg-secondary">Alcance Zonal</span>';
-            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-            const disableEdit = (rol.id === 1 && !currentUser.is_superuser) ? 'disabled title="Solo el Súper Admin puede modificar este rol"' : '';
+        const mods = rlPorModulo();
+        const totalPerms = Object.keys(MAPA_UI_PERMISOS).length;
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const totalPermsTxt = document.getElementById('rl-hero-sub');
+        if (totalPermsTxt) totalPermsTxt.textContent = `${cacheSeguridad.roles.length} ${cacheSeguridad.roles.length === 1 ? 'rol' : 'roles'} · ${totalPerms} permisos disponibles en ${Object.keys(mods).length} módulos`;
 
+        grid.innerHTML = cacheSeguridad.roles.map((rol, i) => {
+            const set = new Set(rol.permisos || []);
+            const granted = Object.keys(MAPA_UI_PERMISOS).filter(k => set.has(k)).length;
+            const crit = RL_CRITICOS.filter(k => set.has(k)).length;
+            const bloqueado = rol.id === 1 && !currentUser.is_superuser;
+            const entries = Object.entries(mods);
+            const spectrum = entries.map(([m, keys]) => {
+                const n = keys.filter(k => set.has(k)).length;
+                return `<i style="--h:${RL_MODULOS[m]?.hue ?? 215};--w:${keys.length};--p:${Math.round(n / keys.length * 100)}%"></i>`;
+            }).join('');
+            const lis = entries.map(([m, keys]) => {
+                const n = keys.filter(k => set.has(k)).length;
+                const meta = RL_MODULOS[m] || { label: m, icon: 'bi-shield', hue: 215 };
+                return `<li class="${n === 0 ? 'is-empty' : ''}" style="--h:${meta.hue}"><i class="bi ${meta.icon}" aria-hidden="true"></i><span class="nm">${rlEsc(meta.label)}</span><span class="n">${n}/${keys.length}</span></li>`;
+            }).join('');
+            const inicial = rlEsc((rol.nombre || '?').trim().charAt(0).toUpperCase());
             return `
-                <div class="col-md-6 p-2">
-                    <div class="card h-100 border shadow-sm">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h5 class="fw-bold text-primary mb-0">${rol.nombre}</h5>
-                                <span class="badge bg-dark">${rol.permisos.length} Permisos</span>
-                            </div>
-                            <p class="text-muted small mb-3">${rol.descripcion || 'Sin descripción'}</p>
-                            <div class="mb-3">${esGlobal}</div>
-                            <h6 class="fw-bold small">Permisos:</h6>
-                            <div class="d-flex flex-wrap gap-1" style="max-height: 160px; overflow-y: auto;">
-                                ${rol.permisos.map(p => `<span class="badge bg-light text-dark border" style="font-size: 0.75rem">${p}</span>`).join('')}
-                            </div>
+                <article class="rl-card ${rol.alcance_global ? 'is-global' : ''}" style="--i:${i}">
+                    <header class="rl-card-head">
+                        <span class="rl-avatar" aria-hidden="true">${inicial}</span>
+                        <div class="rl-card-title">
+                            <h3>${rlEsc(rol.nombre)}</h3>
+                            <span class="rl-scope ${rol.alcance_global ? 'is-global' : ''}"><i class="bi ${rol.alcance_global ? 'bi-globe2' : 'bi-diagram-3'}" aria-hidden="true"></i>${rol.alcance_global ? 'Alcance global' : 'Filtrado por áreas'}</span>
                         </div>
-                        <div class="card-footer bg-white border-top d-flex gap-2">
-                            <button class="btn btn-sm btn-outline-success flex-grow-1" ${disableEdit} onclick="editRol(${rol.id})"><i class="bi bi-shield-check me-1"></i>Editar Matriz</button>
-                            <button class="btn btn-sm btn-outline-danger" ${rol.id === 1 ? 'disabled title="El Rol Maestro es inmutable"' : ''} onclick="deleteRol(${rol.id})"><i class="bi bi-trash"></i></button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
+                        <div class="rl-count" title="${granted} de ${totalPerms} permisos"><b>${granted}</b><span>/${totalPerms}</span></div>
+                    </header>
+                    <p class="rl-desc">${rlEsc(rol.descripcion) || 'Sin descripción'}</p>
+                    <div class="rl-spectrum" role="img" aria-label="Cobertura de permisos por módulo">${spectrum}</div>
+                    <ul class="rl-mods">${lis}</ul>
+                    ${crit ? `<div class="rl-flag"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>${crit} permiso${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''}</div>` : ''}
+                    <footer class="rl-card-foot">
+                        <button type="button" class="rl-btn rl-btn-primary" ${bloqueado ? 'disabled title="Solo el Súper Admin puede modificar este rol"' : ''} onclick="editRol(${rol.id})"><i class="bi bi-sliders2" aria-hidden="true"></i>Editar permisos</button>
+                        <button type="button" class="rl-btn rl-btn-icon rl-btn-danger" aria-label="Eliminar rol" ${rol.id === 1 ? 'disabled title="El rol maestro es inmutable"' : 'title="Eliminar rol"'} onclick="deleteRol(${rol.id})"><i class="bi bi-trash3" aria-hidden="true"></i></button>
+                    </footer>
+                </article>`;
+        }).join('') || '<div class="rl-empty-state">Aún no hay roles. Crea el primero con «Nuevo rol».</div>';
     } catch (error) {
         console.error(error);
-        grid.innerHTML = `<div class="col-12 text-center text-danger py-5">🔒 Error de Acceso a Roles.</div>`;
+        grid.innerHTML = '<div class="rl-empty-state text-danger"><i class="bi bi-lock me-2"></i>No se pudieron cargar los roles (acceso o conexión).</div>';
     }
 }
 
@@ -542,162 +580,181 @@ function getPermissionDetails(permId) {
     return details[permId] || null;
 }
 
+let rl_modulo_activo = null;
+
+function rlNorm(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function renderMatrizPermisos() {
     const container = document.getElementById('roles-permissions-matrix');
     if (!container) return;
+    const mods = rlPorModulo();
+    const nombres = Object.keys(mods);
+    rl_modulo_activo = rl_modulo_activo && mods[rl_modulo_activo] ? rl_modulo_activo : nombres[0];
 
-    // Group by module
-    const modules = {};
-    Object.keys(MAPA_UI_PERMISOS).forEach(key => {
-        const item = MAPA_UI_PERMISOS[key];
-        if (!modules[item.module]) {
-            modules[item.module] = [];
-        }
-        modules[item.module].push({ key, ...item });
-    });
-
-    // Module icons
-    const moduleIcons = {
-        'DASHBOARD': '📊',
-        'EMPLEADOS': '👥',
-        'MARCACIONES': '🕐',
-        'REPORTES': '📊',
-        'CONFIGURACIÓN': '⚙️',
-        '4 PRODUCTOS': '🎁',
-        'PORTERÍA': '🛡️'
-    };
-
-    // Render HTML
-    container.innerHTML = Object.entries(modules).map(([moduleName, items]) => {
-        const cardsHtml = items.map(item => {
-            const idSafe = item.key.replace('.', '-');
-            const details = getPermissionDetails(item.key);
-            
-            let alertHtml = '';
-            if (details && details.alert) {
-                alertHtml = `
-                    <div class="mt-2 px-2 py-1 rounded" style="font-size: 0.75rem; background-color: #fef3c7; border-left: 3px solid #f59e0b;">
-                        <strong style="color: #b45309;">⚠️ ${details.alert}</strong>
-                        <div class="text-muted" style="font-size: 0.75rem; line-height: 1.3;">${details.flow}</div>
-                    </div>
-                `;
-            }
-
-            return `
-                <div class="col-md-4 col-lg-3">
-                    <div class="d-flex align-items-start gap-2 p-3 border rounded shadow-sm h-100" style="background: #f8fafc; transition: all 0.2s;">
-                        <input class="form-check-input perm-ui-check flex-shrink-0 mt-1" type="checkbox" value="${item.key}" id="perm-ui-${idSafe}" style="width: 1.15rem; height: 1.15rem; cursor: pointer;">
-                        <div class="w-100">
-                            <label class="form-check-label fw-bold text-dark mb-1" for="perm-ui-${idSafe}" style="font-size: 0.9rem; cursor: pointer;">
-                                ${item.action}
-                            </label>
-                            <div class="text-muted" style="font-size: 0.78rem; line-height: 1.3;">
-                                ${item.description}
-                            </div>
-                            ${alertHtml}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="col-12 mb-4">
-                <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0 !important;">
-                    <div class="card-header bg-white pt-3 pb-2 px-4 border-bottom-0">
-                        <h6 class="fw-bold mb-0 text-primary d-flex align-items-center" style="font-size: 0.95rem; color: #0d6efd !important;">
-                            <span class="me-2">${moduleIcons[moduleName] || '🛡️'}</span>MÓDULO ${moduleName}
-                            <span class="badge bg-light text-secondary ms-2" style="font-size: 0.75rem;">${items.length} permisos</span>
-                        </h6>
-                    </div>
-                    <div class="card-body px-4 pt-2 pb-4">
-                        <div class="row g-3">
-                            ${cardsHtml}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    const nav = nombres.map(m => {
+        const meta = RL_MODULOS[m] || { label: m, icon: 'bi-shield', hue: 215 };
+        return `<button type="button" class="rl-nav-item" data-mod="${rlEsc(m)}" style="--h:${meta.hue}" onclick="rlIrModulo('${m}')">
+            <span class="ico"><i class="bi ${meta.icon}" aria-hidden="true"></i></span><span class="lbl">${rlEsc(meta.label)}</span><span class="cnt" data-cnt="${rlEsc(m)}">0/${mods[m].length}</span></button>`;
     }).join('');
+
+    const secciones = nombres.map(m => {
+        const meta = RL_MODULOS[m] || { label: m, icon: 'bi-shield', hue: 215, desc: '' };
+        const rows = mods[m].map(key => {
+            const item = MAPA_UI_PERMISOS[key];
+            const det = getPermissionDetails(key);
+            const nivel = RL_CRITICOS.includes(key) ? 'crit' : RL_CONTABLES.includes(key) ? 'cont' : '';
+            const badge = nivel ? `<span class="rl-badge ${nivel}"><i class="bi ${nivel === 'crit' ? 'bi-exclamation-triangle-fill' : 'bi-calculator'}" aria-hidden="true"></i>${nivel === 'crit' ? 'Crítico' : 'Contable'}</span>` : '';
+            const nota = nivel && det && det.flow ? `<span class="rl-row-note"><i class="bi bi-info-circle" aria-hidden="true"></i><span>${rlEsc(det.alert)} · ${rlEsc(det.flow)}</span></span>` : '';
+            return `<label class="rl-row ${nivel ? 'is-' + (nivel === 'crit' ? 'critico' : 'contable') : ''}" for="perm-ui-${key.replace('.', '-')}" data-q="${rlEsc(rlNorm(item.action + ' ' + item.description + ' ' + key + ' ' + meta.label))}">
+                <input class="perm-ui-check rl-check" type="checkbox" value="${key}" id="perm-ui-${key.replace('.', '-')}">
+                <span class="rl-switch" aria-hidden="true"></span>
+                <span class="rl-row-body"><span class="rl-row-name">${rlEsc(item.action)}${badge}</span><span class="rl-row-desc">${rlEsc(item.description.replace(/\s*⚠️?.*$/u, ''))}</span>${nota}</span>
+                <code class="rl-key">${key}</code></label>`;
+        }).join('');
+        return `<section class="rl-sec" data-mod="${rlEsc(m)}" style="--h:${meta.hue}" ${m === rl_modulo_activo ? '' : 'hidden'}>
+            <header class="rl-sec-head"><span class="rl-sec-ico"><i class="bi ${meta.icon}" aria-hidden="true"></i></span>
+                <div><h4>${rlEsc(meta.label)}</h4><p>${rlEsc(meta.desc || '')}</p></div>
+                <div class="rl-sec-actions"><button type="button" class="rl-link" onclick="rlMarcarModulo('${m}', true)">Marcar todo</button><button type="button" class="rl-link" onclick="rlMarcarModulo('${m}', false)">Quitar todo</button></div></header>
+            <div class="rl-rows">${rows}</div></section>`;
+    }).join('');
+
+    container.innerHTML = `
+        <aside class="rl-m-nav">
+            <label class="rl-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="rl-search" placeholder="Buscar permiso…" autocomplete="off" aria-label="Buscar permiso"></label>
+            <nav class="rl-nav" aria-label="Módulos">${nav}</nav>
+        </aside>
+        <div class="rl-m-panel" id="rl-panel">${secciones}<div class="rl-nores" id="rl-nores" hidden>Ningún permiso coincide con la búsqueda.</div></div>`;
+
+    container.onchange = e => { if (e.target.classList.contains('rl-check')) rlRefrescar(); };
+    const inp = document.getElementById('rl-search');
+    inp.addEventListener('input', rlFiltrar);
+    inp.addEventListener('keydown', e => { if (e.key === 'Escape' && inp.value) { e.stopPropagation(); inp.value = ''; rlFiltrar(); } });
+    rlIrModulo(rl_modulo_activo, true);
+    rlRefrescar();
+}
+
+window.rlIrModulo = function (m, silencioso) {
+    rl_modulo_activo = m;
+    const q = document.getElementById('rl-search');
+    if (q && q.value && !silencioso) { q.value = ''; }
+    document.querySelectorAll('#roles-permissions-matrix .rl-nav-item').forEach(b => b.classList.toggle('is-active', b.dataset.mod === m));
+    document.querySelectorAll('#roles-permissions-matrix .rl-row').forEach(r => { r.hidden = false; });
+    document.querySelectorAll('#roles-permissions-matrix .rl-sec').forEach(s => { s.hidden = s.dataset.mod !== m; });
+    const nores = document.getElementById('rl-nores'); if (nores) nores.hidden = true;
+    const panel = document.getElementById('rl-panel'); if (panel) panel.scrollTop = 0;
+};
+
+function rlFiltrar() {
+    const q = rlNorm(document.getElementById('rl-search').value.trim());
+    if (!q) { rlIrModulo(rl_modulo_activo, true); return; }
+    let total = 0;
+    document.querySelectorAll('#roles-permissions-matrix .rl-sec').forEach(sec => {
+        let vis = 0;
+        sec.querySelectorAll('.rl-row').forEach(r => { const ok = r.dataset.q.includes(q); r.hidden = !ok; if (ok) vis++; });
+        sec.hidden = vis === 0; total += vis;
+    });
+    document.querySelectorAll('#roles-permissions-matrix .rl-nav-item').forEach(b => b.classList.remove('is-active'));
+    document.getElementById('rl-nores').hidden = total > 0;
+}
+
+window.rlMarcarModulo = function (m, on) {
+    document.querySelectorAll(`#roles-permissions-matrix .rl-sec[data-mod="${m}"] .rl-check`).forEach(c => { c.checked = on; });
+    rlRefrescar();
+};
+
+function rlSeleccionados() {
+    return Array.from(document.querySelectorAll('#roles-permissions-matrix .rl-check:checked')).map(c => c.value);
+}
+
+function rlRefrescar() {
+    const sel = new Set(rlSeleccionados());
+    const mods = rlPorModulo();
+    Object.entries(mods).forEach(([m, keys]) => {
+        const n = keys.filter(k => sel.has(k)).length;
+        const el = document.querySelector(`#roles-permissions-matrix [data-cnt="${m}"]`);
+        if (el) { el.textContent = `${n}/${keys.length}`; el.classList.toggle('has', n > 0); }
+    });
+    const crit = RL_CRITICOS.filter(k => sel.has(k)).length;
+    const res = document.getElementById('rl-resumen');
+    if (res) res.innerHTML = `<b>${sel.size}</b> de ${Object.keys(MAPA_UI_PERMISOS).length} permisos` + (crit ? ` · <span class="crit"><i class="bi bi-exclamation-triangle-fill"></i> ${crit} crítico${crit > 1 ? 's' : ''}</span>` : '');
+}
+
+window.rlSetAlcance = function (v) {
+    document.getElementById('rol-global').value = v;
+    rlSyncAlcance();
+};
+function rlSyncAlcance() {
+    const v = document.getElementById('rol-global').value === '1' ? '1' : '0';
+    const seg = document.getElementById('rl-seg');
+    if (!seg) return;
+    seg.dataset.v = v;
+    seg.querySelectorAll('button').forEach(b => { const on = b.dataset.v === v; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+}
+
+function rlTituloModal(nombre) {
+    const t = document.getElementById('modalRolTitle');
+    if (t) t.textContent = nombre ? `Editar rol · ${nombre}` : 'Nuevo rol';
+    const av = document.getElementById('rl-m-avatar');
+    if (av) av.textContent = nombre ? nombre.trim().charAt(0).toUpperCase() : '+';
 }
 
 window.openRolModal = function () {
     ensureModalInstances();
-    const title = document.getElementById('modalRolTitle');
-    if (title) title.textContent = "🔑 Nuevo Rol de Seguridad";
+    rlTituloModal('');
     document.getElementById('formRol').reset();
-    document.getElementById('rol-id').value = "";
-
+    document.getElementById('rol-id').value = '';
+    document.getElementById('rol-global').value = '0';
+    rl_modulo_activo = null;
     renderMatrizPermisos();
+    rlSyncAlcance();
     if (modalRolInstance) modalRolInstance.show();
-}
-
+};
 
 window.editRol = function (id) {
     const rol = cacheSeguridad.roles.find(r => r.id === id);
-    if (!rol) {
-        console.error("Rol no encontrado:", id);
-        return;
-    }
-
-    console.log(`Editando Rol: ${rol.nombre}`, rol.permisos);
-
-    document.getElementById('modalRolTitle').textContent = `🔑 Editando Matriz: ${rol.nombre}`;
+    if (!rol) { console.error('Rol no encontrado:', id); return; }
+    ensureModalInstances();
+    rlTituloModal(rol.nombre);
     document.getElementById('rol-id').value = rol.id;
     document.getElementById('rol-nombre').value = rol.nombre;
-    document.getElementById('rol-descripcion').value = rol.descripcion || "";
-    document.getElementById('rol-global').value = rol.alcance_global ? "1" : "0";
-
+    document.getElementById('rol-descripcion').value = rol.descripcion || '';
+    document.getElementById('rol-global').value = rol.alcance_global ? '1' : '0';
+    rl_modulo_activo = null;
     renderMatrizPermisos();
-
-    // Pequeño delay para asegurar que el DOM de la matriz se renderizó antes de marcar
-    setTimeout(() => {
-        const activePerms = rol.permisos || [];
-        console.log(`Marcando permisos en UI checkboxes para activePerms:`, activePerms);
-
-        Object.keys(MAPA_UI_PERMISOS).forEach(key => {
-            const idSafe = key.replace('.', '-');
-            const ck = document.getElementById(`perm-ui-${idSafe}`);
-            if (ck) {
-                // 1:1 mapping: el key del checkbox ES el permiso
-                ck.checked = activePerms.includes(key);
-            }
-        });
-    }, 50);
-
+    rlSyncAlcance();
+    const activos = new Set(rol.permisos || []);
+    Object.keys(MAPA_UI_PERMISOS).forEach(key => {
+        const ck = document.getElementById(`perm-ui-${key.replace('.', '-')}`);
+        if (ck) ck.checked = activos.has(key);
+    });
+    rlRefrescar();
     if (modalRolInstance) modalRolInstance.show();
-}
+};
 
 window.saveRol = async function () {
     const rolId = document.getElementById('rol-id').value;
-    
-    // 1:1 mapping: cada checkbox checked = 1 permiso exacto
-    const selectedPerms = [];
-    Object.keys(MAPA_UI_PERMISOS).forEach(key => {
-        const idSafe = key.replace('.', '-');
-        const ck = document.getElementById(`perm-ui-${idSafe}`);
-        if (ck && ck.checked) {
-            selectedPerms.push(key); // key = permiso backend
-        }
-    });
+    const nombre = document.getElementById('rol-nombre').value.trim();
+    if (!nombre) { document.getElementById('rol-nombre').focus(); return; }
+
+    const selectedPerms = rlSeleccionados();
+    // Permisos que existen en la BD pero no en el catálogo de la pantalla (p. ej. heredados) se conservan: guardar el
+    // rol desde acá no debe quitarlos en silencio.
+    const original = cacheSeguridad.roles.find(r => String(r.id) === String(rolId));
+    (original?.permisos || []).filter(p => !(p in MAPA_UI_PERMISOS)).forEach(p => selectedPerms.push(p));
 
     const payload = {
-        nombre: document.getElementById('rol-nombre').value,
+        nombre,
         descripcion: document.getElementById('rol-descripcion').value,
-        alcance_global: document.getElementById('rol-global').value === "1",
+        alcance_global: document.getElementById('rol-global').value === '1',
         permisos: selectedPerms
     };
 
     try {
         const method = rolId ? 'PUT' : 'POST';
         const url = rolId ? `/api/seguridad/roles/${rolId}/` : '/api/seguridad/roles/';
-
-        const res = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (res.ok) {
             Swal.fire('Éxito', 'Rol guardado correctamente', 'success');
             if (modalRolInstance) modalRolInstance.hide();
@@ -709,7 +766,7 @@ window.saveRol = async function () {
     } catch (e) {
         Swal.fire('Error', 'Fallo de red', 'error');
     }
-}
+};
 
 window.deleteRol = async function (id) {
     const rol = cacheSeguridad.roles.find(r => r.id === id);

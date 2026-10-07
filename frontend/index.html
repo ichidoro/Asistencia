@@ -2149,21 +2149,18 @@
                                     </div>
 
                                     <!-- Vista Roles -->
-                                    <div id="vista-seguridad-roles" class="seguridad-view" style="display: none;">
-                                        <div class="card shadow-sm border-0">
-                                            <div
-                                                class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                                                <h5 class="mb-0 fw-bold">Matriz de Roles (RBAC)</h5>
-                                                <button class="btn btn-primary"
-                                                    onclick="if(typeof openRolModal==='function')openRolModal()"><i
-                                                        class="bi bi-plus-circle me-2"></i>Crear Rol</button>
+                                    <div id="vista-seguridad-roles" class="seguridad-view rl" style="display: none;">
+                                        <div class="rl-hero">
+                                            <div>
+                                                <h2>Roles y permisos</h2>
+                                                <p id="rl-hero-sub">Define qué puede ver y hacer cada tipo de usuario en el sistema.</p>
                                             </div>
-                                            <div class="card-body p-0">
-                                                <div class="row g-0" id="roles-grid">
-                                                    <div class="col-12 text-center py-5">Cargando árbol de seguridad...
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <button type="button" class="rl-btn rl-btn-brand"
+                                                onclick="if(typeof openRolModal==='function')openRolModal()"><i
+                                                    class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo rol</button>
+                                        </div>
+                                        <div class="rl-grid" id="roles-grid">
+                                            <div class="rl-empty-state">Cargando roles…</div>
                                         </div>
                                     </div>
                                 </div>
@@ -5530,47 +5527,49 @@
             </div>
 
             <!-- Modal Roles -->
-            <div class="modal fade" id="modalRol" tabindex="-1" aria-hidden="true" style="z-index: 2050;">
-                <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-dark text-white">
-                            <h5 class="modal-title fw-bold" id="modalRolTitle"><i class="bi bi-key" aria-hidden="true"></i> Configuración de Rol y Permisos</h5>
-                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal fade rl-modal" id="modalRol" tabindex="-1" aria-hidden="true" style="z-index: 2050;">
+                <div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-md-down">
+                    <div class="modal-content">
+                        <div class="rl-m-head">
+                            <span class="rl-avatar" id="rl-m-avatar" aria-hidden="true">+</span>
+                            <div>
+                                <h5 id="modalRolTitle">Nuevo rol</h5>
+                                <small>Marca lo que este rol puede hacer. Los cambios aplican a todos sus usuarios.</small>
+                            </div>
+                            <button aria-label="Cerrar" type="button" class="rl-m-close" data-bs-dismiss="modal"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                         </div>
-                        <div class="modal-body p-4">
-                            <form id="formRol">
+                        <div class="rl-m-body">
+                            <form id="formRol" onsubmit="return false;">
                                 <input type="hidden" id="rol-id">
-                                <div class="row g-3 mb-4">
-                                    <div class="col-md-4">
-                                        <label for="rol-nombre" class="form-label fw-bold">Nombre del Rol</label>
-                                        <input type="text" id="rol-nombre" class="form-control" required
-                                            placeholder="ej: Jefe de Planta">
+                                <input type="hidden" id="rol-global" value="0">
+                                <div class="rl-form">
+                                    <div class="rl-field">
+                                        <label for="rol-nombre">Nombre del rol</label>
+                                        <input type="text" id="rol-nombre" class="rl-input" required placeholder="Ej: Jefe de Planta" autocomplete="off">
                                     </div>
-                                    <div class="col-md-5">
-                                        <label for="rol-descripcion" class="form-label fw-bold">Descripción</label>
-                                        <input type="text" id="rol-descripcion" class="form-control"
-                                            placeholder="Describa el alcance de este rol">
+                                    <div class="rl-field">
+                                        <label for="rol-descripcion">Descripción</label>
+                                        <input type="text" id="rol-descripcion" class="rl-input" placeholder="¿Para quién es y qué alcance tiene?" autocomplete="off">
                                     </div>
-                                    <div class="col-md-3">
-                                        <label for="rol-global" class="form-label fw-bold">Tipo de Alcance</label>
-                                        <select id="rol-global" class="form-select">
-                                            <option value="0">Zonal (Filtrado por Áreas)</option>
-                                            <option value="1">Global (Súper Visionario)</option>
-                                        </select>
+                                    <div class="rl-field">
+                                        <label id="rl-seg-label">Alcance</label>
+                                        <div class="rl-seg" id="rl-seg" data-v="0" role="group" aria-labelledby="rl-seg-label">
+                                            <button type="button" data-v="0" class="is-on" aria-pressed="true" onclick="rlSetAlcance('0')"><i class="bi bi-diagram-3" aria-hidden="true"></i>Por áreas</button>
+                                            <button type="button" data-v="1" aria-pressed="false" onclick="rlSetAlcance('1')"><i class="bi bi-globe2" aria-hidden="true"></i>Global</button>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <h6 class="fw-bold mb-3 border-bottom pb-2">Matriz de Permisos por Módulo</h6>
-                                <div id="roles-permissions-matrix" class="row">
-                                    <!-- Inyectado por JS dinámicamente -->
+                                <div id="roles-permissions-matrix" class="rl-matrix">
+                                    <!-- Inyectado por JS -->
                                 </div>
                             </form>
                         </div>
-                        <div class="modal-footer bg-light border-top">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                            <button type="button" class="btn btn-success px-4" onclick="saveRol()">
-                                <i class="bi bi-check-circle me-2"></i>Validar y Guardar Rol
-                            </button>
+                        <div class="rl-m-foot">
+                            <div class="rl-resumen" id="rl-resumen" aria-live="polite"></div>
+                            <div class="rl-actions">
+                                <button type="button" class="rl-btn rl-btn-ghost" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="rl-btn rl-btn-brand" onclick="saveRol()"><i class="bi bi-check2-circle" aria-hidden="true"></i>Guardar rol</button>
+                            </div>
                         </div>
                     </div>
                 </div>
