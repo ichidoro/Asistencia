@@ -2646,3 +2646,37 @@ window.abrirModalCrearCargo = async function() {
     });
 };
 
+// ── Configuración: buscador del menú lateral ─────────────────────────────────────────────
+// Filtra los ajustes por nombre (y por palabras clave comunes). Enter abre el primero; Esc limpia.
+(function initConfigNavSearch() {
+    const CLAVES = {
+        'horarios-tab': 'turnos horarios jornada', 'periodos-tab': 'tramos cierre periodos liquidacion', 'justificaciones-tab': 'justificaciones permisos licencias',
+        'calendario-tab': 'calendario feriados festivos', 'estados-tab': 'estados asistencia colores', 'areas-tab': 'areas departamentos bioalba',
+        'cargos-tab': 'cargos puestos', 'generos-tab': 'generos', 'pagadores-tab': 'pagadores empresas', 'bonos-tab': 'bonos beneficios',
+        'correo-tab': 'correo email smtp alertas notificaciones', 'robot-bioalba-tab': 'robot bioalba sincronizacion relojes',
+        'catalogo-hallazgos-config-tab': 'porteria hallazgos anomalias rondas', 'porteria-ubicaciones-config-tab': 'porteria ubicacion puntos control qr',
+        'flota-config-tab': 'flota camiones vehiculos', 'productos-propios-tab': 'productos propios entregas', 'seguridad-config-tab': 'seguridad usuarios roles permisos auditoria',
+        'sistema-config-tab': 'sistema base de datos diagnostico'
+    };
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    function init() {
+        const input = document.getElementById('cfg-search');
+        const nav = document.getElementById('configTabs');
+        if (!input || !nav || input.dataset.ready) return;
+        input.dataset.ready = '1';
+        const items = () => Array.from(nav.querySelectorAll('.cfg-item'));
+        const visibles = () => items().filter(b => !b.classList.contains('d-none') && !b.hidden);
+        function filtrar() {
+            const q = norm(input.value.trim());
+            items().forEach(b => { b.hidden = !!q && !norm(b.textContent + ' ' + (CLAVES[b.id] || '')).includes(q); });
+            const nores = document.getElementById('cfg-nores');
+            if (nores) nores.hidden = !q || visibles().length > 0;
+        }
+        input.addEventListener('input', filtrar);
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { const b = visibles()[0]; if (b) { e.preventDefault(); b.click(); } }
+            else if (e.key === 'Escape' && input.value) { e.stopPropagation(); input.value = ''; filtrar(); }
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();

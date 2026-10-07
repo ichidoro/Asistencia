@@ -1728,110 +1728,57 @@
                 </div>
 
                 <div id="page-configuracion" class="page">
-                    <div class="card shadow-sm border-0">
-                        <div class="card-header bg-white border-bottom-0 pt-3">
-                            <ul class="nav nav-tabs card-header-tabs" id="configTabs" role="tablist">
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link active fw-bold" id="horarios-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-horarios" type="button" role="tab"><i class="bi bi-clock me-1" aria-hidden="true"></i> Turnos</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="areas-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-areas" type="button" role="tab"
-                                        onclick="if(typeof cargarCatalogoAreas === 'function') cargarCatalogoAreas()"><i class="bi bi-building me-1" aria-hidden="true"></i>
-                                        Áreas</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="cargos-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-cargos" type="button" role="tab"
-                                        onclick="if(typeof cargarCatalogoCargos === 'function') cargarCatalogoCargos()"><i class="bi bi-briefcase me-1" aria-hidden="true"></i>
-                                        Cargos</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="generos-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-generos" type="button" role="tab"
-                                        onclick="if(typeof cargarCatalogoGeneros === 'function') cargarCatalogoGeneros()"><i class="bi bi-gender-ambiguous me-1" aria-hidden="true"></i>
-                                        Géneros</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="pagadores-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-pagadores" type="button" role="tab"
-                                        onclick="if(typeof openTabPagadores === 'function') openTabPagadores()"><i class="bi bi-bank me-1" aria-hidden="true"></i> Pagadores</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="bonos-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-bonos" type="button" role="tab"><i class="bi bi-cash-coin me-1" aria-hidden="true"></i> Bonos</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="periodos-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-periodos" type="button" role="tab"
-                                        onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()"><i class="bi bi-calendar-range me-1" aria-hidden="true"></i> Tramos de Cierre</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="justificaciones-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-justificaciones" type="button" role="tab"><i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
-                                        Justificaciones</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="calendario-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-calendario" type="button" role="tab"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>
-                                        Calendario</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="correo-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-correo" type="button" role="tab"><i class="bi bi-envelope me-1" aria-hidden="true"></i>
-                                        Correo</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="estados-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-estados" type="button" role="tab"
-                                        onclick="if(typeof loadEstadosConfig==='function') loadEstadosConfig()"><i class="bi bi-palette me-1" aria-hidden="true"></i>
-                                        Estados</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="seguridad-config-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-seguridad" type="button" role="tab" data-permiso="configuracion.seguridad"><i class="bi bi-shield-lock me-1" aria-hidden="true"></i>
-                                        Seguridad</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="robot-bioalba-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-robot-bioalba" type="button" role="tab"
-                                        onclick="if(typeof loadRobotSyncLogs === 'function') loadRobotSyncLogs()"><i class="bi bi-robot me-1" aria-hidden="true"></i>
-                                        Robot BioAlba</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="productos-propios-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo"
-                                        onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()"><i class="bi bi-gift me-1" aria-hidden="true"></i>
-                                        Productos Propios</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="catalogo-hallazgos-config-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-catalogo-hallazgos-config" type="button" role="tab" data-permiso="porteria.editar"
-                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()"><i class="bi bi-shield-exclamation me-1" aria-hidden="true"></i>
-                                        Catálogo Hallazgos</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="porteria-ubicaciones-config-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar"
-                                        onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>
-                                        Ubicación</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="flota-config-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-flota-config" type="button" role="tab" data-permiso="configuracion.flota"
-                                        onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initAdminTab()"><i class="bi bi-truck me-1" aria-hidden="true"></i>
-                                        Flota Aguacol</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link fw-bold" id="sistema-config-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-sistema" type="button" role="tab" data-permiso="superuser"
-                                        onclick="if(typeof loadAjustesSistema === 'function') loadAjustesSistema()"><i class="bi bi-gear me-1" aria-hidden="true"></i>
-                                        Sistema</button>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="card-body p-4">
+                    <div class="cfg">
+                        <aside class="cfg-side">
+                            <div class="cfg-side-head">
+                                <h2>Configuración</h2>
+                                <p>Ajustes del sistema de asistencia</p>
+                            </div>
+                            <label class="cfg-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="cfg-search" placeholder="Buscar ajuste…" autocomplete="off" aria-label="Buscar ajuste"></label>
+                            <div class="cfg-nav" id="configTabs" role="tablist" aria-orientation="vertical">
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Asistencia</div>
+                                    <button class="nav-link cfg-item active" id="horarios-tab" data-bs-toggle="tab" data-bs-target="#tab-horarios" type="button" role="tab"><i class="bi bi-clock" aria-hidden="true"></i> Turnos</button>
+                                    <button class="nav-link cfg-item" id="periodos-tab" data-bs-toggle="tab" data-bs-target="#tab-periodos" type="button" role="tab" onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()"><i class="bi bi-calendar-range" aria-hidden="true"></i> Tramos de Cierre</button>
+                                    <button class="nav-link cfg-item" id="justificaciones-tab" data-bs-toggle="tab" data-bs-target="#tab-justificaciones" type="button" role="tab"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Justificaciones</button>
+                                    <button class="nav-link cfg-item" id="calendario-tab" data-bs-toggle="tab" data-bs-target="#tab-calendario" type="button" role="tab"><i class="bi bi-calendar3" aria-hidden="true"></i> Calendario</button>
+                                    <button class="nav-link cfg-item" id="estados-tab" data-bs-toggle="tab" data-bs-target="#tab-estados" type="button" role="tab" onclick="if(typeof loadEstadosConfig==='function') loadEstadosConfig()"><i class="bi bi-palette" aria-hidden="true"></i> Estados</button>
+                                </div>
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Organización</div>
+                                    <button class="nav-link cfg-item" id="areas-tab" data-bs-toggle="tab" data-bs-target="#tab-areas" type="button" role="tab" onclick="if(typeof cargarCatalogoAreas === 'function') cargarCatalogoAreas()"><i class="bi bi-building" aria-hidden="true"></i> Áreas</button>
+                                    <button class="nav-link cfg-item" id="cargos-tab" data-bs-toggle="tab" data-bs-target="#tab-cargos" type="button" role="tab" onclick="if(typeof cargarCatalogoCargos === 'function') cargarCatalogoCargos()"><i class="bi bi-briefcase" aria-hidden="true"></i> Cargos</button>
+                                    <button class="nav-link cfg-item" id="generos-tab" data-bs-toggle="tab" data-bs-target="#tab-generos" type="button" role="tab" onclick="if(typeof cargarCatalogoGeneros === 'function') cargarCatalogoGeneros()"><i class="bi bi-gender-ambiguous" aria-hidden="true"></i> Géneros</button>
+                                </div>
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Remuneración</div>
+                                    <button class="nav-link cfg-item" id="pagadores-tab" data-bs-toggle="tab" data-bs-target="#tab-pagadores" type="button" role="tab" onclick="if(typeof openTabPagadores === 'function') openTabPagadores()"><i class="bi bi-bank" aria-hidden="true"></i> Pagadores</button>
+                                    <button class="nav-link cfg-item" id="bonos-tab" data-bs-toggle="tab" data-bs-target="#tab-bonos" type="button" role="tab"><i class="bi bi-cash-coin" aria-hidden="true"></i> Bonos</button>
+                                </div>
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Comunicación e integraciones</div>
+                                    <button class="nav-link cfg-item" id="correo-tab" data-bs-toggle="tab" data-bs-target="#tab-correo" type="button" role="tab"><i class="bi bi-envelope" aria-hidden="true"></i> Correo</button>
+                                    <button class="nav-link cfg-item" id="robot-bioalba-tab" data-bs-toggle="tab" data-bs-target="#tab-robot-bioalba" type="button" role="tab" onclick="if(typeof loadRobotSyncLogs === 'function') loadRobotSyncLogs()"><i class="bi bi-robot" aria-hidden="true"></i> Robot BioAlba</button>
+                                </div>
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Portería y flota</div>
+                                    <button class="nav-link cfg-item" id="catalogo-hallazgos-config-tab" data-bs-toggle="tab" data-bs-target="#tab-catalogo-hallazgos-config" type="button" role="tab" data-permiso="porteria.editar" onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Catálogo Hallazgos</button>
+                                    <button class="nav-link cfg-item" id="porteria-ubicaciones-config-tab" data-bs-toggle="tab" data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar" onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()"><i class="bi bi-geo-alt" aria-hidden="true"></i> Ubicación</button>
+                                    <button class="nav-link cfg-item" id="flota-config-tab" data-bs-toggle="tab" data-bs-target="#tab-flota-config" type="button" role="tab" data-permiso="configuracion.flota" onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initAdminTab()"><i class="bi bi-truck" aria-hidden="true"></i> Flota Aguacol</button>
+                                </div>
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Entregas</div>
+                                    <button class="nav-link cfg-item" id="productos-propios-tab" data-bs-toggle="tab" data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo" onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()"><i class="bi bi-gift" aria-hidden="true"></i> Productos Propios</button>
+                                </div>
+                                <div class="cfg-group" role="presentation">
+                                    <div class="cfg-group-title" aria-hidden="true">Administración</div>
+                                    <button class="nav-link cfg-item" id="seguridad-config-tab" data-bs-toggle="tab" data-bs-target="#tab-seguridad" type="button" role="tab" data-permiso="configuracion.seguridad"><i class="bi bi-shield-lock" aria-hidden="true"></i> Seguridad</button>
+                                    <button class="nav-link cfg-item" id="sistema-config-tab" data-bs-toggle="tab" data-bs-target="#tab-sistema" type="button" role="tab" data-permiso="superuser" onclick="if(typeof loadAjustesSistema === 'function') loadAjustesSistema()"><i class="bi bi-gear" aria-hidden="true"></i> Sistema</button>
+                                </div>
+                                <div class="cfg-nores" id="cfg-nores" hidden>Ningún ajuste coincide.</div>
+                            </div>
+                        </aside>
+                        <section class="cfg-main">
                             <div class="tab-content" id="configTabsContent">
                                 <!-- Tab Horarios -->
                                 <div class="tab-pane fade show active" id="tab-horarios" role="tabpanel">
@@ -2349,7 +2296,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
                     </div>
                 </div>
 
