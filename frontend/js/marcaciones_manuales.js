@@ -2248,27 +2248,101 @@ function m180AcompNombre(id) {
     return e.nombre_completo || e.nombre || [e.nombres, e.apellidos].filter(Boolean).join(' ') || `Empleado ${id}`;
 }
 
-function m180AcompRender() {
+function m180AcompIniciales(nombre) {
+    const w = String(nombre).trim().split(/\s+/).filter(Boolean);
+    return ((w[0] || '')[0] || '').toUpperCase() + ((w.length > 1 ? w[w.length - 1] : '')[0] || '').toUpperCase();
+}
+
+let m180_acomp_activo = -1;
+
+function m180AcompCandidatos() {
     const emps = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data && stateMarcacionesApp.data.empleados) || [];
     const choferId = parseInt(document.getElementById('m180-empleado-id').value);
-    const esPeoneta = e => /peoneta/i.test(e.cargo || '');
-    let candidatos = emps.filter(esPeoneta);
-    if (!candidatos.length) candidatos = emps;  // sin cargo "peoneta" reconocible: listar a todos
-    const sel = document.getElementById('m180-acomp-select');
-    if (sel) {
-        sel.innerHTML = '<option value="">+ Agregar acompañante...</option>' + candidatos
-            .filter(e => e.id != choferId && !m180_acomp.includes(Number(e.id)))
-            .sort((a, b) => m180AcompNombre(a.id).localeCompare(m180AcompNombre(b.id)))
-            .map(e => `<option value="${e.id}">${m180Esc(m180AcompNombre(e.id))}</option>`).join('');
+    let cand = emps.filter(e => /peoneta/i.test(e.cargo || ''));
+    if (!cand.length) cand = emps;  // sin cargo "peoneta" reconocible: listar a todos
+    return cand.filter(e => e.id != choferId && !m180_acomp.includes(Number(e.id)))
+        .sort((a, b) => m180AcompNombre(a.id).localeCompare(m180AcompNombre(b.id)));
+}
+
+function m180AcompRenderPanel() {
+    const panel = document.getElementById('m180-acomp-panel');
+    const input = document.getElementById('m180-acomp-input');
+    if (!panel || !input) return;
+    const q = input.value.trim().toLowerCase();
+    const lista = m180AcompCandidatos().filter(e => !q || m180AcompNombre(e.id).toLowerCase().includes(q));
+    m180_acomp_activo = lista.length ? Math.min(Math.max(m180_acomp_activo, 0), lista.length - 1) : -1;
+    if (!lista.length) {
+        panel.innerHTML = `<div class="m180-acomp-none">${q ? 'Ningún peoneta coincide con "' + m180Esc(input.value.trim()) + '"' : 'No quedan peonetas por agregar'}</div>`;
+        return;
     }
+    panel.innerHTML = lista.map((e, i) => {
+        const nom = m180AcompNombre(e.id);
+        let nomHtml = m180Esc(nom);
+        if (q) {
+            const ix = nom.toLowerCase().indexOf(q);
+            if (ix >= 0) nomHtml = m180Esc(nom.slice(0, ix)) + '<mark>' + m180Esc(nom.slice(ix, ix + q.length)) + '</mark>' + m180Esc(nom.slice(ix + q.length));
+        }
+        return `<button type="button" role="option" class="m180-acomp-opt${i === m180_acomp_activo ? ' is-active' : ''}" data-id="${e.id}" onmousedown="event.preventDefault(); window.m180AcompAgregar(${e.id})">
+            <span class="m180-acomp-av">${m180Esc(m180AcompIniciales(nom))}</span>
+            <span><div class="nm">${nomHtml}</div><div class="cg">${m180Esc(e.cargo || 'Sin cargo')}</div></span>
+            <i class="bi bi-plus-circle-fill add" aria-hidden="true"></i></button>`;
+    }).join('');
+    const act = panel.querySelector('.is-active');
+    if (act) act.scrollIntoView({ block: 'nearest' });
+}
+
+function m180AcompAbrir(abrir) {
+    const combo = document.getElementById('m180-acomp-combo');
+    const input = document.getElementById('m180-acomp-input');
+    if (!combo) return;
+    combo.classList.toggle('is-open', abrir);
+    if (input) input.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (abrir) m180AcompRenderPanel();
+}
+
+function m180AcompInitCombo() {
+    const input = document.getElementById('m180-acomp-input');
+    if (!input || input.dataset.ready) return;
+    input.dataset.ready = '1';
+    input.addEventListener('focus', () => { m180_acomp_activo = 0; m180AcompAbrir(true); });
+    input.addEventListener('blur', () => m180AcompAbrir(false));
+    input.addEventListener('input', () => { m180_acomp_activo = 0; m180AcompAbrir(true); });
+    input.addEventListener('keydown', ev => {
+        const opts = document.querySelectorAll('#m180-acomp-panel .m180-acomp-opt');
+        const abierto = document.getElementById('m180-acomp-combo').classList.contains('is-open');
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            if (!abierto) return m180AcompAbrir(true);
+            if (opts.length) m180_acomp_activo = (m180_acomp_activo + (ev.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length;
+            m180AcompRenderPanel();
+        } else if (ev.key === 'Enter') {
+            ev.preventDefault();
+            const o = opts[m180_acomp_activo];
+            if (o) window.m180AcompAgregar(o.dataset.id);
+        } else if (ev.key === 'Escape' && (abierto || input.value)) {
+            ev.stopPropagation();
+            input.value = '';
+            m180AcompAbrir(false);
+        }
+    });
+}
+
+function m180AcompRender() {
+    m180AcompInitCombo();
+    const cnt = document.getElementById('m180-acomp-count');
+    if (cnt) cnt.textContent = m180_acomp.length;
     const chips = document.getElementById('m180-acomp-chips');
     if (chips) {
-        chips.innerHTML = m180_acomp.map(id => `
-            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:0.75rem;">
-                ${m180Esc(m180AcompNombre(id))}
-                <button type="button" class="btn-close m180-edit-btn" style="font-size:0.5rem;" aria-label="Quitar" onclick="window.m180AcompQuitar(${id})"></button>
-            </span>`).join('');
+        chips.innerHTML = m180_acomp.length
+            ? `<div class="m180-acomp-list">${m180_acomp.map(id => {
+                const nom = m180AcompNombre(id);
+                return `<span class="m180-acomp-chip"><span class="m180-acomp-av">${m180Esc(m180AcompIniciales(nom))}</span><span class="nm">${m180Esc(nom)}</span>
+                    <button type="button" aria-label="Quitar a ${m180Esc(nom)}" onclick="window.m180AcompQuitar(${id})"><i class="bi bi-x-lg" style="font-size:.7rem" aria-hidden="true"></i></button></span>`;
+            }).join('')}</div>`
+            : `<div class="m180-acomp-empty"><i class="bi bi-person-plus" aria-hidden="true"></i><span>Sin acompañantes: el horario queda solo para el chofer.</span></div>`;
     }
+    const combo = document.getElementById('m180-acomp-combo');
+    if (combo && combo.classList.contains('is-open')) m180AcompRenderPanel();
 }
 
 window.m180AcompAgregar = function(id) {
@@ -2276,6 +2350,8 @@ window.m180AcompAgregar = function(id) {
     if (!id || m180_locked || m180_acomp.includes(id)) return;
     m180_acomp.push(id);
     m180_dirty = true;
+    const inp = document.getElementById('m180-acomp-input');
+    if (inp) inp.value = '';
     m180AcompRender();
 };
 window.m180AcompQuitar = function(id) {
