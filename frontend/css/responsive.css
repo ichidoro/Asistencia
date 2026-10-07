@@ -2739,6 +2739,7 @@
     border: 2.5px dashed rgba(16, 185, 129, 0.95) !important;
     border-radius: 12px;
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
+    pointer-events: none !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (min-width: 768px) {
@@ -2757,6 +2758,7 @@
     border: 2px dashed rgba(16, 185, 129, 0.8) !important;
     border-radius: 12px;
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+    pointer-events: none !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (orientation: landscape), (min-width: 768px) {

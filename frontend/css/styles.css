@@ -3509,6 +3509,17 @@ tr:hover .emp-name-cell {
     z-index: 2150 !important;
 }
 
+/* Escáner de Libreta: a pantalla completa por encima de todo (z-index 2500), inmune a velos apilados */
+#modalScannerLibreta {
+    z-index: 2500 !important;
+}
+#modalScannerLibreta .modal-dialog {
+    z-index: 2501 !important;
+}
+#modalScannerLibreta .modal-content {
+    z-index: 2502 !important;
+}
+
 /* Ajuste de z-index para backdrops apilados dinámicamente en Bootstrap 5.
    Se elige por CUÁNTOS velos hay (hermanos .modal-backdrop previos), no por la posición entre los <div> del
    body: con :nth-of-type(3) el velo del aviso de bloqueo caía como "tercer div" al terminar el splash, quedaba

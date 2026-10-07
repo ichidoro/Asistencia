@@ -5064,7 +5064,7 @@
             </div>
 
             <!-- MODAL ESCÁNER INTELIGENTE EN VIVO CON CÁMARA INMERSIVA A PANTALLA COMPLETA -->
-            <div class="modal fade" id="modalScannerLibreta" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+            <div class="modal fade" id="modalScannerLibreta" tabindex="-1" aria-hidden="true" data-bs-backdrop="false">
                 <div class="modal-dialog modal-fullscreen m-0 p-0">
                     <div class="modal-content border-0 bg-black text-white w-100 h-100 position-relative overflow-hidden">
                         
@@ -5076,20 +5076,20 @@
                             <canvas id="scanner-hidden-canvas" style="display:none;"></canvas>
 
                             <!-- HUD SUPERIOR FLOTANTE (TRANSPARENTE) -->
-                            <div class="position-absolute top-0 start-0 w-100 p-2.5 d-flex align-items-center justify-content-between pointer-events-none" style="z-index:20; background:linear-gradient(rgba(0,0,0,0.7), transparent);">
+                            <div class="position-absolute top-0 start-0 w-100 p-2.5 d-flex align-items-center justify-content-between pointer-events-none" style="z-index:500; background:linear-gradient(rgba(0,0,0,0.7), transparent);">
                                 <!-- Botón Cerrar -->
-                                <button type="button" class="btn btn-dark bg-opacity-70 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" style="width:42px; height:42px; pointer-events:auto;" onclick="window.scannerCerrar()" aria-label="Cerrar">
+                                <button type="button" class="btn btn-dark bg-opacity-70 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" style="width:42px; height:42px; pointer-events:auto; position:relative; z-index:501;" onclick="window.scannerCerrar()" aria-label="Cerrar">
                                     <i class="bi bi-x-lg fs-5"></i>
                                 </button>
 
                                 <!-- Indicador Central Discreto -->
-                                <div class="badge bg-dark bg-opacity-80 text-white px-3 py-2 rounded-pill border border-white border-opacity-25 d-flex align-items-center gap-1.5 shadow" style="font-size:0.75rem; pointer-events:auto;">
+                                <div class="badge bg-dark bg-opacity-80 text-white px-3 py-2 rounded-pill border border-white border-opacity-25 d-flex align-items-center gap-1.5 shadow" style="font-size:0.75rem; pointer-events:auto; position:relative; z-index:501;">
                                     <i class="bi bi-phone text-warning fs-6" id="scanner-hud-icon"></i>
                                     <span id="scanner-hud-hint">Acerca a la columna de hoy (vertical)</span>
                                 </div>
 
                                 <!-- Toggle Modo Rápido (1 Día vs Hoja) -->
-                                <button type="button" class="btn btn-dark bg-opacity-70 text-white rounded-pill px-2.5 py-1.5 d-flex align-items-center gap-1 shadow border border-white border-opacity-25" id="btn-toggle-scanner-mode" onclick="window.scannerToggleModoGuia()" style="font-size:0.72rem; pointer-events:auto;" title="Cambiar modo de encuadre">
+                                <button type="button" class="btn btn-dark bg-opacity-70 text-white rounded-pill px-2.5 py-1.5 d-flex align-items-center gap-1 shadow border border-white border-opacity-25" id="btn-toggle-scanner-mode" onclick="window.scannerToggleModoGuia()" style="font-size:0.72rem; pointer-events:auto; position:relative; z-index:501;" title="Cambiar modo de encuadre">
                                     <i class="bi bi-layout-sidebar-inset text-success" id="icon-scanner-mode"></i>
                                     <span id="txt-scanner-mode">1 Día</span>
                                 </button>
@@ -5097,7 +5097,7 @@
 
                             <!-- GUÍA RETÍCULA VISUAL (COLUMNA DIARIA POR DEFECTO) -->
                             <div id="scanner-camera-overlay" class="position-absolute top-0 start-0 w-100 h-100 pointer-events-none d-flex flex-column align-items-center justify-content-center" style="pointer-events:none; z-index:10;">
-                                <div class="scanner-guide-box-col-dia position-relative" id="scanner-guide-box">
+                                <div class="scanner-guide-box-col-dia position-relative" id="scanner-guide-box" style="pointer-events:none;">
                                     <!-- Esquinas de mira óptica -->
                                     <div class="scanner-corner top-left"></div>
                                     <div class="scanner-corner top-right"></div>
@@ -5132,19 +5132,19 @@
                             </div>
 
                             <!-- HUD INFERIOR FLOTANTE DE DISPARO (TRANSPARENTE) -->
-                            <div class="position-absolute bottom-0 start-0 w-100 p-3 pb-4 d-flex align-items-center justify-content-around" style="z-index:20; background:linear-gradient(transparent, rgba(0,0,0,0.8));">
+                            <div class="position-absolute bottom-0 start-0 w-100 p-3 pb-4 d-flex align-items-center justify-content-around" style="z-index:500; pointer-events:auto; background:linear-gradient(transparent, rgba(0,0,0,0.8));">
                                 <!-- Botón de Galería / Archivo (Izquierda) -->
-                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" onclick="document.getElementById('m180-gallery-input').click()" style="width:48px;height:48px;" title="Cargar foto desde galería o WhatsApp">
+                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" onclick="document.getElementById('m180-gallery-input').click()" style="width:48px;height:48px; position:relative; z-index:501; pointer-events:auto;" title="Cargar foto desde galería o WhatsApp">
                                     <i class="bi bi-images fs-5"></i>
                                 </button>
 
                                 <!-- Botón Disparador Principal (Centro, Grande y Cómodo para el pulgar) -->
-                                <button type="button" id="scanner-btn-shutter" class="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0" onclick="window.scannerCapturarFrameDirecto()" style="width:74px;height:74px;border:4px solid white;box-shadow:0 0 25px rgba(16,185,129,0.7) !important; touch-action: manipulation; -webkit-tap-highlight-color: transparent;" title="Capturar y Procesar con IA">
+                                <button type="button" id="scanner-btn-shutter" class="btn btn-success rounded-circle shadow-lg d-flex align-items-center justify-content-center p-0" onclick="window.scannerCapturarFrameDirecto(event)" ontouchend="window.scannerCapturarFrameDirecto(event)" style="width:78px;height:78px;border:4px solid white;box-shadow:0 0 25px rgba(16,185,129,0.7) !important; touch-action: manipulation; -webkit-tap-highlight-color: transparent; pointer-events: auto !important; position: relative; z-index: 501; cursor: pointer;" title="Capturar y Procesar con IA">
                                     <i class="bi bi-camera-fill fs-2" style="pointer-events: none;"></i>
                                 </button>
 
                                 <!-- Botón Cambiar Cámara (Derecha) -->
-                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" id="scanner-btn-flip" onclick="window.scannerCambiarCamara()" style="width:48px;height:48px;" title="Cambiar Cámara">
+                                <button type="button" class="btn btn-dark bg-opacity-60 text-white rounded-circle d-flex align-items-center justify-content-center shadow border border-white border-opacity-25" id="scanner-btn-flip" onclick="window.scannerCambiarCamara()" style="width:48px;height:48px; position:relative; z-index:501; pointer-events:auto;" title="Cambiar Cámara">
                                     <i class="bi bi-camera-rotate fs-5"></i>
                                 </button>
                             </div>

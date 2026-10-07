@@ -3161,7 +3161,19 @@ window.abrirScannerLibreta = async function() {
     const shutterBtn = document.getElementById('scanner-btn-shutter');
     if (shutterBtn) {
         shutterBtn.classList.remove('disabled', 'opacity-50');
+        shutterBtn.onclick = (e) => {
+            window.scannerCapturarFrameDirecto(e);
+        };
+        shutterBtn.ontouchend = (e) => {
+            window.scannerCapturarFrameDirecto(e);
+        };
     }
+
+    // Inhabilitar interacción de velos (backdrops) para que NUNCA bloqueen los toques de la cámara
+    document.querySelectorAll('.modal-backdrop').forEach(b => {
+        b.style.pointerEvents = 'none';
+        b.style.opacity = '0';
+    });
 
     // Asegurar modo 1 Día (columna vertical) inicializado por defecto
     window.scannerModoActual = 'dia';
@@ -3310,7 +3322,17 @@ window.scannerToggleModoGuia = function() {
     }
 };
 
-window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
+let _scannerLastCaptureTime = 0;
+window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function(e) {
+    if (e) {
+        try { e.preventDefault(); e.stopPropagation(); } catch(_) {}
+    }
+    const now = Date.now();
+    if (now - _scannerLastCaptureTime < 800) {
+        return;
+    }
+    _scannerLastCaptureTime = now;
+
     if (window._scannerEnProceso) {
         console.warn("⚠️ Captura ya en proceso, ignorando pulsación duplicada.");
         return;
@@ -3335,18 +3357,9 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
         shutterBtn.classList.add('disabled', 'opacity-50');
     }
 
-    // 3. Validar estado del flujo de video
-    if (video.readyState < 2 || !video.videoWidth) {
-        if (typeof showToast === 'function') {
-            showToast("La cámara se está inicializando. Espere un segundo y vuelva a presionar.", "warning");
-        }
-        if (shutterBtn) shutterBtn.classList.remove('disabled', 'opacity-50');
-        return;
-    }
-
     window._scannerEnProceso = true;
 
-    // 4. Cambiar inmediatamente la vista al spinner para que la pantalla NUNCA quede inmóvil
+    // 3. Cambiar inmediatamente la vista al spinner para que la pantalla NUNCA quede inmóvil
     document.getElementById('scanner-step-camera')?.classList.add('d-none');
     document.getElementById('scanner-step-crop')?.classList.add('d-none');
     const loadingStep = document.getElementById('scanner-step-loading');
@@ -3355,11 +3368,11 @@ window.scannerCapturarFrame = window.scannerCapturarFrameDirecto = function() {
         loadingStep.classList.add('d-flex');
     }
 
-    // 5. Procesar la captura y recorte dentro de requestAnimationFrame para asegurar renderizado previo del loader
+    // 4. Procesar la captura y recorte dentro de requestAnimationFrame para asegurar renderizado previo del loader
     requestAnimationFrame(() => {
         try {
-            const w = video.videoWidth || 1920;
-            const h = video.videoHeight || 1080;
+            const w = video.videoWidth || video.clientWidth || 1920;
+            const h = video.videoHeight || video.clientHeight || 1080;
             canvas.width = w;
             canvas.height = h;
 
@@ -3864,6 +3877,11 @@ window.scannerCerrar = function() {
         scannerCropperInstance.destroy();
         scannerCropperInstance = null;
     }
+    // Restaurar eventos de backdrop para el modal de libreta inferior
+    document.querySelectorAll('.modal-backdrop').forEach(b => {
+        b.style.pointerEvents = '';
+        b.style.opacity = '';
+    });
     const modalEl = document.getElementById('modalScannerLibreta');
     if (modalEl) {
         const bsModal = bootstrap.Modal.getInstance(modalEl);
