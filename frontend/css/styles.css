@@ -4289,3 +4289,27 @@ tr:hover .emp-name-cell {
 .m180-chofer-btn:disabled { opacity:.55; cursor:default; }
 .m180-chofer-btn:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
 @media (max-width:576px) { .m180-chofer-btn { width:100%; justify-content:center; } }
+
+/* ── Grilla de asistencia · ícono de cargo junto al nombre ────────────── */
+.emp-id-row { display:flex; align-items:center; gap:9px; min-width:0; }
+.emp-id-txt { min-width:0; flex:1; }
+.emp-cargo-ico { --ci-bg:#f1f5f9; --ci-ink:#64748b; flex:none; width:28px; height:28px; display:grid; place-items:center; border-radius:9px;
+    background:var(--ci-bg); color:var(--ci-ink); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--ci-ink) 16%, transparent), 0 1px 1px rgba(15,23,42,.05);
+    cursor:help; }
+.emp-cargo-ico svg { display:block; }
+.emp-cargo-ico.cg-chofer     { --ci-bg:#e3edff; --ci-ink:#1d4ed8; }
+.emp-cargo-ico.cg-peoneta    { --ci-bg:#ffeadb; --ci-ink:#c2410c; }
+.emp-cargo-ico.cg-bodega     { --ci-bg:#fdf1c9; --ci-ink:#92600a; }
+.emp-cargo-ico.cg-produccion { --ci-bg:#d6f5e6; --ci-ink:#047857; }
+.emp-cargo-ico.cg-mantencion { --ci-bg:#e4e9f0; --ci-ink:#334155; }
+.emp-cargo-ico.cg-supervisor { --ci-bg:#f6e4fb; --ci-ink:#a21caf; }
+.emp-cargo-ico.cg-calidad    { --ci-bg:#ebe5fd; --ci-ink:#6d28d9; }
+.emp-cargo-ico.cg-ventas     { --ci-bg:#ffe2e7; --ci-ink:#be123c; }
+.emp-cargo-ico.cg-admin      { --ci-bg:#dff1fb; --ci-ink:#0369a1; }
+.emp-cargo-ico.cg-seguridad  { --ci-bg:#d3f4ef; --ci-ink:#0f766e; }
+@media (max-width:768px) {
+    .emp-id-row { gap:7px; }
+    .emp-cargo-ico { width:24px; height:24px; border-radius:8px; }
+    .emp-cargo-ico svg { width:14px; height:14px; }
+}
+@media print { .emp-cargo-ico { box-shadow:none; } }

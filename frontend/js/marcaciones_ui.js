@@ -5830,8 +5830,13 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         <td class="${nameClass} sticky-col-analitica emp-name-cell text-start ps-2 align-middle" style="position:sticky; left:0; z-index:50; white-space:nowrap;cursor:pointer;font-size:0.75rem; width:260px; min-width:260px; max-width:260px;"
             ondblclick="openBatchApprovalModal(${emp.id},'${(emp.nombre_completo||'').replace(/'/g,"\\'")}')"
             title="${hasHE ? 'Doble clic → Gestionar Horas Extra' : 'Doble clic → Ver Horas Extra'}">
-            <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
-            <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
+            <div class="emp-id-row">
+                ${cargoIconoHtml(emp.cargo)}
+                <div class="emp-id-txt">
+                    <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
+                    <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
+                </div>
+            </div>
         </td>
         ${bonoCells}
         ${showIncidencias ? `
@@ -5910,6 +5915,7 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
                 id: eid, info,
                 nombre_completo: info.nombre_completo || e_raw.nombre_completo || e_raw.nombre,
                 area: info.area || e_raw.area || '',
+                cargo: info.cargo || e_raw.cargo || '',
                 turno: info.turno || info.nombre_turno || '',
                 turno_dias: info.turno_dias || {},
                 tipo_programacion: info.tipo_programacion || '',
@@ -6082,6 +6088,7 @@ window.reloadSingleEmployeeRow = async function(empId) {
             id: empId, info,
             nombre_completo: info.nombre_completo || empRaw.nombre_completo || empRaw.nombre,
             area: info.area || empRaw.area || '',
+            cargo: info.cargo || empRaw.cargo || '',
             turno: info.turno || info.nombre_turno || '',
             turno_dias: info.turno_dias || {},
             tipo_programacion: info.tipo_programacion || '',
@@ -6198,6 +6205,7 @@ function renderVistaAnalitica(respData, container) {
                 id: eid, info,
                 nombre_completo: info.nombre_completo || e_raw.nombre_completo || e_raw.nombre,
                 area: info.area || e_raw.area || '',
+                cargo: info.cargo || e_raw.cargo || '',
                 turno: info.turno || info.nombre_turno || '',          // backend envía info.turno
                 turno_dias: info.turno_dias || {},                     // necesario para proyección LIBRE y tooltip
                 tipo_programacion: info.tipo_programacion || '',
@@ -8496,3 +8504,47 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     td.click();
 });
+
+
+// ── Íconos por cargo en la grilla de asistencia ─────────────────────────────────────────────────────────
+// Una familia de líneas (24px, trazo 1.7, puntas redondas) en una pastilla tintada por categoría. El cargo viene
+// del empleado; si no calza con ninguna categoría se muestra la silueta genérica. El detalle va en el tooltip.
+const CARGO_ICONOS = {
+    chofer:     { nombre: 'Chofer',          svg: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/><path d="M3.4 10.6 9.7 11.3M20.6 10.6 14.3 11.3M12 14.4V21"/>' },
+    peoneta:    { nombre: 'Peoneta',         svg: '<path d="M5.5 3v14.8h8.7"/><rect x="9.6" y="6.6" width="10.4" height="11.2" rx="1.7"/><path d="M9.6 12.2H20"/><circle cx="9.2" cy="20.6" r="1.5"/>' },
+    bodega:     { nombre: 'Bodega',          svg: '<path d="M3 10.2 12 4l9 6.2V20H3Z"/><path d="M8 20v-6.2h8V20M8 16.9h8"/>' },
+    produccion: { nombre: 'Producción',      svg: '<path d="M3 20.5h18M5 20.5V10.2l5 3.3v-3.3l5 3.3V4.5h4v16"/><path d="M8.2 17.4h1.4M13.2 17.4h1.4"/>' },
+    mantencion: { nombre: 'Mantención',      svg: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
+    supervisor: { nombre: 'Jefatura',        svg: '<path d="m12 3.2 2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.5l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85L12 3.2Z"/>' },
+    calidad:    { nombre: 'Calidad / Lab.',  svg: '<path d="M9.4 3.2h5.2M10.5 3.2v5.9L5.1 18.3A1.9 1.9 0 0 0 6.7 21h10.6a1.9 1.9 0 0 0 1.6-2.7L13.5 9.1V3.2"/><path d="M7.7 14.8h8.6"/>' },
+    ventas:     { nombre: 'Ventas',          svg: '<path d="M3 12.2V4.5A1.5 1.5 0 0 1 4.5 3h7.7a1.5 1.5 0 0 1 1.06.44l7.3 7.3a1.5 1.5 0 0 1 0 2.12l-7.7 7.7a1.5 1.5 0 0 1-2.12 0l-7.3-7.3A1.5 1.5 0 0 1 3 12.2Z"/><circle cx="8" cy="8" r="1.3"/>' },
+    admin:      { nombre: 'Administración',  svg: '<rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9 4.5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.5M8.6 11h6.8M8.6 15h4.4"/>' },
+    seguridad:  { nombre: 'Seguridad',       svg: '<path d="M12 3 4.6 6v5.4c0 4.6 3 8.2 7.4 9.6 4.4-1.4 7.4-5 7.4-9.6V6L12 3Z"/><path d="m9 12 2.2 2.2L15.2 10"/>' },
+    otro:       { nombre: '',                svg: '<circle cx="12" cy="8" r="3.6"/><path d="M4.6 20.5c.8-3.9 3.8-6 7.4-6s6.6 2.1 7.4 6"/>' }
+};
+const CARGO_REGLAS = [
+    ['chofer',     /chofer|conductor/],
+    ['peoneta',    /peoneta|acompanante|ayudante de (reparto|camion)/],
+    ['supervisor', /supervis|jefe|jefa|gerent|encargad|coordinad|director|lider|subgerent/],
+    ['calidad',    /calidad|laborator|quimic/],
+    ['mantencion', /mantenc|mecanic|electric|tecnico|soldad|gasfit|reparac/],
+    ['bodega',     /bodeg|almacen|despach|inventar|logistic|grua|horquill/],
+    ['produccion', /operador|operario|produccion|llenad|envas|maquin|etiquet|planta|cocin|mezcl|armador/],
+    ['seguridad',  /guardia|porter|seguridad|vigilan|prevenc/],
+    ['ventas',     /vendedor|ventas|comercial|ejecutiv|marketing/],
+    ['admin',      /administ|asistente|secretar|contab|analista|rrhh|recursos humanos|finanz|compras|adquis|oficina|tesorer|abogad|sistemas|informat/]
+];
+function categoriaCargo(cargo) {
+    const t = String(cargo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (const [cat, re] of CARGO_REGLAS) { if (re.test(t)) return cat; }
+    return 'otro';
+}
+function cargoIconoHtml(cargo) {
+    const cat = categoriaCargo(cargo);
+    const def = CARGO_ICONOS[cat];
+    const etiqueta = String(cargo || '').trim() || 'Sin cargo';
+    const esc = etiqueta.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return `<span class="emp-cargo-ico cg-${cat}" role="img" aria-label="Cargo: ${esc}" title="${esc}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.svg}</svg></span>`;
+}
+window.cargoIconoHtml = cargoIconoHtml;
+window.categoriaCargo = categoriaCargo;
