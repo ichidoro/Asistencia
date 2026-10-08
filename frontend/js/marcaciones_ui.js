@@ -6197,7 +6197,7 @@ window.toggleGridTooltip = function() {
     window._gridTooltipEnabled = !(window._gridTooltipEnabled !== false);
     try { localStorage.setItem('asistencia_grid_tooltip', window._gridTooltipEnabled ? '1' : '0'); } catch (_) {}
     const tip = document.getElementById('grid-fly-tooltip');
-    if (tip) tip.style.display = 'none';
+    if (tip) { tip.classList.remove('tp-pinned'); tip.style.display = 'none'; }
     const btn = document.getElementById('btn-toggle-grid-tip');
     if (btn) {
         const b = window._gridTipBtnProps();
@@ -6625,15 +6625,13 @@ function renderVistaAnalitica(respData, container) {
                 'z-index:9999',
                 'display:none',
                 'pointer-events:none',
-                'max-width:440px',
-                'min-width:280px',
-                'border-radius:10px',
-                'box-shadow:0 8px 32px rgba(0,0,0,0.18)',
-                'background:rgba(255,255,255,0.97)',
-                'border:1px solid #e2e8f0',
+                'max-width:460px',
+                'min-width:0',
+                'border-radius:16px',
+                'background:transparent',
+                'border:0',
                 'padding:0',
-                'overflow:hidden',
-                'backdrop-filter:blur(8px)',
+                'overflow:visible',
                 'transition:opacity 0.08s ease'
             ].join(';');
             document.body.appendChild(flyTip);
@@ -6661,7 +6659,27 @@ function renderVistaAnalitica(respData, container) {
         }
 
         function _hideFlyTip() {
+            if (flyTip.classList.contains('tp-pinned')) return;   // fijado con Shift: no se oculta solo
             flyTip.style.display = 'none';
+        }
+        // Shift fija el tooltip (permite leerlo entero, ver todos los tramos y copiar datos).
+        // Se suelta con Esc, con otro Shift o haciendo clic fuera.
+        function _unpinFlyTip() {
+            flyTip.classList.remove('tp-pinned');
+            flyTip.style.pointerEvents = 'none';
+            flyTip.style.display = 'none';
+        }
+        if (!flyTip._pinBound) {
+            flyTip._pinBound = true;
+            document.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Shift' && !ev.repeat && flyTip.style.display === 'block') {
+                    if (flyTip.classList.contains('tp-pinned')) { _unpinFlyTip(); }
+                    else { flyTip.classList.add('tp-pinned'); flyTip.style.pointerEvents = 'auto'; flyTip.style.maxHeight = (window.innerHeight - 16) + 'px'; flyTip.style.overflowY = 'auto'; }
+                } else if (ev.key === 'Escape' && flyTip.classList.contains('tp-pinned')) { _unpinFlyTip(); }
+            });
+            document.addEventListener('mousedown', (ev) => {
+                if (flyTip.classList.contains('tp-pinned') && !flyTip.contains(ev.target)) _unpinFlyTip();
+            }, true);
         }
 
         const tableEl = container.querySelector('table.matrix-table');
@@ -6670,6 +6688,7 @@ function renderVistaAnalitica(respData, container) {
             const newTable = tableEl; // ya es nuevo por innerHTML
 
             newTable.addEventListener('mouseover', (e) => {
+                if (flyTip.classList.contains('tp-pinned')) return;
                 if (window._gridTooltipEnabled === false) { _hideFlyTip(); return; }
                 const td = e.target.closest('td[data-grid-tooltip]');
                 if (!td) { _hideFlyTip(); return; }
@@ -6677,7 +6696,7 @@ function renderVistaAnalitica(respData, container) {
             });
 
             newTable.addEventListener('mousemove', (e) => {
-                if (window._gridTooltipEnabled !== false && flyTip.style.display !== 'none') _positionFlyTip(e);
+                if (window._gridTooltipEnabled !== false && flyTip.style.display !== 'none' && !flyTip.classList.contains('tp-pinned')) _positionFlyTip(e);
             });
 
             newTable.addEventListener('mouseout', (e) => {
@@ -7292,6 +7311,25 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
 }
 
 // ─── PARSER Y RENDERIZADOR DE SLOTS DE LIBRETA ART. 25 BIS (180 HORAS) ────
+// ─── TOOLTIP DE CELDAS: helpers de presentación (estilos en css/tooltip-celda.css) ───
+function _tpHuman(min) {
+    // 9.53 → "9 min 32 s" ; 65 → "1 h 05 min"
+    const tot = Math.round((Number(min) || 0) * 60);
+    const h = Math.floor(tot / 3600), m = Math.floor((tot % 3600) / 60), s = tot % 60;
+    if (h > 0) return `${h} h ${String(m).padStart(2, '0')} min`;
+    if (m > 0) return s > 0 ? `${m} min ${String(s).padStart(2, '0')} s` : `${m} min`;
+    return `${s} s`;
+}
+function _tpHM(min) {
+    const t = Math.round(Math.abs(Number(min) || 0));
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+function _tpPill(tone, label, icon) {
+    const cls = { ok: 'badge-state-success', warn: 'badge-state-warning', bad: 'badge-state-danger',
+                  info: 'badge-state-info', he: 'badge-state-warning badge-he', neutral: 'badge-state-neutral' }[tone] || 'badge-state-neutral';
+    return `<span class="badge-status ${cls}" style="width:auto;min-height:0">${icon ? `<i class="bi ${icon} me-1"></i>` : ''}${label}</span>`;
+}
+
 function _parseSlotsArt25bis(slots_96) {
     // La libreta se guarda como JSON de enteros ([1,1,4,0,...]); también se acepta cadena de letras (M/E/A/D/0)
     if (typeof slots_96 === 'string' && slots_96.trim().startsWith('[')) {
@@ -7412,22 +7450,6 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     const isCuadrado = totalMinReg >= 1440;
     const hasData = !!(slotsData || totalMinReg > 0 || di.hora_entrada_real || (di.horas_trabajadas && di.horas_trabajadas > 0));
 
-    // Badge de estado
-    let badgeHtml = '';
-    if (isCerrado) {
-        badgeHtml = `<span class="badge bg-success" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-shield-check me-1"></i>DÍA CERRADO</span>`;
-    } else if (slotsData && (minEfec > 0 || minEsp > 0)) {
-        badgeHtml = `<span class="badge bg-warning text-dark border border-warning" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-pencil-square me-1"></i>BORRADOR 180H</span>`;
-    } else if (est === 'LIBRE') {
-        badgeHtml = `<span class="badge bg-secondary" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-cup-hot-fill me-1"></i>DÍA LIBRE</span>`;
-    } else if (isFer) {
-        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-star-fill me-1"></i>FERIADO</span>`;
-    } else if (est === 'VIAJE_LARGO') {
-        badgeHtml = `<span class="badge bg-info text-dark" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-truck me-1"></i>VIAJE LARGO</span>`;
-    } else {
-        badgeHtml = `<span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding:4px 8px; font-weight:700;"><i class="bi bi-exclamation-triangle-fill me-1"></i>PENDIENTE</span>`;
-    }
-
     // Acumulados mensuales
     const acumBolsaMin = stats.acumBolsa || 0;
     const metaBolsaMin = stats.metaMin || 10800; // 180h = 10800 min
@@ -7435,209 +7457,97 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     const acumEsperaMin = stats.acumEspera || 0;
     const metaEsperaMin = stats.metaEsperaMin || 5280; // 88h = 5280 min
     const saldoEsperaMin = stats.saldoEspera !== null && stats.saldoEspera !== undefined ? stats.saldoEspera : (acumEsperaMin - metaEsperaMin);
+    const sg = (v) => (v > 0 ? '+' : (v < 0 ? '−' : ''));
 
-    // Contenido dinámico según si tiene libreta o está pendiente
-    let bodyContentHtml = '';
+    const toMin = (t) => { if (!t || typeof t !== 'string') return null; const p = t.split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0) + (+p[2] || 0) / 60; };
+    const mEnt = toMin(di.hora_entrada_real), mSal = toMin(di.hora_salida_real);
+    const hasSlots = !!(slotsData && slotsData.tramos && slotsData.tramos.length > 0);
+    const maxCond = hasSlots ? slotsData.maxConduccionContinua : 0;
 
-    if (slotsData && slotsData.tramos && slotsData.tramos.length > 0) {
-        // 1. Mini barra continua de 24h
-        let barSegments = '';
-        slotsData.tramos.forEach(t => {
-            const pct = ((t.count / 96) * 100).toFixed(2);
-            barSegments += `<div style="width:${pct}%; height:100%; background-color:${t.color};" title="${t.short} (${t.startStr} - ${t.endStr}): ${t.durHrs}h"></div>`;
-        });
-
-        // 2. Desglose de tramos cronológicos
-        let tramosListHtml = '';
-        slotsData.tramos.forEach(t => {
-            if (t.code === '0' && slotsData.tramos.length > 1) return;
-            tramosListHtml += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:3px 6px; border-bottom:1px dashed #e2e8f0; font-size: 0.75rem;">
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <span style="display:inline-block; width:8px; height:8px; border-radius:2px; background:${t.color};"></span>
-                    <strong style="font-family:monospace; color:#1e293b;">${t.startStr} - ${t.endStr}</strong>
-                    <span style="color:#475569;"><i class="bi ${t.icon} me-1" style="color:${t.color}; font-size:0.75rem;"></i>${t.short}</span>
-                </div>
-                <span style="font-family:monospace; font-weight:700; color:${t.color};">${formatExactMinutesToTime(t.durMin)}</span>
-            </div>`;
-        });
-
-        // 3. Alerta de fatiga / seguridad vial
-        let fatigaHtml = '';
-        if (slotsData.maxConduccionContinua > 300) {
-            fatigaHtml = `
-            <div style="margin-top:6px; padding:5px 8px; background:#fff1f2; border:1px solid #fecdd3; border-radius:4px; color:#e11d48; font-size: 0.75rem; font-weight:600;">
-                <i class="bi bi-exclamation-octagon-fill me-1"></i> ALERTA LEGAL: Conducción continua de ${(slotsData.maxConduccionContinua/60).toFixed(1)}h supera el tope de 5 horas continuas sin descanso (Art. 25 bis).
-            </div>`;
-        } else if (slotsData.minConduccion > 0) {
-            fatigaHtml = `
-            <div style="margin-top:6px; padding:4px 8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; color:#15803d; font-size: 0.75rem; font-weight:600;">
-                <i class="bi bi-shield-check me-1"></i> Conducción continua conforme a norma (bloque máx: ${(slotsData.maxConduccionContinua/60).toFixed(1)}h ≤ 5h).
-            </div>`;
-        }
-
-        bodyContentHtml = `
-        <!-- SECCIÓN 1: Mini-Línea de Tiempo 24 Horas -->
-        <div style="margin-bottom:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span style="font-weight:700; font-size: 0.75rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
-                    <i class="bi bi-clock-history" style="color:#059669;"></i> Cronología 24 Horas (Libreta DT)
-                </span>
-                <span style="font-size: 0.75rem; color:#64748b; font-weight:600;">Resolución 15m</span>
-            </div>
-            
-            <div style="display:flex; width:100%; height:16px; border-radius:4px; overflow:hidden; border:1px solid #cbd5e1; margin-bottom:6px; box-shadow:inset 0 1px 2px rgba(0,0,0,0.06);">
-                ${barSegments}
-            </div>
-
-            <!-- Leyenda compacta -->
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; color:#64748b; margin-bottom:8px; padding:0 2px;">
-                <span><span style="color:#059669; font-weight:bold;">●</span> Conducción</span>
-                <span><span style="color:#4f46e5; font-weight:bold;">●</span> Auxiliares</span>
-                <span><span style="color:#d97706; font-weight:bold;">●</span> Espera</span>
-                <span><span style="color:#0284c7; font-weight:bold;">●</span> Descanso</span>
-            </div>
-
-            <!-- Lista de Tramos -->
-            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:6px 8px; max-height:160px; overflow-y:auto;">
-                ${tramosListHtml}
-            </div>
-        </div>
-
-        <!-- SECCIÓN 2: Balance Legal Diario Art. 25 bis -->
-        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
-            <div style="font-weight:700; font-size:0.70rem; color:#1e293b; text-transform:uppercase; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-                <span><i class="bi bi-scale me-1" style="color:#3b82f6;"></i> Balance Diario del Registro</span>
-                <span class="badge ${isCuadrado ? 'bg-success' : 'bg-warning text-dark'}" style="font-size: 0.75rem; padding:2px 6px;">${isCuadrado ? '24:00 CUADRADO' : 'INCOMPLETO'}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
-                <span style="color:#64748b;">• Jornada Efectiva (Cond. + Aux.):</span>
-                <strong style="font-family:monospace; color:#059669;">${formatExactMinutesToTime(minEfec)} (${(minEfec/60).toFixed(1)} hrs)</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
-                <span style="color:#64748b;">• Tiempo de Espera (Retribuido):</span>
-                <strong style="font-family:monospace; color:#d97706;">${formatExactMinutesToTime(minEsp)} (${(minEsp/60).toFixed(1)} hrs)</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:4px;">
-                <span style="color:#64748b;">• Descanso Total (Tierra/Litera):</span>
-                <strong style="font-family:monospace; color:#0284c7;">${formatExactMinutesToTime(minDesc)} (${(minDesc/60).toFixed(1)} hrs)</strong>
-            </div>
-            ${fatigaHtml}
-        </div>`;
+    // ── Veredicto ──
+    let tone = 'warn', vTitle = '', vSub = '', tagLabel = 'PENDIENTE', tagIcon = 'bi-exclamation-triangle-fill';
+    if (hasSlots && maxCond > 300) {
+        tone = 'bad'; vTitle = `Conducción continua ${(maxCond / 60).toFixed(1)} h`; vSub = 'Supera el tope de 5 h sin descanso (Art. 25 bis)';
+        tagLabel = 'ALERTA'; tagIcon = 'bi-exclamation-octagon-fill';
+    } else if (hasSlots) {
+        tone = isCuadrado ? 'ok' : 'warn';
+        const sinTramos = (minEfec + minEsp + minDesc) === 0;
+        vTitle = isCuadrado ? 'Jornada cuadrada · 24:00' : (sinTramos ? 'Libreta sin tramos' : `Registro incompleto · ${_tpHM(totalMinReg)} de 24:00`);
+        vSub = sinTramos ? 'Todo el día figura sin registro' : `Efectiva ${_tpHM(minEfec)}${slotsData.minConduccion > 0 ? ' · conducción en norma' : ''}`;
+        tagLabel = isCerrado ? 'CERRADO' : 'BORRADOR 180H'; tagIcon = isCerrado ? 'bi-shield-check' : 'bi-pencil-square';
+    } else if (est === 'LIBRE' && !hasData) {
+        tone = 'neutral'; vTitle = 'Día libre'; vSub = 'Sin libreta Art. 25 bis para este día'; tagLabel = 'LIBRE'; tagIcon = 'bi-cup-hot-fill';
+    } else if (isFer && !hasData) {
+        tone = 'warn'; vTitle = 'Feriado'; vSub = feriadoDesc; tagLabel = 'FERIADO'; tagIcon = 'bi-star-fill';
+    } else if (est === 'VIAJE_LARGO') {
+        tone = 'info'; vTitle = 'Viaje largo en ruta'; vSub = 'Horas reconocidas por el viaje'; tagLabel = 'VIAJE'; tagIcon = 'bi-truck';
     } else if (hasData && totalMinReg > 0) {
-        bodyContentHtml = `
-        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:10px;">
-            <div style="font-weight:700; font-size:0.70rem; color:#1e293b; text-transform:uppercase; margin-bottom:6px;">
-                <i class="bi bi-scale me-1" style="color:#3b82f6;"></i> Resumen de Jornada Art. 25 bis
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
-                <span style="color:#64748b;">• Conducción Registrada:</span>
-                <strong style="font-family:monospace; color:#059669;">${formatExactMinutesToTime(minCond)} (${(minCond/60).toFixed(1)} hrs)</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
-                <span style="color:#64748b;">• Labores Auxiliares:</span>
-                <strong style="font-family:monospace; color:#4f46e5;">${formatExactMinutesToTime(minAux)} (${(minAux/60).toFixed(1)} hrs)</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:3px;">
-                <span style="color:#64748b;">• Tiempos de Espera:</span>
-                <strong style="font-family:monospace; color:#d97706;">${formatExactMinutesToTime(minEsp)} (${(minEsp/60).toFixed(1)} hrs)</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size: 0.75rem;">
-                <span style="color:#64748b;">• Descanso:</span>
-                <strong style="font-family:monospace; color:#0284c7;">${formatExactMinutesToTime(minDesc)} (${(minDesc/60).toFixed(1)} hrs)</strong>
-            </div>
-        </div>`;
+        tone = 'info'; vTitle = `Resumen registrado · ${_tpHM(totalMinReg)}`; vSub = 'Sin distribución de 24 h en la libreta'; tagLabel = 'PARCIAL'; tagIcon = 'bi-clipboard-data';
     } else {
-        bodyContentHtml = `
-        <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:12px; margin-bottom:10px;">
-            <div style="color:#b45309; font-weight:700; font-size:0.75rem; margin-bottom:4px;">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i> Libreta Art. 25 bis pendiente de registro
-            </div>
-            <div style="font-size: 0.75rem; color:#475569; margin-bottom:8px; line-height:1.3;">
-                Este día no cuenta con la distribución de tramos de 24 horas registrada en el sistema.
-            </div>
-            ${di.hora_entrada_real || di.hora_salida_real ? `
-            <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:4px; padding:6px 8px; font-size: 0.75rem; color:#334155; margin-bottom:8px;">
-                <strong>Marcas físicas en terminal:</strong><br>
-                • Entrada: ${di.hora_entrada_real || 'Sin registro'}<br>
-                • Salida: ${di.hora_salida_real || 'Sin registro'}
-            </div>` : ''}
-            <div style="font-size: 0.75rem; color:#3f6fd6; font-weight:600;">
-                <i class="bi bi-cursor-fill me-1"></i> Haga clic sobre la celda para abrir el Registro Diario Art. 25 bis.
-            </div>
-        </div>`;
+        tone = 'warn'; vTitle = 'Falta registrar la libreta';
+        vSub = (mEnt !== null && mSal !== null) ? 'Hay marcas de reloj, sin tramos de 24 h' : 'Sin tramos de 24 h registrados';
     }
 
-    // SECCIÓN 3: Acumulados de Ciclo Mensual (Meta 180h / 88h)
-    let saldoBolsaColor = saldoBolsaMin >= 0 ? '#10b981' : '#ef4444';
-    let saldoBolsaSign = saldoBolsaMin > 0 ? '+' : (saldoBolsaMin < 0 ? '-' : '');
-    let saldoEsperaColor = saldoEsperaMin >= 0 ? '#10b981' : '#d97706';
-    let saldoEsperaSign = saldoEsperaMin > 0 ? '+' : (saldoEsperaMin < 0 ? '-' : '');
+    // ── Cuerpo ──
+    const kpis = (cond, aux, esp, desc) => `
+        <div class="tp-sec"><div class="tp-kp">
+            <div><span>Efectiva</span><b>${_tpHM(cond + aux)}</b><em>cond. ${_tpHM(cond)} + aux. ${_tpHM(aux)}</em></div>
+            <div><span>Espera</span><b style="color:#b45309">${_tpHM(esp)}</b><em>retribuida</em></div>
+            <div><span>Descanso</span><b style="color:#0369a1">${_tpHM(desc)}</b><em>tierra / litera</em></div>
+        </div></div>`;
+    let bodyHtml = '';
+    if (hasSlots) {
+        let acc = 0, segs = '';
+        slotsData.tramos.forEach(t => {
+            const left = (acc / 96) * 100, w = (t.count / 96) * 100; acc += t.count;
+            segs += `<i style="left:${left.toFixed(3)}%;width:${w.toFixed(3)}%;background:${t.color}" title="${t.short} ${t.startStr}-${t.endStr}"></i>`;
+        });
+        const marks = [mEnt, mSal].filter(v => v !== null).map(v => `<s style="left:${Math.min(99.5, v / 14.4).toFixed(2)}%"></s>`).join('');
+        const visibles = slotsData.tramos.filter(t => !(t.code === '0' && slotsData.tramos.length > 1));
+        const rows = visibles.map((t, i) => `
+            <div class="tp-tr ${i >= 3 ? 'tp-extra' : ''}"><span><b style="background:${t.color}"></b><span class="tp-mono">${t.startStr}–${t.endStr}</span> ${t.short}</span><span style="color:${t.color};font-weight:700">${_tpHM(t.durMin)}</span></div>`).join('');
+        const extraN = Math.max(0, visibles.length - 3);
+        if (minEfec + minEsp + minDesc > 0) bodyHtml += kpis(minCond, minAux, minEsp, minDesc);
+        bodyHtml += `<div class="tp-sec">
+            <div class="tp-lab"><span>Cronología 24 h · libreta DT</span><span>resolución 15 m</span></div>
+            <div class="tp-bar">${segs}${marks}</div>
+            <div class="tp-tick"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+            <div class="tp-lg"><span><b style="background:#059669"></b>Conducción</span><span><b style="background:#4f46e5"></b>Auxiliares</span><span><b style="background:#d97706"></b>Espera</span><span><b style="background:#0284c7"></b>Descanso</span>${marks ? '<span style="margin-left:auto"><b style="background:#14235c;width:2px;height:10px"></b>reloj</span>' : ''}</div>
+            <div style="margin-top:8px">${rows}${extraN > 0 ? `<div class="tp-more">+ ${extraN} tramos más · mantén <kbd style="font-family:var(--font-mono,monospace);font-size:.6rem;border:1px solid #d5dede;border-radius:4px;padding:0 4px">Shift</kbd> para verlos</div>` : ''}</div>
+        </div>`;
+        if (slotsData.minConduccion > 0) {
+            const bad = maxCond > 300, pct = Math.min(100, Math.round(maxCond / 300 * 100));
+            bodyHtml += `<div class="tp-sec"><div class="tp-gauge ${bad ? 'bad' : 'ok'}"><i class="bi ${bad ? 'bi-exclamation-octagon-fill' : 'bi-shield-check'}"></i>Conducción continua máx. <span class="tp-mono">${(maxCond / 60).toFixed(1)} h</span> de 5 h<span class="g"><i style="width:${pct}%"></i></span></div></div>`;
+        }
+    } else if (hasData && totalMinReg > 0) {
+        bodyHtml += kpis(minCond, minAux, minEsp, minDesc);
+    } else if (mEnt !== null || mSal !== null) {
+        bodyHtml += `<div class="tp-sec"><div class="tp-chip" style="display:inline-block"><i class="bi bi-fingerprint"></i> <span class="tp-mono">${di.hora_entrada_real || '—'} → ${di.hora_salida_real || '—'}</span></div>${(mEnt !== null && mSal !== null) ? ` <span class="tp-sub" style="margin-left:6px">${_tpHuman(Math.max(0, mSal - mEnt + (mSal < mEnt ? 1440 : 0)))} en terminal</span>` : ''}</div>`;
+    }
 
-    const acumuladosHtml = `
-    <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:6px; padding:10px; margin-bottom:8px;">
-        <div style="font-weight:700; font-size:0.70rem; color:#7c3aed; text-transform:uppercase; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-            <span><i class="bi bi-bullseye me-1"></i> Acumulado Mensual Art. 25 bis</span>
-            <span style="font-size: 0.75rem; color:#8b5cf6; font-weight:600;">Bolsas DT</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size: 0.75rem; margin-bottom:4px;">
-            <span style="color:#64748b;">• Bolsa 180h Efectiva:</span>
-            <span style="font-family:monospace;">
-                <strong>${_fmtMin(acumBolsaMin)}</strong> / ${_fmtMin(metaBolsaMin)} 
-                <span style="color:${saldoBolsaColor}; font-weight:700;">(${saldoBolsaSign}${_fmtMin(Math.abs(saldoBolsaMin))})</span>
-            </span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size: 0.75rem;">
-            <span style="color:#64748b;">• Bolsa Espera 88h:</span>
-            <span style="font-family:monospace;">
-                <strong>${_fmtMin(acumEsperaMin)}</strong> / ${_fmtMin(metaEsperaMin)}
-                <span style="color:${saldoEsperaColor}; font-weight:700;">(${saldoEsperaSign}${_fmtMin(Math.abs(saldoEsperaMin))})</span>
-            </span>
-        </div>
+    const barBolsa = Math.max(0, Math.min(100, Math.round(acumBolsaMin / metaBolsaMin * 100)));
+    const barEsp = Math.max(0, Math.min(100, Math.round(acumEsperaMin / metaEsperaMin * 100)));
+    const acumHtml = `<div class="tp-sec tp-alt">
+        <div class="tp-lab" style="color:#7c3aed"><span>Acumulado del ciclo</span><span>Bolsas DT</span></div>
+        <div class="tp-pb"><div class="l"><span>Bolsa 180h efectiva</span><span class="tp-mono"><b>${_fmtMin(acumBolsaMin)}</b> / ${_fmtMin(metaBolsaMin)} <b style="color:${saldoBolsaMin >= 0 ? '#0f7a4f' : '#b3261e'}">(${sg(saldoBolsaMin)}${_fmtMin(Math.abs(saldoBolsaMin))})</b></span></div><div class="t"><i style="width:${barBolsa}%;background:#8b5cf6"></i></div></div>
+        <div class="tp-pb"><div class="l"><span>Bolsa espera 88h</span><span class="tp-mono"><b>${_fmtMin(acumEsperaMin)}</b> / ${_fmtMin(metaEsperaMin)} <b style="color:${saldoEsperaMin >= 0 ? '#0f7a4f' : '#b45309'}">(${sg(saldoEsperaMin)}${_fmtMin(Math.abs(saldoEsperaMin))})</b></span></div><div class="t"><i style="width:${barEsp}%;background:#f59e0b"></i></div></div>
     </div>`;
 
-    // Marcas físicas en terminal (si existen marcas de reloj)
-    let marcasFisicasHtml = '';
-    if (di.hora_entrada_real || di.hora_salida_real) {
-        marcasFisicasHtml = `
-        <div style="font-size: 0.75rem; color:#64748b; padding:4px 8px; background:#f1f5f9; border-radius:4px; display:flex; justify-content:space-between;">
-            <span><i class="bi bi-fingerprint me-1"></i>Terminal Biométrico:</span>
-            <span style="font-family:monospace; color:#334155;">Entrada: <strong>${di.hora_entrada_real || '—'}</strong> · Salida: <strong>${di.hora_salida_real || '—'}</strong></span>
-        </div>`;
-    }
-
+    const subLine = `${empAreaText} · ${shiftName}`;
     const html = `
-    <div style="width: min(380px, calc(100vw - 24px)); font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
-        
-        <!-- Header Principal Art. 25 bis -->
-        <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 10px; margin-bottom: 10px;">
-            <div style="color: #059669; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
-                <i class="bi bi-truck me-1" style="font-size:0.8rem"></i> CONTROL JORNADA ART. 25 BIS DT
-            </div>
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <div style="color: var(--primary-color, #3f6fd6); font-weight: 700; font-size: 0.85rem;">
-                    ${dateFormatted}
-                </div>
-                <div>
-                    ${badgeHtml}
-                </div>
-            </div>
-
-            <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span> · TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
-            <div style="color:#7c3aed; font-weight:600; font-size: 0.6875rem; text-transform: uppercase;">RÉGIMEN: ART. 25 BIS CÓDIGO DEL TRABAJO (BOLSA 180H / ESPERA 88H)</div>
-            ${isFer ? `<div style="margin-top: 6px; padding: 5px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
+    <div class="tp tp-${tone}">
+        <div class="tp-hd">
+            <div class="tp-top"><span><i class="bi bi-truck me-1"></i>Art. 25 bis · Bolsa 180h</span>${_tpPill(tone, tagLabel, tagIcon)}</div>
+            <div class="tp-v">${vTitle}${vSub ? `<small>${vSub}</small>` : ''}</div>
+            <div class="tp-nm">${empName}</div>
+            <div class="tp-sub">${dateFormatted} · ${subLine}</div>
+            ${isFer && vTitle !== 'Feriado' ? `<div class="tp-fer"><i class="bi bi-star-fill me-1"></i>${feriadoDesc}</div>` : ''}
         </div>
-
-        ${bodyContentHtml}
-
-        ${acumuladosHtml}
-
-        ${marcasFisicasHtml}
-
-        <div style="margin-top:8px; text-align:center; font-size: 0.75rem; color:#94a3b8;">
-            <i class="bi bi-info-circle me-1"></i> Doble clic en celda para justificar · Clic para abrir Libreta 180h
+        ${bodyHtml}
+        ${acumHtml}
+        <div class="tp-ft">
+            ${(mEnt !== null || mSal !== null) && hasSlots ? `<span><i class="bi bi-fingerprint"></i> <span class="tp-mono">${di.hora_entrada_real || '—'} → ${di.hora_salida_real || '—'}</span></span>` : ''}
+            <span class="push"><kbd>Clic</kbd> libreta</span><span><kbd>2 clics</kbd> justificar</span><span><kbd>Shift</kbd> fijar</span>
         </div>
     </div>`;
 
@@ -7690,27 +7600,13 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                 }
             }
         }
-        let emptyStateHtml = isFer ? `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-star-fill me-1"></i>FERIADO</div>` : `<div class="badge-status badge-state-secondary" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;">SIN DATOS</div>`;
-        
-        return _escAttr(`<div style="width: min(340px, calc(100vw - 24px)); font-family: var(--font-sans); cursor: default; background:var(--card-bg, #ffffff); color:var(--text-primary, #1e293b); padding:12px; border-radius:6px; margin:0; border:1px solid var(--border-color, #e2e8f0); box-shadow:var(--shadow-premium);">
-            <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
-                <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
-                    <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="color: var(--primary-color, #3f6fd6); font-weight: 700; font-size: 0.85rem;">
-                        ${dateFormatted}
-                    </div>
-                    <div>
-                        ${emptyStateHtml}
-                    </div>
-                </div>
-                <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
-                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
-                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase; margin-bottom:2px;">TURNO: <span style="color:var(--text-primary, #1e293b);">${fallbackShift}</span></div>
-                <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase; margin-bottom:2px;">CICLO: <span style="color:var(--text-primary, #1e293b);">--</span></div>
-                ${scheduleHtml}
-                ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
+        return _escAttr(`<div class="tp ${isFer ? 'tp-warn' : 'tp-neutral'} tp-sm">
+            <div class="tp-hd">
+                <div class="tp-top"><span><i class="bi bi-calendar3 me-1"></i>${dateFormatted}</span>${_tpPill(isFer ? 'warn' : 'neutral', isFer ? 'FERIADO' : 'SIN DATOS', isFer ? 'bi-star-fill' : '')}</div>
+                <div class="tp-v">${isFer ? 'Feriado' : 'Sin datos'}<small>${isFer ? feriadoDesc : 'No hay registro de asistencia para este día'}</small></div>
+                <div class="tp-nm">${empName}</div>
+                <div class="tp-sub">${empAreaText} · ${fallbackShift}</div>
+                ${scheduleHtml ? `<div class="tp-sub" style="margin-top:6px">${scheduleHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}</div>` : ''}
             </div>
         </div>`);
     }
@@ -8417,61 +8313,108 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
 
 
 
+    // ── Veredicto del día (lo primero que se lee) ────────────────────────────
+    let tone = 'neutral', vTitle = stateNameMap[est] || (e.nomenclatura || est), vSub = '';
+    const jInfo = e.justificacion || {};
+    if (e.justificacion_id && (e.nomenclatura || jInfo.tipo_nombre)) {
+        tone = 'info';
+        vTitle = jInfo.tipo_nombre || e.nomenclatura;
+        const goce = (jInfo.con_goce_sueldo === 0 || jInfo.con_goce_sueldo === false) ? 'sin goce de sueldo' : 'con goce de sueldo';
+        vSub = `${goce}${jInfo.pagador ? ' · pagador: ' + jInfo.pagador : ''}`;
+    } else if (est === 'INASISTENCIA') {
+        tone = 'bad'; vTitle = 'Inasistencia'; vSub = 'Sin marcas ni justificación';
+    } else if (est === 'ANOMALIA' || est === 'PENDIENTE') {
+        tone = 'warn'; vTitle = 'Marcas incompletas'; vSub = 'Revisar entrada/salida del día';
+    } else if (est === 'EN_CURSO') {
+        tone = 'ok'; vTitle = 'Turno en curso'; vSub = e.hora_salida_teorica ? `Salida teórica ${e.hora_salida_teorica.substring(0, 5)}` : '';
+    } else if (est === 'LIBRE' || est === 'FERIADO') {
+        tone = est === 'FERIADO' ? 'warn' : 'neutral';
+        vTitle = est === 'FERIADO' ? 'Feriado' : 'Día libre';
+        vSub = est === 'FERIADO' ? (feriadoDesc || 'Día no laborable') : 'Asignación automática';
+        if (e.jornada_adicional) { tone = 'he'; vTitle = `${vTitle} trabajado`; vSub = 'Con jornada adicional'; }
+    } else if (est === 'VIAJE_LARGO') {
+        tone = 'info'; vTitle = 'Viaje largo en ruta'; vSub = '';
+    } else if (minDeudaNeta > 0) {
+        tone = minDeudaNeta >= 30 ? 'bad' : 'warn';
+        const solo = minAtr > 0 && minSad === 0 && minExCol === 0 && durPerMin === 0 ? 'Atraso de ' : (minSad > 0 && minAtr === 0 && minExCol === 0 && durPerMin === 0 ? 'Salida anticipada de ' : 'Deuda neta de ');
+        vTitle = solo + _tpHuman(minDeudaNeta);
+        vSub = `Deuda neta del día · <span class="tp-mono">${formatExactMinutesToTime(minDeudaNeta)}</span>`;
+    } else if (heTotal > 0) {
+        tone = 'he'; vTitle = `Horas extra · ${_tpHuman(heTotal)}`; vSub = 'Autorizadas en el día';
+    } else if (heBruta > 0) {
+        tone = 'he'; vTitle = `Horas extra por revisar · ${_tpHuman(heBruta)}`; vSub = e.estado_he ? `Estado: ${e.estado_he}` : 'Detectadas, sin autorizar';
+    } else if (est === 'OK') {
+        tone = 'ok'; vTitle = 'Jornada conforme'; vSub = 'Sin deuda';
+    } else if (est === 'SALIDA_ADELANTADA' || est === 'ATRASO' || est === 'ATR_SAD') {
+        tone = 'warn';
+    } else if (est === 'EXTRA' || est === 'JORNADA_ESPECIAL') {
+        tone = 'he'; vSub = e.jornada_adicional ? 'Jornada adicional' : '';
+    }
+    if (e.deuda_condonada > 0 && minDeudaNeta === 0 && tone !== 'info') { vSub = (vSub ? vSub + ' · ' : '') + 'deuda condonada'; }
+
+    // ── Línea de tiempo turno teórico vs. real ───────────────────────────────
+    let stripHtml = '';
+    const okStrip = e.hora_entrada_real && e.hora_salida_real && e.hora_entrada_teorica && e.hora_salida_teorica;
+    if (okStrip) {
+        const base = rawTimeToMins(e.hora_entrada_teorica);
+        const norm = (t, floor) => { let x = rawTimeToMins(t) - base; if (x < floor) x += 1440; return x; };
+        const ps = 0, pe = norm(e.hora_salida_teorica, 1);
+        const rs = norm(e.hora_entrada_real, -720), re = norm(e.hora_salida_real, rs + 1);
+        const lo = Math.min(ps, rs) - 25, hi = Math.max(pe, re) + 25, span = Math.max(1, hi - lo);
+        const L = (x) => (((x - lo) / span) * 100).toFixed(2);
+        const W = (a, b) => (((b - a) / span) * 100).toFixed(2);
+        const dEnt = rs - ps, dSal = re - pe;
+        const lab = (d) => (Math.abs(d) < 0.5 ? '' : ` <span style="opacity:.7">${d > 0 ? '+' : '−'}${Math.round(Math.abs(d))}m</span>`);
+        stripHtml = `
+        <div class="tp-sec"><div class="tp-lab"><span>Jornada vs. turno</span><span class="tp-mono" style="text-transform:none">${e.hora_entrada_teorica.substring(0,5)}–${e.hora_salida_teorica.substring(0,5)}</span></div>
+            <div class="tp-tl"><div class="r"></div>
+                <div class="p" style="left:${L(ps)}%;width:${W(ps, pe)}%"></div>
+                ${dEnt > 0.5 ? `<div class="a" style="left:${L(ps)}%;width:${W(ps, rs)}%"></div>` : ''}
+                <div class="w" style="left:${L(Math.max(rs, ps))}%;width:${W(Math.max(rs, ps), re)}%"></div>
+                <i style="left:${L(rs)}%;--d:${dEnt > 0.5 ? '#f59e0b' : '#10b981'}"></i><i style="left:${L(re)}%;--d:${dSal < -0.5 ? '#f43f5e' : '#10b981'}"></i>
+                <u style="left:${L(rs)}%;color:${dEnt > 0.5 ? '#a35a00' : '#0f7a4f'}">${e.hora_entrada_real.substring(0,5)}${lab(dEnt)}</u>
+                <u style="left:${L(re)}%;color:${dSal < -0.5 ? '#b3261e' : '#0f7a4f'}">${e.hora_salida_real.substring(0,5)}${lab(dSal)}</u>
+            </div>
+            <div class="tp-key"><b style="background:#d5e0f7"></b>turno teórico &nbsp; <b style="background:#10b981"></b>trabajado${dEnt > 0.5 ? ' &nbsp; <b style="background:#f59e0b"></b>atraso' : ''}</div>
+        </div>`;
+    }
+    // Eventos: con la línea de tiempo solo se listan los intermedios (colación, permisos); sin ella, todos
+    const evList = (okStrip ? timelineEvents.filter(t => t.tipo !== 'ENTRADA' && t.tipo !== 'SALIDA') : timelineEvents).filter(t => t.tipo !== 'COLACION_AUTO');
+    const evHtml = evList.length ? evList.map(t => `<div class="tp-ev"><span><i class="bi ${t.icon}" style="color:${t.color}"></i> ${t.hora ? `<strong>${t.hora}</strong> — ` : ''}${t.titulo}</span><span>${t.detalle || ''}</span></div>`).join('') : '';
+    const evSection = evHtml ? `<div class="tp-sec"><div class="tp-lab"><span>${okStrip ? 'Intermedias' : 'Trazabilidad de jornada'}</span><span style="text-transform:none">${marksBadgeText}</span></div>${evHtml}</div>`
+        : (!okStrip ? `<div class="tp-sec" style="color:#94a3b8;text-align:center">Sin actividad registrada en la jornada</div>` : '');
+
+    // ── KPIs ────────────────────────────────────────────────────────────────
+    let kpiHtml = '';
+    const tieneMarcas = !!(e.hora_entrada_real || e.hora_salida_real || hasColReal);
+    if (tieneMarcas || minEfectivos > 0 || minDeudaNeta > 0 || heTotal > 0) {
+        const third = minDeudaNeta > 0 ? `<div><span>Deuda</span><b style="color:#b3261e">${formatExactMinutesToTime(minDeudaNeta).substring(0, 5)}</b><em>neta del día</em></div>`
+            : heTotal > 0 ? `<div><span>Horas extra</span><b style="color:#6d28d9">${formatExactMinutesToTime(heTotal).substring(0, 5)}</b><em>autorizadas</em></div>`
+            : `<div><span>Programadas</span><b>${progHrsFormatted.substring(0, 5)}</b><em>del turno</em></div>`;
+        kpiHtml = `<div class="tp-sec"><div class="tp-kp">
+            <div><span>Efectivo</span><b>${formatExactMinutesToTime(minEfectivos).substring(0, 5)}</b><em>trabajado</em></div>
+            <div><span>Colación</span><b style="color:#b45309">${minColacion > 0 && tieneMarcas ? Math.round(minColacion) + ' min' : '—'}</b><em>${hasColReal ? 'marcada' : (colAuto > 0 ? 'automática' : '')}</em></div>
+            ${third}</div>
+            <div class="tp-chips">${marksBadgeText ? `<span class="tp-chip">${marksBadgeText}</span>` : ''}${colAuto > 0 && !hasColReal && tieneMarcas ? '<span class="tp-chip">Descuento colación automático</span>' : ''}${e.deuda_condonada > 0 ? '<span class="tp-chip good">Deuda condonada</span>' : ''}${permBadgeChip(durPerMin)}</div></div>`;
+    }
+    function permBadgeChip(m) { return m > 0 ? `<span class="tp-chip">Permiso ${Math.round(m)} min</span>` : ''; }
+
+    const extras = [avisosHtml, balanceCardHtml, bloquesAdicionalesHtml].filter(Boolean).join('');
     const html = `
-    <div style="width: min(360px, calc(100vw - 24px)); font-family: var(--font-sans); cursor: default; background-color: var(--card-bg, #ffffff); color: var(--text-primary, #1e293b); padding: 14px; border-radius: 8px; margin: 0; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-premium); text-align: left;">
-        
-        <!-- Header Principal -->
-        <div style="border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 12px; margin-bottom: 12px;">
-            
-            <div style="color: var(--text-secondary, #64748b); font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;">
-                <i class="bi bi-clock me-1" style="font-size:0.8rem"></i> REGISTRO DE ASISTENCIA
-            </div>
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="color: var(--primary-color, #3f6fd6); font-weight: 700; font-size: 0.85rem;">
-                     ${dateFormatted}
-                </div>
-                <div>
-                    ${badgeHtml}
-                </div>
-            </div>
-
-            <div style="color:var(--text-primary, #1e293b); font-weight:700; font-size:0.9rem; margin-bottom:4px; line-height:1.2;">${empName}</div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">ÁREA: <span style="color:var(--text-primary, #1e293b);">${empAreaText}</span></div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; margin-bottom:2px; text-transform: uppercase;">TURNO: <span style="color:var(--text-primary, #1e293b);">${shiftName}</span></div>
-            <div style="color:var(--text-secondary, #64748b); font-weight:500; font-size: 0.6875rem; text-transform: uppercase;">CICLO: <span style="color:var(--text-primary, #1e293b);">${cycleName}</span></div>
-            ${isFer ? `<div style="margin-top: 6px; padding: 6px 8px; background-color: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color, #f59e0b); border-radius: 4px; color: var(--warning-color, #f59e0b); font-size: 0.75rem; font-weight: 600; text-align: left;"><i class="bi bi-star-fill me-1"></i> ${feriadoDesc}</div>` : ''}
-            
+    <div class="tp tp-${tone}">
+        <div class="tp-hd">
+            <div class="tp-top"><span><i class="bi bi-calendar3 me-1"></i>${dateFormatted}</span>${badgeHtml}</div>
+            <div class="tp-v">${vTitle}${vSub ? `<small>${vSub}</small>` : ''}</div>
+            <div class="tp-nm">${empName}</div>
+            <div class="tp-sub">${empAreaText} · ${shiftName}${cycleName && cycleName !== '--' ? ' · ' + cycleName : ''}</div>
+            ${isFer && est !== 'FERIADO' ? `<div class="tp-fer"><i class="bi bi-star-fill me-1"></i>${feriadoDesc}</div>` : ''}
         </div>
-
-        <!-- SECCIÓN 1: Trazabilidad Física de Jornada (Timeline Cronológico) -->
-        <div style="margin-bottom: 12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:700; font-size: 0.75rem; color:var(--text-primary, #1e293b); display:flex; align-items:center; gap:4px;">
-                    <i class="bi bi-diagram-3-fill" style="color:var(--primary-color, #3f6fd6);"></i> Trazabilidad de Jornada
-                </span>
-                <span style="background:rgba(63, 111, 214, 0.1); color:var(--primary-color, #3f6fd6); font-weight:700; font-size: 0.6875rem; padding:2px 6px; border-radius:4px; text-transform:uppercase;">
-                    ${marksBadgeText}
-                </span>
-            </div>
-            <div style="background: var(--bg-secondary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; padding: 10px 12px;">
-                ${timelineHtml}
-            </div>
-        </div>
-
-        <!-- SECCIÓN 2: Barra de Distribución Horaria -->
-        ${timeBarHtml}
-
-        <!-- Avisos especiales del sistema -->
-        ${avisosHtml}
-
-        <!-- SECCIÓN 3: Balance Aritmético Unificado -->
-        ${balanceCardHtml}
-
-        <!-- SECCIÓN 4: Bloques Adicionales Operativos (Jornada Adicional +2, Viajes Largos, etc.) -->
-        ${bloquesAdicionalesHtml}
-    </div>
-    `;
+        ${stripHtml}
+        ${kpiHtml}
+        ${evSection}
+        ${extras ? `<div class="tp-sec">${extras}</div>` : ''}
+        <div class="tp-ft"><span><kbd>Clic</kbd> acciones</span><span><kbd>2 clics</kbd> justificar</span><span><kbd>Shift</kbd> fijar</span></div>
+    </div>`;
 
     return _escAttr(html);
 }
