@@ -6157,6 +6157,31 @@ window.reloadSingleEmployeeRow = async function(empId) {
     }
 };
 
+// Vista previa al pasar el mouse por las celdas de la grilla (el cuadro flotante #grid-fly-tooltip): en pantallas chicas tapa la
+// grilla, así que se puede apagar con el botón de la barra. Se recuerda por navegador (localStorage); encendida por defecto.
+window._gridTooltipEnabled = (() => { try { return localStorage.getItem('asistencia_grid_tooltip') !== '0'; } catch (_) { return true; } })();
+window._gridTipBtnProps = function() {
+    const on = window._gridTooltipEnabled !== false;
+    return on
+        ? { on, cls: 'btn-primary', html: '<i class="bi bi-chat-square-text-fill me-1"></i> <span class="d-none d-sm-inline">Vista previa</span>', title: 'Vista previa al pasar el mouse: ACTIVADA. Clic para desactivarla (útil en pantallas chicas).' }
+        : { on, cls: 'btn-outline-secondary', html: '<i class="bi bi-chat-square-dots me-1"></i> <span class="d-none d-sm-inline">Vista previa</span>', title: 'Vista previa al pasar el mouse: DESACTIVADA. Clic para activarla.' };
+};
+window.toggleGridTooltip = function() {
+    window._gridTooltipEnabled = !(window._gridTooltipEnabled !== false);
+    try { localStorage.setItem('asistencia_grid_tooltip', window._gridTooltipEnabled ? '1' : '0'); } catch (_) {}
+    const tip = document.getElementById('grid-fly-tooltip');
+    if (tip) tip.style.display = 'none';
+    const btn = document.getElementById('btn-toggle-grid-tip');
+    if (btn) {
+        const b = window._gridTipBtnProps();
+        btn.className = `btn btn-sm ${b.cls} fw-bold`;
+        btn.innerHTML = b.html;
+        btn.title = b.title;
+        btn.setAttribute('aria-pressed', String(b.on));
+    }
+    if (typeof showToast === 'function') showToast(window._gridTooltipEnabled ? 'Vista previa activada' : 'Vista previa desactivada', 'info');
+};
+
 window.toggleStickyEmpleado = function() {
     window._stickyUnpinned = !window._stickyUnpinned;
     const table = document.querySelector('.matrix-table-premium');
@@ -6438,6 +6463,7 @@ function renderVistaAnalitica(respData, container) {
     const pinBtnIcon = isUnpinned ? 'bi-pin-fill' : 'bi-pin-angle';
     const pinBtnClass = isUnpinned ? 'btn-primary' : 'btn-outline-secondary';
 
+    const tipBtn = window._gridTipBtnProps();
     const sw = `<div class="va-toolbar-premium">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#3f6fd6"></i>
@@ -6447,6 +6473,7 @@ function renderVistaAnalitica(respData, container) {
         <div style="width:1px;height:24px;background:#cbd5e1"></div>
         <div class="segmented-control" role="group" aria-label="Modo de vista">${vmButtons}</div>
         <div class="ms-auto d-flex align-items-center gap-2">
+            <button id="btn-toggle-grid-tip" class="btn btn-sm ${tipBtn.cls} fw-bold" onclick="window.toggleGridTooltip()" title="${tipBtn.title}" aria-pressed="${tipBtn.on}">${tipBtn.html}</button>
             <button id="btn-toggle-sticky-emp" class="btn btn-sm ${pinBtnClass} fw-bold" onclick="window.toggleStickyEmpleado()" title="Fijar o liberar nombres y columnas de resumen para deslizamiento libre en pantallas táctiles">
                 <i class="bi ${pinBtnIcon} me-1"></i> <span class="d-none d-sm-inline">${pinBtnText} Nombres</span>
             </button>
@@ -6616,13 +6643,14 @@ function renderVistaAnalitica(respData, container) {
             const newTable = tableEl; // ya es nuevo por innerHTML
 
             newTable.addEventListener('mouseover', (e) => {
+                if (window._gridTooltipEnabled === false) { _hideFlyTip(); return; }
                 const td = e.target.closest('td[data-grid-tooltip]');
                 if (!td) { _hideFlyTip(); return; }
                 _showFlyTip(td, e);
             });
 
             newTable.addEventListener('mousemove', (e) => {
-                if (flyTip.style.display !== 'none') _positionFlyTip(e);
+                if (window._gridTooltipEnabled !== false && flyTip.style.display !== 'none') _positionFlyTip(e);
             });
 
             newTable.addEventListener('mouseout', (e) => {
