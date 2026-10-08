@@ -63,7 +63,9 @@
 #modal-validacion-jornada .modal-content::before {
   background: linear-gradient(90deg, #5b2fc0, #8a63e8) !important;
 }
-.modal-backdrop.show { opacity: .55; backdrop-filter: blur(3px); }
+/* un solo velo, sin desenfoque (los modales apilados no deben acumular capas) */
+.modal-backdrop.show { opacity: .5; backdrop-filter: none; }
+.modal-backdrop ~ .modal-backdrop { display: none; }
 
 /* ── Encabezado claro, un solo estilo ──────────────────────────────────────── */
 .modal:not(#modalScannerLibreta) .modal-header {
