@@ -4267,3 +4267,25 @@ tr:hover .emp-name-cell {
 #page-configuracion .cfg-item.nav-link.active { color: var(--cfg-ink) !important; background-color: hsl(var(--h) 80% 96%) !important; }
 @media (hover: hover) and (pointer: fine) { #page-configuracion .cfg-item.nav-link:hover:not(.active) { background-color: var(--cfg-bg) !important; color: var(--cfg-ink) !important; } }
 #page-configuracion .cfg-main .btn-primary { color: #fff; }
+
+/* ── Libreta 180h · Tarjeta del peoneta: su chofer del día ────────────── */
+.m180-chofer { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:14px 16px; background:#fff; border:1px solid #bfdbfe; border-radius:14px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04), 0 6px 18px -10px rgba(37,99,235,.35); }
+.m180-chofer.d-none { display:none; }
+.m180-chofer-ico { width:40px; height:40px; flex:none; display:grid; place-items:center; border-radius:12px; color:#fff; font-size:1.15rem;
+    background:linear-gradient(135deg,#1e3a8a,#2563eb); box-shadow:0 4px 10px -4px rgba(37,99,235,.6); }
+.m180-chofer-body { flex:1; min-width:180px; display:flex; flex-direction:column; gap:4px; }
+.m180-chofer-lbl { font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+.m180-chofer-who { display:flex; align-items:center; gap:9px; }
+.m180-chofer-who .nm { font-size:.95rem; font-weight:700; color:#0f172a; line-height:1.2; }
+.m180-chofer-who .m180-acomp-av { --ac-deep:#1e3a8a; --ac-soft:#eff6ff; --ac-line:#bfdbfe; }
+.m180-chofer-st { align-self:flex-start; display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:99px; font-size:.72rem; font-weight:600; }
+.m180-chofer-st.ok { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+.m180-chofer-st.warn { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+.m180-chofer-btn { display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 16px; border:0; border-radius:10px; background:#2563eb; color:#fff;
+    font-size:.82rem; font-weight:700; cursor:pointer; transition:background .15s, transform .12s; }
+.m180-chofer-btn:hover { background:#1d4ed8; }
+.m180-chofer-btn:active { transform:scale(.97); }
+.m180-chofer-btn:disabled { opacity:.55; cursor:default; }
+.m180-chofer-btn:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+@media (max-width:576px) { .m180-chofer-btn { width:100%; justify-content:center; } }

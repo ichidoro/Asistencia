@@ -2330,18 +2330,28 @@ function m180AcompInitCombo() {
     });
 }
 
-// Tarjeta del peoneta: a qué chofer está enlazado ese día y botón para volver a asignarle el turno del chofer.
+// Tarjeta del peoneta: quién es su chofer ese día, si ya tiene el turno de él y botón para volver a asignárselo.
+// Al ser peoneta se oculta el selector de "Acompañantes" (es del chofer y confundía: el peoneta no elige a nadie).
 function m180ChoferRender() {
     const box = document.getElementById('m180-chofer-box');
+    const acomp = document.getElementById('m180-acomp-box');
     if (!box) return;
-    if (m180_chofer_id == null) { box.classList.add('d-none'); box.innerHTML = ''; return; }
-    const nom = m180Esc(m180AcompNombre(m180_chofer_id));
+    const esPeoneta = m180_chofer_id != null;
+    if (acomp) acomp.classList.toggle('d-none', esPeoneta);
+    if (!esPeoneta) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+    const nom = m180AcompNombre(m180_chofer_id);
+    const estado = m180_chofer_tiene_datos
+        ? '<span class="m180-chofer-st ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Con el turno del chofer</span>'
+        : '<span class="m180-chofer-st warn"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> Sin turno asignado</span>';
+    const boton = m180_locked ? '' : `<button type="button" class="m180-chofer-btn" id="m180-btn-reasignar" onclick="window.m180ReasignarTurno()">
+            <i class="bi bi-arrow-repeat" aria-hidden="true"></i> ${m180_chofer_tiene_datos ? 'Volver a asignar turno' : 'Asignar turno del chofer'}</button>`;
     box.classList.remove('d-none');
-    box.innerHTML = `<div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
-        <div style="font-size:0.82rem;"><i class="bi bi-link-45deg me-1"></i>Acompañante del chofer <strong>${nom}</strong> este día.
-            ${m180_chofer_tiene_datos ? '' : '<span class="text-danger fw-semibold">Sin turno asignado.</span>'}</div>
-        <button type="button" class="btn btn-sm btn-primary fw-bold px-3" id="m180-btn-reasignar" onclick="window.m180ReasignarTurno()">
-            <i class="bi bi-arrow-repeat me-1"></i> Volver a asignar turno</button></div>`;
+    box.innerHTML = `<div class="m180-chofer-ico"><i class="bi bi-truck" aria-hidden="true"></i></div>
+        <div class="m180-chofer-body">
+            <div class="m180-chofer-lbl">Chofer de este peoneta hoy</div>
+            <div class="m180-chofer-who"><span class="m180-acomp-av">${m180Esc(m180AcompIniciales(nom))}</span><span class="nm">${m180Esc(nom)}</span></div>
+            ${estado}
+        </div>${boton}`;
 }
 
 async function m180ReasignarTurno() {
