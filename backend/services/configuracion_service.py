@@ -306,8 +306,15 @@ class ConfiguracionService:
             if count >= tipo['frecuencia_anual']:
                 raise HTTPException(status_code=400, detail=f"Se ha excedido la frecuencia anual permitida ({tipo['frecuencia_anual']}) para este permiso")
         
+        # 4. Validar solapamiento con otras justificaciones del mismo empleado
+        # (un permiso por horas solo choca con otro permiso cuyo horario se cruce,
+        #  o con una justificación de día completo)
+        await self._validar_solapamiento(j.empleado_id, 0,
+                                          str(j.fecha_inicio), str(j.fecha_fin),
+                                          hora_inicio=j.hora_inicio, hora_fin=j.hora_fin)
+
         justificacion_id = await self.repository.create_justificacion(j)
-        
+
         # Notificar por Email
         if self.notification_service:
             try:
@@ -545,18 +552,40 @@ class ConfiguracionService:
             logger.warning(f"Error verificando período cerrado: {e}")
 
     async def _validar_solapamiento(self, empleado_id: int, excluir_id: int,
-                                      fecha_inicio: str, fecha_fin: str):
-        """Lanza HTTPException si el rango se solapa con otra justificación del mismo empleado"""
+                                      fecha_inicio: str, fecha_fin: str,
+                                      hora_inicio: Optional[str] = None,
+                                      hora_fin: Optional[str] = None):
+        """Lanza HTTPException si el rango se solapa con otra justificación del mismo empleado.
+
+        Si se informa `hora_inicio` (permiso por horas), solo hay conflicto con:
+          - una justificación de día completo (sin hora_inicio), o
+          - otro permiso por horas cuyo horario se cruce. Un permiso abierto
+            (sin hora_fin) se considera vigente hasta el fin del día.
+        Sin `hora_inicio` (día completo) cualquier justificación que se cruce es conflicto.
+        """
         from fastapi import HTTPException
-        overlap = await self.repository.db.fetch_one("""
-            SELECT id, fecha_inicio, fecha_fin FROM justificaciones
+        filtro_horas = ""
+        params = [empleado_id, excluir_id, str(fecha_fin), str(fecha_inicio)]
+        if hora_inicio:
+            nuevo_fin = hora_fin or "23:59"
+            filtro_horas = """
+              AND (
+                    hora_inicio IS NULL OR hora_inicio = ''
+                 OR (hora_inicio < ? AND COALESCE(NULLIF(hora_fin, ''), '23:59') > ?)
+              )"""
+            params += [nuevo_fin, hora_inicio]
+        overlap = await self.repository.db.fetch_one(f"""
+            SELECT id, fecha_inicio, fecha_fin, hora_inicio, hora_fin FROM justificaciones
             WHERE empleado_id = ? AND id != ?
               AND date(fecha_inicio) <= date(?) AND date(fecha_fin) >= date(?)
-        """, (empleado_id, excluir_id, str(fecha_fin), str(fecha_inicio)))
+              {filtro_horas}
+        """, tuple(params))
         if overlap:
+            horas = (f" {overlap['hora_inicio']}-{overlap['hora_fin'] or 'abierto'}"
+                     if overlap['hora_inicio'] else "")
             raise HTTPException(400,
-                f"Las nuevas fechas se solapan con otra justificación (ID={overlap['id']}, "
-                f"{overlap['fecha_inicio']} → {overlap['fecha_fin']})")
+                f"Las fechas se solapan con otra justificación (ID={overlap['id']}, "
+                f"{overlap['fecha_inicio']} → {overlap['fecha_fin']}{horas})")
 
     async def _recalcular_dias_justificacion(self, empleado_id, fecha_inicio, fecha_fin):
         """Recalcula asistencia para el rango afectado usando batch con delta/diffing"""
