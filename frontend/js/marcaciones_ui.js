@@ -682,7 +682,7 @@ let _loadMarcacionesDebounceTimer = null;
 let _lastLoadMarcacionesCall = 0;
 
 // Exponer globalmente para ser visible desde bypassSecurityWall y otros modales
-window.loadMarcacionesData = async function() {
+window.loadMarcacionesData = async function(opts) {
     // Invalidar caché de auditoría al recargar datos (estado puede haber cambiado)
     if (typeof _invalidarAuditoriaCache === 'function') _invalidarAuditoriaCache();
 
@@ -713,7 +713,7 @@ window.loadMarcacionesData = async function() {
 
     _loadMarcacionesInProgress = true;
     try {
-        return await _loadMarcacionesDataImpl();
+        return await _loadMarcacionesDataImpl(opts);
     } finally {
         _loadMarcacionesInProgress = false;
         _loadMarcacionesDebounceTimer = null;
@@ -722,7 +722,34 @@ window.loadMarcacionesData = async function() {
 
 let _currentMarcacionesAbortController = null;
 
-async function _loadMarcacionesDataImpl() {
+// Recarga "silenciosa" (la dispara el detector de cambios cada vez que entran marcaciones nuevas): no pone el spinner que vaciaba la
+// grilla y mandaba la vista al tope; guarda dónde estaba el scroll (página y contenedores internos de la grilla) y lo devuelve al
+// terminar de dibujar, para que quien esté mirando un empleado más abajo siga ahí.
+function _marcSnapScroll(container) {
+    const snap = { win: [window.scrollX, window.scrollY], ancestros: [], internos: [] };
+    for (let el = container; el && el !== document.documentElement; el = el.parentElement) {
+        if (el.scrollTop || el.scrollLeft) snap.ancestros.push([el, el.scrollTop, el.scrollLeft]);
+    }
+    const divs = container.querySelectorAll('div');
+    for (let i = 0; i < divs.length; i++) {
+        const d = divs[i];
+        if (d.scrollTop || d.scrollLeft) snap.internos.push([i, d.scrollTop, d.scrollLeft]);
+    }
+    return snap;
+}
+function _marcRestoreScroll(container, snap) {
+    const aplicar = () => {
+        snap.ancestros.forEach(([el, t, l]) => { el.scrollTop = t; el.scrollLeft = l; });
+        const divs = container.querySelectorAll('div');
+        snap.internos.forEach(([i, t, l]) => { const d = divs[i]; if (d) { d.scrollTop = t; d.scrollLeft = l; } });
+        if (window.scrollX !== snap.win[0] || window.scrollY !== snap.win[1]) window.scrollTo(snap.win[0], snap.win[1]);
+    };
+    aplicar();
+    requestAnimationFrame(() => { aplicar(); setTimeout(aplicar, 150); });
+}
+
+async function _loadMarcacionesDataImpl(opts) {
+    const silent = !!(opts && opts.silent);
     // 🛑 ABORTAR FETCH ANTERIOR SI AÚN ESTÁ EN PROCESO
     if (_currentMarcacionesAbortController) {
         _currentMarcacionesAbortController.abort();
@@ -731,7 +758,8 @@ async function _loadMarcacionesDataImpl() {
     const signal = _currentMarcacionesAbortController.signal;
 
     const container = document.getElementById('marcaciones-view-container');
-    container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando datos...</p></div>';
+    const scrollSnap = silent ? _marcSnapScroll(container) : null;
+    if (!silent) container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando datos...</p></div>';
 
     // 🛑 BLOQUEO DE SEGURIDAD (PLAN V29+)
     // El sistema valida SIEMPRE si hay empleados con marcas pero sin turno (Fantasmas)
@@ -817,6 +845,7 @@ async function _loadMarcacionesDataImpl() {
         } else {
             renderVistaAnalitica(data, container);
         }
+        if (scrollSnap) _marcRestoreScroll(container, scrollSnap);
 
     } catch (e) {
         if (e.name === 'AbortError') {
@@ -1017,7 +1046,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
             customClass: { popup: 'shadow-lg' }
         });
 
-        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData({ silent: true });
     } catch (e) {
         Swal.close();
         console.error('[Sync BioAlba] Error:', e);
@@ -1026,7 +1055,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         } else {
             showToast('Error de sincronización: ' + e.message, 'error');
         }
-        try { await window.loadMarcacionesData(); } catch (_) {}
+        try { await window.loadMarcacionesData({ silent: true }); } catch (_) {}
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = originalContent; }
     }
@@ -2090,7 +2119,7 @@ async function _checkForChanges(isBaseline = false) {
 
             // Recargar la grilla
             if (typeof window.loadMarcacionesData === 'function') {
-                window.loadMarcacionesData();
+                window.loadMarcacionesData({ silent: true });
             }
         } else {
             // Sin cambios, solo actualizar referencia silenciosamente
