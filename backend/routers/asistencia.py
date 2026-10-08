@@ -3192,11 +3192,7 @@ async def save_libreta_180h(
                 if ex_a and int(ex_a.get('cerrado') or 0) == 1:
                     acomp_omitidos.append(aid)
                     continue
-                await service.repository.upsert_libreta_180h({
-                    **data,
-                    'empleado_id': aid,
-                    'observaciones': (payload.observaciones or "") + (" · " if payload.observaciones else "") + f"Acompañante del chofer ID {payload.empleado_id}"
-                })
+                await service.repository.upsert_libreta_180h({**data, 'empleado_id': aid})
                 await service.procesar_empleado_dia(aid, payload.fecha, save=True, force=True)
 
         # Guardar fotografía de respaldo físico si viene adjunta
@@ -3274,13 +3270,7 @@ async def reasignar_turno_acompanante_180h(
         if propio and int(propio.get('cerrado') or 0) == 1:
             raise HTTPException(status_code=409, detail="El día del acompañante está cerrado: ábrelo para poder reasignarle el turno.")
 
-        obs_ch = (lib_chofer.get('observaciones') or "")
-        obs_ch = obs_ch.split(" · Acompañante del chofer ID")[0].split("Acompañante del chofer ID")[0].rstrip(" ·")
-        await repo.upsert_libreta_180h({
-            **lib_chofer,
-            'empleado_id': payload.empleado_id,
-            'observaciones': obs_ch + (" · " if obs_ch else "") + f"Acompañante del chofer ID {chofer_id}"
-        })
+        await repo.upsert_libreta_180h({**lib_chofer, 'empleado_id': payload.empleado_id})
         res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
 
         try:

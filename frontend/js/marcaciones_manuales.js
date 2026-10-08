@@ -2929,7 +2929,8 @@ async function proceedToMarcacion180h() {
             m180_chofer_tiene_datos = !!data.has_data;
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
-                document.getElementById('m180-observaciones').value = data.observaciones || '';
+                // Registros viejos traían "Acompañante del chofer ID n" escrito a mano por el sistema: ya lo dice la tarjeta del chofer.
+                document.getElementById('m180-observaciones').value = (data.observaciones || '').replace(/\s*·?\s*Acompañante del chofer ID \d+/g, '').trim();
                 m180SetBadge(Number(data.cerrado) ? 'cerrado' : 'borrador');
                 m180SetLocked(Number(data.cerrado) === 1);
             }
