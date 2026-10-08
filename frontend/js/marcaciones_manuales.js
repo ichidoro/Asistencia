@@ -2235,6 +2235,8 @@ let m180_dirty = false;
 let m180_force_close = false;
 let m180_prev_keys = new Set();
 let m180_locked = false;      // día cerrado: solo lectura
+let m180_chofer_id = null;       // si el empleado es peoneta de un chofer ese día: ID del chofer
+let m180_chofer_tiene_datos = false;
 let m180_acomp = [];          // IDs de peonetas que copian la libreta del chofer
 let m180_acomp_ocupados = [];  // peonetas ya asignados a otro chofer ese día
 
@@ -2327,6 +2329,48 @@ function m180AcompInitCombo() {
         }
     });
 }
+
+// Tarjeta del peoneta: a qué chofer está enlazado ese día y botón para volver a asignarle el turno del chofer.
+function m180ChoferRender() {
+    const box = document.getElementById('m180-chofer-box');
+    if (!box) return;
+    if (m180_chofer_id == null) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+    const nom = m180Esc(m180AcompNombre(m180_chofer_id));
+    box.classList.remove('d-none');
+    box.innerHTML = `<div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <div style="font-size:0.82rem;"><i class="bi bi-link-45deg me-1"></i>Acompañante del chofer <strong>${nom}</strong> este día.
+            ${m180_chofer_tiene_datos ? '' : '<span class="text-danger fw-semibold">Sin turno asignado.</span>'}</div>
+        <button type="button" class="btn btn-sm btn-primary fw-bold px-3" id="m180-btn-reasignar" onclick="window.m180ReasignarTurno()">
+            <i class="bi bi-arrow-repeat me-1"></i> Volver a asignar turno</button></div>`;
+}
+
+async function m180ReasignarTurno() {
+    const empId = parseInt(document.getElementById('m180-empleado-id').value);
+    const dateStr = document.getElementById('m180-fecha-str').value;
+    const btn = document.getElementById('m180-btn-reasignar');
+    try {
+        if (btn) btn.disabled = true;
+        const resp = await fetch('/api/asistencia/libreta-180h/reasignar-turno/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getLibretaAuthHeaders() },
+            body: JSON.stringify({ empleado_id: empId, fecha: dateStr })
+        });
+        if (!resp.ok) {
+            let msg = `Error ${resp.status} al reasignar`;
+            try { const d = await resp.json(); if (d.detail) msg = d.detail; } catch (_) {}
+            throw new Error(msg);
+        }
+        if (typeof showToast === 'function') showToast('Turno del chofer reasignado al peoneta', 'success');
+        m180_dirty = false;
+        if (typeof window.reloadSingleEmployeeRow === 'function') await window.reloadSingleEmployeeRow(empId);
+        else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        await proceedToMarcacion180h();   // recarga la tarjeta con el turno ya asignado
+    } catch (err) {
+        if (btn) btn.disabled = false;
+        Swal.fire({ icon: 'error', title: 'No se pudo reasignar', text: err.message });
+    }
+}
+window.m180ReasignarTurno = m180ReasignarTurno;
 
 function m180AcompRender() {
     m180AcompInitCombo();
@@ -2852,6 +2896,7 @@ async function proceedToMarcacion180h() {
     m180SetLocked(false);
     const btnDelDiaInit = document.getElementById('m180-btn-delete-dia');
     if (btnDelDiaInit) btnDelDiaInit.classList.add('d-none');
+    m180_chofer_id = null;
 
     try {
         const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`, {
@@ -2870,6 +2915,8 @@ async function proceedToMarcacion180h() {
 
             m180_acomp = (data.acompanantes || []).map(Number);
             m180_acomp_ocupados = (data.acompanantes_ocupados || []).map(Number);
+            m180_chofer_id = data.chofer_id != null ? Number(data.chofer_id) : null;
+            m180_chofer_tiene_datos = !!data.has_data;
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
                 document.getElementById('m180-observaciones').value = data.observaciones || '';
@@ -2908,6 +2955,7 @@ async function proceedToMarcacion180h() {
 
     refreshAllSlotsVisuals();
     m180AcompRender();
+    m180ChoferRender();
 
     const modalEl = document.getElementById('modalMarcacion180h');
     if (modalEl) {
@@ -3078,14 +3126,10 @@ async function eliminarRegistroLibretaDia() {
             throw new Error(errMsg);
         }
 
-        let delData = null;
-        try { delData = await resp.json(); } catch (_) {}
         m180_dirty = false;
         window.m180_last_scanned_image = null;
         if (typeof showToast === 'function') {
-            showToast(delData && delData.reasignado_de_chofer
-                ? 'Peoneta enlazado a un chofer: se le volvió a asignar el turno del chofer'
-                : 'Registro de libreta eliminado y día restaurado', 'success');
+            showToast('Registro de libreta eliminado y día restaurado', 'success');
         }
 
         const modalEl = document.getElementById('modalMarcacion180h');

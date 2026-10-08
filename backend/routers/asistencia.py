@@ -3025,6 +3025,7 @@ async def get_libreta_180h(
                 "observaciones": "",
                 "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
                 "acompanantes_ocupados": list((await service.repository.get_acompanantes_ocupados_180h(fecha, empleado_id)).keys()),
+                "chofer_id": await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha),
                 "tiene_foto": tiene_foto,
                 "foto_url": foto_url
             }
@@ -3058,6 +3059,7 @@ async def get_libreta_180h(
             "observaciones": row.get('observaciones') or "",
             "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
                 "acompanantes_ocupados": list((await service.repository.get_acompanantes_ocupados_180h(fecha, empleado_id)).keys()),
+            "chofer_id": await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha),
             "tiene_foto": tiene_foto,
             "foto_url": foto_url
         }
@@ -3245,6 +3247,61 @@ async def save_libreta_180h(
 
 
 
+class Libreta180hReasignarRequest(BaseModel):
+    empleado_id: int
+    fecha: str
+
+
+@router.post("/libreta-180h/reasignar-turno/")
+async def reasignar_turno_acompanante_180h(
+    payload: Libreta180hReasignarRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Peoneta (acompañante) enlazado a un chofer ese día: vuelve a copiarle el horario del chofer,
+    por ejemplo cuando se le eliminó su registro. Es la misma copia que hace el guardado de la libreta del chofer.
+    """
+    try:
+        repo = service.repository
+        chofer_id = await repo.get_chofer_de_acompanante_180h(payload.empleado_id, payload.fecha)
+        if chofer_id is None:
+            raise HTTPException(status_code=404, detail="Este empleado no está enlazado como acompañante de ningún chofer ese día.")
+        lib_chofer = await repo.get_libreta_180h(chofer_id, payload.fecha)
+        if not lib_chofer:
+            raise HTTPException(status_code=409, detail="El chofer no tiene horario registrado ese día: no hay turno que asignar.")
+        propio = await repo.get_libreta_180h(payload.empleado_id, payload.fecha)
+        if propio and int(propio.get('cerrado') or 0) == 1:
+            raise HTTPException(status_code=409, detail="El día del acompañante está cerrado: ábrelo para poder reasignarle el turno.")
+
+        obs_ch = (lib_chofer.get('observaciones') or "")
+        obs_ch = obs_ch.split(" · Acompañante del chofer ID")[0].split("Acompañante del chofer ID")[0].rstrip(" ·")
+        await repo.upsert_libreta_180h({
+            **lib_chofer,
+            'empleado_id': payload.empleado_id,
+            'observaciones': obs_ch + (" · " if obs_ch else "") + f"Acompañante del chofer ID {chofer_id}"
+        })
+        res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
+
+        try:
+            val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+            val_user = getattr(current_user, 'username', 'sistema')
+            await repo.db.execute("""
+                INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle)
+                VALUES (?, ?, ?, ?, ?)
+            """, (val_id, val_user, 'REASIGNAR_TURNO_ACOMPANANTE_180H', 'Marcaciones',
+                  f"Turno del chofer {chofer_id} reasignado al acompañante {payload.empleado_id} en fecha {payload.fecha}"))
+        except Exception:
+            pass
+
+        return {"status": "success", "message": "Turno del chofer reasignado al acompañante.", "chofer_id": chofer_id, "resultado_asistencia": res_dia}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error en reasignar_turno_acompanante_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
+        raise HTTPException(status_code=500, detail=f"Error reasignando turno: {str(e)}")
+
+
 @router.delete("/libreta-180h/")
 async def delete_libreta_180h(
     empleado_id: int = Query(...),
@@ -3258,9 +3315,6 @@ async def delete_libreta_180h(
     del día devolviéndolo a su estado natural (LIBRE o PENDIENTE).
     """
     try:
-        # Si el empleado es peoneta enlazado a un chofer ese día, borrarle el horario no lo deja sin turno:
-        # se le vuelve a asignar el del chofer (más abajo). Para desenlazarlo hay que sacarlo de la lista del chofer.
-        chofer_id = await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha)
         deleted = await service.repository.delete_libreta_180h(empleado_id, fecha)
         await service.repository.set_acompanantes_180h(empleado_id, fecha, [])
         if not deleted:
@@ -3277,22 +3331,7 @@ async def delete_libreta_180h(
         except Exception as photo_del_err:
             logger.warning(f"⚠️ Error eliminando foto física en disco: {photo_del_err}")
 
-        # Peoneta enlazado: reasignarle el turno del chofer (misma copia que hace el guardado de la libreta del chofer).
-        reasignado_de = None
-        if chofer_id is not None:
-            lib_chofer = await service.repository.get_libreta_180h(chofer_id, fecha)
-            if lib_chofer:
-                obs_ch = (lib_chofer.get('observaciones') or "")
-                obs_ch = obs_ch.split(" · Acompañante del chofer ID")[0].split("Acompañante del chofer ID")[0].rstrip(" ·")
-                await service.repository.upsert_libreta_180h({
-                    **lib_chofer,
-                    'empleado_id': empleado_id,
-                    'observaciones': obs_ch + (" · " if obs_ch else "") + f"Acompañante del chofer ID {chofer_id}"
-                })
-                reasignado_de = chofer_id
-                logger.info(f"🔗 Turno reasignado a peoneta emp={empleado_id} fecha={fecha} desde chofer {chofer_id}")
-
-        # Recalcular asistencia (turno del chofer si es peoneta enlazado; si no, vuelve a LIBRE o PENDIENTE)
+        # Recalcular asistencia para volver al estado natural (LIBRE o PENDIENTE)
         res_dia = await service.procesar_empleado_dia(empleado_id, fecha, save=True, force=True)
 
         try:
@@ -3308,9 +3347,7 @@ async def delete_libreta_180h(
 
         return {
             "status": "success",
-            "message": (f"Registro eliminado, pero está enlazado al chofer ID {reasignado_de}: se le volvió a asignar el turno del chofer. "
-                        "Para quitárselo, sácalo de la lista de acompañantes del chofer.") if reasignado_de else f"Registro de libreta del {fecha} eliminado correctamente.",
-            "reasignado_de_chofer": reasignado_de,
+            "message": f"Registro de libreta del {fecha} eliminado correctamente.",
             "resultado_asistencia": res_dia
         }
     except HTTPException:
