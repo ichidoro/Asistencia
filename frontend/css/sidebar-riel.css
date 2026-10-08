@@ -1,0 +1,78 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIDEBAR CON RIEL — expandida / riel / auto-ocultar (solo escritorio ≥ 992px)
+   - En móvil no cambia nada (sigue el cajón actual con el botón de hamburguesa).
+   - Modo elegido en body[data-sidebar]; lo guarda sidebar_riel.js en localStorage.
+   - Rendimiento: el ancho del contenido cambia de golpe (sin animar el margen,
+     para no reflujar la grilla en cada cuadro); solo se anima la propia sidebar.
+   - Revertir: quitar el <link> y el <script> en index.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 992px) {
+  body[data-sidebar="rail"],
+  body[data-sidebar="auto"] { --sidebar-width: 64px; }
+
+  /* modo auto: al pasar el mouse se despliega SOBRE el contenido (no lo empuja) */
+  body[data-sidebar="auto"] .sidebar:hover,
+  body[data-sidebar="auto"] .sidebar:focus-within { width: 260px; box-shadow: 18px 0 40px -10px rgba(6, 12, 46, .45); }
+
+  /* ── colapsado (riel, o auto sin hover) ── */
+  body[data-sidebar="rail"] .sidebar,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) { overflow: visible; }
+
+  body[data-sidebar="rail"] .logo-container,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .logo-container {
+    padding: 14px 0; min-height: 64px; align-items: center; justify-content: center;
+  }
+  body[data-sidebar="rail"] .logo-container > *,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .logo-container > * { display: none !important; }
+  body[data-sidebar="rail"] .logo-container::before,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .logo-container::before {
+    content: "A"; width: 38px; height: 38px; border-radius: 11px; display: flex;
+    align-items: center; justify-content: center; font-weight: 800; font-size: 18px;
+    color: #fff; background: rgba(255, 255, 255, .12);
+  }
+
+  body[data-sidebar="rail"] .sidebar-item,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .sidebar-item {
+    justify-content: center; padding: 12px 0; margin: 2px 10px; position: relative;
+  }
+  body[data-sidebar="rail"] .sidebar-item > span:not(.icon),
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .sidebar-item > span:not(.icon) { display: none; }
+
+  /* tooltip del riel */
+  body[data-sidebar="rail"] .sidebar-item::after {
+    content: attr(data-label); position: absolute; left: calc(100% + 12px); top: 50%;
+    transform: translateY(-50%); background: #0f172a; color: #fff; font-size: 12px;
+    font-weight: 600; padding: 5px 10px; border-radius: 8px; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 5;
+  }
+  body[data-sidebar="rail"] .sidebar-item:hover::after,
+  body[data-sidebar="rail"] .sidebar-item:focus-visible::after { opacity: 1; }
+
+  /* pie: estado + selector de modo */
+  body[data-sidebar="rail"] .sidebar-footer,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .sidebar-footer { padding: 14px 0; }
+  body[data-sidebar="rail"] .sidebar-footer .status > span:not(.status-dot),
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .sidebar-footer .status > span:not(.status-dot) { display: none; }
+  body[data-sidebar="rail"] .sidebar-footer .status,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .sidebar-footer .status { justify-content: center; }
+  body[data-sidebar="rail"] .status-dot,
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .status-dot { margin-right: 0; }
+}
+
+/* selector de modo (se inyecta en el pie; oculto en móvil) */
+.sb-modes { display: none; }
+@media (min-width: 992px) {
+  .sb-modes { display: flex; gap: 4px; margin-top: 12px; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, .08); }
+  .sb-modes button {
+    flex: 1; border: 0; background: transparent; color: rgba(255, 255, 255, .6);
+    border-radius: 8px; padding: 6px 0; font-size: 14px; cursor: pointer; transition: background .15s, color .15s;
+  }
+  .sb-modes button:hover { color: #fff; background: rgba(255, 255, 255, .1); }
+  .sb-modes button[aria-pressed="true"] { background: rgba(255, 255, 255, .2); color: #fff; }
+  /* colapsado: solo un botón para volver a expandir */
+  body[data-sidebar="rail"] .sb-modes button:not([data-mode="expanded"]),
+  body[data-sidebar="auto"] .sidebar:not(:hover):not(:focus-within) .sb-modes { display: none; }
+  body[data-sidebar="rail"] .sb-modes { background: transparent; margin: 10px 10px 0; }
+}
+/* el botón de hamburguesa del encabezado sigue siendo solo para móvil */
+@media (prefers-reduced-motion: reduce) { .sb-modes button { transition: none; } }
