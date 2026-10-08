@@ -2114,9 +2114,7 @@ async function _checkForChanges(isBaseline = false) {
             cd.lastUpdate = newUpdate;
             cd.lastCount = newCount;
 
-            // Mostrar toast informativo
-            showToast("Nuevas marcaciones detectadas. Actualizando...", "info");
-
+            // Sin aviso: la recarga es silenciosa y conserva el scroll (un toast cada 30 s molestaba a quien estaba revisando la grilla).
             // Recargar la grilla
             if (typeof window.loadMarcacionesData === 'function') {
                 window.loadMarcacionesData({ silent: true });
