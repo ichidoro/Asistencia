@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Oficial: Bolsa de 180 Horas y Libreta de Asistencia de Choferes (Art. 25 bis DT)</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --color-cond: #10b981;
+            --color-esp: #f59e0b;
+            --color-aux: #3b82f6;
+            --color-desc: #8b5cf6;
+            --color-dark: #0f172a;
+            --color-card-bg: #ffffff;
+            --color-body-bg: #f8fafc;
+        }
+
+        body {
+            background-color: var(--color-body-bg);
+            color: #1e293b;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        /* Hero Header */
+        .manual-hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0369a1 100%);
+            color: white;
+            padding: 3rem 1.5rem 2.5rem;
+            border-bottom: 5px solid #38bdf8;
+        }
+
+        /* Nav Pills Modern */
+        .nav-manual .nav-link {
+            font-weight: 600;
+            color: #475569;
+            border-radius: 8px;
+            padding: 0.65rem 1.2rem;
+            margin-right: 0.5rem;
+            transition: all 0.2s ease;
+        }
+        .nav-manual .nav-link:hover {
+            color: #0284c7;
+            background: #e0f2fe;
+        }
+        .nav-manual .nav-link.active {
+            background: #0284c7;
+            color: white;
+            box-shadow: 0 4px 10px rgba(2, 132, 199, 0.25);
+        }
+
+        /* Cards and Badges */
+        .card-custom {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            background: white;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-custom:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.07);
+        }
+
+        .badge-cond { background-color: var(--color-cond); color: white; }
+        .badge-esp { background-color: var(--color-esp); color: white; }
+        .badge-aux { background-color: var(--color-aux); color: white; }
+        .badge-desc { background-color: var(--color-desc); color: white; }
+
+        /* Color indicators */
+        .border-cond { border-left: 5px solid var(--color-cond) !important; }
+        .border-esp { border-left: 5px solid var(--color-esp) !important; }
+        .border-aux { border-left: 5px solid var(--color-aux) !important; }
+        .border-desc { border-left: 5px solid var(--color-desc) !important; }
+
+        /* Simulator Styles */
+        .simulator-grid-container {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 1.25rem;
+            color: white;
+            overflow-x: auto;
+        }
+        .timeline-header {
+            display: flex;
+            margin-left: 110px;
+            font-size: 0.72rem;
+            color: #94a3b8;
+            font-family: monospace;
+            padding-bottom: 4px;
+        }
+        .timeline-tick {
+            flex: 1;
+            text-align: left;
+            position: relative;
+        }
+        .timeline-tick::before {
+            content: "|";
+            position: absolute;
+            left: 0;
+            top: 14px;
+            color: #475569;
+        }
+
+        .lane-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .lane-label {
+            width: 110px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .lane-slots {
+            display: flex;
+            flex: 1;
+            height: 28px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+        .slot-block {
+            flex: 1;
+            border-right: 1px solid #334155;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        .slot-block:hover {
+            opacity: 0.8;
+            filter: brightness(1.2);
+        }
+        .slot-block:nth-child(4n) {
+            border-right: 1px solid #64748b;
+        }
+        .slot-block.active-cond { background-color: var(--color-cond) !important; }
+        .slot-block.active-esp { background-color: var(--color-esp) !important; }
+        .slot-block.active-aux { background-color: var(--color-aux) !important; }
+        .slot-block.active-desc { background-color: var(--color-desc) !important; }
+
+        /* Printable Training Certificate */
+        .printable-acta {
+            background: white;
+            padding: 2.5rem;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            color: #0f172a;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #seccion-acta, #seccion-acta * {
+                visibility: visible;
+            }
+            #seccion-acta {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                padding: 0;
+                margin: 0;
+                border: none;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HERO HEADER -->
+    <header class="manual-hero">
+        <div class="container">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div>
+                    <span class="badge bg-warning text-dark px-3 py-1.5 fw-bold mb-2">
+                        <i class="bi bi-shield-check me-1"></i> RESOLUCIÓN EXENTA N° 1213 DT / ART. 25 BIS
+                    </span>
+                    <h1 class="h2 fw-bold mb-1">Manual Operativo: Bolsa de 180 Horas Mensuales</h1>
+                    <p class="mb-0 text-white-50 fs-6">
+                        Guía práctica oficial para Choferes y Auxiliares de Carga Terrestre: llenado de libreta física, reglas legales y rendición diaria obligatoria.
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-light btn-sm px-3" onclick="window.print()">
+                        <i class="bi bi-printer-fill me-1"></i> Imprimir Acta
+                    </button>
+                    <a href="#simulador" class="btn btn-warning text-dark fw-bold btn-sm px-3">
+                        <i class="bi bi-play-circle-fill me-1"></i> Probar Simulador
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- NAVEGACIÓN PRINCIPAL -->
+    <nav class="bg-white border-bottom sticky-top py-2 shadow-sm no-print">
+        <div class="container">
+            <ul class="nav nav-pills nav-manual" id="manualTabs">
+                <li class="nav-item">
+                    <a class="nav-link active" href="#ley"><i class="bi bi-journal-text me-1"></i> 1. Ley Art. 25 bis</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#carriles"><i class="bi bi-list-check me-1"></i> 2. Los 4 Carriles</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#simulador"><i class="bi bi-cpu me-1"></i> 3. Simulador Interactivo</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#obligaciones"><i class="bi bi-exclamation-octagon-fill me-1 text-danger"></i> 4. Obligaciones y Sanciones</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#acta"><i class="bi bi-file-earmark-person-fill me-1 text-primary"></i> 5. Acta de Capacitación</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container my-4">
+
+        <!-- ========================================== -->
+        <!-- SECCIÓN 1: MARCO LEGAL ART. 25 BIS DT     -->
+        <!-- ========================================== -->
+        <section id="ley" class="mb-5 pt-3">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <div class="bg-primary text-white rounded p-2 d-flex"><i class="bi bi-bank fs-4"></i></div>
+                <div>
+                    <h3 class="fw-bold mb-0">1. Marco Legal del Artículo 25 bis del Código del Trabajo</h3>
+                    <small class="text-muted">Régimen especial de jornada y descansos para transporte interurbano de carga</small>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-6 col-lg-3">
+                    <div class="card card-custom h-100 p-3 border-top border-4 border-primary">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-hourglass-split text-primary fs-3"></i>
+                            <h6 class="fw-bold mb-0">Bolsa Mensual</h6>
+                        </div>
+                        <h4 class="fw-bold text-dark">180 Horas</h4>
+                        <p class="small text-muted mb-0">
+                            La jornada ordinaria de trabajo no podrá exceder de <strong>180 horas mensuales</strong>, la que no podrá distribuirse en menos de <strong>21 días</strong> al mes.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-3">
+                    <div class="card card-custom h-100 p-3 border-top border-4 border-success">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-speedometer2 text-success fs-3"></i>
+                            <h6 class="fw-bold mb-0">Tope Conducción</h6>
+                        </div>
+                        <h4 class="fw-bold text-dark">Máx. 5 Horas</h4>
+                        <p class="small text-muted mb-0">
+                            En ningún caso el chofer podrá manejar más de <strong>5 horas continuas</strong>. Tras este período, debe descansar obligatoriamente un mínimo de <strong>2 horas</strong>.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-3">
+                    <div class="card card-custom h-100 p-3 border-top border-purple border-4" style="border-top-color:#8b5cf6 !important;">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-moon-stars-fill text-purple fs-3" style="color:#8b5cf6;"></i>
+                            <h6 class="fw-bold mb-0">Descanso Diario</h6>
+                        </div>
+                        <h4 class="fw-bold text-dark">Mín. 8 Horas</h4>
+                        <p class="small text-muted mb-0">
+                            El descanso diario mínimo ininterrumpido será de <strong>8 horas</strong> dentro de cada período de 24 horas. Si se pernocta a bordo, la litera debe cumplir condiciones técnicas.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-3">
+                    <div class="card card-custom h-100 p-3 border-top border-4 border-warning">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-clock-history text-warning fs-3"></i>
+                            <h6 class="fw-bold mb-0">Tiempos de Espera</h6>
+                        </div>
+                        <h4 class="fw-bold text-dark">Fuera de 180h</h4>
+                        <p class="small text-muted mb-0">
+                            Los tiempos de espera <strong>no son imputables a la jornada de 180 horas</strong>, pero deben registrarse fielmente en la libreta y remunerarse según la base pactada.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerta Legal Destacada -->
+            <div class="alert alert-primary mt-4 border-0 shadow-sm d-flex align-items-start gap-3">
+                <i class="bi bi-info-circle-fill fs-3 text-primary mt-1"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Principio de Registro Inmediato y Fidedigno (Res. Ex. Nº 1213 DT)</h6>
+                    <p class="small mb-0">
+                        La ley exige que las marcas se realicen <strong>en el momento exacto en que inicia y finaliza cada actividad</strong>. Está terminantemente prohibido completar la libreta "de memoria" al final del turno, de la semana o del mes. En una inspección, las marcas desfasadas o idénticas en bloque son declaradas como <strong>registro no fidedigno</strong>, acarreando multas gravísimas para la empresa y sumarios.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓN 2: LOS 4 CARRILES CON CASOS REALES -->
+        <!-- ========================================== -->
+        <section id="carriles" class="mb-5 pt-3">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <div class="bg-success text-white rounded p-2 d-flex"><i class="bi bi-grid-3x3-gap-fill fs-4"></i></div>
+                <div>
+                    <h3 class="fw-bold mb-0">2. Los 4 Carriles Reglamentarios de la Libreta Física</h3>
+                    <small class="text-muted">Resolución Exenta Nº 1213 de la Dirección del Trabajo: ¿Qué se marca en cada fila?</small>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <!-- 1. CONDUCCIÓN -->
+                <div class="col-lg-6">
+                    <div class="card card-custom h-100 p-4 border-cond">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0 text-success"><i class="bi bi-truck me-2"></i>1. Conducción (Código 1)</h5>
+                            <span class="badge badge-cond px-2.5 py-1">Suma a las 180h</span>
+                        </div>
+                        <p class="text-muted small">
+                            Tiempo durante el cual el conductor opera materialmente el camión al volante, ya sea en carretera, autopista, caminos rurales o maniobras internas.
+                        </p>
+                        <h6 class="fw-bold small text-dark mb-2"><i class="bi bi-check2-circle text-success me-1"></i> ¿Qué labores se marcan aquí?</h6>
+                        <ul class="small text-secondary mb-3">
+                            <li>Manejo en ruta entre plantas, clientes o ciudades.</li>
+                            <li>Traslado del camión entre estacionamiento, andenes o talleres.</li>
+                            <li>Conducción en taco, peaje o detenciones semafóricas.</li>
+                        </ul>
+                        <div class="p-2.5 bg-light rounded border border-success border-opacity-25 small">
+                            <strong class="text-danger"><i class="bi bi-x-circle-fill me-1"></i> Error grave a evitar:</strong> Marcar conducción cuando el camión está detenido esperando turno para entrar a la bodega.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. TIEMPOS DE ESPERA -->
+                <div class="col-lg-6">
+                    <div class="card card-custom h-100 p-4 border-esp">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0 text-warning"><i class="bi bi-clock-history me-2"></i>2. Tiempos de Espera (Código 2)</h5>
+                            <span class="badge badge-esp px-2.5 py-1">No suma 180h · Se Paga</span>
+                        </div>
+                        <p class="text-muted small">
+                            Tiempos en que el conductor permanece a disposición de la empresa sin manejar y sin realizar esfuerzo físico directo (está esperando órdenes o procesos ajenos).
+                        </p>
+                        <h6 class="fw-bold small text-dark mb-2"><i class="bi bi-check2-circle text-warning me-1"></i> ¿Qué labores se marcan aquí?</h6>
+                        <ul class="small text-secondary mb-3">
+                            <li>Espera en fila para pesaje en romana o control fitosanitario (SAG/Aduana).</li>
+                            <li>Espera de turno en andén mientras el cliente carga o descarga los pallets.</li>
+                            <li>Detención obligada por corte de ruta o instrucciones directas de la central.</li>
+                        </ul>
+                        <div class="p-2.5 bg-light rounded border border-warning border-opacity-25 small">
+                            <strong class="text-danger"><i class="bi bi-x-circle-fill me-1"></i> Error grave a evitar:</strong> Marcar espera cuando el chofer está en su día libre o descansando en su casa.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. LABORES AUXILIARES -->
+                <div class="col-lg-6">
+                    <div class="card card-custom h-100 p-4 border-aux">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-tools me-2"></i>3. Labores Auxiliares (Código 3)</h5>
+                            <span class="badge badge-aux px-2.5 py-1">Suma a las 180h</span>
+                        </div>
+                        <p class="text-muted small">
+                            Toda labor física o administrativa relacionada con el viaje, vehículo o carga, que no corresponda a la conducción propiamente tal.
+                        </p>
+                        <h6 class="fw-bold small text-dark mb-2"><i class="bi bi-check2-circle text-primary me-1"></i> ¿Qué labores se marcan aquí?</h6>
+                        <ul class="small text-secondary mb-3">
+                            <li>Revisión mecánica preventiva diaria (niveles, luces, neumáticos, frenos).</li>
+                            <li>Encarpado, estiba, desestiba y amarre con fajas o cadenas.</li>
+                            <li>Chequeo de guías de despacho, facturas y recepción de firmas en cliente.</li>
+                        </ul>
+                        <div class="p-2.5 bg-light rounded border border-primary border-opacity-25 small">
+                            <strong class="text-danger"><i class="bi bi-x-circle-fill me-1"></i> Error grave a evitar:</strong> Marcar labores auxiliares mientras se está durmiendo o comiendo.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. DESCANSO -->
+                <div class="col-lg-6">
+                    <div class="card card-custom h-100 p-4 border-desc">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0" style="color:var(--color-desc);"><i class="bi bi-moon-stars me-2"></i>4. Descanso (Código 4)</h5>
+                            <span class="badge badge-desc px-2.5 py-1">Fuera de Jornada</span>
+                        </div>
+                        <p class="text-muted small">
+                            Períodos en que el conductor queda totalmente liberado de toda obligación y atención al empleador, disponiendo libremente de su tiempo.
+                        </p>
+                        <h6 class="fw-bold small text-dark mb-2"><i class="bi bi-check2-circle me-1" style="color:var(--color-desc);"></i> ¿Qué labores se marcan aquí?</h6>
+                        <ul class="small text-secondary mb-3">
+                            <li>Horario de colación (mínimo 30 minutos a 1 hora).</li>
+                            <li>Pausa obligatoria de 2 horas tras haber conducido 5 horas continuas.</li>
+                            <li>Descanso diario nocturno de mínimo 8 horas continuas.</li>
+                        </ul>
+                        <div class="p-2.5 bg-light rounded border border-opacity-25 small" style="border-color:var(--color-desc);">
+                            <strong class="text-danger"><i class="bi bi-x-circle-fill me-1"></i> Error grave a evitar:</strong> Dejar la cuadrícula en blanco sin marcar el descanso (debe rayarse el carril 4).
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla Comparativa Rápida para Dudas Frecuentes -->
+            <div class="card card-custom mt-4 overflow-hidden">
+                <div class="card-header bg-dark text-white py-2.5 px-3">
+                    <span class="fw-bold"><i class="bi bi-patch-question-fill text-warning me-2"></i>Guía Rápida: "¿Qué marco en la libreta si...?"</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0 align-middle small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Situación Real en Ruta o Planta</th>
+                                <th style="width:200px;">¿Qué carril marcar?</th>
+                                <th>Fundamento Legal (DT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Estoy encarpando el camión y amarrando con fajas.</td>
+                                <td><span class="badge badge-aux">Carril 3: Tareas Auxiliares</span></td>
+                                <td>Es trabajo físico directo para la seguridad de la carga.</td>
+                            </tr>
+                            <tr>
+                                <td>Llegué al cliente, apagué el camión y me dijeron "espere 2 horas afuera hasta que le asignemos andén".</td>
+                                <td><span class="badge badge-esp">Carril 2: Espera</span></td>
+                                <td>No maneja ni hace esfuerzo físico, pero está a disposición del empleador.</td>
+                            </tr>
+                            <tr>
+                                <td>Conduje 4 horas y media y paré en un servicentro a almorzar.</td>
+                                <td><span class="badge badge-desc">Carril 4: Descanso</span></td>
+                                <td>Tiempo libre para alimentación; cesa la prestación de servicios.</td>
+                            </tr>
+                            <tr>
+                                <td>En la mañana reviso el aceite, agua, luces y firmo la orden de salida.</td>
+                                <td><span class="badge badge-aux">Carril 3: Tareas Auxiliares</span></td>
+                                <td>Inspección de pre-uso reglamentaria.</td>
+                            </tr>
+                            <tr>
+                                <td>Estoy manejando en el taco de Américo Vespucio a 10 km/h.</td>
+                                <td><span class="badge badge-cond">Carril 1: Conducción</span></td>
+                                <td>El conductor está al volante con el motor en marcha en vía pública.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓN 3: SIMULADOR INTERACTIVO REGLETA   -->
+        <!-- ========================================== -->
+        <section id="simulador" class="mb-5 pt-3">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="bg-warning text-dark rounded p-2 d-flex"><i class="bi bi-calculator-fill fs-4"></i></div>
+                    <div>
+                        <h3 class="fw-bold mb-0">3. Simulador Interactivo de la Planilla Diaria</h3>
+                        <small class="text-muted">Practica marcando los 96 cuartos de hora (15 minutos cada uno) y audita las reglas DT</small>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-outline-success" onclick="cargarEscenario('tipico')">
+                        <i class="bi bi-lightning-charge me-1"></i> Día Típico Mixto
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="cargarEscenario('viaje_largo')">
+                        <i class="bi bi-truck me-1"></i> Viaje Largo (Pausa 2h)
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="cargarEscenario('espera')">
+                        <i class="bi bi-clock-history me-1"></i> Día de Espera Cliente
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="limpiarSimulador()">
+                        <i class="bi bi-trash me-1"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+
+            <!-- CONTENEDOR DEL SIMULADOR -->
+            <div class="card card-custom p-4 shadow-sm mb-4">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-dark"><i class="bi bi-brush me-1"></i> Herramienta activa para pintar:</span>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-success active" id="btn-tool-1" onclick="seleccionarHerramienta(1)">1. Conducción</button>
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="btn-tool-2" onclick="seleccionarHerramienta(2)">2. Espera</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-tool-3" onclick="seleccionarHerramienta(3)">3. Auxiliares</button>
+                            <button type="button" class="btn btn-sm btn-outline-purple" id="btn-tool-4" onclick="seleccionarHerramienta(4)" style="color:#8b5cf6; border-color:#8b5cf6;">4. Descanso</button>
+                            <button type="button" class="btn btn-sm btn-outline-dark" id="btn-tool-0" onclick="seleccionarHerramienta(0)"><i class="bi bi-eraser"></i> Borrar</button>
+                        </div>
+                    </div>
+                    <div class="small text-muted">
+                        <i class="bi bi-info-circle me-1"></i> Haz clic en los casilleros para marcar o arrastra sobre la fila correspondiente.
+                    </div>
+                </div>
+
+                <!-- Grilla Interactiva Visual -->
+                <div class="simulator-grid-container mb-3">
+                    <!-- Escala de Horas (00h a 24h cada 2 horas) -->
+                    <div class="timeline-header" id="sim-timeline">
+                        <div class="timeline-tick">00h</div>
+                        <div class="timeline-tick">02h</div>
+                        <div class="timeline-tick">04h</div>
+                        <div class="timeline-tick">06h</div>
+                        <div class="timeline-tick">08h</div>
+                        <div class="timeline-tick">10h</div>
+                        <div class="timeline-tick">12h</div>
+                        <div class="timeline-tick">14h</div>
+                        <div class="timeline-tick">16h</div>
+                        <div class="timeline-tick">18h</div>
+                        <div class="timeline-tick">20h</div>
+                        <div class="timeline-tick">22h</div>
+                        <div class="timeline-tick" style="flex:0;">24h</div>
+                    </div>
+
+                    <!-- Fila 1: Conducción -->
+                    <div class="lane-row">
+                        <div class="lane-label text-success"><i class="bi bi-truck"></i> COND</div>
+                        <div class="lane-slots" id="slots-lane-1"></div>
+                    </div>
+
+                    <!-- Fila 2: Espera -->
+                    <div class="lane-row">
+                        <div class="lane-label text-warning"><i class="bi bi-clock"></i> ESPERA</div>
+                        <div class="lane-slots" id="slots-lane-2"></div>
+                    </div>
+
+                    <!-- Fila 3: Auxiliares -->
+                    <div class="lane-row">
+                        <div class="lane-label text-primary"><i class="bi bi-tools"></i> AUX</div>
+                        <div class="lane-slots" id="slots-lane-3"></div>
+                    </div>
+
+                    <!-- Fila 4: Descanso -->
+                    <div class="lane-row">
+                        <div class="lane-label" style="color:var(--color-desc);"><i class="bi bi-moon"></i> DESC</div>
+                        <div class="lane-slots" id="slots-lane-4"></div>
+                    </div>
+                </div>
+
+                <!-- Resumen Dinámico de Horas Acumuladas -->
+                <div class="row g-3 text-center mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="p-2.5 bg-light rounded border border-success">
+                            <span class="small text-muted d-block">Conducción</span>
+                            <h4 class="fw-bold text-success mb-0" id="total-cond">0.0h</h4>
+                            <small class="text-muted" style="font-size:0.7rem;">Suma a 180h</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2.5 bg-light rounded border border-warning">
+                            <span class="small text-muted d-block">T. Espera</span>
+                            <h4 class="fw-bold text-warning mb-0" id="total-esp">0.0h</h4>
+                            <small class="text-muted" style="font-size:0.7rem;">Remunerado / Fuera 180h</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2.5 bg-light rounded border border-primary">
+                            <span class="small text-muted d-block">Tareas Auxiliares</span>
+                            <h4 class="fw-bold text-primary mb-0" id="total-aux">0.0h</h4>
+                            <small class="text-muted" style="font-size:0.7rem;">Suma a 180h</small>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2.5 bg-light rounded border" style="border-color:var(--color-desc) !important;">
+                            <span class="small text-muted d-block">Descanso</span>
+                            <h4 class="fw-bold mb-0" style="color:var(--color-desc);" id="total-desc">0.0h</h4>
+                            <small class="text-muted" style="font-size:0.7rem;">Pausa legal / Colación</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auditoría Legal en Vivo -->
+                <div id="sim-alerts-box" class="alert alert-secondary py-2 px-3 small mb-0">
+                    <i class="bi bi-shield-check me-1 text-success"></i> Estado: La regleta está vacía. Selecciona una herramienta para comenzar a marcar.
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓN 4: OBLIGACIONES Y SANCIONES LEGALES -->
+        <!-- ========================================== -->
+        <section id="obligaciones" class="mb-5 pt-3">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <div class="bg-danger text-white rounded p-2 d-flex"><i class="bi bi-shield-exclamation fs-4"></i></div>
+                <div>
+                    <h3 class="fw-bold mb-0">4. Portabilidad del Libro, Entrega Diaria y Sanciones Legales</h3>
+                    <small class="text-muted">Responsabilidad legal del chofer frente a fiscalizaciones de Carabineros y la DT</small>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <!-- Portabilidad a bordo del camión -->
+                <div class="col-md-4">
+                    <div class="card card-custom h-100 p-4 border-top border-4 border-danger">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-danger">
+                            <i class="bi bi-truck-front-fill fs-3"></i>
+                            <h5 class="fw-bold mb-0">Portabilidad a Bordo</h5>
+                        </div>
+                        <p class="small text-muted">
+                            La libreta de asistencia <strong>debe permanecer en todo momento dentro de la cabina del camión asignado</strong> durante toda la ruta.
+                        </p>
+                        <div class="alert alert-danger p-2 small mb-0">
+                            <strong>Fiscalización en Carretera:</strong> Si Carabineros o inspectores de la DT detienen el vehículo y el chofer no porta su libreta física, se cursa una <strong>infracción gravísima</strong> inmediata, con multas que superan los <strong>$3.500.000 (hasta 60 UTM)</strong>.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Entrega diaria de la hoja -->
+                <div class="col-md-4">
+                    <div class="card card-custom h-100 p-4 border-top border-4 border-warning">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-warning">
+                            <i class="bi bi-file-earmark-arrow-up-fill fs-3"></i>
+                            <h5 class="fw-bold mb-0">Rendición Diaria</h5>
+                        </div>
+                        <p class="small text-muted">
+                            Al término de cada jornada o retorno a base, el chofer tiene la <strong>obligación contractual y reglamentaria de entregar la hoja desprendible o transmitir la foto clara</strong> para que sea ingresada al sistema digital de asistencia.
+                        </p>
+                        <div class="alert alert-warning p-2 small mb-0">
+                            <strong>Consecuencia Operativa:</strong> Si no se entrega la hoja, el sistema no puede acreditar horas extraordinarias, tiempos de espera ni descansos, impidiendo el pago correcto en la liquidación de sueldo.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consecuencias de Incumplimiento -->
+                <div class="col-md-4">
+                    <div class="card card-custom h-100 p-4 border-top border-4 border-dark">
+                        <div class="d-flex align-items-center gap-2 mb-2 text-dark">
+                            <i class="bi bi-gavel fs-3"></i>
+                            <h5 class="fw-bold mb-0">Sanciones Laborales</h5>
+                        </div>
+                        <p class="small text-muted">
+                            Estar formalmente capacitado y no cumplir con el llenado, custodia o entrega de la libreta física constituye una falta grave según el Código del Trabajo.
+                        </p>
+                        <ul class="small text-secondary ps-3 mb-0">
+                            <li><strong>Amonestación por escrito</strong> con copia a la Inspección del Trabajo.</li>
+                            <li><strong>Responsabilidad patrimonial</strong> frente a multas provocadas por omisión del conductor.</li>
+                            <li><strong>Causal de Despido sin indemnización:</strong> Art. 160 Nº 7 del Código del Trabajo (Incumplimiento grave de las obligaciones del contrato).</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓN 5: ACTA DE CAPACITACIÓN IMPRIMIBLE  -->
+        <!-- ========================================== -->
+        <section id="acta" class="mb-5 pt-3">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 no-print">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="bg-dark text-white rounded p-2 d-flex"><i class="bi bi-file-earmark-text-fill fs-4"></i></div>
+                    <div>
+                        <h3 class="fw-bold mb-0">5. Acta de Capacitación, Entrega de Libro y Compromiso</h3>
+                        <small class="text-muted">Documento formal de respaldo para la carpeta del trabajador (Ley 16.744 / Código del Trabajo)</small>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="window.print()">
+                    <i class="bi bi-printer-fill me-1"></i> Imprimir Documento Oficial (PDF)
+                </button>
+            </div>
+
+            <!-- HOJA FORMAL IMPRIMIBLE -->
+            <div class="printable-acta shadow-sm" id="seccion-acta">
+                <div class="text-center pb-3 mb-4 border-bottom">
+                    <h4 class="fw-bold text-uppercase mb-1">ACTA DE CAPACITACIÓN, ENTREGA DE LIBRETA DE CONTROL Y COMPROMISO LABORAL</h4>
+                    <p class="text-muted small mb-0">
+                        En cumplimiento del Artículo 25 bis del Código del Trabajo, Resolución Exenta N° 1213 de la Dirección del Trabajo y Obligación de Informar (ODI / Ley 16.744)
+                    </p>
+                </div>
+
+                <!-- Datos de Individualización -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-bordered small mb-0">
+                            <tbody>
+                                <tr><th class="table-light" style="width:140px;">Nombre Chofer:</th><td>_____________________________________________</td></tr>
+                                <tr><th class="table-light">R.U.T.:</th><td>________________________</td></tr>
+                                <tr><th class="table-light">N° Licencia / Clase:</th><td>________________________</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm table-bordered small mb-0">
+                            <tbody>
+                                <tr><th class="table-light" style="width:140px;">Patente Camión:</th><td>________________________</td></tr>
+                                <tr><th class="table-light">Folio Libreta Entregada:</th><td><strong>N° _____________________</strong></td></tr>
+                                <tr><th class="table-light">Fecha de Inducción:</th><td>______ / ______ / 202____</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Cláusulas de Compromiso -->
+                <h6 class="fw-bold text-dark mb-2 text-uppercase small">I. DECLARACIÓN DE CAPACITACIÓN Y RECEPCIÓN MATERIAL</h6>
+                <p class="small text-justify text-secondary mb-3">
+                    Por medio del presente instrumento, el trabajador individualizado declara bajo juramento haber participado y completado satisfactoriamente la capacitación teórico-práctica sobre el funcionamiento de la <strong>Bolsa de 180 Horas Mensuales</strong>, las normas de la <strong>Resolución Exenta N° 1213 de la DT</strong> y las disposiciones del <strong>Artículo 25 bis del Código del Trabajo</strong>. Asimismo, certifica haber recibido materialmente una (1) Libreta Oficial de Control de Asistencia y Tiempos de Trabajo en perfecto estado físico y correlativo.
+                </p>
+
+                <h6 class="fw-bold text-dark mb-2 text-uppercase small">II. OBLIGACIONES Y RESPONSABILIDADES ASUMIDAS POR EL CONDUCTOR</h6>
+                <ol class="small text-secondary ps-3 mb-4">
+                    <li class="mb-1"><strong>Portabilidad Obligatoria:</strong> Mantener la libreta física obligatoriamente a bordo del camión asignado durante todos los trayectos, viajes y turnos, exhibiéndola de inmediato ante requerimiento de Carabineros de Chile o inspectores de la Dirección del Trabajo.</li>
+                    <li class="mb-1"><strong>Llenado Fidedigno e Inmediato:</strong> Marcar cada cuadrante de 15 minutos en el momento preciso en que ocurra la actividad (Conducción, Espera, Tareas Auxiliares o Descanso), prohibiéndose expresamente el llenado diferido, acumulado o de memoria al final del mes.</li>
+                    <li class="mb-1"><strong>Rendición y Traspaso Diario:</strong> Entregar físicamente la copia correspondiente o facilitar su captura fotográfica de alta resolución diariamente o al término del turno de ruta, para su incorporación en el sistema digital de gestión de asistencia de la empresa.</li>
+                    <li class="mb-1"><strong>Custodia y Buen Cuidado:</strong> Cuidar el documento físico de pérdidas, adulteraciones, roturas o manchas que impidan la legibilidad de las marcas reglamentarias.</li>
+                </ol>
+
+                <h6 class="fw-bold text-dark mb-2 text-uppercase small">III. CONSECUENCIAS POR INCUMPLIMIENTO</h6>
+                <p class="small text-justify text-secondary mb-4">
+                    El trabajador declara conocer que el extravío, adulteración, no portabilidad en ruta o la negativa/omisión en la entrega diaria de las hojas de asistencia constituye una <strong>infracción grave a las obligaciones que impone el contrato de trabajo</strong> (Reglamento Interno de Orden, Higiene y Seguridad y Artículo 160 N° 7 del Código del Trabajo), facultando al empleador a cursar amonestaciones formales por escrito con copia a la Inspección del Trabajo, imputar la responsabilidad ante multas fiscales ocasionadas por dolo o negligencia del chofer, y poner término a la relación laboral sin derecho a indemnización.
+                </p>
+
+                <!-- Cuadro de Firmas -->
+                <div class="row pt-4 text-center mt-5">
+                    <div class="col-4">
+                        <div class="border-top pt-2" style="border-color:#64748b !important;">
+                            <strong class="d-block small">FIRMA DEL TRABAJADOR</strong>
+                            <small class="text-muted d-block">RUT: ____________________</small>
+                            <small class="text-muted">Huella Digital Dedo Pulgar Derecho</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border-top pt-2" style="border-color:#64748b !important;">
+                            <strong class="d-block small">INSTRUCTOR / CAPACITADOR</strong>
+                            <small class="text-muted d-block">Firma y Timbre</small>
+                            <small class="text-muted">Área Operaciones / Prevención</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border-top pt-2" style="border-color:#64748b !important;">
+                            <strong class="d-block small">EMPRESA / RR.HH.</strong>
+                            <small class="text-muted d-block">Firma y Timbre Autorizado</small>
+                            <small class="text-muted">Recepción Conforme Carpeta Personal</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-dark text-white py-4 mt-5 no-print border-top border-secondary">
+        <div class="container text-center small text-white-50">
+            <p class="mb-1">Sistema de Control de Asistencia y Gestión de Choferes de Carga Interurbana · Art. 25 bis Código del Trabajo</p>
+            <p class="mb-0">Documento pedagógico y normativo generado para fines de cumplimiento legal, prevención de riesgos y transparencia laboral.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- SCRIPT DEL SIMULADOR INTERACTIVO -->
+    <script>
+        // Array de 96 slots (0 = Vacio, 1 = Cond, 2 = Esp, 3 = Aux, 4 = Desc)
+        let simSlots = new Array(96).fill(0);
+        let herramientaActiva = 1; // 1 = Conducción por defecto
+
+        // Inicializar grilla visual en el DOM
+        function inicializarSimulador() {
+            for (let lane = 1; lane <= 4; lane++) {
+                const container = document.getElementById(`slots-lane-${lane}`);
+                if (!container) continue;
+                container.innerHTML = '';
+                for (let i = 0; i < 96; i++) {
+                    const block = document.createElement('div');
+                    block.className = 'slot-block';
+                    block.dataset.slotIndex = i;
+                    block.dataset.lane = lane;
+                    
+                    const horaInicio = formatHora(i * 15);
+                    const horaFin = formatHora((i + 1) * 15);
+                    block.title = `${horaInicio} - ${horaFin}`;
+
+                    block.onclick = () => alternarSlot(i, lane);
+                    container.appendChild(block);
+                }
+            }
+            actualizarVisuales();
+        }
+
+        function formatHora(minutosTotales) {
+            const h = Math.floor(minutosTotales / 60);
+            const m = minutosTotales % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        function seleccionarHerramienta(cod) {
+            herramientaActiva = cod;
+            for (let i = 0; i <= 4; i++) {
+                const btn = document.getElementById(`btn-tool-${i}`);
+                if (btn) btn.classList.remove('active');
+            }
+            const activeBtn = document.getElementById(`btn-tool-${cod}`);
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        function alternarSlot(slotIdx, lane) {
+            if (herramientaActiva === 0) {
+                // Borrar slot
+                simSlots[slotIdx] = 0;
+            } else if (lane === herramientaActiva) {
+                // Asignar actividad
+                simSlots[slotIdx] = (simSlots[slotIdx] === herramientaActiva) ? 0 : herramientaActiva;
+            } else {
+                // Si hizo clic en un carril distinto a la herramienta, pintar el carril correspondiente a la herramienta
+                simSlots[slotIdx] = herramientaActiva;
+            }
+            actualizarVisuales();
+        }
+
+        function actualizarVisuales() {
+            // Actualizar clases de los bloques
+            for (let lane = 1; lane <= 4; lane++) {
+                const container = document.getElementById(`slots-lane-${lane}`);
+                if (!container) continue;
+                const blocks = container.children;
+                for (let i = 0; i < 96; i++) {
+                    blocks[i].className = 'slot-block';
+                    if (simSlots[i] === lane) {
+                        if (lane === 1) blocks[i].classList.add('active-cond');
+                        else if (lane === 2) blocks[i].classList.add('active-esp');
+                        else if (lane === 3) blocks[i].classList.add('active-aux');
+                        else if (lane === 4) blocks[i].classList.add('active-desc');
+                    }
+                }
+            }
+
+            // Calcular totales
+            const condCount = simSlots.filter(s => s === 1).length;
+            const espCount = simSlots.filter(s => s === 2).length;
+            const auxCount = simSlots.filter(s => s === 3).length;
+            const descCount = simSlots.filter(s => s === 4).length;
+
+            const condH = (condCount * 15 / 60).toFixed(1);
+            const espH = (espCount * 15 / 60).toFixed(1);
+            const auxH = (auxCount * 15 / 60).toFixed(1);
+            const descH = (descCount * 15 / 60).toFixed(1);
+
+            document.getElementById('total-cond').textContent = `${condH}h`;
+            document.getElementById('total-esp').textContent = `${espH}h`;
+            document.getElementById('total-aux').textContent = `${auxH}h`;
+            document.getElementById('total-desc').textContent = `${descH}h`;
+
+            // Auditar reglas legales
+            auditarReglas(condCount, espCount, auxCount, descCount);
+        }
+
+        function auditarReglas(cond, esp, aux, desc) {
+            const box = document.getElementById('sim-alerts-box');
+            if (!box) return;
+
+            // Verificar si hay conducción continua > 5 horas (20 slots de 15 min)
+            let maxCondContinua = 0;
+            let currentCondContinua = 0;
+            for (let i = 0; i < 96; i++) {
+                if (simSlots[i] === 1) {
+                    currentCondContinua++;
+                    if (currentCondContinua > maxCondContinua) maxCondContinua = currentCondContinua;
+                } else {
+                    currentCondContinua = 0;
+                }
+            }
+
+            const maxHorasContinuas = (maxCondContinua * 15 / 60).toFixed(1);
+            const vacios = simSlots.filter(s => s === 0).length;
+
+            if (maxCondContinua > 20) {
+                box.className = 'alert alert-danger py-2 px-3 small mb-0';
+                box.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Infracción Legal Grave:</strong> Se detectaron <strong>${maxHorasContinuas} horas continuas de conducción</strong>. La ley exige descanso obligatorio de 2 horas tras un máximo de 5 horas al volante.`;
+            } else if (vacios > 0) {
+                const vaciosH = (vacios * 15 / 60).toFixed(1);
+                box.className = 'alert alert-warning py-2 px-3 small mb-0';
+                box.innerHTML = `<i class="bi bi-info-circle-fill me-1"></i> <strong>Atención:</strong> Quedan <strong>${vaciosH} horas sin marcar</strong> en la regleta de 24 horas. Los espacios vacíos deben rayarse en descanso (Carril 4).`;
+            } else {
+                box.className = 'alert alert-success py-2 px-3 small mb-0';
+                box.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> <strong>Planilla Correcta:</strong> Las 24 horas del día están debidamente justificadas conforme a la Resolución Exenta N° 1213 DT.`;
+            }
+        }
+
+        function cargarEscenario(tipo) {
+            simSlots.fill(4); // Llenar todo con descanso de base
+
+            if (tipo === 'tipico') {
+                // 07:00 a 07:30 Auxiliar (revisión camión)
+                for (let i = 28; i < 30; i++) simSlots[i] = 3;
+                // 07:30 a 11:30 Conducción (4h)
+                for (let i = 30; i < 46; i++) simSlots[i] = 1;
+                // 11:30 a 13:00 Espera descarga
+                for (let i = 46; i < 52; i++) simSlots[i] = 2;
+                // 13:00 a 14:00 Colación (Descanso)
+                for (let i = 52; i < 56; i++) simSlots[i] = 4;
+                // 14:00 a 17:30 Conducción retorno (3.5h)
+                for (let i = 56; i < 70; i++) simSlots[i] = 1;
+                // 17:30 a 18:00 Auxiliar (entrega de guías y llaves)
+                for (let i = 70; i < 72; i++) simSlots[i] = 3;
+            } else if (tipo === 'viaje_largo') {
+                // 06:00 a 10:30 Conducción (4.5h)
+                for (let i = 24; i < 42; i++) simSlots[i] = 1;
+                // 10:30 a 12:30 Pausa Legal de Descanso (2h)
+                for (let i = 42; i < 50; i++) simSlots[i] = 4;
+                // 12:30 a 16:30 Conducción Tramo 2 (4h)
+                for (let i = 50; i < 66; i++) simSlots[i] = 1;
+                // 16:30 a 17:00 Auxiliares
+                for (let i = 66; i < 68; i++) simSlots[i] = 3;
+            } else if (tipo === 'espera') {
+                // 08:00 a 08:30 Auxiliares
+                for (let i = 32; i < 34; i++) simSlots[i] = 3;
+                // 08:30 a 09:30 Conducción a planta
+                for (let i = 34; i < 38; i++) simSlots[i] = 1;
+                // 09:30 a 16:30 Tiempos de espera por retraso de carga (7h)
+                for (let i = 38; i < 66; i++) simSlots[i] = 2;
+                // 16:30 a 17:30 Conducción retorno
+                for (let i = 66; i < 70; i++) simSlots[i] = 1;
+            }
+            actualizarVisuales();
+        }
+
+        function limpiarSimulador() {
+            simSlots.fill(0);
+            actualizarVisuales();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            inicializarSimulador();
+        });
+    </script>
+</body>
+</html>

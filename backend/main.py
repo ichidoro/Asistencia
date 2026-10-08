@@ -17,7 +17,7 @@ import uuid
 import os
 
 # Identificador único de ejecución para cache busting agnóstico
-STARTUP_ID = f"{str(uuid.uuid4())[:8]}_v64_scanner_libreta_fix"
+STARTUP_ID = f"{str(uuid.uuid4())[:8]}_v65_manual_180h"
 
 # Add project root to path for direct execution
 project_root = str(Path(__file__).parent.parent)
@@ -264,6 +264,14 @@ async def service_worker():
     if sw_path.exists():
         return FileResponse(sw_path, media_type="application/javascript",
                           headers={"Service-Worker-Allowed": "/"})
+    return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+@app.get("/manual-180h", include_in_schema=False)
+@app.get("/manual-choferes", include_in_schema=False)
+async def manual_choferes_180h():
+    manual_path = Path(__file__).parent.parent / "frontend" / "manual_choferes_180h.html"
+    if manual_path.exists():
+        return FileResponse(manual_path, media_type="text/html; charset=utf-8")
     return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 # 🥚
