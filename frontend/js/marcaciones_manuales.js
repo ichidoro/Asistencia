@@ -3078,10 +3078,14 @@ async function eliminarRegistroLibretaDia() {
             throw new Error(errMsg);
         }
 
+        let delData = null;
+        try { delData = await resp.json(); } catch (_) {}
         m180_dirty = false;
         window.m180_last_scanned_image = null;
         if (typeof showToast === 'function') {
-            showToast('Registro de libreta eliminado y día restaurado', 'success');
+            showToast(delData && delData.reasignado_de_chofer
+                ? 'Peoneta enlazado a un chofer: se le volvió a asignar el turno del chofer'
+                : 'Registro de libreta eliminado y día restaurado', 'success');
         }
 
         const modalEl = document.getElementById('modalMarcacion180h');

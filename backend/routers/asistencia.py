@@ -3258,6 +3258,9 @@ async def delete_libreta_180h(
     del día devolviéndolo a su estado natural (LIBRE o PENDIENTE).
     """
     try:
+        # Si el empleado es peoneta enlazado a un chofer ese día, borrarle el horario no lo deja sin turno:
+        # se le vuelve a asignar el del chofer (más abajo). Para desenlazarlo hay que sacarlo de la lista del chofer.
+        chofer_id = await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha)
         deleted = await service.repository.delete_libreta_180h(empleado_id, fecha)
         await service.repository.set_acompanantes_180h(empleado_id, fecha, [])
         if not deleted:
@@ -3274,7 +3277,22 @@ async def delete_libreta_180h(
         except Exception as photo_del_err:
             logger.warning(f"⚠️ Error eliminando foto física en disco: {photo_del_err}")
 
-        # Recalcular asistencia para volver al estado natural (LIBRE o PENDIENTE)
+        # Peoneta enlazado: reasignarle el turno del chofer (misma copia que hace el guardado de la libreta del chofer).
+        reasignado_de = None
+        if chofer_id is not None:
+            lib_chofer = await service.repository.get_libreta_180h(chofer_id, fecha)
+            if lib_chofer:
+                obs_ch = (lib_chofer.get('observaciones') or "")
+                obs_ch = obs_ch.split(" · Acompañante del chofer ID")[0].split("Acompañante del chofer ID")[0].rstrip(" ·")
+                await service.repository.upsert_libreta_180h({
+                    **lib_chofer,
+                    'empleado_id': empleado_id,
+                    'observaciones': obs_ch + (" · " if obs_ch else "") + f"Acompañante del chofer ID {chofer_id}"
+                })
+                reasignado_de = chofer_id
+                logger.info(f"🔗 Turno reasignado a peoneta emp={empleado_id} fecha={fecha} desde chofer {chofer_id}")
+
+        # Recalcular asistencia (turno del chofer si es peoneta enlazado; si no, vuelve a LIBRE o PENDIENTE)
         res_dia = await service.procesar_empleado_dia(empleado_id, fecha, save=True, force=True)
 
         try:
@@ -3290,7 +3308,9 @@ async def delete_libreta_180h(
 
         return {
             "status": "success",
-            "message": f"Registro de libreta del {fecha} eliminado correctamente.",
+            "message": (f"Registro eliminado, pero está enlazado al chofer ID {reasignado_de}: se le volvió a asignar el turno del chofer. "
+                        "Para quitárselo, sácalo de la lista de acompañantes del chofer.") if reasignado_de else f"Registro de libreta del {fecha} eliminado correctamente.",
+            "reasignado_de_chofer": reasignado_de,
             "resultado_asistencia": res_dia
         }
     except HTTPException:
