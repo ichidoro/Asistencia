@@ -1,0 +1,178 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODALES MODERNOS — capa visual solo de presentación
+   - Unifica encabezados, tarjetas, campos, botones y pies de los modales.
+   - No toca ids, clases que usa el JS, ni la lógica; tampoco la grilla.
+   - Se carga al final del <head>. Para revertir: quitar el <link> en index.html
+     o borrar este archivo.
+   - Tipografía: una sola familia de texto (Barlow, ya definida en el tema) y una
+     sola mono (JetBrains Mono) para cifras; reemplaza los `monospace` sueltos.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --m-navy: #14235c;
+  --m-navy-mid: #1b2f8f;
+  --m-blue: #3f6fd6;
+  --m-green: #4a8f24;
+  --m-red: #d9463a;
+  --m-ink: #1a2326;
+  --m-muted: #5a6a6a;
+  --m-line: #e3e9e9;
+  --m-soft: #f4f7f7;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/* ── Una sola mono para cifras: reemplaza `font-family: monospace` en línea ── */
+[style*="font-family:monospace"],
+[style*="font-family: monospace"],
+[style*="font-family:'Courier New'"],
+[style*="font-family: 'Courier New'"] {
+  font-family: var(--font-mono) !important;
+}
+.font-monospace { font-family: var(--font-mono) !important; }
+
+/* ── Marco del modal (todos menos el escáner a pantalla completa) ──────────── */
+.modal:not(#modalScannerLibreta) .modal-content {
+  border: 0 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 60px -12px rgba(13, 26, 82, .35), 0 0 0 1px rgba(13, 26, 82, .06) !important;
+  overflow: hidden;
+  position: relative;
+}
+.modal:not(#modalScannerLibreta) .modal-content::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--m-navy-mid), var(--m-blue) 55%, var(--m-green));
+}
+/* variantes de acento según el tipo de modal */
+.modal .modal-content:has(.modal-header.bg-danger)::before {
+  background: linear-gradient(90deg, #b3261e, #e5534b 60%, #e8890c) !important;
+}
+.modal .modal-content:has(.modal-header.bg-success)::before,
+#modal-compensar-he .modal-content::before,
+#modalMarcacion180h .modal-content::before {
+  background: linear-gradient(90deg, #2f7a14, #5aad2e) !important;
+}
+.modal .modal-content:has(.modal-header.bg-warning)::before,
+#modal-bonos-asignados .modal-content::before {
+  background: linear-gradient(90deg, #e8890c, #f5b942) !important;
+}
+#modal-validacion-jornada .modal-content::before {
+  background: linear-gradient(90deg, #5b2fc0, #8a63e8) !important;
+}
+.modal-backdrop.show { opacity: .55; backdrop-filter: blur(3px); }
+
+/* ── Encabezado claro, un solo estilo ──────────────────────────────────────── */
+.modal:not(#modalScannerLibreta) .modal-header {
+  background: #fff !important;
+  color: var(--m-navy) !important;
+  border-bottom: 1px solid var(--m-line) !important;
+  padding: 1.25rem 1.5rem 1rem !important;
+}
+.modal:not(#modalScannerLibreta) .modal-header .modal-title,
+.modal:not(#modalScannerLibreta) .modal-header h1,
+.modal:not(#modalScannerLibreta) .modal-header h2,
+.modal:not(#modalScannerLibreta) .modal-header h3,
+.modal:not(#modalScannerLibreta) .modal-header h4,
+.modal:not(#modalScannerLibreta) .modal-header h5,
+.modal:not(#modalScannerLibreta) .modal-header h6,
+.modal:not(#modalScannerLibreta) .modal-header .text-white,
+.modal:not(#modalScannerLibreta) .modal-header .text-dark {
+  color: var(--m-navy) !important;
+  font-weight: 700;
+}
+.modal:not(#modalScannerLibreta) .modal-header .small,
+.modal:not(#modalScannerLibreta) .modal-header .opacity-75,
+.modal:not(#modalScannerLibreta) .modal-header .text-white-50 {
+  color: var(--m-muted) !important;
+  opacity: 1 !important;
+}
+.modal .modal-header.bg-danger .modal-title,
+.modal .modal-header.bg-danger i { color: #8f2019 !important; }
+.modal .modal-header.bg-success .modal-title { color: #2f7a14 !important; }
+/* círculo/ícono del encabezado (antes translúcido sobre fondo oscuro) */
+.modal:not(#modalScannerLibreta) .modal-header [style*="rgba(255,255,255"] {
+  background: #e8efff !important;
+  color: var(--m-blue) !important;
+  backdrop-filter: none !important;
+}
+.modal:not(#modalScannerLibreta) .modal-header i { color: var(--m-blue); }
+.modal .modal-header.bg-danger i[class*="bi-"] { color: var(--m-red) !important; }
+.modal:not(#modalScannerLibreta) .modal-header .btn-close,
+.modal:not(#modalScannerLibreta) .modal-header .btn-close-white {
+  filter: none !important;
+  opacity: .65;
+  background-color: var(--m-soft);
+  border-radius: 50%;
+  padding: .55rem;
+  transition: opacity .15s, background-color .15s;
+}
+.modal:not(#modalScannerLibreta) .modal-header .btn-close:hover { opacity: 1; background-color: #e6ecee; }
+
+/* ── Cuerpo y pie ─────────────────────────────────────────────────────────── */
+.modal:not(#modalScannerLibreta) .modal-body { padding: 1.25rem 1.5rem !important; }
+.modal:not(#modalScannerLibreta) .modal-footer {
+  padding: .9rem 1.5rem !important;
+  background: #fafcfc;
+  border-top: 1px solid var(--m-line) !important;
+  gap: .5rem;
+}
+
+/* ── Campos ───────────────────────────────────────────────────────────────── */
+.modal .form-label,
+.modal label.small {
+  font-size: .68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--m-muted);
+}
+.modal .form-control,
+.modal .form-select {
+  border-radius: 10px !important;
+  border: 1px solid #d5dede !important;
+  transition: border-color .15s, box-shadow .15s;
+}
+.modal .form-control:focus,
+.modal .form-select:focus {
+  border-color: var(--m-blue) !important;
+  box-shadow: 0 0 0 4px rgba(63, 111, 214, .15) !important;
+}
+
+/* ── Avisos ───────────────────────────────────────────────────────────────── */
+.modal .alert { border-radius: 14px; border-width: 1px; }
+
+/* ── Botones ──────────────────────────────────────────────────────────────── */
+.modal .btn {
+  border-radius: 10px !important;
+  font-weight: 600;
+  transition: transform .12s, box-shadow .15s, filter .15s;
+}
+.modal .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 14px -6px rgba(13, 26, 82, .4); filter: brightness(1.04); }
+.modal .btn:active { transform: none; box-shadow: none; }
+.modal .btn:disabled, .modal .btn.disabled { transform: none; box-shadow: none; filter: none; }
+
+/* ── Tablas dentro de modales ─────────────────────────────────────────────── */
+.modal .table thead th {
+  font-size: .68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--m-muted);
+  background: var(--m-soft);
+  border-bottom: 1px solid var(--m-line);
+  white-space: nowrap;
+}
+.modal .table td { vertical-align: middle; }
+/* el historial de cierres es modal-lg: darle más ancho para que no parta las fechas */
+#modal-historial-cierres .modal-dialog { max-width: min(1100px, 94vw); }
+#modal-historial-cierres .table td:nth-child(1),
+#modal-historial-cierres .table td:nth-child(3) { white-space: nowrap; }
+
+/* ── Movimiento reducido ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .modal .btn, .modal .form-control, .modal .form-select { transition: none; }
+  .modal .btn:hover { transform: none; }
+}
