@@ -15,27 +15,64 @@
             width: 440px;
             height: 100vh;
             background: #fff;
-            box-shadow: -4px 0 32px rgba(0,0,0,0.15);
+            box-shadow: -24px 0 60px -12px rgba(13,26,82,0.35), 0 0 0 1px rgba(13,26,82,0.06);
             z-index: 9999;
             transition: right 0.35s cubic-bezier(.4,0,.2,1);
             display: flex; flex-direction: column;
-            border-left: 3px solid #10b981;
+            border-left: 0;
             font-family: var(--font-sans);
             overflow: hidden;
         }
         #panel-perdonazo.abierto { right: 0; }
-        #panel-perdonazo .panel-header {
-            background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
-            color: white; padding: 18px 20px 14px;
-            flex-shrink: 0;
+        #panel-perdonazo::before {
+            content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; z-index: 2;
+            background: linear-gradient(90deg, #2f7a14, #5aad2e);
         }
+        #panel-perdonazo .panel-header {
+            background: #fff; color: #14235c;
+            padding: 22px 20px 14px; flex-shrink: 0;
+            border-bottom: 1px solid #e3e9e9;
+        }
+        #panel-perdonazo .pz-ic {
+            width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+            background: #e5f4dc; color: #2f7a14;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+        #panel-perdonazo .pz-kicker {
+            font-size: 0.68rem; letter-spacing: .06em; text-transform: uppercase;
+            font-weight: 700; color: #5a6a6a;
+        }
+        #panel-perdonazo .pz-close {
+            margin-left: auto; width: 32px; height: 32px; border: 0; border-radius: 50%;
+            background: #f4f7f7; color: #5a6a6a; cursor: pointer; font-size: 0.95rem;
+            transition: background .15s;
+        }
+        #panel-perdonazo .pz-close:hover { background: #e6ecee; }
+        #panel-perdonazo .pz-label {
+            font-size: 0.68rem; font-weight: 700; letter-spacing: .06em;
+            text-transform: uppercase; color: #5a6a6a; display: block; margin-bottom: 5px;
+        }
+        #panel-perdonazo .pz-select {
+            width: 100%; padding: 8px 10px; border: 1px solid #d5dede; border-radius: 10px;
+            font-size: 0.82rem; background: #fff; color: #1a2326; font-weight: 600;
+        }
+        #panel-perdonazo .pz-select:focus {
+            outline: 0; border-color: #3f6fd6; box-shadow: 0 0 0 4px rgba(63,111,214,.15);
+        }
+        #panel-perdonazo .pz-btn {
+            border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer;
+            font-size: 0.85rem; transition: transform .12s, box-shadow .15s;
+        }
+        #panel-perdonazo .pz-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 14px -6px rgba(13,26,82,.4); }
+        #panel-perdonazo .pz-ok { flex: 1; background: #2f7a14; color: #fff; border: 0; }
+        #panel-perdonazo .pz-rev { background: #fff; color: #b3261e; border: 1px solid #e5534b; }
         #panel-perdonazo .panel-body {
             flex: 1; overflow-y: auto; padding: 16px;
         }
         #panel-perdonazo .panel-footer {
-            padding: 12px 16px;
-            border-top: 1px solid #e2e8f0;
-            background: #f8fafc;
+            padding: 14px 16px;
+            border-top: 1px solid #e3e9e9;
+            background: #fafcfc;
             flex-shrink: 0;
         }
         #panel-perdonazo .emp-row {
@@ -49,14 +86,14 @@
         #panel-perdonazo .emp-row:hover { background: #f0fdf4; border-color: #86efac; }
         #panel-perdonazo .emp-row.seleccionado { background: #dcfce7; border-color: #22c55e; }
         #panel-perdonazo .badge-estado {
-            font-size: 0.75rem; font-weight: 700; padding: 2px 6px;
-            border-radius: 999px; display: inline-block;
+            font-size: 0.75rem; font-weight: 700; padding: 2px 7px;
+            border-radius: 6px; display: inline-block; font-family: var(--font-mono, ui-monospace, monospace);
         }
         #panel-perdonazo .badge-deuda { background: #fee2e2; color: #dc2626; }
         #panel-perdonazo .badge-condonado { background: #dcfce7; color: #16a34a; }
         .perdonazo-overlay {
             position: fixed; inset: 0;
-            background: rgba(0,0,0,0.3);
+            background: rgba(13,26,82,0.35);
             z-index: 9998;
             display: none;
         }
@@ -78,21 +115,22 @@
         panel.id = 'panel-perdonazo';
         panel.innerHTML = `
             <div class="panel-header">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="pz-ic"><i class="bi bi-gift-fill"></i></div>
                     <div>
-                        <div style="font-size:0.7rem;opacity:0.8;letter-spacing:1px;text-transform:uppercase;">Perdonazo por Día</div>
-                        <div id="panel-perdonazo-titulo" style="font-size:1.1rem;font-weight:800;margin-top:2px;">Cargando...</div>
+                        <div class="pz-kicker">Perdonazo por día</div>
+                        <div id="panel-perdonazo-titulo" style="font-size:1.1rem;font-weight:800;margin-top:1px;color:#14235c;">Cargando...</div>
                     </div>
-                    <button onclick="cerrarPanelPerdonazo()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:1rem;">✕</button>
+                    <button class="pz-close" onclick="cerrarPanelPerdonazo()" aria-label="Cerrar">✕</button>
                 </div>
             </div>
             <div class="panel-body" id="panel-perdonazo-body">
                 <div style="text-align:center;padding:40px;color:#94a3b8;">Cargando empleados...</div>
             </div>
             <div class="panel-footer">
-                <div style="margin-bottom:10px;">
-                    <label for="panel-tipo-condonacion" style="font-size:0.75rem;font-weight:700;color:#374151;display:block;margin-bottom:5px;">¿Qué deuda condonar?</label>
-                    <select id="panel-tipo-condonacion" onchange="renderizarListaPerdonazo()" style="width:100%;padding:6px 10px;border:1px solid #d1fae5;border-radius:8px;font-size:0.8rem;background:#f0fdf4;color:#047857;font-weight:600;">
+                <div style="margin-bottom:12px;">
+                    <label for="panel-tipo-condonacion" class="pz-label">¿Qué deuda condonar?</label>
+                    <select id="panel-tipo-condonacion" class="pz-select" onchange="renderizarListaPerdonazo()">
                         <optgroup label="Tolerancias Presenciales (Minutos)">
                             <option value="1">Solo Salida Adelantada</option>
                             <option value="2">Solo Atraso</option>
@@ -104,10 +142,10 @@
                     </select>
                 </div>
                 <div style="display:flex;gap:8px;">
-                    <button onclick="ejecutarPerdonazoPanelSeleccionados()" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;font-size:0.85rem;">
+                    <button class="pz-btn pz-ok" onclick="ejecutarPerdonazoPanelSeleccionados()">
                         <i class="bi bi-gift-fill me-1"></i> Aplicar Perdonazo
                     </button>
-                    <button onclick="revocarPerdonazoPanelSeleccionados()" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;font-size:0.8rem;">
+                    <button class="pz-btn pz-rev" onclick="revocarPerdonazoPanelSeleccionados()">
                         <i class="bi bi-x-circle"></i> Revocar
                     </button>
                 </div>
