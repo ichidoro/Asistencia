@@ -6552,13 +6552,7 @@ function renderVistaAnalitica(respData, container) {
     </table>
     </div>
     <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
-        <span class="badge-status badge-state-success"><i class="bi bi-check-circle-fill me-1"></i>OK</span> Normal
-        <span class="badge-status badge-state-warning"><i class="bi bi-clock-fill me-1"></i>ATR</span> Atraso
-        <span class="badge-status badge-state-info"><i class="bi bi-box-arrow-left me-1"></i>SAD</span> Sal.Adelantada
-        <span class="badge-status badge-state-danger"><i class="bi bi-x-circle-fill me-1"></i>INA</span> Inasistencia
-        <span class="badge-status badge-state-neutral"><i class="bi bi-cup-hot-fill me-1"></i>LIB</span> Libre (Auto)
-        <span class="badge-status badge-state-warning"><i class="bi bi-calendar-heart-fill me-1"></i>FER</span> Feriado
-        <span class="badge-status badge-state-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>PER</span> Permiso
+        ${_leyendaEstadosHtml()}
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
     </div>`;
 
@@ -6698,6 +6692,28 @@ function _fallbackEstadoColor(codigo) {
     return m[codigo] || 'badge-state-neutral';
 }
 
+// Leyenda de la grilla: siglas e íconos salen de la tabla maestra de estados (Configuración › Estados),
+// con respaldo local; así nunca contradice lo que muestran las celdas.
+function _leyendaEstadosHtml() {
+    const c = window._estadosAsistencia || {};
+    const items = [
+        ['OK', 'Normal', '', 'OK', 'bi-check-circle-fill', 'badge-state-success'],
+        ['ATRASO', 'Atraso', '', 'ATR', 'bi-clock-fill', 'badge-state-warning'],
+        ['SALIDA_ADELANTADA', 'Sal. adelantada', '', 'SAL', 'bi-box-arrow-left', 'badge-state-info'],
+        ['INASISTENCIA', 'Inasistencia', '', 'INA', 'bi-x-circle-fill', 'badge-state-danger'],
+        ['LIBRE', 'Libre (auto)', '', 'LIB', 'bi-cup-hot-fill', 'badge-state-neutral'],
+        ['FERIADO', 'Feriado', 'badge-fer', 'FER', 'bi-calendar-heart-fill', 'badge-state-warning'],
+        ['PERMISO', 'Permiso', '', 'PER', 'bi-calendar-check-fill', 'badge-state-info'],
+        ['PENDIENTE', 'Pendiente', 'badge-pen', 'PEN', 'bi-hourglass-split', 'badge-state-warning'],
+        ['HORAS_EXTRAS', 'Horas extra', 'badge-he', 'HE', 'bi-clock-fill', 'badge-state-warning']
+    ];
+    return items.map(([cod, txt, extra, sigla, icono, cls]) => {
+        const e = c[cod] || {};
+        const clase = (cod === 'PENDIENTE' || cod === 'HORAS_EXTRAS') ? cls : (e.color_clase || cls);
+        return `<span class="badge-status ${clase} ${extra}"><i class="bi ${e.icono_bi || icono} me-1"></i>${e.short_label || sigla}</span> ${txt}`;
+    }).join('\n        ');
+}
+
 function _analiticaCellBadge(di) {
     if (!di || !di.estado) return '';
     let est = di.estado;
@@ -6822,6 +6838,8 @@ function _analiticaCellBadge(di) {
         tooltipTitle = `${jNombre} (${di.nomenclatura}) · ${goce}${pagador}`;
     } else if (badgeMap[est]) {
         [pillClass, label] = badgeMap[est];
+        // Variantes visuales (grilla en calma): distinguen estados que comparten color base
+        if (est === 'FERIADO') pillClass += ' badge-fer'; else if (est === 'PENDIENTE') pillClass += ' badge-pen';
         if (est === 'LIBRE') tooltipTitle = 'Día Libre (Asignación automática)';
         else if (est === 'FERIADO') tooltipTitle = 'Feriado legal / Irrenunciable';
         else if (est === 'INASISTENCIA') tooltipTitle = 'Inasistencia (Generada automáticamente)';
@@ -6845,7 +6863,7 @@ function _analiticaCellBadge(di) {
                 // REGLA DE NEGOCIO: Si fue rechazada en día libre/festivo, no abulta la grilla con badge especial
                 primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle} (Jornada rechazada)"` : ''}><span>${label}</span></div>`;
             } else if (ja.estado === 'HORAS_EXTRAS') {
-                const class_esp = 'badge-state-warning';
+                const class_esp = 'badge-state-warning badge-he';
                 const label_esp = esMasDos ? '+2 HE' : 'HE';
                 const icon_esp = '<i class="bi bi-clock-fill me-1"></i>';
                 const title_esp = 'Jornada Adicional Aprobada como Horas Extras al 50%';
