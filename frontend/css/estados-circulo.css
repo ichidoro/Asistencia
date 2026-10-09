@@ -62,33 +62,58 @@ body.estados-circulo .va-legend-bar .color-amarillo {
     background: linear-gradient(135deg, #d9830b, #b45f06) !important;
 }
 
-/* ── Varios estados: círculo + puntos de color ─────────────────────────── */
+/* ── Varios estados: TODOS visibles, el tamaño se adapta a la cantidad ──────
+   data-n="+k" (k = estados adicionales) lo pone el render de la grilla.
+   2 estados → 2 círculos en fila · 3-4 → rejilla 2×2 · 5-6 → rejilla 3×2 (solo color;
+   la sigla de cada uno está en el tooltip). El alto total nunca supera ~36 px. */
 body.estados-circulo .matrix-table-premium td.col-day .st-multi {
     position: relative;
-    display: grid !important;
-    grid-template-columns: 24px 8px;
-    grid-template-rows: repeat(3, 8px);
-    column-gap: 3px;
-    row-gap: 2px;
-    align-items: center;
-    width: fit-content !important;
-    max-width: none !important;
+    display: flex !important;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+    gap: 2px;
+    width: 100% !important;
+    max-width: 44px !important;
     margin: 0 auto !important;
 }
 body.estados-circulo .matrix-table-premium td.col-day .st-multi::after { content: none; }
-body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:first-child {
-    grid-column: 1;
-    grid-row: 1 / span 3;
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status { margin: 0 !important; flex: 0 0 auto; }
+
+/* 5 o más estados (base): rejilla 3×2, solo color */
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status {
+    width: 13px !important; height: 13px !important;
 }
-body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+2) {
-    width: 8px !important;
-    height: 8px !important;
-    grid-column: 2;
-    margin: 0 !important;
-    box-shadow: none !important;
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status > span { display: none !important; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi:not([data-n="+1"]):not([data-n="+2"]):not([data-n="+3"]) { max-width: 44px !important; gap: 2px 1px; }
+
+/* 2 estados */
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+1"] > .badge-status {
+    width: 21px !important; height: 21px !important;
 }
-body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+2) > span { display: none !important; }
-body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+5) { display: none !important; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+1"] > .badge-status > span { display: block !important; font-size: 0.5rem !important; letter-spacing: -0.3px; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+1"] > .badge-status[data-l="3"] > span { font-size: 0.42rem !important; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+1"] > .badge-status[data-l="4"] > span,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+1"] > .badge-status[data-l="5"] > span { font-size: 0.36rem !important; }
+
+/* 3 y 4 estados: rejilla 2×2 */
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+2"],
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+3"] { max-width: 38px !important; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+2"] > .badge-status,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+3"] > .badge-status {
+    width: 17px !important; height: 17px !important;
+}
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+2"] > .badge-status > span,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+3"] > .badge-status > span { display: block !important; font-size: 0.4rem !important; letter-spacing: -0.3px; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+2"] > .badge-status[data-l="3"] > span,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+3"] > .badge-status[data-l="3"] > span { font-size: 0.34rem !important; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+2"] > .badge-status[data-l="4"] > span,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+3"] > .badge-status[data-l="4"] > span,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+2"] > .badge-status[data-l="5"] > span,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi[data-n="+3"] > .badge-status[data-l="5"] > span { font-size: 0.3rem !important; }
+
+/* 7 o más: se muestran 6 (el resto, en el tooltip) */
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+7) { display: none !important; }
 
 /* ── Leyenda ───────────────────────────────────────────────────────────── */
 body.estados-circulo .va-legend-bar .badge-status {
