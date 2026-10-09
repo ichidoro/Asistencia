@@ -558,8 +558,14 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
         // Renderizar Turnos (solo si no es carga parcial de empleados)
         if (!onlyEmployees && turnoSelect) {
             const currentTurnoVal = turnoSelect.value;
-            turnoSelect.innerHTML = '<option value="">Todos los Horarios</option>' +
-                turnos.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+            // Agrupado por tipo cuando hay de ambos (misma regla que la grilla: tipo_programacion o 'TRANSPORTE')
+            const _esTurnoBolsa = t => t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA'
+                                    || String(t.nombre || '').toUpperCase().includes('TRANSPORTE');
+            const _optT = t => `<option value="${t.id}">${t.nombre}</option>`;
+            const _tB = turnos.filter(_esTurnoBolsa), _tC = turnos.filter(t => !_esTurnoBolsa(t));
+            turnoSelect.innerHTML = '<option value="">Todos los Horarios</option>' + ((_tB.length && _tC.length)
+                ? `<optgroup label="Ciclo inteligente">${_tC.map(_optT).join('')}</optgroup><optgroup label="Bolsa flexible">${_tB.map(_optT).join('')}</optgroup>`
+                : turnos.map(_optT).join(''));
 
             if (currentTurnoVal && turnos.find(t => t.id == currentTurnoVal)) {
                 turnoSelect.value = currentTurnoVal;
