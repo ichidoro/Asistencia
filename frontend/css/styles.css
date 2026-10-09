@@ -221,6 +221,11 @@ input[type="search"], .search-input, [class*="search"] input {
 
 #header-username {
     color: var(--text-color);
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    text-align: left;
 }
 
 /* --- Splash Screen Premium --- */
