@@ -5565,6 +5565,7 @@ window.getGridShow = function(f, hasBonos) {
         showIncidencias: s.showIncidencias === true,
         showHE: s.showHE === true,
         showDeudas: !esBolsa && s.showDeudas === true,
+        hasInc: !esBolsa,         // "Incidencias": no aplica a bolsa
         hasDeudas: !esBolsa,      // "Tiempo no trabajado": no aplica a bolsa
         hasSaldo: !esBolsa,       // "Saldo neto": no aplica a bolsa (su balance está en 180h / 88h)
         hayBolsa: esBolsa,        // grupos Bolsa (180h) y Espera (88h)
@@ -5579,7 +5580,7 @@ window.buildStickyCols = function(sh, bonosNombres) {
     const cols = {
         empleado: { width: 260 },
         bonos: { width: sh.hasBonos ? (sh.showBonos ? bonosNombres.length * 65 : C) : 0 },
-        incidencias: { width: sh.showIncidencias ? sh.nInc * 65 : C },
+        incidencias: { width: sh.hasInc ? (sh.showIncidencias ? sh.nInc * 65 : C) : 0 },
         he: { width: sh.showHE ? heW : C },
         deudas: { width: sh.hasDeudas ? (sh.showDeudas ? 5 * 65 : C) : 0 },
         saldo: { width: sh.hasSaldo ? 84 : 0 }
@@ -5837,7 +5838,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 
 window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols) {
     const { emp } = r;
-    const sh = {nInc: hayBolsa ? 4 : 6, hasDeudas: !hayBolsa, hasSaldo: !hayBolsa, heFull: !hayBolsa};
+    const sh = {nInc: hayBolsa ? 4 : 6, hasInc: !hayBolsa, hasDeudas: !hayBolsa, hasSaldo: !hayBolsa, heFull: !hayBolsa};
     const _I = sh.nInc === 6 ? {per:0,atr:1,sad:2,ina:3,esp:4,tot:5} : {per:0,ina:1,esp:2,tot:3};
     const _heFull = sh.heFull;
     const isSaldoZero = Math.abs(r.saldo) < 0.0083;
@@ -5927,7 +5928,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
             </div>
         </td>
         ${bonoCells}
-        ${showIncidencias ? `
+        ${!sh.hasInc ? '' : showIncidencias ? `
         <td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;left:${getStickyLeftLocal('incidencias', _I.per)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_per||''}</td>
         ${_I.atr!==undefined?`<td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.atr)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_atr||''}</td>`:''}
         ${_I.sad!==undefined?`<td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.sad)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_sad||''}</td>`:''}
@@ -6056,7 +6057,7 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
     const totalsRowHtml = `<tr class="fw-bold text-center" style="font-size:0.78rem; border-top: 2px solid #e2e8f0; background: #f8fafc;">
         <td class="sticky-col-analitica text-start ps-2" style="position:sticky; left:0; z-index:60; background: #f8fafc; color: #475569; font-weight: 800; width:260px; min-width:260px; max-width:260px;">TOTALES</td>
         ${bonosTotalsCell}
-        ${showIncidencias ? `
+        ${!sh.hasInc ? '' : showIncidencias ? `
         <td class="sticky-premium-col" style="position:sticky; z-index:60; border-left:3px solid #f59e0b;left:${getStickyLeftLocal('incidencias', _I.per)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_per||''}</td>
         ${_I.atr!==undefined?`<td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', _I.atr)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_atr||''}</td>`:''}
         ${_I.sad!==undefined?`<td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeftLocal('incidencias', _I.sad)}px;${getStickyWidthStyleLocal('incidencias')}">${tot.cnt_sad||''}</td>`:''}
@@ -6405,7 +6406,7 @@ function renderVistaAnalitica(respData, container) {
     const totalsRow = `<tr class="fw-bold text-center" style="font-size:0.78rem; border-top: 2px solid #e2e8f0; background: #f8fafc;">
         <td class="sticky-col-analitica text-start ps-2" style="position:sticky; left:0; z-index:60; background: #f8fafc; color: #475569; font-weight: 800; width:260px; min-width:260px; max-width:260px;">TOTALES</td>
         ${bonosTotalsCell}
-        ${showIncidencias ? `
+        ${!sh.hasInc ? '' : showIncidencias ? `
         <td class="sticky-premium-col" style="position:sticky; z-index:60; border-left:3px solid #f59e0b;left:${getStickyLeft('incidencias', _I.per)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_per||''}</td>
         ${_I.atr!==undefined?`<td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', _I.atr)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_atr||''}</td>`:''}
         ${_I.sad!==undefined?`<td class="sticky-premium-col" style="position:sticky; z-index:60; left:${getStickyLeft('incidencias', _I.sad)}px;${getStickyWidthStyle('incidencias')}">${tot.cnt_sad||''}</td>`:''}
@@ -6490,7 +6491,7 @@ function renderVistaAnalitica(respData, container) {
     // ── 9. HTML final ────────────────────────────────────────────────────────
     // (hayBolsa y showSaldoMeta ya están definidos arriba, antes de bodyRows)
 
-    const incHeadersTop = showIncidencias 
+    const incHeadersTop = !sh.hasInc ? '' : showIncidencias 
         ? `<th colspan="${sh.nInc}" class="text-start px-2 th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:${sh.nInc*65}px; min-width:${sh.nInc*65}px; max-width:${sh.nInc*65}px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-flag-fill me-1" style="font-size:0.75rem;color:#f59e0b"></i><span class="fw-bold">Incidencias</span> <button class="btn btn-sm btn-link text-muted p-0 ms-1" onclick="vaToggleCol('showIncidencias')" title="Contraer"><i class="bi bi-chevron-left"></i></button></th>` 
         : `<th rowspan="2" class="align-middle px-1 text-center th-bento th-bento-warning sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias')}px; width:76px; min-width:76px; max-width:76px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><button class="btn btn-sm btn-link text-muted p-0 mb-1" onclick="vaToggleCol('showIncidencias')" title="Expandir Incidencias"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-flag-fill d-block mb-1" style="font-size:0.85rem;color:#f59e0b"></i><span class="gc-lbl">Incidencias</span></th>`;
     
@@ -6524,7 +6525,7 @@ function renderVistaAnalitica(respData, container) {
             <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}" title="Horas de espera acumuladas en el ciclo">ACUM.</th>
             <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Balance de espera">BALANCE</th>` : '';
 
-    const incHeadersSub = showIncidencias ? `
+    const incHeadersSub = (sh.hasInc && showIncidencias) ? `
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.per)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PERM</th>
             ${_I.atr!==undefined?`<th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.atr)}px;${getStickyWidthStyle('incidencias')}" title="Días con atraso">ATR</th>`:''}
             ${_I.sad!==undefined?`<th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.sad)}px;${getStickyWidthStyle('incidencias')}" title="Días con salida adelantada">S.ADL</th>`:''}
