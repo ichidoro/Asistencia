@@ -25,12 +25,11 @@ body.estados-chip .matrix-table-premium td.col-day .badge-status {
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    border: 0 !important;
     line-height: 1 !important;
     letter-spacing: 0 !important;
-    color: #fff !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.22) !important;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25) !important;
+    /* Colores, bordes, halos (Flúor), pulsos y destellos (Glitter) son los originales de cada color:
+       aquí solo se cambia la forma y el tamaño. */
+    animation-fill-mode: none;
 }
 body.estados-chip .matrix-table-premium td.col-day .badge-status:only-child { margin: 0 auto !important; }
 body.estados-chip .matrix-table-premium td.col-day .badge-status[data-hide] { display: none !important; }
@@ -40,21 +39,13 @@ body.estados-chip .va-legend-bar .badge-status > span {
     position: static !important;
     transform: none !important;
     display: block !important;
-    color: #fff !important;
+    color: inherit;
     font-weight: 800 !important;
     letter-spacing: -0.1px;
     text-transform: uppercase;
 }
 body.estados-chip .matrix-table-premium td.col-day .badge-status > span i,
 body.estados-chip .va-legend-bar .badge-status > span i { display: none !important; }
-
-/* Estados "apagados" (gris) también con sigla blanca; amarillo/naranja un tono más profundo (contraste) */
-body.estados-chip .matrix-table-premium td.col-day .badge-state-neutral > span,
-body.estados-chip .matrix-table-premium td.col-day .color-gris > span { color: #fff !important; }
-body.estados-chip .matrix-table-premium td.col-day .badge-state-warning,
-body.estados-chip .matrix-table-premium td.col-day .color-amarillo,
-body.estados-chip .va-legend-bar .badge-state-warning,
-body.estados-chip .va-legend-bar .color-amarillo { background: linear-gradient(135deg, #d9830b, #b45f06) !important; }
 
 /* Contenedores (varios estados o principal doble): una sola caja que reparte los chips */
 body.estados-chip .matrix-table-premium td.col-day .st-multi,
@@ -117,8 +108,8 @@ body.estados-rect .matrix-table-premium td.col-day[data-cnt="4"] .badge-status[d
 /* Leyenda */
 body.estados-rect .va-legend-bar .badge-status {
     position: relative !important; display: inline-flex !important; align-items: center; justify-content: center;
-    width: 34px !important; height: 18px !important; margin: 0 6px 0 0 !important; padding: 0 !important; border: 0 !important;
-    border-radius: 5px !important; vertical-align: middle; color: #fff !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.22) !important;
+    width: 34px !important; height: 18px !important; margin: 0 6px 0 0 !important; padding: 0 !important;
+    border-radius: 5px !important; vertical-align: middle;
 }
 body.estados-rect .va-legend-bar .badge-status > span { font-size: 0.62rem !important; }
 
@@ -155,7 +146,7 @@ body.estados-circulo .matrix-table-premium td.col-day[data-cnt="4"] .badge-statu
 /* Leyenda */
 body.estados-circulo .va-legend-bar .badge-status {
     position: relative !important; display: inline-flex !important; align-items: center; justify-content: center;
-    width: 22px !important; height: 22px !important; margin: 0 6px 0 0 !important; padding: 0 !important; border: 0 !important;
-    border-radius: 50% !important; vertical-align: middle; color: #fff !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25) !important;
+    width: 22px !important; height: 22px !important; margin: 0 6px 0 0 !important; padding: 0 !important;
+    border-radius: 50% !important; vertical-align: middle;
 }
 body.estados-circulo .va-legend-bar .badge-status > span { font-size: 0.55rem !important; }
