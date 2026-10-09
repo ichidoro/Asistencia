@@ -58,9 +58,12 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          return caches.match(event.request);
-        })
+        .catch(() =>
+          // Sin red: lo guardado, o una respuesta de error válida (undefined rompía respondWith)
+          caches.match(event.request).then((cached) =>
+            cached || new Response('', { status: 503, statusText: 'Sin conexión' })
+          )
+        )
     );
     return;
   }
