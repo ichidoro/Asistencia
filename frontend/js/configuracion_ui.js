@@ -182,6 +182,48 @@ const COLOR_OPTIONS = [
     { value: 'color-glitter-plata', label: '🪙 Glitter Plata', preview: '#94a3b8' },
 ];
 
+// ── Helpers de la pestaña Estados ───────────────────────────────────────────
+function _escAttr(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function _estadoSiglaDefecto(codigo) { return codigo === 'JORNADA_ESPECIAL' ? 'ESP' : String(codigo).substring(0, 3); }
+// Vista previa idéntica a la grilla: sigla sobre línea de color, dentro de una celda de día real
+function _estadoPreviewHtml(color, icono, sigla) {
+    return `<table class="matrix-table-premium mb-0 mx-auto" style="width:84px;border:0;background:transparent" aria-hidden="true"><tbody><tr>
+        <td class="col-day text-center p-0" style="height:38px;min-width:0;width:84px;border:1px solid #e2e8f0;background:#fff;position:relative;overflow:visible">
+            <span class="badge-status ${_escAttr(color)}"><span><i class="bi ${_escAttr(icono || 'bi-circle')}"></i>${_escAttr(sigla)}</span></span>
+        </td></tr></tbody></table>`;
+}
+const _COLORES_ESPECIALES = /^color-(fluor|pulso|glitter)-/;
+// Marca siglas repetidas (bloquea al guardar) y colores repetidos (solo avisa)
+window.refreshEstadosAvisos = function() {
+    const activos = _estadosConfigList.filter(e => document.getElementById(`estado-activo-${e.codigo}`)?.checked);
+    const sig = {}, col = {};
+    activos.forEach(e => {
+        const sg = (document.getElementById(`estado-short-${e.codigo}`)?.value || _estadoSiglaDefecto(e.codigo)).trim().toUpperCase();
+        const cl = document.getElementById(`estado-color-${e.codigo}`)?.value || '';
+        (sig[sg] = sig[sg] || []).push(e.codigo);
+        (col[cl] = col[cl] || []).push(e.codigo);
+    });
+    _estadosConfigList.forEach(e => {
+        const inp = document.getElementById(`estado-short-${e.codigo}`);
+        const aviso = document.getElementById(`estado-aviso-${e.codigo}`);
+        if (!inp || !aviso) return;
+        const esAct = activos.some(a => a.codigo === e.codigo);
+        const sg = (inp.value || _estadoSiglaDefecto(e.codigo)).trim().toUpperCase();
+        const cl = document.getElementById(`estado-color-${e.codigo}`)?.value || '';
+        const dupSig = esAct && (sig[sg] || []).length > 1 ? (sig[sg] || []).filter(c => c !== e.codigo) : [];
+        const dupCol = esAct && (col[cl] || []).length > 1 ? (col[cl] || []).filter(c => c !== e.codigo) : [];
+        inp.classList.toggle('is-invalid', dupSig.length > 0 || !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(inp.value.trim() || 'X'));
+        let h = '';
+        if (dupSig.length) h += `<div class="text-danger small fw-semibold"><i class="bi bi-x-octagon-fill"></i> Etiqueta repetida con ${dupSig.map(_escAttr).join(', ')}</div>`;
+        if (dupCol.length) h += `<div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Mismo color que ${dupCol.map(_escAttr).join(', ')}</div>`;
+        if (_COLORES_ESPECIALES.test(cl)) h += `<div class="text-muted small"><i class="bi bi-info-circle"></i> En la grilla se ve como su color base</div>`;
+        aviso.innerHTML = h;
+    });
+};
+
 function renderEstadosConfig() {
     const container = document.getElementById('estados-config-container');
     if (!container) return;
@@ -203,13 +245,16 @@ function renderEstadosConfig() {
     </div>
     <div class="alert alert-info py-2 small mb-3">
         <i class="bi bi-info-circle me-1"></i>
-        Los cambios se aplican en tiempo real. Recarga la grilla de marcaciones para ver el efecto.
+        Los cambios se aplican en tiempo real; recarga la grilla de marcaciones para ver el efecto.
+        La vista previa muestra cómo se ve en la grilla: la <strong>etiqueta</strong> sobre una línea del <strong>color</strong> elegido.
+        Las etiquetas no pueden repetirse entre estados activos; si dos estados comparten color solo se avisa.
+        Los colores Flúor, Pulso y Glitter se ven como su color base en la grilla.
     </div>
     <div class="table-responsive">
     <table class="table table-hover align-middle" id="tabla-estados-config">
         <thead class="table-light">
             <tr>
-                <th style="width:110px">Código</th>
+                <th style="width:190px">Código</th>
                 <th style="width:130px">Nombre Display</th>
                 <th style="width:80px" class="text-center">Etiqueta (Max 5)</th>
                 <th>Descripción</th>
@@ -233,21 +278,22 @@ function renderEstadosConfig() {
             <td>
                 <span class="badge bg-light text-dark border fw-bold font-monospace">${e.codigo}</span>
                 ${e.es_sistema ? '<div class="small text-muted" style="font-size: 0.75rem">Sistema</div>' : ''}
+                <div id="estado-aviso-${e.codigo}"></div>
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm"
-                    id="estado-nombre-${e.codigo}" value="${e.nombre_display || ''}"
+                    id="estado-nombre-${e.codigo}" maxlength="40" value="${_escAttr(e.nombre_display || '')}"
                     placeholder="Nombre visible">
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm text-center font-monospace"
-                    id="estado-short-${e.codigo}" value="${e.short_label || (e.codigo === 'JORNADA_ESPECIAL' ? 'ESP' : e.codigo.substring(0,3))}"
+                    id="estado-short-${e.codigo}" value="${_escAttr(e.short_label || _estadoSiglaDefecto(e.codigo))}"
                     placeholder="Etiq" maxlength="5"
                     oninput="previewEstadoBadge('${e.codigo}')">
             </td>
             <td>
                 <input type="text" class="form-control form-control-sm"
-                    id="estado-desc-${e.codigo}" value="${e.descripcion || ''}"
+                    id="estado-desc-${e.codigo}" maxlength="240" value="${_escAttr(e.descripcion || '')}"
                     placeholder="Descripción del estado">
             </td>
             <td>
@@ -258,22 +304,20 @@ function renderEstadosConfig() {
             </td>
             <td>
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text p-1"><i id="estado-icon-preview-${e.codigo}" class="bi ${e.icono_bi || 'bi-circle'}"></i></span>
+                    <span class="input-group-text p-1"><i id="estado-icon-preview-${e.codigo}" class="bi ${_escAttr(e.icono_bi || 'bi-circle')}"></i></span>
                     <input type="text" class="form-control form-control-sm font-monospace"
-                        id="estado-icono-${e.codigo}" value="${e.icono_bi || ''}"
+                        id="estado-icono-${e.codigo}" value="${_escAttr(e.icono_bi || '')}"
                         placeholder="bi-circle-fill"
                         oninput="previewEstadoBadge('${e.codigo}')">
                 </div>
             </td>
             <td class="text-center" id="preview-${e.codigo}">
-                <span id="estado-preview-badge-${e.codigo}" class="badge-status ${e.color_clase} px-2 py-1" style="font-size:0.75rem">
-                    <i class="bi ${e.icono_bi || 'bi-circle'} me-1"></i>${e.short_label || (e.codigo === 'JORNADA_ESPECIAL' ? 'ESP' : e.codigo.substring(0,3))}
-                </span>
+                ${_estadoPreviewHtml(e.color_clase, e.icono_bi, e.short_label || _estadoSiglaDefecto(e.codigo))}
             </td>
             <td class="text-center">
                 <div class="form-check form-switch d-flex justify-content-center">
                     <input class="form-check-input" type="checkbox" role="switch"
-                        id="estado-activo-${e.codigo}" ${e.activo ? 'checked' : ''}>
+                        id="estado-activo-${e.codigo}" ${e.activo ? 'checked' : ''} onchange="refreshEstadosAvisos()">
                 </div>
             </td>
             <td class="text-center">
@@ -286,20 +330,20 @@ function renderEstadosConfig() {
 
     html += `</tbody></table></div>`;
     container.innerHTML = html;
+    refreshEstadosAvisos();
 }
 
 window.previewEstadoBadge = function(codigo) {
     const color = document.getElementById(`estado-color-${codigo}`)?.value || 'badge-state-neutral';
     const icono = document.getElementById(`estado-icono-${codigo}`)?.value || 'bi-circle';
-    const badge = document.getElementById(`estado-preview-badge-${codigo}`);
+    const cont = document.getElementById(`preview-${codigo}`);
     const iconPrev = document.getElementById(`estado-icon-preview-${codigo}`);
-    if (badge) {
-        badge.className = `badge-status ${color} px-2 py-1`;
-        badge.style.fontSize = '0.75rem';
-        const displayLabel = document.getElementById(`estado-short-${codigo}`)?.value || (codigo === 'JORNADA_ESPECIAL' ? 'ESP' : codigo.substring(0,3));
-        badge.innerHTML = `<i class="bi ${icono} me-1"></i>${displayLabel}`;
+    if (cont) {
+        const displayLabel = document.getElementById(`estado-short-${codigo}`)?.value || _estadoSiglaDefecto(codigo);
+        cont.innerHTML = _estadoPreviewHtml(color, icono, displayLabel);
     }
-    if (iconPrev) iconPrev.className = `bi ${icono}`;
+    if (iconPrev) iconPrev.className = `bi ${/^bi-[a-z0-9-]+$/.test(icono) ? icono : 'bi-circle'}`;
+    refreshEstadosAvisos();
 };
 
 window.saveEstado = async function(codigo) {
@@ -310,13 +354,27 @@ window.saveEstado = async function(codigo) {
     const icono = document.getElementById(`estado-icono-${codigo}`)?.value?.trim();
     const activo = document.getElementById(`estado-activo-${codigo}`)?.checked ? 1 : 0;
 
+    // Validación previa (el servidor vuelve a validar)
+    if (!nombre) { showToast('El nombre visible no puede quedar vacío', 'error'); return; }
+    if (shortLabel && !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(shortLabel)) { showToast('La etiqueta admite 1 a 5 letras, números, punto, + o guion', 'error'); return; }
+    if (icono && !/^bi-[a-z0-9-]+$/.test(icono)) { showToast("El icono debe tener el formato 'bi-nombre'", 'error'); return; }
+    if (/[<>]/.test(`${nombre}${desc}${shortLabel}`)) { showToast('No uses los caracteres < o > en los textos', 'error'); return; }
+    refreshEstadosAvisos();
+    if (document.getElementById(`estado-short-${codigo}`)?.classList.contains('is-invalid')) { showToast('Corrige la etiqueta antes de guardar (repetida o con formato no válido)', 'error'); return; }
+
     try {
         const res = await fetch(`/api/configuracion/estados/${codigo}/`, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre_display: nombre, short_label: shortLabel, descripcion: desc, color_clase: color, icono_bi: icono, activo })
         });
-        if (!res.ok) throw new Error((await res.json()).detail || 'Error guardando');
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof out.detail === 'string' ? out.detail : 'Error guardando');
+        if (out.saved && out.saved.short_label !== undefined) {
+            const inp = document.getElementById(`estado-short-${codigo}`);
+            if (inp) inp.value = out.saved.short_label;      // el servidor la deja en mayúsculas
+        }
+        (out.warnings || []).forEach(w => showToast(w, 'warning'));
 
         // Actualizar caché global para que los badges se vean de inmediato sin recargar la página
         if (window._estadosAsistencia && window._estadosAsistencia[codigo]) {
@@ -328,8 +386,9 @@ window.saveEstado = async function(codigo) {
         }
 
         showToast(`Estado '${codigo}' guardado correctamente`, 'success');
+        previewEstadoBadge(codigo);
     } catch(e) {
-        alert('Error: ' + e.message);
+        showToast('No se guardó: ' + e.message, 'error');
     }
 };
 // ==========================================

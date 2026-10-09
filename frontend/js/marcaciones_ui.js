@@ -6776,7 +6776,12 @@ window._loadEstadosAsistencia = async function() {
         if (!resp.ok) return;
         const lista = await resp.json();
         window._estadosAsistencia = {};
-        lista.forEach(e => { window._estadosAsistencia[e.codigo] = e; });
+        // Estos textos se pintan dentro de HTML (badges, leyenda, tooltips): se escapan una sola vez al cargar
+        const _esc = v => (typeof v === 'string') ? v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') : v;
+        lista.forEach(e => {
+            ['nombre_display', 'short_label', 'descripcion', 'icono_bi', 'color_clase'].forEach(k => { if (k in e) e[k] = _esc(e[k]); });
+            window._estadosAsistencia[e.codigo] = e;
+        });
         console.log(`[Estados] ${lista.length} estados cargados desde BD.`);
     } catch(err) {
         console.warn('[Estados] Error cargando estados, usando defaults:', err);
