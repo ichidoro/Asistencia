@@ -1,0 +1,145 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ESTADOS DE LA GRILLA · "Sigla limpia + subrayado segmentado"
+   ───────────────────────────────────────────────────────────────────────────
+   - La sigla va en texto sobrio; el color del estado (el configurado en
+     Configuración → Estados, vía su clase color-* / badge-state-*) se muestra
+     como una línea de 4 px bajo la sigla.
+   - Celda con varios estados: la línea se divide en un segmento por estado y
+     aparece «+N» (el detalle completo está en el tooltip).
+   - Sin degradados extra, halos ni animaciones: los colores Flúor / Pulso /
+     Glitter se ven como su color base dentro de la grilla.
+   - Alcance: solo la grilla (.matrix-table-premium td.col-day). La leyenda usa
+     las mismas reglas dentro de .va-legend-bar.
+   Para revertir: quitar el <link> de este archivo en index.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Insignia = línea de color ─────────────────────────────────────────── */
+.matrix-table-premium td.col-day .badge-status {
+    position: relative !important;
+    display: block !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    max-width: 58px;
+    height: 4px !important;
+    min-height: 0 !important;
+    margin: 13px auto 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+    transition: none !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+}
+
+/* La sigla (el <span> interno) flota sobre la línea */
+.matrix-table-premium td.col-day .badge-status > span {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 4px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.7rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--ui-ink-deep, #1a2326);
+    text-shadow: none;
+}
+
+/* Sin íconos en la grilla (el color y la sigla bastan; el ícono va en el tooltip) */
+.matrix-table-premium td.col-day .badge-status > span i {
+    display: none;
+}
+
+/* Estado "libre" (gris): sigla atenuada para que el día de trabajo destaque */
+.matrix-table-premium td.col-day .badge-state-neutral > span,
+.matrix-table-premium td.col-day .color-gris > span {
+    color: #8f9ba8;
+}
+
+/* ── Celda con varios estados: línea segmentada ────────────────────────── */
+.matrix-table-premium td.col-day .st-multi {
+    position: relative;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 2px;
+    width: 100%;
+    max-width: 58px;
+    margin: 13px auto 0;
+    padding: 0 !important;
+    line-height: 0;
+}
+
+.matrix-table-premium td.col-day .st-multi > .badge-status {
+    position: static !important;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    margin: 0 !important;
+}
+
+/* Solo el primer estado muestra la sigla; ancla = el contenedor */
+.matrix-table-premium td.col-day .st-multi > .badge-status > span {
+    display: none;
+}
+
+.matrix-table-premium td.col-day .st-multi > .badge-status:first-child > span {
+    display: block;
+}
+
+.matrix-table-premium td.col-day .st-multi::after {
+    content: attr(data-n);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 4px);
+    margin-left: 14px;
+    transform: translateX(0);
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #7a8791;
+}
+
+/* Si la sigla del primero es larga, desplaza el +N un poco más */
+.matrix-table-premium td.col-day .st-multi[data-long]::after {
+    margin-left: 20px;
+}
+
+/* ── Leyenda: misma lógica (sigla sobre línea de color) ───────────────── */
+.va-legend-bar .badge-status {
+    position: relative !important;
+    display: inline-block !important;
+    width: 34px !important;
+    height: 4px !important;
+    min-height: 0 !important;
+    margin: 12px 6px 0 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transform: none !important;
+    vertical-align: middle;
+    font-size: 0 !important;
+    line-height: 0 !important;
+}
+.va-legend-bar .badge-status > span {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 3px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.3px;
+    color: var(--ui-ink-deep, #1a2326);
+}
+.va-legend-bar .badge-status > span i { display: none; }

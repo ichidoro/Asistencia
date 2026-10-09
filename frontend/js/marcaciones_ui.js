@@ -6784,7 +6784,7 @@ function _leyendaEstadosHtml() {
     return items.map(([cod, txt, extra, sigla, icono, cls]) => {
         const e = c[cod] || {};
         const clase = (cod === 'PENDIENTE' || cod === 'HORAS_EXTRAS') ? cls : (e.color_clase || cls);
-        return `<span class="badge-status ${clase} ${extra}"><i class="bi ${e.icono_bi || icono} me-1"></i>${e.short_label || sigla}</span> ${txt}`;
+        return `<span class="badge-status ${clase} ${extra}"><span><i class="bi ${e.icono_bi || icono} me-1"></i>${e.short_label || sigla}</span></span> ${txt}`;
     }).join('\n        ');
 }
 
@@ -7093,7 +7093,8 @@ function _analiticaCellBadge(di) {
     // Si hay badges adicionales → contenedor columna; si no → badge simple
     let resultHtml = '';
     if (extraBadges.length > 0) {
-        resultHtml = `<div class="d-flex flex-column align-items-center justify-content-center gap-1" style="line-height:1.2; padding:2px 0;">
+        // Grilla de estados "subrayado segmentado": un segmento por estado (.st-multi) y «+N» en la esquina
+        resultHtml = `<div class="st-multi" data-n="+${extraBadges.length}">
             ${primaryBadge}
             ${extraBadges.join('\n')}
         </div>`;
