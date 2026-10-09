@@ -145,27 +145,7 @@ app.add_middleware(_TiempoPeticionMiddleware, umbral_ms=int(_os.environ.get("SLO
 # Montar frontend (archivos estáticos)
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
-    class CachedStaticFiles(StaticFiles):
-        """StaticFiles con Cache-Control: las URLs versionadas (?v=<startup_id>, que cambia en cada
-        deploy) se cachean un año; fuentes/imagenes 7 dias; el resto se revalida por ETag (304)."""
-        _LONG = (".woff2", ".woff", ".ttf", ".png", ".jpg", ".jpeg", ".ico", ".svg", ".webp", ".mp3")
-        # Librerías de terceros que no llevan ?v= (cambian solo al actualizar la librería, y ahí se cambia el archivo):
-        # 30 días en vez de revalidar contra el servidor en cada visita.
-        _VENDOR_SUFIJOS = (".min.js", ".min.css")
-        _VENDOR_NOMBRES = ("chart.js", "bootstrap-icons.css", "all.min.css")
-
-        async def get_response(self, path, scope):
-            resp = await super().get_response(path, scope)
-            if resp.status_code == 200:
-                if b"v=" in scope.get("query_string", b""):
-                    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-                elif path.lower().endswith(self._LONG):
-                    resp.headers["Cache-Control"] = "public, max-age=604800"
-                elif path.lower().endswith(self._VENDOR_SUFIJOS) or path.rsplit("/", 1)[-1].lower() in self._VENDOR_NOMBRES or path.lower().startswith("js/libs/"):
-                    resp.headers["Cache-Control"] = "public, max-age=2592000"
-                else:
-                    resp.headers["Cache-Control"] = "no-cache"
-            return resp
+    from backend.services.static_files import CachedStaticFiles
 
     app.mount("/static", CachedStaticFiles(directory=str(frontend_path)), name="static")
     # Configurar Jinja2 Templates para cache busting dinámico

@@ -40,3 +40,4 @@ google-auth==2.28.1
 
 asyncpg==0.30.0
 orjson>=3.10
+rjsmin==1.2.5
