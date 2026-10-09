@@ -74,3 +74,11 @@
 .tp-ft { padding: 8px 16px; background: #fafcfc; border-top: 1px solid #eef2f2; font-size: .64rem; color: #5a6a6a; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .tp-ft kbd { font-family: var(--font-mono, monospace); font-size: .6rem; background: #fff; border: 1px solid #d5dede; border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; color: #14235c; }
 .tp-ft .push { margin-left: auto; }
+
+/* ── Pantallas táctiles: sin atajos de teclado/mouse; se explica el gesto ── */
+.tp-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+    .tp-kb { display: none !important; }
+    .tp-touch { display: inline !important; }
+    #grid-fly-tooltip.tp-pinned { box-shadow: 0 10px 40px rgba(15,23,42,.35); }
+}

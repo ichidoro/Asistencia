@@ -6582,7 +6582,7 @@ function renderVistaAnalitica(respData, container) {
     </div>
     <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
         ${_leyendaEstadosHtml()}
-        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i>Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span>
+        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
     </div>`;
 
     window._gridApplyPinCap();
@@ -6616,12 +6616,15 @@ function renderVistaAnalitica(respData, container) {
 
         function _positionFlyTip(e) {
             const PAD = 14;
+            flyTip.style.maxWidth = Math.min(460, window.innerWidth - 16) + 'px';
             const tipW = flyTip.offsetWidth  || 340;
             const tipH = flyTip.offsetHeight || 200;
             let x = e.clientX + PAD;
             let y = e.clientY + PAD;
             if (x + tipW > window.innerWidth  - 8) x = e.clientX - tipW - PAD;
             if (y + tipH > window.innerHeight - 8) y = e.clientY - tipH - PAD;
+            if (x < 4 || x + tipW > window.innerWidth - 4) x = Math.max(4, (window.innerWidth - tipW) / 2);   // pantalla angosta: centrado
+            if (y < 4) y = 4;
             flyTip.style.left = Math.max(4, x) + 'px';
             flyTip.style.top  = Math.max(4, y) + 'px';
         }
@@ -6655,6 +6658,7 @@ function renderVistaAnalitica(respData, container) {
                 } else if (ev.key === 'Escape' && flyTip.classList.contains('tp-pinned')) { _unpinFlyTip(); }
             });
             document.addEventListener('mousedown', (ev) => {
+                if (flyTip._pinnedAt && Date.now() - flyTip._pinnedAt < 900) return;   // eventos de mouse emulados al soltar el dedo
                 if (flyTip.classList.contains('tp-pinned') && !flyTip.contains(ev.target)) _unpinFlyTip();
             }, true);
         }
@@ -6696,6 +6700,55 @@ function renderVistaAnalitica(respData, container) {
 
         // Seguridad extra: click en cualquier lado lo cierra
         document.addEventListener('click', _hideFlyTip, { passive: true, once: false });
+
+        // ── Pantallas táctiles: mantener pulsada una celda muestra el detalle completo (equivale a Shift) ──
+        if (tableEl && !tableEl._lpBound) {
+            tableEl._lpBound = true;
+            let lpTimer = null, lpStart = null, lpFired = false;
+            const LP_MS = 480, LP_MOVE = 10;
+            const clearLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+            tableEl.addEventListener('touchstart', (e) => {
+                if (e.touches.length !== 1) { clearLp(); return; }
+                const td = e.target.closest('td[data-grid-tooltip]');
+                if (!td || window._gridTooltipEnabled === false) return;
+                const t = e.touches[0];
+                lpStart = { x: t.clientX, y: t.clientY };
+                lpFired = false;
+                clearLp();
+                lpTimer = setTimeout(() => {
+                    lpTimer = null; lpFired = true;
+                    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
+                    _showFlyTip(td, { clientX: lpStart.x, clientY: lpStart.y });
+                    flyTip._pinnedAt = Date.now();
+                    flyTip.classList.add('tp-pinned');
+                    flyTip.style.pointerEvents = 'auto';
+                    flyTip.style.maxHeight = (window.innerHeight - 16) + 'px';
+                    flyTip.style.overflowY = 'auto';
+                    _positionFlyTip({ clientX: lpStart.x, clientY: lpStart.y });
+                }, LP_MS);
+            }, { passive: true });
+            tableEl.addEventListener('touchmove', (e) => {
+                if (!lpTimer || !lpStart) return;
+                const t = e.touches[0];
+                if (Math.abs(t.clientX - lpStart.x) > LP_MOVE || Math.abs(t.clientY - lpStart.y) > LP_MOVE) clearLp();
+            }, { passive: true });
+            ['touchend', 'touchcancel'].forEach(ev => tableEl.addEventListener(ev, clearLp, { passive: true }));
+            // Tras una pulsación larga no debe abrirse el modal de acciones
+            tableEl.addEventListener('click', (e) => {
+                if (lpFired) { e.stopPropagation(); e.preventDefault(); lpFired = false; }
+            }, true);
+            // El menú contextual del navegador (pulsación larga en Android) estorba
+            tableEl.addEventListener('contextmenu', (e) => {
+                if (e.target.closest('td[data-grid-tooltip]') && window.matchMedia('(pointer:coarse)').matches) e.preventDefault();
+            });
+        }
+        // Tocar fuera del detalle fijado lo cierra
+        if (!flyTip._touchOutBound) {
+            flyTip._touchOutBound = true;
+            document.addEventListener('touchstart', (ev) => {
+                if (flyTip.classList.contains('tp-pinned') && !flyTip.contains(ev.target)) _unpinFlyTip();
+            }, { passive: true, capture: true });
+        }
 
     }, 100);
 }
@@ -7528,7 +7581,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
             <div class="tp-bar">${segs}${marks}</div>
             <div class="tp-tick"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
             <div class="tp-lg"><span><b style="background:#059669"></b>Conducción</span><span><b style="background:#4f46e5"></b>Auxiliares</span><span><b style="background:#d97706"></b>Espera</span><span><b style="background:#0284c7"></b>Descanso</span>${marks ? '<span style="margin-left:auto"><b style="background:#14235c;width:2px;height:10px"></b>reloj</span>' : ''}</div>
-            <div style="margin-top:8px">${rows}${extraN > 0 ? `<div class="tp-more">+ ${extraN} tramos más · mantén <kbd style="font-family:var(--font-mono,monospace);font-size:.6rem;border:1px solid #d5dede;border-radius:4px;padding:0 4px">Shift</kbd> para verlos</div>` : ''}</div>
+            <div style="margin-top:8px">${rows}${extraN > 0 ? `<div class="tp-more">+ ${extraN} tramos más · <span class="tp-kb">mantén <kbd style="font-family:var(--font-mono,monospace);font-size:.6rem;border:1px solid #d5dede;border-radius:4px;padding:0 4px">Shift</kbd> para verlos</span><span class="tp-touch">mantén pulsada la celda para verlos</span></div>` : ''}</div>
         </div>`;
         if (slotsData.minConduccion > 0) {
             const bad = maxCond > 300, pct = Math.min(100, Math.round(maxCond / 300 * 100));
@@ -7562,7 +7615,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
         ${acumHtml}
         <div class="tp-ft">
             ${(mEnt !== null || mSal !== null) && hasSlots ? `<span><i class="bi bi-fingerprint"></i> <span class="tp-mono">${di.hora_entrada_real || '—'} → ${di.hora_salida_real || '—'}</span></span>` : ''}
-            <span class="push"><kbd>Clic</kbd> libreta</span><span><kbd>2 clics</kbd> justificar</span><span><kbd>Shift</kbd> fijar</span>
+            <span class="push tp-kb"><kbd>Clic</kbd> libreta</span><span class="tp-kb"><kbd>2 clics</kbd> justificar</span><span class="tp-touch push"><kbd>Toque</kbd> libreta · <kbd>2 toques</kbd> justificar</span><span class="tp-kb"><kbd>Shift</kbd> fijar</span><span class="tp-touch">Mantén pulsado: detalle completo</span>
         </div>
     </div>`;
 
@@ -8428,7 +8481,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         ${kpiHtml}
         ${evSection}
         ${extras ? `<div class="tp-sec">${extras}</div>` : ''}
-        <div class="tp-ft"><span><kbd>Clic</kbd> acciones</span><span><kbd>2 clics</kbd> justificar</span><span><kbd>Shift</kbd> fijar</span></div>
+        <div class="tp-ft"><span class="tp-kb"><kbd>Clic</kbd> acciones</span><span class="tp-kb"><kbd>2 clics</kbd> justificar</span><span class="tp-touch"><kbd>Toque</kbd> acciones · <kbd>2 toques</kbd> justificar</span><span class="tp-kb"><kbd>Shift</kbd> fijar</span><span class="tp-touch">Mantén pulsado: detalle completo</span></div>
     </div>`;
 
     return _escAttr(html);

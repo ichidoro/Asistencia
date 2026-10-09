@@ -22,16 +22,27 @@
 }
 
 /* ── Encabezados opacos ─────────────────────────────────────────────────── */
-.matrix-table-premium thead th {
+/* (styles.css fuerza un degradado casi transparente con `thead tr:first-child th`;
+   se iguala esa especificidad para ganar) */
+.matrix-table-premium thead tr th,
+.matrix-table-premium thead tr:first-child th {
     background-image: none !important;
-    background-color: #f1f4fb;
+    background-color: #f1f4fb !important;
 }
-.matrix-table-premium thead th.th-bento { background-color: #ffffff !important; }
-.matrix-table-premium thead th.th-bento-sub { background-color: #f4f6fa !important; }
-.matrix-table-premium thead th[style*="background:#f0fdf4"] { background-color: #e8f8ee !important; }
-.matrix-table-premium thead th[style*="background:#faf5ff"] { background-color: #f6efff !important; }
-.matrix-table-premium thead th[style*="background:#fffbeb"] { background-color: #fff6dc !important; }
-.matrix-table-premium thead th[style*="background:#f0f7ff"] { background-color: #e6f1ff !important; }
+.matrix-table-premium thead tr th.sticky-col-analitica,
+.matrix-table-premium thead tr:first-child th.sticky-col-analitica { background-color: #eef1f8 !important; }
+.matrix-table-premium thead tr th.th-bento,
+.matrix-table-premium thead tr:first-child th.th-bento { background-color: #ffffff !important; }
+.matrix-table-premium thead tr th.th-bento-sub,
+.matrix-table-premium thead tr:first-child th.th-bento-sub { background-color: #f4f6fa !important; }
+.matrix-table-premium thead tr th[style*="background:#f0fdf4"],
+.matrix-table-premium thead tr:first-child th[style*="background:#f0fdf4"] { background-color: #e8f8ee !important; }
+.matrix-table-premium thead tr th[style*="background:#faf5ff"],
+.matrix-table-premium thead tr:first-child th[style*="background:#faf5ff"] { background-color: #f6efff !important; }
+.matrix-table-premium thead tr th[style*="background:#fffbeb"],
+.matrix-table-premium thead tr:first-child th[style*="background:#fffbeb"] { background-color: #fff6dc !important; }
+.matrix-table-premium thead tr th[style*="background:#f0f7ff"],
+.matrix-table-premium thead tr:first-child th[style*="background:#f0f7ff"] { background-color: #e6f1ff !important; }
 .matrix-table-premium tfoot td.sticky-premium-col,
 .matrix-table-premium tfoot td.sticky-col-analitica {
     background-image: none !important;
@@ -168,3 +179,11 @@
     }
     .matrix-table-premium th.sticky-saldo-col { width: 84px !important; min-width: 84px !important; max-width: 84px !important; }
 }
+
+/* Fila resaltada (hover / toque): el resaltado era translúcido y dejaba ver el texto de atrás */
+.matrix-table-premium tbody tr:hover td.sticky-col-analitica,
+.matrix-table-premium tbody tr:hover td.sticky-premium-col {
+    background-color: #eceffc !important;
+    background-image: none !important;
+}
+.matrix-table-premium tbody td.sticky-col-analitica { background-image: none !important; }
