@@ -46,10 +46,10 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
     soloNegativo: false,
     soloConHE: false,
     showBonos: false,
-    showHE: false,
+    showHE: null,         // null = según tipo: ciclo contraído, bolsa abierto (solo tiene la columna Aprobadas)
     showDeudas: false,
     showIncidencias: false,
-    showSaldoMeta: false, // Todos los grupos arrancan contraídos (nombre completo visible)
+    showSaldoMeta: null,  // null = según tipo: Bolsa/Espera abiertos en bolsa flexible
     tabTipo: null         // Pestaña activa en áreas con ambos tipos: 'ciclo' | 'bolsa'
 };
 
@@ -5532,10 +5532,10 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
     soloNegativo: false,
     soloConHE: false,
     showBonos: false,
-    showHE: false,
+    showHE: null,         // null = según tipo: ciclo contraído, bolsa abierto (solo tiene la columna Aprobadas)
     showDeudas: false,
     showIncidencias: false,
-    showSaldoMeta: false, // Todos los grupos arrancan contraídos (nombre completo visible)
+    showSaldoMeta: null,  // null = según tipo: Bolsa/Espera abiertos en bolsa flexible
     tabTipo: null         // Pestaña activa en áreas con ambos tipos: 'ciclo' | 'bolsa'
 };
 
@@ -5563,13 +5563,13 @@ window.getGridShow = function(f, hasBonos) {
         hasBonos,
         showBonos: s.showBonos === true,
         showIncidencias: s.showIncidencias === true,
-        showHE: s.showHE === true,
+        showHE: (s.showHE ?? esBolsa) === true,
         showDeudas: !esBolsa && s.showDeudas === true,
         hasInc: !esBolsa,         // "Incidencias": no aplica a bolsa
         hasDeudas: !esBolsa,      // "Tiempo no trabajado": no aplica a bolsa
         hasSaldo: !esBolsa,       // "Saldo neto": no aplica a bolsa (su balance está en 180h / 88h)
         hayBolsa: esBolsa,        // grupos Bolsa (180h) y Espera (88h)
-        showSaldoMeta: esBolsa && s.showSaldoMeta === true,
+        showSaldoMeta: esBolsa && (s.showSaldoMeta ?? true) === true,
         heFull: !esBolsa,         // HE: ciclo = Pend/Apr/Rech/Tot; bolsa = solo aprobadas (exceso sobre la meta)
         nInc: esBolsa ? 4 : 6     // bolsa: sin ATR ni S.ADL
     };
@@ -7151,7 +7151,13 @@ window.vaToggleBonos = function() {
 }
 
 window.vaToggleCol = function(key) {
-    window.vistaAnaliticaState[key] = !window.vistaAnaliticaState[key];
+    const st = window.vistaAnaliticaState;
+    const esB = !!(window._gridFlags && window._gridFlags.esBolsa);
+    // showHE y showSaldoMeta tienen valor por defecto según el tipo (null): se alterna el valor efectivo
+    const actual = (key === 'showHE') ? (st.showHE ?? esB)
+                 : (key === 'showSaldoMeta') ? (st.showSaldoMeta ?? esB)
+                 : st[key];
+    st[key] = !actual;
     if (stateMarcacionesApp.data) {
         const container = document.getElementById('marcaciones-view-container');
         renderVistaAnalitica(stateMarcacionesApp.data, container);
