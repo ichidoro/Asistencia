@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks, Query
 from typing import List, Dict, Any
 from backend.services.configuracion_service import ConfiguracionService
@@ -584,6 +585,29 @@ async def get_estados_asistencia(
     return [dict(r) for r in rows]
 
 
+# Clases de color que el frontend sabe dibujar (Configuración → Estados + las del seed original)
+_COLORES_ESTADO_VALIDOS = {
+    'color-verde', 'color-azul', 'color-rojo', 'color-amarillo', 'color-naranja', 'color-purpura',
+    'color-rosa', 'color-cian', 'color-lima', 'color-indigo', 'color-teal', 'color-gris', 'color-negro',
+    'color-fluor-verde', 'color-fluor-azul', 'color-fluor-amarillo', 'color-fluor-rosa',
+    'color-pulso-rojo', 'color-pulso-verde', 'color-pulso-azul', 'color-glitter-oro', 'color-glitter-plata',
+    'badge-state-success', 'badge-state-danger', 'badge-state-warning', 'badge-state-info',
+    'badge-state-neutral', 'bg-dark text-white', 'badge-inasistencia-compensada-he', 'badge-compensatorio',
+}
+_RE_SIGLA = re.compile(r"^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$")
+_RE_ICONO = re.compile(r"^bi-[a-z0-9-]{1,60}$")
+_RE_TEXTO_SEGURO = re.compile(r"^[^<>\x00-\x08\x0b\x0c\x0e-\x1f]*$")
+
+
+def _sigla_efectiva(row: dict) -> str:
+    """Misma regla que el frontend: sigla propia o, si no hay, las 3 primeras letras del código."""
+    sl = (row.get('short_label') or '').strip()
+    if sl:
+        return sl.upper()
+    cod = row.get('codigo') or ''
+    return 'ESP' if cod == 'JORNADA_ESPECIAL' else cod[:3].upper()
+
+
 @router.put("/estados/{codigo}/")
 async def update_estado_asistencia(
     codigo: str,
@@ -595,15 +619,71 @@ async def update_estado_asistencia(
     Actualiza los campos visuales de un estado (nombre_display, descripcion,
     color_clase, icono_bi, activo).
     El campo 'codigo' es inmutable — es la clave de BD que usa el motor.
+
+    Validaciones: texto sin < > ni caracteres de control (se pinta en HTML), sigla de 1–5
+    caracteres sin repetir entre estados activos, color e icono con formato conocido.
+    Un color repetido entre estados activos NO se bloquea: se devuelve en `warnings`.
     """
     row = await db.fetch_one("SELECT * FROM estados_asistencia WHERE codigo = ?", (codigo,))
     if not row:
         raise HTTPException(status_code=404, detail=f"Estado '{codigo}' no encontrado")
+    row = dict(row)
 
     allowed = ['nombre_display', 'short_label', 'descripcion', 'color_clase', 'icono_bi', 'activo', 'orden']
     updates = {k: v for k, v in payload.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail="No hay campos válidos para actualizar")
+
+    # ── Validación de formato ────────────────────────────────────────────────
+    for campo, maximo in (('nombre_display', 40), ('descripcion', 240), ('short_label', 5)):
+        if campo in updates and updates[campo] is not None:
+            val = str(updates[campo]).strip()
+            if len(val) > maximo:
+                raise HTTPException(status_code=422, detail=f"'{campo}' admite hasta {maximo} caracteres")
+            if not _RE_TEXTO_SEGURO.match(val):
+                raise HTTPException(status_code=422, detail=f"'{campo}' no puede contener < > ni caracteres de control")
+            updates[campo] = val
+    if 'nombre_display' in updates and not updates['nombre_display']:
+        raise HTTPException(status_code=422, detail="El nombre visible no puede quedar vacío")
+    if 'short_label' in updates:
+        sl = updates['short_label'] or ''
+        if sl and not _RE_SIGLA.match(sl):
+            raise HTTPException(status_code=422, detail="La etiqueta admite 1 a 5 letras, números, punto, + o guion")
+        updates['short_label'] = sl.upper()
+    if 'icono_bi' in updates:
+        ic = (updates['icono_bi'] or '').strip()
+        if ic and not _RE_ICONO.match(ic):
+            raise HTTPException(status_code=422, detail="El icono debe tener el formato 'bi-nombre' (Bootstrap Icons)")
+        updates['icono_bi'] = ic
+    if 'color_clase' in updates:
+        col = (updates['color_clase'] or '').strip()
+        if col != row.get('color_clase') and col not in _COLORES_ESTADO_VALIDOS:
+            raise HTTPException(status_code=422, detail=f"Color no válido: '{col}'")
+        updates['color_clase'] = col
+    if 'activo' in updates:
+        updates['activo'] = 1 if updates['activo'] in (1, True, '1', 'true') else 0
+
+    # ── Sigla única entre estados activos ────────────────────────────────────
+    final = {**row, **updates}
+    warnings = []
+    cambia_sigla = _sigla_efectiva(final) != _sigla_efectiva(row) or int(row.get('activo') or 0) != int(final.get('activo') or 0)
+    if int(final.get('activo') or 0) == 1 and cambia_sigla:
+        mi_sigla = _sigla_efectiva(final)
+        otros = [dict(r) for r in await db.fetch_all(
+            "SELECT * FROM estados_asistencia WHERE activo = 1 AND codigo <> ?", (codigo,))]
+        choque = [o['codigo'] for o in otros if _sigla_efectiva(o) == mi_sigla]
+        if choque:
+            raise HTTPException(
+                status_code=409,
+                detail=f"La etiqueta '{mi_sigla}' ya la usa el estado {', '.join(choque)}. Elige otra.")
+
+    if int(final.get('activo') or 0) == 1:
+        otros_act = [dict(r) for r in await db.fetch_all(
+            "SELECT * FROM estados_asistencia WHERE activo = 1 AND codigo <> ?", (codigo,))]
+        mismo_color = [o['codigo'] for o in otros_act if (o.get('color_clase') or '') == (final.get('color_clase') or '')]
+        if mismo_color:
+            warnings.append(f"El color de '{codigo}' es igual al de: {', '.join(mismo_color)}. "
+                            "En la grilla costará distinguirlos.")
 
     from datetime import datetime
     updates['updated_at'] = datetime.now().isoformat()
@@ -612,7 +692,8 @@ async def update_estado_asistencia(
     values = list(updates.values()) + [codigo]
     await db.execute(f"UPDATE estados_asistencia SET {set_clause} WHERE codigo = ?", values)
     logger.info(f"✏️ Estado '{codigo}' actualizado por usuario {current_user.username}: {updates}")
-    return {"success": True, "codigo": codigo, "message": "Estado actualizado correctamente"}
+    return {"success": True, "codigo": codigo, "message": "Estado actualizado correctamente",
+            "saved": {k: v for k, v in updates.items() if k != 'updated_at'}, "warnings": warnings}
 
 
 @router.post("/estados/seed/")
