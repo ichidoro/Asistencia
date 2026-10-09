@@ -20,6 +20,9 @@ from loguru import logger
 
 from backend.core.config import settings
 from backend.repositories.asistencia import AsistenciaRepository
+from backend.services.libreta_corte import (
+    obtener_corte_libreta, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
+)
 from backend.repositories.empleado import EmpleadoRepository
 from backend.services.quantum_matrix_engine import (
     QuantumPhaseTopology,
@@ -2755,8 +2758,18 @@ class AsistenciaService:
             res_rrhh = await db.fetch_one(q_rrhh, (fecha_fin, fecha_inicio))
             periodo_cerrado = res_rrhh['count'] > 0 if res_rrhh else False
 
+        # Régimen de control de cada día (reloj biométrico antes del corte, libreta desde el corte)
+        corte_libreta = await obtener_corte_libreta(db)
+        for _eid, _cells in matrix.items():
+            _inf = _cells.get('info') or {}
+            for _f, _cell in _cells.items():
+                if _f != 'info' and isinstance(_cell, dict):
+                    _cell['modalidad_dia'] = regimen_del_dia(
+                        _f, _inf.get('modalidad_control'), _inf.get('tipo_programacion'), corte_libreta)
+
         return {
             'matrix': matrix,
+            'corte_libreta': corte_libreta,
             'empleados': empleados,
             'feriados': feriados_list,
             'periodo': {
@@ -3078,7 +3091,7 @@ class AsistenciaService:
             "count": count
         }
 
-    async def purgar_y_recalcular_libreta_180h(self, fecha_desde: str = "2026-10-01") -> Dict[str, Any]:
+    async def purgar_y_recalcular_libreta_180h(self, fecha_desde: Optional[str] = None) -> Dict[str, Any]:
         """
         Purga todas las marcaciones biométricas de reloj físico (logs_raw donde manual=0 o manual IS NULL)
         para todos los empleados asignados a turnos cuya modalidad de control sea 'LIBRETA_180H'
@@ -3089,6 +3102,10 @@ class AsistenciaService:
         con 0 horas trabajadas, 0 deuda y sin marcas de reloj.
         """
         db = self.repository.db
+        # Sin fecha explícita, se usa la fecha de corte configurada (Configuración → ajuste de libreta 180h)
+        fecha_desde = normalizar_fecha_corte(fecha_desde) or await obtener_corte_libreta(db)
+        if not fecha_desde:
+            raise ValueError("No hay fecha de corte de libreta configurada ni se indicó 'fecha_desde'.")
         logger.info(f"🧹 [Libreta 180h] Iniciando purga de marcas de reloj y recálculo desde {fecha_desde}...")
 
         # 1. Buscar asignaciones relevantes
@@ -3186,8 +3203,8 @@ class AsistenciaService:
         self,
         empleado_origen_id: int,
         empleado_destino_id: int,
-        fecha_desde: str = "2026-10-01",
-        fecha_hasta: str = "2026-10-05",
+        fecha_desde: str,
+        fecha_hasta: str,
         observacion_override: Optional[str] = None
     ) -> Dict[str, Any]:
         """

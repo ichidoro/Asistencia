@@ -18,6 +18,7 @@ from backend.services.empleado_service import EmpleadoService
 from backend.repositories.empleado import EmpleadoRepository
 from backend.repositories.turno import TurnoRepository
 from backend.core.database import db
+from backend.services.libreta_corte import obtener_corte_libreta, regimen_del_dia, REGIMEN_LIBRETA
 from backend.schemas.empleado import EmpleadoCreate
 
 # Singleton: una sola instancia del scraper compartida por todos los SyncService.
@@ -1178,6 +1179,7 @@ class SyncService:
             # Mapa de [rut_limpio] -> empleado_id (para acotar recálculo al batch)
             rut_to_emp_id = {}
             from datetime import timedelta
+            corte_libreta = await obtener_corte_libreta(db)   # fecha de corte reloj → libreta (configurable)
             for asig in asigs_raw:
                 rut_key = str(asig['rut']).replace(".", "").replace("-", "").strip()
                 rut_to_emp_id[rut_key] = asig['emp_id']
@@ -1193,14 +1195,13 @@ class SyncService:
                 
                 mod_control = str(asig.get('modalidad_control') or 'RELOJ').strip().upper()
                 tipo_prog = str(asig.get('tipo_programacion') or '').strip().upper()
-                is_libreta_shift = (mod_control == 'LIBRETA_180H')
-                is_bolsa = tipo_prog in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
 
                 curr = start_dt
                 while curr <= end_dt:
                     c_str = curr.strftime("%Y-%m-%d")
-                    # Blindaje: los días bajo Libreta 180h / Sin Reloj van a libreta_dates_gate y NO al reloj
-                    if is_libreta_shift or (is_bolsa and c_str >= '2026-10-01'):
+                    # Blindaje: los días bajo Libreta 180h / Sin Reloj van a libreta_dates_gate y NO al reloj.
+                    # El régimen de cada día lo decide la fecha de corte configurada (libreta_corte.py).
+                    if regimen_del_dia(c_str, mod_control, tipo_prog, corte_libreta) == REGIMEN_LIBRETA:
                         libreta_dates_gate[rut_key].add(c_str)
                     else:
                         asig_map_gate[rut_key].add(c_str)

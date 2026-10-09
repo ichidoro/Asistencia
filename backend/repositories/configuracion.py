@@ -5,6 +5,8 @@ from backend.schemas.bono import BonoCreate, BonoReglaCreate, BonoAsignacionCrea
 from backend.schemas.justificacion import JustificacionTipoCreate, JustificacionCreate
 import json
 
+from backend.services.libreta_corte import CLAVE_CORTE_LIBRETA, VALOR_INICIAL_CORTE_LIBRETA, DESCRIPCION_CORTE_LIBRETA
+
 class ConfiguracionRepository:
     _bonos_cache = None
     _last_auto_heal_time = 0.0
@@ -219,7 +221,8 @@ class ConfiguracionRepository:
                 ("asistencia_emergencia_gap_horas", "4.0", "Horas de gap para segmentación de marcas de emergencia"),
                 ("asistencia_emergencia_banda_horas", "2.0", "Horas de holgura para la banda de tolerancia envolvente"),
                 ("asistencia_emergencia_jornada_limite_horas", "3.0", "Horas límite para calificar bloque como jornada especial en vez de horas extras directas"),
-                ("asistencia_max_extras_ordinarias_dia_habil", "240", "Minutos límite de horas extras ordinarias en día hábil antes de convertirse en especial (100% del bloque)")
+                ("asistencia_max_extras_ordinarias_dia_habil", "240", "Minutos límite de horas extras ordinarias en día hábil antes de convertirse en especial (100% del bloque)"),
+                (CLAVE_CORTE_LIBRETA, VALOR_INICIAL_CORTE_LIBRETA, DESCRIPCION_CORTE_LIBRETA)
             ]
             await self.db.executemany(
                 "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",

@@ -3348,7 +3348,7 @@ async def delete_libreta_180h(
 
 
 class PurgaMarcasRelojRequest(BaseModel):
-    fecha_desde: Optional[str] = "2026-10-01"
+    fecha_desde: Optional[str] = None   # None = usar la fecha de corte configurada
 
 
 @router.post("/libreta-180h/purgar-marcas-reloj/")
@@ -3364,7 +3364,7 @@ async def purgar_marcas_reloj_libreta_180h(
     permanezcan estrictamente como PENDIENTE sin marcas de reloj.
     """
     try:
-        f_desde = (payload.fecha_desde if payload and payload.fecha_desde else "2026-10-01")
+        f_desde = (payload.fecha_desde if payload and payload.fecha_desde else None)
         resultado = await service.purgar_y_recalcular_libreta_180h(fecha_desde=f_desde)
 
         try:

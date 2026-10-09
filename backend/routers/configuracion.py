@@ -1,4 +1,5 @@
 import re
+from backend.services.libreta_corte import CLAVE_CORTE_LIBRETA, normalizar_fecha_corte
 from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks, Query
 from typing import List, Dict, Any
 from backend.services.configuracion_service import ConfiguracionService
@@ -486,7 +487,15 @@ async def set_ajuste(
             msg_error = "Debe ser un número entero válido mayor o igual a 0." if clave == "bioalba_dias_volatilidad" else "Debe ser un número entero válido mayor a 0."
             raise HTTPException(status_code=400, detail=f"Valor inválido para {clave}: {msg_error}")
 
+    if clave == CLAVE_CORTE_LIBRETA:
+        fecha_ok = normalizar_fecha_corte(valor)
+        if not fecha_ok:
+            raise HTTPException(status_code=400, detail="La fecha de corte debe tener el formato AAAA-MM-DD y ser una fecha válida.")
+        valor = fecha_ok
+
     success = await service.set_ajuste(clave, valor)
+    if clave == CLAVE_CORTE_LIBRETA:
+        logger.warning(f"🗓️ Fecha de corte reloj→libreta 180h cambiada a {valor} por {current_user.username}")
     return {"success": success, "message": "Ajuste guardado"}
 
 # --- NOTIFICACIONES POR AREA ---
