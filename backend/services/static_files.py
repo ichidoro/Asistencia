@@ -54,6 +54,9 @@ class CachedStaticFiles(StaticFiles):
         if resp.status_code in (200, 304):
             if b"v=" in scope.get("query_string", b""):
                 resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            elif path.lower().endswith((".woff2", ".woff")):
+                # Fuentes: el nombre incluye el peso/versión; 30 días sin revalidar
+                resp.headers["Cache-Control"] = "public, max-age=2592000, immutable"
             elif path.lower().endswith(self._LONG):
                 resp.headers["Cache-Control"] = "public, max-age=604800"
             elif path.lower().endswith(self._VENDOR_SUFIJOS) or path.rsplit("/", 1)[-1].lower() in self._VENDOR_NOMBRES or path.lower().startswith("js/libs/"):

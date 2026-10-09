@@ -26,7 +26,8 @@
     <!-- Custom styles (MUST load after Bootstrap for proper override) -->
     <link rel="stylesheet" href="/static/css/bundle-base.css?v={{ startup_id }}">
     <!-- Cropper.js CSS para Escáner de Libreta 180h -->
-    <link rel="stylesheet" href="/static/css/cropper.min.css">
+    <link rel="preload" href="/static/css/cropper.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/static/css/cropper.min.css"></noscript>
 
     <!-- Non-blocking Icon Fonts (Preload + swap) -->
     <!-- bootstrap-icons: fuente precargada y CSS no diferido (evita el salto de layout al llegar los iconos) -->
