@@ -314,7 +314,9 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
             (di && (di.modalidad_control === 'LIBRETA_180H' || di.origen === 'LIBRETA_180H' || di.slots_96))
         );
 
-        if (isLibreta) {
+        // Antes de la fecha de corte el día se controló por reloj: no corresponde cargar libreta
+        const diaPorReloj = typeof window.esDiaControlPorReloj === 'function' && window.esDiaControlPorReloj(di, dateStr, empInfo);
+        if (isLibreta && !diaPorReloj) {
             btnMarcacion180h.classList.remove('d-none');
         } else {
             btnMarcacion180h.classList.add('d-none');

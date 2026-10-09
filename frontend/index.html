@@ -2211,6 +2211,29 @@
                                             </div>
                                         </div>
 
+                                        <!-- Tarjeta Control Bolsa Flexible: reloj → libreta -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border-0 shadow-sm">
+                                                <div class="card-header bg-white fw-bold py-3">
+                                                    <i class="bi bi-journal-check text-success me-2"></i>Bolsa Flexible: del reloj a la libreta
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="mb-3">
+                                                        <label for="ajuste-libreta-corte" class="form-label fw-bold small text-muted">Fecha desde la que se usa libreta</label>
+                                                        <div class="input-group">
+                                                            <input type="date" class="form-control" id="ajuste-libreta-corte">
+                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_libreta_180h_bolsa_desde', 'ajuste-libreta-corte')" title="Guardar"><i class="bi bi-save"></i></button>
+                                                        </div>
+                                                        <div class="form-text">
+                                                            <strong>Antes</strong> de esta fecha los horarios de bolsa se controlan con las marcas del reloj biométrico;
+                                                            <strong>desde</strong> ella, con la libreta ingresada a mano. Cambiarla no recalcula los días ya guardados:
+                                                            después de cambiarla, recalcula el período.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Tarjeta Sincronización BioAlba -->
                                         <div class="col-md-6">
                                             <div class="card h-100 border-0 shadow-sm">

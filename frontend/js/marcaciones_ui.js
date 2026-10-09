@@ -5551,6 +5551,26 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
 //  · Bolsa flexible:    Bonos · Incidencias (sin ATR/S.ADL) · Horas extra (solo aprobadas) · Bolsa 180h · Espera 88h
 // Todos los grupos arrancan contraídos; cada uno conserva su botón de expandir/contraer.
 window.GRID_COLLAPSED_W = 76;
+
+// ── Corte reloj → libreta (Bolsa flexible) ─────────────────────────────────────
+// Antes de la fecha de corte el horario se controlaba con el reloj biométrico; desde ella, con la libreta
+// ingresada a mano. La fecha la entrega el servidor (ajuste configurable); aquí no se escribe ninguna fecha.
+window.getCorteLibreta = function() {
+    const d = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data) ? stateMarcacionesApp.data : null;
+    return (d && d.corte_libreta) || null;
+};
+window._empEsHorarioLibreta = function(empInfo) {
+    return !!(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'
+        || String(empInfo.modalidad_control || '').toUpperCase() === 'LIBRETA_180H'));
+};
+// true si ese día se controló por reloj (horario de libreta, pero anterior al corte y sin libreta cargada)
+window.esDiaControlPorReloj = function(di, dateStr, empInfo) {
+    if (!window._empEsHorarioLibreta(empInfo)) return false;
+    if (di && (di.slots_96 || di.origen === 'LIBRETA_180H')) return false;       // hay libreta real: es libreta
+    if (di && di.modalidad_dia) return di.modalidad_dia === 'RELOJ';
+    const corte = window.getCorteLibreta();
+    return !!corte && String(dateStr) < corte;
+};
 window.getGridFlags = function(allRows) {
     const st = window.vistaAnaliticaState;
     const nB = allRows.filter(r => r.esBolsa).length;
@@ -5906,7 +5926,9 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         // los datos en memoria y el tooltip se arma al pasar el mouse (ver _getCellTipHtml).
         const tipKey = emp.id + '|' + d;
         (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp: Object.assign({}, emp, { stats: r }) });
-        return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}, ${d}" style="${bg}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
+        const _corteC = (window._gridFlags && window._gridFlags.esBolsa) ? window.getCorteLibreta() : null;
+        const corteCelda = (_corteC && d === _corteC) ? 'border-left:3px solid #8b5cf6;' : '';
+        return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}, ${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-tip="${tipKey}">
@@ -6379,8 +6401,13 @@ function renderVistaAnalitica(respData, container) {
         const perdonazoStyle = window._perdonazoState?.activo
             ? 'cursor:pointer;border-bottom:2px solid #10b981;'
             : '';
-        return `<th class="col-day text-center p-1" style="min-width:48px;font-size: 0.75rem;white-space:nowrap;${bg}${perdonazoStyle}" ${perdonazoClick}
-                    title="${window._perdonazoState?.activo ? 'Clic para gestionar perdonazos del día' : ''}">
+        const _corte = gf.esBolsa ? window.getCorteLibreta() : null;
+        const esCorte = !!_corte && d === _corte;
+        const corteStyle = esCorte ? 'border-left:3px solid #8b5cf6;' : '';
+        const titleHdr = esCorte ? 'Desde este día: libreta (antes: reloj biométrico)'
+                       : (window._perdonazoState?.activo ? 'Clic para gestionar perdonazos del día' : '');
+        return `<th class="col-day text-center p-1" style="min-width:48px;font-size: 0.75rem;white-space:nowrap;${bg}${perdonazoStyle}${corteStyle}" ${perdonazoClick}
+                    title="${titleHdr}">
                     <div style="font-weight:700;font-size: 0.75rem;line-height:1.1">${dateStrObj}</div>
                     <div style="opacity:0.8;font-size: 0.75rem;line-height:1.1">${dayShortName}</div>
                     ${window._perdonazoState?.activo ? '<div style="font-size: 0.75rem;color:#10b981;font-weight:600;"><i class="bi bi-gift" aria-hidden="true"></i></div>' : ''}
@@ -6588,6 +6615,7 @@ function renderVistaAnalitica(respData, container) {
     </div>
     <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
         ${_leyendaEstadosHtml()}
+        ${(gf.esBolsa && window.getCorteLibreta() && dates.includes(window.getCorteLibreta())) ? `<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> Línea violeta: desde ${window.getCorteLibreta().split('-').reverse().join('-')} se usa libreta; antes, reloj biométrico</span>` : ''}
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
     </div>`;
 
@@ -7659,7 +7687,8 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
                        (di && di.turno_nombre && di.turno_nombre.toUpperCase().includes('TRANSPORTE')) ||
                        (di && di.slots_96);
 
-    if (isEmpBolsa) {
+    // Antes de la fecha de corte el día se controló por reloj: tooltip normal (no pide libreta)
+    if (isEmpBolsa && !window.esDiaControlPorReloj(di, dateStr, empInfo)) {
         return _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo);
     }
 
