@@ -141,9 +141,9 @@
         .bg-purple { background-color: #6f42c1 !important; }
     </style>
     <!-- Tema Aguacol (Barlow + paleta de marca, mismo lenguaje que Nexacol). Va al final para ganar la cascada. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+    <link rel="preload" href="/static/css/fonts/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/css/fonts/barlow-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/fuentes.css">
     <link rel="stylesheet" href="/static/css/aguacol-theme.css?v={{ startup_id }}">
     <!-- Ajustes móviles (después del tema y de responsive.css) -->
     <link rel="stylesheet" href="/static/css/mobile-ui.css?v={{ startup_id }}">
