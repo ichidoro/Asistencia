@@ -1,0 +1,106 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ESTADOS EN CÍRCULO (opcional) · body.estados-circulo
+   ───────────────────────────────────────────────────────────────────────────
+   Alternativa a "sigla + línea de color": el estado es un círculo del color
+   configurado en Configuración → Estados, con la sigla en blanco.
+   - No cambia el tamaño de las celdas: el círculo (24 px) cabe en la misma altura.
+   - Varios estados en un día: círculo del primero + un punto de color por cada
+     estado adicional (hasta 3). El detalle completo sigue en el tooltip.
+   - Se activa con el botón «Estados» de la barra de la grilla (preferencia por
+     navegador). Sin la clase en <body>, este archivo no hace nada.
+   - Siglas de 3 y 4 letras se achican (data-l lo pone marcaciones_ui.js).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body.estados-circulo .matrix-table-premium td.col-day .badge-status,
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status {
+    position: relative !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 24px !important;
+    height: 24px !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    font-size: 0.62rem !important;
+    line-height: 1 !important;
+    letter-spacing: 0 !important;
+    color: #fff !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25) !important;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.estados-circulo .matrix-table-premium td.col-day .badge-status > span,
+body.estados-circulo .va-legend-bar .badge-status > span {
+    position: static !important;
+    transform: none !important;
+    display: block !important;
+    color: #fff !important;
+    font-size: 0.62rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.2px;
+    text-transform: uppercase;
+}
+body.estados-circulo .matrix-table-premium td.col-day .badge-status[data-l="3"] > span,
+body.estados-circulo .va-legend-bar .badge-status[data-l="3"] > span { font-size: 0.52rem !important; }
+body.estados-circulo .matrix-table-premium td.col-day .badge-status[data-l="4"] > span,
+body.estados-circulo .va-legend-bar .badge-status[data-l="4"] > span,
+body.estados-circulo .matrix-table-premium td.col-day .badge-status[data-l="5"] > span { font-size: 0.44rem !important; }
+
+/* Los estados "apagados" (libre/gris) también llevan sigla blanca */
+body.estados-circulo .matrix-table-premium td.col-day .badge-state-neutral > span,
+body.estados-circulo .matrix-table-premium td.col-day .color-gris > span { color: #fff !important; }
+
+/* Amarillo/naranja con letra blanca: un tono más profundo para conservar contraste */
+body.estados-circulo .matrix-table-premium td.col-day .badge-state-warning,
+body.estados-circulo .matrix-table-premium td.col-day .color-amarillo,
+body.estados-circulo .va-legend-bar .badge-state-warning,
+body.estados-circulo .va-legend-bar .color-amarillo {
+    background: linear-gradient(135deg, #d9830b, #b45f06) !important;
+}
+
+/* ── Varios estados: círculo + puntos de color ─────────────────────────── */
+body.estados-circulo .matrix-table-premium td.col-day .st-multi {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: 24px 8px;
+    grid-template-rows: repeat(3, 8px);
+    column-gap: 3px;
+    row-gap: 2px;
+    align-items: center;
+    width: fit-content !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+}
+body.estados-circulo .matrix-table-premium td.col-day .st-multi::after { content: none; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+}
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+2) {
+    width: 8px !important;
+    height: 8px !important;
+    grid-column: 2;
+    margin: 0 !important;
+    box-shadow: none !important;
+}
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+2) > span { display: none !important; }
+body.estados-circulo .matrix-table-premium td.col-day .st-multi > .badge-status:nth-child(n+5) { display: none !important; }
+
+/* ── Leyenda ───────────────────────────────────────────────────────────── */
+body.estados-circulo .va-legend-bar .badge-status {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 22px !important;
+    height: 22px !important;
+    margin: 0 6px 0 0 !important;
+    border-radius: 50% !important;
+    vertical-align: middle;
+    color: #fff !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25) !important;
+}

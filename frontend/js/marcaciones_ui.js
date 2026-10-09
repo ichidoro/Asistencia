@@ -6240,6 +6240,57 @@ window.reloadSingleEmployeeRow = async function(empId) {
 // Vista previa al pasar el mouse por las celdas de la grilla (el cuadro flotante #grid-fly-tooltip): en pantallas chicas tapa la
 // grilla, así que se puede apagar con el botón de la barra. Se recuerda por navegador (localStorage); encendida por defecto.
 window._gridTooltipEnabled = (() => { try { return localStorage.getItem('asistencia_grid_tooltip') !== '0'; } catch (_) { return true; } })();
+// ── Estados en círculo (opcional): interruptor "Estados" de la barra de la grilla ──
+window._estadosCirculoOn = function() {
+    try { return localStorage.getItem('asistencia_estados_circulo') === '1'; } catch (_) { return false; }
+};
+window._estadosCirculoBtnProps = function() {
+    const on = window._estadosCirculoOn();
+    return on
+        ? { on, cls: 'btn-primary', html: '<i class="bi bi-circle-fill me-1"></i> <span class="d-none d-sm-inline">Estados</span>', title: 'Estados en círculos: ACTIVADO. Clic para volver a sigla + línea.' }
+        : { on, cls: 'btn-outline-secondary', html: '<i class="bi bi-circle me-1"></i> <span class="d-none d-sm-inline">Estados</span>', title: 'Estados como sigla + línea de color. Clic para verlos en círculos.' };
+};
+// La longitud de la sigla decide el tamaño de letra del círculo (CSS no puede medir texto).
+window._marcarLargoSiglas = function() {
+    document.querySelectorAll('.matrix-table-premium td.col-day .badge-status, .va-legend-bar .badge-status').forEach(b => {
+        const sp = b.querySelector(':scope > span');
+        if (!sp) return;
+        const n = String(Math.min(5, (sp.textContent || '').trim().length));
+        if (b.dataset.l !== n) b.dataset.l = n;
+    });
+};
+window.aplicarEstadosCirculo = function() {
+    const on = window._estadosCirculoOn();
+    document.body.classList.toggle('estados-circulo', on);
+    if (on) {
+        window._marcarLargoSiglas();
+        if (!window._estadosCircObs) {
+            let raf = 0;
+            window._estadosCircObs = new MutationObserver(() => {
+                if (raf) return;
+                raf = requestAnimationFrame(() => { raf = 0; window._marcarLargoSiglas(); });
+            });
+            window._estadosCircObs.observe(document.body, { childList: true, subtree: true });
+        }
+    } else if (window._estadosCircObs) {
+        window._estadosCircObs.disconnect();
+        window._estadosCircObs = null;
+    }
+};
+window.toggleEstadosCirculo = function() {
+    try { localStorage.setItem('asistencia_estados_circulo', window._estadosCirculoOn() ? '0' : '1'); } catch (_) {}
+    window.aplicarEstadosCirculo();
+    const btn = document.getElementById('btn-toggle-estados-circ');
+    if (btn) {
+        const b = window._estadosCirculoBtnProps();
+        btn.className = `btn btn-sm ${b.cls} fw-bold`;
+        btn.innerHTML = b.html;
+        btn.title = b.title;
+        btn.setAttribute('aria-pressed', String(b.on));
+    }
+};
+window.aplicarEstadosCirculo();
+
 window._gridTipBtnProps = function() {
     const on = window._gridTooltipEnabled !== false;
     return on
@@ -6492,6 +6543,7 @@ function renderVistaAnalitica(respData, container) {
     const pinBtnClass = isUnpinned ? 'btn-primary' : 'btn-outline-secondary';
 
     const tipBtn = window._gridTipBtnProps();
+    const circBtn = window._estadosCirculoBtnProps();
     const sw = `<div class="va-toolbar-premium">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#3f6fd6"></i>
@@ -6502,6 +6554,7 @@ function renderVistaAnalitica(respData, container) {
         <div style="width:1px;height:24px;background:#cbd5e1"></div>
         <div class="segmented-control" role="group" aria-label="Modo de vista">${vmButtons}</div>
         <div class="ms-auto d-flex align-items-center gap-2">
+            <button id="btn-toggle-estados-circ" class="btn btn-sm ${circBtn.cls} fw-bold" onclick="window.toggleEstadosCirculo()" title="${circBtn.title}" aria-pressed="${circBtn.on}">${circBtn.html}</button>
             <button id="btn-toggle-grid-tip" class="btn btn-sm ${tipBtn.cls} fw-bold" onclick="window.toggleGridTooltip()" title="${tipBtn.title}" aria-pressed="${tipBtn.on}">${tipBtn.html}</button>
             <button id="btn-toggle-sticky-emp" class="btn btn-sm ${pinBtnClass} fw-bold" onclick="window.toggleStickyEmpleado()" title="Fijar o liberar nombres y columnas de resumen para deslizamiento libre en pantallas táctiles">
                 <i class="bi ${pinBtnIcon} me-1"></i> <span class="d-none d-sm-inline">${pinBtnText} Nombres</span>
