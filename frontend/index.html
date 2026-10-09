@@ -31,8 +31,9 @@
     <link rel="stylesheet" href="/static/css/cropper.min.css">
 
     <!-- Non-blocking Icon Fonts (Preload + swap) -->
-    <link rel="preload" href="/static/css/bootstrap-icons.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="/static/css/bootstrap-icons.css"></noscript>
+    <!-- bootstrap-icons: fuente precargada y CSS no diferido (evita el salto de layout al llegar los iconos) -->
+    <link rel="preload" href="/static/css/fonts/bootstrap-icons.woff2?2820a3852bdb9a5832199cc61cec4e65" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/bootstrap-icons.css">
     <link rel="preload" href="/static/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="/static/css/all.min.css"></noscript>
 
