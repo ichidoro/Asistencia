@@ -3400,7 +3400,7 @@ class AsistenciaService:
             "dias_encontrados": len(asist_origen) or len(libretas_origen),
             "dias_replicados": dias_replicados,
             "detalles": detalles,
-            "mensaje": f"Se replicaron {dias_replicados} días idénticos desde Juan Paredes a Enzo Donoso."
+            "mensaje": f"Se replicaron {dias_replicados} días idénticos del empleado origen al destino."
         }
 
     # Alias de compatibilidad
