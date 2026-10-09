@@ -1,0 +1,170 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRILLA · capas, columnas fijas y pestañas por tipo de horario
+   ───────────────────────────────────────────────────────────────────────────
+   - Encabezados y celdas fijas 100 % opacos (antes un degradado casi transparente
+     dejaba ver el texto que pasaba por detrás al deslizar).
+   - Escala de capas única (de abajo hacia arriba):
+       días 1 < resúmenes fijos 40 < nombre 50 < pie 60 < encabezado de días 90
+       < encabezado de resúmenes 110 < encabezado del nombre 120
+   - Grupos contraídos: 68 px con el nombre completo en dos líneas.
+   - Si el bloque fijo supera la mitad del ancho visible, el JS agrega .gc-unpinned
+     y los resúmenes se deslizan junto con los días (nunca tapan los días).
+   Para revertir: quitar el <link> de este archivo en index.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --gc-z-summary: 40;
+    --gc-z-name: 50;
+    --gc-z-foot: 60;
+    --gc-z-head-days: 90;
+    --gc-z-head-summary: 110;
+    --gc-z-head-name: 120;
+}
+
+/* ── Encabezados opacos ─────────────────────────────────────────────────── */
+.matrix-table-premium thead th {
+    background-image: none !important;
+    background-color: #f1f4fb;
+}
+.matrix-table-premium thead th.th-bento { background-color: #ffffff !important; }
+.matrix-table-premium thead th.th-bento-sub { background-color: #f4f6fa !important; }
+.matrix-table-premium thead th[style*="background:#f0fdf4"] { background-color: #e8f8ee !important; }
+.matrix-table-premium thead th[style*="background:#faf5ff"] { background-color: #f6efff !important; }
+.matrix-table-premium thead th[style*="background:#fffbeb"] { background-color: #fff6dc !important; }
+.matrix-table-premium thead th[style*="background:#f0f7ff"] { background-color: #e6f1ff !important; }
+.matrix-table-premium tfoot td.sticky-premium-col,
+.matrix-table-premium tfoot td.sticky-col-analitica {
+    background-image: none !important;
+    background-color: #e9eef5 !important;
+}
+
+/* Escala de capas */
+.matrix-table-premium thead { z-index: var(--gc-z-head-days) !important; }
+.matrix-table-premium thead th.sticky-col-analitica { z-index: var(--gc-z-head-name) !important; }
+.matrix-table-premium thead th.sticky-premium-col { z-index: var(--gc-z-head-summary) !important; }
+.matrix-table-premium tbody td.sticky-col-analitica { z-index: var(--gc-z-name) !important; }
+.matrix-table-premium tbody td.sticky-premium-col { z-index: var(--gc-z-summary) !important; }
+.matrix-table-premium tfoot td { z-index: var(--gc-z-foot) !important; }
+
+/* ── Etiqueta de grupo contraído: nombre completo en 2 líneas ───────────── */
+.matrix-table-premium .gc-lbl {
+    display: inline-block;
+    font-size: .64rem;
+    line-height: 1.12;
+    letter-spacing: 0;
+    font-weight: 700;
+    text-transform: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* ── Resumen que se desliza con los días cuando no cabe fijo ───────────── */
+.matrix-table-premium.gc-unpinned .sticky-premium-col,
+.matrix-table-premium.gc-unpinned th.sticky-premium-col,
+.matrix-table-premium.gc-unpinned td.sticky-premium-col {
+    position: static !important;
+    left: auto !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+}
+
+/* ── Pestañas por tipo de horario ───────────────────────────────────────── */
+.gc-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 8px 10px 0;
+    border: 1px solid #dee2e6;
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    background: #fff;
+}
+.gc-tab {
+    appearance: none;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    background: transparent;
+    color: #5b6776;
+    font-size: .8125rem;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    min-height: 40px;
+    margin-bottom: -1px;
+}
+.gc-tab .gc-n {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: #e8edf4;
+    font-size: .72rem;
+}
+.gc-tab[aria-selected="true"] {
+    color: #1a2326;
+    background: #f8f9fa;
+    border-color: #dee2e6;
+    box-shadow: inset 0 3px 0 #3f6fd6;
+}
+.gc-tab[data-tipo="bolsa"][aria-selected="true"] { box-shadow: inset 0 3px 0 #8b5cf6; }
+.gc-tab[aria-selected="true"] .gc-n { background: #dbe6fb; }
+.gc-tabs + .va-toolbar-premium { border-top-left-radius: 0; border-top-right-radius: 0; }
+
+/* Etiqueta de tipo cuando el área tiene un solo tipo */
+.gc-tipo-chip {
+    font-size: .72rem;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #eef2fb;
+    color: #3f6fd6;
+}
+.gc-tipo-chip.bolsa { background: #f3ecff; color: #7c3aed; }
+
+/* Saldo de la bolsa (180 h) bajo el nombre: solo pantallas chicas */
+.gc-bolsa-chip { display: none; }
+@media (max-width: 1024px) {
+    .gc-bolsa-chip {
+        display: inline-block;
+        margin-top: 2px;
+        padding: 0 7px;
+        border-radius: 999px;
+        font-size: .7rem;
+        font-weight: 800;
+        line-height: 1.5;
+        background: #f3ecff;
+        color: #7c3aed;
+    }
+    .gc-bolsa-chip.neg { background: #fff0f0; color: #dc2626; }
+    .gc-bolsa-chip.pos { background: #eafaf0; color: #15803d; }
+}
+
+/* ── Barra de modos en pantallas chicas: se desliza, no se corta ───────── */
+@media (max-width: 768px) {
+    .va-toolbar-premium .segmented-control {
+        max-width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .va-toolbar-premium .segmented-control::-webkit-scrollbar { display: none; }
+    .va-toolbar-premium .segmented-control .segmented-btn { flex: 0 0 auto; white-space: nowrap; }
+    .gc-tab { flex: 1 1 0; padding: 8px 8px; font-size: .78rem; }
+}
+
+/* Celdas de resumen: el valor (hh:mm:ss) debe caber completo */
+.matrix-table-premium td.sticky-premium-col { font-variant-numeric: tabular-nums; }
+@media (max-width: 768px) {
+    .matrix-table-premium .sticky-premium-col,
+    .matrix-table-premium td.sticky-premium-col,
+    .matrix-table-premium th.sticky-premium-col,
+    .matrix-table-premium .sticky-saldo-col {
+        width: 76px !important; min-width: 76px !important; max-width: 76px !important;
+        padding: 4px 3px !important;
+        font-size: .75rem !important;
+    }
+    .matrix-table-premium th.sticky-saldo-col { width: 84px !important; min-width: 84px !important; max-width: 84px !important; }
+}
