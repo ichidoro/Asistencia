@@ -238,7 +238,7 @@
                 </div>
                 <div class="header-right">
                     <!-- Centro de Notificaciones (Alertas de Contrato) -->
-                    <div id="notification-center" class="notification-center me-3" title="No hay alertas críticas">
+                    <div id="notification-center" role="list" class="notification-center me-3" title="No hay alertas críticas">
                         <li class="nav-item list-unstyled">
                             <a class="nav-link position-relative" href="#" aria-label="Centro de Notificaciones y Alertas"
                                 onclick="switchPage('empleados'); document.getElementById('contratos-tab').click(); return false;">
@@ -251,13 +251,13 @@
                         </li>
                     </div>
 
-                    <button class="btn-sync" id="btn-sync" title="Wizard de Inicialización" aria-label="Wizard de Sincronización" data-permiso="configuracion.wizard">
+                    <button class="btn-sync" id="btn-sync" title="Wizard de Inicialización" aria-label="Empleados: wizard de sincronización" data-permiso="configuracion.wizard">
                         <span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
                         <span>Empleados</span>
                     </button>
                     <div class="user-menu dropdown">
                         <button type="button" id="header-username" class="dropdown-toggle fw-bold" data-bs-toggle="dropdown"
-                            aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario" style="cursor:pointer; color:#fff; display:flex; align-items:center; gap:8px;">
+                            aria-expanded="false" aria-haspopup="true" style="cursor:pointer; color:#fff; display:flex; align-items:center; gap:8px;">
                             <span class="user-avatar-circle" id="header-avatar">?</span>
                             <span class="d-none d-sm-inline" id="header-user-text">Cargando...</span>
                         </button>
