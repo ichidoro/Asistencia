@@ -70,6 +70,8 @@ def contenido_minificado(path: Path, ruta_rel: str) -> bytes | None:
         if hit is not None:
             return hit
         texto = path.read_text(encoding="utf-8")
+        if "sourceMappingURL" in texto[-300:]:
+            return None  # ya viene compilado con su source map: no tocarlo
         if ruta_rel.lower().endswith(".css"):
             out = minificar_css(texto)
         else:
