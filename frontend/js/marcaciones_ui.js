@@ -6240,56 +6240,91 @@ window.reloadSingleEmployeeRow = async function(empId) {
 // Vista previa al pasar el mouse por las celdas de la grilla (el cuadro flotante #grid-fly-tooltip): en pantallas chicas tapa la
 // grilla, así que se puede apagar con el botón de la barra. Se recuerda por navegador (localStorage); encendida por defecto.
 window._gridTooltipEnabled = (() => { try { return localStorage.getItem('asistencia_grid_tooltip') !== '0'; } catch (_) { return true; } })();
-// ── Estados en círculo (opcional): interruptor "Estados" de la barra de la grilla ──
-window._estadosCirculoOn = function() {
-    try { return localStorage.getItem('asistencia_estados_circulo') === '1'; } catch (_) { return false; }
+// ── Estados como chips (opcional): botón "Estados" de la barra de la grilla ──
+// Modos: 'linea' (sigla + línea de color, el de siempre) · 'rect' · 'circulo'. Se guarda por navegador.
+window._ESTADOS_MODOS = ['linea', 'rect', 'circulo'];
+window._estadosModo = function() {
+    try {
+        const m = localStorage.getItem('asistencia_estados_modo');
+        if (window._ESTADOS_MODOS.includes(m)) return m;
+        if (localStorage.getItem('asistencia_estados_circulo') === '1') return 'circulo'; // preferencia anterior
+    } catch (_) {}
+    return 'linea';
 };
-window._estadosCirculoBtnProps = function() {
-    const on = window._estadosCirculoOn();
-    return on
-        ? { on, cls: 'btn-primary', html: '<i class="bi bi-circle-fill me-1"></i> <span class="d-none d-sm-inline">Estados</span>', title: 'Estados en círculos: ACTIVADO. Clic para volver a sigla + línea.' }
-        : { on, cls: 'btn-outline-secondary', html: '<i class="bi bi-circle me-1"></i> <span class="d-none d-sm-inline">Estados</span>', title: 'Estados como sigla + línea de color. Clic para verlos en círculos.' };
+window._estadosChipBtnProps = function() {
+    const m = window._estadosModo();
+    const on = m !== 'linea';
+    const nombre = { linea: 'sigla + línea', rect: 'rectángulos', circulo: 'círculos' }[m];
+    const icono = { linea: 'bi-distribute-vertical', rect: 'bi-square-fill', circulo: 'bi-circle-fill' }[m];
+    return {
+        on, cls: on ? 'btn-primary' : 'btn-outline-secondary',
+        html: `<i class="bi ${icono} me-1"></i> <span class="d-none d-sm-inline">Estados</span>`,
+        title: `Estados: ${nombre}. Clic para cambiar (sigla + línea → rectángulos → círculos).`, nombre
+    };
 };
-// La longitud de la sigla decide el tamaño de letra del círculo (CSS no puede medir texto).
-window._marcarLargoSiglas = function() {
-    document.querySelectorAll('.matrix-table-premium td.col-day .badge-status, .va-legend-bar .badge-status').forEach(b => {
+// El CSS no puede contar ni medir texto: aquí se marca cuántos estados hay por celda (td[data-cnt], máx. 4),
+// el largo de cada sigla (badge[data-l]) y los que sobran (badge[data-hide], td[data-more]).
+window._marcarEstadosChip = function() {
+    document.querySelectorAll('.matrix-table-premium td.col-day').forEach(td => {
+        const bs = td.querySelectorAll('.badge-status');
+        const total = bs.length;
+        const cnt = String(Math.min(4, total));
+        if (td.dataset.cnt !== cnt) td.dataset.cnt = cnt;
+        if (total > 4) { if (td.dataset.more !== '+' + (total - 4)) td.dataset.more = '+' + (total - 4); }
+        else if (td.dataset.more) delete td.dataset.more;
+        bs.forEach((b, i) => {
+            const sp = b.querySelector(':scope > span');
+            if (sp) {
+                const n = String(Math.min(5, (sp.textContent || '').trim().length));
+                if (b.dataset.l !== n) b.dataset.l = n;
+            }
+            if (i >= 4) { if (b.dataset.hide === undefined) b.dataset.hide = '1'; }
+            else if (b.dataset.hide !== undefined) delete b.dataset.hide;
+        });
+    });
+    document.querySelectorAll('.va-legend-bar .badge-status').forEach(b => {
         const sp = b.querySelector(':scope > span');
         if (!sp) return;
         const n = String(Math.min(5, (sp.textContent || '').trim().length));
         if (b.dataset.l !== n) b.dataset.l = n;
     });
 };
-window.aplicarEstadosCirculo = function() {
-    const on = window._estadosCirculoOn();
-    document.body.classList.toggle('estados-circulo', on);
-    if (on) {
-        window._marcarLargoSiglas();
-        if (!window._estadosCircObs) {
+window.aplicarEstadosChip = function() {
+    const m = window._estadosModo();
+    const cl = document.body.classList;
+    cl.toggle('estados-chip', m !== 'linea');
+    cl.toggle('estados-rect', m === 'rect');
+    cl.toggle('estados-circulo', m === 'circulo');
+    if (m !== 'linea') {
+        window._marcarEstadosChip();
+        if (!window._estadosChipObs) {
             let raf = 0;
-            window._estadosCircObs = new MutationObserver(() => {
+            window._estadosChipObs = new MutationObserver(() => {
                 if (raf) return;
-                raf = requestAnimationFrame(() => { raf = 0; window._marcarLargoSiglas(); });
+                raf = requestAnimationFrame(() => { raf = 0; window._marcarEstadosChip(); });
             });
-            window._estadosCircObs.observe(document.body, { childList: true, subtree: true });
+            window._estadosChipObs.observe(document.body, { childList: true, subtree: true });
         }
-    } else if (window._estadosCircObs) {
-        window._estadosCircObs.disconnect();
-        window._estadosCircObs = null;
+    } else if (window._estadosChipObs) {
+        window._estadosChipObs.disconnect();
+        window._estadosChipObs = null;
     }
 };
-window.toggleEstadosCirculo = function() {
-    try { localStorage.setItem('asistencia_estados_circulo', window._estadosCirculoOn() ? '0' : '1'); } catch (_) {}
-    window.aplicarEstadosCirculo();
+window.toggleEstadosChip = function() {
+    const sig = { linea: 'rect', rect: 'circulo', circulo: 'linea' }[window._estadosModo()];
+    try { localStorage.setItem('asistencia_estados_modo', sig); } catch (_) {}
+    window.aplicarEstadosChip();
     const btn = document.getElementById('btn-toggle-estados-circ');
+    const b = window._estadosChipBtnProps();
     if (btn) {
-        const b = window._estadosCirculoBtnProps();
         btn.className = `btn btn-sm ${b.cls} fw-bold`;
         btn.innerHTML = b.html;
         btn.title = b.title;
         btn.setAttribute('aria-pressed', String(b.on));
     }
+    if (typeof showToast === 'function') showToast(`Estados: ${b.nombre}`, 'info');
 };
-window.aplicarEstadosCirculo();
+window.aplicarEstadosChip();
 
 window._gridTipBtnProps = function() {
     const on = window._gridTooltipEnabled !== false;
@@ -6543,7 +6578,7 @@ function renderVistaAnalitica(respData, container) {
     const pinBtnClass = isUnpinned ? 'btn-primary' : 'btn-outline-secondary';
 
     const tipBtn = window._gridTipBtnProps();
-    const circBtn = window._estadosCirculoBtnProps();
+    const circBtn = window._estadosChipBtnProps();
     const sw = `<div class="va-toolbar-premium">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#3f6fd6"></i>
@@ -6554,7 +6589,7 @@ function renderVistaAnalitica(respData, container) {
         <div style="width:1px;height:24px;background:#cbd5e1"></div>
         <div class="segmented-control" role="group" aria-label="Modo de vista">${vmButtons}</div>
         <div class="ms-auto d-flex align-items-center gap-2">
-            <button id="btn-toggle-estados-circ" class="btn btn-sm ${circBtn.cls} fw-bold" onclick="window.toggleEstadosCirculo()" title="${circBtn.title}" aria-pressed="${circBtn.on}">${circBtn.html}</button>
+            <button id="btn-toggle-estados-circ" class="btn btn-sm ${circBtn.cls} fw-bold" onclick="window.toggleEstadosChip()" title="${circBtn.title}" aria-pressed="${circBtn.on}">${circBtn.html}</button>
             <button id="btn-toggle-grid-tip" class="btn btn-sm ${tipBtn.cls} fw-bold" onclick="window.toggleGridTooltip()" title="${tipBtn.title}" aria-pressed="${tipBtn.on}">${tipBtn.html}</button>
             <button id="btn-toggle-sticky-emp" class="btn btn-sm ${pinBtnClass} fw-bold" onclick="window.toggleStickyEmpleado()" title="Fijar o liberar nombres y columnas de resumen para deslizamiento libre en pantallas táctiles">
                 <i class="bi ${pinBtnIcon} me-1"></i> <span class="d-none d-sm-inline">${pinBtnText} Nombres</span>
