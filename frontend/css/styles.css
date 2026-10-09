@@ -4076,7 +4076,7 @@ tr:hover .emp-name-cell {
 .rl-m-close:focus-visible { outline: 2px solid var(--rl-brand); outline-offset: 2px; }
 .rl-m-body { padding: 0; background: var(--rl-bg); flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .rl-form { display: grid; grid-template-columns: 1.1fr 1.6fr auto; gap: 14px; align-items: end; padding: 16px 22px; background: #fff; border-bottom: 1px solid var(--rl-line); }
-.rl-field label { display: block; margin-bottom: 5px; font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rl-mute); }
+.rl-field label, .rl-field .rl-lbl { display: block; margin-bottom: 5px; font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rl-mute); }
 .rl-input { width: 100%; height: 40px; padding: 0 12px; border: 1.5px solid var(--rl-line); border-radius: 11px; background: var(--rl-bg); color: var(--rl-ink); font-size: .88rem;
     transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease; }
 .rl-input:focus { outline: 0; border-color: var(--rl-brand); background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--rl-brand) 16%, transparent); }
