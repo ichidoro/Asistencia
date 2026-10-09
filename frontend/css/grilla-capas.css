@@ -187,3 +187,16 @@
     background-image: none !important;
 }
 .matrix-table-premium tbody td.sticky-col-analitica { background-image: none !important; }
+
+/* Pestaña sin empleados con los filtros actuales: sigue visible y pulsable, solo atenuada */
+.gc-tab.gc-vacia:not([aria-selected="true"]) { opacity: .6; }
+.gc-vacio {
+    border: 1px solid #dee2e6;
+    border-radius: 0 0 8px 8px;
+    background: #fff;
+    padding: 48px 16px;
+    text-align: center;
+    color: #5b6776;
+}
+.gc-vacio > .bi { font-size: 2rem; color: #94a3b8; display: block; margin-bottom: 8px; }
+.gc-vacio-t { font-size: .9rem; font-weight: 600; }

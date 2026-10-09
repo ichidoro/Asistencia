@@ -5575,9 +5575,11 @@ window.getGridFlags = function(allRows) {
     const st = window.vistaAnaliticaState;
     const nB = allRows.filter(r => r.esBolsa).length;
     const nC = allRows.length - nB;
-    const tabs = nB > 0 && nC > 0;
-    let tipo = nB > 0 ? 'bolsa' : 'ciclo';
-    if (tabs) tipo = (st.tabTipo === 'bolsa' || st.tabTipo === 'ciclo') ? st.tabTipo : 'ciclo';
+    // Las pestañas "Ciclo inteligente" y "Bolsa flexible" se muestran siempre, aunque una no tenga empleados.
+    const tabs = true;
+    // Si el usuario no eligió pestaña, abre la que tenga empleados (Ciclo si ambas).
+    let tipo = (nC === 0 && nB > 0) ? 'bolsa' : 'ciclo';
+    if (st.tabTipo === 'bolsa' || st.tabTipo === 'ciclo') tipo = st.tabTipo;
     const f = { tipo, tabs, nB, nC, total: allRows.length, esBolsa: tipo === 'bolsa' };
     window._gridFlags = f;
     return f;
@@ -6583,7 +6585,6 @@ function renderVistaAnalitica(respData, container) {
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-grid-3x3-gap-fill" style="font-size:1.1rem;color:#3f6fd6"></i>
             <span class="fw-bold" style="font-size:0.88rem;color:#1e293b">Vista Analítica</span>
-            ${gf.tabs ? '' : `<span class="gc-tipo-chip ${gf.esBolsa ? 'bolsa' : ''}">${gf.esBolsa ? 'Bolsa flexible' : 'Ciclo inteligente'}</span>`}
             ${closedBadge}
         </div>
         <div style="width:1px;height:24px;background:#cbd5e1"></div>
@@ -6665,15 +6666,31 @@ function renderVistaAnalitica(respData, container) {
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 3)}px;${getStickyWidthStyle('deudas')}" title="Minutos salida adelantada">S.ADL</th>
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('deudas', 4)}px;${getStickyWidthStyle('deudas')};color:#dc2626;font-weight:700" title="Total deuda acumulada">TOT</th>` : '';
 
-    const tabsHtml = gf.tabs ? `<div class="gc-tabs" role="tablist" aria-label="Tipo de horario">
-        <button type="button" class="gc-tab" role="tab" data-tipo="ciclo" aria-selected="${!gf.esBolsa}" onclick="vaSetTab('ciclo')">Ciclo inteligente<span class="gc-n">${gf.nC}</span></button>
-        <button type="button" class="gc-tab" role="tab" data-tipo="bolsa" aria-selected="${gf.esBolsa}" onclick="vaSetTab('bolsa')">Bolsa flexible<span class="gc-n">${gf.nB}</span></button>
-    </div>` : '';
+    const tabsHtml = `<div class="gc-tabs" role="tablist" aria-label="Tipo de horario">
+        <button type="button" class="gc-tab${gf.nC === 0 ? ' gc-vacia' : ''}" role="tab" data-tipo="ciclo" aria-selected="${!gf.esBolsa}" onclick="vaSetTab('ciclo')">Ciclo inteligente<span class="gc-n">${gf.nC}</span></button>
+        <button type="button" class="gc-tab${gf.nB === 0 ? ' gc-vacia' : ''}" role="tab" data-tipo="bolsa" aria-selected="${gf.esBolsa}" onclick="vaSetTab('bolsa')">Bolsa flexible<span class="gc-n">${gf.nB}</span></button>
+    </div>`;
+
+    // Pestaña sin información con los filtros actuales: se mantiene la pestaña y se avisa dentro de ella.
+    let vaciaHtml = '';
+    if (visibleRows.length === 0) {
+        const nomTipo = gf.esBolsa ? 'Bolsa flexible' : 'Ciclo inteligente';
+        const nOtro = gf.esBolsa ? gf.nC : gf.nB;
+        const nomOtro = gf.esBolsa ? 'Ciclo inteligente' : 'Bolsa flexible';
+        const porToggle = rows.length > 0;   // hay empleados del tipo, pero los oculta "Solo saldo negativo" / "Solo con HE"
+        const msg = porToggle
+            ? `Ningún empleado de «${nomTipo}» cumple los filtros «solo saldo negativo» / «solo con HE».`
+            : `No existe información en «${nomTipo}» con los filtros actuales.`;
+        const salto = nOtro > 0
+            ? `<button type="button" class="btn btn-sm btn-outline-primary mt-3" onclick="vaSetTab('${gf.esBolsa ? 'ciclo' : 'bolsa'}')">Ver ${nomOtro} (${nOtro})</button>`
+            : (allRows.length === 0 ? `<div class="text-muted mt-2" style="font-size:.8rem">Los filtros (área, búsqueda, estado, período) no devuelven empleados.</div>` : '');
+        vaciaHtml = `<div class="gc-vacio" role="status"><i class="bi bi-inbox"></i><div class="gc-vacio-t">${msg}</div>${salto}</div>`;
+    }
 
     container.innerHTML = `
     ${tabsHtml}
     ${sw}
-    <div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
+    ${vaciaHtml || `<div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
     <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
         <tr class="text-center" style="background:#f8f9fa;font-size: 0.75rem">
@@ -6700,12 +6717,12 @@ function renderVistaAnalitica(respData, container) {
     <tbody id="matrix-tbody">${bodyRows}</tbody>
     <tfoot>${totalsRow}</tfoot>
     </table>
-    </div>
-    <div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
+    </div>`}
+    ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
         ${_leyendaEstadosHtml()}
         ${(gf.esBolsa && window.getCorteLibreta() && dates.includes(window.getCorteLibreta())) ? `<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> Línea violeta: desde ${window.getCorteLibreta().split('-').reverse().join('-')} se usa libreta; antes, reloj biométrico</span>` : ''}
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
-    </div>`;
+    </div>`}`;
 
     window._gridApplyPinCap();
 
