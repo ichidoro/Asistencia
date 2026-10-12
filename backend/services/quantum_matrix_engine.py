@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 _CHILE_TZ = ZoneInfo(settings.TIMEZONE)
 
+# Ajuste global (tabla `ajustes`): '1' activa el pago automático del turno nocturno de víspera de feriado.
+CLAVE_VISPERA_FERIADO_PAGADO = "asistencia_vispera_feriado_nocturno_pagado"
+
+
 def _get_now_local() -> datetime:
     """Retorna la fecha/hora actual naive en la zona horaria de Chile."""
     try:
@@ -1320,6 +1324,7 @@ class QuantumMatrixEngine:
         he_previo: Optional[Dict[str, Any]] = None,
         je_previo: Optional[Dict[str, Any]] = None,
         holiday_desc: Optional[str] = None,
+        vispera_feriado: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Resolución holística y ÚNICA del día:
@@ -1365,6 +1370,7 @@ class QuantumMatrixEngine:
                 viaje_largo_info=viaje_largo_info,
                 todos_ciclos_dia=todos_ciclos_dia,
                 holiday_desc=holiday_desc,
+                vispera_feriado=vispera_feriado,
             )
 
         # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
@@ -1501,6 +1507,7 @@ class QuantumMatrixEngine:
         viaje_largo_info: Optional[Dict[str, Any]] = None,
         todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
         holiday_desc: Optional[str] = None,
+        vispera_feriado: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Núcleo cuántico: resolución de marcas vs turno (reloj biométrico)."""
         
@@ -1960,6 +1967,18 @@ class QuantumMatrixEngine:
                         return None
                 else:
                     return None
+
+            # Víspera de feriado: el turno nocturno que empieza el día anterior a un feriado y cruza a él se
+            # paga aunque no haya marcas (ajuste 'asistencia_vispera_feriado_nocturno_pagado', apagado por defecto).
+            # Si el trabajador sí marcó, este bloque no se ejecuta y el turno se calcula normal.
+            if (vispera_feriado and (cruza_med or es_nocturno) and not is_bolsa
+                    and _flag(ajustes.get(CLAVE_VISPERA_FERIADO_PAGADO))):
+                res['estado'] = 'OK'
+                res['observaciones'] += 'Víspera de feriado: turno nocturno a pago sin marcas. '
+                res['origen'] = 'VISPERA_FERIADO'
+                res['horas_trabajadas'] = 0.0
+                res['minutos_deuda'] = 0.0
+                return res
 
             # Día sin marcas (día pasado o hoy superada la hora límite sin actividad):
             res['estado'] = 'INASISTENCIA'

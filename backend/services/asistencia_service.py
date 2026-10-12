@@ -1970,6 +1970,9 @@ class AsistenciaService:
         bonos_asignados = []
         is_holiday = fecha in feriados_dict
         is_weekend = dia_semana >= 5  # 5=Sat, 6=Sun
+        _sig = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        # El 1-ene es feriado fijo: cubre el 31-dic aunque el calendario cargado sea solo del año de `fecha`.
+        vispera_feriado = (_sig in feriados_dict) or _sig.endswith("-01-01")
 
         # ── PARADIGMA DE CONSUMO (STATE MACHINE) ──────────────────────────────
         if marcas_consumidas_session is None:
@@ -2201,6 +2204,7 @@ class AsistenciaService:
                 he_previo=he_previo,
                 je_previo=je_prev,
                 holiday_desc=feriados_dict.get(fecha),
+                vispera_feriado=vispera_feriado,
             )
 
         if resultado is None:
