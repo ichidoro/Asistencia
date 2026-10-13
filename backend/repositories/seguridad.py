@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from loguru import logger
 import jwt
+import bcrypt
 
 from backend.core.database import Database
 from backend.schemas.auth import (
@@ -21,21 +22,26 @@ class SeguridadRepository:
         self.db = db
 
     def get_password_hash(self, password: str) -> str:
-        """Hashing ultra-estable usando hashlib (Sin dependencias nativas volátiles)"""
-        salt = secrets.token_hex(16)
-        hash_obj = hashlib.sha256(f"{salt}{password}".encode('utf-8'))
-        return f"{salt}${hash_obj.hexdigest()}"
+        # bcrypt solo mira los primeros 72 bytes; se recorta explícito (bcrypt 5 lanza error si se pasa de eso).
+        return bcrypt.hashpw(password.encode('utf-8')[:72], bcrypt.gensalt()).decode('ascii')
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         try:
-            if not hashed_password or "$" not in hashed_password:
+            if not hashed_password:
                 return False
+            if hashed_password.startswith("$2"):
+                return bcrypt.checkpw(plain_password.encode('utf-8')[:72], hashed_password.encode('ascii'))
+            # Formato antiguo "salt$sha256": se sigue aceptando y el login lo migra a bcrypt (ver password_necesita_migrar).
             salt, stored_hash = hashed_password.split("$")
             hash_obj = hashlib.sha256(f"{salt}{plain_password}".encode('utf-8'))
             return secrets.compare_digest(hash_obj.hexdigest(), stored_hash)
         except Exception as e:
-            logger.error(f"Error verificando password (Hashlib): {e}")
+            logger.error(f"Error verificando password: {e}")
             return False
+
+    @staticmethod
+    def password_necesita_migrar(hashed_password: str) -> bool:
+        return not (hashed_password or "").startswith("$2")
 
     def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None):
         to_encode = data.copy()

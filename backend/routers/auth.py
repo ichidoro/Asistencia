@@ -55,6 +55,13 @@ async def login_for_access_token(
     # Contraseña correcta: no cuenta como intento fallido (aunque el usuario esté inactivo).
     _limiter.limpiar(ip, form_data.username)
 
+    # Hash antiguo (sha256+salt): se re-guarda con bcrypt ahora que tenemos la contraseña en claro.
+    if repo.password_necesita_migrar(user_data["password_hash"]):
+        try:
+            await repo.db.execute("UPDATE usuarios SET password_hash = ? WHERE id = ?", (repo.get_password_hash(form_data.password), user_data["id"]))
+        except Exception as e:
+            logger.warning(f"No se pudo migrar el hash de {user_data['username']} a bcrypt: {e}")
+
     if not user_data["activo"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

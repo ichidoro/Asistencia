@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 from typing import List, Optional, Callable
 from loguru import logger
 from datetime import datetime
@@ -102,7 +102,7 @@ async def get_current_user(
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except JWTError:
+    except jwt.PyJWTError:
         raise credentials_exception
 
     # ZERO-TRUST: Verificamos en la réplica local (1ms) que el usuario siga existiendo y ACTIVO.

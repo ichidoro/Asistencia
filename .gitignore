@@ -328,3 +328,5 @@ _work/
 # Recursos de marca (logo e iconos) sí van al repo
 !frontend/assets/img/*.png
 !frontend/assets/img/icons/*.png
+
+respaldo_*.txt
