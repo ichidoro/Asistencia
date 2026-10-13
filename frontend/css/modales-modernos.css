@@ -47,6 +47,10 @@
   pointer-events: none;
   background: linear-gradient(90deg, var(--m-navy-mid), var(--m-blue) 55%, var(--m-green));
 }
+/* El `overflow: hidden` de arriba (para recortar la barra de color a las esquinas redondeadas) dejaba SIN scroll a los modales custom largos
+   (ej. Nuevo Empleado: max-height 90vh y el formulario quedaba cortado). Se mantiene el recorte lateral y se habilita el vertical. */
+.modal:not(.fade):not(#modalScannerLibreta) .modal-content { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+
 /* variantes de acento según el tipo de modal */
 .modal .modal-content:has(.modal-header.bg-danger)::before {
   background: linear-gradient(90deg, #b3261e, #e5534b 60%, #e8890c) !important;
