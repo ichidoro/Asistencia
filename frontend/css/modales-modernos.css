@@ -157,8 +157,10 @@
   font-weight: 600;
   transition: transform .12s, box-shadow .15s, filter .15s;
 }
-.modal .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 14px -6px rgba(13, 26, 82, .4); filter: brightness(1.04); }
-.modal .btn:active { transform: none; box-shadow: none; }
+@media (hover: hover) and (pointer: fine) {
+  .modal .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 14px -6px rgba(13, 26, 82, .4); filter: brightness(1.04); }
+}
+.modal .btn:active:not(:disabled):not(.disabled) { transform: scale(.97); box-shadow: none; transition-duration: 90ms; }
 .modal .btn:disabled, .modal .btn.disabled { transform: none; box-shadow: none; filter: none; }
 
 /* ── Tablas dentro de modales ─────────────────────────────────────────────── */
@@ -180,5 +182,43 @@
 /* ── Movimiento reducido ──────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .modal .btn, .modal .form-control, .modal .form-select { transition: none; }
-  .modal .btn:hover { transform: none; }
+  .modal .btn:hover, .modal .btn:active { transform: none; }
+}
+
+
+/* ═══ Fluidez y gestos (2026-10-13) ══════════════════════════════════════════════════════════════════════════
+   Solo opacity / translate / scale (no animan layout), curvas ease-out fuertes y duraciones cortas (<250 ms). Se usan las
+   propiedades individuales `translate` y `scale` porque `.modal .modal-content { transform: none !important }` anula cualquier
+   `transform` animado de la tarjeta. Todo se apaga con prefers-reduced-motion. */
+
+/* Modales custom (.modal sin .fade): el velo aparece con un fundido y la tarjeta sube/escala desde casi su tamaño (nunca desde 0). */
+.modal:not(.fade).active { animation: mm-overlay-in 160ms ease-out both; overflow-y: auto; align-items: safe center; overscroll-behavior: contain; }
+.modal:not(.fade).active .modal-content { animation: mm-card-in 240ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes mm-overlay-in { from { opacity: 0; } }
+@keyframes mm-card-in { from { opacity: 0; translate: 0 10px; scale: .97; } }
+
+/* El modal de bonos deja los desplegables fuera del recorte (overflow visible): si la pantalla es baja, scrollea el velo en vez de cortarse. */
+#modal-bono .modal-content { max-height: none !important; }
+
+/* Modales Bootstrap (.fade): entrada con escala suave en vez del deslizamiento de 50 px. */
+.modal.fade .modal-dialog { transform: translateY(8px) scale(.98); transition: transform 240ms cubic-bezier(.23, 1, .32, 1); }
+.modal.fade.show .modal-dialog { transform: none; }
+
+/* Menús desplegables: fundido corto (solo opacidad: Popper posiciona el menú con transform y no hay que pisarlo). */
+.dropdown-menu.show { animation: mm-fade-in 140ms ease-out both; }
+@keyframes mm-fade-in { from { opacity: 0; } }
+
+/* Cambio de pantalla: entrada muy sutil (se usa muchas veces al día: 4 px y 180 ms). */
+.page.active { animation: mm-page-in 180ms cubic-bezier(.23, 1, .32, 1) backwards; }
+@keyframes mm-page-in { from { opacity: 0; translate: 0 4px; } }
+
+/* Feedback al presionar en el resto de botones y pestañas (los de modal ya lo tienen arriba). */
+.btn:active:not(:disabled):not(.disabled), .nav-pills .nav-link:active, .btn-close:active { scale: .97; transition-duration: 90ms; }
+.btn, .nav-link, .btn-close, .page-link, .dropdown-item, .form-check-label { touch-action: manipulation; }
+.table-responsive, .modal-body { overscroll-behavior: contain; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal:not(.fade).active, .modal:not(.fade).active .modal-content, .dropdown-menu.show, .page.active { animation: none !important; }
+  .modal.fade .modal-dialog { transition: none; transform: none; }
+  .btn:active:not(:disabled):not(.disabled), .nav-pills .nav-link:active, .btn-close:active { scale: 1; }
 }
