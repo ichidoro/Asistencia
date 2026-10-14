@@ -48,6 +48,29 @@ async def _ensure_table(db: Database):
     await db.execute("CREATE INDEX IF NOT EXISTS idx_art22_emp_fecha ON articulo22_registros(empleado_id, fecha)")
 
 
+def _estadia_min(marcas: List[Dict[str, Any]]) -> float:
+    """Minutos en planta de un día: cada ENTRADA seguida de una SALIDA suma su diferencia (cruza medianoche si S < E)."""
+    total = 0.0
+    i = 0
+    while i < len(marcas):
+        m = marcas[i]
+        if m["tipo"] == "E" and i + 1 < len(marcas) and marcas[i + 1]["tipo"] == "S":
+            e_dt = datetime.strptime(m["hora"], "%H:%M:%S")
+            s_dt = datetime.strptime(marcas[i + 1]["hora"], "%H:%M:%S")
+            if s_dt < e_dt:
+                s_dt += timedelta(days=1)
+            total += (s_dt - e_dt).total_seconds() / 60
+            i += 2
+            continue
+        i += 1
+    return total
+
+
+def _fmt_hm(minutos: float) -> str:
+    m = int(round(minutos))
+    return f"{m // 60}h {m % 60:02d}m"
+
+
 # ============================================
 # ENDPOINTS
 # ============================================
@@ -311,6 +334,7 @@ async def get_historial(
     desde: Optional[str] = Query(None),
     hasta: Optional[str] = Query(None),
     area: Optional[str] = Query(None),
+    empleado_id: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Database = Depends(get_db),
@@ -332,6 +356,9 @@ async def get_historial(
     if area:
         where_clauses.append("a.nombre = ?")
         params.append(area)
+    if empleado_id:
+        where_clauses.append("r.empleado_id = ?")
+        params.append(empleado_id)
 
     where_sql = " AND ".join(where_clauses)
 
@@ -375,20 +402,7 @@ async def get_historial(
             "SELECT hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha = ? ORDER BY id",
             (r["empleado_id"], r["fecha"])
         )
-        estadia_min = 0
-        i = 0
-        marcas_list = [dict(m) for m in marcas]
-        while i < len(marcas_list):
-            m = marcas_list[i]
-            if m["tipo"] == "E" and i + 1 < len(marcas_list) and marcas_list[i + 1]["tipo"] == "S":
-                e_dt = datetime.strptime(m["hora"], "%H:%M:%S")
-                s_dt = datetime.strptime(marcas_list[i + 1]["hora"], "%H:%M:%S")
-                if s_dt < e_dt:
-                    s_dt += timedelta(days=1)  # Cross-midnight
-                estadia_min += (s_dt - e_dt).total_seconds() / 60
-                i += 2
-                continue
-            i += 1
+        estadia_min = _estadia_min([dict(m) for m in marcas])
 
         horas = int(estadia_min // 60)
         mins = int(estadia_min % 60)
@@ -407,7 +421,35 @@ async def get_historial(
             "estadia_display": f"{horas}h {mins:02d}m"
         })
 
+    # Resumen de TODO el rango para un solo empleado (no solo la página visible)
+    resumen = None
+    if empleado_id:
+        todas = await db.fetch_all(
+            "SELECT fecha, hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha BETWEEN ? AND ? ORDER BY fecha, id",
+            (empleado_id, desde, hasta)
+        )
+        por_dia: Dict[str, List[Dict[str, Any]]] = {}
+        for m in todas:
+            por_dia.setdefault(m["fecha"], []).append(dict(m))
+        total_min = sum(_estadia_min(v) for v in por_dia.values())
+        dias_con = len(por_dia)
+        dias_incompletos = sum(
+            1 for v in por_dia.values()
+            if sum(1 for x in v if x["tipo"] == "E") != sum(1 for x in v if x["tipo"] == "S")
+        )
+        resumen = {
+            "dias": dias_con,
+            "estadia_min": round(total_min, 1),
+            "estadia_display": _fmt_hm(total_min),
+            "horas_decimal": round(total_min / 60, 2),
+            "promedio_dia_display": _fmt_hm(total_min / dias_con) if dias_con else "0h 00m",
+            "primera_fecha": min(por_dia) if por_dia else None,
+            "ultima_fecha": max(por_dia) if por_dia else None,
+            "dias_incompletos": dias_incompletos,
+        }
+
     return {
+        "resumen": resumen,
         "desde": desde,
         "hasta": hasta,
         "total": total_records,
@@ -416,3 +458,126 @@ async def get_historial(
         "pages": (total_records + limit - 1) // limit,
         "registros": resultado
     }
+
+
+@router.get("/exportar-excel/")
+async def exportar_excel(
+    desde: str = Query(...),
+    hasta: str = Query(...),
+    empleado_id: Optional[int] = Query(None),
+    area: Optional[str] = Query(None),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(get_current_user),
+    _perm = Depends(RequirePermission("porteria.art22"))
+):
+    """Excel con las marcaciones Art. 22 del rango (todos o un empleado): resumen por día, marcas y total por empleado."""
+    import io
+    from fastapi.responses import StreamingResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    await _ensure_table(db)
+    try:
+        d0 = datetime.strptime(desde, "%Y-%m-%d")
+        d1 = datetime.strptime(hasta, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fechas inválidas (use AAAA-MM-DD)")
+    if d1 < d0:
+        raise HTTPException(status_code=400, detail="La fecha final es anterior a la inicial")
+    if (d1 - d0).days > 3660:
+        raise HTTPException(status_code=400, detail="El rango máximo es de 10 años")
+
+    where = ["r.fecha BETWEEN ? AND ?"]
+    params: List[Any] = [desde, hasta]
+    if empleado_id:
+        where.append("r.empleado_id = ?")
+        params.append(empleado_id)
+    if area:
+        where.append("a.nombre = ?")
+        params.append(area)
+    rows = await db.fetch_all(
+        f"""SELECT r.empleado_id, r.fecha, r.hora, r.tipo, r.registrado_por_nombre, r.observaciones,
+                   e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.cargo, a.nombre AS area_nombre
+            FROM articulo22_registros r
+            JOIN empleados e ON r.empleado_id = e.id
+            LEFT JOIN areas a ON e.area_id = a.id
+            WHERE {" AND ".join(where)}
+            ORDER BY e.apellido_paterno, e.nombre, r.fecha, r.id""",
+        tuple(params)
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="No hay marcaciones en el rango seleccionado")
+
+    emps: Dict[int, Dict[str, Any]] = {}
+    for r in rows:
+        r = dict(r)
+        e = emps.setdefault(r["empleado_id"], {
+            "rut": r["rut"],
+            "nombre": f"{r['apellido_paterno'] or ''} {r['apellido_materno'] or ''}, {r['nombre'] or ''}".strip(" ,"),
+            "cargo": r["cargo"] or "", "area": r["area_nombre"] or "", "dias": {}})
+        e["dias"].setdefault(r["fecha"], []).append(r)
+
+    wb = Workbook()
+    head_font = Font(bold=True, color="FFFFFF")
+    head_fill = PatternFill("solid", fgColor="1E3A8A")
+
+    def _encabezado(ws, cols, anchos):
+        ws.append(cols)
+        for c in ws[1]:
+            c.font, c.fill, c.alignment = head_font, head_fill, Alignment(horizontal="center", vertical="center")
+        for i, w in enumerate(anchos, 1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+        ws.freeze_panes = "A2"
+
+    ws1 = wb.active
+    ws1.title = "Resumen por día"
+    _encabezado(ws1, ["Fecha", "RUT", "Empleado", "Cargo", "Área", "1ª entrada", "Últ. salida", "Marcas",
+                      "Estadía (h:mm)", "Horas (decimal)", "Observación"],
+                [12, 13, 34, 30, 22, 11, 11, 8, 14, 14, 36])
+    ws2 = wb.create_sheet("Marcaciones")
+    _encabezado(ws2, ["Fecha", "RUT", "Empleado", "Hora", "Tipo", "Registrado por", "Observaciones"],
+                [12, 13, 34, 10, 10, 28, 40])
+    ws3 = wb.create_sheet("Total por empleado")
+    _encabezado(ws3, ["RUT", "Empleado", "Cargo", "Área", "Primera fecha", "Última fecha", "Días con marcas",
+                      "Estadía total (h:mm)", "Horas (decimal)", "Promedio por día", "Días con marca sin par"],
+                [13, 34, 30, 22, 13, 13, 15, 18, 15, 16, 20])
+
+    gran_total = 0.0
+    for e in emps.values():
+        tot = 0.0
+        incompletos = 0
+        for fecha in sorted(e["dias"]):
+            ms = [{"hora": m["hora"], "tipo": m["tipo"]} for m in e["dias"][fecha]]
+            mins = _estadia_min(ms)
+            tot += mins
+            ents = [m["hora"] for m in ms if m["tipo"] == "E"]
+            sals = [m["hora"] for m in ms if m["tipo"] == "S"]
+            aviso = ""
+            if len(ents) != len(sals):
+                incompletos += 1
+                aviso = "Entrada o salida sin par: no suma horas"
+            ws1.append([fecha, e["rut"], e["nombre"], e["cargo"], e["area"], ents[0][:5] if ents else "",
+                        sals[-1][:5] if sals else "", len(ms), _fmt_hm(mins), round(mins / 60, 2), aviso])
+            for m in e["dias"][fecha]:
+                ws2.append([fecha, e["rut"], e["nombre"], m["hora"], "Entrada" if m["tipo"] == "E" else "Salida",
+                            m["registrado_por_nombre"] or "", m["observaciones"] or ""])
+        gran_total += tot
+        dias = len(e["dias"])
+        ws3.append([e["rut"], e["nombre"], e["cargo"], e["area"], min(e["dias"]), max(e["dias"]), dias,
+                    _fmt_hm(tot), round(tot / 60, 2), _fmt_hm(tot / dias) if dias else "", incompletos])
+    if len(emps) > 1:
+        ws3.append([])
+        ws3.append(["", "TOTAL", "", "", "", "", "", _fmt_hm(gran_total), round(gran_total / 60, 2)])
+        for c in ws3[ws3.max_row]:
+            c.font = Font(bold=True)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    sufijo = f"_emp{empleado_id}" if empleado_id else ""
+    nombre = f"articulo22_{desde}_a_{hasta}{sufijo}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'}
+    )

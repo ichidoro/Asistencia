@@ -554,11 +554,21 @@ const Articulo22Module = (() => {
                             <label for="art22-hist-hasta">Hasta</label>
                             <input type="date" class="form-control form-control-sm" id="art22-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
                         </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="art22-hist-emp">Empleado</label>
+                            <select class="form-select form-select-sm" id="art22-hist-emp" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; min-width:210px; max-width:280px;">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
                         <button class="btn btn-sm btn-primary fw-bold px-3" onclick="Articulo22Module.cargarHistorial()" style="border-radius:6px; font-size:0.8rem">
                             <i class="bi bi-search me-1"></i>Consultar
                         </button>
+                        <button class="btn btn-sm btn-success fw-bold px-3" onclick="Articulo22Module.descargarExcel()" style="border-radius:6px; font-size:0.8rem" title="Descarga las marcaciones del rango (y del empleado elegido) en Excel">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
                     </div>
                 </div>
+                <div id="art22-hist-resumen" style="display:none"></div>
                 <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
                     <table class="table mb-0 art22-hist-table">
                         <thead>
@@ -586,6 +596,7 @@ const Articulo22Module = (() => {
         if (hasta) hasta.value = _fechaActual;
         if (desde) { const d = new Date(); d.setDate(d.getDate()-7); desde.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
+        cargarEmpleadosFiltro();
         await cargarEstadoDia();
         if (_refreshInterval) clearInterval(_refreshInterval);
         _refreshInterval = setInterval(() => cargarEstadoDia(), 60000);
@@ -1005,20 +1016,77 @@ const Articulo22Module = (() => {
     // ════════════════════════════════════════════════
     // HISTORIAL
     // ════════════════════════════════════════════════
-    async function cargarHistorial(page = 1) {
+    async function cargarEmpleadosFiltro() {
+        const sel = document.getElementById('art22-hist-emp');
+        if (!sel) return;
+        try {
+            const res = await fetch('/api/articulo22/empleados/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+            if (!res.ok) return;
+            const lista = await res.json();
+            const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            sel.innerHTML = '<option value="">Todos</option>' + lista.map(e =>
+                `<option value="${e.id}">${esc((e.apellido_paterno || '') + ' ' + (e.apellido_materno || ''))}, ${esc(e.nombre)}</option>`).join('');
+        } catch (e) { console.error(e); }
+    }
+
+    function _historialParams() {
         const desde = document.getElementById('art22-hist-desde')?.value;
         const hasta = document.getElementById('art22-hist-hasta')?.value;
+        const emp = document.getElementById('art22-hist-emp')?.value;
+        return { desde, hasta, emp };
+    }
+
+    async function descargarExcel() {
+        const { desde, hasta, emp } = _historialParams();
+        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Seleccione rango de fechas', 'warning'); return; }
+        try {
+            const res = await fetch(`/api/articulo22/exportar-excel/?desde=${desde}&hasta=${hasta}${emp ? '&empleado_id=' + emp : ''}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+            });
+            if (!res.ok) {
+                let msg = 'No se pudo generar el Excel';
+                try { msg = (await res.json()).detail || msg; } catch (_) {}
+                if (typeof showToast === 'function') showToast(msg, 'warning');
+                return;
+            }
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `articulo22_${desde}_a_${hasta}${emp ? '_emp' + emp : ''}.xlsx`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        } catch (e) { console.error(e); if (typeof showToast === 'function') showToast('Error al descargar el Excel', 'danger'); }
+    }
+
+    function _renderResumen(r) {
+        const box = document.getElementById('art22-hist-resumen');
+        if (!box) return;
+        if (!r) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        const f = (x) => x ? x.split('-').reverse().join('-') : '—';
+        box.style.display = 'block';
+        box.innerHTML = `<div class="d-flex flex-wrap gap-4 align-items-center px-3 py-3 border-bottom" style="background:#f0fdf4; font-size:0.85rem; color:#14532d">
+            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Estadía total en planta</div><div style="font-size:1.4rem; font-weight:800">${r.estadia_display} <span style="font-size:.85rem; font-weight:600">(${r.horas_decimal} h)</span></div></div>
+            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Días con marcas</div><div style="font-size:1.1rem; font-weight:700">${r.dias}</div></div>
+            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Promedio por día</div><div style="font-size:1.1rem; font-weight:700">${r.promedio_dia_display}</div></div>
+            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Primera / última marca</div><div style="font-size:1.1rem; font-weight:700">${f(r.primera_fecha)} · ${f(r.ultima_fecha)}</div></div>
+            ${r.dias_incompletos ? `<div style="color:#9a3412"><i class="bi bi-exclamation-triangle-fill me-1"></i>${r.dias_incompletos} día(s) con una marca sin par (no suman horas)</div>` : ''}
+        </div>`;
+    }
+
+    async function cargarHistorial(page = 1) {
+        const { desde, hasta, emp } = _historialParams();
         const tbody = document.getElementById('art22-historial-tbody');
         const pagDiv = document.getElementById('art22-historial-pagination');
         if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Seleccione rango de fechas', 'warning'); return; }
         tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
 
         try {
-            const res = await fetch(`/api/articulo22/historial/?desde=${desde}&hasta=${hasta}&page=${page}`, {
+            const res = await fetch(`/api/articulo22/historial/?desde=${desde}&hasta=${hasta}&page=${page}${emp ? '&empleado_id=' + emp : ''}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!res.ok) throw new Error("Error");
             const data = await res.json();
+            _renderResumen(data.resumen);
 
             if (!data.registros.length) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No hay registros en el período</td></tr>';
@@ -1055,5 +1123,5 @@ const Articulo22Module = (() => {
 
     function destroy() { if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; } }
 
-    return { initTab, cargarEstadoDia, marcar, cargarHistorial, destroy };
+    return { initTab, cargarEstadoDia, marcar, cargarHistorial, descargarExcel, destroy };
 })();
