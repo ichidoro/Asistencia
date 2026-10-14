@@ -48,22 +48,49 @@ async def _ensure_table(db: Database):
     await db.execute("CREATE INDEX IF NOT EXISTS idx_art22_emp_fecha ON articulo22_registros(empleado_id, fecha)")
 
 
-def _estadia_min(marcas: List[Dict[str, Any]]) -> float:
-    """Minutos en planta de un día: cada ENTRADA seguida de una SALIDA suma su diferencia (cruza medianoche si S < E)."""
-    total = 0.0
+def _analizar_dia(marcas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Analiza las marcas de un día (en orden de registro).
+
+    - estadia: minutos en planta = suma de cada tramo ENTRADA→SALIDA.
+    - fuera:   minutos fuera de planta entre una SALIDA y la ENTRADA siguiente del mismo día.
+    - jornada: desde la primera ENTRADA hasta la última SALIDA (estadia + fuera). None si no hay salida.
+    - incompleto: hay una entrada sin salida (o una salida sin entrada).
+    Una hora menor que la anterior se interpreta como cruce de medianoche.
+    """
+    base = datetime(2000, 1, 1)
+    dts: List[datetime] = []
+    for m in marcas:
+        t = datetime.strptime(m["hora"], "%H:%M:%S")
+        dt = base.replace(hour=t.hour, minute=t.minute, second=t.second)
+        while dts and dt < dts[-1]:
+            dt += timedelta(days=1)
+        dts.append(dt)
+
+    estadia = fuera = 0.0
+    primera_e = ultima_s = None
     i = 0
-    while i < len(marcas):
-        m = marcas[i]
-        if m["tipo"] == "E" and i + 1 < len(marcas) and marcas[i + 1]["tipo"] == "S":
-            e_dt = datetime.strptime(m["hora"], "%H:%M:%S")
-            s_dt = datetime.strptime(marcas[i + 1]["hora"], "%H:%M:%S")
-            if s_dt < e_dt:
-                s_dt += timedelta(days=1)
-            total += (s_dt - e_dt).total_seconds() / 60
+    n = len(marcas)
+    cierre_previo: Optional[datetime] = None   # última salida de un tramo cerrado
+    incompleto = False
+    while i < n:
+        if marcas[i]["tipo"] == "E" and i + 1 < n and marcas[i + 1]["tipo"] == "S":
+            if primera_e is None:
+                primera_e = dts[i]
+            if cierre_previo is not None:
+                fuera += (dts[i] - cierre_previo).total_seconds() / 60
+            estadia += (dts[i + 1] - dts[i]).total_seconds() / 60
+            cierre_previo = ultima_s = dts[i + 1]
             i += 2
-            continue
-        i += 1
-    return total
+        else:
+            incompleto = True
+            i += 1
+    jornada = (ultima_s - primera_e).total_seconds() / 60 if primera_e and ultima_s else None
+    return {"estadia": estadia, "fuera": fuera, "jornada": jornada, "incompleto": incompleto}
+
+
+def _estadia_min(marcas: List[Dict[str, Any]]) -> float:
+    """Minutos en planta de un día (suma de tramos ENTRADA→SALIDA)."""
+    return _analizar_dia(marcas)["estadia"]
 
 
 def _fmt_hm(minutos: float) -> str:
@@ -402,7 +429,8 @@ async def get_historial(
             "SELECT hora, tipo FROM articulo22_registros WHERE empleado_id = ? AND fecha = ? ORDER BY id",
             (r["empleado_id"], r["fecha"])
         )
-        estadia_min = _estadia_min([dict(m) for m in marcas])
+        an = _analizar_dia([dict(m) for m in marcas])
+        estadia_min = an["estadia"]
 
         horas = int(estadia_min // 60)
         mins = int(estadia_min % 60)
@@ -418,6 +446,9 @@ async def get_historial(
             "ultima_salida": r.get("ultima_salida"),
             "total_marcas": r.get("total_marcas", 0),
             "estadia_min": round(estadia_min, 1),
+            "jornada_display": _fmt_hm(an["jornada"]) if an["jornada"] is not None else None,
+            "fuera_display": _fmt_hm(an["fuera"]) if an["jornada"] is not None else None,
+            "incompleto": an["incompleto"],
             "estadia_display": f"{horas}h {mins:02d}m"
         })
 
@@ -431,7 +462,10 @@ async def get_historial(
         por_dia: Dict[str, List[Dict[str, Any]]] = {}
         for m in todas:
             por_dia.setdefault(m["fecha"], []).append(dict(m))
-        total_min = sum(_estadia_min(v) for v in por_dia.values())
+        analisis = [_analizar_dia(v) for v in por_dia.values()]
+        total_min = sum(x["estadia"] for x in analisis)
+        total_fuera = sum(x["fuera"] for x in analisis)
+        total_jornada = sum(x["jornada"] for x in analisis if x["jornada"] is not None)
         dias_con = len(por_dia)
         dias_incompletos = sum(
             1 for v in por_dia.values()
@@ -441,6 +475,8 @@ async def get_historial(
             "dias": dias_con,
             "estadia_min": round(total_min, 1),
             "estadia_display": _fmt_hm(total_min),
+            "fuera_display": _fmt_hm(total_fuera),
+            "jornada_display": _fmt_hm(total_jornada),
             "horas_decimal": round(total_min / 60, 2),
             "promedio_dia_display": _fmt_hm(total_min / dias_con) if dias_con else "0h 00m",
             "primera_fecha": min(por_dia) if por_dia else None,
@@ -532,24 +568,29 @@ async def exportar_excel(
     ws1 = wb.active
     ws1.title = "Resumen por día"
     _encabezado(ws1, ["Fecha", "RUT", "Empleado", "Cargo", "Área", "1ª entrada", "Últ. salida", "Marcas",
-                      "Estadía (h:mm)", "Horas (decimal)", "Observación"],
-                [12, 13, 34, 30, 22, 11, 11, 8, 14, 14, 36])
+                      "Jornada total (1ª entrada→últ. salida)", "Tiempo fuera de planta", "Estadía en planta (h:mm)",
+                      "Estadía (horas decimal)", "Observación"],
+                [12, 13, 34, 30, 22, 11, 11, 8, 20, 16, 18, 16, 36])
     ws2 = wb.create_sheet("Marcaciones")
     _encabezado(ws2, ["Fecha", "RUT", "Empleado", "Hora", "Tipo", "Registrado por", "Observaciones"],
                 [12, 13, 34, 10, 10, 28, 40])
     ws3 = wb.create_sheet("Total por empleado")
     _encabezado(ws3, ["RUT", "Empleado", "Cargo", "Área", "Primera fecha", "Última fecha", "Días con marcas",
-                      "Estadía total (h:mm)", "Horas (decimal)", "Promedio por día", "Días con marca sin par"],
-                [13, 34, 30, 22, 13, 13, 15, 18, 15, 16, 20])
+                      "Jornada total", "Tiempo fuera de planta", "Estadía en planta (h:mm)", "Horas (decimal)",
+                      "Promedio por día", "Días con marca sin par"],
+                [13, 34, 30, 22, 13, 13, 15, 16, 18, 18, 15, 16, 20])
 
-    gran_total = 0.0
+    gran_total = gran_fuera = gran_jornada = 0.0
     for e in emps.values():
-        tot = 0.0
+        tot = tot_fuera = tot_jornada = 0.0
         incompletos = 0
         for fecha in sorted(e["dias"]):
             ms = [{"hora": m["hora"], "tipo": m["tipo"]} for m in e["dias"][fecha]]
-            mins = _estadia_min(ms)
+            an = _analizar_dia(ms)
+            mins = an["estadia"]
             tot += mins
+            tot_fuera += an["fuera"]
+            tot_jornada += an["jornada"] or 0.0
             ents = [m["hora"] for m in ms if m["tipo"] == "E"]
             sals = [m["hora"] for m in ms if m["tipo"] == "S"]
             aviso = ""
@@ -557,17 +598,24 @@ async def exportar_excel(
                 incompletos += 1
                 aviso = "Entrada o salida sin par: no suma horas"
             ws1.append([fecha, e["rut"], e["nombre"], e["cargo"], e["area"], ents[0][:5] if ents else "",
-                        sals[-1][:5] if sals else "", len(ms), _fmt_hm(mins), round(mins / 60, 2), aviso])
+                        sals[-1][:5] if sals else "", len(ms),
+                        _fmt_hm(an["jornada"]) if an["jornada"] is not None else "",
+                        _fmt_hm(an["fuera"]) if an["jornada"] is not None else "",
+                        _fmt_hm(mins), round(mins / 60, 2), aviso])
             for m in e["dias"][fecha]:
                 ws2.append([fecha, e["rut"], e["nombre"], m["hora"], "Entrada" if m["tipo"] == "E" else "Salida",
                             m["registrado_por_nombre"] or "", m["observaciones"] or ""])
         gran_total += tot
+        gran_fuera += tot_fuera
+        gran_jornada += tot_jornada
         dias = len(e["dias"])
         ws3.append([e["rut"], e["nombre"], e["cargo"], e["area"], min(e["dias"]), max(e["dias"]), dias,
-                    _fmt_hm(tot), round(tot / 60, 2), _fmt_hm(tot / dias) if dias else "", incompletos])
+                    _fmt_hm(tot_jornada), _fmt_hm(tot_fuera), _fmt_hm(tot), round(tot / 60, 2),
+                    _fmt_hm(tot / dias) if dias else "", incompletos])
     if len(emps) > 1:
         ws3.append([])
-        ws3.append(["", "TOTAL", "", "", "", "", "", _fmt_hm(gran_total), round(gran_total / 60, 2)])
+        ws3.append(["", "TOTAL", "", "", "", "", "", _fmt_hm(gran_jornada), _fmt_hm(gran_fuera),
+                    _fmt_hm(gran_total), round(gran_total / 60, 2)])
         for c in ws3[ws3.max_row]:
             c.font = Font(bold=True)
 

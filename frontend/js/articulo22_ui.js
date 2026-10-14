@@ -579,11 +579,13 @@ const Articulo22Module = (() => {
                                 <th>1ª Entrada</th>
                                 <th>Últ. Salida</th>
                                 <th class="text-center">Marcas</th>
-                                <th class="text-end">Estadía</th>
+                                <th class="text-end" title="Desde la primera entrada hasta la última salida del día">Jornada</th>
+                                <th class="text-end" title="Tiempo fuera de planta entre una salida y la entrada siguiente del mismo día">Fuera</th>
+                                <th class="text-end" title="Jornada menos el tiempo fuera: tiempo realmente en planta">Estadía en planta</th>
                             </tr>
                         </thead>
                         <tbody id="art22-historial-tbody">
-                            <tr><td colspan="7" class="text-center py-4 text-muted" style="font-size:0.85rem">Seleccione fechas y presione Consultar</td></tr>
+                            <tr><td colspan="9" class="text-center py-4 text-muted" style="font-size:0.85rem">Seleccione fechas y presione Consultar</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1065,6 +1067,8 @@ const Articulo22Module = (() => {
         const f = (x) => x ? x.split('-').reverse().join('-') : '—';
         box.style.display = 'block';
         box.innerHTML = `<div class="d-flex flex-wrap gap-4 align-items-center px-3 py-3 border-bottom" style="background:#f0fdf4; font-size:0.85rem; color:#14532d">
+            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Jornada total</div><div style="font-size:1.1rem; font-weight:700">${r.jornada_display}</div></div>
+            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Tiempo fuera</div><div style="font-size:1.1rem; font-weight:700; color:#b45309">− ${r.fuera_display}</div></div>
             <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Estadía total en planta</div><div style="font-size:1.4rem; font-weight:800">${r.estadia_display} <span style="font-size:.85rem; font-weight:600">(${r.horas_decimal} h)</span></div></div>
             <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Días con marcas</div><div style="font-size:1.1rem; font-weight:700">${r.dias}</div></div>
             <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Promedio por día</div><div style="font-size:1.1rem; font-weight:700">${r.promedio_dia_display}</div></div>
@@ -1078,7 +1082,7 @@ const Articulo22Module = (() => {
         const tbody = document.getElementById('art22-historial-tbody');
         const pagDiv = document.getElementById('art22-historial-pagination');
         if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Seleccione rango de fechas', 'warning'); return; }
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
 
         try {
             const res = await fetch(`/api/articulo22/historial/?desde=${desde}&hasta=${hasta}&page=${page}${emp ? '&empleado_id=' + emp : ''}`, {
@@ -1089,7 +1093,7 @@ const Articulo22Module = (() => {
             _renderResumen(data.resumen);
 
             if (!data.registros.length) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No hay registros en el período</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No hay registros en el período</td></tr>';
                 pagDiv.innerHTML = '';
                 return;
             }
@@ -1105,7 +1109,9 @@ const Articulo22Module = (() => {
                     <td style="color:#065f46; font-weight:500">${r.primera_entrada ? r.primera_entrada.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
                     <td style="color:#9f1239; font-weight:500">${r.ultima_salida ? r.ultima_salida.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
                     <td class="text-center"><span class="art22-marcas-circle">${r.total_marcas}</span></td>
-                    <td class="text-end" style="font-weight:700; color:#1e293b">${r.estadia_display}</td>
+                    <td class="text-end" style="color:#475569">${r.jornada_display || '<span style="color:#94a3b8">—</span>'}</td>
+                    <td class="text-end" style="color:${r.fuera_display && r.fuera_display !== '0h 00m' ? '#b45309' : '#475569'}">${r.fuera_display || '<span style="color:#94a3b8">—</span>'}</td>
+                    <td class="text-end" style="font-weight:700; color:#1e293b">${r.estadia_display}${r.incompleto ? ' <i class="bi bi-exclamation-triangle-fill" style="color:#d97706" title="Marca sin par (entrada sin salida): no suma horas"></i>' : ''}</td>
                 </tr>`;
             }).join('');
 
@@ -1118,7 +1124,7 @@ const Articulo22Module = (() => {
                 p += '</div>';
                 pagDiv.innerHTML = p;
             } else { pagDiv.innerHTML = `<span>${data.total} registro(s)</span>`; }
-        } catch (e) { console.error(e); tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">Error al cargar</td></tr>'; }
+        } catch (e) { console.error(e); tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error al cargar</td></tr>'; }
     }
 
     function destroy() { if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; } }
