@@ -87,7 +87,11 @@ async function saveTurno() {
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         meta_horas_espera: parseFloat(document.getElementById('input-meta-espera')?.value || 88.0),
-        modalidad_control: document.getElementById('select-modalidad-control')?.value || 'RELOJ',
+        // El selector vive en el bloque de Bolsa Flexible (oculto en los demás tipos, donde no se puede editar): fuera de Bolsa Flexible
+        // siempre es reloj, aunque el turno viniera guardado con LIBRETA_180H (caso Tradicional Facturación 2, 2026-10-14).
+        modalidad_control: ['BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'].includes(formData.get('tipo_programacion'))
+            ? (document.getElementById('select-modalidad-control')?.value || 'RELOJ')
+            : 'RELOJ',
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
