@@ -1102,7 +1102,8 @@ class SyncService:
                     logger.info(f"📥 Descargando BioAlba: {anio_iter}-{mes_iter:02d}...")
                     await _call_cb('progress', {'stage': 'download', 'info': f"Descargando marcaciones de BioAlba para {anio_iter}-{mes_iter:02d}..."})
                     lote = await self.scraper.get_marcaciones(
-                        mes=mes_iter, anio=anio_iter, ruts_set=valid_ruts
+                        mes=mes_iter, anio=anio_iter, ruts_set=valid_ruts,
+                        desde=fecha_inicio, hasta=fecha_fin
                     )
                     marcaciones_bioalba.extend(lote)
                     logger.info(f"   → {len(lote)} marcaciones obtenidas para {anio_iter}-{mes_iter:02d}")

@@ -216,7 +216,8 @@ class BioAlbaScraper:
             logger.error(traceback.format_exc())
             return []
 
-    async def get_marcaciones(self, mes: int = None, anio: int = None, rut_filter: str = None, ruts_set: set = None) -> List[Dict[str, Any]]:
+    async def get_marcaciones(self, mes: int = None, anio: int = None, rut_filter: str = None, ruts_set: set = None,
+                              desde: str = None, hasta: str = None) -> List[Dict[str, Any]]:
         """
         Obtener marcaciones (logs) de asistencia desde BioAlba via Excel Mensual.
         Si no se especifica mes/anio, usa el actual.
@@ -231,7 +232,8 @@ class BioAlbaScraper:
             cliente = EasyTimeClient(settings.EASYTIME_URL, settings.EASYTIME_USER, settings.EASYTIME_PASSWORD)
             try:
                 return await cliente.fetch_marcaciones(anio or _now.year, mes or _now.month,
-                                                       ruts_set=ruts_set, rut_filter=rut_filter)
+                                                       ruts_set=ruts_set, rut_filter=rut_filter,
+                                                       desde=desde, hasta=hasta)
             except Exception as e_et:
                 logger.error(f"❌ EasyTime falló: {e_et}")
                 raise

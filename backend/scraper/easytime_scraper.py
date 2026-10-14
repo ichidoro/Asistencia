@@ -12,6 +12,7 @@ Devuelve el mismo formato que BioAlbaScraper.get_marcaciones():
 import asyncio
 import calendar
 import re
+from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -36,7 +37,7 @@ def _rut_limpio(valor: Any) -> str:
 class EasyTimeClient:
     PAGE_SIZE = 500
     REINTENTOS = 4
-    MAX_PAGES = 200   # tope de seguridad (200k marcas)
+    MAX_PEDIDOS = 400   # tope de seguridad de pedidos por descarga
 
     def __init__(self, base_url: str, usuario: str, password: str):
         self.base_url = base_url.rstrip('/')
@@ -61,64 +62,106 @@ class EasyTimeClient:
         if body.get("ret") != 0:
             raise RuntimeError(f"EasyTime: login rechazado ({body.get('message') or body})")
 
+    async def _pedir(self, session: aiohttp.ClientSession, ini: datetime, fin: datetime,
+                     pagina: int = 1) -> Dict[str, Any]:
+        params = {"page": pagina, "page_size": self.PAGE_SIZE,
+                  "start_time": ini.strftime("%Y-%m-%d %H:%M:%S"), "end_time": fin.strftime("%Y-%m-%d %H:%M:%S")}
+        error = ""
+        for intento in range(1, self.REINTENTOS + 1):
+            try:
+                async with session.get(f"{self.base_url}/iclock/api/transactions/", params=params) as resp:
+                    if resp.status == 200:
+                        return await resp.json(content_type=None)
+                    error = f"HTTP {resp.status}"
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e_red:
+                error = str(e_red)
+            logger.warning(f"⚠️ EasyTime {params['start_time']}: {error} (intento {intento}/{self.REINTENTOS})")
+            await asyncio.sleep(1.5 * intento)
+        raise RuntimeError(f"EasyTime: el tramo {params['start_time']} → {params['end_time']} falló tras {self.REINTENTOS} intentos")
+
+    async def _tramo(self, session: aiohttp.ClientSession, ini: datetime, fin: datetime,
+                     acum: Dict[Any, Dict[str, Any]], pedidos: List[int]) -> None:
+        """Trae las marcas de [ini, fin] en UNA sola página.
+        La paginación de EasyTime no es estable (sin orden fijo, repite filas y salta otras: con ~3.900 marcas al mes
+        se perdían ~7%, distintas en cada descarga). Por eso cada pedido debe caber en una página: si el total
+        (count) la supera, el tramo se parte a la mitad. Cada página se verifica contra count y se deduplica por id."""
+        pedidos[0] += 1
+        if pedidos[0] > self.MAX_PEDIDOS:
+            raise RuntimeError("EasyTime: demasiados pedidos en una descarga (tope de seguridad)")
+        for intento in range(1, self.REINTENTOS + 1):
+            payload = await self._pedir(session, ini, fin)
+            total = int(payload.get("count") or 0)
+            filas = payload.get("data") or []
+            if total > self.PAGE_SIZE or len({f.get("id") for f in filas}) == total:
+                break
+            logger.warning(f"⚠️ EasyTime {ini}: llegaron {len(filas)} de {total} marcas (intento {intento}/{self.REINTENTOS})")
+            await asyncio.sleep(1.5 * intento)
+        else:
+            raise RuntimeError(f"EasyTime: el tramo {ini} → {fin} no devuelve todas sus marcas")
+        if total > self.PAGE_SIZE:
+            if fin - ini < timedelta(seconds=2):
+                raise RuntimeError(f"EasyTime: más de {self.PAGE_SIZE} marcas en {ini}")
+            mitad = ini + (fin - ini) / 2
+            mitad = mitad.replace(microsecond=0)
+            await self._tramo(session, ini, mitad, acum, pedidos)
+            await self._tramo(session, mitad + timedelta(seconds=1), fin, acum, pedidos)
+            return
+        for f in filas:
+            acum[f.get("id")] = f
+
     async def fetch_marcaciones(self, anio: int, mes: int,
                                 ruts_set: Optional[set] = None,
-                                rut_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-        ultimo = calendar.monthrange(anio, mes)[1]
-        inicio = f"{anio}-{mes:02d}-01 00:00:00"
-        fin = f"{anio}-{mes:02d}-{ultimo:02d} 23:59:59"
+                                rut_filter: Optional[str] = None,
+                                desde: Optional[str] = None,
+                                hasta: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Marcaciones del mes. desde/hasta ('AAAA-MM-DD', opcionales) acotan la descarga a ese rango dentro del mes."""
+        primero = date(anio, mes, 1)
+        ultimo = date(anio, mes, calendar.monthrange(anio, mes)[1])
+        if desde:
+            primero = max(primero, date.fromisoformat(desde[:10]))
+        if hasta:
+            ultimo = min(ultimo, date.fromisoformat(hasta[:10]))
         rut_filtro = _rut_limpio(rut_filter) if rut_filter else ""
+        resultado: List[Dict[str, Any]] = []
+        if primero > ultimo:
+            return resultado
 
         timeout = aiohttp.ClientTimeout(total=120)
         jar = aiohttp.CookieJar(unsafe=True)
-        resultado: List[Dict[str, Any]] = []
         descartadas = 0
         conector = None
         if not settings.EASYTIME_VERIFY_SSL:
             logger.warning("⚠️ EASYTIME_VERIFY_SSL=false: no se valida el certificado SSL de EasyTime (temporal)")
             conector = aiohttp.TCPConnector(ssl=False)
+        acum: Dict[Any, Dict[str, Any]] = {}
+        pedidos = [0]
         async with aiohttp.ClientSession(timeout=timeout, cookie_jar=jar, connector=conector) as session:
             await self._login(session)
-            pagina = 1
-            while pagina <= self.MAX_PAGES:
-                params = {"page": pagina, "page_size": self.PAGE_SIZE, "start_time": inicio, "end_time": fin}
-                payload = None
-                for intento in range(1, self.REINTENTOS + 1):
-                    try:
-                        async with session.get(f"{self.base_url}/iclock/api/transactions/", params=params) as resp:
-                            if resp.status == 200:
-                                payload = await resp.json(content_type=None)
-                                break
-                            error = f"HTTP {resp.status}"
-                    except (aiohttp.ClientError, asyncio.TimeoutError) as e_red:
-                        error = str(e_red)
-                    logger.warning(f"⚠️ EasyTime página {pagina}: {error} (intento {intento}/{self.REINTENTOS})")
-                    await asyncio.sleep(1.5 * intento)
-                if payload is None:
-                    raise RuntimeError(f"EasyTime: la página {pagina} falló tras {self.REINTENTOS} intentos")
-                filas = payload.get("data") or []
-                for f in filas:
-                    rut = _rut_limpio(f.get("emp_code"))
-                    hora = (f.get("punch_time") or "").strip()
-                    if not rut or not hora:
-                        continue
-                    if rut_filtro and rut != rut_filtro:
-                        continue
-                    if ruts_set and rut not in ruts_set:
-                        descartadas += 1
-                        continue
-                    estado = str(f.get("punch_state"))
-                    tipo = "Entrada" if estado in _ENTRADAS else ("Salida" if estado in _SALIDAS else "Desconocido")
-                    resultado.append({
-                        "rut": rut,
-                        "fecha_hora": hora,
-                        "tipo": tipo,
-                        "equipo": (f.get("terminal_alias") or "Manual").strip(),
-                    })
-                if not payload.get("next") or not filas:
-                    break
-                pagina += 1
+            dia = primero
+            while dia <= ultimo:
+                await self._tramo(session, datetime.combine(dia, time(0, 0, 0)),
+                                  datetime.combine(dia, time(23, 59, 59)), acum, pedidos)
+                dia += timedelta(days=1)
+
+        for f in acum.values():
+            rut = _rut_limpio(f.get("emp_code"))
+            hora = (f.get("punch_time") or "").strip()
+            if not rut or not hora:
+                continue
+            if rut_filtro and rut != rut_filtro:
+                continue
+            if ruts_set and rut not in ruts_set:
+                descartadas += 1
+                continue
+            estado = str(f.get("punch_state"))
+            tipo = "Entrada" if estado in _ENTRADAS else ("Salida" if estado in _SALIDAS else "Desconocido")
+            resultado.append({
+                "rut": rut,
+                "fecha_hora": hora,
+                "tipo": tipo,
+                "equipo": (f.get("terminal_alias") or "Manual").strip(),
+            })
 
         extra = f" (descartadas por RUT desconocido: {descartadas})" if descartadas else ""
-        logger.info(f"✅ EasyTime {anio}-{mes:02d}: {len(resultado)} marcaciones{extra}")
+        logger.info(f"✅ EasyTime {primero} → {ultimo}: {len(resultado)} marcaciones en {pedidos[0]} pedidos{extra}")
         return resultado
