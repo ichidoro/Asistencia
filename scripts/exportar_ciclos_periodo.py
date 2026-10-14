@@ -1,6 +1,10 @@
 """Exporta (SOLO LECTURA) los datos necesarios para repetir fuera de línea el cálculo de los Ciclos Inteligentes de un rango.
 
-Uso (en el servidor, con el .env cargado):
+Uso con Docker (la imagen no trae scripts/; ver docs/DEPLOY_DOCKER_POSTGRES.md):
+    docker cp scripts/exportar_ciclos_periodo.py asistencia_app:/tmp/
+    docker exec -w /app asistencia_app python /tmp/exportar_ciclos_periodo.py 2026-10-01 2026-10-14 --salida /tmp/octubre.json
+    docker cp asistencia_app:/tmp/octubre.json .
+Uso sin Docker (con el .env cargado):
     python scripts/exportar_ciclos_periodo.py 2026-10-01 2026-10-14
     python scripts/exportar_ciclos_periodo.py 2026-10-01 2026-10-14 --salida /tmp/octubre.json --con-nombres
 

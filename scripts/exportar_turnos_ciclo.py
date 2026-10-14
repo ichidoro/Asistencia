@@ -1,6 +1,10 @@
 """Exporta (SOLO LECTURA) los turnos de Ciclo Inteligente tal como están en la app, para simularlos fuera de línea.
 
-Uso (en el servidor, con el .env cargado):
+Uso con Docker (la imagen no trae scripts/; ver docs/DEPLOY_DOCKER_POSTGRES.md):
+    docker cp scripts/exportar_turnos_ciclo.py asistencia_app:/tmp/
+    docker exec -w /app asistencia_app python /tmp/exportar_turnos_ciclo.py --salida /tmp/turnos_ciclo.json
+    docker cp asistencia_app:/tmp/turnos_ciclo.json .
+Uso sin Docker (con el .env cargado):
     python scripts/exportar_turnos_ciclo.py
     python scripts/exportar_turnos_ciclo.py --salida /tmp/turnos.json
 

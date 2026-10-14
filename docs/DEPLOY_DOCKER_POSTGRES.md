@@ -67,6 +67,16 @@ actual, pero **sigue en el historial de git**: rotarlo en Turso.
   luego `select calls, total_exec_time, query from pg_stat_statements order by total_exec_time desc limit 10`.
 - **La app corre sin root (uid 1000)**. Si `logs/`, `downloads/` o `backups/` fueron creados por root (instalaciones antiguas):
   `docker run --rm -v "$PWD:/w" alpine chown -R 1000:1000 /w/logs /w/downloads /w/backups`.
+- **Correr un script de `scripts/` (diagnósticos y exportaciones de solo lectura)**: la imagen solo trae `backend/` y `frontend/`
+  (no existe `scripts/` dentro del contenedor) y Postgres no publica puertos hacia el servidor, así que el script se copia al
+  contenedor `asistencia_app` (que ya tiene `DATABASE_URL`), se ejecuta ahí y se trae el resultado. Ejemplo con la exportación de turnos:
+  ```
+  docker cp scripts/exportar_turnos_ciclo.py asistencia_app:/tmp/
+  docker exec -w /app asistencia_app python /tmp/exportar_turnos_ciclo.py --salida /tmp/turnos_ciclo.json
+  docker cp asistencia_app:/tmp/turnos_ciclo.json .
+  ```
+  Los scripts que solo imprimen (diagnósticos) no necesitan el tercer paso. No usar `docker exec -i ... python - < script.py`:
+  `python-dotenv` falla cuando el script llega por entrada estándar.
 - **Respaldos**: `backup-postgres.sh` (diario 02:00) y `restore-test.sh` (domingo 03:00, restaura el último respaldo en una BD
   temporal y compara conteos). Un respaldo que no restaura no sirve: revisar `logs/restore-test.log`.
 - **Respuestas grandes** (`/asistencia/matriz`, `/matrix`, `/reporte`) usan `backend/core/fast_json.py` (orjson) en vez de
