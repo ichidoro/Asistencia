@@ -1856,6 +1856,30 @@ class QuantumMatrixEngine:
             except Exception as e:
                 logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
 
+        # Jornada que termina pasada la medianoche, justo fuera del horizonte (caso Orlando Carreño 05-10-2026: turno 15:00-23:00, salida
+        # a las 01:00:06 con horizonte hasta 01:00:00). Si la última marca del día quedó como Entrada sin cerrar y la marca siguiente
+        # (en orden de tiempo) es una Salida del día siguiente que cae dentro de una banda extra después del horizonte, es la salida
+        # de esta jornada: si no, queda como Salida suelta en el día siguiente y rompe su cálculo (y su colación).
+        if not is_bolsa and not es_nocturno and marcas_disponibles:
+            try:
+                ult = marcas_disponibles[-1]
+                if str(ult.get('tipo', '')).strip().lower() in _TIPOS_E:
+                    dt_ult = datetime.strptime(str(ult.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
+                    ids_disp = {l.get('id') for l in marcas_disponibles}
+                    for cand in marcas_no_consumidas:
+                        if cand.get('id') in ids_disp:
+                            continue
+                        dt_c = datetime.strptime(str(cand.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
+                        if dt_c <= dt_ult:
+                            continue
+                        if (str(cand.get('tipo', '')).strip().lower() in _TIPOS_S
+                                and dt_c.strftime("%Y-%m-%d") > fecha
+                                and end_horizon < dt_c <= end_horizon + timedelta(minutes=banda_minutos)):
+                            marcas_disponibles.append(cand)
+                        break  # solo la PRIMERA marca posterior cuenta: si no es esa Salida, no se absorbe nada
+            except Exception as e:
+                logger.warning(f"Error evaluando salida pasada la medianoche: {e}")
+
         # Selector tensorial de salida óptima para turnos con múltiples marcas de salida:
         # Si hay 1 entrada y >= 2 salidas sin entrada intermedia, se selecciona la salida que minimiza
         # la distancia circular de fase hacia la salida teórica contractual, evitando cortar prematuramente.
