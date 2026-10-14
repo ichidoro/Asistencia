@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from loguru import logger
 
 from backend.core.config import settings
-from backend.repositories.asistencia import AsistenciaRepository
+from backend.repositories.asistencia import AsistenciaRepository, LOGS_CON_TIPO_CORREGIDO
 from backend.services.libreta_corte import (
     obtener_corte_libreta, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
 )
@@ -210,7 +210,7 @@ class AsistenciaService:
         logs_ini = (dt - timedelta(days=1)).strftime("%Y-%m-%d") + " 00:00:00"
         logs_fin = (dt + timedelta(days=1)).strftime("%Y-%m-%d") + " 23:59:59"
         q_logs = f"""
-            SELECT * FROM logs_raw
+            SELECT * FROM {LOGS_CON_TIPO_CORREGIDO}
             WHERE empleado_id IN ({ids_placeholder})
               AND fecha_hora BETWEEN ? AND ?
             ORDER BY fecha_hora ASC
@@ -934,7 +934,7 @@ class AsistenciaService:
         logs_ini = (start - timedelta(days=1)).strftime("%Y-%m-%d") + " 00:00:00"
         logs_fin = (end + timedelta(days=1)).strftime("%Y-%m-%d") + " 23:59:59"
         all_logs = await db.fetch_all(
-            "SELECT * FROM logs_raw WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ? ORDER BY fecha_hora ASC",
+            f"SELECT * FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ? ORDER BY fecha_hora ASC",
             (empleado_id, logs_ini, logs_fin)
         )
         all_logs = [dict(l) for l in all_logs]

@@ -1536,6 +1536,122 @@ async def agregar_marcacion_manual(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ── Marcaciones del día: ver todas y elegir cuál es Entrada / Salida (2026-10-14) ─────────────────────────
+# Caso Catalina Núñez 09-10: el reloj dejó la primera marca del día como "Salida" y el motor la descartaba (atraso falso de 273 min).
+# La marca cruda no se toca: la reclasificación se guarda aparte (logs_tipo_override) y el motor lee el tipo ya corregido.
+_COLACION_MIN, _COLACION_MAX = 20, 150  # minutos entre una salida y la siguiente entrada para considerarlas colación
+
+
+def _min_dia(fh: str) -> int:
+    hh, mm = int(fh[11:13]), int(fh[14:16])
+    return hh * 60 + mm
+
+
+def sugerir_clasificacion_marcas(horas: List[str]) -> List[Dict[str, Any]]:
+    """
+    Sugerencia de Entrada/Salida para las marcas de un día (ya ordenadas), y cuáles serían de colación.
+      · primera = Entrada, última = Salida, el resto alterna.
+      · una Salida seguida de una Entrada a mitad del día, separadas por 20-150 min = colación.
+    Con una cantidad impar de marcas no se puede afirmar: se devuelve la alternancia pero con `dudoso`.
+    """
+    n = len(horas)
+    out = [{"tipo": ("Entrada" if i % 2 == 0 else "Salida"), "colacion": False} for i in range(n)]
+    if n >= 2:
+        out[-1]["tipo"] = "Salida"
+    for i in range(1, n - 1):
+        if out[i]["tipo"] == "Salida" and out[i + 1]["tipo"] == "Entrada" and i + 1 <= n - 2:
+            gap = _min_dia(horas[i + 1]) - _min_dia(horas[i])
+            if _COLACION_MIN <= gap <= _COLACION_MAX:
+                out[i]["colacion"] = out[i + 1]["colacion"] = True
+                out[i]["colacion_min"] = out[i + 1]["colacion_min"] = gap
+    dudoso = n % 2 == 1 or n < 2
+    for o in out:
+        o["dudoso"] = dudoso
+    return out
+
+
+@router.get("/marcaciones/dia/")
+async def marcaciones_del_dia(
+    empleado_id: int = Query(...),
+    fecha: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Todas las marcaciones del día con lo que dijo el reloj, el tipo que rige hoy y una sugerencia (con la colación marcada)."""
+    emp = await EmpleadoRepository(service.repository.db).get_by_id(empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO
+    rows = await service.repository.db.fetch_all(
+        f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO} "
+        "WHERE empleado_id = ? AND substr(fecha_hora, 1, 10) = ? ORDER BY fecha_hora ASC",
+        (empleado_id, fecha))
+    rows = [dict(r) for r in rows]
+    sug = sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in rows])
+    return {
+        "success": True,
+        "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
+        "marcas": [{
+            "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],
+            "corregida": (r["tipo"] != r["tipo_original"]), "manual": bool(r["manual"]), "equipo": r.get("equipo"),
+            "sugerido": s["tipo"], "colacion": s["colacion"], "colacion_min": s.get("colacion_min"), "dudoso": s["dudoso"],
+        } for r, s in zip(rows, sug)],
+    }
+
+
+class MarcaTipoItem(BaseModel):
+    id: int
+    tipo: str
+
+
+class ReclasificarMarcasRequest(BaseModel):
+    empleado_id: int
+    fecha: str
+    marcas: List[MarcaTipoItem]
+
+
+@router.post("/marcaciones/reclasificar/")
+async def reclasificar_marcaciones(
+    req: ReclasificarMarcasRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """Fija si cada marca del día es Entrada o Salida y reprocesa el día. Las marcas crudas del reloj no se modifican."""
+    emp = await EmpleadoRepository(service.repository.db).get_by_id(req.empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+    if await service.repository.check_fecha_cerrada(req.fecha, req.empleado_id):
+        raise HTTPException(status_code=403, detail="El periodo de esta fecha se encuentra cerrado y no admite modificaciones.")
+    if not req.marcas:
+        raise HTTPException(status_code=400, detail="No hay marcaciones para clasificar.")
+    nuevos = {}
+    for m in req.marcas:
+        t = (m.tipo or "").strip().capitalize()
+        if t not in ("Entrada", "Salida"):
+            raise HTTPException(status_code=400, detail=f"Tipo inválido para la marca {m.id}: debe ser Entrada o Salida.")
+        nuevos[m.id] = t
+    db = service.repository.db
+    ids = list(nuevos.keys())
+    ph = ",".join("?" * len(ids))
+    # Solo marcas de ESTE empleado y ESTE día (no se puede tocar una marca ajena por el id)
+    orig = await db.fetch_all(
+        f"SELECT id, tipo FROM logs_raw WHERE id IN ({ph}) AND empleado_id = ? AND substr(fecha_hora, 1, 10) = ?",
+        tuple(ids) + (req.empleado_id, req.fecha))
+    orig = {r["id"]: r["tipo"] for r in orig}
+    if len(orig) != len(ids):
+        raise HTTPException(status_code=400, detail="Alguna marca no corresponde a este empleado y día.")
+    for log_id, t in nuevos.items():
+        await db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
+        if str(orig[log_id] or "").strip().lower() != t.lower():
+            await db.execute("INSERT INTO logs_tipo_override (log_id, tipo, usuario_id) VALUES (?, ?, ?)",
+                             (log_id, t, getattr(current_user, "user_id", None)))
+    resultado = await service.procesar_empleado_dia(req.empleado_id, req.fecha, save=True)
+    logger.info(f"🕘 Marcas reclasificadas: empleado {req.empleado_id} {req.fecha} por usuario {getattr(current_user, 'username', '?')}: {nuevos}")
+    return {"success": True, "mensaje": "Marcaciones clasificadas y asistencia recalculada", "asistencia": resultado}
+
+
 @router.delete("/marcaciones/manual/")
 async def eliminar_jornada_especial_manual(
     empleado_id: int = Query(...),

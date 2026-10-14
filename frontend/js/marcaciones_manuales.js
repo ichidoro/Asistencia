@@ -840,6 +840,9 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         if (btnUnlock) btnUnlock.style.display = 'none';
     }
 
+    // Panel con TODAS las marcaciones del día para elegir cuál es Entrada / Salida (y ver cuál sería la colación)
+    cargarPanelMarcacionesDia(empId, dateStr, alertDiv);
+
     // Auto-focus al primer campo libre
     setTimeout(() => {
         if (!inputEntrada.disabled) inputEntrada.focus();
@@ -849,6 +852,137 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     if (marcacionesManualesState.manualInstance) {
         marcacionesManualesState.manualInstance.show();
     }
+}
+
+// ── Marcaciones del día: ver todas y elegir cuál es Entrada / Salida ─────────────────────────────────────
+// Caso Catalina Núñez 09-10: el reloj dejó la primera marca como "Salida" y el atraso salió de 273 min. La marca cruda no se
+// modifica; lo que se elige acá se guarda aparte (logs_tipo_override) y el día se recalcula con ese tipo.
+const MARCAS_COLACION_MIN = 20, MARCAS_COLACION_MAX = 150;
+
+function _marcasMinutos(hora) {
+    const [h, m] = String(hora).split(':');
+    return parseInt(h, 10) * 60 + parseInt(m, 10);
+}
+
+/** Entrada/Salida elegidas -> marcas que serían colación (una Salida y la Entrada siguiente, a mitad del día, 20-150 min). */
+function _marcasColacion(marcas, tipos) {
+    const res = {};
+    for (let i = 1; i < marcas.length - 1; i++) {
+        if (tipos[i] === 'Salida' && tipos[i + 1] === 'Entrada' && i + 1 <= marcas.length - 2) {
+            const gap = _marcasMinutos(marcas[i + 1].hora) - _marcasMinutos(marcas[i].hora);
+            if (gap >= MARCAS_COLACION_MIN && gap <= MARCAS_COLACION_MAX) { res[i] = gap; res[i + 1] = gap; }
+        }
+    }
+    return res;
+}
+
+async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
+    let host = document.getElementById('manual-panel-marcas');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'manual-panel-marcas';
+        host.className = 'mb-3';
+        if (anchorEl) anchorEl.insertAdjacentElement('afterend', host);
+    }
+    host.style.display = 'none';
+    host.innerHTML = '';
+    const reqId = `${empId}|${dateStr}`;
+    host.dataset.req = reqId;
+    try {
+        const r = await fetch(`/api/asistencia/marcaciones/dia/?empleado_id=${encodeURIComponent(empId)}&fecha=${encodeURIComponent(dateStr)}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (host.dataset.req !== reqId || !data.marcas || data.marcas.length === 0) return; // el modal ya cambió de día
+        renderPanelMarcasDia(host, empId, dateStr, data);
+    } catch (e) {
+        console.warn('No se pudieron cargar las marcaciones del día', e);
+    }
+}
+
+function renderPanelMarcasDia(host, empId, dateStr, data) {
+    const marcas = data.marcas;
+    const cerrada = !!data.fecha_cerrada;
+    const dudoso = marcas.some(m => m.dudoso);
+    host.style.display = 'block';
+    host.innerHTML = `
+        <div class="border rounded p-2" style="background:#f8fafc;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong><i class="bi bi-list-check"></i> Marcaciones del día (${marcas.length})</strong>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcas-sugerir"${cerrada ? ' disabled' : ''}>Usar sugerencia</button>
+            </div>
+            <div class="small text-muted mb-2">Elija cuál marca es Entrada y cuál es Salida. La colación se detecta sola cuando una Salida y la Entrada siguiente quedan a mitad del día, entre 20 y 150 minutos.</div>
+            <table class="table table-sm align-middle mb-1" style="font-size:.9rem;">
+                <thead><tr><th>Hora</th><th>El reloj dijo</th><th>Es</th><th></th></tr></thead>
+                <tbody id="marcas-dia-body"></tbody>
+            </table>
+            <div id="marcas-dia-aviso" class="small mb-2"></div>
+            <div class="text-end">
+                <button type="button" class="btn btn-sm btn-primary" id="btn-marcas-guardar"${cerrada ? ' disabled' : ''}>Guardar clasificación</button>
+            </div>
+            ${cerrada ? '<div class="small text-danger mt-1">El período está cerrado: no se puede modificar.</div>' : ''}
+        </div>`;
+    const body = host.querySelector('#marcas-dia-body');
+    body.innerHTML = marcas.map((m, i) => `
+        <tr data-i="${i}">
+            <td class="fw-semibold">${m.hora}</td>
+            <td>${m.tipo_reloj || '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
+            <td><select class="form-select form-select-sm marca-tipo" style="width:110px;"${cerrada ? ' disabled' : ''}>
+                <option value="Entrada"${m.tipo_actual === 'Entrada' ? ' selected' : ''}>Entrada</option>
+                <option value="Salida"${m.tipo_actual === 'Salida' ? ' selected' : ''}>Salida</option>
+            </select></td>
+            <td class="marca-etiqueta"></td>
+        </tr>`).join('');
+
+    const selects = () => Array.from(body.querySelectorAll('select.marca-tipo'));
+    const tipos = () => selects().map(sel => sel.value);
+    const refrescar = () => {
+        const ts = tipos();
+        const col = _marcasColacion(marcas, ts);
+        body.querySelectorAll('tr').forEach((tr, i) => {
+            tr.querySelector('.marca-etiqueta').innerHTML = col[i] !== undefined
+                ? `<span class="badge bg-info text-dark">Colación · ${col[i]} min</span>` : '';
+        });
+        const avisos = [];
+        if (ts[0] === 'Salida') avisos.push('La primera marca del día está como Salida.');
+        if (ts.length > 1 && ts[ts.length - 1] === 'Entrada') avisos.push('La última marca del día está como Entrada.');
+        for (let i = 1; i < ts.length; i++) if (ts[i] === ts[i - 1]) { avisos.push('Hay dos marcas seguidas del mismo tipo: revise que alternen Entrada y Salida.'); break; }
+        if (dudoso) avisos.push('La cantidad de marcas es impar o hay una sola: confirme cuál falta.');
+        host.querySelector('#marcas-dia-aviso').innerHTML = avisos.length
+            ? `<span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> ${avisos.join(' ')}</span>` : '';
+    };
+    selects().forEach(sel => sel.addEventListener('change', refrescar));
+    host.querySelector('#btn-marcas-sugerir').addEventListener('click', () => {
+        selects().forEach((sel, i) => { sel.value = marcas[i].sugerido; });
+        refrescar();
+    });
+    host.querySelector('#btn-marcas-guardar').addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget;
+        const ts = tipos();
+        btn.disabled = true;
+        try {
+            const r = await fetch('/api/asistencia/marcaciones/reclasificar/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ empleado_id: parseInt(empId), fecha: dateStr, marcas: marcas.map((m, i) => ({ id: m.id, tipo: ts[i] })) })
+            });
+            const resp = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                const msg = resp.detail || 'No se pudo guardar la clasificación.';
+                if (typeof showToast === 'function') showToast(msg, 'danger'); else alert(msg);
+                btn.disabled = false;
+                return;
+            }
+            if (typeof showToast === 'function') showToast('Marcaciones clasificadas y asistencia recalculada.', 'success');
+            closeManualEntryModal();
+            if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+            else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        } catch (e) {
+            console.error('Error al clasificar marcaciones', e);
+            alert('Error de conexión al guardar la clasificación.');
+            btn.disabled = false;
+        }
+    });
+    refrescar();
 }
 
 function closeManualEntryModal() {

@@ -10,6 +10,14 @@ from loguru import logger
 
 from backend.core.database import Database
 
+# Marcas del reloj con el tipo (Entrada/Salida) ya corregido por una persona, si lo hubo (tabla logs_tipo_override). Se usa como
+# `FROM {LOGS_CON_TIPO_CORREGIDO}`: el alias se llama logs_raw, así los WHERE existentes siguen igual. `tipo_original` = lo que dijo el reloj.
+LOGS_CON_TIPO_CORREGIDO = (
+    "(SELECT l.id, l.empleado_id, l.rut, l.fecha_hora, COALESCE(o.tipo, l.tipo) AS tipo, l.equipo, l.hash_original, l.created_at, "
+    "l.manual, l.observaciones, l.usuario_id, l.tipo AS tipo_original "
+    "FROM logs_raw l LEFT JOIN logs_tipo_override o ON o.log_id = l.id) AS logs_raw"
+)
+
 class AsistenciaRepository:
     def __init__(self, db: Database):
         self.db = db
@@ -26,11 +34,11 @@ class AsistenciaRepository:
         manana = (fecha_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
         query = """
-            SELECT * FROM logs_raw
+            SELECT * FROM %s
             WHERE empleado_id = ?
               AND fecha_hora BETWEEN ? AND ?
             ORDER BY fecha_hora ASC
-        """
+        """ % LOGS_CON_TIPO_CORREGIDO
         return await self.db.fetch_all(query, (empleado_id, f"{ayer} 00:00:00", f"{manana} 23:59:59"))
 
     async def get_raw_logs_summary(self, fecha_inicio: str, fecha_fin: str) -> Dict[int, Dict[str, int]]:

@@ -297,6 +297,18 @@ class TurnoRepository:
                 except Exception as mig_err:
                     logger.error(f"❌ Error crítico en migración de logs_raw ({col}): {mig_err}")
 
+        # Tipo (Entrada/Salida) que una persona le asigna a una marca del reloj que quedó mal clasificada (2026-10-14: la primera
+        # marca del día llegaba como "Salida" y el motor la descartaba). La marca cruda NO se toca: el motor lee el tipo ya corregido.
+        if not await self.db.table_exists("logs_tipo_override"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS logs_tipo_override (
+                    log_id INTEGER PRIMARY KEY,
+                    tipo TEXT NOT NULL,
+                    usuario_id INTEGER,
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+
         # ⚡ Índices para logs_raw (tabla de marcaciones crudas - leida en cada recalculo)
         # [NOTA] idx_logs_raw_empleado eliminado: cubierto por el compuesto idx_logs_raw_emp_fecha
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_logs_raw_fecha ON logs_raw(fecha_hora)")
