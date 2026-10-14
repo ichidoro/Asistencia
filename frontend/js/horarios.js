@@ -87,11 +87,7 @@ async function saveTurno() {
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         meta_horas_espera: parseFloat(document.getElementById('input-meta-espera')?.value || 88.0),
-        // El selector de modalidad solo aplica a Bolsa Flexible (queda oculto en los demás tipos pero conserva su valor por defecto,
-        // LIBRETA_180H): un horario tradicional guardado con eso pasaba a controlarse por libreta (2026-10-14, Facturación 2).
-        modalidad_control: ['BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'].includes(formData.get('tipo_programacion'))
-            ? (document.getElementById('select-modalidad-control')?.value || 'LIBRETA_180H')
-            : 'RELOJ',
+        modalidad_control: document.getElementById('select-modalidad-control')?.value || 'RELOJ',
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
@@ -335,7 +331,7 @@ async function openModalHorario(id = null) {
             if (inputMetaEsp) inputMetaEsp.value = (turno.meta_horas_espera !== undefined && turno.meta_horas_espera !== null) ? turno.meta_horas_espera : 88.0;
 
             const selectModControl = document.getElementById('select-modalidad-control');
-            if (selectModControl) selectModControl.value = turno.modalidad_control || 'LIBRETA_180H';
+            if (selectModControl) selectModControl.value = turno.modalidad_control || 'RELOJ';
 
             const chkViajes = document.getElementById('chkPermiteViajesLargos') || document.getElementById('chk-permite-viajes-largos');
             if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
@@ -410,7 +406,7 @@ async function openModalHorario(id = null) {
         const inputMetaEsp = document.getElementById('input-meta-espera');
         if (inputMetaEsp) inputMetaEsp.value = "88.0";
         const selectModControl = document.getElementById('select-modalidad-control');
-        if (selectModControl) selectModControl.value = 'LIBRETA_180H';
+        if (selectModControl) selectModControl.value = 'RELOJ';
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
         handleTipoProgramacionChange();
@@ -1149,7 +1145,7 @@ function renderModalHtml() {
                             </div>
                             <div class="col-md-2">
                                 <label for="input-tipo-programacion" class="form-label">Tipo Planificación</label>
-                                <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="handleTipoProgramacionChange()">
+                                <select id="input-tipo-programacion" class="form-select" name="tipo_programacion" onchange="onTipoProgramacionCambiado()">
                                     <option value="CICLO_INTELIGENTE">Ciclo Inteligente</option>
                                     <option value="BOLSA_FLEXIBLE">Bolsa Flexible</option>
                                 </select>
@@ -1209,8 +1205,8 @@ function renderModalHtml() {
                                         <i class="bi bi-clipboard-check" aria-hidden="true"></i> Modalidad de Control de Asistencia
                                     </label>
                                     <select id="select-modalidad-control" name="modalidad_control" class="form-select border-success">
-                                        <option value="LIBRETA_180H">Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj a partir de 01-10-2026)</option>
                                         <option value="RELOJ">Reloj Control Biométrico Tradicional</option>
+                                        <option value="LIBRETA_180H">Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj a partir de 01-10-2026)</option>
                                     </select>
                                     <div class="form-text small text-muted mt-1">
                                         Define si la asistencia del trabajador se registra vía Libreta Digital Art. 25 bis (sin marcas biométricas) o mediante reloj control físico.
@@ -1490,6 +1486,16 @@ function closeModalHorario(fromSave = false) {
 // ==========================================
 // AUTOMATION LOGIC
 // ==========================================
+// Cambio hecho por la persona en el selector de tipo: la modalidad sugerida sigue al tipo (Bolsa Flexible = libreta; el resto = reloj).
+// Se puede cambiar después a mano. No corre al abrir un turno guardado, así no pisa lo que ya tiene.
+function onTipoProgramacionCambiado() {
+    const tipo = document.querySelector('select[name="tipo_programacion"]')?.value;
+    const sel = document.getElementById('select-modalidad-control');
+    if (sel) sel.value = (tipo === 'BOLSA_FLEXIBLE' || tipo === 'FLEXIBLE_BOLSA') ? 'LIBRETA_180H' : 'RELOJ';
+    handleTipoProgramacionChange();
+}
+window.onTipoProgramacionCambiado = onTipoProgramacionCambiado;
+
 function handleTipoProgramacionChange() {
     const tipoSelect = document.querySelector('select[name="tipo_programacion"]');
     if (!tipoSelect) return;
