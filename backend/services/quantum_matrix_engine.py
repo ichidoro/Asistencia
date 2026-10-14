@@ -661,11 +661,17 @@ class QuantumShiftWeekMatcher:
                         break
 
             if hay_entrada_noche_hoy:
+                # Solo las salidas de los ciclos NOCTURNOS: si se mezclaran las de un ciclo diurno (p. ej. 23:00),
+                # el límite subiría a ~25:00 y entraría al análisis todo el día siguiente, incluida su última salida.
                 salidas_nocturnas_teo = [
                     QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida'))
                     for s_dict in turnos_dict.values()
                     for cfg in [s_dict.get(dia_semana, {})]
-                    if cfg and not cfg.get('es_libre') and cfg.get('hora_salida')
+                    if cfg and not cfg.get('es_libre') and cfg.get('hora_salida') and (
+                        cfg.get('cruza_medianoche') or
+                        (cfg.get('hora_entrada') and
+                         QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
+                    )
                 ]
                 max_sal_teo = max(salidas_nocturnas_teo) if salidas_nocturnas_teo else 720.0
                 for l in logs:
