@@ -1,5 +1,8 @@
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from loguru import logger
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission
 from backend.services.turno_service import TurnoService
 from backend.repositories.turno import TurnoRepository
@@ -8,6 +11,7 @@ from backend.repositories.asistencia import AsistenciaRepository
 from backend.repositories.empleado import EmpleadoRepository
 from backend.core.database import get_db, Database
 from backend.schemas.turno import TurnoCreate, TurnoResponse, AsignacionCreate, AsignacionBulk, AsignacionUpdateDate
+from backend.services.turnos_export import exportar_turnos_ciclo
 from datetime import date
 
 router = APIRouter(
@@ -138,6 +142,25 @@ async def get_turnos_stats_por_area(
         areas_permitidas = current_user.areas or []
         stats["areas"] = {k: v for k, v in stats.get("areas", {}).items() if k in areas_permitidas}
     return stats
+
+@router.get("/export-ciclos/")
+async def export_turnos_ciclo(
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
+):
+    """
+    Solo lectura. Todos los turnos de Ciclo Inteligente con sus opciones/semanas, el horario de cada día, todos sus
+    parámetros y cuántas personas los tienen asignados hoy (solo el número: sin nombres, RUT ni marcas).
+    Sirve para repetir fuera de línea cómo se comportaría el motor con los turnos reales (botón "Exportar turnos").
+    """
+    if not (current_user.alcance_global or current_user.is_superuser):
+        raise HTTPException(status_code=403, detail="La exportación de turnos requiere alcance global")
+    datos = await exportar_turnos_ciclo(db)
+    logger.info(f"Exportación de turnos de Ciclo Inteligente por {current_user.username}: {datos['meta']['conteos']}")
+    return JSONResponse(
+        content=jsonable_encoder(datos),
+        headers={"Content-Disposition": 'attachment; filename="turnos_ciclo.json"', "Cache-Control": "no-store"},
+    )
 
 @router.post("/asignar/")
 async def asignar_turno(
