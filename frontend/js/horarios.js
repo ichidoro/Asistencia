@@ -250,6 +250,44 @@ async function deleteTurno(id) {
     }
 }
 
+// Descarga (solo lectura) todos los turnos de Ciclo Inteligente con sus opciones, los 7 días de cada una y todos sus parámetros,
+// más cuántas personas tiene cada turno (sin nombres, RUT ni marcas). Sirve para simular fuera de línea cómo se comportaría el motor.
+async function exportarTurnosJson(btn) {
+    const textoOriginal = btn ? btn.innerHTML : '';
+    const avisar = (msg, tipo) => (typeof window.showToast === 'function' ? window.showToast(msg, tipo) : alert(msg));
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Exportando...';
+        }
+        const res = await fetch('/api/turnos/export-ciclos/');
+        if (!res.ok) {
+            let msg = 'No se pudo exportar los turnos';
+            try { msg = (await res.json()).detail || msg; } catch (_) { /* respuesta sin JSON */ }
+            avisar(msg, 'warning');
+            return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `turnos_ciclo_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        avisar('Turnos exportados: revisa tus descargas', 'success');
+    } catch (error) {
+        console.error(error);
+        avisar('Error al exportar los turnos', 'danger');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+}
+window.exportarTurnosJson = exportarTurnosJson;
+
 function ensureViajesLargosSwitch() {
     const divLineaFicticia = document.getElementById('divLineaFicticia');
     if (divLineaFicticia && !document.getElementById('divPermiteViajesLargos')) {
@@ -511,12 +549,18 @@ function renderHorariosUI() {
         const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
         const html = `
             <div id="horarios-view" class="fade-in">
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
                     <h2><i class="bi bi-calendar3" aria-hidden="true"></i> Configuración de Turnos</h2>
                     ${canEdit ? `
-                    <button class="btn btn-primary" onclick="openModalHorario()">
-                        <i class="bi bi-plus-lg"></i> Nuevo Turno
-                    </button>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary" id="btn-exportar-turnos" type="button" onclick="exportarTurnosJson(this)"
+                            title="Descarga todos los turnos de Ciclo Inteligente con sus opciones, días y parámetros (solo lectura, sin datos personales)">
+                            <i class="bi bi-download" aria-hidden="true"></i> Exportar turnos
+                        </button>
+                        <button class="btn btn-primary" onclick="openModalHorario()">
+                            <i class="bi bi-plus-lg"></i> Nuevo Turno
+                        </button>
+                    </div>
                     ` : ''}
                 </div>
 
