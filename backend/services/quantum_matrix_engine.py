@@ -320,11 +320,20 @@ class MultiBlockTensorSolver:
                 return None
 
     @classmethod
-    def collapse_consecutive_same_type(cls, logs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def collapse_consecutive_same_type(
+        cls,
+        logs: List[Dict[str, Any]],
+        salidas_por_estructura: bool = False,
+        descartadas_estructura: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Deduplica marcaciones consecutivas del mismo tipo dentro de un bloque continuo:
         - Para entradas consecutivas (E, E...): preserva la primera (inicio de jornada).
         - Para salidas consecutivas (S, S...): preserva la última (fin de jornada).
+        Entre marcas a menos de 20 min (doble toque) rige siempre. Con `salidas_por_estructura`, las Salidas seguidas que vienen justo
+        después de una Entrada se reducen a la última SIN mirar cuánto las separa: esa Entrada no puede cerrar la jornada en una Salida
+        intermedia si después hay otra Salida (Entrada 07:52 · Salida 13:24 · Salida 17:16 cierra a las 17:16; la pausa la cubre la
+        colación automática del turno asignado). Las Salidas descartadas por esta vía se anotan en `descartadas_estructura`.
         """
         if not logs or len(logs) <= 1:
             return logs
@@ -350,11 +359,15 @@ class MultiBlockTensorSolver:
                     i += 1
             elif is_s:
                 last_s = curr
+                cerrada = salidas_por_estructura and i > 0 and str(logs[i - 1].get('tipo', '')).strip().lower() in _TIPOS_E
                 while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_S:
                     dt_c = cls.parse_dt(last_s)
                     dt_n = cls.parse_dt(logs[i + 1])
-                    if dt_c and dt_n and (dt_n - dt_c).total_seconds() >= 1200.0:
+                    separadas = bool(dt_c and dt_n and (dt_n - dt_c).total_seconds() >= 1200.0)
+                    if separadas and not cerrada:
                         break
+                    if separadas and descartadas_estructura is not None:
+                        descartadas_estructura.append(last_s)
                     i += 1
                     last_s = logs[i]
                 collapsed.append(last_s)
@@ -369,7 +382,8 @@ class MultiBlockTensorSolver:
         logs: List[Dict[str, Any]],
         gap_emergencia_horas: float = 4.0,
         limite_jornada_emergencia_horas: float = 3.0,
-        bounce_seconds: float = 180.0
+        bounce_seconds: float = 180.0,
+        salidas_por_estructura: bool = False
     ) -> Dict[str, Any]:
         """
         Segmenta cronológicamente las marcas del día en:
@@ -382,7 +396,8 @@ class MultiBlockTensorSolver:
             'jornada_adicional_minutos': 0,
             'jornada_adicional_obs': '',
             'emergencia_detectada': None,
-            'marcas_consumidas_ids': []
+            'marcas_consumidas_ids': [],
+            'descartadas_estructura': []
         }
 
         if not logs:
@@ -428,7 +443,11 @@ class MultiBlockTensorSolver:
             return result
 
         # El primer bloque es el Bloque Principal ordinario (con deduplicación de tipos repetidos)
-        result['bloque_principal'] = cls.collapse_consecutive_same_type(bloques[0])
+        result['bloque_principal'] = cls.collapse_consecutive_same_type(
+            bloques[0],
+            salidas_por_estructura=salidas_por_estructura,
+            descartadas_estructura=result['descartadas_estructura'],
+        )
         for l in bloques[0]:
             if l.get('id'):
                 result['marcas_consumidas_ids'].append(l['id'])
@@ -1886,29 +1905,21 @@ class QuantumMatrixEngine:
             except Exception as e:
                 logger.warning(f"Error evaluando salida pasada la medianoche: {e}")
 
-        # Selector tensorial de salida óptima para turnos con múltiples marcas de salida:
-        # Si hay 1 entrada y >= 2 salidas sin entrada intermedia, se selecciona la salida que minimiza
-        # la distancia circular de fase hacia la salida teórica contractual, evitando cortar prematuramente.
-        descartadas_multi_salida_ids: Set[Any] = set()
-        if not is_bolsa and hora_sal_teo:
-            e_cands = [l for l in marcas_disponibles if str(l.get('tipo', '')).strip().lower() in _TIPOS_E]
-            s_cands = [l for l in marcas_disponibles if str(l.get('tipo', '')).strip().lower() in _TIPOS_S]
-            if len(e_cands) == 1 and len(s_cands) >= 2:
-                p_sal_teo = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
-                mejor_salida = min(s_cands, key=lambda s: abs(QuantumPhaseTopology.circular_distance(p_sal_teo, QuantumPhaseTopology.time_to_phase(str(s.get('fecha_hora', ''))[11:16]))))
-                descartadas_multi_salida_ids = {s.get('id') for s in s_cands if s.get('id') and s.get('id') != mejor_salida.get('id')}
-                marcas_disponibles = [l for l in marcas_disponibles if l.get('id') not in descartadas_multi_salida_ids]
+        # (Antes aquí se elegía, con 1 Entrada y >= 2 Salidas, la Salida más cercana a la salida teórica. Eso contradecía la regla de
+        # collapse_consecutive_same_type —"Salidas seguidas: se queda la última"— y cortaba la jornada en la Salida a colación cuando la persona
+        # se quedaba más tarde. Ahora manda la última Salida; ver MultiBlockTensorSolver.collapse_consecutive_same_type.)
 
         # 4. Segmentación Multi-Bloque (+2 y Emergencias)
         segment_res = MultiBlockTensorSolver.segment_blocks(
             marcas_disponibles,
             gap_emergencia_horas=gap_emergencia,
             limite_jornada_emergencia_horas=limite_emergencia,
-            bounce_seconds=bounce_sec
+            bounce_seconds=bounce_sec,
+            salidas_por_estructura=not is_bolsa
         )
 
         bloque_p = segment_res['bloque_principal']
-        marcas_consumidas_ids = list(set(segment_res['marcas_consumidas_ids']) | descartadas_multi_salida_ids)
+        marcas_consumidas_ids = list(set(segment_res['marcas_consumidas_ids']))
 
         # Resultado base
         res: Dict[str, Any] = {
@@ -1949,6 +1960,12 @@ class QuantumMatrixEngine:
             }
         if segment_res['emergencia_detectada']:
             res['observaciones'] += segment_res['emergencia_detectada']['texto'] + " "
+        if segment_res['descartadas_estructura']:
+            horas_desc = [MultiBlockTensorSolver.parse_dt(l).strftime("%H:%M:%S") for l in segment_res['descartadas_estructura']
+                          if MultiBlockTensorSolver.parse_dt(l)]
+            if horas_desc:
+                res['observaciones'] += ("Salidas seguidas: se tomó la última y se descartó la de las " if len(horas_desc) == 1
+                                         else "Salidas seguidas: se tomó la última y se descartaron las de las ") + ", ".join(horas_desc) + ". "
 
         # Si no hay marcas en el bloque principal
         now_local = _get_now_local()
