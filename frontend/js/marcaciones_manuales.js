@@ -915,6 +915,8 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     const marcas = data.marcas;
     const cerrada = !!data.fecha_cerrada;
     const dudoso = marcas.some(m => m.dudoso);
+    // Quitar una marca manual (nunca las del reloj): solo quien tenga el permiso que asigna el administrador al rol
+    const puedeQuitar = typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.eliminar_manual');
     host.style.display = 'block';
     host.innerHTML = `
         <div class="border rounded p-2" style="background:#f8fafc;">
@@ -924,7 +926,7 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
             </div>
             <div class="small text-muted mb-2">Elija cuál marca es Entrada y cuál es Salida. La colación se detecta sola cuando una Salida y la Entrada siguiente quedan a mitad del día, entre 20 y 150 minutos.</div>
             <table class="table table-sm align-middle mb-1" style="font-size:.9rem;">
-                <thead><tr><th>Hora</th><th>El reloj dijo</th><th>Es</th><th></th></tr></thead>
+                <thead><tr><th>Hora</th><th>El reloj dijo</th><th>Es</th><th></th>${puedeQuitar ? '<th></th>' : ''}</tr></thead>
                 <tbody id="marcas-dia-body"></tbody>
             </table>
             <div id="marcas-dia-aviso" class="small mb-2"></div>
@@ -949,7 +951,11 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
                 <option value="Salida"${m.tipo_actual === 'Salida' ? ' selected' : ''}>Salida</option>
             </select></td>
             <td class="marca-etiqueta"></td>
+            ${puedeQuitar ? `<td class="text-end">${m.manual ? `<button type="button" class="btn btn-sm btn-outline-danger btn-quitar-marca" title="Quitar esta marcación manual"${cerrada ? ' disabled' : ''}><i class="bi bi-trash"></i> Quitar</button>` : ''}</td>` : ''}
         </tr>`).join('');
+    body.querySelectorAll('.btn-quitar-marca').forEach((btn) => {
+        btn.addEventListener('click', () => quitarMarcaManual(empId, marcas[parseInt(btn.closest('tr').dataset.i)]));
+    });
 
     const selects = () => Array.from(body.querySelectorAll('select.marca-tipo'));
     const tipos = () => selects().map(sel => sel.value);
@@ -1001,6 +1007,52 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         }
     });
     refrescar();
+}
+
+/**
+ * Quita UNA marcación manual (las del reloj no se pueden quitar). Pide el motivo, que queda en la auditoría junto con quién la quitó.
+ */
+async function quitarMarcaManual(empId, marca) {
+    if (!marca) return;
+    const fechaTxt = typeof window.formatFechaDDMMYYYY === 'function' ? window.formatFechaDDMMYYYY(marca.fecha) : marca.fecha;
+    let motivo = '';
+    if (typeof Swal !== 'undefined') {
+        const r = await Swal.fire({
+            icon: 'warning',
+            title: 'Quitar marcación manual',
+            html: `Se quitará la marcación manual <b>${marca.tipo_actual} de las ${marca.hora}</b> del ${fechaTxt}.<br>Las marcas del reloj no se tocan. Quedará registrado quién la quitó y por qué.`,
+            input: 'textarea',
+            inputLabel: 'Motivo (obligatorio)',
+            inputPlaceholder: 'Ej.: la Salida quedó con la fecha equivocada',
+            inputValidator: (v) => (!v || v.trim().length < 5) ? 'Escriba el motivo (al menos 5 letras).' : undefined,
+            showCancelButton: true,
+            reverseButtons: true,
+            confirmButtonText: 'Quitar marcación',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc2626'
+        });
+        if (!r.isConfirmed) return;
+        motivo = String(r.value || '').trim();
+    } else {
+        motivo = String(window.prompt(`Motivo para quitar la marcación manual ${marca.tipo_actual} de las ${marca.hora} (${fechaTxt}):`) || '').trim();
+        if (motivo.length < 5) return;
+    }
+    try {
+        const resp = await fetch(`/api/asistencia/marcaciones/manual/${encodeURIComponent(marca.id)}/?motivo=${encodeURIComponent(motivo)}`, { method: 'DELETE' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            const msg = data.detail || 'No se pudo quitar la marcación.';
+            if (typeof showToast === 'function') showToast(msg, 'danger'); else alert(msg);
+            return;
+        }
+        if (typeof showToast === 'function') showToast(data.mensaje || 'Marcación manual quitada.', 'success');
+        closeManualEntryModal();
+        if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+        else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+    } catch (e) {
+        console.error('Error al quitar la marcación manual', e);
+        alert('Error de conexión al quitar la marcación.');
+    }
 }
 
 function closeManualEntryModal() {
@@ -1106,9 +1158,11 @@ async function saveManualEntry() {
         let errors = [];
         let successCount = 0;
 
+        const avisos = [];
         results.forEach(res => {
             if (res.status === 200) {
                 successCount++;
+                if (res.body && res.body.aviso) avisos.push(res.body.aviso);
             } else {
                 errors.push(`${res.type}: ${res.body.detail || 'Error'}`);
             }
@@ -1120,6 +1174,8 @@ async function saveManualEntry() {
 
         if (successCount > 0) {
             if (typeof showToast === 'function') showToast(`Se guardaron ${successCount} marcaciones.`, "success");
+            // Salida de un turno de noche: quedó el día siguiente; se avisa dónde y cuántas horas dura la jornada
+            if (avisos.length) alert(avisos.join('\n\n'));
             closeManualEntryModal();
             if (typeof window.reloadSingleEmployeeRow === 'function') {
                 window.reloadSingleEmployeeRow(empId);

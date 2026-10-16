@@ -1447,6 +1447,54 @@ async def aprobar_horas_extra_batch(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ── Salida de un turno de noche ingresada a mano (2026-10-16) ─────────────────────────────────────────────────────────────────
+# Caso Eduardo Donoso 11-10: se ingresó Entrada 23:00 y Salida 07:00 y las dos quedaron con fecha 11-10; la Salida (07:00 del 11) cayó
+# en el turno de la noche anterior, sin Entrada, y el panel pedía "ingrese la Entrada faltante" (falso positivo). Una jornada no termina antes
+# de empezar: la Salida igual o anterior a la Entrada es la del día siguiente.
+def _hora_con_segundos(hora: Any) -> str:
+    """'07:00' o '07:00:00' → '07:00:00'. Una hora que no existe (25:00, 7) es un error, no una marca."""
+    h = str(hora).strip()
+    h = f"{h}:00" if h.count(":") == 1 else h
+    try:
+        return datetime.strptime(h, "%H:%M:%S").strftime("%H:%M:%S")
+    except ValueError:
+        raise ValueError(f"Hora inválida: «{hora}». Use el formato HH:MM.") from None
+
+
+def fecha_de_la_salida(fecha: str, hora_salida: Any, hora_entrada: Any = None, cruza_medianoche: bool = False) -> str:
+    """
+    Fecha (YYYY-MM-DD) en que cae la Salida de la jornada que empieza en `fecha`.
+      · el turno declara que cruza la medianoche → el día siguiente;
+      · la Salida es igual o anterior a la Entrada (23:00 → 07:00) → el día siguiente;
+      · sin Entrada con la que compararla (y sin el aviso del turno) → la misma fecha: no se inventa nada.
+    """
+    manana = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    if cruza_medianoche:
+        return manana
+    if hora_entrada and _hora_con_segundos(hora_salida) <= _hora_con_segundos(hora_entrada):
+        return manana
+    return fecha
+
+
+_TIPOS_ENTRADA = ('entrada', 'entry', 'e', 'in', '1')
+
+
+async def _hora_de_entrada_sin_cerrar(db, empleado_id: int, fecha: str) -> Optional[str]:
+    """Hora (HH:MM:SS) de la última marca de `fecha` si es una Entrada (con el tipo ya corregido por una persona): una Entrada sin Salida."""
+    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO
+    ultima = await db.fetch_one(
+        f"SELECT fecha_hora, tipo FROM {LOGS_CON_TIPO_CORREGIDO} WHERE empleado_id = ? AND substr(fecha_hora,1,10) = ? "
+        "ORDER BY fecha_hora DESC LIMIT 1", (empleado_id, fecha))
+    if ultima and str(ultima["tipo"] or "").strip().lower() in _TIPOS_ENTRADA:
+        return str(ultima["fecha_hora"])[11:19]
+    return None
+
+
+def _duracion_texto(fh_desde: str, fh_hasta: str) -> str:
+    minutos = _min_abs(fh_hasta) - _min_abs(fh_desde)
+    return f"{minutos // 60} h {minutos % 60:02d} min"
+
+
 @router.post("/marcaciones/manual/")
 async def agregar_marcacion_manual(
     empleado_id: int,
@@ -1495,8 +1543,10 @@ async def agregar_marcacion_manual(
             )
 
         marcas_a_insertar = []
-        if hora_entrada and str(hora_entrada).strip() not in ('', 'null', 'undefined'):
-            fh_ent = f"{fecha} {hora_entrada}:00" if str(hora_entrada).count(':') == 1 else f"{fecha} {hora_entrada}"
+        aviso = None
+        hora_entrada_ok = hora_entrada if hora_entrada and str(hora_entrada).strip() not in ('', 'null', 'undefined') else None
+        if hora_entrada_ok:
+            fh_ent = f"{fecha} {_hora_con_segundos(hora_entrada_ok)}"
             marcas_a_insertar.append((fh_ent, "Entrada"))
         if hora_salida and str(hora_salida).strip() not in ('', 'null', 'undefined'):
             # Blindaje contra artefacto 00:00 de salida cuando se acompaña con entrada matutina diurna
@@ -1505,36 +1555,68 @@ async def agregar_marcacion_manual(
             if h_sal_clean in ('00:00', '00:00:00') and h_ent_clean and '06:00' <= h_ent_clean <= '12:00':
                 logger.warning(f"Ignorando salida espuria 00:00 para entrada matutina {h_ent_clean} de empleado {empleado_id}")
             else:
-                fh_sal = f"{fecha} {hora_salida}:00" if str(hora_salida).count(':') == 1 else f"{fecha} {hora_salida}"
+                # Sin Entrada en esta petición, se compara con la Entrada que el día dejó sin cerrar (si la hay)
+                ent_ref = hora_entrada_ok or await _hora_de_entrada_sin_cerrar(db, empleado_id, fecha)
+                fh_sal, aviso = await _armar_salida_manual(service, empleado_id, fecha, hora_salida, ent_ref)
                 marcas_a_insertar.append((fh_sal, "Salida"))
         if not hora_entrada and not hora_salida and hora and tipo:
-            fh_single = f"{fecha} {hora}:00" if str(hora).count(':') == 1 else f"{fecha} {hora}"
+            if tipo == "Salida":
+                fh_single, aviso = await _armar_salida_manual(service, empleado_id, fecha, hora,
+                                                              await _hora_de_entrada_sin_cerrar(db, empleado_id, fecha))
+            else:
+                fh_single = f"{fecha} {_hora_con_segundos(hora)}"
             marcas_a_insertar.append((fh_single, tipo))
 
         if not marcas_a_insertar:
             raise HTTPException(status_code=400, detail="Debe proporcionar 'hora' y 'tipo' o bien 'hora_entrada' / 'hora_salida'")
 
         query = """
-            INSERT OR IGNORE INTO logs_raw (empleado_id, rut, fecha_hora, tipo, manual, observaciones, hash_original)
-            VALUES (?, ?, ?, ?, 1, ?, ?)
+            INSERT OR IGNORE INTO logs_raw (empleado_id, rut, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
+            VALUES (?, ?, ?, ?, 1, ?, ?, ?)
         """
         for fh, t in marcas_a_insertar:
             raw_string = f"{rut}|{fh}|{t}"
             hash_val = hashlib.sha256(raw_string.encode()).hexdigest()
-            await db.execute(query, (empleado_id, rut, fh, t, obs_str, hash_val))
-        
+            await db.execute(query, (empleado_id, rut, fh, t, obs_str, hash_val, getattr(current_user, "user_id", None)))
+
         # 2. Reprocesar asistencia del día UNA SOLA VEZ
         resultado = await service.procesar_empleado_dia(empleado_id, fecha, save=True)
-        
+        # La Salida de un turno de noche cae al día siguiente: ese día también ve la marca; si ya estaba calculado, se recalcula
+        for otro_dia in sorted({fh[:10] for fh, _ in marcas_a_insertar} - {fecha}):
+            if (otro_dia <= datetime.now().strftime("%Y-%m-%d") and await service.repository.get_asistencia(empleado_id, otro_dia)
+                    and not await service.repository.check_fecha_cerrada(otro_dia, empleado_id)):
+                await service.procesar_empleado_dia(empleado_id, otro_dia, save=True)
+
         return {
             "success": True,
             "mensaje": f"Se agregaron {len(marcas_a_insertar)} marcaciones manuales y se reprocesó la asistencia",
+            "aviso": aviso,
             "asistencia": resultado
         }
     except HTTPException:
         raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _armar_salida_manual(service: AsistenciaService, empleado_id: int, fecha: str, hora_salida: Any, hora_entrada: Optional[str]):
+    """
+    Fecha y hora completas de una Salida manual de la jornada que empieza en `fecha`, y el aviso si quedó al día siguiente.
+    Si ese día siguiente está en un período cerrado no se agrega la marca (no se puede modificar).
+    """
+    fecha_sal = fecha_de_la_salida(fecha, hora_salida, hora_entrada)
+    fh_sal = f"{fecha_sal} {_hora_con_segundos(hora_salida)}"
+    if fecha_sal == fecha:
+        return fh_sal, None
+    if await service.repository.check_fecha_cerrada(fecha_sal, empleado_id):
+        raise HTTPException(status_code=403, detail=f"La Salida cae el {fecha_sal[8:]}-{fecha_sal[5:7]} (día siguiente) y ese período está cerrado: no admite modificaciones.")
+    aviso = (f"La Salida de las {fh_sal[11:16]} quedó el {fecha_sal[8:]}-{fecha_sal[5:7]} (día siguiente) porque es anterior a la Entrada: "
+             "el turno cruza la medianoche.")
+    if hora_entrada:
+        aviso += f" Jornada de {_duracion_texto(f'{fecha} {_hora_con_segundos(hora_entrada)}', fh_sal)}: revise que sea correcta."
+    return fh_sal, aviso
 
 # ── Marcaciones del día: ver todas y elegir cuál es Entrada / Salida (2026-10-14) ─────────────────────────
 # Caso Catalina Núñez 09-10: el reloj dejó la primera marca del día como "Salida" y el motor la descartaba (atraso falso de 273 min).
@@ -1704,6 +1786,62 @@ async def reclasificar_marcaciones(
     return {"success": True, "mensaje": "Marcaciones clasificadas y asistencia recalculada", "asistencia": resultado}
 
 
+# ── Quitar UNA marcación manual, con permiso propio y registro (2026-10-16) ───────────────────────────────────────────────────
+# Las marcas del reloj no se tocan nunca. Una marca manual la puso una persona (p. ej. una Salida de turno de noche con la fecha
+# equivocada) y otra con el permiso `marcaciones.eliminar_manual` puede quitarla; la copia queda en la auditoría con quién, cuándo y por qué.
+_MOTIVO_MIN_LETRAS = 5
+
+
+@router.delete("/marcaciones/manual/{log_id}/")
+async def quitar_marcacion_manual(
+    log_id: int,
+    motivo: str = Query(..., description="Por qué se quita la marca; queda en la auditoría"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.eliminar_manual"))
+):
+    """Quita una marcación manual (nunca una del reloj), guarda su copia en la auditoría y recalcula los días que la usaban."""
+    db = service.repository.db
+    motivo = (motivo or "").strip()
+    if len(motivo) < _MOTIVO_MIN_LETRAS:
+        raise HTTPException(status_code=400, detail=f"Indique el motivo (al menos {_MOTIVO_MIN_LETRAS} letras): queda registrado en la auditoría.")
+    marca = await db.fetch_one(
+        "SELECT id, empleado_id, fecha_hora, tipo, manual, observaciones, usuario_id, created_at FROM logs_raw WHERE id = ?", (log_id,))
+    if not marca:
+        raise HTTPException(status_code=404, detail="Marcación no encontrada")
+    if not marca["manual"]:
+        raise HTTPException(status_code=400, detail="Solo se pueden quitar marcaciones manuales: las marcas del reloj no se modifican.")
+    emp = await EmpleadoRepository(db).get_by_id(marca["empleado_id"])
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+
+    # Días que cuentan esta marca: el de su fecha y, si un turno de noche la usó como Salida, el día anterior
+    dia = str(marca["fecha_hora"])[:10]
+    ayer = (datetime.strptime(dia, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    calculados = await db.fetch_all(
+        "SELECT fecha, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha IN (?, ?)", (marca["empleado_id"], ayer, dia))
+    dias = sorted({dia} | {str(a["fecha"])[:10] for a in calculados if log_id in _ids_de_json(a["marcas_consumidas_ids"])})
+    for d in dias:
+        if await service.repository.check_fecha_cerrada(d, marca["empleado_id"]):
+            raise HTTPException(status_code=403, detail=f"El periodo del {d[8:]}-{d[5:7]} se encuentra cerrado y no admite modificaciones.")
+
+    from backend.repositories.seguridad import SeguridadRepository
+    detalle = json.dumps({
+        "marca_id": log_id, "empleado_id": marca["empleado_id"], "fecha_hora": str(marca["fecha_hora"]), "tipo": marca["tipo"],
+        "observaciones": marca["observaciones"], "ingresada_por_usuario_id": marca["usuario_id"], "ingresada_el": str(marca["created_at"]),
+        "motivo": motivo,
+    }, ensure_ascii=False)
+    async with db.transaction():  # sin copia en la auditoría no se quita nada
+        await SeguridadRepository(db).log_auditoria(current_user.user_id, current_user.username, "ELIMINAR_MARCA_MANUAL", "MARCACIONES", detalle)
+        await db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
+        await db.execute("DELETE FROM logs_raw WHERE id = ? AND manual = 1", (log_id,))
+    logger.info(f"🗑️ Marca manual {log_id} ({marca['fecha_hora']}) de empleado {marca['empleado_id']} quitada por {current_user.username}: {motivo}")
+
+    for d in dias:
+        await service.procesar_empleado_dia(marca["empleado_id"], d, save=True)
+    return {"success": True, "mensaje": "Marcación manual quitada y asistencia recalculada", "dias_recalculados": dias}
+
+
 @router.delete("/marcaciones/manual/")
 async def eliminar_jornada_especial_manual(
     empleado_id: int = Query(...),
@@ -1729,13 +1867,24 @@ async def eliminar_jornada_especial_manual(
     try:
         db = service.repository.db
         
-        # Eliminar las marcaciones manuales de este día
+        # Eliminar las marcaciones manuales de este día (la copia de lo que se borra queda en la auditoría, con quién y cuándo)
         fecha_like = f"{fecha} %"
         query = """
-            DELETE FROM logs_raw 
+            DELETE FROM logs_raw
             WHERE empleado_id = ? AND manual = 1 AND fecha_hora LIKE ?
         """
-        await db.execute(query, (empleado_id, fecha_like))
+        a_borrar = await db.fetch_all(
+            "SELECT id, fecha_hora, tipo, observaciones, usuario_id, created_at FROM logs_raw WHERE empleado_id = ? AND manual = 1 AND fecha_hora LIKE ?",
+            (empleado_id, fecha_like))
+        from backend.repositories.seguridad import SeguridadRepository
+        async with db.transaction():
+            if a_borrar:
+                await SeguridadRepository(db).log_auditoria(
+                    current_user.user_id, current_user.username, "ELIMINAR_MARCAS_MANUALES_DEL_DIA", "MARCACIONES",
+                    json.dumps({"empleado_id": empleado_id, "fecha": fecha, "marcas": [
+                        {"marca_id": m["id"], "fecha_hora": str(m["fecha_hora"]), "tipo": m["tipo"], "observaciones": m["observaciones"],
+                         "ingresada_por_usuario_id": m["usuario_id"], "ingresada_el": str(m["created_at"])} for m in a_borrar]}, ensure_ascii=False))
+            await db.execute(query, (empleado_id, fecha_like))
         
         # Reprocesar la asistencia del día
         resultado = await service.procesar_empleado_dia(empleado_id, fecha, save=True)
@@ -1982,6 +2131,7 @@ async def agregar_marcaciones_masivas(
 
         # ── 5. Construir batch de inserts en memoria ───────────────────────────
         batch_logs: list = []
+        uid_masivo = getattr(current_user, "user_id", None)  # quién hizo el relleno: queda en cada marca
         dias_procesados = 0
         dias_ignorados  = 0
         errores: list   = []
@@ -2019,12 +2169,13 @@ async def agregar_marcaciones_masivas(
             fh_ent  = f"{fecha_str} {hora_entrada}:00"
             rut_str = str(emp.rut) if emp else str(empleado_id)
             h_ent   = hashlib.sha256(f"{rut_str}|{fh_ent}|Entrada".encode()).hexdigest()
-            batch_logs.append((empleado_id, fh_ent, "Entrada", 1, "Relleno Masivo", h_ent))
+            batch_logs.append((empleado_id, fh_ent, "Entrada", 1, "Relleno Masivo", h_ent, uid_masivo))
 
-            # Salida
-            fh_sal = f"{fecha_str} {hora_salida}:00"
+            # Salida: en un turno que cruza la medianoche cae el día siguiente (Entrada 23:00 del 11 · Salida 07:00 del 12)
+            fecha_sal = fecha_de_la_salida(fecha_str, hora_salida, hora_entrada, bool(config_dia.get("cruza_medianoche")))
+            fh_sal = f"{fecha_sal} {hora_salida}:00"
             h_sal  = hashlib.sha256(f"{rut_str}|{fh_sal}|Salida".encode()).hexdigest()
-            batch_logs.append((empleado_id, fh_sal, "Salida", 1, "Relleno Masivo", h_sal))
+            batch_logs.append((empleado_id, fh_sal, "Salida", 1, "Relleno Masivo", h_sal, uid_masivo))
 
             dias_procesados += 1
             current += timedelta(days=1)
@@ -2033,8 +2184,8 @@ async def agregar_marcaciones_masivas(
         if batch_logs:
             q_insert = """
                 INSERT OR IGNORE INTO logs_raw
-                    (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (empleado_id, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             await db.executemany(q_insert, batch_logs)
             logger.info(f"📥 [Relleno Masivo] {len(batch_logs)} marcas teóricas insertadas para empleado {empleado_id}")

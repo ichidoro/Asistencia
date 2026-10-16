@@ -67,8 +67,34 @@ Cada jornada muestra **las marcas que usó su cálculo**, no las que caen en su 
 - El aviso amarillo «Ingrese la marcación faltante…» solo se ve cuando de verdad falta una marca.
 - **Dónde está en el código**: `marcas_que_pertenecen_al_dia` y `_marcas_del_dia` en `backend/routers/asistencia.py`; el panel en `frontend/js/marcaciones_manuales.js` (`renderPanelMarcasDia`). Listar las marcas es solo lectura: los días ya calculados se ven bien sin reprocesar.
 
+## 5. Marcaciones manuales: la Salida de un turno de noche y cómo quitar una marca
+
+**La fecha de la Salida ingresada a mano.** Una jornada no termina antes de empezar: si la Salida es **igual o anterior a la Entrada** (Entrada 23:00 · Salida 07:00), la Salida es la del **día siguiente**. Vale para el ingreso manual (Entrada y Salida juntas, o la Salida sola) y para el Relleno Masivo (que además respeta `cruza_medianoche` del turno).
+
+| Se ingresa | La Salida queda |
+|---|---|
+| Entrada 07:00 · Salida 15:00 | el mismo día |
+| Entrada 23:00 · Salida 07:00 | el día siguiente, con aviso («quedó el DD-MM… Jornada de 8 h 00 min: revise que sea correcta») |
+| Entrada 16:00 · Salida 00:00 | el día siguiente (la medianoche que viene) |
+| Solo la Salida, y el día tiene una Entrada sin cerrar posterior a esa hora (Entrada 22:50 · Salida 07:00) | el día siguiente |
+| Solo la Salida, sin ninguna Entrada con la que compararla | la misma fecha (no se inventa nada) |
+
+- Si el día siguiente está en un período cerrado, no se agrega la marca (403). Si ya estaba calculado y está abierto, se recalcula.
+- Una hora que no existe (`25:00`, `7`) da error 400; antes se guardaba tal cual.
+- **Cada marca manual guarda quién la ingresó** (`logs_raw.usuario_id`); antes quedaba vacío.
+- **Caso real que originó la regla** (sin datos de personas): turno de noche, 11-10-2026. Se ingresó a mano Entrada 23:00 y Salida 07:00 y las dos quedaron con fecha 11-10. La Salida de las 07:00 del 11 cayó en el turno de la noche anterior, sin Entrada, y el panel del 10-10 pedía «ingrese la Entrada faltante» (falso positivo). Había otros 6 pares manuales con la Salida antes que la Entrada el mismo día (2 con el mismo patrón 23:00 / 07:00, 4 con Salida 00:00, 1 con 16:00 / 15:00).
+
+**Quitar una marca manual** (`DELETE /asistencia/marcaciones/manual/{id}/?motivo=…`, botón «Quitar» en «Marcaciones del día»):
+- Permiso propio **`marcaciones.eliminar_manual`**: se crea solo al arrancar y se asigna al Super Administrador; los demás roles lo reciben desde Configuración → Seguridad. Sin el permiso el botón no aparece y el servidor responde 403.
+- **Solo marcas manuales.** Las del reloj no se quitan nunca (400).
+- **El motivo es obligatorio** (al menos 5 letras).
+- Queda en la auditoría (`logs_auditoria`, acción `ELIMINAR_MARCA_MANUAL`) la copia de la marca, quién la ingresó y cuándo, quién la quitó y el motivo. Todo ocurre en una transacción: sin la copia no se quita nada.
+- No se puede si el día de la marca (o el turno que la usó) está en un período cerrado. Después recalcula los días que la usaban.
+- El botón antiguo «quitar todas las marcaciones manuales del día» (`DELETE /marcaciones/manual/`) sigue con el permiso `marcaciones.editar`, pero ahora también deja su copia en la auditoría (`ELIMINAR_MARCAS_MANUALES_DEL_DIA`). Ojo: borra por la fecha de cada marca, así que en un turno de noche deja la Salida del día siguiente.
+- **Dónde está en el código**: `fecha_de_la_salida`, `_armar_salida_manual`, `agregar_marcacion_manual`, `quitar_marcacion_manual` y `agregar_marcaciones_masivas` en `backend/routers/asistencia.py`; el permiso en `backend/repositories/seguridad.py`; el botón y el aviso en `frontend/js/marcaciones_manuales.js` (`quitarMarcaManual`).
+
 ## Cómo se prueba
 
 Cada error que se encuentra queda como regla en este documento **y** como prueba en `backend/tests/`:
-`test_dos_entradas_y_salida.py`, `test_salidas_seguidas_ultima.py` y `test_marcas_dia_cruce_medianoche.py`. Se corren desde la raíz del proyecto con `python -m pytest backend/tests -q` (requiere `pytest`, que no viene en `requirements.txt`).
+`test_dos_entradas_y_salida.py`, `test_salidas_seguidas_ultima.py`, `test_marcas_dia_cruce_medianoche.py` y `test_marcas_manuales_turno_noche.py`. Se corren desde la raíz del proyecto con `python -m pytest backend/tests -q` (requiere `pytest`, que no viene en `requirements.txt`).
 Ojo: `.gitignore` ignora los archivos `test_*.py`; las pruebas nuevas se suben con `git add -f`.
