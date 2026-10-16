@@ -51,8 +51,24 @@ Regla de oro: **manda el horario/turno asignado al empleado**, también en los t
 - **Dónde está en el código**: `MultiBlockTensorSolver.collapse_consecutive_same_type` (Salidas seguidas) y el paso 7 de `QuantumMatrixEngine.solve_attendance_day` (Entrada, Entrada, Salida), ambos en `backend/services/quantum_matrix_engine.py`.
 - **Casos reales que originaron estas reglas** (sin datos de personas): martes 29-09-2026, turno JJV Producción, Entrada 06:40 · Entrada 13:17 · Salida 16:29 (el día cerraba a las 13:17 con 192 min de deuda); jueves 01-10-2026, turno Planta Mantención 2, Entrada 07:52 · Salida 13:24 · Salida 17:16 (el día cerraba a las 13:24 con 148 min de deuda).
 
-### Cómo se prueba
+## 4. Panel «Marcaciones del día» (modal «Ingreso Manual») y turnos que cruzan la medianoche
+
+Cada jornada muestra **las marcas que usó su cálculo**, no las que caen en su fecha del calendario. Un turno que cruza la medianoche cierra con una marca del día siguiente, y esa marca es de ese turno.
+
+| Marca | Aparece en el panel de… |
+|---|---|
+| La usó el cálculo de ese día (`asistencias.marcas_consumidas_ids`), aunque caiga al día siguiente | ese día, con la etiqueta «DD-MM · día siguiente» |
+| La usó el cálculo del día anterior o del siguiente | solo en el día que la usó |
+| Nadie la usó y cae en esa fecha del calendario | ese día |
+
+- **Caso real que originó la regla** (sin datos de personas): turno Tarde 15:00-23:00, Planta Mantención 2. 13-10: Entrada 14:59:59 · Salida 00:08:17 (ya del 14 en el calendario). 14-10: Entrada 15:05:11 · Salida 23:04:45. El cálculo estaba bien, pero el panel del 13 mostraba solo la Entrada («hay una sola: confirme cuál falta») y el del 14 mostraba la Salida de las 00:08 como su primera marca («La primera marca del día está como Salida»).
+- **Guardar la clasificación** acepta las marcas de la jornada (también las del día siguiente) y rechaza con 400 las que son de otro turno. Después recalcula el día y, si el día siguiente ya estaba calculado (no es futuro y su período sigue abierto), lo recalcula también, porque hereda las marcas que usó este día.
+- **Colación**: los huecos entre marcas (20-150 min) se miden con fecha y hora completas; así un hueco que cruza la medianoche no sale negativo.
+- El aviso amarillo «Ingrese la marcación faltante…» solo se ve cuando de verdad falta una marca.
+- **Dónde está en el código**: `marcas_que_pertenecen_al_dia` y `_marcas_del_dia` en `backend/routers/asistencia.py`; el panel en `frontend/js/marcaciones_manuales.js` (`renderPanelMarcasDia`). Listar las marcas es solo lectura: los días ya calculados se ven bien sin reprocesar.
+
+## Cómo se prueba
 
 Cada error que se encuentra queda como regla en este documento **y** como prueba en `backend/tests/`:
-`test_dos_entradas_y_salida.py` y `test_salidas_seguidas_ultima.py`. Se corren desde la raíz del proyecto con `python -m pytest backend/tests -q` (requiere `pytest`, que no viene en `requirements.txt`).
+`test_dos_entradas_y_salida.py`, `test_salidas_seguidas_ultima.py` y `test_marcas_dia_cruce_medianoche.py`. Se corren desde la raíz del proyecto con `python -m pytest backend/tests -q` (requiere `pytest`, que no viene en `requirements.txt`).
 Ojo: `.gitignore` ignora los archivos `test_*.py`; las pruebas nuevas se suben con `git add -f`.
