@@ -1017,7 +1017,11 @@ async function quitarMarcaManual(empId, marca) {
     const fechaTxt = typeof window.formatFechaDDMMYYYY === 'function' ? window.formatFechaDDMMYYYY(marca.fecha) : marca.fecha;
     let motivo = '';
     if (typeof Swal !== 'undefined') {
+        // El cuadro se abre DENTRO del modal que está a la vista: Bootstrap atrapa el foco dentro de su modal y, si el cuadro
+        // quedara afuera, lo que se escribe se iría al campo del modal y no al «Motivo».
+        const modalAbierto = document.querySelector('.modal.show');
         const r = await Swal.fire({
+            target: modalAbierto || 'body',
             icon: 'warning',
             title: 'Quitar marcación manual',
             html: `Se quitará la marcación manual <b>${marca.tipo_actual} de las ${marca.hora}</b> del ${fechaTxt}.<br>Las marcas del reloj no se tocan. Quedará registrado quién la quitó y por qué.`,

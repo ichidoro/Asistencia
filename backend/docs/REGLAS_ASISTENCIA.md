@@ -91,6 +91,7 @@ Cada jornada muestra **las marcas que usó su cálculo**, no las que caen en su 
 - Queda en la auditoría (`logs_auditoria`, acción `ELIMINAR_MARCA_MANUAL`) la copia de la marca, quién la ingresó y cuándo, quién la quitó y el motivo. Todo ocurre en una transacción: sin la copia no se quita nada.
 - No se puede si el día de la marca (o el turno que la usó) está en un período cerrado. Después recalcula los días que la usaban.
 - El botón antiguo «quitar todas las marcaciones manuales del día» (`DELETE /marcaciones/manual/`) sigue con el permiso `marcaciones.editar`, pero ahora también deja su copia en la auditoría (`ELIMINAR_MARCAS_MANUALES_DEL_DIA`). Ojo: borra por la fecha de cada marca, así que en un turno de noche deja la Salida del día siguiente.
+- **Regla de pantalla (error del 16-10-2026):** un cuadro de SweetAlert con **campo de texto** que se abre sobre un modal de Bootstrap debe llevar `target` con ese modal (`target: document.querySelector('.modal.show')`). Si se abre afuera, Bootstrap atrapa el foco dentro de su modal y lo que la persona escribe cae en el campo del modal, no en el cuadro: el «Motivo» de «Quitar» no dejaba escribir. Los cuadros solo con botones (`uiConfirm`) no se ven afectados.
 - **Dónde está en el código**: `fecha_de_la_salida`, `_armar_salida_manual`, `agregar_marcacion_manual`, `quitar_marcacion_manual` y `agregar_marcaciones_masivas` en `backend/routers/asistencia.py`; el permiso en `backend/repositories/seguridad.py`; el botón y el aviso en `frontend/js/marcaciones_manuales.js` (`quitarMarcaManual`).
 
 ## Cómo se prueba
