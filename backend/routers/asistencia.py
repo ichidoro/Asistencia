@@ -7,7 +7,7 @@ import json
 from backend.core.fast_json import fast_json
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime, timedelta
 from loguru import logger
 
@@ -1542,9 +1542,59 @@ async def agregar_marcacion_manual(
 _COLACION_MIN, _COLACION_MAX = 20, 150  # minutos entre una salida y la siguiente entrada para considerarlas colación
 
 
-def _min_dia(fh: str) -> int:
-    hh, mm = int(fh[11:13]), int(fh[14:16])
-    return hh * 60 + mm
+def _min_abs(fh: str) -> int:
+    """Minutos de una marca contados desde el año 1 (fecha + hora): sirve para medir huecos que cruzan la medianoche."""
+    fh = str(fh)
+    return datetime.strptime(fh[:10], "%Y-%m-%d").toordinal() * 1440 + int(fh[11:13]) * 60 + int(fh[14:16])
+
+
+def _ids_de_json(txt: Any) -> Set[int]:
+    """Ids de marcas guardados como texto JSON (asistencias.marcas_consumidas_ids)."""
+    try:
+        v = json.loads(txt) if isinstance(txt, (str, bytes)) else (txt or [])
+    except Exception:
+        return set()
+    out: Set[int] = set()
+    for x in (v if isinstance(v, list) else []):
+        try:
+            out.add(int(x))
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def marcas_que_pertenecen_al_dia(fecha: str, marcas: List[Dict[str, Any]], ids_dia: Set[int], ids_vecinos: Set[int]) -> List[Dict[str, Any]]:
+    """
+    De las marcas de ayer, hoy y mañana, cuáles son de la jornada de `fecha` (la columna "marcas del día" del modal):
+      · las que usó el cálculo de ese día (`ids_dia`), aunque caigan en la fecha siguiente del calendario: un turno que cruza la
+        medianoche cierra con una marca del día siguiente (Entrada 14:59 del 13 · Salida 00:08 del 14 son una sola jornada);
+      · las que nadie usó y caen en esa fecha del calendario;
+      · nunca las que usó el día anterior o el siguiente (`ids_vecinos`): la Salida de las 00:08 del 14 es del turno del 13.
+    Sin cálculo previo del día (`ids_dia` vacío) queda lo que cae en la fecha del calendario menos lo que ya usó un día vecino.
+    """
+    out = []
+    for m in marcas:
+        mid = m.get("id")
+        if mid in ids_dia or (str(m.get("fecha_hora", ""))[:10] == fecha and mid not in ids_vecinos):
+            out.append(m)
+    return sorted(out, key=lambda m: str(m.get("fecha_hora", "")))
+
+
+async def _marcas_del_dia(db, empleado_id: int, fecha: str) -> List[Dict[str, Any]]:
+    """Marcas (con el tipo ya corregido por una persona, si lo hubo) que pertenecen a la jornada de `fecha`."""
+    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO
+    f = datetime.strptime(fecha, "%Y-%m-%d")
+    ayer, manana = (f - timedelta(days=1)).strftime("%Y-%m-%d"), (f + timedelta(days=1)).strftime("%Y-%m-%d")
+    rows = await db.fetch_all(
+        f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO} "
+        "WHERE empleado_id = ? AND fecha_hora BETWEEN ? AND ? ORDER BY fecha_hora ASC",
+        (empleado_id, f"{ayer} 00:00:00", f"{manana} 23:59:59"))
+    asist = await db.fetch_all(
+        "SELECT fecha, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha IN (?, ?, ?)",
+        (empleado_id, ayer, fecha, manana))
+    usadas = {str(a["fecha"])[:10]: _ids_de_json(a["marcas_consumidas_ids"]) for a in asist}
+    return marcas_que_pertenecen_al_dia(fecha, [dict(r) for r in rows], usadas.get(fecha, set()),
+                                        usadas.get(ayer, set()) | usadas.get(manana, set()))
 
 
 def sugerir_clasificacion_marcas(horas: List[str]) -> List[Dict[str, Any]]:
@@ -1560,7 +1610,7 @@ def sugerir_clasificacion_marcas(horas: List[str]) -> List[Dict[str, Any]]:
         out[-1]["tipo"] = "Salida"
     for i in range(1, n - 1):
         if out[i]["tipo"] == "Salida" and out[i + 1]["tipo"] == "Entrada" and i + 1 <= n - 2:
-            gap = _min_dia(horas[i + 1]) - _min_dia(horas[i])
+            gap = _min_abs(horas[i + 1]) - _min_abs(horas[i])
             if _COLACION_MIN <= gap <= _COLACION_MAX:
                 out[i]["colacion"] = out[i + 1]["colacion"] = True
                 out[i]["colacion_min"] = out[i + 1]["colacion_min"] = gap
@@ -1577,23 +1627,21 @@ async def marcaciones_del_dia(
     service: AsistenciaService = Depends(get_asistencia_service),
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
 ):
-    """Todas las marcaciones del día con lo que dijo el reloj, el tipo que rige hoy y una sugerencia (con la colación marcada)."""
+    """Todas las marcaciones de la jornada con lo que dijo el reloj, el tipo que rige hoy y una sugerencia (con la colación marcada).
+    Incluye la marca del día siguiente que cerró un turno que cruza la medianoche y deja fuera la que cerró el turno de ayer."""
     emp = await EmpleadoRepository(service.repository.db).get_by_id(empleado_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
     current_user.verificar_acceso_area(emp.area, "este empleado")
-    from backend.repositories.asistencia import LOGS_CON_TIPO_CORREGIDO
-    rows = await service.repository.db.fetch_all(
-        f"SELECT id, fecha_hora, tipo, tipo_original, manual, equipo FROM {LOGS_CON_TIPO_CORREGIDO} "
-        "WHERE empleado_id = ? AND substr(fecha_hora, 1, 10) = ? ORDER BY fecha_hora ASC",
-        (empleado_id, fecha))
-    rows = [dict(r) for r in rows]
+    # Las marcas de la jornada, no solo las del día del calendario: un turno que cruza la medianoche cierra con una marca de mañana
+    rows = await _marcas_del_dia(service.repository.db, empleado_id, fecha)
     sug = sugerir_clasificacion_marcas([str(r["fecha_hora"]) for r in rows])
     return {
         "success": True,
         "fecha_cerrada": bool(await service.repository.check_fecha_cerrada(fecha, empleado_id)),
         "marcas": [{
-            "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],
+            "id": r["id"], "hora": str(r["fecha_hora"])[11:19], "fecha": str(r["fecha_hora"])[:10],
+            "tipo_reloj": r["tipo_original"], "tipo_actual": r["tipo"],
             "corregida": (r["tipo"] != r["tipo_original"]), "manual": bool(r["manual"]), "equipo": r.get("equipo"),
             "sugerido": s["tipo"], "colacion": s["colacion"], "colacion_min": s.get("colacion_min"), "dudoso": s["dudoso"],
         } for r, s in zip(rows, sug)],
@@ -1635,12 +1683,11 @@ async def reclasificar_marcaciones(
     db = service.repository.db
     ids = list(nuevos.keys())
     ph = ",".join("?" * len(ids))
-    # Solo marcas de ESTE empleado y ESTE día (no se puede tocar una marca ajena por el id)
-    orig = await db.fetch_all(
-        f"SELECT id, tipo FROM logs_raw WHERE id IN ({ph}) AND empleado_id = ? AND substr(fecha_hora, 1, 10) = ?",
-        tuple(ids) + (req.empleado_id, req.fecha))
+    # Solo marcas de ESTE empleado y de ESTA jornada (no se puede tocar una marca ajena por el id)
+    permitidas = {m["id"] for m in await _marcas_del_dia(db, req.empleado_id, req.fecha)}
+    orig = await db.fetch_all(f"SELECT id, tipo FROM logs_raw WHERE id IN ({ph}) AND empleado_id = ?", tuple(ids) + (req.empleado_id,))
     orig = {r["id"]: r["tipo"] for r in orig}
-    if len(orig) != len(ids):
+    if len(orig) != len(ids) or not set(ids) <= permitidas:
         raise HTTPException(status_code=400, detail="Alguna marca no corresponde a este empleado y día.")
     for log_id, t in nuevos.items():
         await db.execute("DELETE FROM logs_tipo_override WHERE log_id = ?", (log_id,))
@@ -1648,6 +1695,11 @@ async def reclasificar_marcaciones(
             await db.execute("INSERT INTO logs_tipo_override (log_id, tipo, usuario_id) VALUES (?, ?, ?)",
                              (log_id, t, getattr(current_user, "user_id", None)))
     resultado = await service.procesar_empleado_dia(req.empleado_id, req.fecha, save=True)
+    # El día siguiente hereda las marcas que usó este día (turnos que cruzan la medianoche): si ya estaba calculado, se recalcula
+    manana = (datetime.strptime(req.fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    if (manana <= datetime.now().strftime("%Y-%m-%d") and await service.repository.get_asistencia(req.empleado_id, manana)
+            and not await service.repository.check_fecha_cerrada(manana, req.empleado_id)):
+        await service.procesar_empleado_dia(req.empleado_id, manana, save=True)
     logger.info(f"🕘 Marcas reclasificadas: empleado {req.empleado_id} {req.fecha} por usuario {getattr(current_user, 'username', '?')}: {nuevos}")
     return {"success": True, "mensaje": "Marcaciones clasificadas y asistencia recalculada", "asistencia": resultado}
 

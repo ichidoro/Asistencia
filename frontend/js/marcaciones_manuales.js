@@ -864,12 +864,20 @@ function _marcasMinutos(hora) {
     return parseInt(h, 10) * 60 + parseInt(m, 10);
 }
 
+/** Minutos de una marca con su fecha: así el hueco entre dos marcas que cruzan la medianoche no sale negativo. */
+function _marcasAbs(m) {
+    if (!m.fecha) return _marcasMinutos(m.hora);
+    const [y, mo, d] = String(m.fecha).split('-').map(n => parseInt(n, 10));
+    const [h, mi] = String(m.hora).split(':').map(n => parseInt(n, 10));
+    return Date.UTC(y, mo - 1, d, h, mi) / 60000;
+}
+
 /** Entrada/Salida elegidas -> marcas que serían colación (una Salida y la Entrada siguiente, a mitad del día, 20-150 min). */
 function _marcasColacion(marcas, tipos) {
     const res = {};
     for (let i = 1; i < marcas.length - 1; i++) {
         if (tipos[i] === 'Salida' && tipos[i + 1] === 'Entrada' && i + 1 <= marcas.length - 2) {
-            const gap = _marcasMinutos(marcas[i + 1].hora) - _marcasMinutos(marcas[i].hora);
+            const gap = _marcasAbs(marcas[i + 1]) - _marcasAbs(marcas[i]);
             if (gap >= MARCAS_COLACION_MIN && gap <= MARCAS_COLACION_MAX) { res[i] = gap; res[i + 1] = gap; }
         }
     }
@@ -922,9 +930,15 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
             ${cerrada ? '<div class="small text-danger mt-1">El período está cerrado: no se puede modificar.</div>' : ''}
         </div>`;
     const body = host.querySelector('#marcas-dia-body');
+    // Turno que cruza la medianoche: la Salida de las 00:08 del día siguiente es de esta jornada y se avisa con su fecha
+    const etiquetaOtroDia = (m) => {
+        if (!m.fecha || m.fecha === dateStr) return '';
+        const [, mo, d] = m.fecha.split('-');
+        return `<div class="small text-muted fw-normal">${d}-${mo} · ${m.fecha > dateStr ? 'día siguiente' : 'día anterior'}</div>`;
+    };
     body.innerHTML = marcas.map((m, i) => `
         <tr data-i="${i}">
-            <td class="fw-semibold">${m.hora}</td>
+            <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}</td>
             <td>${m.tipo_reloj || '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
             <td><select class="form-select form-select-sm marca-tipo" style="width:110px;"${cerrada ? ' disabled' : ''}>
                 <option value="Entrada"${m.tipo_actual === 'Entrada' ? ' selected' : ''}>Entrada</option>
