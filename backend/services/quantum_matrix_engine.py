@@ -2130,6 +2130,17 @@ class QuantumMatrixEngine:
                     dt_ini = items_emparejar[idx_e][0]
                     dt_fin = items_emparejar[idx_e + 1][0]
                     dur_delta = (dt_fin - dt_ini).total_seconds() / 60.0
+                    # Una Entrada no puede cerrar la jornada si justo después viene una Salida (Entrada, Entrada, Salida): falta una de las
+                    # dos marcas de la pausa (la salida o el regreso) y no se sabe cuál. Se conserva la 1ª Entrada como inicio, se descarta la
+                    # del medio y se sigue con el par Entrada → Salida; la colación automática del turno asignado descuenta la pausa.
+                    # (Caso 29-09-2026: E 06:40, E 13:17, S 16:29 cerraba a las 13:17 con 192 min de deuda y dejaba la Salida real afuera.)
+                    # Sin Salida posterior (Entrada, Entrada) la 2ª sigue valiendo como Salida mal rotulada, igual que antes.
+                    if (not is_bolsa and items_emparejar[idx_e + 1][1] == 'E'
+                            and idx_e + 2 < len(items_emparejar) and items_emparejar[idx_e + 2][1] == 'S'):
+                        res['observaciones'] += (f"Dos Entradas seguidas ({dt_ini.strftime('%H:%M:%S')} y {dt_fin.strftime('%H:%M:%S')}): "
+                                                 f"falta una marca de colación; la jornada se calculó desde la primera Entrada hasta la Salida. ")
+                        del items_emparejar[idx_e + 1]
+                        continue
                     if dur_delta >= 20.0:
                         pares_trabajo.append((dt_ini, dt_fin))
                         idx_e += 2
