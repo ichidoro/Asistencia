@@ -840,6 +840,10 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         if (btnUnlock) btnUnlock.style.display = 'none';
     }
 
+    // El aviso amarillo fijo ("Ingrese la marcación faltante...") solo corresponde cuando de verdad falta una marca
+    const avisoFalta = document.getElementById('manual-alert-faltante');
+    if (avisoFalta) avisoFalta.style.display = (isValidTime(horaEntrada) && isValidTime(horaSalida)) ? 'none' : '';
+
     // Panel con TODAS las marcaciones del día para elegir cuál es Entrada / Salida (y ver cuál sería la colación)
     cargarPanelMarcacionesDia(empId, dateStr, alertDiv);
 
