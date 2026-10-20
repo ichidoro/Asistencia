@@ -35,7 +35,7 @@ const ReglasMarcasModule = (() => {
     // en vez del texto corrido «06:46:36 Ent · 09:31:24 Sal · …» que confunde.
     const marcasChips = (marcas) => String(marcas || '').split(' · ').filter(Boolean).map(m => {
         const esEnt = m.indexOf('Ent') >= 0;
-        return `<span style="${esEnt ? 'background:#d1e7dd;color:#0f5132;' : 'background:#cfe2ff;color:#084298;'}border-radius:6px;padding:1px 7px;font-size:.76rem;font-weight:600;white-space:nowrap;display:inline-block;margin:1px 2px 1px 0;">${esEnt ? 'E' : 'S'} ${esc(m.slice(0, 5))}</span>`;
+        return `<span style="${esEnt ? 'background:#d1e7dd;color:#0f5132;' : 'background:#cfe2ff;color:#084298;'}border-radius:6px;padding:1px 7px;font-size:.76rem;font-weight:600;white-space:nowrap;display:inline-block;margin:1px 2px 1px 0;">${esEnt ? 'Entrada' : 'Salida'} ${esc(m.slice(0, 5))}</span>`;
     }).join('');
     const pct = (n, total) => total > 0 ? (100 * n / total).toLocaleString('es-CL', { maximumFractionDigits: 1 }) : '0';
     const toast = (msg, tipo_) => { if (typeof showToast === 'function') showToast(msg, tipo_ || 'success'); else alert(msg); };
@@ -450,7 +450,7 @@ const ReglasMarcasModule = (() => {
                 ${fraseBox}${bloqueNota}
                 <div class="text-muted mb-1" style="font-size:.78rem;">Ver si corrige, antes de guardar</div>
                 ${ensayoHtml}
-                <div class="text-muted" style="font-size:.78rem;">«Guardar» deja la regla lista (sigue apagada). «Correr esta regla» la enciende de verdad, con su antes y después completo.</div>`;
+                <div class="text-muted" style="font-size:.78rem;">El orden al terminar: primero <strong>«1. Guardar»</strong> (la regla queda lista, sigue apagada) y después <strong>«2. Correr esta regla»</strong> (la enciende de verdad, con su antes y después completo). La corrida siempre usa lo guardado.</div>`;
             }
             const nav = `
             <div class="d-flex justify-content-between align-items-center mt-2 mb-3">
@@ -473,10 +473,10 @@ const ReglasMarcasModule = (() => {
                 </span>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="rm-ver-dias">Ver los días con esta secuencia</button>
+                    ${edit && !r.activa ? `<button type="button" class="btn btn-sm ${_hayCambios(r) ? 'btn-warning fw-bold' : 'btn-primary'}" id="rm-guardar">1. ${_hayCambios(r) ? 'Guardar cambios' : 'Guardar'}</button>` : ''}
                     ${puede && data.motor_conectado ? (r.activa
                         ? '<button type="button" class="btn btn-sm btn-outline-danger" id="rm-correr" data-encender="0">Apagar esta regla</button>'
-                        : '<button type="button" class="btn btn-sm btn-success" id="rm-correr" data-encender="1">Correr esta regla</button>') : ''}
-                    ${edit && !r.activa ? `<button type="button" class="btn btn-sm ${_hayCambios(r) ? 'btn-warning fw-bold' : 'btn-primary'}" id="rm-guardar">${_hayCambios(r) ? 'Guardar cambios' : 'Guardar'}</button>` : ''}
+                        : `<button type="button" class="btn btn-sm btn-success" id="rm-correr" data-encender="1">${edit ? '2. ' : ''}Correr esta regla</button>`) : ''}
                 </div>
             </div>
             ${r.activa ? '<div class="text-muted mt-1" style="font-size:.78rem;">Para cambiar una regla encendida, primero apáguela: así el cambio corre con su propio antes y después.</div>' : ''}`;
@@ -515,7 +515,7 @@ const ReglasMarcasModule = (() => {
             const b = $('rm-sin-guardar'), g2 = $('rm-guardar');
             const sucio = _hayCambios(r);
             if (b) b.style.display = sucio ? '' : 'none';
-            if (g2) { g2.textContent = sucio ? 'Guardar cambios' : 'Guardar'; g2.className = `btn btn-sm ${sucio ? 'btn-warning fw-bold' : 'btn-primary'}`; }
+            if (g2) { g2.textContent = sucio ? '1. Guardar cambios' : '1. Guardar'; g2.className = `btn btn-sm ${sucio ? 'btn-warning fw-bold' : 'btn-primary'}`; }
         });
         el.querySelectorAll('#rm-pasos [data-rm-paso]').forEach(b => b.addEventListener('click', () => {
             paso = parseInt(b.dataset.rmPaso); renderEditor();
