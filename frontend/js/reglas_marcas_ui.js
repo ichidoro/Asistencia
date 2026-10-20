@@ -31,6 +31,12 @@ const ReglasMarcasModule = (() => {
     const canEdit = () => (typeof AuthService !== 'undefined') ? AuthService.hasPermission('configuracion.reglas_marcaciones') : false;
     const headers = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` });
     const pretty = (sec) => sec.split('').join(' · ');
+    // Las marcas de un día como fichas de colores (verde Entrada, azul Salida),
+    // en vez del texto corrido «06:46:36 Ent · 09:31:24 Sal · …» que confunde.
+    const marcasChips = (marcas) => String(marcas || '').split(' · ').filter(Boolean).map(m => {
+        const esEnt = m.indexOf('Ent') >= 0;
+        return `<span style="${esEnt ? 'background:#d1e7dd;color:#0f5132;' : 'background:#cfe2ff;color:#084298;'}border-radius:6px;padding:1px 7px;font-size:.76rem;font-weight:600;white-space:nowrap;display:inline-block;margin:1px 2px 1px 0;">${esEnt ? 'E' : 'S'} ${esc(m.slice(0, 5))}</span>`;
+    }).join('');
     const pct = (n, total) => total > 0 ? (100 * n / total).toLocaleString('es-CL', { maximumFractionDigits: 1 }) : '0';
     const toast = (msg, tipo_) => { if (typeof showToast === 'function') showToast(msg, tipo_ || 'success'); else alert(msg); };
 
@@ -380,7 +386,7 @@ const ReglasMarcasModule = (() => {
                     <div class="table-responsive"><table class="table table-sm align-middle" style="font-size:.84rem;">
                         <thead><tr><th>Persona</th><th>Fecha</th><th>Marcas del día</th><th>Estado hoy</th><th class="text-end">Horas hoy</th></tr></thead>
                         <tbody>${ej.dias.map(d => `
-                            <tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td><td>${esc(d.marcas || '')}</td>
+                            <tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td><td>${marcasChips(d.marcas)}</td>
                                 <td>${esc(d.estado || '')}</td><td class="text-end">${Number(d.horas || 0).toLocaleString('es-CL')}</td></tr>`).join('')}</tbody>
                     </table></div>
                     <div class="text-muted" style="font-size:.78rem;">Hay ${Number(ej.total).toLocaleString('es-CL')} ${ej.total === 1 ? 'día así' : 'días así'} en el tramo abierto (marcas del reloj, sin manuales, sin cierres); se muestran los más recientes.</div>`;
@@ -731,7 +737,7 @@ const ReglasMarcasModule = (() => {
                 <div class="text-muted mb-2" style="font-size:.82rem;">Desde el ${esc(body.desde)} · ${body.dias.length} ${body.dias.length === 1 ? 'día' : 'días'} · solo lectura (marcas del reloj, sin manuales)</div>
                 <div class="table-responsive"><table class="table table-sm align-middle" style="font-size:.84rem;">
                 <thead><tr><th>Persona</th><th>Fecha</th><th>Marcas</th><th>Estado</th><th class="text-end">Horas</th><th class="text-end">Deuda (min)</th></tr></thead>
-                <tbody>${body.dias.map(d => `<tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td><td>${esc(d.marcas)}</td><td>${esc(d.estado)}</td><td class="text-end">${Number(d.horas).toLocaleString('es-CL')}</td><td class="text-end">${Number(d.deuda).toLocaleString('es-CL')}</td></tr>`).join('')}</tbody>
+                <tbody>${body.dias.map(d => `<tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td><td>${marcasChips(d.marcas)}</td><td>${esc(d.estado)}</td><td class="text-end">${Number(d.horas).toLocaleString('es-CL')}</td><td class="text-end">${Number(d.deuda).toLocaleString('es-CL')}</td></tr>`).join('')}</tbody>
                 </table></div>` :
                 '<div class="text-muted py-3">No hay días con esta secuencia en el tramo abierto.</div>';
         } catch (e) {
