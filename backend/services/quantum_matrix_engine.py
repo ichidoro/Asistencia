@@ -45,6 +45,50 @@ def _get_now_local() -> datetime:
 _TIPOS_E: Set[str] = {'entrada', 'entry', 'e', 'in', '1'}
 _TIPOS_S: Set[str] = {'salida', 'exit', 's', 'out', '0', '2'}
 
+# ── Reglas de marcaciones (Configuración → Reglas de marcaciones) ────────────
+# Las carga backend/services/reglas_marcas_runtime.cargar() al arrancar y tras
+# cada cambio en la pestaña. Aquí viven SOLO las reglas ENCENDIDAS (activa = 1)
+# de CICLO_INTELIGENTE, por secuencia exacta: con el dict vacío el motor se
+# comporta exactamente igual que antes. Bolsa Flexible nunca las usa, y una
+# regla jamás se aplica a una jornada que todavía no termina.
+REGLAS_MARCAS_ACTIVAS: Dict[str, Dict[str, Any]] = {}
+# Rebote (doble toque) del ajuste `reglas_marcas_rebote_segundos`; None = 180 s.
+REGLAS_MARCAS_REBOTE: Optional[float] = None
+# Marcador estable en observaciones para la lista «Días por revisar» (etapa 3).
+MARCA_REVISION_REGLA = 'Revisar las marcas (regla '
+
+
+def _rebote_defecto(tipo_prog: str) -> float:
+    """Rebote cuando el turno no fija `redondeo_minutos`: en Ciclo Inteligente sale del ajuste
+    de la pestaña Reglas de marcaciones (180 s por defecto); Bolsa Flexible conserva sus 180 s."""
+    if tipo_prog == 'CICLO_INTELIGENTE' and REGLAS_MARCAS_REBOTE and REGLAS_MARCAS_REBOTE > 0:
+        return float(REGLAS_MARCAS_REBOTE)
+    return 180.0
+
+
+def _aplicar_extremos(consumidos: List[Dict[str, Any]], colacion: str) -> List[Dict[str, Any]]:
+    """Lectura «extremos» de una regla de marcaciones: la primera marca del día es la Entrada y la
+    última la Salida, sin importar el rótulo del reloj. Las marcas del medio solo valen como pausa
+    (una Salida seguida de una Entrada) cuando la colación de la regla es MEDIDA; las demás se
+    descartan de la lectura (siguen consumidas por el día). Devuelve copias: no toca las originales."""
+    orden = sorted(consumidos, key=lambda l: str(l.get('fecha_hora', '')))
+    if len(orden) < 2:
+        return [dict(l) for l in orden]
+    nuevo = [dict(orden[0], tipo='Entrada')]
+    if colacion == 'MEDIDA':
+        i = 1
+        while i < len(orden) - 2:
+            t_a = str(orden[i].get('tipo', '')).strip().lower()
+            t_b = str(orden[i + 1].get('tipo', '')).strip().lower()
+            if t_a in _TIPOS_S and t_b in _TIPOS_E:
+                nuevo.append(dict(orden[i], tipo='Salida'))
+                nuevo.append(dict(orden[i + 1], tipo='Entrada'))
+                i += 2
+            else:
+                i += 1
+    nuevo.append(dict(orden[-1], tipo='Salida'))
+    return nuevo
+
 
 class QuantumPhaseTopology:
     """Manejo de tiempo modular y distancias geodésicas en el círculo unitario S^1 (24 horas = 1440 minutos)."""
@@ -1634,7 +1678,7 @@ class QuantumMatrixEngine:
         umbral_col = float(t_cfg.get('umbral_horas_colacion', 0.0) or 0.0)
         tolerancia_exceso_col = int(t_cfg.get('tolerancia_exceso_colacion_minutos', 0) or 0)
         redondeo_min = int(t_cfg.get('redondeo_minutos', 0) or 0)
-        bounce_sec = max(60.0, float(redondeo_min * 60.0)) if redondeo_min > 0 else 180.0
+        bounce_sec = max(60.0, float(redondeo_min * 60.0)) if redondeo_min > 0 else _rebote_defecto(tipo_prog)
 
         hora_limite_ficticia = t_cfg.get('hora_limite_ficticia')
 
@@ -1985,6 +2029,56 @@ class QuantumMatrixEngine:
         bloque_p = segment_res['bloque_principal']
         marcas_consumidas_ids = list(set(segment_res['marcas_consumidas_ids']))
 
+        # ── Reglas de marcaciones (pestaña de Configuración) ─────────────────
+        # Solo Ciclo Inteligente, solo reglas ENCENDIDAS y solo jornadas ya
+        # terminadas (nunca el día en curso). Bolsa Flexible, los días con
+        # bloques extra (+2) o emergencia y las secuencias sin regla encendida
+        # conservan la lógica de siempre. La secuencia del día se arma con TODAS
+        # las marcas que el día consume (igual que la pestaña las cuenta), y la
+        # lectura por extremos no cambia qué marcas quedan consumidas.
+        regla_dia = None
+        secuencia_dia = ''
+        obs_regla = ''
+        if (REGLAS_MARCAS_ACTIVAS and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE'
+                and bloque_p and not segment_res['bloques_extras'] and not segment_res['emergencia_detectada']):
+            hoy_regla = _get_now_local().strftime("%Y-%m-%d")
+            fin_jornada = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
+            if fin_jornada < hoy_regla:
+                por_id = {l.get('id'): l for l in marcas_disponibles if l.get('id') is not None}
+                consumidos_dia = sorted(
+                    (por_id[i] for i in marcas_consumidas_ids if i in por_id),
+                    key=lambda l: str(l.get('fecha_hora', ''))
+                )
+                letras = ''.join(
+                    'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E
+                    else ('S' if str(l.get('tipo', '')).strip().lower() in _TIPOS_S else '?')
+                    for l in consumidos_dia
+                )
+                if letras and '?' not in letras:
+                    secuencia_dia = letras
+                    regla_dia = REGLAS_MARCAS_ACTIVAS.get(secuencia_dia)
+                if regla_dia:
+                    sec_fmt = ' · '.join(secuencia_dia)
+                    pide_solo_revision = (regla_dia.get('lectura') == 'NINGUNA'
+                                          or regla_dia.get('accion') == 'SOLO_REVISA')
+                    if not pide_solo_revision:
+                        if regla_dia.get('lectura') == 'EXTREMOS':
+                            nuevo_bloque = _aplicar_extremos(consumidos_dia, str(regla_dia.get('colacion') or ''))
+                            def _letras(ls):
+                                return [(l.get('id'), 'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E else 'S')
+                                        for l in ls]
+                            # Si la lectura por extremos deja las marcas tal cual (p. ej. E·S),
+                            # no hay nada que cambiar ni que anotar: sigue el camino de siempre.
+                            if _letras(nuevo_bloque) != _letras(consumidos_dia):
+                                bloque_p = nuevo_bloque
+                                obs_regla += (f"Regla de marcaciones ({sec_fmt}): se leyó con la primera marca "
+                                              f"como Entrada y la última como Salida. ")
+                        if regla_dia.get('colacion') == 'NINGUNA':
+                            descuento_col_auto = False
+                            minutos_col_auto = 0
+                        if regla_dia.get('accion') == 'CALCULA_Y_REVISA':
+                            obs_regla += f"{MARCA_REVISION_REGLA}{sec_fmt}). "
+
         # Resultado base
         res: Dict[str, Any] = {
             'hora_entrada_real': None,
@@ -2036,6 +2130,22 @@ class QuantumMatrixEngine:
                 tipo_txt = 'Entrada' if str(c['manual'].get('tipo', '')).strip().lower() in _TIPOS_E else 'Salida'
                 res['observaciones'] += (f"Marca manual de las {h_man.strftime('%H:%M:%S')} ({tipo_txt}) sin usar: el reloj ya marcó "
                                          f"a las {h_rel.strftime('%H:%M:%S')}. ")
+
+        if obs_regla:
+            res['observaciones'] += obs_regla
+        if regla_dia and (regla_dia.get('lectura') == 'NINGUNA' or regla_dia.get('accion') == 'SOLO_REVISA'):
+            # La regla pide revisión ANTES de calcular: el día queda en anomalía, con las horas de
+            # las marcas a la vista, hasta que una persona agregue la marca que falta o lo confirme.
+            sec_fmt = ' · '.join(secuencia_dia)
+            dts_regla = sorted(d for d in (MultiBlockTensorSolver.parse_dt(l) for l in bloque_p) if d)
+            if dts_regla:
+                res['hora_entrada_real'] = dts_regla[0].strftime("%H:%M:%S")
+                if len(dts_regla) > 1:
+                    res['hora_salida_real'] = dts_regla[-1].strftime("%H:%M:%S")
+            res['estado'] = 'ANOMALIA'
+            res['observaciones'] += (f"Regla de marcaciones ({sec_fmt}): el día queda en revisión antes de "
+                                     f"calcularse. {MARCA_REVISION_REGLA}{sec_fmt}). ")
+            return res
 
         # Si no hay marcas en el bloque principal
         now_local = _get_now_local()

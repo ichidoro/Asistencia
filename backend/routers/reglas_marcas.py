@@ -1,9 +1,11 @@
 """
 API de la pestaña «Reglas de marcaciones» (Configuración).
 
-Etapa 1: ver y editar las reglas. El motor de cálculo todavía no las lee:
-todas nacen apagadas y el botón «Correr esta regla» llega en la etapa
-siguiente (regla por regla, solo tramo abierto y áreas abiertas).
+El motor lee SOLO las reglas encendidas (activa = 1). Todas nacen apagadas y
+se encienden una por una con «Correr esta regla», que recalcula en segundo
+plano únicamente los días del tramo abierto (jornadas terminadas, sin cierres
+de área o turno) cuya secuencia es la de la regla, y entrega el antes y el
+después de cada día que cambió. «Apagar esta regla» deshace de la misma forma.
 """
 import json
 from typing import Any, Dict
@@ -15,6 +17,10 @@ from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.reglas_marcas import ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
 from backend.services.reglas_marcas_def import grupo_de_secuencia
+from backend.services.reglas_marcas_corridas import (
+    JOBS, _hay_corrida_en_curso, iniciar_corrida, job_publico,
+)
+from backend.services.reglas_marcas_runtime import cargar as cargar_reglas_runtime
 
 router = APIRouter(prefix="/configuracion/reglas-marcas", tags=["Reglas de marcaciones"])
 
@@ -47,6 +53,7 @@ async def listar_reglas(
         for sec, c in sorted(por_sec.items(), key=lambda kv: -kv[1]["dias"])
         if sec not in {r["secuencia"] for r in reglas}
     ]
+    corrida = _hay_corrida_en_curso()
     return {
         "tipo": tipo,
         "tipos": await repo.tipos_horario(),
@@ -56,8 +63,53 @@ async def listar_reglas(
         "total_jornadas_tramo_abierto": conteos["total_abiertos"],
         "tramo_abierto_desde": desde,
         "rebote_segundos": await repo.rebote_segundos(),
-        "motor_conectado": False,  # etapa 1: solo configuración
+        "motor_conectado": True,
+        "corrida_en_curso": job_publico(corrida) if corrida else None,
     }
+
+
+@router.get("/corridas/{job_id}/", response_model=Dict[str, Any])
+async def estado_corrida(
+    job_id: str,
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver")),
+):
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Esa corrida no existe (o el servidor se reinició).")
+    return job_publico(job)
+
+
+async def _lanzar(regla_id: int, encender: bool, repo: ReglasMarcasRepository,
+                  current_user: SecurityContext) -> Dict[str, Any]:
+    regla = await repo.obtener(regla_id)
+    if not regla:
+        raise HTTPException(status_code=404, detail="La regla no existe.")
+    if not regla.get("secuencia"):
+        raise HTTPException(status_code=400, detail="La regla no tiene secuencia.")
+    job = iniciar_corrida(regla, encender, current_user.user_id, current_user.username)
+    if job.get("error"):
+        raise HTTPException(status_code=409, detail=job["error"])
+    return job_publico(job)
+
+
+@router.post("/{regla_id}/correr/", response_model=Dict[str, Any], status_code=202)
+async def correr_regla(
+    regla_id: int,
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
+):
+    """Enciende la regla y recalcula SOLO sus días del tramo abierto, en segundo plano."""
+    return await _lanzar(regla_id, True, repo, current_user)
+
+
+@router.post("/{regla_id}/apagar/", response_model=Dict[str, Any], status_code=202)
+async def apagar_regla(
+    regla_id: int,
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
+):
+    """Apaga la regla y recalcula de vuelta sus días del tramo abierto, en segundo plano."""
+    return await _lanzar(regla_id, False, repo, current_user)
 
 
 @router.get("/{regla_id}/dias/", response_model=Dict[str, Any])
@@ -90,6 +142,7 @@ async def guardar_rebote(
         raise HTTPException(status_code=400, detail="El rebote debe estar entre 0 y 1800 segundos.")
     anterior = await repo.rebote_segundos()
     await repo.guardar_rebote(segundos)
+    await cargar_reglas_runtime(db)
     await SeguridadRepository(db).log_auditoria(
         current_user.user_id, current_user.username, "UPDATE", "REGLAS_MARCAS",
         json.dumps({"ajuste": "rebote_segundos", "antes": anterior, "despues": segundos})
@@ -122,4 +175,5 @@ async def actualizar_regla(
         current_user.user_id, current_user.username, "UPDATE", "REGLAS_MARCAS",
         json.dumps(detalle, ensure_ascii=False)
     )
+    await cargar_reglas_runtime(db)
     return {"message": "Regla guardada.", "regla": despues}

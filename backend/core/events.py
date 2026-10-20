@@ -190,11 +190,14 @@ async def lifespan(app: FastAPI):
                 flota_repo = FlotaRepository(db)
                 await flota_repo.init_tables()
 
-                # Inicializar Reglas de marcaciones (etapa 1: solo configuración;
-                # el motor todavía no las lee y la semilla nunca pisa lo editado)
+                # Inicializar Reglas de marcaciones (la semilla nunca pisa lo editado)
+                # y cargar en memoria las reglas ENCENDIDAS antes de cualquier recálculo:
+                # con todas apagadas, el motor se comporta exactamente igual que antes.
                 from backend.repositories.reglas_marcas import ReglasMarcasRepository
+                from backend.services.reglas_marcas_runtime import cargar as cargar_reglas_marcas
                 reglas_repo = ReglasMarcasRepository(db)
                 await reglas_repo.init_tables()
+                await cargar_reglas_marcas(db)
                 
                 # Sincronizar/poblar tabla horas_extras con registros pendientes
                 from backend.repositories.hora_extra import HoraExtraRepository

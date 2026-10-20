@@ -208,8 +208,11 @@ class ReglasMarcasRepository:
         if not actual:
             return {'error': 'La regla no existe.'}
         if cambios.get('activa') not in (None, actual.get('activa')):
-            return {'error': 'Las reglas se encienden con «Correr esta regla» '
-                             '(disponible en la etapa siguiente), no desde aquí.'}
+            return {'error': 'Las reglas se encienden y apagan con «Correr esta regla» '
+                             'y «Apagar esta regla», no desde aquí.'}
+        if actual.get('activa'):
+            return {'error': 'Esta regla está encendida y el motor la está usando: '
+                             'apáguela antes de cambiarla, para que el cambio corra con su propio antes y después.'}
         nueva = {
             'secuencia': actual['secuencia'],
             'lectura': cambios.get('lectura', actual['lectura']),

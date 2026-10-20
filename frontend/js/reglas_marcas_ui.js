@@ -1,8 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Reglas de marcaciones (Configuración) — etapa 1: solo configuración.
-// El motor de cálculo TODAVÍA no lee estas reglas: todas nacen apagadas y el
-// botón «Correr esta regla» se habilita en la etapa siguiente, regla por regla,
-// solo sobre el tramo abierto y las áreas abiertas.
+// Reglas de marcaciones (Configuración).
+// El motor lee SOLO las reglas encendidas. Todas nacen apagadas y se encienden
+// una por una con «Correr esta regla»: recalcula en segundo plano únicamente
+// los días del tramo abierto con esa secuencia (jornadas terminadas, sin
+// cierres de área) y muestra el antes y el después de cada día que cambió.
+// «Apagar esta regla» deshace de la misma forma. Los períodos cerrados no se
+// tocan nunca.
 // ─────────────────────────────────────────────────────────────────────────────
 const ReglasMarcasModule = (() => {
     const API = '/api/configuracion/reglas-marcas/';
@@ -103,10 +106,11 @@ const ReglasMarcasModule = (() => {
             </div>
             <div class="alert alert-info py-2 mb-2" style="font-size:.9rem;">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
-                Estas reglas <strong>todavía no cambian ningún cálculo</strong>: todas nacen apagadas.
-                En la etapa siguiente, el botón «Correr esta regla» las encenderá una por una, recalculando
-                solo el tramo abierto y las áreas abiertas. Los períodos cerrados no se tocan.
+                El motor usa <strong>solo las reglas encendidas</strong>. «Correr esta regla» la enciende y
+                recalcula únicamente los días del tramo abierto con esa secuencia (nunca el día en curso,
+                nunca períodos cerrados), mostrando el antes y el después. «Apagar esta regla» lo deshace.
             </div>
+            <div id="rm-corrida-aviso"></div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3" style="font-size:.88rem;">
                 <span class="text-muted">Reglas corridas: <strong>${activas} de ${data.reglas.length}</strong> ·
                     cubren el <strong>${pct(diasActivas, data.total_jornadas)} %</strong> de las ${Number(data.total_jornadas).toLocaleString('es-CL')} jornadas con marcas del reloj</span>
@@ -137,6 +141,7 @@ const ReglasMarcasModule = (() => {
         const btnReb = $('rm-rebote-save');
         if (btnReb) btnReb.addEventListener('click', guardarRebote);
         if (data.reglas.length) { renderLista(); renderEditor(); }
+        if (data.corrida_en_curso && data.corrida_en_curso.estado === 'en_curso') seguirCorrida(data.corrida_en_curso.id);
     }
 
     function renderLista() {
@@ -167,7 +172,8 @@ const ReglasMarcasModule = (() => {
         if (!el || !r) return;
         const rs = roles(r.secuencia, r.lectura);
         const colorChip = { ent: 'background:#d1e7dd;color:#0f5132;', sal: 'background:#cfe2ff;color:#084298;', pausa: 'background:#fff3cd;color:#664d03;', muted: 'background:#f1f3f5;color:#6c757d;' };
-        const edit = canEdit();
+        const puede = canEdit();
+        const edit = puede && !r.activa;
         el.innerHTML = `
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                 <div class="d-flex gap-1">${r.secuencia.split('').map(c => `<span style="${colorChip[c === 'E' ? 'ent' : 'sal']}width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;">${c}</span>`).join('')}</div>
@@ -209,13 +215,16 @@ const ReglasMarcasModule = (() => {
                 <input type="text" id="rm-nota" class="form-control form-control-sm" maxlength="300" placeholder="Nota (opcional)" value="${esc(r.nota || '')}" ${edit ? '' : 'disabled'}>
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span class="badge ${r.activa ? 'bg-success' : 'bg-secondary'}">${r.activa ? 'Conectada al cálculo' : 'Sin conectar al cálculo'}</span>
+                <span class="badge ${r.activa ? 'bg-success' : 'bg-secondary'}">${r.activa ? 'Encendida: el motor la usa' : 'Apagada: el motor no la usa'}</span>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="rm-ver-dias">Ver los días con esta secuencia</button>
-                    <button type="button" class="btn btn-sm btn-outline-success" disabled title="Se habilita cuando el motor esté conectado (etapa siguiente)">Correr esta regla</button>
-                    ${edit ? '<button type="button" class="btn btn-sm btn-primary" id="rm-guardar">Guardar</button>' : ''}
+                    ${puede && data.motor_conectado ? (r.activa
+                        ? '<button type="button" class="btn btn-sm btn-outline-danger" id="rm-correr" data-encender="0">Apagar esta regla</button>'
+                        : '<button type="button" class="btn btn-sm btn-success" id="rm-correr" data-encender="1">Correr esta regla</button>') : ''}
+                    ${edit && !r.activa ? '<button type="button" class="btn btn-sm btn-primary" id="rm-guardar">Guardar</button>' : ''}
                 </div>
-            </div>`;
+            </div>
+            ${r.activa ? '<div class="text-muted mt-1" style="font-size:.78rem;">Para cambiar una regla encendida, primero apáguela: así el cambio corre con su propio antes y después.</div>' : ''}`;
         // Ediciones locales (solo en memoria hasta Guardar)
         $('rm-lectura').addEventListener('change', (e) => {
             r.lectura = e.target.value;
@@ -238,6 +247,90 @@ const ReglasMarcasModule = (() => {
         $('rm-ver-dias').addEventListener('click', () => verDias(r));
         const g = $('rm-guardar');
         if (g) g.addEventListener('click', () => guardar(r));
+        const c = $('rm-correr');
+        if (c) c.addEventListener('click', () => correrRegla(r, c.dataset.encender === '1'));
+    }
+
+    const CAMPOS_TXT = {
+        estado: 'Estado', hora_entrada_real: 'Entrada', hora_salida_real: 'Salida',
+        horas_trabajadas: 'Horas', minutos_atraso: 'Atraso (min)', minutos_salida_adelantada: 'Salida adelantada (min)',
+        minutos_deuda: 'Deuda (min)', minutos_extra_bruto: 'Extra bruto (min)', minutos_colacion: 'Colación (min)',
+        observaciones: 'Observaciones',
+    };
+
+    async function correrRegla(r, encender) {
+        const verbo = encender ? 'Correr' : 'Apagar';
+        const nAb = Number(r.dias_abiertos);
+        const detalle = encender
+            ? `Se encenderá la regla y se recalcularán solo los días del tramo abierto con la secuencia ${pretty(r.secuencia)} (${nAb.toLocaleString('es-CL')} ${nAb === 1 ? 'día' : 'días'} con marcas del reloj, más los que tengan marcas manuales). Nunca el día en curso ni períodos cerrados.`
+            : `Se apagará la regla y esos mismos días del tramo abierto se recalcularán de vuelta con la lógica de siempre.`;
+        const ok = await Swal.fire({
+            title: `${verbo} la regla ${pretty(r.secuencia)}`,
+            html: `<div style="font-size:.95rem;text-align:left;">${detalle}<br><br>Al terminar verá el antes y el después de cada día que cambió.</div>`,
+            icon: 'question', showCancelButton: true,
+            confirmButtonText: `${verbo} ahora`, cancelButtonText: 'Cancelar',
+        });
+        if (!ok.isConfirmed) return;
+        try {
+            const res = await fetch(`${API}${r.id}/${encender ? 'correr' : 'apagar'}/`, { method: 'POST', headers: headers() });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) { toast(body.detail || 'No se pudo iniciar la corrida.', 'danger'); return; }
+            seguirCorrida(body.id);
+        } catch (e) {
+            toast('No se pudo iniciar la corrida: sin conexión.', 'danger');
+        }
+    }
+
+    function seguirCorrida(jobId) {
+        const aviso = $('rm-corrida-aviso');
+        const pinta = (j) => {
+            if (!aviso) return;
+            const prog = j.total ? ` · ${j.avance} de ${j.total} días` : '';
+            aviso.innerHTML = `<div class="alert alert-warning py-2 mb-2" style="font-size:.88rem;">
+                <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                ${j.encender ? 'Corriendo' : 'Apagando'} la regla ${pretty(esc(j.secuencia))}${prog}… No cierre esta pantalla.</div>`;
+        };
+        const tick = async () => {
+            try {
+                const res = await fetch(`${API}corridas/${jobId}/`, { headers: headers() });
+                const j = await res.json();
+                if (!res.ok) throw new Error(j.detail || `HTTP ${res.status}`);
+                if (j.estado === 'en_curso') { pinta(j); setTimeout(tick, 2000); return; }
+                if (aviso) aviso.innerHTML = '';
+                if (j.estado === 'fallo') {
+                    abrirModal('La corrida no terminó bien', `<div class="alert alert-danger">${esc(j.error || 'Error desconocido')}</div>`);
+                } else {
+                    mostrarResultado(j);
+                }
+                selId = j.regla_id; init();
+            } catch (e) {
+                if (aviso) aviso.innerHTML = `<div class="alert alert-danger py-2 mb-2" style="font-size:.88rem;">No se pudo seguir la corrida: ${esc(e.message)}. Recargue la pestaña.</div>`;
+            }
+        };
+        tick();
+    }
+
+    function mostrarResultado(j) {
+        const r = j.resultado || {};
+        const filas = (r.detalle || []).map(d => {
+            const cambios = Object.entries(d.cambios || {}).filter(([k]) => k !== 'observaciones')
+                .map(([k, v]) => `${CAMPOS_TXT[k] || k}: ${esc(String(v.antes ?? '—'))} → ${esc(String(v.despues ?? '—'))}`)
+                .join('<br>');
+            return `<tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td>
+                <td>${d.solo_aviso ? '<span class="badge bg-info text-dark">Solo cambia la anotación (horas iguales)</span>' : (cambios || '—')}</td></tr>`;
+        }).join('');
+        const cuerpo = `
+            <div class="mb-2" style="font-size:.9rem;">
+                Regla <strong>${pretty(esc(j.secuencia))}</strong> ${j.encender ? 'encendida' : 'apagada'}.
+                Días revisados: <strong>${r.dias_revisados ?? 0}</strong> ·
+                cambiaron: <strong>${r.dias_cambiados ?? 0}</strong>
+                (${r.dias_con_horas_distintas ?? 0} con horas o estado distinto, ${r.dias_solo_aviso ?? 0} solo con una anotación nueva y las horas iguales).
+            </div>
+            ${filas ? `<div class="table-responsive"><table class="table table-sm align-middle" style="font-size:.84rem;">
+                <thead><tr><th>Persona</th><th>Fecha</th><th>Qué cambió (antes → después)</th></tr></thead>
+                <tbody>${filas}</tbody></table></div>`
+                : '<div class="text-muted">Ningún día cambió.</div>'}`;
+        abrirModal(`Resultado: ${j.encender ? 'correr' : 'apagar'} la regla ${pretty(j.secuencia)}`, cuerpo);
     }
 
     async function guardar(r) {
