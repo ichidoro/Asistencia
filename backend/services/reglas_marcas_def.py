@@ -38,6 +38,22 @@ ACCIONES = ('CALCULA', 'CALCULA_Y_REVISA', 'SOLO_REVISA')
 
 OPCIONES_REVISION = ('AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'CONFIRMAR')
 
+# Notas frecuentes de la pestaña: el diagnóstico de qué le pasó a las marcas.
+# La pantalla las ofrece en una lista desplegable (más «Otra (escribir)», que
+# abre el texto libre). Son solo informativas: no cambian cómo se calcula el día,
+# y la nota guardada sigue siendo texto (una nota antigua que no calce con
+# ninguna se muestra como «Otra» con su texto tal cual).
+NOTAS_FRECUENTES = (
+    'Día bien marcado: entrada, salida y pausas completas.',
+    'Falta la Entrada.',
+    'Falta la Salida.',
+    'Falta una marca de la colación (la de ir o la de volver).',
+    'Marca mal rotulada: una Entrada que era Salida, o al revés.',
+    'Marca repetida (doble toque).',
+    'Dos pausas: una es la colación, la otra un permiso.',
+    'Caso raro: revisar siempre.',
+)
+
 _RE_SECUENCIA = re.compile(r'^[ES]{1,12}$')
 
 # Marcador estable que el motor escribe en las observaciones de un día cuya regla

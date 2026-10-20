@@ -117,6 +117,17 @@ def test_la_grilla_tiene_el_boton_por_revisar():
     assert "Por revisar (" in DOC, "el documento perdió el botón «Por revisar (N)» de la grilla"
 
 
+def test_la_nota_se_elige_de_una_lista_desplegable():
+    """La nota de cada regla se elige de las notas frecuentes del servidor;
+    «Otra (escribir)» abre el texto libre. El servidor entrega la lista."""
+    pestana_js = _leer("frontend/js/reglas_marcas_ui.js")
+    assert "rm-nota-sel" in pestana_js, "la pestaña perdió la lista desplegable de la nota"
+    assert "Otra (escribir)" in pestana_js
+    assert "notas_frecuentes" in pestana_js, "la pestaña ya no lee las notas del servidor"
+    assert "notas_frecuentes" in _leer("backend/routers/reglas_marcas.py")
+    assert "NOTAS_FRECUENTES" in _leer("backend/services/reglas_marcas_def.py")
+
+
 # ── 5. La tabla de confirmaciones y su firma existen ─────────────────────────
 
 def test_confirmaciones_con_firma_en_el_repositorio():

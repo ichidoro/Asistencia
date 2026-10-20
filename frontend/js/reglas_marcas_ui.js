@@ -47,6 +47,7 @@ const ReglasMarcasModule = (() => {
         r.lectura = g.lectura; r.colacion = g.colacion; r.accion = g.accion;
         r.opciones_revision = g.opciones ? g.opciones.split(',') : [];
         r.nota = g.nota;
+        delete r._notaOtra;
     }
 
     // Qué papel juega cada marca según la lectura elegida (sin horas: solo posiciones).
@@ -216,6 +217,12 @@ const ReglasMarcasModule = (() => {
         const colorChip = { ent: 'background:#d1e7dd;color:#0f5132;', sal: 'background:#cfe2ff;color:#084298;', pausa: 'background:#fff3cd;color:#664d03;', muted: 'background:#f1f3f5;color:#6c757d;' };
         const puede = canEdit();
         const edit = puede && !r.activa;
+        // La nota se elige de una lista de diagnósticos frecuentes (del servidor);
+        // «Otra (escribir)» abre el texto libre. Una nota guardada que no calce
+        // con ninguna opción se muestra como «Otra» con su texto tal cual.
+        const notasFrec = data.notas_frecuentes || [];
+        const notaVal = r.nota || '';
+        const notaOtra = r._notaOtra === true || (notaVal !== '' && !notasFrec.includes(notaVal));
         el.innerHTML = `
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                 <div class="d-flex gap-1">${r.secuencia.split('').map(c => `<span style="${colorChip[c === 'E' ? 'ent' : 'sal']}width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;">${c}</span>`).join('')}</div>
@@ -254,7 +261,15 @@ const ReglasMarcasModule = (() => {
                 </div>
             </div>
             <div class="mb-2">
-                <input type="text" id="rm-nota" class="form-control form-control-sm" maxlength="300" placeholder="Nota (opcional)" value="${esc(r.nota || '')}" ${edit ? '' : 'disabled'}>
+                <div class="text-muted mb-1" style="font-size:.78rem;">Nota: qué les pasó a las marcas (no cambia el cálculo)</div>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <select id="rm-nota-sel" class="form-select form-select-sm w-auto" ${edit ? '' : 'disabled'}>
+                        <option value="" ${(!notaOtra && !notaVal) ? 'selected' : ''}>Sin nota</option>
+                        ${notasFrec.map(n => `<option value="${esc(n)}" ${(!notaOtra && notaVal === n) ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+                        <option value="__OTRA__" ${notaOtra ? 'selected' : ''}>Otra (escribir)</option>
+                    </select>
+                    ${notaOtra ? `<input type="text" id="rm-nota" class="form-control form-control-sm flex-grow-1 w-auto" maxlength="300" placeholder="Escriba la nota" value="${esc(notaVal)}" ${edit ? '' : 'disabled'}>` : ''}
+                </div>
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>
@@ -289,6 +304,13 @@ const ReglasMarcasModule = (() => {
             if (i >= 0) r.opciones_revision.splice(i, 1); else r.opciones_revision.push(op);
             renderEditor();
         }));
+        const notaSel = $('rm-nota-sel');
+        if (notaSel) notaSel.addEventListener('change', (e) => {
+            if (e.target.value === '__OTRA__') { r._notaOtra = true; r.nota = ''; }
+            else { delete r._notaOtra; r.nota = e.target.value; }
+            renderEditor();
+            if (r._notaOtra) { const inp = $('rm-nota'); if (inp) inp.focus(); }
+        });
         const nota = $('rm-nota');
         if (nota) nota.addEventListener('input', (e) => {
             r.nota = e.target.value;
@@ -461,7 +483,7 @@ const ReglasMarcasModule = (() => {
     }
 
     async function guardar(r) {
-        const nota = $('rm-nota') ? $('rm-nota').value.trim() : (r.nota || '');
+        const nota = (r.nota || '').trim();
         try {
             const res = await fetch(`${API}${r.id}/`, {
                 method: 'PUT', headers: headers(),
@@ -471,6 +493,7 @@ const ReglasMarcasModule = (() => {
             if (!res.ok) { toast(body.detail || 'No se pudo guardar la regla.', 'danger'); return; }
             Object.assign(r, body.regla, { dias: r.dias, dias_abiertos: r.dias_abiertos, grupo: r.grupo });
             r._guardada = _fotoRegla(r);
+            delete r._notaOtra;
             toast(`Regla ${pretty(r.secuencia)} guardada.`);
             renderLista(); renderEditor();
         } catch (e) {

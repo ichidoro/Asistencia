@@ -8,8 +8,8 @@ import os
 os.environ.setdefault("SECRET_KEY", "test")
 
 from backend.services.reglas_marcas_def import (  # noqa: E402
-    ACCIONES, COLACIONES, LECTURAS, OPCIONES_REVISION, REGLAS_SEMILLA,
-    filas_semilla, grupo_de_secuencia, validar_regla,
+    ACCIONES, COLACIONES, LECTURAS, NOTAS_FRECUENTES, OPCIONES_REVISION,
+    REGLAS_SEMILLA, filas_semilla, grupo_de_secuencia, validar_regla,
 )
 
 SEMILLA = {r['secuencia']: r for r in REGLAS_SEMILLA}
@@ -175,3 +175,15 @@ def test_catalogos_sin_sorpresas():
     assert COLACIONES == ('TURNO', 'MEDIDA', 'NINGUNA')
     assert ACCIONES == ('CALCULA', 'CALCULA_Y_REVISA', 'SOLO_REVISA')
     assert set(OPCIONES_REVISION) == {'AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'CONFIRMAR'}
+
+
+def test_notas_frecuentes_para_la_lista_desplegable():
+    """La nota de la pestaña se elige de esta lista (más «Otra (escribir)»).
+    Son solo informativas: no cambian el cálculo y la nota sigue siendo texto."""
+    assert len(NOTAS_FRECUENTES) == 8
+    assert len(set(NOTAS_FRECUENTES)) == len(NOTAS_FRECUENTES), "hay notas repetidas"
+    for n in NOTAS_FRECUENTES:
+        assert n.strip() == n and n, "nota vacía o con espacios en los bordes"
+        assert len(n) <= 300, "la nota no cabe en el campo (300 letras)"
+    assert any('Falta la Entrada' in n for n in NOTAS_FRECUENTES)
+    assert any('doble toque' in n for n in NOTAS_FRECUENTES)

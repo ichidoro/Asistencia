@@ -16,7 +16,7 @@ from backend.core.database import Database, get_db
 from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.reglas_marcas import ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
-from backend.services.reglas_marcas_def import grupo_de_secuencia
+from backend.services.reglas_marcas_def import NOTAS_FRECUENTES, grupo_de_secuencia
 from backend.services.reglas_marcas_corridas import (
     JOBS, _hay_corrida_en_curso, iniciar_corrida, job_publico,
 )
@@ -63,6 +63,7 @@ async def listar_reglas(
         "total_jornadas_tramo_abierto": conteos["total_abiertos"],
         "tramo_abierto_desde": desde,
         "rebote_segundos": await repo.rebote_segundos(),
+        "notas_frecuentes": list(NOTAS_FRECUENTES),
         "motor_conectado": True,
         "corrida_en_curso": job_publico(corrida) if corrida else None,
     }
