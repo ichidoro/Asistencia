@@ -2988,3 +2988,85 @@
         scrollbar-width: none !important;
     }
 }
+
+
+/* ─── ETAPA C (20-10-2026): las tablas de Configuración como tarjetas apiladas
+   bajo 576 px. El JS tablas_tarjetas.js copia cada encabezado a sus celdas
+   (data-tt) y marca la tabla (tt-tarjetas); aquí cada fila se vuelve una
+   tarjeta «Etiqueta: valor», sin deslizar de lado. Escritorio y tablet no
+   cambian: estas reglas no existen sobre 576 px. ─── */
+@media (max-width: 576px) {
+    #page-configuracion table.tt-tarjetas {
+        min-width: 0 !important;
+        display: block;
+        width: 100%;
+        border-collapse: separate;
+    }
+
+    #page-configuracion table.tt-tarjetas thead {
+        display: none;
+    }
+
+    #page-configuracion table.tt-tarjetas tbody {
+        display: block;
+        width: 100%;
+    }
+
+    #page-configuracion table.tt-tarjetas tbody tr {
+        display: block;
+        border: 1px solid var(--border-color, #e5e7eb);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+        margin-bottom: 10px;
+        padding: 8px 12px;
+    }
+
+    #page-configuracion table.tt-tarjetas tbody tr.tt-grupo {
+        border: 0;
+        box-shadow: none;
+        background: transparent;
+        margin-bottom: 4px;
+        padding: 2px 0;
+    }
+
+    #page-configuracion table.tt-tarjetas tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        border: 0 !important;
+        width: auto;
+        padding: 3px 0;
+        text-align: left !important;
+        white-space: normal !important;
+    }
+
+    /* El contenido ancho de una celda (avisos largos, mini-tablas de vista previa)
+       se parte o baja de línea dentro de la tarjeta, en vez de salirse */
+    #page-configuracion table.tt-tarjetas tbody td {
+        flex-wrap: wrap;
+    }
+
+    #page-configuracion table.tt-tarjetas tbody td > * {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /* Calendario: la barra de año y botones (2026 / Sincronizar / Nuevo Feriado)
+       se parte en líneas en vez de salirse */
+    #calendario-container > .d-flex.justify-content-between,
+    #calendario-container .d-flex.gap-2 {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    #page-configuracion table.tt-tarjetas tbody td[data-tt]::before {
+        content: attr(data-tt);
+        font-weight: 600;
+        font-size: .68rem;
+        text-transform: uppercase;
+        color: #6c757d;
+        flex: 0 0 auto;
+    }
+}
