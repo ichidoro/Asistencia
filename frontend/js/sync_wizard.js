@@ -323,7 +323,7 @@ window.wizardNextStep = async function() {
             try {
                 const resp = await fetch('/api/sync/wizard/commit/areas/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
                     body: JSON.stringify({ areas: resoluciones })
                 });
                 if (resp.ok) {
@@ -348,7 +348,7 @@ window.wizardNextStep = async function() {
             try {
                 const resp = await fetch('/api/sync/wizard/commit/cargos/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
                     body: JSON.stringify({ cargos: window._wizardState.resoluciones.cargos })
                 });
                 if (resp.ok) {
@@ -783,7 +783,7 @@ async function fetchAndRenderWizardStep3_Pagadores() {
 
     try {
         const resp = await fetch('/api/configuracion/pagadores/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (!resp.ok) throw new Error('Error cargando pagadores');
         const pagadores = await resp.json();
@@ -1050,7 +1050,7 @@ async function fetchAndRenderWizardStep4_TiposJ() {
 
     try {
         const resp = await fetch('/api/configuracion/justificaciones/tipos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (!resp.ok) throw new Error('Error cargando tipos de justificación');
         const tipos = await resp.json();
@@ -1195,7 +1195,7 @@ async function fetchAndRenderWizardStep3() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify({ areas: areasList })
         });
@@ -1398,7 +1398,7 @@ async function fetchAndRenderWizardStep4() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify({ areas: areasList })
         });
@@ -1567,7 +1567,7 @@ async function fetchAndRenderWizardStep5() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(requestBody)
         });
@@ -1845,7 +1845,7 @@ window.confirmWizardSync = async function() {
 
         const resp = await fetch('/api/sync/wizard/commit-all/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
             body: JSON.stringify(commitPayload)
         });
 
@@ -2099,7 +2099,7 @@ window._wizardEditarBono = async function(bonoId) {
     // Obtener el bono completo (con reglas) desde la API
     let bono = null;
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         const resp = await fetch(`/api/configuracion/bonos/`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -2253,7 +2253,7 @@ window.startWizardSSESync = async function(payload) {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(payload)
         });
@@ -2377,7 +2377,7 @@ window.startWizardSSESync = async function(payload) {
             statusTextEl.textContent = 'Preparando fichas de empleados...';
             window._wizardState.onboardingCompletados = {};
             
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('access_token');
             const syncList = window._wizardState.synchronizedEmployees || [];
             const resolvedEmployees = [];
             
@@ -2584,7 +2584,7 @@ async function loadOnboardingEmployeeForm(empId) {
     formEl.style.opacity = '0.5';
 
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         const resp = await fetch(`/api/empleados/${empId}/`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -2827,7 +2827,7 @@ window.saveWizardEmpleadoFicha = async function() {
     });
 
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         const resp = await fetch(`/api/empleados/${id}/`, {
             method: 'PUT',
             headers: { 
@@ -2861,7 +2861,7 @@ window.saveWizardEmpleadoFicha = async function() {
 
 async function loadStep10EmployeesData() {
     const employees = window._wizardState.newEmployeesDetalles || [];
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     
     window._wizardState.employeesFullData = [];
     
@@ -2915,7 +2915,7 @@ window.renderWizardStep10 = async function() {
     
     if (!window._wizardState.turnosDisponibles || window._wizardState.turnosDisponibles.length === 0) {
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('access_token');
             const response = await fetch('/api/turnos/?activo=true', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -3116,7 +3116,7 @@ window.finishWizardOnboarding = async function() {
     });
 
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         
         await Promise.all(activeEmployees.map(async (emp) => {
             const turnoId = window._wizardState.turnosIndividualesAsignados[emp.id];

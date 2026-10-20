@@ -10,7 +10,7 @@ window._cachedAreas = window._cachedAreas || null;
 async function getAreasCache(forceRefresh = false) {
     if (window._cachedAreas && window._cachedAreas.length > 0 && !forceRefresh) return window._cachedAreas;
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         const r = await fetch('/api/empleados/stats/', { headers });
         if (r.ok) {

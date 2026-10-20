@@ -920,7 +920,7 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
 async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
     try {
         const r = await fetch(`/api/configuracion/reglas-marcas/evaluar/?empleado_id=${encodeURIComponent(empId)}&fecha=${encodeURIComponent(dateStr)}`,
-            { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+            { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
         if (!r.ok) return;
         const ev = await r.json();
         if (host.dataset.req !== reqId) return;
@@ -966,7 +966,7 @@ async function confirmarDiaRevision(empId, dateStr) {
     try {
         const r = await fetch('/api/configuracion/reglas-marcas/confirmar/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
             body: JSON.stringify({ empleado_id: parseInt(empId), fecha: dateStr, motivo: motivo.trim() })
         });
         const body = await r.json().catch(() => ({}));
@@ -1885,7 +1885,7 @@ async function executePerdonazoMasivo() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('token')}`
+                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(payload)
         });
@@ -1926,7 +1926,7 @@ function getViajeLargoAuthToken() {
         const t = AuthService.getToken();
         if (t) return t;
     }
-    return localStorage.getItem('access_token') || localStorage.getItem('token') || window.AuthToken || '';
+    return localStorage.getItem('access_token') || localStorage.getItem('access_token') || window.AuthToken || '';
 }
 
 async function proceedToViajeLargo(customStartId, customRetId) {
@@ -3095,7 +3095,7 @@ function m180EsSuperAdmin() {
 }
 
 function getLibretaAuthHeaders() {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token') || window.AuthToken || '';
+    const token = localStorage.getItem('access_token') || localStorage.getItem('access_token') || window.AuthToken || '';
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
@@ -3231,7 +3231,7 @@ async function proceedToMarcacion180h() {
             const previewContainer = document.getElementById('m180-ocr-preview-container');
             const previewImg = document.getElementById('m180-ocr-preview-img');
             if (data.foto_url && previewContainer && previewImg) {
-                const authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+                const authToken = localStorage.getItem('access_token') || localStorage.getItem('access_token') || '';
                 const authFotoUrl = authToken ? `${data.foto_url}&token=${encodeURIComponent(authToken)}` : data.foto_url;
                 previewImg.src = authFotoUrl;
                 previewContainer.classList.remove('d-none');
@@ -4069,7 +4069,7 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-        const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+        const token = localStorage.getItem('access_token') || localStorage.getItem('access_token') || '';
         const resp = await fetch('/api/asistencia/libreta-180h/ocr-gemini-base64/', {
             method: 'POST',
             headers: {
@@ -4112,7 +4112,7 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
         const previewImg = document.getElementById('m180-ocr-preview-img');
         const previewContainer = document.getElementById('m180-ocr-preview-container');
         if (previewImg && previewContainer) {
-            const authToken = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+            const authToken = localStorage.getItem('access_token') || localStorage.getItem('access_token') || '';
             const authFotoUrl = (data.foto_url && authToken) ? `${data.foto_url}&token=${encodeURIComponent(authToken)}` : (data.foto_url || base64Jpeg);
             previewImg.src = base64Jpeg || authFotoUrl;
             previewContainer.classList.remove('d-none');

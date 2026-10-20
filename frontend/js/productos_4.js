@@ -16,7 +16,7 @@ const Productos4Module = {
         // Cargar periodo activo de la base de datos si está disponible
         try {
             const activeResp = await fetch('/api/configuracion/periodos/activo/', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (activeResp.ok) {
                 const activePeriod = await activeResp.json();
@@ -167,7 +167,7 @@ const Productos4Module = {
     async cargarProductos() {
         try {
             const response = await fetch('/api/productos-4/productos?incluir_inactivos=true', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!response.ok) throw new Error("Error al obtener catálogo de productos propios.");
             this.productos = await response.json();
@@ -187,7 +187,7 @@ const Productos4Module = {
             if (typeof getAreasCache === 'function') {
                 areas = await getAreasCache(true);
             } else {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('access_token');
                 const r = await fetch('/api/empleados/stats/', {
                     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                 });
@@ -268,7 +268,7 @@ const Productos4Module = {
             }
 
             const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!response.ok) throw new Error("Error al evaluar el periodo.");
             this.evaluaciones = await response.json();
@@ -555,7 +555,7 @@ const Productos4Module = {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                         },
                         body: JSON.stringify({
                             empleado_id: empleadoId,
@@ -730,7 +730,7 @@ const Productos4Module = {
         try {
             const url = `/api/productos-4/consolidado?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`;
             const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!response.ok) throw new Error("Error al obtener el consolidado.");
             const data = await response.json();
@@ -1056,7 +1056,7 @@ const Productos4Module = {
                 url += `&area=${encodeURIComponent(areaVal)}`;
             }
             const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!response.ok) throw new Error("Error al obtener la lista de entregas.");
             const data = await response.json();
@@ -1246,7 +1246,7 @@ const Productos4Module = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                 },
                 body: JSON.stringify({
                     empleado_id: empleadoId,
@@ -1429,7 +1429,7 @@ const Productos4Module = {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                         },
                         body: JSON.stringify({
                             codigo: parseInt(code),
@@ -1525,7 +1525,7 @@ const Productos4Module = {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                         },
                         body: JSON.stringify({
                             codigo: codigo,
@@ -1559,7 +1559,7 @@ const Productos4Module = {
     async verificarEstadoPeriodo() {
         try {
             const response = await fetch(`/api/productos-4/periodo/status?mes=${this.periodoActivo.mes}&anio=${this.periodoActivo.anio}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (response.ok) {
                 this.periodoEstado = await response.json();
@@ -1699,7 +1699,7 @@ const Productos4Module = {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
                     body: JSON.stringify({
                         mes: this.periodoActivo.mes,
@@ -1747,7 +1747,7 @@ const Productos4Module = {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
                     body: JSON.stringify({
                         mes: this.periodoActivo.mes,

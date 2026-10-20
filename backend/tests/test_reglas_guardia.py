@@ -117,6 +117,21 @@ def test_la_grilla_tiene_el_boton_por_revisar():
     assert "Por revisar (" in DOC, "el documento perdió el botón «Por revisar (N)» de la grilla"
 
 
+def test_ninguna_pantalla_lee_la_llave_de_sesion_muerta():
+    """La sesión del frontend vive en localStorage bajo 'access_token'
+    (AuthService.TOKEN_KEY). Una llave 'token' no la escribe nadie: leerla da
+    null, y las llamadas solo funcionaban porque el interceptor global de
+    auth.js corrige el Authorization de cada fetch. Nadie debe volver a
+    depender de esa casualidad."""
+    import pathlib
+    import re
+    raiz = pathlib.Path(__file__).resolve().parents[2] / "frontend"
+    patron = re.compile(r"getItem\((['\"])token\1\)")
+    malos = sorted({f.name for f in list(raiz.rglob("*.js")) + list(raiz.glob("*.html"))
+                    if patron.search(f.read_text(encoding="utf-8", errors="ignore"))})
+    assert not malos, f"Vuelven a leer la llave muerta 'token': {malos} (use 'access_token')"
+
+
 def test_el_ensayo_no_guarda_y_viaja_en_contexto():
     """El «Ensayar con los días reales» del asistente calcula con el motor de verdad
     pero sin escribir (collect_only) y la regla propuesta viaja en una variable de

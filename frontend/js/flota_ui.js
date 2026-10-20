@@ -855,7 +855,7 @@ const FlotaModule = (() => {
     async function cargarEstadoDia() {
         try {
             const res = await fetch(`/api/flota/estado-dia/?fecha=${_fechaActual}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!res.ok) throw new Error("Error cargando estado de la flota");
             const data = await res.json();
@@ -1349,7 +1349,7 @@ const FlotaModule = (() => {
             const res = await fetch('/api/flota/marcar/', {
                 method: 'POST',
                 headers: { 
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`, 
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 
                     'Content-Type': 'application/json' 
                 },
                 body: JSON.stringify({ flota_id: flotaId, observaciones: observaciones, tipo: tipoMarca })
@@ -1394,7 +1394,7 @@ const FlotaModule = (() => {
             if (patente) url += `&patente=${encodeURIComponent(patente)}`;
             
             const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!res.ok) throw new Error("Error al consultar el historial");
             const data = await res.json();
@@ -1489,7 +1489,7 @@ const FlotaModule = (() => {
 
         try {
             const res = await fetch('/api/flota/maestro/', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (!res.ok) throw new Error("Error al obtener catálogo");
             const data = await res.json();
@@ -1540,7 +1540,7 @@ const FlotaModule = (() => {
                 areas = _catalogoAreasCached;
             } else {
                 const res = await fetch('/api/configuracion/areas/', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
                 });
                 if (res.ok) {
                     areas = await res.json();
@@ -1550,7 +1550,7 @@ const FlotaModule = (() => {
             
             // Cargar maestro de vehículos para validación de duplicados en tiempo real
             const resMaestro = await fetch('/api/flota/maestro/', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (resMaestro.ok) {
                 vehiculosExistentes = await resMaestro.json();
@@ -1664,7 +1664,7 @@ const FlotaModule = (() => {
                         method: method,
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                         },
                         body: JSON.stringify({ patente, area_id })
                     });
@@ -1701,7 +1701,7 @@ const FlotaModule = (() => {
                 try {
                     const response = await fetch(`/api/flota/maestro/${id}/`, {
                         method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
                     });
                     
                     if (!response.ok) {

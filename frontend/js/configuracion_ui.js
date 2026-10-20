@@ -145,7 +145,7 @@ window.loadEstadosConfig = async function() {
     </div>`;
 
     try {
-        const res = await fetch('/api/configuracion/estados/?solo_activos=false', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        const res = await fetch('/api/configuracion/estados/?solo_activos=false', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
         if (!res.ok) throw new Error('Error cargando estados');
         _estadosConfigList = await res.json();
         renderEstadosConfig();
@@ -365,7 +365,7 @@ window.saveEstado = async function(codigo) {
     try {
         const res = await fetch(`/api/configuracion/estados/${codigo}/`, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre_display: nombre, short_label: shortLabel, descripcion: desc, color_clase: color, icono_bi: icono, activo })
         });
         const out = await res.json().catch(() => ({}));
@@ -497,7 +497,7 @@ async function _doLoadMetadata() {
     // 1. Intentar metadata de empleados (puede estar vacío en instalación nueva)
     try {
         const response = await fetch('/api/empleados/metadata/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (response.ok) {
             const data = await response.json();
@@ -522,7 +522,7 @@ async function _doLoadMetadata() {
     // 2. SIEMPRE cargar catálogo de cargos (tabla `cargos`, no depende de empleados)
     try {
         const cargosRes = await fetch('/api/configuracion/cargos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (cargosRes.ok) {
             const catalogCargos = await cargosRes.json();
@@ -694,7 +694,7 @@ async function openModalBono(bono = null) {
     areasContainer.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Cargando areas...</span>';
     try {
         const areasRes = await fetch(`/api/configuracion/areas/`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         const areasData = areasRes.ok ? await areasRes.json() : [];
         
@@ -943,7 +943,7 @@ async function saveBono() {
             method,
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(body)
         });
@@ -999,7 +999,7 @@ async function confirmDeleteBono(id) {
 
 async function deleteBono(id) {
     try {
-        const response = await fetch(`${API_CONFIG}bonos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },  method: 'DELETE' });
+        const response = await fetch(`${API_CONFIG}bonos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },  method: 'DELETE' });
         if (!response.ok) throw new Error("Error al eliminar");
         showToast("Bono eliminado", "success");
         loadBonos();
@@ -1300,7 +1300,7 @@ async function confirmDeleteTipoJ(id) {
 
 async function deleteTipoJ(id) {
     try {
-        const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },  method: 'DELETE' });
+        const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },  method: 'DELETE' });
         if (!response.ok) throw new Error("No se puede eliminar (posiblemente en uso)");
         showToast("Tipo eliminado", "success");
         loadTiposJustificacion();
@@ -1393,7 +1393,7 @@ window.addPagadorFromConfig = async function () {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre, activo: true })
         });
         if (!response.ok) throw new Error("Error al añadir");
@@ -1415,7 +1415,7 @@ window.addPagador = async function () {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre, activo: true })
         });
         if (!response.ok) throw new Error("Error al añadir");
@@ -1436,7 +1436,7 @@ window.togglePagador = async function (id, nuevoEstado) {
     try {
         const response = await fetch(`${API_CONFIG}pagadores/${id}/`, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ nombre: p.nombre, activo: nuevoEstado })
         });
         if (!response.ok) throw new Error("Error al actualizar");
@@ -1566,7 +1566,7 @@ window.saveAreaNotificaciones = async function () {
     try {
         const res = await fetch(`${API_CONFIG}notificaciones_areas/`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ area, emails })
         });
         
@@ -1596,7 +1596,7 @@ window.deleteAreaNotificaciones = async function (area) {
     if (!await uiConfirm(`¿Eliminar notificaciones para el área ${area}?`)) return;
     
     try {
-        const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 
+        const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }, 
             method: 'DELETE'
         });
         
@@ -1634,7 +1634,7 @@ window.loadRobotSyncLogs = async function() {
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
     try {
-        const response = await fetch('/api/sync/logs/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },  signal: controller.signal });
+        const response = await fetch('/api/sync/logs/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },  signal: controller.signal });
         clearTimeout(timeoutId);
         
         if (!response.ok) throw new Error("Error obteniendo logs de sincronización");
@@ -1790,7 +1790,7 @@ window.cargarCatalogoAreas = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/areas/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        const response = await fetch('/api/configuracion/areas/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de áreas");
         const areas = await response.json();
 
@@ -1855,7 +1855,7 @@ window.toggleAreaAplicaFlota = async function(areaId, checked) {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify({ aplica_flota: checked ? 1 : 0 })
         });
@@ -1905,7 +1905,7 @@ window.confirmDeleteArea = function(areaId, areaNombre) {
 window.deleteArea = async function(areaId) {
     try {
         const response = await fetch(`/api/configuracion/areas/${areaId}/`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
             method: 'DELETE'
         });
         
@@ -1958,7 +1958,7 @@ window.confirmDeleteAlias = function(aliasId, aliasNombre) {
 
 window.deleteAlias = async function(aliasId) {
     try {
-        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 
+        const response = await fetch(`/api/configuracion/areas/alias/${aliasId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }, 
             method: 'DELETE'
         });
         
@@ -2006,7 +2006,7 @@ window.cargarCatalogoCargos = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        const response = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de cargos");
         const cargos = await response.json();
 
@@ -2063,7 +2063,7 @@ window.toggleCargoExclusion = async function(cargoId, value) {
         const response = await fetch(`/api/configuracion/cargos/${cargoId}/excluir/?excluir=${value}`, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
                 'Content-Type': 'application/json'
             }
         });
@@ -2115,7 +2115,7 @@ window.confirmDeleteCargoAlias = function(aliasId, aliasNombre) {
 
 window.deleteCargoAlias = async function(aliasId) {
     try {
-        const response = await fetch(`/api/configuracion/cargos/alias/${aliasId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, 
+        const response = await fetch(`/api/configuracion/cargos/alias/${aliasId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }, 
             method: 'DELETE'
         });
         
@@ -2161,7 +2161,7 @@ window.cargarCatalogoGeneros = async function() {
     `;
 
     try {
-        const response = await fetch('/api/configuracion/generos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        const response = await fetch('/api/configuracion/generos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
         if (!response.ok) throw new Error("Error obteniendo catálogo de géneros");
         const generos = await response.json();
 
@@ -2205,7 +2205,7 @@ window.loadPeriodosRRHH = async function() {
 
     try {
         const response = await fetch('/api/configuracion/periodos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (!response.ok) throw new Error("Error obteniendo los tramos de cierre");
         const periodos = await response.json();
@@ -2394,7 +2394,7 @@ window.openModalPeriodo = function(periodo = null) {
         (async () => {
             try {
                 const ajResp = await fetch('/api/configuracion/ajustes/dia_cierre_rrhh', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
                 });
                 const ajData = ajResp.ok ? await ajResp.json() : null;
                 const diaCierre = ajData ? parseInt(ajData.valor, 10) : 25;
@@ -2510,7 +2510,7 @@ window.savePeriodoRRHH = async function() {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(payload)
         });
@@ -2542,7 +2542,7 @@ window.deletePeriodoRRHH = async function(id) {
         try {
             const response = await fetch(`/api/configuracion/periodos/${id}/`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
 
             if (!response.ok) {
@@ -2592,7 +2592,7 @@ window.activarPeriodoRRHH = async function(id) {
     try {
         const response = await fetch(`/api/configuracion/periodos/${id}/activar/`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
 
         if (!response.ok) {
@@ -2642,7 +2642,7 @@ window.abrirModalCrearArea = async function() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
                     body: JSON.stringify({ nombre: nombre.trim() })
                 });
@@ -2689,7 +2689,7 @@ window.abrirModalCrearCargo = async function() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
                     body: JSON.stringify({ nombre: nombre.trim() })
                 });

@@ -139,7 +139,7 @@ async function initMarcacionesUI() {
         try {
             const currentAreaName = stateMarcacionesApp.area || 'Todas';
             const activeResp = await fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(currentAreaName)}/`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (activeResp.ok) {
                 const activePeriod = await activeResp.json();
@@ -452,7 +452,7 @@ window.cambiarPeriodoFiltro = function(val) {
 async function cargarPeriodosEnToolbar() {
     try {
         const resp = await fetch('/api/configuracion/periodos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (resp.ok) {
             const periodos = await resp.json();
@@ -644,7 +644,7 @@ function updateMarcacionesState(key, value) {
         // ⚡ CARGA AUTOMÁTICA DEL TRAMO ACTIVO/ABIERTO PARA EL ÁREA SELECCIONADA
         const areaName = value || 'Todas';
         fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(areaName)}/`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         })
         .then(r => {
             if (r.ok) return r.json();
@@ -707,7 +707,7 @@ window.actualizarPorRevisar = async function () {
     try {
         const area = stateMarcacionesApp.area || '';
         const r = await fetch(`/api/configuracion/reglas-marcas/por-revisar/?area=${encodeURIComponent(area)}`,
-            { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+            { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
         if (!r.ok) { btn.style.display = 'none'; return; }
         const body = await r.json();
         window._porRevisarDias = body.dias || [];
@@ -995,7 +995,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(payload),
             signal: controller.signal
@@ -4352,7 +4352,7 @@ async function mostrarSelectorPeriodosParaCierre() {
     let periodos = [];
     try {
         const resp = await fetch('/api/configuracion/periodos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (resp.ok) {
             periodos = await resp.json();
@@ -4524,7 +4524,7 @@ async function openCierrePeriodoModal() {
     let periodos = [];
     try {
         const resp = await fetch('/api/configuracion/periodos/', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
         });
         if (resp.ok) {
             periodos = await resp.json();
@@ -4702,7 +4702,7 @@ window.cierreWizardCambiarArea = async function(val) {
     if (val) {
         try {
             const resp = await fetch(`/api/configuracion/periodos/activo/${encodeURIComponent(val)}/`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
             });
             if (resp.ok) {
                 const activePeriod = await resp.json();
@@ -8777,7 +8777,7 @@ window.executeCondonacionMasiva = async function(empleadosIds, fechaInicio, fech
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('token')}`
+                'Authorization': `Bearer ${window.AuthToken || localStorage.getItem('access_token')}`
             },
             body: JSON.stringify(payload)
         });

@@ -29,7 +29,7 @@ const ReglasMarcasModule = (() => {
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const canEdit = () => (typeof AuthService !== 'undefined') ? AuthService.hasPermission('configuracion.reglas_marcaciones') : false;
-    const headers = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` });
+    const headers = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('access_token')}` });
     const pretty = (sec) => sec.split('').join(' · ');
     // Las marcas de un día como fichas de colores (verde Entrada, azul Salida),
     // en vez del texto corrido «06:46:36 Ent · 09:31:24 Sal · …» que confunde.

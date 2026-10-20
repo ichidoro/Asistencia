@@ -411,7 +411,7 @@ function setupEventListeners() {
     try {
       showBatchLoadingOverlay("Analizando integridad de áreas con BioAlba...");
       const res = await fetch(`${API_BASE_URL}/sync/guardian/check/`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
       });
       if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
       
@@ -727,7 +727,7 @@ function _executeSwitchPage(pageName) {
 // API Functions
 async function loadStats() {
   try {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     const response = await fetch(`${API_BASE_URL}/empleados/stats/`, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     });
