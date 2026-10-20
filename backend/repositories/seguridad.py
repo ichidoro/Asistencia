@@ -201,6 +201,7 @@ class SeguridadRepository:
                 ('configuracion.sistema',        'Configuración',  'Pestaña Sistema -> diagnóstico de BD y modo de conexión'),
                 ('configuracion.flota',          'Configuración',  'Pestaña Flota Aguacol → gestionar vehículos de la flota (CRUD)'),
                 ('configuracion.editar',         'Configuración',  'Crear, editar y eliminar áreas, cargos y períodos; catálogo de Portería'),
+                ('configuracion.reglas_marcaciones', 'Configuración', 'Pestaña Reglas de marcaciones → editar cómo se lee cada secuencia de marcas por tipo de horario'),
 
                 # ── 4 Productos (4 permisos granulares) ──
                 ('productos_4.asignar',          '4 Productos',    'Ver y asignar 4 Productos a empleados (con RLS de área)'),

@@ -1748,6 +1748,7 @@
                                     <button class="nav-link cfg-item" id="justificaciones-tab" data-bs-toggle="tab" data-bs-target="#tab-justificaciones" type="button" role="tab"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Justificaciones</button>
                                     <button class="nav-link cfg-item" id="calendario-tab" data-bs-toggle="tab" data-bs-target="#tab-calendario" type="button" role="tab"><i class="bi bi-calendar3" aria-hidden="true"></i> Calendario</button>
                                     <button class="nav-link cfg-item" id="estados-tab" data-bs-toggle="tab" data-bs-target="#tab-estados" type="button" role="tab" onclick="if(typeof loadEstadosConfig==='function') loadEstadosConfig()"><i class="bi bi-palette" aria-hidden="true"></i> Estados</button>
+                                    <button class="nav-link cfg-item" id="reglas-marcas-tab" data-bs-toggle="tab" data-bs-target="#tab-reglas-marcas" type="button" role="tab" onclick="if(typeof ReglasMarcasModule !== 'undefined') ReglasMarcasModule.init()"><i class="bi bi-diagram-3" aria-hidden="true"></i> Reglas de marcaciones</button>
                                 </div>
                                 <div class="cfg-group" role="presentation">
                                     <div class="cfg-group-title" aria-hidden="true">Organización</div>
@@ -1919,6 +1920,15 @@
                                         <div class="text-center py-5 text-muted">
                                             <div class="spinner-border spinner-border-sm" role="status"></div>
                                             Cargando estados...
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Tab Reglas de marcaciones -->
+                                <div class="tab-pane fade" id="tab-reglas-marcas" role="tabpanel">
+                                    <div id="reglas-marcas-container">
+                                        <div class="text-center py-5 text-muted">
+                                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                                            Cargando reglas de marcaciones...
                                         </div>
                                     </div>
                                 </div>
@@ -5315,6 +5325,7 @@
         "/static/js/horarios.js?v={{ startup_id }}_v19",
         "/static/js/asistencia.js?v={{ startup_id }}_v15",
         "/static/js/configuracion_ui.js?v={{ startup_id }}_v15",
+        "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v15",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v15",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v15",
