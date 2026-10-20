@@ -310,6 +310,13 @@ function renderMarcacionesToolbar(container) {
                 </button>
                 ` : ''}
 
+                <!-- Días que una regla de marcaciones dejó en revisión: solo aparece cuando hay alguno -->
+                <button class="btn btn-sm btn-outline-danger shadow-sm ms-2 mx-act-wide" id="btn-por-revisar"
+                        onclick="abrirPanelPorRevisar()" title="Días que una regla de marcaciones dejó en revisión"
+                        style="height:38px; display:none; align-items:center; gap:5px;">
+                    <i class="bi bi-exclamation-triangle-fill"></i> <span class="fw-bold">Por revisar</span>
+                </button>
+
             </div>
         </div>
 
@@ -689,6 +696,68 @@ let _loadMarcacionesDebounceTimer = null;
 let _lastLoadMarcacionesCall = 0;
 
 // Exponer globalmente para ser visible desde bypassSecurityWall y otros modales
+// ── «Por revisar (N)»: días que una regla de marcaciones dejó en revisión ────
+// El botón vive en la barra de la grilla para que cualquiera que vea Marcaciones
+// llegue a los días sin pasar por Configuración (no todos entran ahí). Respeta el
+// filtro de área elegido y se esconde cuando no queda ninguno.
+window._porRevisarDias = [];
+window.actualizarPorRevisar = async function () {
+    const btn = document.getElementById('btn-por-revisar');
+    if (!btn) return;
+    try {
+        const area = stateMarcacionesApp.area || '';
+        const r = await fetch(`/api/configuracion/reglas-marcas/por-revisar/?area=${encodeURIComponent(area)}`,
+            { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        if (!r.ok) { btn.style.display = 'none'; return; }
+        const body = await r.json();
+        window._porRevisarDias = body.dias || [];
+        if (!body.total) { btn.style.display = 'none'; return; }
+        btn.style.display = 'flex';
+        btn.querySelector('span').textContent = `Por revisar (${body.total})`;
+    } catch (e) {
+        btn.style.display = 'none';
+    }
+};
+
+window.abrirPanelPorRevisar = function () {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let m = document.getElementById('por-revisar-modal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'por-revisar-modal';
+        m.className = 'modal fade';
+        m.tabIndex = -1;
+        m.innerHTML = `<div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Días por revisar</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+            <div class="modal-body" id="por-revisar-body"></div></div></div>`;
+        document.body.appendChild(m);
+    }
+    const dias = window._porRevisarDias || [];
+    const cuerpo = dias.length ? `
+        <div class="text-muted mb-2" style="font-size:.84rem;">Una regla de marcaciones dejó estos días en revisión. «Abrir» muestra sus marcas para corregirlas o confirmar que están bien. Mientras queden días aquí, el cierre del tramo de su área está bloqueado.</div>
+        <div class="table-responsive"><table class="table table-sm align-middle" style="font-size:.85rem;">
+            <thead><tr><th>Persona</th><th>Área</th><th>Fecha</th><th>Secuencia</th><th>Estado</th><th class="text-end">Horas</th><th class="text-end">Deuda (min)</th><th></th></tr></thead>
+            <tbody>${dias.map((d, i) => `
+                <tr><td>${esc(d.persona)}</td><td>${esc(d.area || '')}</td><td>${window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(d.fecha) : esc(d.fecha)}</td>
+                    <td>${esc((d.secuencia || '').split('').join(' · '))}</td><td>${esc(d.estado || '')}</td>
+                    <td class="text-end">${Number(d.horas || 0).toLocaleString('es-CL')}</td>
+                    <td class="text-end">${Number(d.deuda || 0).toLocaleString('es-CL')}</td>
+                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary py-0" data-pr-abrir="${i}">Abrir</button></td>
+                </tr>`).join('')}</tbody>
+        </table></div>` :
+        '<div class="text-muted py-3">No hay días por revisar con el filtro actual.</div>';
+    document.getElementById('por-revisar-body').innerHTML = cuerpo;
+    const inst = bootstrap.Modal.getOrCreateInstance(m);
+    m.querySelectorAll('[data-pr-abrir]').forEach(b => b.addEventListener('click', () => {
+        const d = dias[parseInt(b.dataset.prAbrir)];
+        if (!d) return;
+        inst.hide();
+        if (typeof openManualEntryModal === 'function') openManualEntryModal(d.empleado_id, d.fecha, d.persona);
+    }));
+    inst.show();
+};
+
 window.loadMarcacionesData = async function(opts) {
     // Invalidar caché de auditoría al recargar datos (estado puede haber cambiado)
     if (typeof _invalidarAuditoriaCache === 'function') _invalidarAuditoriaCache();
@@ -720,7 +789,9 @@ window.loadMarcacionesData = async function(opts) {
 
     _loadMarcacionesInProgress = true;
     try {
-        return await _loadMarcacionesDataImpl(opts);
+        const resultado = await _loadMarcacionesDataImpl(opts);
+        window.actualizarPorRevisar();   // el conteo del botón «Por revisar» acompaña a la grilla (sin esperar)
+        return resultado;
     } finally {
         _loadMarcacionesInProgress = false;
         _loadMarcacionesDebounceTimer = null;

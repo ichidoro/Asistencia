@@ -980,6 +980,7 @@ async function confirmarDiaRevision(empId, dateStr) {
         if (host) cargarReglaDia(empId, dateStr, host, false, host.dataset.req);
         if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
         else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        if (typeof window.actualizarPorRevisar === 'function') window.actualizarPorRevisar();
     } catch (e) {
         if (typeof showToast === 'function') showToast('No se pudo confirmar: sin conexión.', 'danger');
     }
@@ -1075,6 +1076,7 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
             closeManualEntryModal();
             if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
             else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+            if (typeof window.actualizarPorRevisar === 'function') window.actualizarPorRevisar();
         } catch (e) {
             console.error('Error al clasificar marcaciones', e);
             alert('Error de conexión al guardar la clasificación.');
@@ -1128,6 +1130,7 @@ async function quitarMarcaManual(empId, marca) {
         closeManualEntryModal();
         if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
         else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        if (typeof window.actualizarPorRevisar === 'function') window.actualizarPorRevisar();
     } catch (e) {
         console.error('Error al quitar la marcación manual', e);
         alert('Error de conexión al quitar la marcación.');

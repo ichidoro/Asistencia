@@ -110,6 +110,13 @@ def test_la_grilla_marca_los_dias_en_revision():
     assert "firma_marcas" in MATRIZ
 
 
+def test_la_grilla_tiene_el_boton_por_revisar():
+    grilla_js = _leer("frontend/js/marcaciones_ui.js")
+    assert "btn-por-revisar" in grilla_js
+    assert "reglas-marcas/por-revisar/" in grilla_js
+    assert "Por revisar (" in DOC, "el documento perdió el botón «Por revisar (N)» de la grilla"
+
+
 # ── 5. La tabla de confirmaciones y su firma existen ─────────────────────────
 
 def test_confirmaciones_con_firma_en_el_repositorio():
