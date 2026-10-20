@@ -13,11 +13,16 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from backend.core.database import Database
-from backend.services.reglas_marcas_def import filas_semilla, validar_regla
+from backend.services.reglas_marcas_def import (
+    MARCA_REVISION_REGLA, filas_semilla, firma_marcas, secuencia_en_revision, validar_regla,
+)
 
 CLAVE_REBOTE = 'reglas_marcas_rebote_segundos'
 DESCRIPCION_REBOTE = ('Reglas de marcaciones: segundos entre dos marcas para considerarlas '
-                      'un doble toque (rebote). Todavía no conectado al cálculo.')
+                      'un doble toque (rebote). Solo Ciclo Inteligente; el redondeo propio '
+                      'de un turno manda sobre este valor.')
+CLAVE_COLACION_MIN = 'reglas_marcas_colacion_min_minutos'
+CLAVE_COLACION_MAX = 'reglas_marcas_colacion_max_minutos'
 
 # La cuenta de jornadas por secuencia recorre todo el historial: se guarda 10 minutos.
 _CONTEOS_TTL = 600.0
@@ -58,12 +63,35 @@ class ReglasMarcasRepository:
         except Exception as e:
             logger.warning(f"Semilla reglas_marcas: {e}")
         try:
-            await self.db.execute(
+            await self.db.executemany(
                 "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
-                (CLAVE_REBOTE, '180', DESCRIPCION_REBOTE)
+                [
+                    (CLAVE_REBOTE, '180', DESCRIPCION_REBOTE),
+                    (CLAVE_COLACION_MIN, '20',
+                     'Reglas de marcaciones: minutos mínimos de una pausa para que la pantalla la señale como colación.'),
+                    (CLAVE_COLACION_MAX, '150',
+                     'Reglas de marcaciones: minutos máximos de una pausa para que la pantalla la señale como colación.'),
+                ]
             )
         except Exception as e:
-            logger.warning(f"Semilla ajuste rebote: {e}")
+            logger.warning(f"Semilla ajustes reglas: {e}")
+        # Confirmaciones de «Días por revisar»: quién miró un día en revisión y lo dio
+        # por bueno. Vale mientras las marcas del día no cambien (la firma coincide).
+        if not await self.db.table_exists("revisiones_marcas"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS revisiones_marcas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empleado_id INTEGER NOT NULL,
+                    fecha TEXT NOT NULL,
+                    secuencia TEXT,
+                    firma TEXT NOT NULL,
+                    usuario_id INTEGER,
+                    username TEXT,
+                    motivo TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (empleado_id, fecha, firma)
+                )
+            """)
 
     # ── Lectura ──────────────────────────────────────────────────────────────
 
@@ -198,6 +226,156 @@ class ReglasMarcasRepository:
              ORDER BY d.fecha, persona
         """, (tipo_horario, desde_abierto, secuencia))
         return [dict(r) for r in rows]
+
+    async def ventana_colacion(self) -> Dict[str, int]:
+        out = {'min': 20, 'max': 150}
+        for clave, campo in ((CLAVE_COLACION_MIN, 'min'), (CLAVE_COLACION_MAX, 'max')):
+            try:
+                r = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (clave,))
+                if r and r.get('valor') is not None:
+                    out[campo] = int(float(r['valor']))
+            except Exception:
+                pass
+        return out
+
+    # ── Días por revisar ─────────────────────────────────────────────────────
+    # Un día está «por revisar» cuando sus observaciones traen el marcador que
+    # escribe el motor y no existe una confirmación cuya firma (las marcas que el
+    # día usó) siga coincidiendo. Siempre tramo abierto, nunca hoy, nunca días
+    # cubiertos por un cierre de área, de turno o global.
+
+    _SQL_POR_REVISAR = """
+        SELECT a.empleado_id, a.fecha, a.estado,
+               ROUND(a.horas_trabajadas::numeric, 2) AS horas,
+               ROUND(a.minutos_deuda::numeric, 0) AS deuda,
+               a.hora_entrada_real, a.hora_salida_real,
+               a.observaciones, a.marcas_consumidas_ids,
+               e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS persona,
+               (SELECT ar.nombre FROM historial_areas h LEFT JOIN areas ar ON ar.id = h.area_id
+                 WHERE h.empleado_id = a.empleado_id
+                   AND a.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
+                 LIMIT 1) AS area
+          FROM asistencias a
+          JOIN empleados e ON e.id = a.empleado_id
+         WHERE a.fecha >= ? AND a.fecha < ?
+           AND a.observaciones LIKE ?
+           AND NOT EXISTS (
+                SELECT 1 FROM revisiones_marcas rv
+                 WHERE rv.empleado_id = a.empleado_id AND rv.fecha = a.fecha
+                   AND rv.firma = (SELECT COALESCE(STRING_AGG(j.v, ',' ORDER BY j.v::bigint), '')
+                                     FROM jsonb_array_elements_text(a.marcas_consumidas_ids::jsonb) j(v)))
+           AND NOT EXISTS (
+                SELECT 1 FROM cierres_periodos cp
+                 WHERE cp.fecha_inicio <= a.fecha AND cp.fecha_fin >= a.fecha
+                   AND (cp.area IS NULL OR cp.turno_id = a.turno_asignado_id
+                        OR cp.area = (SELECT ar2.nombre FROM historial_areas h2
+                                        LEFT JOIN areas ar2 ON ar2.id = h2.area_id
+                                       WHERE h2.empleado_id = a.empleado_id
+                                         AND a.fecha BETWEEN h2.fecha_desde AND COALESCE(h2.fecha_hasta, '2099-12-31')
+                                       LIMIT 1)))
+         ORDER BY a.fecha, persona
+    """
+
+    async def dias_por_revisar(self, desde: Optional[str] = None,
+                               hasta: Optional[str] = None,
+                               area: Optional[str] = None) -> List[Dict[str, Any]]:
+        from datetime import datetime as _dt
+        desde = desde or await self.inicio_tramo_abierto()
+        hasta = hasta or _dt.now().strftime('%Y-%m-%d')
+        rows = await self.db.fetch_all(self._SQL_POR_REVISAR,
+                                       (desde, hasta, f'%{MARCA_REVISION_REGLA}%'))
+        out = []
+        for r in rows:
+            d = dict(r)
+            if area and (d.get('area') or '') != area:
+                continue
+            d['secuencia'] = secuencia_en_revision(d.get('observaciones'))
+            d.pop('observaciones', None)
+            d.pop('marcas_consumidas_ids', None)
+            out.append(d)
+        return out
+
+    async def confirmar_dia(self, empleado_id: int, fecha: str, usuario_id: int,
+                            username: str, motivo: str) -> Dict[str, Any]:
+        a = await self.db.fetch_one(
+            "SELECT observaciones, marcas_consumidas_ids FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+            (empleado_id, fecha))
+        if not a:
+            return {'error': 'Ese día no tiene asistencia calculada.'}
+        sec = secuencia_en_revision(a.get('observaciones'))
+        if not sec:
+            return {'error': 'Ese día no está en revisión por una regla de marcaciones.'}
+        firma = firma_marcas(a.get('marcas_consumidas_ids'))
+        if not firma:
+            return {'error': 'No se pudo leer qué marcas usó el día; recalcúlelo primero.'}
+        await self.db.execute(
+            """INSERT OR IGNORE INTO revisiones_marcas
+               (empleado_id, fecha, secuencia, firma, usuario_id, username, motivo)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (empleado_id, fecha, sec, firma, usuario_id, username, motivo))
+        return {'secuencia': sec, 'firma': firma}
+
+    async def evaluar_dia(self, empleado_id: int, fecha: str) -> Dict[str, Any]:
+        """Qué dice la regla sobre este día, para el cuadro Ingreso Manual."""
+        a = await self.db.fetch_one(
+            "SELECT observaciones, marcas_consumidas_ids, estado FROM asistencias WHERE empleado_id = ? AND fecha = ?",
+            (empleado_id, fecha))
+        sec = secuencia_en_revision(a.get('observaciones')) if a else ''
+        confirmado = False
+        if a and sec:
+            firma = firma_marcas(a.get('marcas_consumidas_ids'))
+            r = await self.db.fetch_one(
+                "SELECT username, created_at FROM revisiones_marcas WHERE empleado_id = ? AND fecha = ? AND firma = ?",
+                (empleado_id, fecha, firma))
+            confirmado = bool(r)
+        regla = None
+        if sec:
+            rr = await self.db.fetch_one(
+                "SELECT secuencia, lectura, colacion, accion, opciones_revision, activa "
+                "FROM reglas_marcas WHERE tipo_horario = 'CICLO_INTELIGENTE' AND secuencia = ?", (sec,))
+            if rr:
+                regla = dict(rr)
+                try:
+                    regla['opciones_revision'] = json.loads(regla.get('opciones_revision') or '[]')
+                except Exception:
+                    regla['opciones_revision'] = []
+        return {'en_revision': bool(sec) and not confirmado, 'confirmado': confirmado,
+                'secuencia': sec, 'regla': regla,
+                'ventana_colacion': await self.ventana_colacion()}
+
+    async def pendientes_para_cierre(self, fecha_inicio: str, fecha_fin: str,
+                                     area: str) -> List[Dict[str, Any]]:
+        """Días por revisar dentro del rango de un cierre de área (bloquean el cierre)."""
+        from datetime import datetime as _dt, timedelta as _td
+        tope = (_dt.strptime(fecha_fin, '%Y-%m-%d') + _td(days=1)).strftime('%Y-%m-%d')
+        return await self.dias_por_revisar(desde=fecha_inicio, hasta=tope, area=area)
+
+    async def crear_regla(self, tipo_horario: str, secuencia: str, username: str) -> Dict[str, Any]:
+        """Crea, desde la bandeja, una regla APAGADA para una secuencia nueva (nace en revisión)."""
+        nueva = {'secuencia': secuencia, 'lectura': 'EXTREMOS', 'colacion': 'TURNO',
+                 'accion': 'CALCULA_Y_REVISA', 'opciones_revision': ['RECLASIFICAR', 'CONFIRMAR']}
+        if len(secuencia) == 1:
+            nueva.update(lectura='NINGUNA', accion='SOLO_REVISA',
+                         opciones_revision=['AGREGAR_SALIDA' if secuencia == 'E' else 'AGREGAR_ENTRADA'])
+        motivo = validar_regla(nueva)
+        if motivo:
+            return {'error': motivo}
+        existente = await self.db.fetch_one(
+            "SELECT id FROM reglas_marcas WHERE tipo_horario = ? AND secuencia = ?",
+            (tipo_horario, secuencia))
+        if existente:
+            return {'error': 'Esa secuencia ya tiene su regla.'}
+        await self.db.execute(
+            """INSERT INTO reglas_marcas (tipo_horario, secuencia, lectura, colacion, accion,
+                                          opciones_revision, activa, nota, updated_by)
+               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
+            (tipo_horario, secuencia, nueva['lectura'], nueva['colacion'], nueva['accion'],
+             json.dumps(nueva['opciones_revision']),
+             'Creada desde la bandeja de secuencias sin regla.', username))
+        creado = await self.db.fetch_one(
+            "SELECT id FROM reglas_marcas WHERE tipo_horario = ? AND secuencia = ?",
+            (tipo_horario, secuencia))
+        return {'regla': await self.obtener(creado['id'])}
 
     # ── Escritura ────────────────────────────────────────────────────────────
 

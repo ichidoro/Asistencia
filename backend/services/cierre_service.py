@@ -399,15 +399,29 @@ class CierreService:
         """
         feriados_periodo = await self.db.fetch_all(query_feriados, (fecha_inicio, fecha_fin))
 
+        # ── HARD STOP 4: Días por revisar (Reglas de marcaciones) ─────────────
+        # Días del rango cuya regla los dejó en revisión y nadie corrigió ni
+        # confirmó: el cierre se bloquea hasta resolverlos (decisión del dueño).
+        try:
+            from backend.repositories.reglas_marcas import ReglasMarcasRepository
+            por_revisar = await ReglasMarcasRepository(self.db).pendientes_para_cierre(
+                fecha_inicio, fecha_fin, area)
+        except Exception as e_rev:
+            logger.warning(f"Pre-evaluación: no se pudieron leer los días por revisar: {e_rev}")
+            por_revisar = []
+
         # Determinar si puede cerrar
         puede_cerrar = (
             len(he_pendientes) == 0
             and len(anomalias) == 0
             and len(en_curso) == 0
+            and len(por_revisar) == 0
         )
 
         return {
             "puede_cerrar": puede_cerrar,
+            "dias_por_revisar": len(por_revisar),
+            "detalle_por_revisar": por_revisar,
             # Hard Stops
             "he_pendientes": len(he_pendientes),
             "detalle_he": [dict(r) for r in he_pendientes],
@@ -446,6 +460,11 @@ class CierreService:
             if evaluacion.get("ultimo_fin_estimado"):
                 msg += f" El último turno activo termina aprox. a las {evaluacion['ultimo_fin_estimado']}."
             raise ValueError(msg)
+        if evaluacion.get("dias_por_revisar", 0) > 0:
+            raise ValueError(
+                f"No se puede cerrar el periodo. Hay {evaluacion['dias_por_revisar']} días por revisar "
+                f"(Reglas de marcaciones): corrija sus marcas o confírmelos en «Marcaciones del día» antes de cerrar."
+            )
 
         # Validar Soft Stop
         if evaluacion["inasistencias_injustificadas"] > 0 and not aceptar_inasistencias:

@@ -68,6 +68,74 @@ async def listar_reglas(
     }
 
 
+@router.get("/por-revisar/", response_model=Dict[str, Any])
+async def dias_por_revisar(
+    area: str = "",
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+):
+    """Días del tramo abierto que una regla dejó en revisión y nadie ha resuelto."""
+    dias = await repo.dias_por_revisar(area=area or None)
+    return {"dias": dias, "total": len(dias)}
+
+
+@router.get("/evaluar/", response_model=Dict[str, Any])
+async def evaluar_dia(
+    empleado_id: int,
+    fecha: str,
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+):
+    """Qué dice la regla de marcaciones sobre un día (para el cuadro Ingreso Manual)."""
+    return await repo.evaluar_dia(empleado_id, fecha)
+
+
+@router.post("/confirmar/", response_model=Dict[str, Any])
+async def confirmar_dia(
+    payload: Dict[str, Any] = Body(...),
+    repo: ReglasMarcasRepository = Depends(_repo),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar")),
+):
+    """Confirma que un día en revisión está bien. Vale mientras sus marcas no cambien."""
+    try:
+        empleado_id = int(payload.get("empleado_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Falta el empleado.")
+    fecha = str(payload.get("fecha") or "")[:10]
+    motivo = str(payload.get("motivo") or "").strip()
+    if len(motivo) < 5:
+        raise HTTPException(status_code=400, detail="Escriba un motivo (al menos 5 letras).")
+    res = await repo.confirmar_dia(empleado_id, fecha, current_user.user_id,
+                                   current_user.username, motivo)
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    await SeguridadRepository(db).log_auditoria(
+        current_user.user_id, current_user.username, "CONFIRMAR_DIA", "REGLAS_MARCAS",
+        json.dumps({"empleado_id": empleado_id, "fecha": fecha,
+                    "secuencia": res["secuencia"], "motivo": motivo}, ensure_ascii=False))
+    return {"message": "Día confirmado: sale de «Días por revisar» mientras sus marcas no cambien."}
+
+
+@router.post("/", response_model=Dict[str, Any], status_code=201)
+async def crear_regla(
+    payload: Dict[str, Any] = Body(...),
+    repo: ReglasMarcasRepository = Depends(_repo),
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
+):
+    """Crea, desde la bandeja, una regla APAGADA para una secuencia sin regla."""
+    secuencia = str(payload.get("secuencia") or "").strip().upper()
+    tipo = str(payload.get("tipo") or "CICLO_INTELIGENTE").strip()
+    res = await repo.crear_regla(tipo, secuencia, current_user.username)
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    await SeguridadRepository(db).log_auditoria(
+        current_user.user_id, current_user.username, "CREAR_REGLA", "REGLAS_MARCAS",
+        json.dumps({"tipo_horario": tipo, "secuencia": secuencia}, ensure_ascii=False))
+    return {"message": "Regla creada, apagada y lista para configurar.", "regla": res["regla"]}
+
+
 @router.get("/corridas/{job_id}/", response_model=Dict[str, Any])
 async def estado_corrida(
     job_id: str,

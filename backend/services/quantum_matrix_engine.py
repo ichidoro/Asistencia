@@ -54,8 +54,9 @@ _TIPOS_S: Set[str] = {'salida', 'exit', 's', 'out', '0', '2'}
 REGLAS_MARCAS_ACTIVAS: Dict[str, Dict[str, Any]] = {}
 # Rebote (doble toque) del ajuste `reglas_marcas_rebote_segundos`; None = 180 s.
 REGLAS_MARCAS_REBOTE: Optional[float] = None
-# Marcador estable en observaciones para la lista «Días por revisar» (etapa 3).
-MARCA_REVISION_REGLA = 'Revisar las marcas (regla '
+# Marcador estable en observaciones para la lista «Días por revisar» (definido en
+# reglas_marcas_def, que es la fuente única; aquí solo se reexporta).
+from backend.services.reglas_marcas_def import MARCA_REVISION_REGLA  # noqa: E402
 
 
 def _rebote_defecto(tipo_prog: str) -> float:

@@ -40,6 +40,35 @@ OPCIONES_REVISION = ('AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'CONFI
 
 _RE_SECUENCIA = re.compile(r'^[ES]{1,12}$')
 
+# Marcador estable que el motor escribe en las observaciones de un día cuya regla
+# lo manda a revisión. La lista «Días por revisar», el triángulo de la grilla y el
+# bloqueo del cierre lo buscan tal cual; no cambiarlo sin recalcular el tramo abierto.
+MARCA_REVISION_REGLA = 'Revisar las marcas (regla '
+_RE_MARCADOR = re.compile(re.escape(MARCA_REVISION_REGLA) + r'([ES](?: · [ES]){0,11})\)')
+
+
+def secuencia_en_revision(observaciones) -> str:
+    """Si las observaciones de un día traen el marcador de revisión, devuelve su
+    secuencia ('SSES'); si no, ''."""
+    m = _RE_MARCADOR.search(observaciones or '')
+    return m.group(1).replace(' · ', '') if m else ''
+
+
+def firma_marcas(marcas_consumidas_ids) -> str:
+    """Firma estable del conjunto de marcas que usó un día (ids ordenados, separados
+    por coma). Una confirmación de revisión vale mientras la firma no cambie: si al
+    día le llegan marcas nuevas, la firma cambia y el día vuelve a la lista."""
+    import json
+    if isinstance(marcas_consumidas_ids, str):
+        try:
+            marcas_consumidas_ids = json.loads(marcas_consumidas_ids or '[]')
+        except ValueError:
+            return ''
+    try:
+        return ','.join(str(i) for i in sorted(int(x) for x in (marcas_consumidas_ids or [])))
+    except (TypeError, ValueError):
+        return ''
+
 
 def validar_regla(regla: dict) -> str:
     """Devuelve '' si la regla es válida, o el motivo del rechazo en palabras simples."""

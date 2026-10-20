@@ -861,7 +861,10 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
 // ── Marcaciones del día: ver todas y elegir cuál es Entrada / Salida ─────────────────────────────────────
 // Caso Catalina Núñez 09-10: el reloj dejó la primera marca como "Salida" y el atraso salió de 273 min. La marca cruda no se
 // modifica; lo que se elige acá se guarda aparte (logs_tipo_override) y el día se recalcula con ese tipo.
-const MARCAS_COLACION_MIN = 20, MARCAS_COLACION_MAX = 150;
+// Ventana para señalar una pausa como colación: viene de los ajustes de la pestaña
+// Reglas de marcaciones (el servidor la entrega en /reglas-marcas/evaluar/); estos
+// son solo los valores de respaldo mientras no llega la respuesta.
+let MARCAS_COLACION_MIN = 20, MARCAS_COLACION_MAX = 150;
 
 function _marcasMinutos(hora) {
     const [h, m] = String(hora).split(':');
@@ -906,8 +909,79 @@ async function cargarPanelMarcacionesDia(empId, dateStr, anchorEl) {
         const data = await r.json();
         if (host.dataset.req !== reqId || !data.marcas || data.marcas.length === 0) return; // el modal ya cambió de día
         renderPanelMarcasDia(host, empId, dateStr, data);
+        cargarReglaDia(empId, dateStr, host, !!data.fecha_cerrada, reqId);
     } catch (e) {
         console.warn('No se pudieron cargar las marcaciones del día', e);
+    }
+}
+
+/** Qué dice la regla de marcaciones sobre este día: línea informativa en el panel y,
+ *  si el día está en revisión y su regla lo permite, el botón «Confirmar que está bien». */
+async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
+    try {
+        const r = await fetch(`/api/configuracion/reglas-marcas/evaluar/?empleado_id=${encodeURIComponent(empId)}&fecha=${encodeURIComponent(dateStr)}`,
+            { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        if (!r.ok) return;
+        const ev = await r.json();
+        if (host.dataset.req !== reqId) return;
+        if (ev.ventana_colacion) {
+            MARCAS_COLACION_MIN = ev.ventana_colacion.min || MARCAS_COLACION_MIN;
+            MARCAS_COLACION_MAX = ev.ventana_colacion.max || MARCAS_COLACION_MAX;
+        }
+        const cont = host.querySelector('#marcas-regla-info');
+        if (!cont) return;
+        if (!ev.secuencia) { cont.innerHTML = ''; return; }
+        const sec = ev.secuencia.split('').join(' · ');
+        const puedeConfirmar = !cerrada && ev.en_revision
+            && ev.regla && (ev.regla.opciones_revision || []).includes('CONFIRMAR')
+            && typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.editar');
+        cont.innerHTML = `
+            <div class="border rounded p-2" style="background:${ev.en_revision ? '#fef2f2' : '#f0fdf4'};">
+                <i class="bi ${ev.en_revision ? 'bi-exclamation-triangle-fill text-danger' : 'bi-check-circle-fill text-success'}"></i>
+                <strong>Regla de marcaciones (${sec}):</strong>
+                ${ev.en_revision ? 'este día está en <strong>«Días por revisar»</strong>. Corrija las marcas abajo, o confirme que está bien.'
+                 : ev.confirmado ? 'este día fue revisado y confirmado. Si cambian sus marcas, vuelve a revisión.'
+                 : 'día en revisión ya resuelto.'}
+                ${puedeConfirmar ? `<button type="button" class="btn btn-sm btn-outline-success ms-2 py-0" onclick="confirmarDiaRevision(${empId}, '${dateStr}')">Confirmar que está bien</button>` : ''}
+            </div>`;
+    } catch (e) {
+        console.warn('No se pudo evaluar la regla del día', e);
+    }
+}
+
+async function confirmarDiaRevision(empId, dateStr) {
+    // El cuadro del motivo se abre DENTRO del modal (si no, el foco del modal no deja escribir)
+    const { value: motivo, isConfirmed } = await Swal.fire({
+        target: document.querySelector('.modal.show') || 'body',
+        title: 'Confirmar que está bien',
+        input: 'textarea',
+        inputLabel: 'Motivo (obligatorio): por qué este día está correcto tal como está',
+        inputPlaceholder: 'Ej: la jefatura confirmó que trabajó ese horario',
+        showCancelButton: true,
+        confirmButtonText: 'Confirmar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (v) => (!v || v.trim().length < 5) ? 'Escriba un motivo (al menos 5 letras).' : undefined,
+    });
+    if (!isConfirmed) return;
+    try {
+        const r = await fetch('/api/configuracion/reglas-marcas/confirmar/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            body: JSON.stringify({ empleado_id: parseInt(empId), fecha: dateStr, motivo: motivo.trim() })
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            const msg = body.detail || 'No se pudo confirmar.';
+            if (typeof showToast === 'function') showToast(msg, 'danger'); else alert(msg);
+            return;
+        }
+        if (typeof showToast === 'function') showToast(body.message || 'Día confirmado.', 'success');
+        const host = document.getElementById('manual-panel-marcas');
+        if (host) cargarReglaDia(empId, dateStr, host, false, host.dataset.req);
+        if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+        else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('No se pudo confirmar: sin conexión.', 'danger');
     }
 }
 
@@ -924,7 +998,8 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
                 <strong><i class="bi bi-list-check"></i> Marcaciones del día (${marcas.length})</strong>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcas-sugerir"${cerrada ? ' disabled' : ''}>Usar sugerencia</button>
             </div>
-            <div class="small text-muted mb-2">Elija cuál marca es Entrada y cuál es Salida. La colación se detecta sola cuando una Salida y la Entrada siguiente quedan a mitad del día, entre 20 y 150 minutos.</div>
+            <div class="small text-muted mb-2">Elija cuál marca es Entrada y cuál es Salida. La colación se detecta sola cuando una Salida y la Entrada siguiente quedan a mitad del día, entre ${MARCAS_COLACION_MIN} y ${MARCAS_COLACION_MAX} minutos.</div>
+            <div id="marcas-regla-info" class="small mb-2"></div>
             <table class="table table-sm align-middle mb-1" style="font-size:.9rem;">
                 <thead><tr><th>Hora</th><th>El reloj dijo</th><th>Es</th><th></th>${puedeQuitar ? '<th></th>' : ''}</tr></thead>
                 <tbody id="marcas-dia-body"></tbody>

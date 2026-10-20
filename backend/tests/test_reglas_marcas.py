@@ -141,6 +141,35 @@ def test_validacion_combinaciones_coherentes():
                                opciones_revision=['CONFIRMAR', 'CONFIRMAR'])) != ''
 
 
+def test_marcador_de_revision_se_lee_de_las_observaciones():
+    from backend.services.reglas_marcas_def import secuencia_en_revision
+    obs = ("Regla de marcaciones (S · S · E · S): se leyó con la primera marca como Entrada "
+           "y la última como Salida. Revisar las marcas (regla S · S · E · S). ")
+    assert secuencia_en_revision(obs) == 'SSES'
+    assert secuencia_en_revision('Revisar las marcas (regla E). ') == 'E'
+    assert secuencia_en_revision('Salidas seguidas: se tomó la última. ') == ''
+    assert secuencia_en_revision(None) == ''
+
+
+def test_firma_de_marcas_estable_y_ordenada():
+    from backend.services.reglas_marcas_def import firma_marcas
+    assert firma_marcas([7003, 7001, 7002]) == '7001,7002,7003'
+    assert firma_marcas('[7003, 7001]') == '7001,7003'      # como viene de asistencias (texto JSON)
+    assert firma_marcas('[]') == '' and firma_marcas(None) == ''
+    assert firma_marcas('no-json') == ''
+
+
+def test_la_regla_creada_desde_la_bandeja_nace_valida():
+    # Mismos valores por defecto que usa crear_regla (repositorio): deben pasar la validación
+    for sec in ('ESSEES', 'E', 'S'):
+        nueva = {'secuencia': sec, 'lectura': 'EXTREMOS', 'colacion': 'TURNO',
+                 'accion': 'CALCULA_Y_REVISA', 'opciones_revision': ['RECLASIFICAR', 'CONFIRMAR']}
+        if len(sec) == 1:
+            nueva.update(lectura='NINGUNA', accion='SOLO_REVISA',
+                         opciones_revision=['AGREGAR_SALIDA' if sec == 'E' else 'AGREGAR_ENTRADA'])
+        assert validar_regla(nueva) == '', sec
+
+
 def test_catalogos_sin_sorpresas():
     assert LECTURAS == ('RELOJ', 'EXTREMOS', 'NINGUNA')
     assert COLACIONES == ('TURNO', 'MEDIDA', 'NINGUNA')

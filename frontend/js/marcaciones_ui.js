@@ -4966,8 +4966,33 @@ function renderWizardStep(step) {
 
     const ev = s.evaluacion;
 
-    if (step === 1) { // Anomalías
-        if (ev.anomalias > 0) {
+    if (step === 1) { // Anomalías y Días por revisar (Reglas de marcaciones)
+        const porRevisar = ev.dias_por_revisar || 0;
+        const porRevisarHtml = porRevisar > 0 ? `
+                <h5 class="text-danger fw-bold mt-3"><i class="bi bi-exclamation-triangle-fill"></i> Días por revisar (Reglas de marcaciones)</h5>
+                <p class="mb-2">Hay <strong>${porRevisar} días</strong> que una regla dejó en revisión. Corrija sus marcas o confírmelos en «Marcaciones del día» antes de cerrar.</p>
+                <div class="border rounded-3 shadow-sm bg-white mb-3" style="max-height:220px; overflow-y:auto;">
+                    <ul class="list-unstyled mb-0">${(ev.detalle_por_revisar || []).map(d => {
+                        const nEsc = (d.persona || '').replace(/'/g, "\\'");
+                        return `
+                        <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom">
+                            <div class="small"><span class="fw-bold">${window.formatFechaDDMMYYYY(d.fecha)}</span>
+                                <span class="mx-2 text-muted">|</span>${d.persona}
+                                <span class="badge bg-warning-subtle text-warning-emphasis ms-2" style="font-size:0.72rem;">Secuencia ${(d.secuencia || '').split('').join(' · ')}</span>
+                                <span class="text-muted ms-2">${d.estado || ''}</span></div>
+                            <button class="btn btn-sm btn-outline-primary fw-bold py-1 px-3" onclick="openManualEntryModal(${d.empleado_id}, '${d.fecha}', '${nEsc}')">
+                                <i class="bi bi-pencil-square me-1"></i> Abrir
+                            </button>
+                        </li>`;
+                    }).join('')}</ul>
+                </div>` : '';
+        if (porRevisar > 0 && !(ev.anomalias > 0)) {
+            content.innerHTML = `
+                <h4 class="text-danger fw-bold"><i class="bi bi-shield-x"></i> HARD STOP: Días por revisar</h4>
+                ${porRevisarHtml}
+            `;
+            btnNext.style.display = 'none';
+        } else if (ev.anomalias > 0) {
             const list = ev.detalle_anomalias.map(a => {
                 const nameEscaped = (a.nombre_completo || '').replace(/'/g, "\\'");
                 return `
@@ -4998,13 +5023,14 @@ function renderWizardStep(step) {
                 <div class="border rounded-3 shadow-sm bg-white" style="max-height:250px; overflow-y:auto;">
                     <ul class="list-unstyled mb-0">${list}</ul>
                 </div>
+                ${porRevisarHtml}
             `;
             btnNext.style.display = 'none';
         } else {
             content.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                    <h4 class="mt-3">Sin Anomalías</h4>
+                    <h4 class="mt-3">Sin Anomalías ni días por revisar</h4>
                     <p class="text-muted">Las marcaciones están íntegras. Puede continuar al siguiente paso.</p>
                 </div>
             `;
@@ -5934,6 +5960,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-tip="${tipKey}">
+                    ${di && di.revision_marcas ? `<span title="Día por revisar: una regla de marcaciones pide mirarlo. Clic para abrirlo." style="position:absolute;top:0;right:0;width:0;height:0;border-top:11px solid #dc2626;border-left:11px solid transparent;z-index:5;"></span>` : ''}
                     ${cellContent}
                 </td>`;
     }).join('');

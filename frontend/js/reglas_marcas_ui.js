@@ -111,6 +111,7 @@ const ReglasMarcasModule = (() => {
                 nunca períodos cerrados), mostrando el antes y el después. «Apagar esta regla» lo deshace.
             </div>
             <div id="rm-corrida-aviso"></div>
+            <div id="rm-por-revisar" class="mb-2"></div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3" style="font-size:.88rem;">
                 <span class="text-muted">Reglas corridas: <strong>${activas} de ${data.reglas.length}</strong> ·
                     cubren el <strong>${pct(diasActivas, data.total_jornadas)} %</strong> de las ${Number(data.total_jornadas).toLocaleString('es-CL')} jornadas con marcas del reloj</span>
@@ -133,15 +134,21 @@ const ReglasMarcasModule = (() => {
             ${(data.secuencias_sin_regla || []).length ? `
             <div class="card border-0 shadow-sm p-3 mt-3">
                 <div class="fw-semibold mb-1">Secuencias encontradas sin regla</div>
-                <div class="text-muted" style="font-size:.85rem;">Cuando el motor esté conectado irán a revisión. Se les crea su regla en la etapa siguiente.</div>
-                <div class="mt-2">${data.secuencias_sin_regla.map(s => `<span class="badge bg-light text-dark border me-1">${pretty(esc(s.secuencia))} · ${s.dias} días</span>`).join(' ')}</div>
+                <div class="text-muted" style="font-size:.85rem;">Mientras no tengan regla, el motor las sigue leyendo como siempre. Cree su regla una sola vez: nace apagada y en revisión, y usted la ajusta y la corre cuando quiera.</div>
+                <div class="mt-2 d-flex flex-wrap gap-2">${data.secuencias_sin_regla.map(s => `
+                    <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-2" style="font-size:.8rem;">
+                        ${pretty(esc(s.secuencia))} · ${s.dias} días
+                        ${canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary py-0" data-rm-crear="${esc(s.secuencia)}" style="font-size:.74rem;">Crear regla</button>` : ''}
+                    </span>`).join(' ')}</div>
             </div>` : ''}
         `;
         cont.querySelectorAll('[data-rm-tipo]').forEach(b => b.addEventListener('click', () => { tipo = b.dataset.rmTipo; selId = null; init(); }));
         const btnReb = $('rm-rebote-save');
         if (btnReb) btnReb.addEventListener('click', guardarRebote);
+        cont.querySelectorAll('[data-rm-crear]').forEach(b => b.addEventListener('click', () => crearRegla(b.dataset.rmCrear)));
         if (data.reglas.length) { renderLista(); renderEditor(); }
         if (data.corrida_en_curso && data.corrida_en_curso.estado === 'en_curso') seguirCorrida(data.corrida_en_curso.id);
+        cargarPorRevisar();
     }
 
     function renderLista() {
@@ -249,6 +256,76 @@ const ReglasMarcasModule = (() => {
         if (g) g.addEventListener('click', () => guardar(r));
         const c = $('rm-correr');
         if (c) c.addEventListener('click', () => correrRegla(r, c.dataset.encender === '1'));
+    }
+
+    async function cargarPorRevisar() {
+        const el = $('rm-por-revisar');
+        if (!el) return;
+        try {
+            const res = await fetch(`${API}por-revisar/`, { headers: headers() });
+            if (!res.ok) { el.innerHTML = ''; return; }
+            const body = await res.json();
+            if (!body.total) {
+                el.innerHTML = `<div class="alert alert-success py-2 mb-0" style="font-size:.88rem;"><i class="bi bi-check-circle"></i> No hay días por revisar en el tramo abierto.</div>`;
+                return;
+            }
+            el.innerHTML = `
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body py-2">
+                        <div class="fw-semibold text-danger mb-1"><i class="bi bi-exclamation-triangle-fill"></i> Días por revisar (${body.total})</div>
+                        <div class="text-muted mb-2" style="font-size:.82rem;">Una regla dejó estos días en revisión. «Abrir» muestra sus marcas para corregirlas o confirmar que están bien. Mientras queden días aquí, el cierre del tramo de su área está bloqueado.</div>
+                        <div class="table-responsive" style="max-height:260px;"><table class="table table-sm align-middle mb-0" style="font-size:.84rem;">
+                            <thead><tr><th>Persona</th><th>Área</th><th>Fecha</th><th>Secuencia</th><th>Estado</th><th class="text-end">Horas</th><th class="text-end">Deuda (min)</th><th></th></tr></thead>
+                            <tbody>${body.dias.map(d => `
+                                <tr><td>${esc(d.persona)}</td><td>${esc(d.area || '')}</td><td>${esc(d.fecha)}</td>
+                                    <td>${pretty(esc(d.secuencia || ''))}</td><td>${esc(d.estado || '')}</td>
+                                    <td class="text-end">${Number(d.horas || 0).toLocaleString('es-CL')}</td>
+                                    <td class="text-end">${Number(d.deuda || 0).toLocaleString('es-CL')}</td>
+                                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary py-0" data-rm-abrir="${d.empleado_id}|${esc(d.fecha)}|${esc(d.persona)}">Abrir</button></td>
+                                </tr>`).join('')}</tbody>
+                        </table></div>
+                    </div>
+                </div>`;
+            el.querySelectorAll('[data-rm-abrir]').forEach(b => b.addEventListener('click', () => {
+                const [eid, fecha, nombre] = b.dataset.rmAbrir.split('|');
+                abrirDiaRevision(parseInt(eid), fecha, nombre);
+            }));
+        } catch (e) {
+            el.innerHTML = '';
+        }
+    }
+
+    // El cuadro «Ingreso Manual» vive en la página de Marcaciones: primero se va allá,
+    // se espera a que la grilla cargue y recién entonces se abre el día.
+    function abrirDiaRevision(eid, fecha, nombre) {
+        if (typeof switchPage === 'function') switchPage('marcaciones');
+        let intentos = 0;
+        const t = setInterval(() => {
+            intentos++;
+            const listo = typeof openManualEntryModal === 'function'
+                && typeof stateMarcacionesApp !== 'undefined'
+                && stateMarcacionesApp.data && stateMarcacionesApp.data.matrix;
+            if (listo) {
+                clearInterval(t);
+                openManualEntryModal(eid, fecha, nombre);
+            } else if (intentos > 40) {
+                clearInterval(t);
+                toast('La grilla no terminó de cargar: busque el día en Marcaciones (la celda lleva un triángulo rojo).', 'warning');
+            }
+        }, 350);
+    }
+
+    async function crearRegla(secuencia) {
+        try {
+            const res = await fetch(API, { method: 'POST', headers: headers(), body: JSON.stringify({ secuencia }) });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) { toast(body.detail || 'No se pudo crear la regla.', 'danger'); return; }
+            toast(body.message || 'Regla creada.');
+            if (body.regla && body.regla.id) selId = body.regla.id;
+            init();
+        } catch (e) {
+            toast('No se pudo crear la regla: sin conexión.', 'danger');
+        }
     }
 
     const CAMPOS_TXT = {
