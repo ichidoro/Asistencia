@@ -193,7 +193,12 @@ const ReglasMarcasModule = (() => {
     function renderLista() {
         const el = $('rm-lista');
         if (!el) return;
-        let html = '';
+        // Encabezado: qué significan el número y el porcentaje de cada fila.
+        let html = `
+            <div class="d-flex justify-content-between align-items-center gap-2 px-2 pt-2" style="font-size:.72rem;">
+                <span class="text-muted fw-semibold text-uppercase">Secuencia</span>
+                <span class="text-muted fw-semibold text-uppercase text-end">Jornadas · % del total</span>
+            </div>`;
         GRUPOS.forEach(g => {
             const filas = data.reglas.filter(r => r.grupo === g);
             if (!filas.length) return;
