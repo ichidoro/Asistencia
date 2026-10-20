@@ -33,6 +33,9 @@ const ReglasMarcasModule = (() => {
     const pretty = (sec) => sec.split('').join(' · ');
     // Las marcas de un día como fichas de colores (verde Entrada, azul Salida),
     // en vez del texto corrido «06:46:36 Ent · 09:31:24 Sal · …» que confunde.
+    // Una secuencia como fichas con la palabra completa (Entrada verde, Salida azul).
+    const secuenciaChips = (sec) => String(sec || '').split('').map(c =>
+        `<span style="${c === 'E' ? 'background:#d1e7dd;color:#0f5132;' : 'background:#cfe2ff;color:#084298;'}border-radius:6px;padding:1px 6px;font-size:.72rem;font-weight:600;display:inline-block;margin:1px 2px 1px 0;">${c === 'E' ? 'Entrada' : 'Salida'}</span>`).join('');
     const marcasChips = (marcas) => String(marcas || '').split(' · ').filter(Boolean).map(m => {
         const esEnt = m.indexOf('Ent') >= 0;
         return `<span style="${esEnt ? 'background:#d1e7dd;color:#0f5132;' : 'background:#cfe2ff;color:#084298;'}border-radius:6px;padding:1px 7px;font-size:.76rem;font-weight:600;white-space:nowrap;display:inline-block;margin:1px 2px 1px 0;">${esEnt ? 'Entrada' : 'Salida'} ${esc(m.slice(0, 5))}</span>`;
@@ -168,7 +171,7 @@ const ReglasMarcasModule = (() => {
             </div>
             ${data.reglas.length ? `
             <div class="d-flex flex-wrap gap-3 align-items-start">
-                <div id="rm-lista" class="card border-0 shadow-sm p-2" style="flex:1 1 300px; max-width:430px;"></div>
+                <div id="rm-lista" class="card border-0 shadow-sm p-2" style="flex:1 1 340px; max-width:540px;"></div>
                 <div id="rm-editor" class="card border-0 shadow-sm p-3" style="flex:2 1 420px;"></div>
             </div>` : `
             <div class="card border-0 shadow-sm p-4 text-muted">
@@ -182,7 +185,7 @@ const ReglasMarcasModule = (() => {
                 <div class="text-muted" style="font-size:.85rem;">Mientras no tengan regla, el motor las sigue leyendo como siempre. Cree su regla una sola vez: nace apagada y en revisión, y usted la ajusta y la corre cuando quiera.</div>
                 <div class="mt-2 d-flex flex-wrap gap-2">${data.secuencias_sin_regla.map(s => `
                     <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-2" style="font-size:.8rem;">
-                        ${pretty(esc(s.secuencia))} · ${s.dias} días
+                        ${secuenciaChips(s.secuencia)} · ${s.dias} días
                         ${canEdit() ? `<button type="button" class="btn btn-sm btn-outline-primary py-0" data-rm-crear="${esc(s.secuencia)}" style="font-size:.74rem;">Crear regla</button>` : ''}
                     </span>`).join(' ')}</div>
             </div>` : ''}
@@ -210,7 +213,7 @@ const ReglasMarcasModule = (() => {
                 const sel = r.id === selId;
                 filas += `
                 <tr data-rm-id="${r.id}" class="${sel ? 'table-primary' : ''}" style="cursor:pointer;">
-                    <td class="align-middle text-nowrap"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${dot};margin-right:6px;"></span>${esc(r.secuencia.split('').join('·'))}</td>
+                    <td class="align-middle"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${dot};margin-right:5px;"></span>${secuenciaChips(r.secuencia)}</td>
                     <td class="text-end align-middle ${sel ? '' : 'text-muted'}">${Number(r.dias).toLocaleString('es-CL')}</td>
                     <td class="text-end align-middle ${sel ? '' : 'text-muted'}">${pct(r.dias, data.total_jornadas)} %</td>
                     <td class="text-center align-middle">${r.activa ? '<i class="bi bi-check-circle-fill text-success" title="Encendida: el motor la usa"></i>' : '<span class="text-muted" title="Apagada: el motor no la usa">—</span>'}</td>
