@@ -210,8 +210,26 @@ class TensorMarkDeduplicator:
                 if diff_sec >= bounce_seconds:
                     clean_logs.append(log)
                     last_dt = curr_dt
+                elif cls._reloj_reemplaza_manual(clean_logs[-1], log):
+                    # Rebote entre una marca manual y una del reloj del mismo tipo: gana la del reloj (es la que midió la persona)
+                    clean_logs[-1] = log
+                    last_dt = curr_dt
 
         return clean_logs
+
+    @staticmethod
+    def _es_sobreescritura(log: Dict[str, Any]) -> bool:
+        """Marca manual con la glosa [SOBREESCRITURA]: corrección humana explícita que sí manda sobre el reloj (ver apply_override_mask)."""
+        return log.get('manual') == 1 and '[SOBREESCRITURA]' in str(log.get('observaciones') or '').upper()
+
+    @classmethod
+    def _reloj_reemplaza_manual(cls, conservada: Dict[str, Any], nueva: Dict[str, Any]) -> bool:
+        """True si `conservada` es manual, `nueva` es del reloj y ambas son del mismo tipo (Entrada con Entrada, Salida con Salida)."""
+        if conservada.get('manual') != 1 or nueva.get('manual') == 1 or cls._es_sobreescritura(conservada):
+            return False
+        t_c = str(conservada.get('tipo', '')).strip().lower()
+        t_n = str(nueva.get('tipo', '')).strip().lower()
+        return (t_c in _TIPOS_E and t_n in _TIPOS_E) or (t_c in _TIPOS_S and t_n in _TIPOS_S)
 
     @classmethod
     def apply_override_mask(cls, logs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -292,6 +310,44 @@ class TensorMarkDeduplicator:
 
         filtered = [l for l in sorted_logs if l.get('id') not in suppressed_ids]
         return filtered
+
+    @classmethod
+    def apply_clock_priority(cls, logs: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        El reloj gana: la marca del reloj es la medición; una marca manual solo COMPLETA lo que falta.
+        Si una marca manual y una del reloj son del mismo tipo y caen en el mismo bloque continuo (sin una marca del tipo contrario de por
+        medio: dos Entradas seguidas, o dos Salidas seguidas), la manual no se usa y manda la del reloj. Una manual que cubre un hueco
+        (la Salida del final del día cuando el reloj solo marcó la Salida a colación) queda intacta: entre ambas hay una Entrada.
+        Caso Maximiliano Badilla, 17-10-2026: Entrada manual 07:00 y Salida manual 14:00, ingresadas a las 09:28, antes de que el reloj
+        marcara 09:48:58 y 15:44:47; el día salía OK con 8,25 h y escondía 49 min de atraso.
+        Nunca se descartan las marcas con la glosa [SOBREESCRITURA] (corrección humana explícita).
+        Devuelve (marcas que siguen, [{'manual': marca descartada, 'reloj': marca del reloj que manda}]).
+        """
+        if not logs:
+            return [], []
+        ordenadas = sorted(logs, key=lambda x: str(x.get('fecha_hora', '')))
+
+        rachas: List[Tuple[Optional[str], List[Dict[str, Any]]]] = []
+        for l in ordenadas:
+            t = str(l.get('tipo', '')).strip().lower()
+            tipo = 'E' if t in _TIPOS_E else ('S' if t in _TIPOS_S else None)
+            if tipo is not None and rachas and rachas[-1][0] == tipo:
+                rachas[-1][1].append(l)
+            else:
+                rachas.append((tipo, [l]))  # tipo desconocido: corta la racha y no se toca
+
+        cubiertas: List[Dict[str, Any]] = []
+        for tipo, racha in rachas:
+            if tipo is None:
+                continue
+            reloj = [l for l in racha if l.get('manual') != 1]
+            manuales = [l for l in racha if l.get('manual') == 1 and not cls._es_sobreescritura(l)]
+            if reloj and manuales:
+                manda = reloj[0] if tipo == 'E' else reloj[-1]  # misma elección que el motor: primera Entrada, última Salida
+                cubiertas.extend({'manual': m, 'reloj': manda} for m in manuales)
+
+        descartadas = {id(c['manual']) for c in cubiertas}
+        return [l for l in ordenadas if id(l) not in descartadas], cubiertas
 
 
 class MultiBlockTensorSolver:
@@ -397,7 +453,8 @@ class MultiBlockTensorSolver:
             'jornada_adicional_obs': '',
             'emergencia_detectada': None,
             'marcas_consumidas_ids': [],
-            'descartadas_estructura': []
+            'descartadas_estructura': [],
+            'manuales_cubiertas': []
         }
 
         if not logs:
@@ -405,6 +462,13 @@ class MultiBlockTensorSolver:
 
         clean_logs = TensorMarkDeduplicator.deduplicate_and_sort(logs, bounce_seconds=bounce_seconds)
         clean_logs = TensorMarkDeduplicator.apply_override_mask(clean_logs)
+        # El reloj gana: una marca manual del mismo tipo que una del reloj, en el mismo bloque continuo, no se usa. Queda anotada y como
+        # consumida de esta jornada para que ningún día vecino la tome como suya.
+        clean_logs, cubiertas = TensorMarkDeduplicator.apply_clock_priority(clean_logs)
+        result['manuales_cubiertas'] = cubiertas
+        for c in cubiertas:
+            if c['manual'].get('id'):
+                result['marcas_consumidas_ids'].append(c['manual']['id'])
 
         if not clean_logs:
             return result
@@ -1966,6 +2030,12 @@ class QuantumMatrixEngine:
             if horas_desc:
                 res['observaciones'] += ("Salidas seguidas: se tomó la última y se descartó la de las " if len(horas_desc) == 1
                                          else "Salidas seguidas: se tomó la última y se descartaron las de las ") + ", ".join(horas_desc) + ". "
+        for c in segment_res['manuales_cubiertas']:
+            h_man, h_rel = MultiBlockTensorSolver.parse_dt(c['manual']), MultiBlockTensorSolver.parse_dt(c['reloj'])
+            if h_man and h_rel:
+                tipo_txt = 'Entrada' if str(c['manual'].get('tipo', '')).strip().lower() in _TIPOS_E else 'Salida'
+                res['observaciones'] += (f"Marca manual de las {h_man.strftime('%H:%M:%S')} ({tipo_txt}) sin usar: el reloj ya marcó "
+                                         f"a las {h_rel.strftime('%H:%M:%S')}. ")
 
         # Si no hay marcas en el bloque principal
         now_local = _get_now_local()

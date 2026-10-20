@@ -13,6 +13,7 @@ from loguru import logger
 
 from backend.services.gemini_vision_service import gemini_vision_service
 from backend.services.asistencia_service import AsistenciaService
+from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
 from backend.services.turno_service import TurnoService
@@ -1476,6 +1477,15 @@ def fecha_de_la_salida(fecha: str, hora_salida: Any, hora_entrada: Any = None, c
     return fecha
 
 
+def _marca_en_el_futuro(fecha_hora: str, ahora: datetime) -> bool:
+    """
+    True si la marca cae después del minuto actual. Una marca manual registra algo que YA ocurrió: una hora que todavía no llega no se mide,
+    se supone (caso 17-10-2026: 22 marcas, entre ellas Salidas de las 14:00 ingresadas a las 09:30). Se compara al minuto, porque el formulario
+    manda horas sin segundos: la hora de este mismo minuto es válida.
+    """
+    return datetime.strptime(str(fecha_hora)[:19], "%Y-%m-%d %H:%M:%S") > ahora.replace(second=59, microsecond=0)
+
+
 _TIPOS_ENTRADA = ('entrada', 'entry', 'e', 'in', '1')
 
 
@@ -1569,6 +1579,16 @@ async def agregar_marcacion_manual(
 
         if not marcas_a_insertar:
             raise HTTPException(status_code=400, detail="Debe proporcionar 'hora' y 'tipo' o bien 'hora_entrada' / 'hora_salida'")
+
+        # Una marca manual registra algo que ya pasó. Si alguna cae en el futuro no se guarda ninguna (el resto se puede ingresar ahora)
+        ahora = _motor._get_now_local()
+        futuras = [fh for fh, _ in marcas_a_insertar if _marca_en_el_futuro(fh, ahora)]
+        if futuras:
+            cuando = ", ".join(f"{fh[11:16]} del {fh[8:10]}-{fh[5:7]}" for fh in futuras)
+            raise HTTPException(status_code=400, detail=(
+                (f"La marca de las {cuando} todavía no ocurre" if len(futuras) == 1 else f"Las marcas de las {cuando} todavía no ocurren")
+                + f" (ahora son las {ahora.strftime('%H:%M')} del {ahora.strftime('%d-%m')}). "
+                  "Una marca manual solo registra algo que ya pasó: ingrésela cuando ocurra."))
 
         query = """
             INSERT OR IGNORE INTO logs_raw (empleado_id, rut, fecha_hora, tipo, manual, observaciones, hash_original, usuario_id)
@@ -2134,6 +2154,8 @@ async def agregar_marcaciones_masivas(
         uid_masivo = getattr(current_user, "user_id", None)  # quién hizo el relleno: queda en cada marca
         dias_procesados = 0
         dias_ignorados  = 0
+        dias_futuros    = 0
+        ahora_masivo    = _motor._get_now_local()
         errores: list   = []
 
         current = start_date
@@ -2168,12 +2190,19 @@ async def agregar_marcaciones_masivas(
             # Entrada
             fh_ent  = f"{fecha_str} {hora_entrada}:00"
             rut_str = str(emp.rut) if emp else str(empleado_id)
-            h_ent   = hashlib.sha256(f"{rut_str}|{fh_ent}|Entrada".encode()).hexdigest()
-            batch_logs.append((empleado_id, fh_ent, "Entrada", 1, "Relleno Masivo", h_ent, uid_masivo))
 
             # Salida: en un turno que cruza la medianoche cae el día siguiente (Entrada 23:00 del 11 · Salida 07:00 del 12)
             fecha_sal = fecha_de_la_salida(fecha_str, hora_salida, hora_entrada, bool(config_dia.get("cruza_medianoche")))
             fh_sal = f"{fecha_sal} {hora_salida}:00"
+
+            # Una marca manual registra algo que ya pasó: un día cuya Entrada o Salida todavía no ocurre no se rellena
+            if _marca_en_el_futuro(fh_ent, ahora_masivo) or _marca_en_el_futuro(fh_sal, ahora_masivo):
+                dias_futuros += 1
+                current += timedelta(days=1)
+                continue
+
+            h_ent   = hashlib.sha256(f"{rut_str}|{fh_ent}|Entrada".encode()).hexdigest()
+            batch_logs.append((empleado_id, fh_ent, "Entrada", 1, "Relleno Masivo", h_ent, uid_masivo))
             h_sal  = hashlib.sha256(f"{rut_str}|{fh_sal}|Salida".encode()).hexdigest()
             batch_logs.append((empleado_id, fh_sal, "Salida", 1, "Relleno Masivo", h_sal, uid_masivo))
 
@@ -2201,9 +2230,11 @@ async def agregar_marcaciones_masivas(
 
         return {
             "success": True,
-            "mensaje": f"Proceso completado. Procesados: {dias_procesados}, Ignorados: {dias_ignorados}",
+            "mensaje": (f"Proceso completado. Procesados: {dias_procesados}, Ignorados: {dias_ignorados}"
+                        + (f", omitidos por ser futuros: {dias_futuros}" if dias_futuros else "")),
             "dias_procesados": dias_procesados,
             "dias_ignorados":  dias_ignorados,
+            "dias_futuros_omitidos": dias_futuros,
             "marcas_insertadas": len(batch_logs),
             "errores": errores
         }
