@@ -169,7 +169,32 @@ def test_solo_revisa_deja_el_dia_en_anomalia_sin_horas(monkeypatch):
     assert set(r["marcas_consumidas_ids"]) == {1, 2, 3}   # las marcas siguen consumidas por el día
 
 
-# ── 5. Rebote ────────────────────────────────────────────────────────────────
+# ── 5. Ensayo del asistente (variable de contexto, sin encender nada) ────────
+
+def test_el_ensayo_aplica_la_regla_propuesta_sin_encenderla(monkeypatch):
+    base = _dia(monkeypatch, NANCY)                        # registro global VACÍO
+    token = qme.REGLAS_MARCAS_ENSAYO.set({"SSES": {"secuencia": "SSES", "lectura": "EXTREMOS",
+                                                   "colacion": "MEDIDA", "accion": "CALCULA"}})
+    try:
+        r = _dia(monkeypatch, NANCY)
+    finally:
+        qme.REGLAS_MARCAS_ENSAYO.reset(token)
+    assert r["hora_entrada_real"] == "06:49:32" and r["hora_salida_real"] == "16:35:27"
+    assert qme.REGLAS_MARCAS_ACTIVAS == {}                 # el ensayo no enciende nada
+    assert _dia(monkeypatch, NANCY) == base                # fuera del ensayo, todo sigue igual
+
+
+def test_el_dict_del_ensayo_reemplaza_al_global(monkeypatch):
+    _regla("SSES", colacion="MEDIDA")                      # encendida de verdad
+    token = qme.REGLAS_MARCAS_ENSAYO.set({})               # el ensayo dice «sin reglas»
+    try:
+        r = _dia(monkeypatch, NANCY)
+    finally:
+        qme.REGLAS_MARCAS_ENSAYO.reset(token)
+    assert r["hora_entrada_real"] == "13:26:28"            # con el dict vacío, el motor de siempre
+
+
+# ── 6. Rebote ────────────────────────────────────────────────────────────────
 
 def test_rebote_del_ajuste_solo_para_ciclo_inteligente():
     assert _rebote_defecto("CICLO_INTELIGENTE") == 180.0

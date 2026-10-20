@@ -117,6 +117,22 @@ def test_la_grilla_tiene_el_boton_por_revisar():
     assert "Por revisar (" in DOC, "el documento perdió el botón «Por revisar (N)» de la grilla"
 
 
+def test_el_ensayo_no_guarda_y_viaja_en_contexto():
+    """El «Ensayar con los días reales» del asistente calcula con el motor de verdad
+    pero sin escribir (collect_only) y la regla propuesta viaja en una variable de
+    contexto: ninguna otra tarea del servidor la ve."""
+    assert "REGLAS_MARCAS_ENSAYO" in MOTOR and "ContextVar" in MOTOR
+    corridas = _leer("backend/services/reglas_marcas_corridas.py")
+    assert "collect_only=True" in corridas, "el ensayo debe calcular sin escribir en la base"
+    assert "REGLAS_MARCAS_ENSAYO.set" in corridas and "REGLAS_MARCAS_ENSAYO.reset" in corridas
+    router = _leer("backend/routers/reglas_marcas.py")
+    assert "/ensayo/" in router and "dias-ejemplo" in router
+    pestana_js = _leer("frontend/js/reglas_marcas_ui.js")
+    assert "rm-ensayar" in pestana_js, "la pestaña perdió el botón de ensayo"
+    assert "data-rm-paso" in pestana_js, "la pestaña perdió el asistente por pasos"
+    assert "collect_only" in DOC and "REGLAS_MARCAS_ENSAYO" in DOC, "el documento perdió el ensayo"
+
+
 def test_la_nota_se_elige_de_una_lista_desplegable():
     """La nota de cada regla se elige de las notas frecuentes del servidor;
     «Otra (escribir)» abre el texto libre. El servidor entrega la lista."""

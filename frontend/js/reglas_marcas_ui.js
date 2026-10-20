@@ -20,6 +20,11 @@ const ReglasMarcasModule = (() => {
     let tipo = 'CICLO_INTELIGENTE';
     let selId = null;
     let cargando = false;
+    // Asistente por pasos del editor (solo cuando la regla se puede editar).
+    let paso = 1;
+    const PASOS = ['Días de ejemplo', 'Cómo leer las marcas', 'Colación', 'Aviso', 'Resumen y ensayo'];
+    const ejemplos = {};   // regla.id -> { dias, total } · días reales del tramo abierto
+    const ensayos = {};    // regla.id -> { clave, estado, res, error } · «cómo quedaría», sin guardar
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -76,22 +81,28 @@ const ReglasMarcasModule = (() => {
         return r;
     }
 
-    function fraseResultado(regla) {
-        const partes = [];
+    // Las tres partes de la frase del resultado (el asistente las muestra por paso).
+    function partesResultado(regla) {
+        const p = { lectura: '', colacion: '', aviso: '' };
         if (regla.lectura === 'NINGUNA') {
-            partes.push('El día queda en anomalía y no se calcula hasta que una persona lo resuelva.');
+            p.lectura = 'El día queda en anomalía y no se calcula hasta que una persona lo resuelva.';
         } else {
-            partes.push(regla.lectura === 'EXTREMOS'
+            p.lectura = regla.lectura === 'EXTREMOS'
                 ? 'La primera marca es la Entrada del día y la última la Salida; las del medio solo valen como pausa si son una Salida seguida de una Entrada.'
-                : 'Las marcas se leen tal como las rotuló el reloj.');
-            partes.push(regla.colacion === 'NINGUNA' ? 'No se descuenta colación.'
+                : 'Las marcas se leen tal como las rotuló el reloj.';
+            p.colacion = regla.colacion === 'NINGUNA' ? 'No se descuenta colación.'
                 : regla.colacion === 'MEDIDA' ? 'La colación se mide con las marcas de la pausa; sin pausa completa rige la del turno (siempre se descuenta el mayor entre la pactada y la medida).'
-                : 'Se descuenta la colación automática del turno asignado.');
+                : 'Se descuenta la colación automática del turno asignado.';
         }
-        partes.push(regla.accion === 'CALCULA' ? 'No aparece en revisión.'
+        p.aviso = regla.accion === 'CALCULA' ? 'No aparece en revisión.'
             : regla.accion === 'CALCULA_Y_REVISA' ? 'El día aparece en «Días por revisar» con un triángulo en la celda.'
-            : 'El día aparece en «Días por revisar» y queda en anomalía hasta revisarlo.');
-        return partes.join(' ');
+            : 'El día aparece en «Días por revisar» y queda en anomalía hasta revisarlo.';
+        return p;
+    }
+
+    function fraseResultado(regla) {
+        const p = partesResultado(regla);
+        return [p.lectura, p.colacion, p.aviso].filter(Boolean).join(' ');
     }
 
     async function init() {
@@ -105,6 +116,10 @@ const ReglasMarcasModule = (() => {
             // Foto de lo GUARDADO: los cambios del editor viven solo en pantalla hasta
             // apretar «Guardar»; con esta foto se sabe si hay cambios pendientes.
             data.reglas.forEach(r => { r._guardada = _fotoRegla(r); });
+            // Los días de ejemplo y los ensayos se refrescan con la pestaña (una
+            // corrida pudo cambiar las horas que muestran).
+            Object.keys(ejemplos).forEach(k => delete ejemplos[k]);
+            Object.keys(ensayos).forEach(k => delete ensayos[k]);
             if (!selId && data.reglas.length) selId = data.reglas[0].id;
             render();
         } catch (e) {
@@ -205,61 +220,107 @@ const ReglasMarcasModule = (() => {
                     toast(`La regla ${pretty(actual.secuencia)} tenía cambios sin guardar: se descartaron. Para conservarlos, apriete «Guardar» antes de cambiar de regla.`, 'warning');
                 }
             }
+            if (nuevoId !== selId) paso = 1;
             selId = nuevoId; renderLista(); renderEditor();
         }));
+    }
+
+    // ── Días de ejemplo y ensayo del asistente ───────────────────────────────
+    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion,
+                                (r.opciones_revision || []).slice().sort().join('|')].join('~');
+
+    async function cargarEjemplos(r) {
+        if (ejemplos[r.id]) return;
+        ejemplos[r.id] = { cargando: true };
+        try {
+            const res = await fetch(`${API}${r.id}/dias-ejemplo/`, { headers: headers() });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+            ejemplos[r.id] = { dias: body.dias || [], total: body.total || 0 };
+        } catch (e) {
+            ejemplos[r.id] = { dias: [], total: 0, error: e.message };
+        }
+        if (selId === r.id) renderEditor();
+    }
+
+    async function ensayar(r) {
+        const clave = claveEnsayo(r);
+        ensayos[r.id] = { clave, estado: 'corriendo' };
+        renderEditor();
+        try {
+            const res = await fetch(`${API}${r.id}/ensayo/`, {
+                method: 'POST', headers: headers(),
+                body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion,
+                                       opciones_revision: r.opciones_revision || [] })
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+            ensayos[r.id] = { clave, estado: 'listo', res: body };
+        } catch (e) {
+            ensayos[r.id] = { clave, estado: 'error', error: e.message };
+        }
+        if (selId === r.id) renderEditor();
     }
 
     function renderEditor() {
         const el = $('rm-editor');
         const r = data.reglas.find(x => x.id === selId);
         if (!el || !r) return;
-        const rs = roles(r.secuencia, r.lectura);
         const colorChip = { ent: 'background:#d1e7dd;color:#0f5132;', sal: 'background:#cfe2ff;color:#084298;', pausa: 'background:#fff3cd;color:#664d03;', muted: 'background:#f1f3f5;color:#6c757d;' };
         const puede = canEdit();
         const edit = puede && !r.activa;
+        cargarEjemplos(r);
+        const ej = ejemplos[r.id];
+        const dia1 = (ej && ej.dias && ej.dias.length) ? ej.dias[0] : null;
+        const frases = partesResultado(r);
         // La nota se elige de una lista de diagnósticos frecuentes (del servidor);
         // «Otra (escribir)» abre el texto libre. Una nota guardada que no calce
         // con ninguna opción se muestra como «Otra» con su texto tal cual.
         const notasFrec = data.notas_frecuentes || [];
         const notaVal = r.nota || '';
         const notaOtra = r._notaOtra === true || (notaVal !== '' && !notasFrec.includes(notaVal));
-        el.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                <div class="d-flex gap-1">${r.secuencia.split('').map(c => `<span style="${colorChip[c === 'E' ? 'ent' : 'sal']}width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;">${c}</span>`).join('')}</div>
-                <span class="text-muted" style="font-size:.82rem;">${Number(r.dias).toLocaleString('es-CL')} jornadas en la historia · ${Number(r.dias_abiertos).toLocaleString('es-CL')} en el tramo abierto · ${pct(r.dias, data.total_jornadas)} % del total</span>
-            </div>
-            <div style="font-size:.95rem;line-height:2.2;">Cuando el día tenga estas marcas, el sistema debe
+
+        // ── Piezas (las usan la vista de solo lectura y los pasos del asistente) ──
+        const selLectura = `
                 <select id="rm-lectura" class="form-select form-select-sm d-inline-block w-auto" ${edit ? '' : 'disabled'}>
                     <option value="RELOJ" ${r.lectura === 'RELOJ' ? 'selected' : ''}>leerlas como marcó el reloj</option>
                     <option value="EXTREMOS" ${r.lectura === 'EXTREMOS' ? 'selected' : ''}>tomar la primera y la última</option>
                     <option value="NINGUNA" ${r.lectura === 'NINGUNA' ? 'selected' : ''}>no leerlas (anomalía)</option>
-                </select> y
+                </select>`;
+        const selAccion = `
                 <select id="rm-accion" class="form-select form-select-sm d-inline-block w-auto" ${edit ? '' : 'disabled'}>
                     <option value="CALCULA" ${r.accion === 'CALCULA' ? 'selected' : ''}>no avisar nada</option>
                     <option value="CALCULA_Y_REVISA" ${r.accion === 'CALCULA_Y_REVISA' ? 'selected' : ''}>avisar para revisar (calcula igual)</option>
                     <option value="SOLO_REVISA" ${r.accion === 'SOLO_REVISA' ? 'selected' : ''}>pedir revisión antes de calcular</option>
-                </select>.
-            </div>
+                </select>`;
+        const rs = roles(r.secuencia, r.lectura);
+        const tiempos = dia1 ? String(dia1.marcas || '').split(' · ').map(m => m.slice(0, 5)) : [];
+        const diagrama = `
             <div class="d-flex position-relative my-3">
                 <div style="position:absolute;left:8%;right:8%;top:13px;height:2px;background:#dee2e6;"></div>
                 ${rs.map((x, k) => `
                 <div class="flex-fill text-center position-relative px-1">
                     <div style="${colorChip[x[1]]}width:28px;height:28px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:600;border:1px solid #ced4da;position:relative;">${k + 1}</div>
-                    <div class="text-muted mt-1" style="font-size:.74rem;">${esc(x[0])}</div>
+                    ${tiempos[k] ? `<div class="fw-semibold mt-1" style="font-size:.74rem;">${esc(tiempos[k])}</div>` : ''}
+                    <div class="text-muted${tiempos[k] ? '' : ' mt-1'}" style="font-size:.74rem;">${esc(x[0])}</div>
                 </div>`).join('')}
             </div>
-            <div class="bg-light rounded p-2 mb-2" style="font-size:.86rem;" id="rm-resultado">${esc(fraseResultado(r))}</div>
+            ${dia1 ? `<div class="text-muted mb-2" style="font-size:.76rem;">Las horas son de un día real: ${esc(dia1.persona)}, ${esc(dia1.fecha)}.</div>` : ''}`;
+        const fraseBox = `<div class="bg-light rounded p-2 mb-2" style="font-size:.86rem;" id="rm-resultado">${esc(fraseResultado(r))}</div>`;
+        const bloqueColacion = `
             <div class="text-muted mb-1" style="font-size:.78rem;">Colación</div>
             <div class="d-flex gap-1 flex-wrap mb-2" id="rm-colacion">
                 ${[['TURNO', 'Del turno asignado'], ['MEDIDA', 'Medida con las marcas'], ['NINGUNA', 'Ninguna']].map(c => `
                     <button type="button" data-col="${c[0]}" class="btn btn-sm ${r.colacion === c[0] ? 'btn-primary' : 'btn-outline-secondary'}" ${edit ? '' : 'disabled'}>${c[1]}</button>`).join('')}
-            </div>
+            </div>`;
+        const bloqueOpciones = `
             <div id="rm-opciones-wrap" ${r.accion === 'CALCULA' ? 'style="opacity:.5;"' : ''}>
                 <div class="text-muted mb-1" style="font-size:.78rem;">Al revisar, la persona podrá (el sistema nunca inventa una marca)</div>
                 <div class="d-flex gap-1 flex-wrap mb-2" id="rm-opciones">
                     ${OPCIONES.map(o => `<button type="button" data-op="${o[0]}" class="btn btn-sm ${(r.opciones_revision || []).includes(o[0]) ? 'btn-primary' : 'btn-outline-secondary'}" ${edit && r.accion !== 'CALCULA' ? '' : 'disabled'}>${(r.opciones_revision || []).includes(o[0]) ? '✓ ' : ''}${o[1]}</button>`).join('')}
                 </div>
-            </div>
+            </div>`;
+        const bloqueNota = `
             <div class="mb-2">
                 <div class="text-muted mb-1" style="font-size:.78rem;">Nota: qué les pasó a las marcas (no cambia el cálculo)</div>
                 <div class="d-flex gap-2 flex-wrap align-items-center">
@@ -270,7 +331,115 @@ const ReglasMarcasModule = (() => {
                     </select>
                     ${notaOtra ? `<input type="text" id="rm-nota" class="form-control form-control-sm flex-grow-1 w-auto" maxlength="300" placeholder="Escriba la nota" value="${esc(notaVal)}" ${edit ? '' : 'disabled'}>` : ''}
                 </div>
+            </div>`;
+
+        // ── Cuerpo: asistente por pasos (editable) o resumen (solo lectura) ──
+        let cuerpo;
+        if (!edit) {
+            cuerpo = `
+            <div style="font-size:.95rem;line-height:2.2;">Cuando el día tenga estas marcas, el sistema debe
+                ${selLectura} y ${selAccion}.
             </div>
+            ${diagrama}${fraseBox}${bloqueColacion}${bloqueOpciones}${bloqueNota}`;
+        } else {
+            const pills = `
+            <div class="d-flex gap-1 flex-wrap mb-2" id="rm-pasos">
+                ${PASOS.map((p, i) => `<button type="button" data-rm-paso="${i + 1}" class="btn btn-sm ${paso === i + 1 ? 'btn-primary' : 'btn-outline-secondary'}" style="font-size:.76rem;">${i + 1}. ${p}</button>`).join('')}
+            </div>`;
+            let cuerpoPaso = '';
+            if (paso === 1) {
+                let diasHtml;
+                if (!ej || ej.cargando) {
+                    diasHtml = '<div class="text-muted py-2"><div class="spinner-border spinner-border-sm"></div> Buscando días reales…</div>';
+                } else if (ej.error) {
+                    diasHtml = `<div class="alert alert-warning py-2" style="font-size:.85rem;">No se pudieron traer los días de ejemplo: ${esc(ej.error)}</div>`;
+                } else if (!ej.total) {
+                    diasHtml = `<div class="alert alert-secondary py-2" style="font-size:.85rem;">No hay días con esta secuencia en el tramo abierto. Puede configurar igual: la regla queda lista para cuando aparezca uno.</div>`;
+                } else {
+                    diasHtml = `
+                    <div class="table-responsive"><table class="table table-sm align-middle" style="font-size:.84rem;">
+                        <thead><tr><th>Persona</th><th>Fecha</th><th>Marcas del día</th><th>Estado hoy</th><th class="text-end">Horas hoy</th></tr></thead>
+                        <tbody>${ej.dias.map(d => `
+                            <tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td><td>${esc(d.marcas || '')}</td>
+                                <td>${esc(d.estado || '')}</td><td class="text-end">${Number(d.horas || 0).toLocaleString('es-CL')}</td></tr>`).join('')}</tbody>
+                    </table></div>
+                    <div class="text-muted" style="font-size:.78rem;">Hay ${Number(ej.total).toLocaleString('es-CL')} ${ej.total === 1 ? 'día así' : 'días así'} en el tramo abierto (marcas del reloj, sin manuales, sin cierres); se muestran los más recientes.</div>`;
+                }
+                cuerpoPaso = `
+                <div class="mb-2" style="font-size:.9rem;">El efecto de lo que configure lo va a ver sobre estos <strong>días reales</strong> del tramo abierto. En los pasos siguientes elige cómo leerlos y al final los ensaya sin guardar nada.</div>
+                ${diasHtml}`;
+            } else if (paso === 2) {
+                cuerpoPaso = `
+                <div style="font-size:.95rem;line-height:2.2;">Cuando el día tenga estas marcas, el sistema debe ${selLectura}.</div>
+                ${diagrama}
+                <div class="bg-light rounded p-2 mb-2" style="font-size:.86rem;">${esc(frases.lectura)}</div>`;
+            } else if (paso === 3) {
+                cuerpoPaso = `
+                <div class="mb-2" style="font-size:.9rem;">¿Qué colación se descuenta en estos días?</div>
+                ${bloqueColacion}
+                <div class="bg-light rounded p-2 mb-2" style="font-size:.86rem;">${esc(frases.colacion || 'Sin lectura no hay colación que descontar: el día queda en revisión.')}</div>
+                ${diagrama}`;
+            } else if (paso === 4) {
+                cuerpoPaso = `
+                <div style="font-size:.95rem;line-height:2.2;">Y el sistema debe ${selAccion}.</div>
+                <div class="bg-light rounded p-2 mb-2" style="font-size:.86rem;">${esc(frases.aviso)}</div>
+                ${bloqueOpciones}`;
+            } else {
+                const en = ensayos[r.id];
+                const claveAct = claveEnsayo(r);
+                let ensayoHtml;
+                if (en && en.estado === 'corriendo') {
+                    ensayoHtml = '<div class="text-muted py-2"><div class="spinner-border spinner-border-sm"></div> Calculando los días de ejemplo con la regla del editor… (nada se guarda en la base)</div>';
+                } else if (en && en.estado === 'listo' && en.clave === claveAct) {
+                    const dias = (en.res && en.res.dias) || [];
+                    ensayoHtml = dias.length ? `
+                    <div class="text-muted mb-1" style="font-size:.8rem;">Así quedarían estos días reales con la regla del editor (esté guardada o no). <strong>Nada se guardó en la base:</strong> es un ensayo.</div>
+                    <div class="table-responsive"><table class="table table-sm align-middle mb-1" style="font-size:.84rem;">
+                        <thead><tr><th>Persona</th><th>Fecha</th><th>Qué cambiaría (hoy → con la regla)</th></tr></thead>
+                        <tbody>${dias.map(d => {
+                            const fmtV = (v) => (v === null || v === undefined || v === '') ? '—'
+                                : (typeof v === 'number' ? Number(v).toLocaleString('es-CL') : esc(String(v)));
+                            const cambios = d.cambios || {};
+                            let celda;
+                            if (!Object.keys(cambios).length) celda = '<span class="badge bg-light text-dark border">Queda igual</span>';
+                            else if (d.solo_aviso) celda = '<span class="badge bg-info text-dark">Solo cambia la anotación (horas iguales)</span>';
+                            else celda = Object.entries(cambios).filter(([c]) => c !== 'observaciones')
+                                .map(([c, v]) => `${CAMPOS_TXT[c] || c}: ${fmtV(v.antes)} → ${fmtV(v.despues)}`).join(' · ')
+                                + (cambios.observaciones ? ' · y cambia la anotación' : '');
+                            return `<tr><td>${esc(d.persona)}</td><td>${esc(d.fecha)}</td><td>${celda}</td></tr>`;
+                        }).join('')}</tbody>
+                    </table></div>`
+                        : '<div class="alert alert-secondary py-2 mb-2" style="font-size:.85rem;">No hay días con esta secuencia en el tramo abierto: no hay nada que ensayar. La regla igual se puede guardar.</div>';
+                } else if (en && en.estado === 'error') {
+                    ensayoHtml = `
+                    <div class="alert alert-warning py-2 mb-2" style="font-size:.85rem;">El ensayo no se pudo hacer: ${esc(en.error || '')}</div>
+                    <button type="button" class="btn btn-sm btn-outline-success mb-2" id="rm-ensayar">Reintentar el ensayo</button>`;
+                } else {
+                    ensayoHtml = `
+                    ${en && en.clave !== claveAct ? '<div class="text-muted mb-1" style="font-size:.78rem;">La configuración cambió desde el último ensayo.</div>' : ''}
+                    <button type="button" class="btn btn-sm btn-outline-success mb-2" id="rm-ensayar">Ensayar con los días reales (no guarda nada)</button>`;
+                }
+                cuerpoPaso = `
+                <div class="mb-1" style="font-size:.9rem;">Así queda la regla:</div>
+                ${fraseBox}${bloqueNota}
+                <div class="text-muted mb-1" style="font-size:.78rem;">Ver si corrige, antes de guardar</div>
+                ${ensayoHtml}
+                <div class="text-muted" style="font-size:.78rem;">«Guardar» deja la regla lista (sigue apagada). «Correr esta regla» la enciende de verdad, con su antes y después completo.</div>`;
+            }
+            const nav = `
+            <div class="d-flex justify-content-between align-items-center mt-2 mb-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="rm-paso-atras" ${paso === 1 ? 'disabled' : ''}>← Atrás</button>
+                ${paso < PASOS.length ? '<button type="button" class="btn btn-sm btn-primary" id="rm-paso-sig">Siguiente →</button>' : ''}
+            </div>`;
+            cuerpo = pills + cuerpoPaso + nav;
+        }
+
+        el.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <div class="d-flex gap-1">${r.secuencia.split('').map(c => `<span style="${colorChip[c === 'E' ? 'ent' : 'sal']}width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;">${c}</span>`).join('')}</div>
+                <span class="text-muted" style="font-size:.82rem;">${Number(r.dias).toLocaleString('es-CL')} jornadas en la historia · ${Number(r.dias_abiertos).toLocaleString('es-CL')} en el tramo abierto · ${pct(r.dias, data.total_jornadas)} % del total</span>
+            </div>
+            ${cuerpo}
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>
                     <span class="badge ${r.activa ? 'bg-success' : 'bg-secondary'}">${r.activa ? 'Encendida: el motor la usa' : 'Apagada: el motor no la usa'}</span>
@@ -285,13 +454,16 @@ const ReglasMarcasModule = (() => {
                 </div>
             </div>
             ${r.activa ? '<div class="text-muted mt-1" style="font-size:.78rem;">Para cambiar una regla encendida, primero apáguela: así el cambio corre con su propio antes y después.</div>' : ''}`;
-        // Ediciones locales (solo en memoria hasta Guardar)
-        $('rm-lectura').addEventListener('change', (e) => {
+        // Ediciones locales (solo en memoria hasta Guardar). Cada control existe solo
+        // en su paso del asistente (o en el resumen de solo lectura): siempre con guarda.
+        const selL = $('rm-lectura');
+        if (selL) selL.addEventListener('change', (e) => {
             r.lectura = e.target.value;
             if (r.lectura === 'NINGUNA') r.accion = 'SOLO_REVISA';
             renderEditor();
         });
-        $('rm-accion').addEventListener('change', (e) => {
+        const selA = $('rm-accion');
+        if (selA) selA.addEventListener('change', (e) => {
             r.accion = e.target.value;
             if (r.accion !== 'SOLO_REVISA' && r.lectura === 'NINGUNA') r.lectura = 'EXTREMOS';
             if (r.accion === 'CALCULA') r.opciones_revision = [];
@@ -319,7 +491,17 @@ const ReglasMarcasModule = (() => {
             if (b) b.style.display = sucio ? '' : 'none';
             if (g2) { g2.textContent = sucio ? 'Guardar cambios' : 'Guardar'; g2.className = `btn btn-sm ${sucio ? 'btn-warning fw-bold' : 'btn-primary'}`; }
         });
-        $('rm-ver-dias').addEventListener('click', () => verDias(r));
+        el.querySelectorAll('#rm-pasos [data-rm-paso]').forEach(b => b.addEventListener('click', () => {
+            paso = parseInt(b.dataset.rmPaso); renderEditor();
+        }));
+        const atras = $('rm-paso-atras');
+        if (atras) atras.addEventListener('click', () => { if (paso > 1) { paso -= 1; renderEditor(); } });
+        const sig = $('rm-paso-sig');
+        if (sig) sig.addEventListener('click', () => { if (paso < PASOS.length) { paso += 1; renderEditor(); } });
+        const ens = $('rm-ensayar');
+        if (ens) ens.addEventListener('click', () => ensayar(r));
+        const vd = $('rm-ver-dias');
+        if (vd) vd.addEventListener('click', () => verDias(r));
         const g = $('rm-guardar');
         if (g) g.addEventListener('click', () => guardar(r));
         const c = $('rm-correr');

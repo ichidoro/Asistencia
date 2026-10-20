@@ -227,6 +227,55 @@ class ReglasMarcasRepository:
         """, (tipo_horario, desde_abierto, secuencia))
         return [dict(r) for r in rows]
 
+    async def dias_ejemplo(self, tipo_horario: str, secuencia: str, desde_abierto: str,
+                           hoy: str, limite: int = 3) -> List[Dict[str, Any]]:
+        """Los días de ejemplo del asistente: los más recientes del tramo abierto con
+        esta secuencia (jornadas terminadas, marcas del reloj sin manuales, nunca días
+        cubiertos por un cierre). Cada fila trae además `total`: cuántos días hay."""
+        rows = await self.db.fetch_all("""
+            WITH ci AS (SELECT id FROM turnos WHERE tipo_programacion = ?),
+            a AS (SELECT a.id AS aid, a.empleado_id, a.fecha, a.turno_asignado_id,
+                         a.estado, a.horas_trabajadas, a.marcas_consumidas_ids AS ids
+                    FROM asistencias a
+                   WHERE a.turno_asignado_id IN (SELECT id FROM ci)
+                     AND a.horas_teoricas > 0 AND a.fecha >= ? AND a.fecha < ?
+                     AND a.marcas_consumidas_ids ~ '^\\[ *[0-9]'),
+            x AS (SELECT a.aid, a.empleado_id, a.fecha, a.turno_asignado_id, a.estado,
+                         a.horas_trabajadas, l.fecha_hora, COALESCE(l.manual, 0) AS man,
+                         CASE WHEN LOWER(COALESCE(o.tipo, l.tipo)) IN ('entrada','entry','e','in','1') THEN 'E'
+                              WHEN LOWER(COALESCE(o.tipo, l.tipo)) IN ('salida','exit','s','out','0','2') THEN 'S'
+                              ELSE '?' END AS t
+                    FROM a
+                   CROSS JOIN LATERAL jsonb_array_elements_text(a.ids::jsonb) j(v)
+                    JOIN logs_raw l ON l.id = j.v::bigint
+                    LEFT JOIN logs_tipo_override o ON o.log_id = l.id),
+            d AS (SELECT aid, empleado_id, fecha, turno_asignado_id, estado, horas_trabajadas,
+                         STRING_AGG(t, '' ORDER BY fecha_hora) AS pat, SUM(man) AS manuales,
+                         STRING_AGG(SUBSTR(fecha_hora, 12, 8) || ' ' ||
+                                    CASE t WHEN 'E' THEN 'Ent' ELSE 'Sal' END,
+                                    ' · ' ORDER BY fecha_hora) AS marcas
+                    FROM x
+                   GROUP BY aid, empleado_id, fecha, turno_asignado_id, estado, horas_trabajadas)
+            SELECT d.empleado_id,
+                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS persona,
+                   d.fecha, d.estado, ROUND(d.horas_trabajadas::numeric, 2) AS horas, d.marcas,
+                   COUNT(*) OVER () AS total
+              FROM d JOIN empleados e ON e.id = d.empleado_id
+             WHERE d.pat = ? AND d.manuales = 0
+               AND NOT EXISTS (
+                    SELECT 1 FROM cierres_periodos cp
+                     WHERE cp.fecha_inicio <= d.fecha AND cp.fecha_fin >= d.fecha
+                       AND (cp.area IS NULL OR cp.turno_id = d.turno_asignado_id
+                            OR cp.area = (SELECT ar.nombre FROM historial_areas h
+                                            LEFT JOIN areas ar ON ar.id = h.area_id
+                                           WHERE h.empleado_id = d.empleado_id
+                                             AND d.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
+                                           LIMIT 1)))
+             ORDER BY d.fecha DESC, persona
+             LIMIT ?
+        """, (tipo_horario, desde_abierto, hoy, secuencia, limite))
+        return [dict(r) for r in rows]
+
     async def ventana_colacion(self) -> Dict[str, int]:
         out = {'min': 20, 'max': 150}
         for clave, campo in ((CLAVE_COLACION_MIN, 'min'), (CLAVE_COLACION_MAX, 'max')):

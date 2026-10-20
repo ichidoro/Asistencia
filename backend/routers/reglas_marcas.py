@@ -16,9 +16,9 @@ from backend.core.database import Database, get_db
 from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.reglas_marcas import ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
-from backend.services.reglas_marcas_def import NOTAS_FRECUENTES, grupo_de_secuencia
+from backend.services.reglas_marcas_def import NOTAS_FRECUENTES, grupo_de_secuencia, validar_regla
 from backend.services.reglas_marcas_corridas import (
-    JOBS, _hay_corrida_en_curso, iniciar_corrida, job_publico,
+    JOBS, _hay_corrida_en_curso, ensayar_regla, iniciar_corrida, job_publico,
 )
 from backend.services.reglas_marcas_runtime import cargar as cargar_reglas_runtime
 
@@ -194,6 +194,53 @@ async def dias_de_la_regla(
     desde = await repo.inicio_tramo_abierto()
     dias = await repo.dias_de_secuencia(regla["tipo_horario"], regla["secuencia"], desde)
     return {"secuencia": regla["secuencia"], "desde": desde, "dias": dias}
+
+
+@router.get("/{regla_id}/dias-ejemplo/", response_model=Dict[str, Any])
+async def dias_ejemplo_de_la_regla(
+    regla_id: int,
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission("configuracion.ver")),
+):
+    """Los días de ejemplo del asistente: los más recientes del tramo abierto con esta
+    secuencia (marcas del reloj, sin manuales, sin cierres). Solo lectura."""
+    regla = await repo.obtener(regla_id)
+    if not regla:
+        raise HTTPException(status_code=404, detail="La regla no existe.")
+    from datetime import datetime as _dt
+    desde = await repo.inicio_tramo_abierto()
+    dias = await repo.dias_ejemplo(regla["tipo_horario"], regla["secuencia"], desde,
+                                   _dt.now().strftime("%Y-%m-%d"))
+    total = int(dias[0]["total"]) if dias else 0
+    return {"secuencia": regla["secuencia"], "desde": desde, "dias": dias, "total": total}
+
+
+@router.post("/{regla_id}/ensayo/", response_model=Dict[str, Any])
+async def ensayar_la_regla(
+    regla_id: int,
+    payload: Dict[str, Any] = Body(...),
+    repo: ReglasMarcasRepository = Depends(_repo),
+    current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
+):
+    """«Cómo quedaría»: calcula los días de ejemplo con la regla del editor (esté
+    guardada o no) y devuelve el antes → después. NO guarda nada en la base."""
+    regla = await repo.obtener(regla_id)
+    if not regla:
+        raise HTTPException(status_code=404, detail="La regla no existe.")
+    propuesta = {
+        "secuencia": regla["secuencia"],
+        "lectura": str(payload.get("lectura") or ""),
+        "colacion": str(payload.get("colacion") or ""),
+        "accion": str(payload.get("accion") or ""),
+        "opciones_revision": payload.get("opciones_revision") or [],
+    }
+    motivo = validar_regla(propuesta)
+    if motivo:
+        raise HTTPException(status_code=400, detail=motivo)
+    res = await ensayar_regla(regla, propuesta)
+    if res.get("error"):
+        raise HTTPException(status_code=409, detail=res["error"])
+    return res
 
 
 @router.put("/rebote/", response_model=Dict[str, Any])

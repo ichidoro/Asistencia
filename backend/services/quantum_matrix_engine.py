@@ -54,6 +54,12 @@ _TIPOS_S: Set[str] = {'salida', 'exit', 's', 'out', '0', '2'}
 REGLAS_MARCAS_ACTIVAS: Dict[str, Dict[str, Any]] = {}
 # Rebote (doble toque) del ajuste `reglas_marcas_rebote_segundos`; None = 180 s.
 REGLAS_MARCAS_REBOTE: Optional[float] = None
+# Ensayo de una regla (asistente de la pestaña): el cálculo «cómo quedaría» corre
+# con este dict EN VEZ del global, sin guardar nada. Es una variable de contexto:
+# solo la ve la tarea que ensaya; el resto del servidor sigue leyendo el global.
+from contextvars import ContextVar  # noqa: E402
+REGLAS_MARCAS_ENSAYO: ContextVar[Optional[Dict[str, Dict[str, Any]]]] = ContextVar(
+    'REGLAS_MARCAS_ENSAYO', default=None)
 # Marcador estable en observaciones para la lista «Días por revisar» (definido en
 # reglas_marcas_def, que es la fuente única; aquí solo se reexporta).
 from backend.services.reglas_marcas_def import MARCA_REVISION_REGLA  # noqa: E402
@@ -2040,7 +2046,10 @@ class QuantumMatrixEngine:
         regla_dia = None
         secuencia_dia = ''
         obs_regla = ''
-        if (REGLAS_MARCAS_ACTIVAS and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE'
+        reglas_marcas = REGLAS_MARCAS_ENSAYO.get()
+        if reglas_marcas is None:
+            reglas_marcas = REGLAS_MARCAS_ACTIVAS
+        if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE'
                 and bloque_p and not segment_res['bloques_extras'] and not segment_res['emergencia_detectada']):
             hoy_regla = _get_now_local().strftime("%Y-%m-%d")
             fin_jornada = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
@@ -2057,7 +2066,7 @@ class QuantumMatrixEngine:
                 )
                 if letras and '?' not in letras:
                     secuencia_dia = letras
-                    regla_dia = REGLAS_MARCAS_ACTIVAS.get(secuencia_dia)
+                    regla_dia = reglas_marcas.get(secuencia_dia)
                 if regla_dia:
                     sec_fmt = ' · '.join(secuencia_dia)
                     pide_solo_revision = (regla_dia.get('lectura') == 'NINGUNA'
