@@ -29,6 +29,26 @@ const ReglasMarcasModule = (() => {
     const pct = (n, total) => total > 0 ? (100 * n / total).toLocaleString('es-CL', { maximumFractionDigits: 1 }) : '0';
     const toast = (msg, tipo_) => { if (typeof showToast === 'function') showToast(msg, tipo_ || 'success'); else alert(msg); };
 
+    function _fotoRegla(r) {
+        return { lectura: r.lectura, colacion: r.colacion, accion: r.accion,
+                 opciones: (r.opciones_revision || []).slice().sort().join(','), nota: r.nota || '' };
+    }
+
+    function _hayCambios(r) {
+        if (!r || !r._guardada) return false;
+        const a = r._guardada, b = _fotoRegla(r);
+        return a.lectura !== b.lectura || a.colacion !== b.colacion || a.accion !== b.accion
+            || a.opciones !== b.opciones || a.nota !== b.nota;
+    }
+
+    function _revertir(r) {
+        const g = r._guardada;
+        if (!g) return;
+        r.lectura = g.lectura; r.colacion = g.colacion; r.accion = g.accion;
+        r.opciones_revision = g.opciones ? g.opciones.split(',') : [];
+        r.nota = g.nota;
+    }
+
     // Qué papel juega cada marca según la lectura elegida (sin horas: solo posiciones).
     function roles(sec, lectura) {
         const n = sec.length;
@@ -81,6 +101,9 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(`${API}?tipo=${encodeURIComponent(tipo)}`, { headers: headers() });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             data = await res.json();
+            // Foto de lo GUARDADO: los cambios del editor viven solo en pantalla hasta
+            // apretar «Guardar»; con esta foto se sabe si hay cambios pendientes.
+            data.reglas.forEach(r => { r._guardada = _fotoRegla(r); });
             if (!selId && data.reglas.length) selId = data.reglas[0].id;
             render();
         } catch (e) {
@@ -170,7 +193,19 @@ const ReglasMarcasModule = (() => {
             });
         });
         el.innerHTML = html;
-        el.querySelectorAll('[data-rm-id]').forEach(b => b.addEventListener('click', () => { selId = parseInt(b.dataset.rmId); renderLista(); renderEditor(); }));
+        el.querySelectorAll('[data-rm-id]').forEach(b => b.addEventListener('click', () => {
+            const nuevoId = parseInt(b.dataset.rmId);
+            if (nuevoId !== selId) {
+                // Cambiar de regla con cambios sin guardar los descartaría en silencio:
+                // se vuelven a lo guardado y se avisa.
+                const actual = data.reglas.find(x => x.id === selId);
+                if (actual && _hayCambios(actual)) {
+                    _revertir(actual);
+                    toast(`La regla ${pretty(actual.secuencia)} tenía cambios sin guardar: se descartaron. Para conservarlos, apriete «Guardar» antes de cambiar de regla.`, 'warning');
+                }
+            }
+            selId = nuevoId; renderLista(); renderEditor();
+        }));
     }
 
     function renderEditor() {
@@ -222,13 +257,16 @@ const ReglasMarcasModule = (() => {
                 <input type="text" id="rm-nota" class="form-control form-control-sm" maxlength="300" placeholder="Nota (opcional)" value="${esc(r.nota || '')}" ${edit ? '' : 'disabled'}>
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span class="badge ${r.activa ? 'bg-success' : 'bg-secondary'}">${r.activa ? 'Encendida: el motor la usa' : 'Apagada: el motor no la usa'}</span>
+                <span>
+                    <span class="badge ${r.activa ? 'bg-success' : 'bg-secondary'}">${r.activa ? 'Encendida: el motor la usa' : 'Apagada: el motor no la usa'}</span>
+                    <span class="badge bg-warning text-dark" id="rm-sin-guardar" ${_hayCambios(r) ? '' : 'style="display:none;"'}>Cambios sin guardar</span>
+                </span>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="rm-ver-dias">Ver los días con esta secuencia</button>
                     ${puede && data.motor_conectado ? (r.activa
                         ? '<button type="button" class="btn btn-sm btn-outline-danger" id="rm-correr" data-encender="0">Apagar esta regla</button>'
                         : '<button type="button" class="btn btn-sm btn-success" id="rm-correr" data-encender="1">Correr esta regla</button>') : ''}
-                    ${edit && !r.activa ? '<button type="button" class="btn btn-sm btn-primary" id="rm-guardar">Guardar</button>' : ''}
+                    ${edit && !r.activa ? `<button type="button" class="btn btn-sm ${_hayCambios(r) ? 'btn-warning fw-bold' : 'btn-primary'}" id="rm-guardar">${_hayCambios(r) ? 'Guardar cambios' : 'Guardar'}</button>` : ''}
                 </div>
             </div>
             ${r.activa ? '<div class="text-muted mt-1" style="font-size:.78rem;">Para cambiar una regla encendida, primero apáguela: así el cambio corre con su propio antes y después.</div>' : ''}`;
@@ -251,6 +289,14 @@ const ReglasMarcasModule = (() => {
             if (i >= 0) r.opciones_revision.splice(i, 1); else r.opciones_revision.push(op);
             renderEditor();
         }));
+        const nota = $('rm-nota');
+        if (nota) nota.addEventListener('input', (e) => {
+            r.nota = e.target.value;
+            const b = $('rm-sin-guardar'), g2 = $('rm-guardar');
+            const sucio = _hayCambios(r);
+            if (b) b.style.display = sucio ? '' : 'none';
+            if (g2) { g2.textContent = sucio ? 'Guardar cambios' : 'Guardar'; g2.className = `btn btn-sm ${sucio ? 'btn-warning fw-bold' : 'btn-primary'}`; }
+        });
         $('rm-ver-dias').addEventListener('click', () => verDias(r));
         const g = $('rm-guardar');
         if (g) g.addEventListener('click', () => guardar(r));
@@ -336,6 +382,10 @@ const ReglasMarcasModule = (() => {
     };
 
     async function correrRegla(r, encender) {
+        if (encender && _hayCambios(r)) {
+            toast(`La regla ${pretty(r.secuencia)} tiene cambios sin guardar: apriete «Guardar» antes de correrla. Si corre sin guardar, la regla usa lo guardado y sus cambios se pierden.`, 'warning');
+            return;
+        }
         const verbo = encender ? 'Correr' : 'Apagar';
         const nAb = Number(r.dias_abiertos);
         const detalle = encender
@@ -420,6 +470,7 @@ const ReglasMarcasModule = (() => {
             const body = await res.json().catch(() => ({}));
             if (!res.ok) { toast(body.detail || 'No se pudo guardar la regla.', 'danger'); return; }
             Object.assign(r, body.regla, { dias: r.dias, dias_abiertos: r.dias_abiertos, grupo: r.grupo });
+            r._guardada = _fotoRegla(r);
             toast(`Regla ${pretty(r.secuencia)} guardada.`);
             renderLista(); renderEditor();
         } catch (e) {
