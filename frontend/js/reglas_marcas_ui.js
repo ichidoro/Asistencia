@@ -162,7 +162,7 @@ const ReglasMarcasModule = (() => {
             </div>
             ${data.reglas.length ? `
             <div class="d-flex flex-wrap gap-3 align-items-start">
-                <div id="rm-lista" class="card border-0 shadow-sm p-2" style="flex:1 1 250px; max-width:360px;"></div>
+                <div id="rm-lista" class="card border-0 shadow-sm p-2" style="flex:1 1 300px; max-width:430px;"></div>
                 <div id="rm-editor" class="card border-0 shadow-sm p-3" style="flex:2 1 420px;"></div>
             </div>` : `
             <div class="card border-0 shadow-sm p-4 text-muted">
@@ -193,27 +193,34 @@ const ReglasMarcasModule = (() => {
     function renderLista() {
         const el = $('rm-lista');
         if (!el) return;
-        // Encabezado: qué significan el número y el porcentaje de cada fila.
-        let html = `
-            <div class="d-flex justify-content-between align-items-center gap-2 px-2 pt-2" style="font-size:.72rem;">
-                <span class="text-muted fw-semibold text-uppercase">Secuencia</span>
-                <span class="text-muted fw-semibold text-uppercase text-end">Jornadas · % del total</span>
-            </div>`;
+        // Tabla con columnas alineadas y encabezado: secuencia, jornadas, % y si está encendida.
+        let filas = '';
         GRUPOS.forEach(g => {
-            const filas = data.reglas.filter(r => r.grupo === g);
-            if (!filas.length) return;
-            html += `<div class="text-muted px-2 pt-2 pb-1" style="font-size:.78rem;">${esc(g)}</div>`;
-            filas.forEach(r => {
+            const grupo = data.reglas.filter(r => r.grupo === g);
+            if (!grupo.length) return;
+            filas += `<tr><td colspan="4" class="text-muted border-0 pt-2 pb-1" style="font-size:.78rem;">${esc(g)}</td></tr>`;
+            grupo.forEach(r => {
                 const dot = r.accion === 'CALCULA' ? '#198754' : (r.accion === 'CALCULA_Y_REVISA' ? '#ffc107' : '#dc3545');
-                html += `
-                <button type="button" data-rm-id="${r.id}" class="btn w-100 text-start d-flex align-items-center gap-2 py-1 px-2 ${r.id === selId ? 'btn-primary' : 'btn-light'}" style="font-size:.86rem;">
-                    <span style="width:9px;height:9px;border-radius:50%;background:${dot};flex:none;"></span>
-                    <span class="flex-grow-1">${pretty(esc(r.secuencia))}</span>
-                    <span class="${r.id === selId ? '' : 'text-muted'}" style="font-size:.78rem;">${Number(r.dias).toLocaleString('es-CL')} · ${pct(r.dias, data.total_jornadas)} %</span>
-                </button>`;
+                const sel = r.id === selId;
+                filas += `
+                <tr data-rm-id="${r.id}" class="${sel ? 'table-primary' : ''}" style="cursor:pointer;">
+                    <td class="align-middle text-nowrap"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${dot};margin-right:6px;"></span>${esc(r.secuencia.split('').join('·'))}</td>
+                    <td class="text-end align-middle ${sel ? '' : 'text-muted'}">${Number(r.dias).toLocaleString('es-CL')}</td>
+                    <td class="text-end align-middle ${sel ? '' : 'text-muted'}">${pct(r.dias, data.total_jornadas)} %</td>
+                    <td class="text-center align-middle">${r.activa ? '<i class="bi bi-check-circle-fill text-success" title="Encendida: el motor la usa"></i>' : '<span class="text-muted" title="Apagada: el motor no la usa">—</span>'}</td>
+                </tr>`;
             });
         });
-        el.innerHTML = html;
+        el.innerHTML = `
+            <div class="table-responsive"><table class="table table-sm table-hover mb-0" style="font-size:.84rem;">
+                <thead><tr class="text-muted text-uppercase" style="font-size:.7rem;">
+                    <th class="fw-semibold">Secuencia</th>
+                    <th class="fw-semibold text-end">Jornadas</th>
+                    <th class="fw-semibold text-end">% del total</th>
+                    <th class="fw-semibold text-center">Encendida</th>
+                </tr></thead>
+                <tbody>${filas}</tbody>
+            </table></div>`;
         el.querySelectorAll('[data-rm-id]').forEach(b => b.addEventListener('click', () => {
             const nuevoId = parseInt(b.dataset.rmId);
             if (nuevoId !== selId) {
