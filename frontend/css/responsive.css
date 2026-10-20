@@ -2208,8 +2208,15 @@
 
 /* ─── FASE 4B: RONDAS — Table scroll, guard card padding ─── */
 @media (max-width: 768px) {
-    /* Rondas historial table: force horizontal scroll */
-    #tab-rondas-nocturnas .table-responsive,
+    /* Rondas historial: el min-width va SOLO en la tabla; si se pone también en el
+       marco (.table-responsive), el marco entero se sale de la pantalla del teléfono
+       y el contenido queda cortado sin forma de deslizarlo. */
+    #tab-rondas-nocturnas .table-responsive {
+        min-width: 0;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
     #tab-rondas-nocturnas .table {
         min-width: 550px;
     }
@@ -2929,3 +2936,55 @@
 }
 
 
+
+
+/* ─── ETAPA B (20-10-2026): contenido cortado en teléfono — Empleados,
+   4 Productos y Portería. Hallado con el inventario medido a 375 px:
+   elementos que sobresalen del borde SIN un marco deslizable que los alcance. ─── */
+@media (max-width: 576px) {
+    /* Empleados: la paginación (« 1 2 3 … 13 ») no cabía y se cortaba */
+    .emp-pagination {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+    }
+
+    .emp-pagination .pagination {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+    }
+}
+
+@media (max-width: 768px) {
+    /* 4 Productos: la cabecera (título + botones del período) no se partía en líneas */
+    #page-productos_4 > .d-flex.justify-content-between {
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+    }
+
+    #page-productos_4 > .d-flex.justify-content-between .d-flex.align-items-center {
+        flex-wrap: wrap !important;
+    }
+
+    /* Los dos bloques de esa cabecera (título y botones) toman el ancho del
+       contenedor y dejan que su contenido se parta, en vez de empujar hacia fuera */
+    #page-productos_4 > .d-flex.justify-content-between > div {
+        flex: 1 1 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    #productos-4-period-actions {
+        flex-wrap: wrap !important;
+    }
+
+    /* 4 Productos: las pestañas (Asignación / Consolidado / Entrega…) se deslizan
+       de lado en vez de cortarse, igual que las pestañas de Configuración */
+    #productos-4-tabs {
+        flex-wrap: nowrap !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+    }
+}
