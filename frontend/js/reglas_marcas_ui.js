@@ -342,10 +342,18 @@ const ReglasMarcasModule = (() => {
             </div>
             ${diagrama}${fraseBox}${bloqueColacion}${bloqueOpciones}${bloqueNota}`;
         } else {
+            // Con «no leerlas (anomalía)» el día no se calcula: la colación no tiene
+            // efecto, así que el paso 3 se salta y su pastilla queda apagada.
+            const sinLectura = r.lectura === 'NINGUNA';
+            if (sinLectura && paso === 3) paso = 4;
             const pills = `
             <div class="d-flex gap-1 flex-wrap mb-2" id="rm-pasos">
-                ${PASOS.map((p, i) => `<button type="button" data-rm-paso="${i + 1}" class="btn btn-sm ${paso === i + 1 ? 'btn-primary' : 'btn-outline-secondary'}" style="font-size:.76rem;">${i + 1}. ${p}</button>`).join('')}
-            </div>`;
+                ${PASOS.map((p, i) => {
+                    const apagada = sinLectura && i + 1 === 3;
+                    return `<button type="button" data-rm-paso="${i + 1}" class="btn btn-sm ${paso === i + 1 ? 'btn-primary' : 'btn-outline-secondary'}" style="font-size:.76rem;${apagada ? 'opacity:.45;' : ''}" ${apagada ? 'disabled' : ''}>${i + 1}. ${p}</button>`;
+                }).join('')}
+            </div>
+            ${sinLectura ? '<div class="text-muted mb-2" style="font-size:.76rem;">3. Colación no aplica: con «no leerlas», el día no se calcula y no hay colación que descontar.</div>' : ''}`;
             let cuerpoPaso = '';
             if (paso === 1) {
                 let diasHtml;
@@ -495,9 +503,13 @@ const ReglasMarcasModule = (() => {
             paso = parseInt(b.dataset.rmPaso); renderEditor();
         }));
         const atras = $('rm-paso-atras');
-        if (atras) atras.addEventListener('click', () => { if (paso > 1) { paso -= 1; renderEditor(); } });
+        if (atras) atras.addEventListener('click', () => {
+            if (paso > 1) { paso -= 1; if (r.lectura === 'NINGUNA' && paso === 3) paso = 2; renderEditor(); }
+        });
         const sig = $('rm-paso-sig');
-        if (sig) sig.addEventListener('click', () => { if (paso < PASOS.length) { paso += 1; renderEditor(); } });
+        if (sig) sig.addEventListener('click', () => {
+            if (paso < PASOS.length) { paso += 1; if (r.lectura === 'NINGUNA' && paso === 3) paso = 4; renderEditor(); }
+        });
         const ens = $('rm-ensayar');
         if (ens) ens.addEventListener('click', () => ensayar(r));
         const vd = $('rm-ver-dias');

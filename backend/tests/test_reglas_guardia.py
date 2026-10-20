@@ -130,6 +130,8 @@ def test_el_ensayo_no_guarda_y_viaja_en_contexto():
     pestana_js = _leer("frontend/js/reglas_marcas_ui.js")
     assert "rm-ensayar" in pestana_js, "la pestaña perdió el botón de ensayo"
     assert "data-rm-paso" in pestana_js, "la pestaña perdió el asistente por pasos"
+    assert "Colación no aplica" in pestana_js, \
+        "la pestaña perdió el salto del paso Colación cuando las marcas no se leen"
     assert "collect_only" in DOC and "REGLAS_MARCAS_ENSAYO" in DOC, "el documento perdió el ensayo"
 
 
