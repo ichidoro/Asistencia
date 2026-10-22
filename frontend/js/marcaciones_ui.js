@@ -1371,12 +1371,29 @@ function calcularMetricasEmpleado(data) {
         }
     });
 
+    // Los días del calendario no traen tipo_programacion (la detección de arriba
+    // nunca prendía): el dato vive en info, que el servidor sí entrega.
+    if (!esBolsa && infoMeta && (infoMeta.tipo_programacion === 'BOLSA_FLEXIBLE' || infoMeta.tipo_programacion === 'FLEXIBLE_BOLSA')) {
+        esBolsa = true;
+        if (!metaMensualMinutos) {
+            metaMensualMinutos = infoMeta.meta_mensual_minutos || Math.round((infoMeta.meta_horas_semanales || 0) * 60);
+        }
+    }
+
+    // Vigencia parcial (ingreso/egreso a mitad del tramo): meta proporcional a los
+    // días corridos disponibles (el servidor la calcula una sola vez en la matriz).
+    const prorrateoBolsa = (esBolsa && infoMeta && infoMeta.bolsa_prorrateo) ? infoMeta.bolsa_prorrateo : null;
+    if (prorrateoBolsa && Number.isFinite(prorrateoBolsa.factor) && prorrateoBolsa.factor < 1) {
+        metaMensualMinutos = Math.round(metaMensualMinutos * prorrateoBolsa.factor);
+    }
+
     if (esBolsa && infoMeta && infoMeta.meta_ajustada_minutos_descuento) {
         metaMensualMinutos = Math.max(0, metaMensualMinutos - infoMeta.meta_ajustada_minutos_descuento);
     }
 
     return {
         esBolsa,
+        prorrateoBolsa,
         metaMensualMinutos,
         minutosTrabajadosAcumulados,
         minutosDeuda,
@@ -1420,6 +1437,24 @@ function renderReporteEmpleado(data, container) {
                         <div class="card-body py-2 text-center">
                             <small class="text-muted d-block">Meta Periodo</small>
                             <span class="fs-5 fw-bold text-dark tabular-nums">${formatMinutesToHHMM(metrics.metaMensualMinutos)}</span>
+                            ${(() => {
+                                // Texto con comillas y concatenación: rjsmin daña las plantillas anidadas
+                                const pb = metrics.prorrateoBolsa;
+                                if (!pb) return '';
+                                const _fEs = iso => iso ? iso.split('-').reverse().join('-') : '';
+                                let partes = [];
+                                if (Number.isFinite(pb.factor) && pb.factor < 1) {
+                                    const motivo = [pb.fecha_ingreso ? 'ingreso el ' + _fEs(pb.fecha_ingreso) : '', pb.fecha_salida ? 'egreso el ' + _fEs(pb.fecha_salida) : ''].filter(Boolean).join(' y ');
+                                    partes.push('<small class="d-block text-muted" style="font-size:0.68rem;">Ajustada por ' + motivo + ' (' + pb.dias_disponibles + ' de ' + pb.dias_tramo + ' días)</small>');
+                                }
+                                if (pb.aviso_21_dias) {
+                                    partes.push('<small class="d-block" style="font-size:0.68rem;color:#d97706;" title="' +
+                                        'La ley (art. 25 bis del Código del Trabajo) exige repartir las 180 horas en al menos ' + pb.dias_minimos_ley +
+                                        ' días. Es un aviso: no bloquea nada."><i class="bi bi-exclamation-triangle-fill me-1"></i>' +
+                                        'Período con solo ' + pb.dias_disponibles + ' días (la ley pide ' + pb.dias_minimos_ley + ')</small>');
+                                }
+                                return partes.join('');
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -5763,14 +5798,26 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
     let acumBolsa=0, excedido=false, metaMin=0;
     let acumEspera=0;
 
+    const prorBolsa = (esBolsa && emp.info && emp.info.bolsa_prorrateo) ? emp.info.bolsa_prorrateo : null;
+    emp._prorrateoBolsa = prorBolsa;
+
     if (esBolsa && emp.info) {
         let metaOriginal = emp.info.meta_mensual_minutos
                || Math.round((emp.info.meta_horas_semanales || 0) * 60);
 
+        // Vigencia parcial (ingreso/egreso a mitad del tramo): meta proporcional a los
+        // días corridos disponibles (el servidor la calcula una sola vez en la matriz).
+        // Ojo: el factor puede ser 0 (sin vigencia en el tramo) y también se aplica.
+        if (prorBolsa && Number.isFinite(prorBolsa.factor) && prorBolsa.factor < 1) {
+            metaOriginal = Math.round(metaOriginal * prorBolsa.factor);
+        }
+
         let diasProgramados = 0;
         let diasJustificados = 0;
-        
+
         dates.forEach(d => {
+            // Fuera de la vigencia del contrato no hay días programados
+            if (prorBolsa && (d < prorBolsa.desde || d > prorBolsa.hasta)) return;
             const dt = new Date(d+'T00:00:00');
             const isFer = feriadosArray.includes(d);
             const diCheck = emp.dias[d] || {};
@@ -5954,7 +6001,11 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
     const metaHorasEspera = (emp.info && emp.info.meta_horas_espera !== undefined && emp.info.meta_horas_espera !== null)
         ? Number(emp.info.meta_horas_espera)
         : 88.0;
-    const metaEsperaMin = Math.round(metaHorasEspera * 60);
+    let metaEsperaMin = Math.round(metaHorasEspera * 60);
+    // La meta de espera (88 h, art. 25 bis) se prorratea igual que la meta de la bolsa
+    if (prorBolsa && Number.isFinite(prorBolsa.factor) && prorBolsa.factor < 1) {
+        metaEsperaMin = Math.round(metaEsperaMin * prorBolsa.factor);
+    }
     const saldoEspera = esBolsa ? (acumEspera - metaEsperaMin) : null;
     return { emp, he_bruto, he_apr, he_rec, he_pend, d_tot, min_atr, min_sad, min_col, min_per,
              cnt_atr, cnt_sad, cnt_inas, cnt_esp, cnt_per, cnt_efectivos, saldo,
@@ -6051,7 +6102,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                 <div class="emp-id-txt">
                     <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
                     <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
-                    ${r.esBolsa ? (() => { const sm = r.saldoMeta || 0, ab = Math.abs(sm), hh = Math.floor(ab/60), mm = Math.round(ab%60); const t = (sm < 0 ? '\u2212' : sm > 0 ? '+' : '') + String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); return `<span class="gc-bolsa-chip ${sm < 0 ? 'neg' : sm > 0 ? 'pos' : ''}" title="Balance de la bolsa de 180 h">180h ${t}</span>`; })() : ''}
+                    ${r.esBolsa ? (() => { const sm = r.saldoMeta || 0, ab = Math.abs(sm), hh = Math.floor(ab/60), mm = Math.round(ab%60); const t = (sm < 0 ? '\u2212' : sm > 0 ? '+' : '') + String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); const pb = r.emp._prorrateoBolsa; const metaH = Math.round((r.metaMin || 0) / 60); const tit = (pb && Number.isFinite(pb.factor) && pb.factor < 1) ? ('Balance de la bolsa; meta ajustada a ' + metaH + ' h: vigencia de ' + pb.dias_disponibles + ' de ' + pb.dias_tramo + ' d\u00edas del tramo') : 'Balance de la bolsa de 180 h'; const warn = (pb && pb.aviso_21_dias) ? '\u26a0 ' : ''; return '<span class="gc-bolsa-chip ' + (sm < 0 ? 'neg' : sm > 0 ? 'pos' : '') + '" title="' + tit + '">' + warn + metaH + 'h ' + t + '</span>'; })() : ''}
                 </div>
             </div>
         </td>
@@ -6083,9 +6134,24 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                         const smColor = sm >= 0 ? '#10b981' : '#ef4444';
                         const smBg    = sm >= 0 ? '#f0fdf4' : '#fff5f5';
                         const smSign  = sm > 0 ? '+' : sm < 0 ? '-' : '';
-                        const metaTooltip = r.emp._diasJustificadosBolsa > 0 
-                            ? `Meta original: ${_fmtMin(r.emp._metaOriginalBolsa)} | Descuento por ${r.emp._diasJustificadosBolsa} día(s) justificado(s)`
-                            : `Meta mensual del ciclo (180h)`;
+                        // Textos SIEMPRE con comillas y concatenación: el minificador del
+                        // servidor (rjsmin) come los espacios del texto de una plantilla
+                        // `...` anidada dentro de ${} de otra plantilla (como este bloque).
+                        let metaTooltip = r.emp._diasJustificadosBolsa > 0
+                            ? 'Meta original: ' + _fmtMin(r.emp._metaOriginalBolsa) + ' | Descuento por ' + r.emp._diasJustificadosBolsa + ' día(s) justificado(s)'
+                            : 'Meta mensual del ciclo (180h)';
+                        const prb = r.emp._prorrateoBolsa;
+                        const _fEs = iso => iso ? iso.split('-').reverse().join('-') : '';
+                        let avisoLey = '';
+                        if (prb && Number.isFinite(prb.factor) && prb.factor < 1) {
+                            const motivo = [prb.fecha_ingreso ? 'ingreso el ' + _fEs(prb.fecha_ingreso) : '', prb.fecha_salida ? 'egreso el ' + _fEs(prb.fecha_salida) : ''].filter(Boolean).join(' y ');
+                            metaTooltip = 'Meta ajustada por ' + motivo + ': proporcional a ' + prb.dias_disponibles + ' de ' + prb.dias_tramo + ' días del tramo. ' + metaTooltip;
+                        }
+                        if (prb && prb.aviso_21_dias) {
+                            avisoLey = '<i class="bi bi-exclamation-triangle-fill" style="color:#d97706;margin-right:2px;" title="' +
+                                'La ley (art. 25 bis del Código del Trabajo) exige repartir las 180 horas en al menos ' + prb.dias_minimos_ley +
+                                ' días; este período solo le da ' + prb.dias_disponibles + ' días a esta persona. Es un aviso: no bloquea nada."></i>';
+                        }
 
                         const se = r.saldoEspera;
                         const seColor = se >= 0 ? '#10b981' : '#d97706';
@@ -6093,7 +6159,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                         const seSign  = se > 0 ? '+' : se < 0 ? '-' : '';
                         const esperaTooltip = `Meta mensual de espera: ${_fmtMin(r.metaEsperaMin)} (88h DT)`;
 
-                        return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}">${_fmtMin(r.metaMin)}</td>
+                        return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}">${avisoLey}${_fmtMin(r.metaMin)}</td>
                                 <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
                                 <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>
                                 <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;font-size:0.78rem;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}" title="${esperaTooltip}">${_fmtMin(r.metaEsperaMin)}</td>

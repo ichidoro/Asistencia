@@ -7,6 +7,7 @@ from loguru import logger
 
 from backend.core.config import settings
 from backend.services.asistencia_service import AsistenciaService
+from backend.services.bolsa_prorrateo import aplicar_prorrateo, fecha_en_vigencia
 
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -220,12 +221,18 @@ class ReportService:
                     meta_original = emp.get("meta_mensual_minutos")
                     if not meta_original:
                         meta_original = round((emp.get("meta_horas_semanales") or 0.0) * 60)
-                    
+                    # Vigencia parcial (ingreso/egreso a mitad del tramo): meta proporcional
+                    # a los días corridos disponibles (calculada una sola vez en la matriz).
+                    pror_bolsa = emp.get("bolsa_prorrateo")
+                    meta_original = aplicar_prorrateo(meta_original, pror_bolsa)
+
                     dias_programados = 0
                     dias_justificados = 0
-                    
+
                     for d in rango_dias:
                         f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
+                        if not fecha_en_vigencia(f_str, pror_bolsa):
+                            continue
                         is_fer = f_str in feriados_set
                         di_check = dias_dict.get(f_str, {})
                         

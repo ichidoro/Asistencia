@@ -161,6 +161,50 @@ def test_la_nota_se_elige_de_una_lista_desplegable():
     assert "NOTAS_FRECUENTES" in _leer("backend/services/reglas_marcas_def.py")
 
 
+def test_la_meta_de_bolsa_se_prorratea_en_todas_las_replicas():
+    """La meta de Bolsa Flexible de una vigencia parcial (ingreso/egreso a mitad
+    del tramo) se calcula UNA vez en la matriz (bolsa_prorrateo) y la aplican las
+    cuatro réplicas: la grilla y la vista individual (marcaciones_ui.js), el
+    Excel (report_service) y el resumen de cierre (cierre_service). Además la
+    pantalla avisa cuando no se alcanzan los 21 días del art. 25 bis."""
+    assert "bolsa_prorrateo" in MATRIZ and "calcular_prorrateo_bolsa" in MATRIZ
+    assert "aplicar_prorrateo" in CIERRE and "fecha_en_vigencia" in CIERRE
+    excel = _leer("backend/services/report_service.py")
+    assert "aplicar_prorrateo" in excel and "fecha_en_vigencia" in excel
+    grilla_js = _leer("frontend/js/marcaciones_ui.js")
+    assert grilla_js.count("bolsa_prorrateo") >= 2, \
+        "la grilla o la vista individual perdió el prorrateo de la meta"
+    assert "aviso_21_dias" in grilla_js and "art. 25 bis" in grilla_js, \
+        "la pantalla perdió el aviso de los 21 días de la ley"
+
+
+def test_los_textos_del_prorrateo_sobreviven_al_minificador():
+    """El servidor minifica el JS al servirlo (static_minify + rjsmin) y rjsmin
+    come los espacios del texto de una plantilla `...` anidada dentro de ${} de
+    otra plantilla (así se descubrió «114h:vigencia de 19de 30días» en pantalla).
+    Los textos del prorrateo van con comillas y concatenación; esta guardia corre
+    el minificador real y comprueba que llegan intactos al navegador."""
+    import pytest
+    rjsmin = pytest.importorskip("rjsmin")
+    m = rjsmin.jsmin(_leer("frontend/js/marcaciones_ui.js"))
+    for frase in (
+        "Balance de la bolsa; meta ajustada a ",
+        " h: vigencia de ",
+        "Meta ajustada por ",
+        ": proporcional a ",
+        " días del tramo",
+        "La ley (art. 25 bis del Código del Trabajo) exige repartir las 180 horas en al menos ",
+        " días; este período solo le da ",
+        " días a esta persona. Es un aviso: no bloquea nada.",
+        "Meta original: ",
+        " | Descuento por ",
+        " día(s) justificado(s)",
+        "Período con solo ",
+        " días (la ley pide ",
+    ):
+        assert frase in m, f"el minificador rompe el texto: {frase!r}"
+
+
 # ── 5. La tabla de confirmaciones y su firma existen ─────────────────────────
 
 def test_confirmaciones_con_firma_en_el_repositorio():

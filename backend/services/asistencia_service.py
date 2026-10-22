@@ -24,6 +24,7 @@ from backend.services.libreta_corte import (
     obtener_corte_libreta, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
 )
 from backend.repositories.empleado import EmpleadoRepository
+from backend.services.bolsa_prorrateo import calcular_prorrateo_bolsa
 from backend.services.quantum_matrix_engine import (
     QuantumPhaseTopology,
     TensorMarkDeduplicator,
@@ -2577,6 +2578,15 @@ class AsistenciaService:
                 t_id = t_info.get('turno_id')
                 emp['primer_dia_semana_turno'] = primer_dia_por_turno.get(t_id, 1)  # default Lunes
                 emp['turno_dias'] = dias_por_turno.get(t_id, {})
+                if emp['tipo_programacion'] in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'):
+                    # Vigencia parcial (ingreso/egreso a mitad del tramo): la meta de la
+                    # bolsa se prorratea por días corridos y se avisa si no se alcanzan
+                    # los 21 días del art. 25 bis. Lo consumen la grilla, el Excel y el
+                    # resumen de cierre desde este único cálculo.
+                    emp['bolsa_prorrateo'] = calcular_prorrateo_bolsa(
+                        emp.get('fecha_ingreso'), emp.get('fecha_salida'),
+                        fecha_inicio, fecha_fin
+                    )
             matrix[eid] = {'info': emp}
 
 

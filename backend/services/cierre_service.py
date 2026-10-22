@@ -1,4 +1,5 @@
 from backend.core.database import Database
+from backend.services.bolsa_prorrateo import aplicar_prorrateo, fecha_en_vigencia
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict, Any, List
 from loguru import logger
@@ -230,6 +231,10 @@ class CierreService:
                 meta_original = emp.get("meta_mensual_minutos")
                 if not meta_original:
                     meta_original = round(float(emp.get("meta_horas_semanales") or 180.0) * 60)
+                # Vigencia parcial (ingreso/egreso a mitad del tramo): meta proporcional
+                # a los días corridos disponibles (calculada una sola vez en la matriz).
+                pror_bolsa = emp.get("bolsa_prorrateo")
+                meta_original = aplicar_prorrateo(meta_original, pror_bolsa)
 
                 dias_programados = 0
                 dias_justificados = 0
@@ -237,6 +242,8 @@ class CierreService:
 
                 for d in rango_dias:
                     f_str = f"{d.year}-{d.month:02d}-{d.day:02d}"
+                    if not fecha_en_vigencia(f_str, pror_bolsa):
+                        continue
                     is_fer = f_str in feriados_set
                     di_check = dias_dict.get(f_str, {})
                     day_db = d.weekday()
@@ -348,8 +355,9 @@ class CierreService:
                 elif acum_bolsa < meta_min:
                     total_deficit_bolsa_min += (meta_min - acum_bolsa)
 
-                # 88h Espera (Art. 25 bis)
+                # 88h Espera (Art. 25 bis); con vigencia parcial se prorratea igual que la meta
                 meta_espera_min = round(float(emp.get("meta_horas_espera") if emp.get("meta_horas_espera") is not None else 88.0) * 60)
+                meta_espera_min = aplicar_prorrateo(meta_espera_min, emp.get("bolsa_prorrateo"))
                 total_espera_min += acum_espera
                 if acum_espera > meta_espera_min:
                     total_exceso_espera_min += (acum_espera - meta_espera_min)
