@@ -5558,10 +5558,17 @@ async function confirmarCierreRRHH() {
 
         const res = await resp.json();
         if (resp.ok) {
-            showToast("Periodo cerrado exitosamente", "success");
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-wizard'));
             if (m) m.hide();
             loadMarcacionesData();
+            Swal.fire({
+                title: 'Período cerrado',
+                text: 'El período quedó sellado para ' + s.area + '. El acta trae el resumen completo: haberes, tiempo no trabajado, compensaciones, bolsa y espera.',
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonText: 'Descargar acta (PDF)',
+                cancelButtonText: 'Cerrar'
+            }).then(r2 => { if (r2.isConfirmed) window.descargarActaCierre(s.fIni, s.fFin, s.area); });
         } else {
             showToast("Error: " + (res.detail || "No se pudo cerrar el periodo"), "error");
             btn.disabled = false;
@@ -5574,6 +5581,117 @@ async function confirmarCierreRRHH() {
         btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
     }
 }
+
+// ── ACTA DE CIERRE (PDF) ─────────────────────────────────────────────────────
+// El acta trae al menos lo mismo que la previsualización: haberes, débitos con
+// su desglose, compensaciones, bolsa y espera (decisión del dueño, 23-10-2026).
+// Se llama al sellar un período y desde los chips de «Áreas cerradas» de
+// Configuración → Tramos de Cierre. Textos con comillas (minificador).
+window.descargarActaCierre = async function (fIni, fFin, area) {
+    try {
+        showToast('Generando el acta de cierre de ' + area + '...', 'info');
+        const resp = await fetch('/api/cierre/acta-resumen?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area), {
+            headers: { 'Authorization': 'Bearer ' + AuthService.getToken() }
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.detail || 'No se pudo generar el acta');
+
+        await window.ensureLib('jspdf');
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'pt', 'a4');
+        const W = doc.internal.pageSize.getWidth();
+        const f = window.formatFechaDDMMYYYY;
+        const h = (v) => (v === undefined || v === null) ? '0' : (String(v) + ' hrs');
+        const hd = d.haberes_debitos || {};
+        const r = d.resumen || {};
+        const ci = d.cierre_info || {};
+
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+        doc.text('ACTA DE CIERRE DE PERÍODO', 40, 44);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+        doc.text('Sistema de asistencia', 40, 59);
+        doc.text('Área: ' + area, W - 40, 44, { align: 'right' });
+        doc.text('Período: ' + f(fIni) + ' al ' + f(fFin), W - 40, 59, { align: 'right' });
+        doc.setFontSize(8.5);
+        const sellado = ci.username ? ('Sellado por ' + ci.username + ' el ' + (ci.created_at || '')) : 'Período aún sin sellar (borrador de acta)';
+        doc.text(sellado + '  ·  Acta generada por ' + (d.generado_por || '') + ' el ' + (d.fecha_generacion || ''), 40, 74);
+        doc.setTextColor(0);
+        doc.line(40, 82, W - 40, 82);
+
+        const cab = { fillColor: [30, 58, 138], fontSize: 8.5 };
+        const cuerpo = { fontSize: 8.5 };
+        const margen = { left: 40, right: 40 };
+
+        doc.autoTable({ startY: 94, theme: 'grid', headStyles: cab, styles: cuerpo, margin: margen,
+            head: [['Resumen del período', 'Días']],
+            body: [
+                ['Jornadas completas (OK)', String(r.dias_ok || 0)],
+                ['Con novedad (atraso / salida adelantada)', String(r.dias_con_novedad || 0)],
+                ['Inasistencias', String(r.inasistencias || 0)],
+                ['Vacaciones / Licencias', String(r.vacaciones || 0) + ' / ' + String(r.licencias || 0)],
+                ['Jornadas especiales', String(r.jornadas_especiales || 0)],
+                ['Libres programados / Feriados', String(r.dias_libres_programados || 0) + ' / ' + String(r.dias_feriado || 0)]
+            ] });
+
+        doc.autoTable({ startY: doc.lastAutoTable.finalY + 10, theme: 'grid', headStyles: cab, styles: cuerpo, margin: margen,
+            head: [['Haberes (HE al 50 %)', 'Horas']],
+            body: [
+                ['HE aprobadas (horarios de ciclo)', h(hd.he_aprobadas_fijos_horas) + ' · ' + String(hd.he_aprobadas_fijos_count || 0) + ' registros'],
+                ['Exceso sobre la meta — Bolsa', h(hd.he_exceso_bolsa_horas)],
+                ['Exceso de espera — Bolsa', h(hd.he_exceso_espera_horas)],
+                ['TOTAL HABERES', h(hd.he_total_haberes_horas)]
+            ] });
+
+        doc.autoTable({ startY: doc.lastAutoTable.finalY + 10, theme: 'grid', headStyles: cab, styles: cuerpo, margin: margen,
+            head: [['Débitos (tiempo no trabajado, al 100 %)', 'Horas']],
+            body: [
+                ['Atrasos netos', h(hd.deuda_atrasos_horas)],
+                ['Exceso de colación', h(hd.deuda_colacion_horas)],
+                ['Salidas adelantadas', h(hd.deuda_salidas_horas)],
+                ['Permisos personales', h(hd.deuda_permisos_horas)],
+                ['Otros (jornadas incompletas sin categoría)', h(hd.deuda_otros_horas)],
+                ['Déficit Bolsa Flexible (definitivo)', h(hd.deficit_bolsa_horas)],
+                ['TOTAL DÉBITOS', h(hd.deuda_total_debitos_horas)]
+            ] });
+
+        const bolsaFila = (hd.bolsa_personas || 0) > 0
+            ? [['Bolsa Flexible (' + String(hd.bolsa_personas) + ' choferes)',
+                String(hd.bolsa_acumulado_horas || 0) + ' de ' + String(hd.bolsa_meta_total_horas || 0) + ' hrs de meta grupal' +
+                (hd.bolsa_definitiva === false ? ' · tramo en curso: el déficit aún no es exigible' : '')]]
+            : [];
+        doc.autoTable({ startY: doc.lastAutoTable.finalY + 10, theme: 'grid', headStyles: cab, styles: cuerpo, margin: margen,
+            head: [['Compensaciones y balance', 'Valor']],
+            body: [
+                ['HE usadas para compensar inasistencias', h(hd.compensaciones_horas)],
+                ['Espera usada (tope 88 h por persona)', h(hd.espera_total_horas)]
+            ].concat(bolsaFila).concat([
+                ['BALANCE OPERATIVO (haberes − débitos − compensaciones)', h(hd.balance_operativo_horas)]
+            ]) });
+
+        const heDet = (d.he_detalle || []).map(x => [x.nombre_completo, f(x.fecha), String(x.horas_aprobadas)]);
+        if (heDet.length) {
+            doc.autoTable({ startY: doc.lastAutoTable.finalY + 12, theme: 'striped', headStyles: cab, styles: { fontSize: 7.5 }, margin: margen,
+                head: [['Detalle de HE aprobadas — trabajador', 'Fecha', 'Horas']], body: heDet });
+        }
+        const inas = (d.inasistencias_aceptadas || []).map(x => [x.nombre_completo, f(x.fecha)]);
+        if (inas.length) {
+            doc.autoTable({ startY: doc.lastAutoTable.finalY + 12, theme: 'striped', headStyles: cab, styles: { fontSize: 7.5 }, margin: margen,
+                head: [['Inasistencias consolidadas sin goce — trabajador', 'Fecha']], body: inas });
+        }
+
+        let yF = doc.lastAutoTable.finalY + 48;
+        if (yF > doc.internal.pageSize.getHeight() - 70) { doc.addPage(); yF = 80; }
+        doc.setFontSize(9);
+        doc.line(60, yF, 240, yF); doc.text('Jefatura del área', 150, yF + 12, { align: 'center' });
+        doc.line(W - 240, yF, W - 60, yF); doc.text('RR.HH.', W - 150, yF + 12, { align: 'center' });
+
+        doc.save('ACTA_' + area.replace(/\s+/g, '_') + '_' + fIni + '_' + fFin + '.pdf');
+        showToast('Acta descargada', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast('Error al generar el acta: ' + e.message, 'error');
+    }
+};
 
 async function openHistorialCierresModal() {
     try {

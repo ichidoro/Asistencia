@@ -303,6 +303,12 @@ async def acta_resumen(
         )
         cierre_info = dict(cierre_row) if cierre_row else {}
 
+        # ── 7. Haberes, débitos, compensaciones, bolsa y espera ──────────────
+        # La misma lógica de la previsualización del cierre: el acta trae al
+        # menos lo mismo que se miró para sellar.
+        service = CierreService(db)
+        haberes_debitos = await service.calcular_haberes_debitos(fecha_inicio, fecha_fin, area)
+
         return {
             "periodo": {"inicio": fecha_inicio, "fin": fecha_fin},
             "area": area,
@@ -316,6 +322,7 @@ async def acta_resumen(
             "total_he_horas": total_he_horas,
             "feriados": feriados,
             "inasistencias_aceptadas": inasistencias_aceptadas,
+            "haberes_debitos": haberes_debitos,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -33,188 +33,14 @@ class CierreService:
         else:
             self.asistencia_service = asistencia_service
 
-    async def evaluar_cierre(self, fecha_inicio: str, fecha_fin: str, area: str):
-        """
-        Evaluación pre-cierre con 4 niveles de semáforo (tela de araña):
-        1. HE PENDIENTES       → Hard Stop 1
-        2. ANOMALÍAS           → Hard Stop 2
-        3. EN_CURSO            → Hard Stop 3
-        4. INASISTENCIAS       → Soft Stop (aceptar con checkbox)
-        """
-        # Validar que no exista solapamiento de periodos cerrados para esta área
-        overlap_query = """
-            SELECT id, fecha_inicio, fecha_fin FROM cierres_periodos 
-            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
-            LIMIT 1
-        """
-        solapamiento = await self.db.fetch_one(overlap_query, (area, fecha_fin, fecha_inicio))
-        if solapamiento:
-            raise ValueError(
-                f"El período seleccionado ya se encuentra cerrado para el área '{area}' "
-                f"({solapamiento['fecha_inicio']} al {solapamiento['fecha_fin']})."
-            )
+    async def calcular_haberes_debitos(self, fecha_inicio: str, fecha_fin: str, area=None):
+        """Haberes, débitos, compensaciones, bolsa y espera del rango.
 
-        params_area = []
-        filtro_area = ""
-        if area and area != 'Todas':
-            filtro_area = " AND ar.nombre = ?"
-            params_area = [area]
-
-        # ── HARD STOP 1: Horas extras pendientes ──────────────────────────────
-        query_he = f"""
-            SELECT he.id, he.fecha, he.empleado_id,
-                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   he.minutos_bruto, he.minutos_autorizados, he.origen,
-                   asi.hora_entrada_real, asi.hora_salida_real,
-                   asi.hora_entrada_teorica, asi.hora_salida_teorica,
-                   asi.minutos_colacion_real, asi.minutos_colacion_auto, asi.minutos_colacion,
-                   asi.observaciones
-            FROM horas_extras he INDEXED BY idx_he_fecha
-            JOIN empleados e ON he.empleado_id = e.id
-            LEFT JOIN asistencias asi ON he.empleado_id = asi.empleado_id AND he.fecha = asi.fecha
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND he.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE he.fecha BETWEEN ? AND ?
-              AND he.estado = 'PENDIENTE'
-              AND he.minutos_bruto >= 1.0
-            {filtro_area}
-            ORDER BY e.apellido_paterno, he.fecha
+        Una sola lógica (idéntica al Excel) compartida por la previsualización
+        del cierre y por el acta de un período ya sellado: lo que se mira para
+        sellar es lo mismo que queda escrito en el acta.
         """
-        he_pendientes = await self.db.fetch_all(
-            query_he, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-
-        # ── HARD STOP 2: Anomalías sin corregir y Días Pendientes ────────────
-        # Excluye anomalías que tienen JE aprobada (EXTRA) con ambas marcas → no son bloqueantes
-        query_anomalias = f"""
-            SELECT a.id, a.empleado_id, a.fecha, a.hora_entrada_real, a.hora_salida_real,
-                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   ar.nombre AS area
-            FROM asistencias a
-            JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ?
-              AND (
-                  (a.estado = 'ANOMALIA' AND NOT EXISTS (
-                      SELECT 1 FROM jornadas_especiales je
-                      WHERE je.empleado_id = a.empleado_id
-                        AND je.fecha = a.fecha
-                        AND je.estado = 'EXTRA'
-                        AND je.hora_entrada IS NOT NULL
-                        AND je.hora_salida IS NOT NULL
-                  ))
-                  OR a.estado = 'PENDIENTE'
-              )
-            {filtro_area}
-            ORDER BY e.apellido_paterno, a.fecha
-        """
-        anomalias = await self.db.fetch_all(
-            query_anomalias, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-
-        # ── HARD STOP 3: Empleados EN_CURSO en el periodo ─────────────────────
-        # Calcula hora estimada de salida para orientar al Jefe
-        query_en_curso = f"""
-            SELECT a.id, a.fecha, a.hora_entrada_real,
-                   a.hora_salida_teorica,
-                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   ar.nombre AS area
-            FROM asistencias a
-            JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ?
-              AND a.estado = 'EN_CURSO'
-            {filtro_area}
-            ORDER BY a.hora_salida_teorica ASC NULLS LAST
-        """
-        en_curso = await self.db.fetch_all(
-            query_en_curso, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-
-        # Calcular hora estimada del último turno activo para mensaje orientador
-        ultimo_fin_estimado = None
-        if en_curso:
-            salidas = [r['hora_salida_teorica'] for r in en_curso if r['hora_salida_teorica']]
-            if salidas:
-                ultimo_fin_estimado = max(salidas)
-
-        # ── SOFT STOP: Inasistencias sin justificar ────────────────────────────
-        # Solo INASISTENCIA, ya NO incluye ANOMALIA (separadas en Hard Stop 2)
-        query_ina = f"""
-            SELECT a.id, a.empleado_id, a.fecha,
-                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
-                   ar.nombre AS area
-            FROM asistencias a
-            JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ?
-              AND a.estado = 'INASISTENCIA'
-            {filtro_area}
-            ORDER BY e.apellido_paterno, a.fecha
-        """
-        inasistencias = await self.db.fetch_all(
-            query_ina, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-
-        # ── Resumen ejecutivo siempre visible ─────────────────────────────────
-        query_resumen = f"""
-            SELECT
-                COUNT(DISTINCT a.empleado_id)                                                      AS total_empleados,
-                SUM(CASE WHEN a.estado = 'OK' THEN 1 ELSE 0 END)                                   AS dias_ok,
-                SUM(CASE WHEN a.estado IN ('ATRASO','SALIDA_ADELANTADA','ATR_SAD') THEN 1 ELSE 0 END) AS dias_con_novedad,
-                SUM(CASE WHEN a.estado = 'VACACIONES' THEN 1 ELSE 0 END)                           AS vacaciones,
-                SUM(CASE WHEN a.estado LIKE 'LICENCIA%' THEN 1 ELSE 0 END)                         AS licencias,
-                SUM(CASE WHEN a.estado = 'JORNADA_ESPECIAL' THEN 1 ELSE 0 END)                     AS jornadas_especiales,
-                SUM(CASE WHEN a.estado = 'LIBRE' THEN 1 ELSE 0 END)                                AS dias_libres,
-                SUM(CASE WHEN a.estado = 'FERIADO' THEN 1 ELSE 0 END)                              AS feriados_caidos,
-                SUM(CASE WHEN a.estado = 'INASISTENCIA' THEN 1 ELSE 0 END)                         AS inasistencias,
-                SUM(CASE WHEN a.estado = 'ANOMALIA' THEN 1 ELSE 0 END)                             AS anomalias
-            FROM asistencias a
-            JOIN empleados e ON a.empleado_id = e.id
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE a.fecha BETWEEN ? AND ?
-            {filtro_area}
-        """
-        resumen_row = await self.db.fetch_one(
-            query_resumen, tuple([fecha_inicio, fecha_fin] + params_area)
-        )
-        resumen = dict(resumen_row) if resumen_row else {}
-
-        # Consolidar coberturas de turno (+2) que operan en paralelo al turno base
-        q_coberturas = f"""
-            SELECT COUNT(je.id) as count_coberturas
-            FROM jornadas_especiales je
-            JOIN empleados e ON je.empleado_id = e.id
-            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
-            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
-                AND a.fecha >= ha.fecha_desde
-                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
-            LEFT JOIN areas ar ON ha.area_id = ar.id
-            WHERE je.fecha BETWEEN ? AND ?
-              AND je.origen = 'COBERTURA_TURNO'
-              AND je.estado != 'RECHAZADA'
-              AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA')
-            {filtro_area}
-        """
-        row_cob = await self.db.fetch_one(q_coberturas, tuple([fecha_inicio, fecha_fin] + params_area))
-        if row_cob and row_cob['count_coberturas']:
-            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
-
-        # ── CÁLCULO OFICIAL DE HABERES, DÉBITOS Y BALANCES (100% IDÉNTICO AL EXCEL) ──
+        salida: Dict[str, Any] = {}
         f_ini = date.fromisoformat(fecha_inicio)
         f_fin = date.fromisoformat(fecha_fin)
         rango_dias = [(f_ini + timedelta(days=i)) for i in range((f_fin - f_ini).days + 1)]
@@ -433,38 +259,224 @@ class CierreService:
         # que también descuenta las compensaciones)
         balance_operativo_hrs = round(he_total_hrs - deuda_total_hrs - compensaciones_hrs, 2)
 
-        resumen['total_empleados'] = len(empleados_matriz)
-        resumen['he_aprobadas_fijos_horas'] = he_fijos_hrs
-        resumen['he_aprobadas_fijos_count'] = total_he_fijos_count
-        resumen['he_exceso_bolsa_horas'] = he_bolsa_hrs
-        resumen['he_exceso_espera_horas'] = he_espera_hrs
-        resumen['espera_total_horas'] = round(total_espera_min / 60.0, 2)
-        resumen['he_total_haberes_horas'] = he_total_hrs
+        salida['total_empleados'] = len(empleados_matriz)
+        salida['he_aprobadas_fijos_horas'] = he_fijos_hrs
+        salida['he_aprobadas_fijos_count'] = total_he_fijos_count
+        salida['he_exceso_bolsa_horas'] = he_bolsa_hrs
+        salida['he_exceso_espera_horas'] = he_espera_hrs
+        salida['espera_total_horas'] = round(total_espera_min / 60.0, 2)
+        salida['he_total_haberes_horas'] = he_total_hrs
 
-        resumen['deuda_fijos_horas'] = deuda_fijos_hrs
-        resumen['deuda_atrasos_horas'] = round(total_deuda_atrasos_min / 60.0, 2)
-        resumen['deuda_colacion_horas'] = round(total_deuda_colacion_min / 60.0, 2)
-        resumen['deuda_salidas_horas'] = round(total_deuda_salidas_min / 60.0, 2)
-        resumen['deuda_permisos_horas'] = round(total_deuda_permisos_min / 60.0, 2)
-        resumen['deuda_otros_horas'] = deuda_otros_hrs
-        resumen['deficit_bolsa_horas'] = deficit_bolsa_hrs
-        resumen['deuda_total_debitos_horas'] = deuda_total_hrs
+        salida['deuda_fijos_horas'] = deuda_fijos_hrs
+        salida['deuda_atrasos_horas'] = round(total_deuda_atrasos_min / 60.0, 2)
+        salida['deuda_colacion_horas'] = round(total_deuda_colacion_min / 60.0, 2)
+        salida['deuda_salidas_horas'] = round(total_deuda_salidas_min / 60.0, 2)
+        salida['deuda_permisos_horas'] = round(total_deuda_permisos_min / 60.0, 2)
+        salida['deuda_otros_horas'] = deuda_otros_hrs
+        salida['deficit_bolsa_horas'] = deficit_bolsa_hrs
+        salida['deuda_total_debitos_horas'] = deuda_total_hrs
 
         # Avance de la Bolsa: meta grupal (ya prorrateada por vigencias parciales),
         # acumulado y si el déficit ya es definitivo o el tramo sigue corriendo
-        resumen['bolsa_personas'] = bolsa_personas
-        resumen['bolsa_meta_total_horas'] = round(total_meta_bolsa_min / 60.0, 2)
-        resumen['bolsa_acumulado_horas'] = round(total_acum_bolsa_min / 60.0, 2)
-        resumen['bolsa_definitiva'] = bolsa_definitiva
-        resumen['bolsa_dias_restantes'] = bolsa_dias_restantes
+        salida['bolsa_personas'] = bolsa_personas
+        salida['bolsa_meta_total_horas'] = round(total_meta_bolsa_min / 60.0, 2)
+        salida['bolsa_acumulado_horas'] = round(total_acum_bolsa_min / 60.0, 2)
+        salida['bolsa_definitiva'] = bolsa_definitiva
+        salida['bolsa_dias_restantes'] = bolsa_dias_restantes
 
-        resumen['compensaciones_horas'] = compensaciones_hrs
-        resumen['balance_operativo_horas'] = balance_operativo_hrs
+        salida['compensaciones_horas'] = compensaciones_hrs
+        salida['balance_operativo_horas'] = balance_operativo_hrs
 
         # Compatibilidad hacia atrás
-        resumen['he_aprobadas_horas'] = he_total_hrs
-        resumen['he_aprobadas_count'] = total_he_fijos_count
-        resumen['deuda_neta_horas'] = deuda_total_hrs
+        salida['he_aprobadas_horas'] = he_total_hrs
+        salida['he_aprobadas_count'] = total_he_fijos_count
+        salida['deuda_neta_horas'] = deuda_total_hrs
+        return salida
+
+    async def evaluar_cierre(self, fecha_inicio: str, fecha_fin: str, area: str):
+        """
+        Evaluación pre-cierre con 4 niveles de semáforo (tela de araña):
+        1. HE PENDIENTES       → Hard Stop 1
+        2. ANOMALÍAS           → Hard Stop 2
+        3. EN_CURSO            → Hard Stop 3
+        4. INASISTENCIAS       → Soft Stop (aceptar con checkbox)
+        """
+        # Validar que no exista solapamiento de periodos cerrados para esta área
+        overlap_query = """
+            SELECT id, fecha_inicio, fecha_fin FROM cierres_periodos 
+            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+            LIMIT 1
+        """
+        solapamiento = await self.db.fetch_one(overlap_query, (area, fecha_fin, fecha_inicio))
+        if solapamiento:
+            raise ValueError(
+                f"El período seleccionado ya se encuentra cerrado para el área '{area}' "
+                f"({solapamiento['fecha_inicio']} al {solapamiento['fecha_fin']})."
+            )
+
+        params_area = []
+        filtro_area = ""
+        if area and area != 'Todas':
+            filtro_area = " AND ar.nombre = ?"
+            params_area = [area]
+
+        # ── HARD STOP 1: Horas extras pendientes ──────────────────────────────
+        query_he = f"""
+            SELECT he.id, he.fecha, he.empleado_id,
+                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
+                   he.minutos_bruto, he.minutos_autorizados, he.origen,
+                   asi.hora_entrada_real, asi.hora_salida_real,
+                   asi.hora_entrada_teorica, asi.hora_salida_teorica,
+                   asi.minutos_colacion_real, asi.minutos_colacion_auto, asi.minutos_colacion,
+                   asi.observaciones
+            FROM horas_extras he INDEXED BY idx_he_fecha
+            JOIN empleados e ON he.empleado_id = e.id
+            LEFT JOIN asistencias asi ON he.empleado_id = asi.empleado_id AND he.fecha = asi.fecha
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND he.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR he.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE he.fecha BETWEEN ? AND ?
+              AND he.estado = 'PENDIENTE'
+              AND he.minutos_bruto >= 1.0
+            {filtro_area}
+            ORDER BY e.apellido_paterno, he.fecha
+        """
+        he_pendientes = await self.db.fetch_all(
+            query_he, tuple([fecha_inicio, fecha_fin] + params_area)
+        )
+
+        # ── HARD STOP 2: Anomalías sin corregir y Días Pendientes ────────────
+        # Excluye anomalías que tienen JE aprobada (EXTRA) con ambas marcas → no son bloqueantes
+        query_anomalias = f"""
+            SELECT a.id, a.empleado_id, a.fecha, a.hora_entrada_real, a.hora_salida_real,
+                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
+                   ar.nombre AS area
+            FROM asistencias a
+            JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE a.fecha BETWEEN ? AND ?
+              AND (
+                  (a.estado = 'ANOMALIA' AND NOT EXISTS (
+                      SELECT 1 FROM jornadas_especiales je
+                      WHERE je.empleado_id = a.empleado_id
+                        AND je.fecha = a.fecha
+                        AND je.estado = 'EXTRA'
+                        AND je.hora_entrada IS NOT NULL
+                        AND je.hora_salida IS NOT NULL
+                  ))
+                  OR a.estado = 'PENDIENTE'
+              )
+            {filtro_area}
+            ORDER BY e.apellido_paterno, a.fecha
+        """
+        anomalias = await self.db.fetch_all(
+            query_anomalias, tuple([fecha_inicio, fecha_fin] + params_area)
+        )
+
+        # ── HARD STOP 3: Empleados EN_CURSO en el periodo ─────────────────────
+        # Calcula hora estimada de salida para orientar al Jefe
+        query_en_curso = f"""
+            SELECT a.id, a.fecha, a.hora_entrada_real,
+                   a.hora_salida_teorica,
+                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
+                   ar.nombre AS area
+            FROM asistencias a
+            JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE a.fecha BETWEEN ? AND ?
+              AND a.estado = 'EN_CURSO'
+            {filtro_area}
+            ORDER BY a.hora_salida_teorica ASC NULLS LAST
+        """
+        en_curso = await self.db.fetch_all(
+            query_en_curso, tuple([fecha_inicio, fecha_fin] + params_area)
+        )
+
+        # Calcular hora estimada del último turno activo para mensaje orientador
+        ultimo_fin_estimado = None
+        if en_curso:
+            salidas = [r['hora_salida_teorica'] for r in en_curso if r['hora_salida_teorica']]
+            if salidas:
+                ultimo_fin_estimado = max(salidas)
+
+        # ── SOFT STOP: Inasistencias sin justificar ────────────────────────────
+        # Solo INASISTENCIA, ya NO incluye ANOMALIA (separadas en Hard Stop 2)
+        query_ina = f"""
+            SELECT a.id, a.empleado_id, a.fecha,
+                   e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS nombre_completo,
+                   ar.nombre AS area
+            FROM asistencias a
+            JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE a.fecha BETWEEN ? AND ?
+              AND a.estado = 'INASISTENCIA'
+            {filtro_area}
+            ORDER BY e.apellido_paterno, a.fecha
+        """
+        inasistencias = await self.db.fetch_all(
+            query_ina, tuple([fecha_inicio, fecha_fin] + params_area)
+        )
+
+        # ── Resumen ejecutivo siempre visible ─────────────────────────────────
+        query_resumen = f"""
+            SELECT
+                COUNT(DISTINCT a.empleado_id)                                                      AS total_empleados,
+                SUM(CASE WHEN a.estado = 'OK' THEN 1 ELSE 0 END)                                   AS dias_ok,
+                SUM(CASE WHEN a.estado IN ('ATRASO','SALIDA_ADELANTADA','ATR_SAD') THEN 1 ELSE 0 END) AS dias_con_novedad,
+                SUM(CASE WHEN a.estado = 'VACACIONES' THEN 1 ELSE 0 END)                           AS vacaciones,
+                SUM(CASE WHEN a.estado LIKE 'LICENCIA%' THEN 1 ELSE 0 END)                         AS licencias,
+                SUM(CASE WHEN a.estado = 'JORNADA_ESPECIAL' THEN 1 ELSE 0 END)                     AS jornadas_especiales,
+                SUM(CASE WHEN a.estado = 'LIBRE' THEN 1 ELSE 0 END)                                AS dias_libres,
+                SUM(CASE WHEN a.estado = 'FERIADO' THEN 1 ELSE 0 END)                              AS feriados_caidos,
+                SUM(CASE WHEN a.estado = 'INASISTENCIA' THEN 1 ELSE 0 END)                         AS inasistencias,
+                SUM(CASE WHEN a.estado = 'ANOMALIA' THEN 1 ELSE 0 END)                             AS anomalias
+            FROM asistencias a
+            JOIN empleados e ON a.empleado_id = e.id
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE a.fecha BETWEEN ? AND ?
+            {filtro_area}
+        """
+        resumen_row = await self.db.fetch_one(
+            query_resumen, tuple([fecha_inicio, fecha_fin] + params_area)
+        )
+        resumen = dict(resumen_row) if resumen_row else {}
+
+        # Consolidar coberturas de turno (+2) que operan en paralelo al turno base
+        q_coberturas = f"""
+            SELECT COUNT(je.id) as count_coberturas
+            FROM jornadas_especiales je
+            JOIN empleados e ON je.empleado_id = e.id
+            JOIN asistencias a ON je.empleado_id = a.empleado_id AND je.fecha = a.fecha
+            LEFT JOIN historial_areas ha ON e.id = ha.empleado_id AND ha.validado = 1
+                AND a.fecha >= ha.fecha_desde
+                AND (ha.fecha_hasta IS NULL OR ha.fecha_hasta = '' OR a.fecha <= ha.fecha_hasta)
+            LEFT JOIN areas ar ON ha.area_id = ar.id
+            WHERE je.fecha BETWEEN ? AND ?
+              AND je.origen = 'COBERTURA_TURNO'
+              AND je.estado != 'RECHAZADA'
+              AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA')
+            {filtro_area}
+        """
+        row_cob = await self.db.fetch_one(q_coberturas, tuple([fecha_inicio, fecha_fin] + params_area))
+        if row_cob and row_cob['count_coberturas']:
+            resumen['jornadas_especiales'] = (resumen.get('jornadas_especiales') or 0) + row_cob['count_coberturas']
+
+        # ── CÁLCULO OFICIAL DE HABERES, DÉBITOS Y BALANCES ──
+        # (una sola lógica, compartida con el acta: calcular_haberes_debitos)
+        resumen.update(await self.calcular_haberes_debitos(fecha_inicio, fecha_fin, area))
 
         # Feriados del periodo
         query_feriados = """

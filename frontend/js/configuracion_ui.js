@@ -2300,7 +2300,8 @@ window.renderPeriodosRRHH = function(periodos) {
             const mes = parts[0] || '';
             const anio = parts[1] || (p.fecha_fin ? p.fecha_fin.split('-')[0] : new Date().getFullYear());
 
-            const closedAreasHtml = (p.areas_cerradas || []).map(a => `<span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1" style="font-size:0.75rem">${a}</span>`).join('');
+            // Cada chip de área cerrada descarga su acta de cierre (PDF) con un clic
+            const closedAreasHtml = (p.areas_cerradas || []).map(a => `<span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1" style="font-size:0.75rem;cursor:pointer" title="Descargar el acta de cierre de ${a} (PDF)" onclick="descargarActaCierre('${p.fecha_inicio}','${p.fecha_fin}','${a}')">${a} <i class="bi bi-file-earmark-pdf"></i></span>`).join('');
             const pendingAreasHtml = (p.areas_pendientes || []).map(a => `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1 mb-1" style="font-size:0.75rem">${a}</span>`).join('');
 
             const finalClosedHtml = closedAreasHtml || '<span class="text-muted small">-</span>';
