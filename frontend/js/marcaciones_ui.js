@@ -6158,18 +6158,31 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                                 ' días; este período solo le da ' + prb.dias_disponibles + ' días a esta persona. Es un aviso: no bloquea nada."></i>';
                         }
 
-                        const se = r.saldoEspera;
-                        const seColor = se >= 0 ? '#10b981' : '#d97706';
-                        const seBg    = se >= 0 ? '#f0fdf4' : '#fffbeb';
-                        const seSign  = se > 0 ? '+' : se < 0 ? '-' : '';
-                        const esperaTooltip = `Meta mensual de espera: ${_fmtMin(r.metaEsperaMin)} (88h DT)`;
+                        // Espera: es un TOPE legal (88 h), no una meta — se muestra «usadas X de Y»
+                        // y el uso en porcentaje; ya no hay «balance −88:00». Textos con comillas
+                        // y concatenación por el minificador.
+                        const topeEsp = r.metaEsperaMin || 0;
+                        const usoPct = topeEsp > 0 ? Math.round((r.acumEspera / topeEsp) * 100) : null;
+                        const excesoEsp = Math.max(0, r.acumEspera - topeEsp);
+                        const usoColor = usoPct === null ? '#94a3b8' : (usoPct >= 100 ? '#b91c1c' : (usoPct >= 75 ? '#d97706' : '#475569'));
+                        let topeTooltip = 'Tope mensual de espera: ' + _fmtMin(topeEsp) + '. Es un máximo legal, no una meta: lo que pase del tope se paga como horas extra.';
+                        if (prb && Number.isFinite(prb.factor) && prb.factor < 1) {
+                            topeTooltip = topeTooltip + ' Tope ajustado por la vigencia parcial del contrato.';
+                        }
+                        const usoTooltip = usoPct === null ? 'Sin tope definido' :
+                            (excesoEsp > 0 ? 'Superó el tope: ' + _fmtMin(excesoEsp) + ' se pagan como horas extra'
+                                           : 'Espera usada: ' + _fmtMin(r.acumEspera) + ' de ' + _fmtMin(topeEsp));
+                        const usoBarra = usoPct === null ? '' :
+                            '<div style="height:3px;background:#f1dfc0;border-radius:2px;margin:2px 8px 0;overflow:hidden"><div style="height:100%;width:' + Math.min(100, usoPct) + '%;background:' + usoColor + '"></div></div>';
+                        const usoTexto = usoPct === null ? '—' : (usoPct + ' %');
+                        const usadasTitle = 'Horas de espera usadas en el ciclo';
 
                         return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}">${avisoLey}${_fmtMin(r.metaMin)}</td>
                                 <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
                                 <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>
-                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;font-size:0.78rem;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}" title="${esperaTooltip}">${_fmtMin(r.metaEsperaMin)}</td>
-                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;font-size:0.78rem;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}" title="Horas de espera acumuladas en el ciclo">${_fmtMin(r.acumEspera)}</td>
-                                <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${seBg};color:${seColor};font-size:0.8rem;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')}" title="Balance de espera">${seSign}${_fmtMin(Math.abs(se))}</td>`;
+                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;font-size:0.78rem;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}" title="${topeTooltip}">${_fmtMin(topeEsp)}</td>
+                                <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;font-size:0.78rem;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}" title="${usadasTitle}">${_fmtMin(r.acumEspera)}</td>
+                                <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:#fffbeb;color:${usoColor};font-size:0.78rem;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')}" title="${usoTooltip}">${usoTexto}${usoBarra}</td>`;
                     })()
                     : `<td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
                        <td class="sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}"></td>
@@ -6282,7 +6295,7 @@ window.recalculateTotalsRow = function(dates, feriadosArray, getFeriadoDesc) {
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')};text-align:center;font-size: 0.75rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 1)}px;${getStickyWidthStyleLocal('espera')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')};text-align:center;font-size: 0.75rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeftLocal('espera', 2)}px;${getStickyWidthStyleLocal('espera')};text-align:center;font-size: 0.75rem;color:#d97706" title="Uso individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
                 : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeftLocal('bolsa')}px;${getStickyWidthStyleLocal('bolsa')}"></td>
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeftLocal('espera')}px;${getStickyWidthStyleLocal('espera')}"></td>`
         ) : ''}
@@ -6722,7 +6735,7 @@ function renderVistaAnalitica(respData, container) {
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;left:${getStickyLeft('bolsa', 2)}px;${getStickyWidthStyle('bolsa')};text-align:center;font-size: 0.75rem;color:#8b5cf6" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}"></td>
                    <td class="sticky-premium-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}"></td>
-                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')};text-align:center;font-size: 0.75rem;color:#d97706" title="Saldo individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
+                   <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')};text-align:center;font-size: 0.75rem;color:#d97706" title="Uso individual — no aplica totalizar"><i class="bi bi-dash"></i></td>`
                 : `<td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#faf5ff;border-left:3px solid #8b5cf6;left:${getStickyLeft('bolsa')}px;${getStickyWidthStyle('bolsa')}"></td>
                    <td class="sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:60; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px;${getStickyWidthStyle('espera')}"></td>`
         ) : ''}
@@ -6808,13 +6821,13 @@ function renderVistaAnalitica(respData, container) {
     // Columna ESPERA (88h) — grupo gemelo paralelo
     const esperaHeaderTop = hayBolsa
         ? (showSaldoMeta
-            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size: 0.75rem;left:${getStickyLeft('espera')}px; width:252px; min-width:252px; max-width:252px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-hourglass-split me-1" style="color:#d97706"></i><span class="fw-bold" style="color:#b45309">Espera (88h)</span></th>`
+            ? `<th colspan="3" class="text-start px-2 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size: 0.75rem;left:${getStickyLeft('espera')}px; width:252px; min-width:252px; max-width:252px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="bi bi-hourglass-split me-1" style="color:#d97706"></i><span class="fw-bold" style="color:#b45309">Espera (tope 88h)</span></th>`
             : `<th rowspan="2" class="align-middle px-1 text-center sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;left:${getStickyLeft('espera')}px; width:76px; min-width:76px; max-width:76px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Tiempos de Espera (88h)"><button class="btn btn-sm btn-link p-0 mb-1" onclick="vaToggleCol('showSaldoMeta')" title="Expandir Espera (88h)" style="color:#d97706"><i class="bi bi-chevron-right"></i></button><br><i class="bi bi-hourglass-split d-block mb-1" style="font-size:0.85rem;color:#d97706"></i><span class="gc-lbl" style="color:#b45309">Espera<br>88h</span></th>`)
         : '';
     const esperaHeadersSub = (hayBolsa && showSaldoMeta) ? `
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}" title="Meta mensual de tiempos de espera (88h o configurada)">META</th>
-            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}" title="Horas de espera acumuladas en el ciclo">ACUM.</th>
-            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Balance de espera">BALANCE</th>` : '';
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;border-left:3px solid #d97706;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 0)}px;${getStickyWidthStyle('espera')}" title="Tope mensual de espera (máximo legal, no es una meta a cumplir)">TOPE</th>
+            <th class="text-center px-1 sticky-premium-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 1)}px;${getStickyWidthStyle('espera')}" title="Horas de espera usadas en el ciclo">USADAS</th>
+            <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Cuánto del tope lleva usado; sobre el 100 % el exceso se paga como horas extra">USO</th>` : '';
 
     const incHeadersSub = (sh.hasInc && showIncidencias) ? `
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.per)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PERM</th>
@@ -7911,7 +7924,7 @@ function _buildTooltipArt25bis(di, dateFormatted, dt, feriadoDesc, isWE, empInfo
     const acumHtml = `<div class="tp-sec tp-alt">
         <div class="tp-lab" style="color:#7c3aed"><span>Acumulado del ciclo</span><span>Bolsas DT</span></div>
         <div class="tp-pb"><div class="l"><span>Bolsa 180h efectiva</span><span class="tp-mono"><b>${_fmtMin(acumBolsaMin)}</b> / ${_fmtMin(metaBolsaMin)} <b style="color:${saldoBolsaMin >= 0 ? '#0f7a4f' : '#b3261e'}">(${sg(saldoBolsaMin)}${_fmtMin(Math.abs(saldoBolsaMin))})</b></span></div><div class="t"><i style="width:${barBolsa}%;background:#8b5cf6"></i></div></div>
-        <div class="tp-pb"><div class="l"><span>Bolsa espera 88h</span><span class="tp-mono"><b>${_fmtMin(acumEsperaMin)}</b> / ${_fmtMin(metaEsperaMin)} <b style="color:${saldoEsperaMin >= 0 ? '#0f7a4f' : '#b45309'}">(${sg(saldoEsperaMin)}${_fmtMin(Math.abs(saldoEsperaMin))})</b></span></div><div class="t"><i style="width:${barEsp}%;background:#f59e0b"></i></div></div>
+        <div class="tp-pb"><div class="l"><span>Espera usada (tope ${_fmtMin(metaEsperaMin)})</span><span class="tp-mono"><b>${_fmtMin(acumEsperaMin)}</b> de ${_fmtMin(metaEsperaMin)}${acumEsperaMin > metaEsperaMin ? ' <b style="color:#0f7a4f">(+' + _fmtMin(acumEsperaMin - metaEsperaMin) + ' como HE)</b>' : ''}</span></div><div class="t"><i style="width:${barEsp}%;background:#f59e0b"></i></div></div>
     </div>`;
 
     const subLine = `${empAreaText} · ${shiftName}`;
