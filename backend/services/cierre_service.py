@@ -4,6 +4,24 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Dict, Any, List
 from loguru import logger
 
+
+def bolsa_es_definitiva(fecha_fin: str, tramo_fin, hoy: str) -> bool:
+    """¿El déficit de la Bolsa Flexible ya es real para este rango?
+
+    La meta de la Bolsa es mensual (por tramo RRHH): mientras el tramo no
+    termine, lo que falta para la meta NO es deuda, es avance. El déficit
+    solo se vuelve definitivo cuando el rango evaluado llega al final de su
+    tramo y esa fecha ya pasó. `tramo_fin` es el fin del tramo RRHH que
+    contiene a `fecha_fin` (None si el rango no cae en ningún tramo: un
+    rango histórico fuera de tramos se evalúa como definitivo).
+    """
+    if fecha_fin >= hoy:
+        return False
+    if tramo_fin and str(tramo_fin)[:10] > fecha_fin:
+        return False
+    return True
+
+
 class CierreService:
     def __init__(self, db: Database, asistencia_service=None):
         self.db = db
@@ -201,6 +219,22 @@ class CierreService:
         f_fin = date.fromisoformat(fecha_fin)
         rango_dias = [(f_ini + timedelta(days=i)) for i in range((f_fin - f_ini).days + 1)]
 
+        # ¿La meta de la Bolsa ya es exigible? Solo cuando el rango llega al final
+        # de su tramo RRHH y esa fecha ya pasó; antes se informa como AVANCE.
+        from backend.services.quantum_matrix_engine import _get_now_local
+        hoy_str = _get_now_local().strftime("%Y-%m-%d")
+        tramo_row = await self.db.fetch_one(
+            "SELECT fecha_fin FROM periodos_rrhh WHERE fecha_inicio <= ? AND fecha_fin >= ? ORDER BY fecha_inicio DESC LIMIT 1",
+            (fecha_fin, fecha_fin)
+        )
+        tramo_fin_str = str(tramo_row["fecha_fin"])[:10] if tramo_row else None
+        bolsa_definitiva = bolsa_es_definitiva(fecha_fin, tramo_fin_str, hoy_str)
+        bolsa_dias_restantes = 0
+        if tramo_fin_str and tramo_fin_str > fecha_fin:
+            bolsa_dias_restantes = (date.fromisoformat(tramo_fin_str) - f_fin).days
+        elif fecha_fin >= hoy_str:
+            bolsa_dias_restantes = (f_fin - date.fromisoformat(hoy_str)).days + 1
+
         matrix_data = await self.asistencia_service.get_matrix_data_with_projections(
             f_ini.month, f_ini.year, area=area, fecha_inicio_override=fecha_inicio, fecha_fin_override=fecha_fin
         )
@@ -222,6 +256,9 @@ class CierreService:
         total_deuda_permisos_min = 0.0
         total_deficit_bolsa_min = 0.0
         total_compensado_min = 0.0
+        total_meta_bolsa_min = 0.0
+        total_acum_bolsa_min = 0.0
+        bolsa_personas = 0
 
         for emp in empleados_matriz:
             emp_id = emp["id"]
@@ -354,9 +391,14 @@ class CierreService:
                                         total_deuda_salidas_min += raw_sad * factor
 
             if es_bolsa:
+                total_meta_bolsa_min += meta_min
+                total_acum_bolsa_min += acum_bolsa
+                bolsa_personas += 1
                 if acum_bolsa > meta_min:
+                    # El exceso ya es real aunque el tramo siga: solo puede crecer
                     total_exceso_bolsa_min += (acum_bolsa - meta_min)
-                elif acum_bolsa < meta_min:
+                elif acum_bolsa < meta_min and bolsa_definitiva:
+                    # Lo que falta para la meta recién es deuda cuando el tramo terminó
                     total_deficit_bolsa_min += (meta_min - acum_bolsa)
 
                 # 88h Espera (Art. 25 bis); con vigencia parcial se prorratea igual que la meta
@@ -407,6 +449,14 @@ class CierreService:
         resumen['deuda_otros_horas'] = deuda_otros_hrs
         resumen['deficit_bolsa_horas'] = deficit_bolsa_hrs
         resumen['deuda_total_debitos_horas'] = deuda_total_hrs
+
+        # Avance de la Bolsa: meta grupal (ya prorrateada por vigencias parciales),
+        # acumulado y si el déficit ya es definitivo o el tramo sigue corriendo
+        resumen['bolsa_personas'] = bolsa_personas
+        resumen['bolsa_meta_total_horas'] = round(total_meta_bolsa_min / 60.0, 2)
+        resumen['bolsa_acumulado_horas'] = round(total_acum_bolsa_min / 60.0, 2)
+        resumen['bolsa_definitiva'] = bolsa_definitiva
+        resumen['bolsa_dias_restantes'] = bolsa_dias_restantes
 
         resumen['compensaciones_horas'] = compensaciones_hrs
         resumen['balance_operativo_horas'] = balance_operativo_hrs

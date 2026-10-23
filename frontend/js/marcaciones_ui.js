@@ -5283,6 +5283,25 @@ function renderWizardStep(step) {
 
         const balNeto = ev.resumen.balance_operativo_horas !== undefined ? ev.resumen.balance_operativo_horas : (heTotal - dTotal);
 
+        // Avance de la Bolsa: mientras el tramo no termine, lo que falta para la
+        // meta NO es deuda y se muestra como avance (texto con comillas y
+        // concatenación por el minificador del servidor).
+        const bolsaPers = ev.resumen.bolsa_personas || 0;
+        let bolsaAvanceHtml = '';
+        if (bolsaPers > 0 && ev.resumen.bolsa_definitiva === false) {
+            const bm = ev.resumen.bolsa_meta_total_horas || 0;
+            const ba = ev.resumen.bolsa_acumulado_horas || 0;
+            const br = ev.resumen.bolsa_dias_restantes || 0;
+            const pctB = bm > 0 ? Math.min(100, Math.round(ba / bm * 100)) : 0;
+            bolsaAvanceHtml = '<div class="card border-0 shadow-sm mb-3" style="background:#faf5ff;">' +
+                '<div class="card-body py-3">' +
+                '<h6 class="text-uppercase small fw-bold mb-1" style="color:#6d28d9;font-size:0.72rem;">Bolsa Flexible — avance del tramo (' + bolsaPers + ' choferes)</h6>' +
+                '<div class="d-flex justify-content-between small" style="color:#4c1d95;"><span>Acumulado del grupo</span><b>' + ba + ' de ' + bm + ' hrs de meta' + (br > 0 ? ' · faltan ' + br + ' días del tramo' : '') + '</b></div>' +
+                '<div style="height:6px;background:#ede9fe;border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:' + pctB + '%;background:#7c3aed"></div></div>' +
+                '<div class="small text-muted mt-2" style="font-size:0.72rem;">La meta es mensual: lo que falta aún no es deuda. El déficit o exceso definitivo por persona se calcula al sellar, cuando el tramo haya terminado (con la meta ajustada de quien entró o salió a mitad de tramo).</div>' +
+                '</div></div>';
+        }
+
         content.innerHTML = `
             <h4 class="fw-bold mb-4"><i class="bi bi-file-text"></i> Previsualización de Cierre</h4>
             <div class="row mb-3 g-3">
@@ -5318,6 +5337,8 @@ function renderWizardStep(step) {
                     </div>
                 </div>
             </div>
+
+            ${bolsaAvanceHtml}
 
             <!-- Desglose de Deuda Neta -->
             <div class="card border-0 shadow-sm mb-4">
