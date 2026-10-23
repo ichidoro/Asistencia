@@ -4,7 +4,7 @@ import json
 from loguru import logger
 
 from backend.core.database import db
-from backend.repositories.seguridad import SeguridadRepository
+from backend.repositories.seguridad import SeguridadRepository, detalle_cambio_rol
 from backend.core.security import SecurityContext, RequirePermission
 from backend.schemas.auth import UsuarioCreate, UsuarioUpdate, RolCreate
 
@@ -53,8 +53,8 @@ async def create_rol(
     """Crear un nuevo Rol de Seguridad con sus respectivos permisos"""
     rol_id = await repo.create_rol(rol.nombre, rol.descripcion, int(rol.alcance_global), rol.permisos)
     await repo.log_auditoria(
-        current_user.user_id, current_user.username, "CREATE", "SEGURIDAD", 
-        f"Rol creado: {rol.nombre} con {len(rol.permisos)} permisos"
+        current_user.user_id, current_user.username, "CREATE", "SEGURIDAD",
+        f"Rol creado: {rol.nombre} (alcance {'GLOBAL' if rol.alcance_global else 'por áreas'}) con {len(rol.permisos)} permisos"
     )
     return {"id": rol_id, "message": "Rol creado exitosamente"}
 
@@ -69,10 +69,16 @@ async def update_rol(
     if rol_id == 1 and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Solo el Súper Administrador puede modificar el Rol Maestro")
     
+    # Auditoría con detalle: se mira el rol ANTES de tocarlo para poder decir
+    # qué cambió (alcance anterior → nuevo, permisos agregados o quitados).
+    antes = await repo.get_rol_by_id(rol_id)
+    permisos_antes = await repo.get_permissions_for_role(rol_id)
     await repo.update_rol(rol_id, rol.nombre, rol.descripcion, int(rol.alcance_global), rol.permisos)
     await repo.log_auditoria(
-        current_user.user_id, current_user.username, "UPDATE", "SEGURIDAD", 
-        f"Rol modificado: {rol.nombre} ({rol_id})"
+        current_user.user_id, current_user.username, "UPDATE", "SEGURIDAD",
+        detalle_cambio_rol(rol.nombre, rol_id,
+                           bool(antes and antes.get("alcance_global")), bool(rol.alcance_global),
+                           permisos_antes, rol.permisos)
     )
     return {"message": "Rol modificado exitosamente"}
 

@@ -751,6 +751,23 @@ window.saveRol = async function () {
         permisos: selectedPerms
     };
 
+    // Blindaje: dejar un rol con alcance global es un cambio mayor (quienes lo
+    // tengan verán TODAS las áreas, sin filtro). El 13-10-2026 un clic inadvertido
+    // dejó global al rol Jefe de Area: desde entonces se pide confirmación expresa.
+    const eraGlobal = !!(original && original.alcance_global);
+    if (payload.alcance_global && !eraGlobal) {
+        const conf = await Swal.fire({
+            title: '¿Dejar este rol con alcance global?',
+            html: 'Quienes tengan el rol <b>' + escHtml(nombre) + '</b> verán <b>TODAS las áreas</b>, sin el filtro de las áreas marcadas en cada usuario.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Sí, dejarlo global',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!conf.isConfirmed) return;
+    }
+
     try {
         const method = rolId ? 'PUT' : 'POST';
         const url = rolId ? `/api/seguridad/roles/${rolId}/` : '/api/seguridad/roles/';

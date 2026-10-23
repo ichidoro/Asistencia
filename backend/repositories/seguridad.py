@@ -17,6 +17,34 @@ from backend.core.config import settings
 
 # ELIMINADO: SECRET_KEY y ALGORITHM hardcoded. Ahora se usan desde settings.
 
+
+def detalle_cambio_rol(nombre: str, rol_id: int, antes_global: bool, despues_global: bool,
+                       permisos_antes: List[str], permisos_despues: List[str]) -> str:
+    """Texto de auditoría que dice QUÉ cambió al guardar un rol.
+
+    El registro genérico «Rol modificado: X» no dejó rastro de que el 13-10-2026
+    el rol Jefe de Area quedó con alcance global; hubo que fecharlo comparando
+    los respaldos diarios. Desde entonces la auditoría escribe el alcance
+    anterior y el nuevo y los permisos agregados o quitados.
+    """
+    if antes_global == despues_global:
+        alcance = "global (sin cambio)" if despues_global else "por áreas (sin cambio)"
+    else:
+        alcance = ("por áreas → GLOBAL" if despues_global else "global → por áreas")
+    antes = set(permisos_antes or [])
+    despues = set(permisos_despues or [])
+    mas = sorted(despues - antes)
+    menos = sorted(antes - despues)
+    cambios = [f"+{p}" for p in mas] + [f"-{p}" for p in menos]
+    if not cambios:
+        permisos = f"sin cambios ({len(despues)})"
+    elif len(cambios) > 10:
+        permisos = f"+{len(mas)} y -{len(menos)} (quedan {len(despues)})"
+    else:
+        permisos = ", ".join(cambios)
+    return f"Rol modificado: {nombre} ({rol_id}) — alcance: {alcance}; permisos: {permisos}"
+
+
 class SeguridadRepository:
     def __init__(self, db: Database):
         self.db = db
