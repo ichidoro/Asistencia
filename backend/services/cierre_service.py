@@ -221,6 +221,7 @@ class CierreService:
         total_deuda_salidas_min = 0.0
         total_deuda_permisos_min = 0.0
         total_deficit_bolsa_min = 0.0
+        total_compensado_min = 0.0
 
         for emp in empleados_matriz:
             emp_id = emp["id"]
@@ -308,6 +309,9 @@ class CierreService:
                     if di.get("minutos_espera"):
                         acum_espera += float(di.get("minutos_espera") or 0.0)
                 else:
+                    # Compensaciones (HE usadas para cubrir una inasistencia): la grilla
+                    # y el Excel las restan del saldo; el resumen del cierre hace lo mismo.
+                    total_compensado_min += float(di.get("minutos_compensados_he") or 0.0)
                     if not is_esp:
                         if di.get("estado_he") == 'APROBADO':
                             m_aut = float(di.get("minutos_extra_autorizados") or 0.0)
@@ -373,8 +377,19 @@ class CierreService:
         deficit_bolsa_hrs = round(total_deficit_bolsa_min / 60.0, 2)
         deuda_total_hrs = round(deuda_fijos_hrs + deficit_bolsa_hrs, 2)
 
-        # Balance Operativo Neto (coincide al 100% con la columna Saldo Neto de Excel)
-        balance_operativo_hrs = round(he_total_hrs - deuda_total_hrs, 2)
+        # El desglose por categoría no siempre alcanza el total (deuda de jornadas
+        # incompletas que no es atraso, colación, salida ni permiso): la diferencia
+        # se informa como «otros» para que la cuenta siempre cierre a la vista.
+        clasificada_min = (total_deuda_atrasos_min + total_deuda_colacion_min
+                           + total_deuda_salidas_min + total_deuda_permisos_min)
+        deuda_otros_hrs = round(max(0.0, total_deuda_fijos_min - clasificada_min) / 60.0, 2)
+
+        # Compensaciones: HE ya usadas para cubrir inasistencias (no se pagan de nuevo)
+        compensaciones_hrs = round(total_compensado_min / 60.0, 2)
+
+        # Balance Operativo Neto (coincide con la columna Saldo Neto del Excel,
+        # que también descuenta las compensaciones)
+        balance_operativo_hrs = round(he_total_hrs - deuda_total_hrs - compensaciones_hrs, 2)
 
         resumen['total_empleados'] = len(empleados_matriz)
         resumen['he_aprobadas_fijos_horas'] = he_fijos_hrs
@@ -389,9 +404,11 @@ class CierreService:
         resumen['deuda_colacion_horas'] = round(total_deuda_colacion_min / 60.0, 2)
         resumen['deuda_salidas_horas'] = round(total_deuda_salidas_min / 60.0, 2)
         resumen['deuda_permisos_horas'] = round(total_deuda_permisos_min / 60.0, 2)
+        resumen['deuda_otros_horas'] = deuda_otros_hrs
         resumen['deficit_bolsa_horas'] = deficit_bolsa_hrs
         resumen['deuda_total_debitos_horas'] = deuda_total_hrs
 
+        resumen['compensaciones_horas'] = compensaciones_hrs
         resumen['balance_operativo_horas'] = balance_operativo_hrs
 
         # Compatibilidad hacia atrás

@@ -5312,6 +5312,7 @@ function renderWizardStep(step) {
                             <h6 class="text-uppercase small fw-bold mb-1 ${balNeto >= 0 ? 'text-success' : 'text-warning-emphasis'}" style="font-size: 0.72rem;">Balance Operativo</h6>
                             <h3 class="fw-bold mb-0 ${balNeto >= 0 ? 'text-success' : 'text-danger'}">${balNeto > 0 ? '+' : ''}${balNeto} <span class="fs-6 text-muted">hrs</span></h3>
                             <small class="text-muted d-block mt-1">Saldo Neto Conciliado</small>
+                            <small class="text-muted d-block">Compensaciones descontadas: ${ev.resumen.compensaciones_horas || 0} hrs</small>
                             <small class="text-muted d-block">Colaboradores: ${ev.resumen.total_empleados || 0}</small>
                         </div>
                     </div>
@@ -5340,6 +5341,10 @@ function renderWizardStep(step) {
                         <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
                             <span><i class="bi bi-calendar-x me-2 text-danger"></i> Deuda por Permisos Personales</span>
                             <span class="fw-bold text-dark">${ev.resumen.deuda_permisos_horas || 0} hrs</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                            <span><i class="bi bi-question-circle me-2 text-muted"></i> Otros (jornadas incompletas sin categoría)</span>
+                            <span class="fw-bold text-dark">${ev.resumen.deuda_otros_horas || 0} hrs</span>
                         </li>
                         ${dBolsa > 0 ? `
                         <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 text-danger">
