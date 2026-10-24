@@ -190,7 +190,10 @@ class CierreService:
                     if not is_esp:
                         cond_tipo = int(di.get("deuda_condonada") or 0)
                         raw_col = float(di.get("minutos_exceso_colacion") or 0.0)
-                        raw_per = float(di.get("minutos_permiso_personal_deuda") or 0.0)
+                        # Permiso del día: el tomado entre marcas o el ingresado por horas; cuando están los dos son el
+                        # mismo permiso (la justificación se ingresa sobre la pausa marcada): el mayor, nunca la suma.
+                        raw_per = max(float(di.get("minutos_permisos_detectados") or 0.0),
+                                      float(di.get("minutos_permiso_personal_deuda") or 0.0))
                         condona_atr = cond_tipo in (2, 3, 5)
                         raw_atr = 0.0 if condona_atr else float(di.get("minutos_atraso") or 0.0)
                         condona_sad = cond_tipo in (1, 3, 5)
@@ -210,9 +213,11 @@ class CierreService:
                                         total_deuda_atrasos_min += raw_atr
                                         total_deuda_salidas_min += raw_sad
                                     else:
+                                        # La persona compensó parte el mismo día: se reparte la deuda neta entre sus
+                                        # causas, también el permiso, para que la suma no pase de la deuda del día.
                                         factor = base_deuda / raw_total
                                         total_deuda_colacion_min += raw_col * factor
-                                        total_deuda_permisos_min += raw_per
+                                        total_deuda_permisos_min += raw_per * factor
                                         total_deuda_atrasos_min += raw_atr * factor
                                         total_deuda_salidas_min += raw_sad * factor
 

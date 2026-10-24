@@ -6048,7 +6048,9 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 
             // Colación y Permisos NUNCA se perdonan por atraso o salida
             const rawCol = Number(di.minutos_exceso_colacion || 0);
-            const rawPer = Number(di.minutos_permiso_personal_deuda || 0);
+            // Permiso del día: el tomado entre marcas o el ingresado por horas. Cuando están los dos son el mismo
+            // permiso (la justificación se ingresa sobre la pausa marcada): se toma el mayor, nunca la suma.
+            const rawPer = Math.max(Number(di.minutos_permisos_detectados || 0), Number(di.minutos_permiso_personal_deuda || 0));
 
             // Atraso condonado solo si condTipo es 2, 3 o 5
             const condonaAtr = (condTipo === 2 || condTipo === 3 || condTipo === 5);
@@ -6071,7 +6073,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
 
             if ((di.minutos_atraso || 0) > 0 && !condonaAtr) cnt_atr++;
             if ((di.minutos_salida_adelantada || 0) > 0 && !condonaSad) cnt_sad++;
-            if (di.tiene_permiso_hora || di.permiso_activo) cnt_per++;
+            if (di.tiene_permiso_hora || di.permiso_activo || rawPer > 0) cnt_per++;
         }
         const jaEst = di.jornada_adicional ? di.jornada_adicional.estado : null;
         const esJaRechazada = jaEst === 'RECHAZADA';

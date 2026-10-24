@@ -317,7 +317,10 @@ class ReportService:
                         cond_tipo = int(di.get("deuda_condonada") or 0)
 
                         raw_col = float(di.get("minutos_exceso_colacion") or 0.0)
-                        raw_per = float(di.get("minutos_permiso_personal_deuda") or 0.0)
+                        # Permiso del día: el tomado entre marcas o el ingresado por horas; cuando están los dos son el
+                        # mismo permiso (la justificación se ingresa sobre la pausa marcada): el mayor, nunca la suma.
+                        raw_per = max(float(di.get("minutos_permisos_detectados") or 0.0),
+                                      float(di.get("minutos_permiso_personal_deuda") or 0.0))
 
                         condona_atr = cond_tipo in (2, 3, 5)
                         raw_atr = 0.0 if condona_atr else float(di.get("minutos_atraso") or 0.0)
@@ -372,9 +375,9 @@ class ReportService:
                             cnt_atr += 1
                         if (di.get("minutos_salida_adelantada") or 0) > 0 and not condona_sad:
                             cnt_sad += 1
-                        if di.get("tiene_permiso_hora") or di.get("permiso_activo"):
+                        if di.get("tiene_permiso_hora") or di.get("permiso_activo") or raw_per > 0:
                             cnt_per += 1
-                            
+
                     if di_estado == 'INASISTENCIA':
                         cnt_inas += 1
                     if tiene_ja_activa or es_dia_esp_valido:
