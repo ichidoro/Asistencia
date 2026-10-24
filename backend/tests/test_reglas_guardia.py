@@ -144,21 +144,63 @@ def test_el_ensayo_no_guarda_y_viaja_en_contexto():
     assert "/ensayo/" in router and "dias-ejemplo" in router
     pestana_js = _leer("frontend/js/reglas_marcas_ui.js")
     assert "rm-ensayar" in pestana_js, "la pestaña perdió el botón de ensayo"
-    assert "data-rm-paso" in pestana_js, "la pestaña perdió el asistente por pasos"
-    assert "Colación no aplica" in pestana_js, \
-        "la pestaña perdió el salto del paso Colación cuando las marcas no se leen"
+    assert "rmx-paso" in pestana_js, "la pestaña perdió el asistente por pasos"
+    assert "No aplica: sin cálculo no hay colación que descontar" in pestana_js, \
+        "la pestaña perdió el aviso de que la colación no aplica cuando el día no se calcula"
     assert "collect_only" in DOC and "REGLAS_MARCAS_ENSAYO" in DOC, "el documento perdió el ensayo"
 
 
-def test_la_nota_se_elige_de_una_lista_desplegable():
-    """La nota de cada regla se elige de las notas frecuentes del servidor;
-    «Otra (escribir)» abre el texto libre. El servidor entrega la lista."""
-    pestana_js = _leer("frontend/js/reglas_marcas_ui.js")
-    assert "rm-nota-sel" in pestana_js, "la pestaña perdió la lista desplegable de la nota"
-    assert "Otra (escribir)" in pestana_js
-    assert "notas_frecuentes" in pestana_js, "la pestaña ya no lee las notas del servidor"
-    assert "notas_frecuentes" in _leer("backend/routers/reglas_marcas.py")
-    assert "NOTAS_FRECUENTES" in _leer("backend/services/reglas_marcas_def.py")
+def test_las_reglas_y_sus_notas_no_estan_escritas_en_el_codigo():
+    """Orden del dueño (23-10-2026): las reglas se crean y configuran desde la
+    interfaz; el código no trae una lista de secuencias ni de notas."""
+    assert not hasattr(DEF, "REGLAS_SEMILLA") and not hasattr(DEF, "NOTAS_FRECUENTES")
+    assert "INSERT OR IGNORE INTO reglas_marcas" not in REPO, "el repositorio volvió a sembrar reglas"
+    assert "filas_semilla" not in REPO
+    assert "notas_frecuentes" not in _leer("backend/routers/reglas_marcas.py")
+    assert "notas_frecuentes" not in _leer("frontend/js/reglas_marcas_ui.js")
+
+
+def test_ninguna_pantalla_ni_anotacion_usa_las_iniciales():
+    """ENTRADA y SALIDA se escriben siempre con la palabra completa."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "js"
+    malos = sorted(f.name for f in raiz.glob("*.js")
+                   if ".split('').join(' · ')" in f.read_text(encoding="utf-8", errors="ignore"))
+    assert not malos, f"vuelven las iniciales unidas con puntos en: {malos}"
+    assert "secuencia_en_palabras(secuencia_dia)" in MOTOR, "el motor anota las reglas sin la palabra completa"
+    assert "' · '.join(secuencia_dia)" not in MOTOR
+
+
+def test_lo_configurable_no_vuelve_a_quedar_escrito_en_el_motor():
+    for clave in ("reglas_marcas_repetidas_minutos", "reglas_marcas_colacion_referencia_minutos",
+                  "reglas_marcas_fuera_ciclo_minutos"):
+        assert clave in MOTOR, f"el motor ya no lee el ajuste {clave}"
+        assert clave in REPO, f"la pestaña ya no ofrece el ajuste {clave}"
+    assert ">= 1200.0" not in MOTOR, "volvieron los 20 minutos escritos para las marcas repetidas"
+    assert "else 60.0" not in MOTOR, "volvió la colación de referencia escrita en el motor"
+    assert "avisa_fuera_de_ciclo" in MOTOR and "avisa_fuera_de_ciclo" in REPO
+
+
+def test_la_tolerancia_de_exceso_se_configura_en_cada_horario():
+    horarios_js = _leer("frontend/js/horarios.js")
+    assert "toleranciaExcesoColacion" in horarios_js and "tolerancia_exceso_colacion_minutos" in horarios_js
+
+
+def test_los_textos_del_asistente_sobreviven_al_minificador():
+    import pytest
+    rjsmin = pytest.importorskip("rjsmin")
+    m = rjsmin.jsmin(_leer("frontend/js/reglas_marcas_ui.js"))
+    for frase in (
+        "¿El sistema puede calcular estos días solo?",
+        "Lo mayor entre la del horario y la pausa medida",
+        "Además, avisar si las marcas no calzan con ningún ciclo del horario",
+        "Día libre o feriado (jornada especial):",
+        "días así en el tramo abierto",
+        " con marcas del reloj, más los que tengan marcas manuales). Nunca el día en curso ni períodos cerrados.",
+        "; se descuenta lo mayor entre la colación del horario y la pausa medida (bajo el mínimo, solo la pausa)",
+        "La primera es la ENTRADA y la última la SALIDA",
+    ):
+        assert frase in m, f"el minificador rompe el texto: {frase!r}"
 
 
 def test_la_meta_de_bolsa_se_prorratea_en_todas_las_replicas():

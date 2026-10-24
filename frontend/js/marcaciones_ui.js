@@ -740,7 +740,7 @@ window.abrirPanelPorRevisar = function () {
             <thead><tr><th>Persona</th><th>Área</th><th>Fecha</th><th>Secuencia</th><th>Estado</th><th class="text-end">Horas</th><th class="text-end">Deuda (min)</th><th></th></tr></thead>
             <tbody>${dias.map((d, i) => `
                 <tr><td>${esc(d.persona)}</td><td>${esc(d.area || '')}</td><td>${window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(d.fecha) : esc(d.fecha)}</td>
-                    <td>${esc((d.secuencia || '').split('').join(' · '))}</td><td>${esc(d.estado || '')}</td>
+                    <td>${esc((d.secuencia || '').split('').map(c => c === 'E' ? 'ENTRADA' : (c === 'S' ? 'SALIDA' : c)).join(' · '))}</td><td>${esc(d.estado || '')}</td>
                     <td class="text-end">${Number(d.horas || 0).toLocaleString('es-CL')}</td>
                     <td class="text-end">${Number(d.deuda || 0).toLocaleString('es-CL')}</td>
                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary py-0" data-pr-abrir="${i}">Abrir</button></td>
@@ -5084,7 +5084,7 @@ function renderWizardStep(step) {
                         <li class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom">
                             <div class="small"><span class="fw-bold">${window.formatFechaDDMMYYYY(d.fecha)}</span>
                                 <span class="mx-2 text-muted">|</span>${d.persona}
-                                <span class="badge bg-warning-subtle text-warning-emphasis ms-2" style="font-size:0.72rem;">Secuencia ${(d.secuencia || '').split('').join(' · ')}</span>
+                                <span class="badge bg-warning-subtle text-warning-emphasis ms-2" style="font-size:0.72rem;">Secuencia ${(d.secuencia || '').split('').map(c => c === 'E' ? 'ENTRADA' : (c === 'S' ? 'SALIDA' : c)).join(' · ')}</span>
                                 <span class="text-muted ms-2">${d.estado || ''}</span></div>
                             <button class="btn btn-sm btn-outline-primary fw-bold py-1 px-3" onclick="openManualEntryModal(${d.empleado_id}, '${d.fecha}', '${nEsc}')">
                                 <i class="bi bi-pencil-square me-1"></i> Abrir

@@ -931,7 +931,7 @@ async function cargarReglaDia(empId, dateStr, host, cerrada, reqId) {
         const cont = host.querySelector('#marcas-regla-info');
         if (!cont) return;
         if (!ev.secuencia) { cont.innerHTML = ''; return; }
-        const sec = ev.secuencia.split('').join(' · ');
+        const sec = ev.secuencia.split('').map(c => c === 'E' ? 'ENTRADA' : (c === 'S' ? 'SALIDA' : c)).join(' · ');
         const puedeConfirmar = !cerrada && ev.en_revision
             && ev.regla && (ev.regla.opciones_revision || []).includes('CONFIRMAR')
             && typeof AuthService !== 'undefined' && AuthService.hasPermission('marcaciones.editar');

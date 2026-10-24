@@ -19,8 +19,8 @@ async def cargar(db) -> int:
     """Refresca las reglas encendidas y el rebote. Devuelve cuántas reglas quedaron activas, o -1 si falló."""
     try:
         rows = await db.fetch_all(
-            "SELECT secuencia, lectura, colacion, accion FROM reglas_marcas "
-            "WHERE tipo_horario = ? AND activa = 1",
+            "SELECT secuencia, lectura, colacion, accion, COALESCE(avisa_fuera_de_ciclo, 0) AS avisa_fuera_de_ciclo "
+            "FROM reglas_marcas WHERE tipo_horario = ? AND activa = 1",
             ('CICLO_INTELIGENTE',)
         )
         activas = {str(r['secuencia']): dict(r) for r in rows}

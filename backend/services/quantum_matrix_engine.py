@@ -62,7 +62,18 @@ REGLAS_MARCAS_ENSAYO: ContextVar[Optional[Dict[str, Dict[str, Any]]]] = ContextV
     'REGLAS_MARCAS_ENSAYO', default=None)
 # Marcador estable en observaciones para la lista «Días por revisar» (definido en
 # reglas_marcas_def, que es la fuente única; aquí solo se reexporta).
-from backend.services.reglas_marcas_def import MARCA_REVISION_REGLA  # noqa: E402
+from backend.services.reglas_marcas_def import MARCA_REVISION_REGLA, secuencia_en_palabras  # noqa: E402
+
+
+def _ajuste_numero(ajustes: Dict[str, Any], clave: str, escala: float = 1.0) -> Optional[float]:
+    """Valor numérico de un ajuste (multiplicado por `escala`), o None si no existe o no se puede leer."""
+    valor = (ajustes or {}).get(clave)
+    if valor in (None, ''):
+        return None
+    try:
+        return float(valor) * escala
+    except (TypeError, ValueError):
+        return None
 
 
 def _rebote_defecto(tipo_prog: str) -> float:
@@ -71,6 +82,35 @@ def _rebote_defecto(tipo_prog: str) -> float:
     if tipo_prog == 'CICLO_INTELIGENTE' and REGLAS_MARCAS_REBOTE and REGLAS_MARCAS_REBOTE > 0:
         return float(REGLAS_MARCAS_REBOTE)
     return 180.0
+
+
+def _fuera_de_ciclo(primera_marca: Dict[str, Any], fecha: str, ciclos: List[Optional[Dict[str, Any]]],
+                    umbral_minutos: float) -> Optional[Dict[str, str]]:
+    """Si la primera marca del día queda más lejos que `umbral_minutos` de la ENTRADA de TODOS los ciclos
+    del día (los días del horario que no son libres), devuelve la hora de la ENTRADA y los ciclos para
+    anotarlo; si calza con alguno, o no hay ciclos con hora, devuelve None."""
+    try:
+        dt_ent = datetime.strptime(str(primera_marca.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+    entradas = []
+    for c in ciclos or []:
+        if not c or _flag(c.get('es_libre', False)):
+            continue
+        h = str(c.get('hora_entrada') or '').strip()
+        if not h:
+            continue
+        try:
+            entradas.append(datetime.strptime(f"{fecha} {h[:5]}", "%Y-%m-%d %H:%M"))
+        except Exception:
+            continue
+    if not entradas:
+        return None
+    mas_cerca = min(abs((dt_ent - e).total_seconds()) / 60.0 for e in entradas)
+    if mas_cerca <= float(umbral_minutos):
+        return None
+    return {'entrada': dt_ent.strftime("%H:%M"),
+            'ciclos': ', '.join(sorted({e.strftime("%H:%M") for e in entradas}))}
 
 
 def _aplicar_extremos(consumidos: List[Dict[str, Any]], colacion: str) -> List[Dict[str, Any]]:
@@ -432,18 +472,21 @@ class MultiBlockTensorSolver:
         logs: List[Dict[str, Any]],
         salidas_por_estructura: bool = False,
         descartadas_estructura: Optional[List[Dict[str, Any]]] = None,
+        repetidas_segundos: float = 0.0,
     ) -> List[Dict[str, Any]]:
         """
         Deduplica marcaciones consecutivas del mismo tipo dentro de un bloque continuo:
-        - Para entradas consecutivas (E, E...): preserva la primera (inicio de jornada).
-        - Para salidas consecutivas (S, S...): preserva la última (fin de jornada).
-        Entre marcas a menos de 20 min (doble toque) rige siempre. Con `salidas_por_estructura`, las Salidas seguidas que vienen justo
+        - Para entradas consecutivas (ENTRADA, ENTRADA...): preserva la primera (inicio de jornada).
+        - Para salidas consecutivas (SALIDA, SALIDA...): preserva la última (fin de jornada).
+        Entre marcas separadas por menos de `repetidas_segundos` (ajuste `reglas_marcas_repetidas_minutos`, que se configura en
+        la pestaña Reglas de marcaciones) rige siempre. Con `salidas_por_estructura`, las Salidas seguidas que vienen justo
         después de una Entrada se reducen a la última SIN mirar cuánto las separa: esa Entrada no puede cerrar la jornada en una Salida
         intermedia si después hay otra Salida (Entrada 07:52 · Salida 13:24 · Salida 17:16 cierra a las 17:16; la pausa la cubre la
         colación automática del turno asignado). Las Salidas descartadas por esta vía se anotan en `descartadas_estructura`.
         """
         if not logs or len(logs) <= 1:
             return logs
+        repetidas_segundos = max(0.0, float(repetidas_segundos or 0.0))
 
         _TIPOS_E = {'entrada', 'entry', 'e', 'in', '1'}
         _TIPOS_S = {'salida', 'exit', 's', 'out', '2'}
@@ -461,7 +504,7 @@ class MultiBlockTensorSolver:
                 while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_E:
                     dt_c = cls.parse_dt(curr)
                     dt_n = cls.parse_dt(logs[i + 1])
-                    if dt_c and dt_n and (dt_n - dt_c).total_seconds() >= 1200.0:
+                    if dt_c and dt_n and (dt_n - dt_c).total_seconds() >= repetidas_segundos:
                         break
                     i += 1
             elif is_s:
@@ -470,7 +513,7 @@ class MultiBlockTensorSolver:
                 while i + 1 < len(logs) and str(logs[i + 1].get('tipo', '')).strip().lower() in _TIPOS_S:
                     dt_c = cls.parse_dt(last_s)
                     dt_n = cls.parse_dt(logs[i + 1])
-                    separadas = bool(dt_c and dt_n and (dt_n - dt_c).total_seconds() >= 1200.0)
+                    separadas = bool(dt_c and dt_n and (dt_n - dt_c).total_seconds() >= repetidas_segundos)
                     if separadas and not cerrada:
                         break
                     if separadas and descartadas_estructura is not None:
@@ -490,13 +533,18 @@ class MultiBlockTensorSolver:
         gap_emergencia_horas: float = 4.0,
         limite_jornada_emergencia_horas: float = 3.0,
         bounce_seconds: float = 180.0,
-        salidas_por_estructura: bool = False
+        salidas_por_estructura: bool = False,
+        repetidas_segundos: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Segmenta cronológicamente las marcas del día en:
         - bloque_principal: Marcas destinadas al turno regular.
         - bloques_extras: Jornadas adicionales (+2) o emergencias según gap_emergencia_horas configurado.
+        `repetidas_segundos` sale del ajuste `reglas_marcas_repetidas_minutos`; sin ese ajuste, dos marcas del mismo
+        tipo solo se juntan dentro del rebote.
         """
+        if repetidas_segundos is None:
+            repetidas_segundos = bounce_seconds
         result: Dict[str, Any] = {
             'bloque_principal': [],
             'bloques_extras': [],
@@ -562,6 +610,7 @@ class MultiBlockTensorSolver:
             bloques[0],
             salidas_por_estructura=salidas_por_estructura,
             descartadas_estructura=result['descartadas_estructura'],
+            repetidas_segundos=repetidas_segundos,
         )
         for l in bloques[0]:
             if l.get('id'):
@@ -635,7 +684,8 @@ class AutoMealOperator:
         minutos_colacion_pactada: int,
         descuento_colacion_auto: bool,
         umbral_horas_colacion: float = 0.0,
-        tolerancia_exceso_minutos: int = 0
+        tolerancia_exceso_minutos: int = 0,
+        umbral_con_pausa: bool = False,
     ) -> Tuple[float, int, int]:
         """
         Devuelve: (horas_trabajadas_netas, minutos_colacion_aplicados, minutos_exceso_colacion)
@@ -646,7 +696,15 @@ class AutoMealOperator:
         t_real = max(0.0, float(minutos_colacion_real or 0.0))
 
         # Caso 1: Hay marcaciones biométricas reales de colación (T_real > 0)
-        if t_real > 0:
+        # Con `umbral_con_pausa` (Ciclo Inteligente) el mínimo de horas del horario vale igual que sin pausa: si la
+        # persona estuvo menos que eso (de la primera ENTRADA a la última SALIDA), no se le exige la colación del
+        # horario y se descuenta solo la pausa que de verdad tomó.
+        if (umbral_con_pausa and t_real > 0 and umbral_horas_colacion > 0
+                and (horas_presenciales_brutas + t_real / 60.0) < umbral_horas_colacion):
+            minutos_colacion_aplicados = int(round(t_real))
+            horas_netas = horas_presenciales_brutas
+            minutos_exceso = 0
+        elif t_real > 0:
             if t_pactado > 0:
                 # Regla de corte unidireccional: Descuento = max(T_pactado, T_real)
                 minutos_colacion_aplicados = int(round(max(float(t_pactado), t_real)))
@@ -1663,6 +1721,10 @@ class QuantumMatrixEngine:
             max_he_ordinarias_min = val_he if val_he > 24 else val_he * 60.0
         except (ValueError, TypeError):
             max_he_ordinarias_min = 240.0
+        # Ajustes de la pestaña Reglas de marcaciones (None si la fila no existe: entonces no se usan).
+        repetidas_seg = _ajuste_numero(ajustes, 'reglas_marcas_repetidas_minutos', escala=60.0)
+        colacion_referencia_min = _ajuste_numero(ajustes, 'reglas_marcas_colacion_referencia_minutos')
+        fuera_ciclo_min = _ajuste_numero(ajustes, 'reglas_marcas_fuera_ciclo_minutos')
 
         # 2. Configuración de turno y día
         t_cfg = turno_config or {}
@@ -2030,7 +2092,8 @@ class QuantumMatrixEngine:
             gap_emergencia_horas=gap_emergencia,
             limite_jornada_emergencia_horas=limite_emergencia,
             bounce_seconds=bounce_sec,
-            salidas_por_estructura=not is_bolsa
+            salidas_por_estructura=not is_bolsa,
+            repetidas_segundos=repetidas_seg,
         )
 
         bloque_p = segment_res['bloque_principal']
@@ -2068,7 +2131,8 @@ class QuantumMatrixEngine:
                     secuencia_dia = letras
                     regla_dia = reglas_marcas.get(secuencia_dia)
                 if regla_dia:
-                    sec_fmt = ' · '.join(secuencia_dia)
+                    sec_fmt = secuencia_en_palabras(secuencia_dia)
+                    marcador = f"{MARCA_REVISION_REGLA}{sec_fmt}). "
                     pide_solo_revision = (regla_dia.get('lectura') == 'NINGUNA'
                                           or regla_dia.get('accion') == 'SOLO_REVISA')
                     if not pide_solo_revision:
@@ -2077,17 +2141,28 @@ class QuantumMatrixEngine:
                             def _letras(ls):
                                 return [(l.get('id'), 'E' if str(l.get('tipo', '')).strip().lower() in _TIPOS_E else 'S')
                                         for l in ls]
-                            # Si la lectura por extremos deja las marcas tal cual (p. ej. E·S),
+                            # Si la lectura por extremos deja las marcas tal cual (p. ej. ENTRADA · SALIDA),
                             # no hay nada que cambiar ni que anotar: sigue el camino de siempre.
                             if _letras(nuevo_bloque) != _letras(consumidos_dia):
                                 bloque_p = nuevo_bloque
                                 obs_regla += (f"Regla de marcaciones ({sec_fmt}): se leyó con la primera marca "
-                                              f"como Entrada y la última como Salida. ")
+                                              f"como ENTRADA y la última como SALIDA. ")
                         if regla_dia.get('colacion') == 'NINGUNA':
                             descuento_col_auto = False
                             minutos_col_auto = 0
                         if regla_dia.get('accion') == 'CALCULA_Y_REVISA':
-                            obs_regla += f"{MARCA_REVISION_REGLA}{sec_fmt}). "
+                            obs_regla += marcador
+                        # «Avisar si las marcas no calzan con ningún ciclo del horario»: la ENTRADA se compara con la
+                        # ENTRADA de cada ciclo del día; si la más cercana queda más lejos que el ajuste, el día va a
+                        # revisión (se calcula igual). No aplica a días libres ni feriados (no tienen ciclo).
+                        if (_flag(regla_dia.get('avisa_fuera_de_ciclo')) and fuera_ciclo_min and fuera_ciclo_min > 0
+                                and consumidos_dia and not is_holiday and not es_libre_dia):
+                            fuera = _fuera_de_ciclo(consumidos_dia[0], fecha, todos_ciclos_dia or [d_cfg], fuera_ciclo_min)
+                            if fuera:
+                                obs_regla += (f"Las marcas no calzan con ningún ciclo del horario: ENTRADA a las "
+                                              f"{fuera['entrada']}, ciclos del día {fuera['ciclos']}. ")
+                                if marcador not in obs_regla:
+                                    obs_regla += marcador
 
         # Resultado base
         res: Dict[str, Any] = {
@@ -2146,7 +2221,7 @@ class QuantumMatrixEngine:
         if regla_dia and (regla_dia.get('lectura') == 'NINGUNA' or regla_dia.get('accion') == 'SOLO_REVISA'):
             # La regla pide revisión ANTES de calcular: el día queda en anomalía, con las horas de
             # las marcas a la vista, hasta que una persona agregue la marca que falta o lo confirme.
-            sec_fmt = ' · '.join(secuencia_dia)
+            sec_fmt = secuencia_en_palabras(secuencia_dia)
             dts_regla = sorted(d for d in (MultiBlockTensorSolver.parse_dt(l) for l in bloque_p) if d)
             if dts_regla:
                 res['hora_entrada_real'] = dts_regla[0].strftime("%H:%M:%S")
@@ -2418,10 +2493,16 @@ class QuantumMatrixEngine:
 
         if pausas_intermedias:
             t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or t_cfg.get('minutos_colacion', 0) or 0)
-            target_col = float(t_col_pactado_target if t_col_pactado_target > 0 else 60.0)
-            
-            # El intervalo intermedio más cercano a la duración de colación se asigna a colación
-            mejor_par_col = min(pausas_intermedias, key=lambda p: abs(p[2] - target_col))
+            # Duración que se busca: la colación del horario; si el horario no tiene, la colación de referencia
+            # del ajuste `reglas_marcas_colacion_referencia_minutos` (pestaña Reglas de marcaciones).
+            target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else colacion_referencia_min
+
+            # El intervalo intermedio más cercano a la duración de colación se asigna a colación;
+            # sin ninguna duración de referencia configurada, la pausa más larga.
+            if target_col:
+                mejor_par_col = min(pausas_intermedias, key=lambda p: abs(p[2] - target_col))
+            else:
+                mejor_par_col = max(pausas_intermedias, key=lambda p: p[2])
             
             res['hora_salida_colacion'] = mejor_par_col[0].strftime("%H:%M:%S")
             res['hora_entrada_colacion'] = mejor_par_col[1].strftime("%H:%M:%S")
@@ -2449,7 +2530,8 @@ class QuantumMatrixEngine:
             minutos_colacion_pactada=t_col_pactado,
             descuento_colacion_auto=descuento_col_auto,
             umbral_horas_colacion=umbral_col,
-            tolerancia_exceso_minutos=tolerancia_exceso_col
+            tolerancia_exceso_minutos=tolerancia_exceso_col,
+            umbral_con_pausa=(tipo_prog == 'CICLO_INTELIGENTE'),
         )
 
         res['horas_trabajadas'] = round(horas_netas, 4)

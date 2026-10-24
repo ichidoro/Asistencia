@@ -1,95 +1,32 @@
 # -*- coding: utf-8 -*-
-"""Reglas de marcaciones (etapa 1): semilla y validación, sin base de datos.
+"""Reglas de marcaciones: definiciones y validación, sin base de datos.
 
-Comprueba que la semilla codifica exactamente lo que decidió el dueño el
-20-10-2026 y que la validación rechaza combinaciones incoherentes.
+Las reglas NO vienen escritas en el código (se crean y configuran desde la
+pantalla); aquí se prueba la lógica: cómo se nombran las marcas, la validación
+y el marcador de revisión.
 """
 import os
 os.environ.setdefault("SECRET_KEY", "test")
 
+from backend.services import reglas_marcas_def as DEF  # noqa: E402
 from backend.services.reglas_marcas_def import (  # noqa: E402
-    ACCIONES, COLACIONES, LECTURAS, NOTAS_FRECUENTES, OPCIONES_REVISION,
-    REGLAS_SEMILLA, filas_semilla, grupo_de_secuencia, validar_regla,
+    ACCIONES, COLACIONES, LECTURAS, OPCIONES_REVISION,
+    grupo_de_secuencia, secuencia_en_palabras, secuencia_en_revision, validar_regla,
 )
 
-SEMILLA = {r['secuencia']: r for r in REGLAS_SEMILLA}
 
-SECUENCIAS_ENCONTRADAS = [
-    'ESES', 'ES', 'ESSS', 'EES', 'EEES', 'ESS', 'ESESES', 'SSES', 'ESEE', 'ESE',
-    'EE', 'SS', 'SES', 'ESESS', 'SSSS', 'EESES', 'EESS', 'ESEES', 'ESSES', 'EEE',
-    'ESESSS', 'SSEE', 'EESSS', 'E', 'SSESES', 'EEEEES', 'ESEEES', 'ESSSS',
-]
-
-
-def test_semilla_cubre_las_28_secuencias_encontradas_mas_la_s_sola():
-    assert set(SEMILLA) == set(SECUENCIAS_ENCONTRADAS) | {'S'}
-    assert len(REGLAS_SEMILLA) == len(SEMILLA), "hay secuencias repetidas en la semilla"
+def test_el_codigo_no_trae_reglas_ni_notas_escritas():
+    """Orden del dueño (23-10-2026): las reglas y sus notas se configuran desde la
+    interfaz; el código solo aporta la lógica."""
+    for nombre in ("REGLAS_SEMILLA", "NOTAS_FRECUENTES", "filas_semilla"):
+        assert not hasattr(DEF, nombre), f"volvió a aparecer {nombre} en el código"
 
 
-def test_toda_la_semilla_es_valida_y_nace_apagada():
-    for r in REGLAS_SEMILLA:
-        assert validar_regla(r) == '', f"{r['secuencia']}: {validar_regla(r)}"
-        assert r['activa'] == 0, f"{r['secuencia']} no nace apagada"
-        assert r['tipo_horario'] == 'CICLO_INTELIGENTE'
-
-
-def test_decision_una_sola_marca_es_anomalia_y_se_agrega_la_que_falta():
-    e, s = SEMILLA['E'], SEMILLA['S']
-    for r in (e, s):
-        assert r['lectura'] == 'NINGUNA'
-        assert r['accion'] == 'SOLO_REVISA'
-    assert e['opciones_revision'] == ['AGREGAR_SALIDA']
-    assert s['opciones_revision'] == ['AGREGAR_ENTRADA']
-
-
-def test_decision_es_toma_extremos_colacion_del_turno_y_calcula():
-    r = SEMILLA['ES']
-    assert (r['lectura'], r['colacion'], r['accion']) == ('EXTREMOS', 'TURNO', 'CALCULA')
-    assert r['opciones_revision'] == []
-
-
-def test_decision_ee_ss_eee_ssss_revisan_corrigen_y_calculan_con_extremos():
-    for sec in ('EE', 'SS', 'EEE', 'SSSS'):
-        r = SEMILLA[sec]
-        assert r['lectura'] == 'EXTREMOS', sec
-        assert r['colacion'] == 'TURNO', sec
-        assert r['accion'] == 'CALCULA_Y_REVISA', sec
-        assert 'RECLASIFICAR' in r['opciones_revision'], sec
-
-
-def test_decision_ese_falta_la_salida_final():
-    r = SEMILLA['ESE']
-    assert r['accion'] == 'CALCULA_Y_REVISA'
-    assert 'AGREGAR_SALIDA' in r['opciones_revision']
-
-
-def test_decision_ses_reclasificar_o_agregar_entrada():
-    r = SEMILLA['SES']
-    assert r['accion'] == 'CALCULA_Y_REVISA'
-    assert 'RECLASIFICAR' in r['opciones_revision']
-    assert 'AGREGAR_ENTRADA' in r['opciones_revision']
-
-
-def test_bien_marcadas_calculan_sin_aviso():
-    for sec in ('ES', 'ESES', 'ESESES'):
-        assert SEMILLA[sec]['accion'] == 'CALCULA', sec
-        assert SEMILLA[sec]['opciones_revision'] == [], sec
-
-
-def test_tipos_repetidos_aprobados_calculan_con_extremos():
-    for sec in ('ESS', 'EES', 'ESSS', 'EEES', 'SSES', 'ESEE'):
-        r = SEMILLA[sec]
-        assert r['lectura'] == 'EXTREMOS', sec
-        assert r['accion'] == 'CALCULA', sec
-
-
-def test_filas_semilla_serializan_opciones_como_json():
-    import json
-    filas = filas_semilla()
-    assert len(filas) == len(REGLAS_SEMILLA)
-    for fila in filas:
-        assert len(fila) == 8
-        json.loads(fila[5])  # opciones_revision legible
+def test_las_marcas_se_nombran_con_la_palabra_completa():
+    assert secuencia_en_palabras("ES") == "ENTRADA · SALIDA"
+    assert secuencia_en_palabras("ESES") == "ENTRADA · SALIDA · ENTRADA · SALIDA"
+    assert secuencia_en_palabras("S", separador=" ") == "SALIDA"
+    assert secuencia_en_palabras("") == ""
 
 
 def test_grupos_de_pantalla():
@@ -109,10 +46,12 @@ def _base(**kw):
     return d
 
 
-def test_validacion_rechaza_secuencias_malas():
+def test_validacion_rechaza_secuencias_malas_y_lo_dice_con_palabras():
     assert validar_regla(_base(secuencia='')) != ''
     assert validar_regla(_base(secuencia='EXS')) != ''
     assert validar_regla(_base(secuencia='E' * 13)) != ''
+    motivo = validar_regla(_base(secuencia='EXS'))
+    assert 'ENTRADA' in motivo and 'SALIDA' in motivo and 'E y S' not in motivo
 
 
 def test_validacion_rechaza_valores_desconocidos():
@@ -120,13 +59,20 @@ def test_validacion_rechaza_valores_desconocidos():
     assert validar_regla(_base(colacion='OTRA')) != ''
     assert validar_regla(_base(accion='OTRA')) != ''
     assert validar_regla(_base(accion='CALCULA_Y_REVISA', opciones_revision=['X'])) != ''
+    assert validar_regla(_base(avisa_fuera_de_ciclo='quizas')) != ''
+
+
+def test_avisar_fuera_de_ciclo_es_una_opcion_de_la_regla():
+    assert validar_regla(_base(avisa_fuera_de_ciclo=1)) == ''
+    assert validar_regla(_base(avisa_fuera_de_ciclo=0)) == ''
+    assert validar_regla(_base()) == ''          # sin el campo: apagada
 
 
 def test_validacion_combinaciones_coherentes():
     # no leer → solo revisión
     assert validar_regla(_base(lectura='NINGUNA', accion='CALCULA')) != ''
     assert validar_regla(_base(lectura='NINGUNA', accion='SOLO_REVISA',
-                               opciones_revision=['CONFIRMAR'])) == ''
+                               opciones_revision=['RECLASIFICAR'])) == ''
     # calcula sin aviso → sin opciones
     assert validar_regla(_base(opciones_revision=['CONFIRMAR'])) != ''
     # va a revisión → al menos una opción
@@ -141,11 +87,13 @@ def test_validacion_combinaciones_coherentes():
                                opciones_revision=['CONFIRMAR', 'CONFIRMAR'])) != ''
 
 
-def test_marcador_de_revision_se_lee_de_las_observaciones():
-    from backend.services.reglas_marcas_def import secuencia_en_revision
-    obs = ("Regla de marcaciones (S · S · E · S): se leyó con la primera marca como Entrada "
-           "y la última como Salida. Revisar las marcas (regla S · S · E · S). ")
-    assert secuencia_en_revision(obs) == 'SSES'
+def test_marcador_de_revision_se_lee_con_palabras_y_con_letras():
+    nuevo = ("Regla de marcaciones (SALIDA · SALIDA · ENTRADA · SALIDA): se leyó con la primera marca como ENTRADA "
+             "y la última como SALIDA. Revisar las marcas (regla SALIDA · SALIDA · ENTRADA · SALIDA). ")
+    assert secuencia_en_revision(nuevo) == 'SSES'
+    antiguo = "Revisar las marcas (regla S · S · E · S). "          # días anotados antes del cambio
+    assert secuencia_en_revision(antiguo) == 'SSES'
+    assert secuencia_en_revision('Revisar las marcas (regla ENTRADA). ') == 'E'
     assert secuencia_en_revision('Revisar las marcas (regla E). ') == 'E'
     assert secuencia_en_revision('Salidas seguidas: se tomó la última. ') == ''
     assert secuencia_en_revision(None) == ''
@@ -175,15 +123,3 @@ def test_catalogos_sin_sorpresas():
     assert COLACIONES == ('TURNO', 'MEDIDA', 'NINGUNA')
     assert ACCIONES == ('CALCULA', 'CALCULA_Y_REVISA', 'SOLO_REVISA')
     assert set(OPCIONES_REVISION) == {'AGREGAR_ENTRADA', 'AGREGAR_SALIDA', 'RECLASIFICAR', 'CONFIRMAR'}
-
-
-def test_notas_frecuentes_para_la_lista_desplegable():
-    """La nota de la pestaña se elige de esta lista (más «Otra (escribir)»).
-    Son solo informativas: no cambian el cálculo y la nota sigue siendo texto."""
-    assert len(NOTAS_FRECUENTES) == 8
-    assert len(set(NOTAS_FRECUENTES)) == len(NOTAS_FRECUENTES), "hay notas repetidas"
-    for n in NOTAS_FRECUENTES:
-        assert n.strip() == n and n, "nota vacía o con espacios en los bordes"
-        assert len(n) <= 300, "la nota no cabe en el campo (300 letras)"
-    assert any('Falta la Entrada' in n for n in NOTAS_FRECUENTES)
-    assert any('doble toque' in n for n in NOTAS_FRECUENTES)

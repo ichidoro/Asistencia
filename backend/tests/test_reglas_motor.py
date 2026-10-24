@@ -23,6 +23,10 @@ from backend.services.quantum_matrix_engine import QuantumMatrixEngine as Q  # n
 from backend.services.quantum_matrix_engine import _aplicar_extremos, _rebote_defecto  # noqa: E402
 
 E, S = "Entrada", "Salida"
+# Ajustes de la pestaña Reglas de marcaciones tal como están configurados en producción
+# (el cálculo los lee de la tabla `ajustes`; el código no trae el número).
+AJUSTES_CONFIGURADOS = {"reglas_marcas_repetidas_minutos": "20"}
+
 AHORA = datetime(2026, 10, 19, 12, 0)   # «hoy» del motor en estas pruebas
 
 
@@ -41,7 +45,7 @@ def _dia(monkeypatch, marcas, fecha="2026-10-15", turno=None, dia=None, ahora=AH
     monkeypatch.setattr(qme, "_get_now_local", lambda: ahora)
     return Q.solve_attendance_day(fecha=fecha, empleado_id=1, logs=[dict(m) for m in marcas],
                                   turno_config=turno or TURNO, dia_config=dia or DIA,
-                                  global_ajustes={}, todos_ciclos_dia=[dia or DIA], consumidas_previas=set())
+                                  global_ajustes=dict(AJUSTES_CONFIGURADOS), todos_ciclos_dia=[dia or DIA], consumidas_previas=set())
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +101,8 @@ def test_nancy_con_la_regla_sses_queda_con_su_dia_completo(monkeypatch):
     # de prueba no tiene anclajes; con los anclajes del turno real queda en ~9,1 h, como al corregirla a mano)
     assert abs(r["horas_trabajadas"] - 9.2653) < 0.01
     assert set(r["marcas_consumidas_ids"]) == {1, 2, 3, 4}
-    assert "Regla de marcaciones (S · S · E · S)" in r["observaciones"]
+    assert "Regla de marcaciones (SALIDA · SALIDA · ENTRADA · SALIDA)" in r["observaciones"]
+    assert "(S · S" not in r["observaciones"], "las anotaciones del día ya no usan iniciales"
 
 
 def test_galaz_con_la_regla_ese_calcula_con_extremos_y_avisa(monkeypatch):
@@ -203,3 +208,90 @@ def test_rebote_del_ajuste_solo_para_ciclo_inteligente():
     assert _rebote_defecto("BOLSA_FLEXIBLE") == 180.0
     qme.REGLAS_MARCAS_REBOTE = 0
     assert _rebote_defecto("CICLO_INTELIGENTE") == 180.0
+
+
+# ── 7. Decisiones del dueño del 23-10-2026 (reglas 1 y 2) ───────────────────
+
+MANT2 = dict(TURNO, umbral_horas_colacion=5.5)                     # Planta Mantención 2: mínimo 5,5 h
+SABADO_CORTO = {"es_libre": 0, "horas_teoricas": 4.5, "hora_entrada": "09:00", "hora_salida": "14:00", "cruza_medianoche": 0}
+CARRENO = [L(1, "2026-09-26 09:41:00", E), L(2, "2026-09-26 12:06:00", S),
+           L(3, "2026-09-26 12:11:00", E), L(4, "2026-09-26 15:06:00", S)]   # Carreño 26-09: pausa de 5 min
+
+
+def test_bajo_el_minimo_con_pausa_marcada_se_descuenta_solo_la_pausa(monkeypatch):
+    """Regla 2: si la persona estuvo menos que el mínimo de su horario, no se le exige la
+    colación del horario aunque haya marcado la pausa: se descuenta solo la pausa real."""
+    _regla("ESES", lectura="RELOJ", colacion="MEDIDA")
+    r = _dia(monkeypatch, CARRENO, fecha="2026-09-26", turno=MANT2, dia=SABADO_CORTO)
+    assert round(r["minutos_colacion"]) == 5                       # antes: 30 (la del horario)
+    assert abs(r["horas_trabajadas"] - (5 + 25 / 60 - 5 / 60)) < 0.02   # 09:41→15:06 menos 5 min = 5,33 h
+
+
+def test_sobre_el_minimo_se_mantiene_lo_mayor_entre_horario_y_pausa(monkeypatch):
+    _regla("ESES", lectura="RELOJ", colacion="MEDIDA")
+    corta = [L(1, "2026-10-15 06:55:00", E), L(2, "2026-10-15 13:29:00", S),
+             L(3, "2026-10-15 13:36:00", E), L(4, "2026-10-15 16:29:00", S)]   # pausa de 7 min, día completo
+    r = _dia(monkeypatch, corta)
+    assert round(r["minutos_colacion"]) == 30                      # la del horario, como Durán 16-10
+    larga = [L(1, "2026-10-15 07:00:00", E), L(2, "2026-10-15 12:00:00", S),
+             L(3, "2026-10-15 14:02:00", E), L(4, "2026-10-15 16:32:00", S)]   # pausa de 2 h 02
+    r2 = _dia(monkeypatch, larga)
+    assert round(r2["minutos_colacion"]) == 122 and r2["minutos_exceso_colacion"] == 92
+
+
+def test_bolsa_flexible_no_cambia_con_el_minimo_con_pausa(monkeypatch):
+    bolsa = dict(TURNO_BOLSA, umbral_horas_colacion=5.5)
+    r = _dia(monkeypatch, CARRENO, fecha="2026-09-26", turno=bolsa, dia=SABADO_CORTO)
+    assert round(r["minutos_colacion"]) == 30                      # Bolsa conserva su cálculo: la del horario
+
+
+BODEGA = {"es_libre": 0, "horas_teoricas": 8.0, "hora_entrada": "11:30", "hora_salida": "20:00", "cruza_medianoche": 0}
+CALDERON = [L(1, "2026-10-15 06:18:00", E), L(2, "2026-10-15 18:33:00", S)]
+
+
+def _regla_ciclo(avisa):
+    qme.REGLAS_MARCAS_ACTIVAS["ES"] = {"secuencia": "ES", "lectura": "EXTREMOS", "colacion": "TURNO",
+                                       "accion": "CALCULA", "avisa_fuera_de_ciclo": avisa}
+
+
+def test_avisa_si_no_calza_con_ningun_ciclo(monkeypatch):
+    _regla_ciclo(1)
+    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "reglas_marcas_fuera_ciclo_minutos", "120")
+    r = _dia(monkeypatch, CALDERON, dia=BODEGA)
+    assert qme.MARCA_REVISION_REGLA in r["observaciones"]
+    assert "no calzan con ningún ciclo" in r["observaciones"] and "06:18" in r["observaciones"]
+    assert r["horas_trabajadas"] > 0                               # se calcula igual
+
+
+def test_no_avisa_si_calza_o_si_la_opcion_esta_apagada(monkeypatch):
+    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "reglas_marcas_fuera_ciclo_minutos", "120")
+    _regla_ciclo(0)
+    assert qme.MARCA_REVISION_REGLA not in (_dia(monkeypatch, CALDERON, dia=BODEGA).get("observaciones") or "")
+    _regla_ciclo(1)
+    a_tiempo = [L(1, "2026-10-15 11:20:00", E), L(2, "2026-10-15 20:05:00", S)]
+    assert qme.MARCA_REVISION_REGLA not in (_dia(monkeypatch, a_tiempo, dia=BODEGA).get("observaciones") or "")
+
+
+def test_sin_el_ajuste_configurado_la_opcion_no_avisa(monkeypatch):
+    _regla_ciclo(1)
+    r = _dia(monkeypatch, CALDERON, dia=BODEGA)                    # sin reglas_marcas_fuera_ciclo_minutos
+    assert qme.MARCA_REVISION_REGLA not in (r.get("observaciones") or "")
+
+
+def test_las_marcas_repetidas_se_juntan_segun_el_ajuste():
+    from backend.services.quantum_matrix_engine import MultiBlockTensorSolver as M
+    dos = [L(1, "2026-10-15 07:00:00", E), L(2, "2026-10-15 07:10:00", E), L(3, "2026-10-15 16:00:00", S)]
+    assert [l["id"] for l in M.collapse_consecutive_same_type(dos, repetidas_segundos=20 * 60)] == [1, 3]
+    assert [l["id"] for l in M.collapse_consecutive_same_type(dos, repetidas_segundos=5 * 60)] == [1, 2, 3]
+
+
+def test_colacion_de_referencia_sale_del_ajuste_y_sin_el_ajuste_la_pausa_mas_larga(monkeypatch):
+    sin_colacion = dict(TURNO, descuento_colacion_auto=0, minutos_colacion_auto=0, umbral_horas_colacion=0)
+    dos_pausas = [L(1, "2026-10-15 07:00:00", E), L(2, "2026-10-15 09:00:00", S), L(3, "2026-10-15 09:20:00", E),
+                  L(4, "2026-10-15 12:30:00", S), L(5, "2026-10-15 13:30:00", E), L(6, "2026-10-15 16:30:00", S)]
+    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "reglas_marcas_colacion_referencia_minutos", "20")
+    r = _dia(monkeypatch, dos_pausas, turno=sin_colacion)
+    assert r["hora_salida_colacion"] == "09:00:00"                 # la de 20 min es la más parecida a 20
+    monkeypatch.delitem(AJUSTES_CONFIGURADOS, "reglas_marcas_colacion_referencia_minutos")
+    r2 = _dia(monkeypatch, dos_pausas, turno=sin_colacion)
+    assert r2["hora_salida_colacion"] == "12:30:00"                # sin ajuste: la más larga (60 min)

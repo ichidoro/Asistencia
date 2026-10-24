@@ -96,6 +96,7 @@ async function saveTurno() {
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
+        tolerancia_exceso_colacion_minutos: Math.max(0, parseInt(document.getElementById('toleranciaExcesoColacion')?.value, 10) || 0),
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         permite_viajes_largos: ((formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
         rotacion_dinamica_diaria: ((formData.get('tipo_programacion') === 'CICLO_INTELIGENTE') && ((document.getElementById('chkRotacionDinamicaDiaria')?.checked) || (document.getElementById('chk-rotacion-dinamica-diaria')?.checked))) ? 1 : 0,
@@ -386,6 +387,9 @@ async function openModalHorario(id = null) {
             document.getElementById('numColacion').value = turno.minutos_colacion_auto || "";
             const umbralInput = document.getElementById('umbralColacion');
             if (umbralInput) umbralInput.value = turno.umbral_horas_colacion !== undefined ? turno.umbral_horas_colacion : 0;
+            const tolInput = document.getElementById('toleranciaExcesoColacion');
+            if (tolInput) tolInput.value = turno.tolerancia_exceso_colacion_minutos !== undefined && turno.tolerancia_exceso_colacion_minutos !== null
+                ? turno.tolerancia_exceso_colacion_minutos : 0;
             toggleColacionInput();
 
             // Llenar Semanas
@@ -442,6 +446,8 @@ async function openModalHorario(id = null) {
         document.getElementById('numColacion').value = "";
         const umbralInput = document.getElementById('umbralColacion');
         if (umbralInput) umbralInput.value = "0";
+        const tolInput = document.getElementById('toleranciaExcesoColacion');
+        if (tolInput) tolInput.value = "0";
         toggleColacionInput();
         const chkViajesLargos = document.getElementById('chk-permite-viajes-largos');
         if (chkViajesLargos) chkViajesLargos.checked = false;
@@ -1334,8 +1340,15 @@ function renderModalHtml() {
                                             <span class="input-group-text">hrs</span>
                                         </div>
                                     </div>
+                                    <div id="divColacionTolerancia" style="display:none; width: 300px;">
+                                        <div class="input-group input-group-sm" title="Minutos sobre la colación del horario que no se anotan como exceso de colación">
+                                            <label class="input-group-text" for="toleranciaExcesoColacion">Tolerancia de exceso</label>
+                                            <input type="number" class="form-control text-center" id="toleranciaExcesoColacion" name="tolerancia_exceso_colacion_minutos" min="0" step="1" value="0">
+                                            <span class="input-group-text">min</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="form-text small">Resta estos minutos si NO hay marcas, siempre que las horas trabajadas superen el umbral.</div>
+                                <div class="form-text small">Sin marcas de colación resta estos minutos, si la persona estuvo al menos el umbral. Con la pausa marcada resta lo mayor entre la pausa y estos minutos; bajo el umbral, solo la pausa. Lo que pase de la colación más la tolerancia queda como exceso.</div>
                             </div>
                         </div>
 
@@ -1492,8 +1505,10 @@ function toggleColacionInput() {
     const chk = document.getElementById('chkColacion');
     const div = document.getElementById('divColacionTime');
     const divUmbral = document.getElementById('divColacionUmbral');
+    const divTol = document.getElementById('divColacionTolerancia');
     if (div) div.style.display = chk.checked ? 'block' : 'none';
     if (divUmbral) divUmbral.style.display = chk.checked ? 'flex' : 'none';
+    if (divTol) divTol.style.display = chk.checked ? 'flex' : 'none';
     updateAllCalculations();
 }
 

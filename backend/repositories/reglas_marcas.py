@@ -1,10 +1,13 @@
 """
 Repositorio de las Reglas de marcaciones (pestaña de Configuración).
 
-Etapa 1: la tabla y su pantalla. El motor de cálculo TODAVÍA NO lee esta tabla:
-todas las reglas nacen apagadas (activa = 0) y el botón «Correr esta regla»
-se habilitará en la etapa siguiente, regla por regla, solo sobre el tramo
-abierto y las áreas abiertas. Los períodos cerrados no se tocan.
+Las reglas viven en la tabla `reglas_marcas` y se crean y configuran desde la
+pantalla: el código no trae ninguna lista de secuencias. Una regla nueva nace
+apagada (activa = 0) y se enciende con «Correr esta regla», que recalcula solo
+el tramo abierto y las áreas abiertas. Los períodos cerrados no se tocan.
+Los valores que ajustan el cálculo (rebote, marcas repetidas, colación de
+referencia, minutos para «no calza con ningún ciclo») son filas de `ajustes`
+que se cambian desde la misma pestaña.
 """
 import json
 import time
@@ -14,7 +17,7 @@ from loguru import logger
 
 from backend.core.database import Database
 from backend.services.reglas_marcas_def import (
-    MARCA_REVISION_REGLA, filas_semilla, firma_marcas, secuencia_en_revision, validar_regla,
+    MARCA_REVISION_REGLA, firma_marcas, secuencia_en_revision, validar_regla,
 )
 
 CLAVE_REBOTE = 'reglas_marcas_rebote_segundos'
@@ -23,6 +26,21 @@ DESCRIPCION_REBOTE = ('Reglas de marcaciones: segundos entre dos marcas para con
                       'de un turno manda sobre este valor.')
 CLAVE_COLACION_MIN = 'reglas_marcas_colacion_min_minutos'
 CLAVE_COLACION_MAX = 'reglas_marcas_colacion_max_minutos'
+CLAVE_REPETIDAS = 'reglas_marcas_repetidas_minutos'
+CLAVE_COLACION_REFERENCIA = 'reglas_marcas_colacion_referencia_minutos'
+CLAVE_FUERA_CICLO = 'reglas_marcas_fuera_ciclo_minutos'
+
+# Ajustes que la pestaña deja cambiar: clave → (descripción, mínimo, máximo).
+# El valor de cada uno vive en la tabla `ajustes`, no aquí.
+AJUSTES_EDITABLES = {
+    CLAVE_REBOTE: ('Segundos entre dos marcas para considerarlas un doble toque (rebote).', 0, 1800),
+    CLAVE_REPETIDAS: ('Minutos entre dos ENTRADAS o dos SALIDAS seguidas para juntarlas en una '
+                      '(se queda la primera ENTRADA o la última SALIDA).', 0, 240),
+    CLAVE_COLACION_REFERENCIA: ('Minutos de colación de referencia para elegir cuál pausa es la colación '
+                                'cuando el horario no tiene colación configurada.', 0, 240),
+    CLAVE_FUERA_CICLO: ('Minutos de diferencia entre la ENTRADA y la del ciclo más cercano del horario '
+                        'para avisar que el día no calza con ningún ciclo.', 0, 720),
+}
 
 # La cuenta de jornadas por secuencia recorre todo el historial: se guarda 10 minutos.
 _CONTEOS_TTL = 600.0
@@ -52,16 +70,14 @@ class ReglasMarcasRepository:
                     UNIQUE (tipo_horario, secuencia)
                 )
             """)
-        # Semilla idempotente: nunca pisa lo que el dueño ya editó.
+        # Opción «avisar si las marcas no calzan con ningún ciclo del horario» (por regla).
         try:
-            await self.db.executemany(
-                """INSERT OR IGNORE INTO reglas_marcas
-                   (tipo_horario, secuencia, lectura, colacion, accion, opciones_revision, activa, nota)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                filas_semilla()
-            )
+            if 'avisa_fuera_de_ciclo' not in set(await self.db.get_column_names("reglas_marcas")):
+                await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN avisa_fuera_de_ciclo INTEGER DEFAULT 0")
         except Exception as e:
-            logger.warning(f"Semilla reglas_marcas: {e}")
+            logger.warning(f"Columna avisa_fuera_de_ciclo: {e}")
+        # Valor inicial de cada ajuste de la pestaña (solo si la fila no existe: lo que
+        # se configure desde la pantalla nunca se pisa). El cálculo los lee de `ajustes`.
         try:
             await self.db.executemany(
                 "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
@@ -71,10 +87,13 @@ class ReglasMarcasRepository:
                      'Reglas de marcaciones: minutos mínimos de una pausa para que la pantalla la señale como colación.'),
                     (CLAVE_COLACION_MAX, '150',
                      'Reglas de marcaciones: minutos máximos de una pausa para que la pantalla la señale como colación.'),
+                    (CLAVE_REPETIDAS, '20', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_REPETIDAS][0]),
+                    (CLAVE_COLACION_REFERENCIA, '60', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_COLACION_REFERENCIA][0]),
+                    (CLAVE_FUERA_CICLO, '120', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_FUERA_CICLO][0]),
                 ]
             )
         except Exception as e:
-            logger.warning(f"Semilla ajustes reglas: {e}")
+            logger.warning(f"Valores iniciales de los ajustes de reglas: {e}")
         # Confirmaciones de «Días por revisar»: quién miró un día en revisión y lo dio
         # por bueno. Vale mientras las marcas del día no cambien (la firma coincide).
         if not await self.db.table_exists("revisiones_marcas"):
@@ -253,14 +272,21 @@ class ReglasMarcasRepository:
                          STRING_AGG(t, '' ORDER BY fecha_hora) AS pat, SUM(man) AS manuales,
                          STRING_AGG(SUBSTR(fecha_hora, 12, 8) || ' ' ||
                                     CASE t WHEN 'E' THEN 'Ent' ELSE 'Sal' END,
-                                    ' · ' ORDER BY fecha_hora) AS marcas
+                                    ' · ' ORDER BY fecha_hora) AS marcas,
+                         STRING_AGG(SUBSTR(fecha_hora, 1, 19) || '|' || t, ',' ORDER BY fecha_hora) AS marcas_completas
                     FROM x
                    GROUP BY aid, empleado_id, fecha, turno_asignado_id, estado, horas_trabajadas)
             SELECT d.empleado_id,
                    e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS persona,
                    d.fecha, d.estado, ROUND(d.horas_trabajadas::numeric, 2) AS horas, d.marcas,
+                   d.marcas_completas, tu.nombre AS horario,
+                   z.hora_entrada_teorica, z.hora_salida_teorica, z.horas_teoricas,
+                   z.minutos_colacion, z.minutos_colacion_real, z.minutos_exceso_colacion,
+                   z.minutos_atraso, z.minutos_salida_adelantada, z.minutos_deuda, z.minutos_extra_bruto,
                    COUNT(*) OVER () AS total
               FROM d JOIN empleados e ON e.id = d.empleado_id
+              JOIN asistencias z ON z.id = d.aid
+              LEFT JOIN turnos tu ON tu.id = z.turno_asignado_id
              WHERE d.pat = ? AND d.manuales = 0
                AND NOT EXISTS (
                     SELECT 1 FROM cierres_periodos cp
@@ -275,6 +301,47 @@ class ReglasMarcasRepository:
              LIMIT ?
         """, (tipo_horario, desde_abierto, hoy, secuencia, limite))
         return [dict(r) for r in rows]
+
+    async def horarios(self, tipo_horario: str) -> List[Dict[str, Any]]:
+        """Los horarios de este tipo con lo que usan las reglas (colación, mínimo de
+        horas, tolerancia de exceso, márgenes y ciclos). Todo sale de Configuración →
+        Horarios: la pestaña de reglas solo lo muestra."""
+        rows = await self.db.fetch_all("""
+            SELECT t.id, t.nombre, t.descuento_colacion_auto, t.minutos_colacion_auto,
+                   t.umbral_horas_colacion, t.tolerancia_exceso_colacion_minutos,
+                   t.anclaje_entrada_minutos, t.anclaje_salida_minutos, t.rotacion_dinamica_diaria,
+                   (SELECT STRING_AGG(DISTINCT SUBSTR(CAST(d.hora_entrada AS TEXT), 1, 5) || '–' ||
+                                      SUBSTR(CAST(d.hora_salida AS TEXT), 1, 5) ||
+                                      COALESCE(' ' || NULLIF(d.etiqueta_bloque, ''), ''), ' · ')
+                      FROM turno_dias d
+                     WHERE d.turno_id = t.id AND d.hora_entrada IS NOT NULL
+                       AND COALESCE(CAST(d.es_libre AS INTEGER), 0) = 0) AS ciclos
+              FROM turnos t
+             WHERE t.tipo_programacion = ? AND COALESCE(CAST(t.activo AS INTEGER), 1) = 1
+             ORDER BY t.nombre
+        """, (tipo_horario,))
+        return [dict(r) for r in rows]
+
+    async def ajustes_reglas(self) -> Dict[str, Optional[float]]:
+        """Valores actuales de los ajustes de la pestaña (None si la fila no existe)."""
+        out: Dict[str, Optional[float]] = {}
+        for clave in AJUSTES_EDITABLES:
+            r = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = ?", (clave,))
+            try:
+                out[clave] = float(r['valor']) if r and r.get('valor') not in (None, '') else None
+            except (TypeError, ValueError):
+                out[clave] = None
+        return out
+
+    async def guardar_ajuste(self, clave: str, valor: float) -> None:
+        descripcion = 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[clave][0]
+        texto = str(int(valor)) if float(valor).is_integer() else str(valor)
+        await self.db.execute(
+            "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
+            (clave, texto, descripcion))
+        await self.db.execute(
+            "UPDATE ajustes SET valor = ?, updated_at = CURRENT_TIMESTAMP WHERE clave = ?",
+            (texto, clave))
 
     async def ventana_colacion(self) -> Dict[str, int]:
         out = {'min': 20, 'max': 150}
@@ -440,12 +507,14 @@ class ReglasMarcasRepository:
         if actual.get('activa'):
             return {'error': 'Esta regla está encendida y el motor la está usando: '
                              'apáguela antes de cambiarla, para que el cambio corra con su propio antes y después.'}
+        avisa = cambios.get('avisa_fuera_de_ciclo', actual.get('avisa_fuera_de_ciclo') or 0)
         nueva = {
             'secuencia': actual['secuencia'],
             'lectura': cambios.get('lectura', actual['lectura']),
             'colacion': cambios.get('colacion', actual['colacion']),
             'accion': cambios.get('accion', actual['accion']),
             'opciones_revision': cambios.get('opciones_revision', actual['opciones_revision']),
+            'avisa_fuera_de_ciclo': 1 if avisa in (1, True, '1', 'true') else 0,
         }
         motivo = validar_regla(nueva)
         if motivo:
@@ -454,20 +523,10 @@ class ReglasMarcasRepository:
         await self.db.execute(
             """UPDATE reglas_marcas
                   SET lectura = ?, colacion = ?, accion = ?, opciones_revision = ?,
-                      nota = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                      avisa_fuera_de_ciclo = ?, nota = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?""",
             (nueva['lectura'], nueva['colacion'], nueva['accion'],
-             json.dumps(nueva['opciones_revision']), nota, username, regla_id)
+             json.dumps(nueva['opciones_revision']), nueva['avisa_fuera_de_ciclo'], nota, username, regla_id)
         )
         despues = await self.obtener(regla_id)
         return {'antes': actual, 'despues': despues}
-
-    async def guardar_rebote(self, segundos: int) -> None:
-        await self.db.execute(
-            "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
-            (CLAVE_REBOTE, str(segundos), DESCRIPCION_REBOTE)
-        )
-        await self.db.execute(
-            "UPDATE ajustes SET valor = ?, updated_at = CURRENT_TIMESTAMP WHERE clave = ?",
-            (str(segundos), CLAVE_REBOTE)
-        )

@@ -14,9 +14,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from backend.core.database import Database, get_db
 from backend.core.security import RequirePermission, SecurityContext
-from backend.repositories.reglas_marcas import ReglasMarcasRepository
+from backend.repositories.reglas_marcas import AJUSTES_EDITABLES, ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
-from backend.services.reglas_marcas_def import NOTAS_FRECUENTES, grupo_de_secuencia, validar_regla
+from backend.services.reglas_marcas_def import grupo_de_secuencia, validar_regla
 from backend.services.reglas_marcas_corridas import (
     JOBS, _hay_corrida_en_curso, ensayar_regla, iniciar_corrida, job_publico,
 )
@@ -63,7 +63,9 @@ async def listar_reglas(
         "total_jornadas_tramo_abierto": conteos["total_abiertos"],
         "tramo_abierto_desde": desde,
         "rebote_segundos": await repo.rebote_segundos(),
-        "notas_frecuentes": list(NOTAS_FRECUENTES),
+        "ajustes": await repo.ajustes_reglas(),
+        "ajustes_descripcion": {k: {"texto": v[0], "min": v[1], "max": v[2]} for k, v in AJUSTES_EDITABLES.items()},
+        "horarios": await repo.horarios(tipo),
         "motor_conectado": True,
         "corrida_en_curso": job_publico(corrida) if corrida else None,
     }
@@ -210,7 +212,7 @@ async def dias_ejemplo_de_la_regla(
     from datetime import datetime as _dt
     desde = await repo.inicio_tramo_abierto()
     dias = await repo.dias_ejemplo(regla["tipo_horario"], regla["secuencia"], desde,
-                                   _dt.now().strftime("%Y-%m-%d"))
+                                   _dt.now().strftime("%Y-%m-%d"), limite=4)
     total = int(dias[0]["total"]) if dias else 0
     return {"secuencia": regla["secuencia"], "desde": desde, "dias": dias, "total": total}
 
@@ -233,6 +235,7 @@ async def ensayar_la_regla(
         "colacion": str(payload.get("colacion") or ""),
         "accion": str(payload.get("accion") or ""),
         "opciones_revision": payload.get("opciones_revision") or [],
+        "avisa_fuera_de_ciclo": 1 if payload.get("avisa_fuera_de_ciclo") in (1, True, "1", "true") else 0,
     }
     motivo = validar_regla(propuesta)
     if motivo:
@@ -243,27 +246,33 @@ async def ensayar_la_regla(
     return res
 
 
-@router.put("/rebote/", response_model=Dict[str, Any])
-async def guardar_rebote(
+@router.put("/ajustes/", response_model=Dict[str, Any])
+async def guardar_ajuste(
     payload: Dict[str, Any] = Body(...),
     repo: ReglasMarcasRepository = Depends(_repo),
     db: Database = Depends(get_db),
     current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
 ):
+    """Guarda uno de los ajustes de la pestaña (rebote, marcas repetidas, colación de
+    referencia, minutos para «no calza con ningún ciclo»). Queda en la auditoría."""
+    clave = str(payload.get("clave") or "")
+    if clave not in AJUSTES_EDITABLES:
+        raise HTTPException(status_code=400, detail="Ese ajuste no se puede cambiar desde esta pestaña.")
+    texto, minimo, maximo = AJUSTES_EDITABLES[clave]
     try:
-        segundos = int(payload.get("segundos"))
+        valor = float(payload.get("valor"))
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="El rebote debe ser un número de segundos.")
-    if not (0 <= segundos <= 1800):
-        raise HTTPException(status_code=400, detail="El rebote debe estar entre 0 y 1800 segundos.")
-    anterior = await repo.rebote_segundos()
-    await repo.guardar_rebote(segundos)
+        raise HTTPException(status_code=400, detail="El valor debe ser un número.")
+    if not (minimo <= valor <= maximo):
+        raise HTTPException(status_code=400, detail=f"El valor debe estar entre {minimo} y {maximo}.")
+    anterior = (await repo.ajustes_reglas()).get(clave)
+    await repo.guardar_ajuste(clave, valor)
     await cargar_reglas_runtime(db)
     await SeguridadRepository(db).log_auditoria(
         current_user.user_id, current_user.username, "UPDATE", "REGLAS_MARCAS",
-        json.dumps({"ajuste": "rebote_segundos", "antes": anterior, "despues": segundos})
+        json.dumps({"ajuste": clave, "antes": anterior, "despues": valor}, ensure_ascii=False)
     )
-    return {"message": "Rebote guardado.", "segundos": segundos}
+    return {"message": "Ajuste guardado.", "clave": clave, "valor": valor}
 
 
 @router.put("/{regla_id}/", response_model=Dict[str, Any])
@@ -275,17 +284,18 @@ async def actualizar_regla(
     current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
 ):
     cambios = {k: payload.get(k) for k in
-               ("lectura", "colacion", "accion", "opciones_revision", "nota", "activa")
+               ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo", "nota", "activa")
                if k in payload}
     resultado = await repo.actualizar(regla_id, cambios, current_user.username)
     if resultado.get("error"):
         raise HTTPException(status_code=400, detail=resultado["error"])
     antes, despues = resultado["antes"], resultado["despues"]
+    campos = ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo")
     detalle = {
         "regla_id": regla_id,
         "secuencia": antes["secuencia"],
-        "antes": {k: antes[k] for k in ("lectura", "colacion", "accion", "opciones_revision")},
-        "despues": {k: despues[k] for k in ("lectura", "colacion", "accion", "opciones_revision")},
+        "antes": {k: antes.get(k) for k in campos},
+        "despues": {k: despues.get(k) for k in campos},
     }
     await SeguridadRepository(db).log_auditoria(
         current_user.user_id, current_user.username, "UPDATE", "REGLAS_MARCAS",

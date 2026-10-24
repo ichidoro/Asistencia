@@ -25,6 +25,10 @@ from backend.services.quantum_matrix_engine import MultiBlockTensorSolver as M  
 E, S = "Entrada", "Salida"
 
 
+# Ajustes de la pestaña Reglas de marcaciones tal como están configurados en producción
+# (el cálculo los lee de la tabla `ajustes`; el código no trae el número).
+AJUSTES_CONFIGURADOS = {"reglas_marcas_repetidas_minutos": "20"}
+
 def L(i, fh, tipo, manual=0, obs=None):
     return {"id": i, "fecha_hora": fh, "tipo": tipo, "manual": manual, "observaciones": obs}
 
@@ -115,7 +119,7 @@ SABADO = {"es_libre": 0, "horas_teoricas": 4.5, "descuento_colacion_auto": 1, "m
 def _dia(monkeypatch, marcas):
     monkeypatch.setattr(qme, "_get_now_local", lambda: AHORA_MOTOR)
     return Q.solve_attendance_day(fecha="2026-10-17", empleado_id=36, logs=[dict(m) for m in marcas], turno_config=TURNO, dia_config=SABADO,
-                                  global_ajustes={}, todos_ciclos_dia=[SABADO], consumidas_previas=set())
+                                  global_ajustes=dict(AJUSTES_CONFIGURADOS), todos_ciclos_dia=[SABADO], consumidas_previas=set())
 
 
 def test_el_dia_de_badilla_se_calcula_con_el_reloj_y_muestra_el_atraso(monkeypatch):

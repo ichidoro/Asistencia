@@ -16,6 +16,10 @@ os.environ.setdefault("SECRET_KEY", "x" * 40)
 from backend.services import quantum_matrix_engine as qme  # noqa: E402
 from backend.services.quantum_matrix_engine import QuantumMatrixEngine as Q  # noqa: E402
 
+# Ajustes de la pestaña Reglas de marcaciones tal como están configurados en producción
+# (el cálculo los lee de la tabla `ajustes`; el código no trae el número).
+AJUSTES_CONFIGURADOS = {"reglas_marcas_repetidas_minutos": "20"}
+
 AHORA = datetime(2026, 10, 2, 12, 0)
 
 # Configuración real de Planta Mantención 2 (sin datos de personas): colación automática 30 min, umbral 5,5 h
@@ -34,7 +38,7 @@ def _dia(monkeypatch, marcas, fecha="2026-10-01", dia=MANANA, turno=None, ciclos
     monkeypatch.setattr(qme, "_get_now_local", lambda: ahora or AHORA)
     logs = [{"id": i + 1, "fecha_hora": f"{f} {h}", "tipo": t} for i, (f, h, t) in enumerate(marcas)]
     return Q.solve_attendance_day(fecha=fecha, empleado_id=1, logs=logs, turno_config=turno or TURNO, dia_config=dia,
-                                  global_ajustes={}, todos_ciclos_dia=ciclos or [NOCHE, MANANA, TARDE], consumidas_previas=set())
+                                  global_ajustes=dict(AJUSTES_CONFIGURADOS), todos_ciclos_dia=ciclos or [NOCHE, MANANA, TARDE], consumidas_previas=set())
 
 
 def _d(marcas):   # marcas del mismo día: [(hora, tipo)]
