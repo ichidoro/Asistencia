@@ -513,7 +513,7 @@ class ReportService:
                 columns_def.append(("Bonos", b, f"bono_{b}"))
                 
             columns_def.extend([
-                ("Incidencias", "PERM", "cnt_per"),
+                ("Incidencias", "PER", "cnt_per"),
                 ("Incidencias", "ATR", "cnt_atr"),
                 ("Incidencias", "S.ADL", "cnt_sad"),
                 ("Incidencias", "INA", "cnt_inas"),

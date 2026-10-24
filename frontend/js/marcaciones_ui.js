@@ -6969,7 +6969,7 @@ function renderVistaAnalitica(respData, container) {
             <th class="text-center px-1 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#fffbeb;font-size: 0.75rem;color:#b45309;left:${getStickyLeft('espera', 2)}px;${getStickyWidthStyle('espera')}" title="Cuánto del tope lleva usado; sobre el 100 % el exceso se paga como horas extra">USO</th>` : '';
 
     const incHeadersSub = (sh.hasInc && showIncidencias) ? `
-            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.per)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PERM</th>
+            <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.per)}px;${getStickyWidthStyle('incidencias')}" title="Días con permiso">PER</th>
             ${_I.atr!==undefined?`<th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.atr)}px;${getStickyWidthStyle('incidencias')}" title="Días con atraso">ATR</th>`:''}
             ${_I.sad!==undefined?`<th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.sad)}px;${getStickyWidthStyle('incidencias')}" title="Días con salida adelantada">S.ADL</th>`:''}
             <th class="text-center px-1 th-bento-sub sticky-premium-col" style="position:sticky; z-index:120; left:${getStickyLeft('incidencias', _I.ina)}px;${getStickyWidthStyle('incidencias')}" title="Inasistencias">INA</th>
@@ -8200,7 +8200,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
     };
 
     let badgeHtml = '';
-    const perSuffix = (e.tiene_permiso_hora || e.permiso_activo) ? ' <span style="opacity:0.8;font-size:0.9em;margin-left:4px;">(+PERM)</span>' : '';
+    const perSuffix = (e.tiene_permiso_hora || e.permiso_activo) ? ' <span style="opacity:0.8;font-size:0.9em;margin-left:4px;">(+PER)</span>' : '';
     
     if (est === 'ATR_SAD') {
         const b1 = `<div class="badge-status badge-state-warning" style="display:inline-flex; align-items:center; padding: 4px 10px; font-size: 0.6875rem; font-weight:700; border-radius: 6px; box-shadow:none; white-space:nowrap; text-transform:uppercase;"><i class="bi bi-clock-fill me-1"></i>ATRASO</div>`;
