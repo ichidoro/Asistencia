@@ -5006,6 +5006,25 @@
                                 </div>
                             </div>
 
+                            <!-- Comparación con el GPS del camión (ruta GPS de Nexacol) -->
+                            <details id="m180-gps-panel" class="mb-3 rounded-3 border bg-white shadow-sm" ontoggle="window.m180GpsAbrir && window.m180GpsAbrir(this)">
+                                <summary class="px-3 py-2 fw-semibold" style="cursor:pointer;">
+                                    <i class="bi bi-geo-alt-fill text-primary me-1"></i> Comparar con el GPS del camión
+                                    <span id="m180-gps-chip" class="badge ms-2 d-none"></span>
+                                </summary>
+                                <div class="p-3 border-top">
+                                    <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+                                        <div>
+                                            <label for="m180-gps-patente" class="form-label small fw-semibold text-secondary mb-1">Patente</label>
+                                            <select id="m180-gps-patente" class="form-select form-select-sm" style="min-width:190px"><option value="">Cargando…</option></select>
+                                        </div>
+                                        <button type="button" id="m180-gps-btn" class="btn btn-sm btn-primary" onclick="window.m180GpsVer()"><i class="bi bi-search me-1"></i> Ver recorrido</button>
+                                        <span id="m180-gps-estado" class="small text-muted"></span>
+                                    </div>
+                                    <div id="m180-gps-resultado"></div>
+                                </div>
+                            </details>
+
                             <!-- Peoneta enlazado a un chofer: botón para volver a asignarle el turno del chofer -->
                             <div id="m180-chofer-box" class="m180-chofer mb-3 d-none" role="status"></div>
 

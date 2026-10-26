@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 días
     CRON_SECRET: str = ""   # definir en .env
+
+    # Ruta GPS de los camiones, leída de Nexacol (para comparar con la libreta 180h). Asistencia entra a Nexacol como un usuario normal de solo lectura
+    # (viewer con permiso solo a Logística → Ruta GPS) y usa sus rutas de siempre: Nexacol no cambia. Vacío = integración apagada.
+    NEXACOL_URL: str = ""        # p. ej. https://nexacol.aguacol.cl
+    NEXACOL_USUARIO: str = ""
+    NEXACOL_CLAVE: str = ""
     
     # ============================================
     # WEBSOCKET

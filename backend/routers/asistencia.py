@@ -15,6 +15,7 @@ from backend.services.gemini_vision_service import gemini_vision_service
 from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine
+from backend.services import gps_nexacol
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
 from backend.services.turno_service import TurnoService
@@ -3751,6 +3752,28 @@ async def marcar_inasistencia_libreta_180h(
     except Exception as e:
         logger.exception(f"❌ Error en marcar_inasistencia_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
         raise HTTPException(status_code=500, detail=f"Error registrando la inasistencia: {str(e)}")
+
+
+@router.get("/libreta-180h/gps/vehiculos/")
+async def gps_vehiculos_libreta(current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))):
+    """Camiones (patentes) de la plataforma de GPS, vía Nexacol, para el selector de la libreta 180h."""
+    try:
+        return {"success": True, "vehiculos": await gps_nexacol.vehiculos()}
+    except gps_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
+
+
+@router.get("/libreta-180h/gps/dia/")
+async def gps_dia_libreta(
+    vehiculo_id: str = Query(..., pattern=r"^\d{1,6}$"),
+    fecha: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Recorrido de un camión en un día (paradas y 96 tramos de 15 min en movimiento/detenido) para compararlo con la libreta 180h."""
+    try:
+        return await gps_nexacol.recorrido_dia(vehiculo_id, fecha)
+    except gps_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
 
 
 @router.delete("/libreta-180h/")

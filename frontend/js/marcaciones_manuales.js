@@ -2949,6 +2949,7 @@ function m180RenderBlocks() {
         ov.innerHTML = html;
     }
     recalcLibretaTotales();
+    if (typeof m180GpsPintar === 'function') m180GpsPintar();
 }
 
 function refreshAllSlotsVisuals() {
@@ -3202,6 +3203,7 @@ async function proceedToMarcacion180h() {
     const btnDelDiaInit = document.getElementById('m180-btn-delete-dia');
     if (btnDelDiaInit) btnDelDiaInit.classList.add('d-none');
     m180_chofer_id = null;
+    if (typeof m180GpsReset === 'function') m180GpsReset();
 
     try {
         const resp = await fetch(`/api/asistencia/libreta-180h/?empleado_id=${empId}&fecha=${dateStr}`, {
@@ -3516,6 +3518,131 @@ async function marcarInasistenciaLibreta() {
     }
 }
 window.marcarInasistenciaLibreta = marcarInasistenciaLibreta;
+
+// ── Comparación de la libreta con el GPS del camión (Nexacol → Ruta GPS) ──────────────────────────────────────────────
+// El servidor entrega el día del camión en 96 tramos de 15 min (0 sin dato / en planta, 1 en movimiento, 2 detenido) y sus paradas;
+// acá se contrasta con los tramos que hay dibujados AHORA en la libreta (se actualiza al editar).
+let m180_gps = null;
+let m180_gps_vehiculos = null;
+const M180_GPS_COLOR = { 0: '#e5e7eb', 1: '#16a34a', 2: '#f59e0b' };
+
+function m180GpsReset() {
+    m180_gps = null;
+    const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
+    const c = document.getElementById('m180-gps-chip'); if (c) c.classList.add('d-none');
+    const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = '';
+}
+
+async function m180GpsAbrir(det) {
+    if (!det.open || m180_gps_vehiculos) return;
+    const sel = document.getElementById('m180-gps-patente');
+    try {
+        const resp = await fetch('/api/asistencia/libreta-180h/gps/vehiculos/', { headers: getLibretaAuthHeaders() });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
+        m180_gps_vehiculos = d.vehiculos || [];
+        sel.innerHTML = '<option value="">Elegir patente…</option>' + m180_gps_vehiculos.map(v => `<option value="${v.id}">${String(v.patente).replace(/[<>&"]/g, '')}</option>`).join('');
+        const emp = document.getElementById('m180-empleado-id').value;
+        let guardada = ''; try { guardada = localStorage.getItem('asistencia_gps_patente:' + emp) || ''; } catch (_) {}
+        if (guardada && m180_gps_vehiculos.some(v => v.id === guardada)) sel.value = guardada;
+    } catch (err) {
+        sel.innerHTML = '<option value="">No disponible</option>';
+        const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = err.message;
+    }
+}
+
+async function m180GpsVer() {
+    const sel = document.getElementById('m180-gps-patente');
+    const estado = document.getElementById('m180-gps-estado');
+    const btn = document.getElementById('m180-gps-btn');
+    const emp = document.getElementById('m180-empleado-id').value;
+    const fecha = document.getElementById('m180-fecha-str').value;
+    if (!sel.value) { estado.textContent = 'Elige una patente.'; return; }
+    try { localStorage.setItem('asistencia_gps_patente:' + emp, sel.value); } catch (_) {}
+    estado.textContent = 'Consultando el GPS…'; btn.disabled = true;
+    try {
+        const resp = await fetch(`/api/asistencia/libreta-180h/gps/dia/?vehiculo_id=${encodeURIComponent(sel.value)}&fecha=${encodeURIComponent(fecha)}`, { headers: getLibretaAuthHeaders() });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
+        m180_gps = d; estado.textContent = '';
+        m180GpsPintar();
+    } catch (err) {
+        m180_gps = null; estado.textContent = err.message;
+        const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
+    } finally { btn.disabled = false; }
+}
+
+function m180GpsHora(i) { return String(Math.floor(i / 4)).padStart(2, '0') + ':' + String((i % 4) * 15).padStart(2, '0'); }
+function m180GpsSeg(hms) { const p = String(hms || '').split(':').map(Number); return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0); }
+function m180GpsEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function m180GpsPintar() {
+    const host = document.getElementById('m180-gps-resultado');
+    if (!host || !m180_gps) return;
+    const g = m180_gps;
+    const patente = m180GpsEsc(g.vehiculo && g.vehiculo.patente);
+    if (!g.hay_datos) {
+        host.innerHTML = `<div class="alert alert-secondary py-2 small mb-0">${g.todo_el_dia_en_planta ? 'El camión estuvo todo el día dentro de la planta.' : 'El GPS no tiene datos de ' + patente + ' en este día.'}</div>`;
+        return;
+    }
+    const sl = m180_slots;
+    // Tramo a tramo: lo que dice la libreta contra lo que hizo el camión
+    const marca = new Array(96).fill('');
+    let juzgados = 0, fallan = 0;
+    for (let i = 0; i < 96; i++) {
+        const act = sl[i] || 0, gp = g.slots_gps[i];
+        if (gp === 0 || act === 3) continue;
+        juzgados++;
+        if (act === 1 && gp === 2) marca[i] = 'cond_detenido';
+        else if ((act === 2 || act === 4) && gp === 1) marca[i] = 'espera_mov';
+        else if (act === 0 && gp === 1) marca[i] = 'sin_libreta_mov';
+        if (marca[i]) fallan++;
+    }
+    const pct = juzgados ? Math.round(((juzgados - fallan) / juzgados) * 100) : null;
+    const chip = document.getElementById('m180-gps-chip');
+    if (chip) {
+        chip.classList.remove('d-none');
+        chip.className = 'badge ms-2 ' + (pct == null ? 'bg-secondary' : pct >= 90 ? 'bg-success' : pct >= 70 ? 'bg-warning text-dark' : 'bg-danger');
+        chip.textContent = pct == null ? 'sin tramos para comparar' : `${pct}% calza`;
+    }
+    const TXT = { cond_detenido: 'Libreta: conducción · GPS: detenido', espera_mov: 'Libreta: espera/descanso · GPS: en movimiento', sin_libreta_mov: 'Libreta: sin registrar · GPS: en movimiento' };
+    // Rangos seguidos con la misma diferencia
+    const rangos = [];
+    for (let i = 0; i < 96;) {
+        if (!marca[i]) { i++; continue; }
+        let j = i; while (j < 96 && marca[j] === marca[i]) j++;
+        rangos.push({ de: i, a: j, tipo: marca[i] }); i = j;
+    }
+    const act = M180_ACTIVIDADES;
+    const barraLib = sl.map((a, i) => `<div title="${m180GpsHora(i)}" style="flex:1;background:${a ? act[a].color : '#f1f3f5'}"></div>`).join('');
+    const barraGps = g.slots_gps.map((c, i) => `<div title="${m180GpsHora(i)}" style="flex:1;background:${M180_GPS_COLOR[c]};${marca[i] ? 'outline:2px solid #dc2626;outline-offset:-2px;' : ''}"></div>`).join('');
+    const regla = [0, 3, 6, 9, 12, 15, 18, 21].map(h => `<span style="flex:1;font-size:.65rem;color:#6b7280">${String(h).padStart(2, '0')}h</span>`).join('');
+    const minCondLib = sl.filter(v => v === 1).length * 15;
+    // Paradas del GPS contra lo que la libreta tenía en ese momento
+    const filasParadas = (g.paradas || []).map(p => {
+        const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
+        const m = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+        for (let i = 0; i < 96; i++) { const ov = Math.min(fin, (i + 1) * 900) - Math.max(ini, i * 900); if (ov > 0) m[sl[i] || 0] += ov / 60; }
+        const total = Object.values(m).reduce((x, y) => x + y, 0) || 1;
+        let badge;
+        if (m[1] / total >= 0.5) badge = `<span class="badge bg-danger">libreta: conducción</span>`;
+        else if (m[0] / total >= 0.5) badge = `<span class="badge bg-warning text-dark">libreta: sin registrar</span>`;
+        else badge = `<span class="badge bg-success">calza</span>`;
+        const det = [m[2] ? `${Math.round(m[2])} min espera` : '', m[4] ? `${Math.round(m[4])} min descanso` : '', m[3] ? `${Math.round(m[3])} min aux.` : '', m[1] ? `${Math.round(m[1])} min conducción` : '', m[0] ? `${Math.round(m[0])} min sin registrar` : ''].filter(Boolean).join(' · ');
+        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsc(p.lugar) || '—'}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
+    }).join('');
+    const r = g.resumen || {};
+    host.innerHTML = `
+        <div class="small text-muted mb-2">${patente} · ${r.km != null ? r.km + ' km' : ''} · ${g.min_mov_gps} min en movimiento (GPS) vs ${minCondLib} min de conducción en la libreta${r.primero ? ` · primer reporte ${m180GpsEsc(r.primero).slice(0, 5)}, último ${m180GpsEsc(r.ultimo).slice(0, 5)}` : ''}</div>
+        <div class="mb-1 small fw-semibold">Libreta</div><div class="d-flex" style="height:20px;border-radius:4px;overflow:hidden">${barraLib}</div>
+        <div class="mt-2 mb-1 small fw-semibold">GPS <span class="fw-normal text-muted">(verde: en movimiento · naranja: detenido · gris: sin dato o en planta · rojo: no calza)</span></div>
+        <div class="d-flex" style="height:20px;border-radius:4px;overflow:hidden">${barraGps}</div>
+        <div class="d-flex mt-1">${regla}</div>
+        ${rangos.length ? `<div class="mt-3"><div class="small fw-semibold mb-1">Tramos que no calzan (${rangos.length})</div><ul class="small mb-0 ps-3">${rangos.map(x => `<li>${m180GpsHora(x.de)}–${m180GpsHora(x.a)} (${(x.a - x.de) * 15} min): ${TXT[x.tipo]}</li>`).join('')}</ul></div>` : '<div class="alert alert-success py-2 small mt-3 mb-0">Todos los tramos con GPS calzan con la libreta.</div>'}
+        <div class="mt-3"><div class="small fw-semibold mb-1">Paradas del camión (${(g.paradas || []).length}, desde 5 min)</div>
+        ${filasParadas ? `<div class="table-responsive"><table class="table table-sm align-middle mb-0" style="font-size:.8rem"><thead><tr><th>Hora</th><th class="text-end">Duración</th><th>Lugar</th><th>Libreta en ese tramo</th></tr></thead><tbody>${filasParadas}</tbody></table></div>` : '<div class="text-muted small">Sin paradas de 5 minutos o más fuera de la planta.</div>'}</div>`;
+}
+window.m180GpsAbrir = m180GpsAbrir; window.m180GpsVer = m180GpsVer; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset;
 window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 
