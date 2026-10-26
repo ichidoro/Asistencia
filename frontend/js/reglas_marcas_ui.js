@@ -23,6 +23,7 @@ const ReglasMarcasModule = (() => {
         estado: 'Estado', hora_entrada_real: 'ENTRADA', hora_salida_real: 'SALIDA', horas_trabajadas: 'Horas',
         minutos_atraso: 'Atraso (min)', minutos_salida_adelantada: 'Salida adelantada (min)', minutos_deuda: 'Tiempo que faltó (min)',
         minutos_extra_bruto: 'Extra (min)', minutos_colacion: 'Colación descontada (min)', observaciones: 'Anotación',
+        hora_salida_colacion: 'Colación desde', minutos_permisos_detectados: 'Permiso (min)',
     };
     const ESTADO_TXT = { JORNADA_ESPECIAL: 'Jornada especial', ANOMALIA: 'En revisión, sin horas', EN_CURSO: 'En curso' };
     // Cualquier estado del día en palabras (los de arriba con su texto propio; el resto, sin guiones bajos).
@@ -83,6 +84,11 @@ const ReglasMarcasModule = (() => {
             '.rmx-hor{position:absolute;top:38px;height:22px;border-radius:7px;background:#eef4ff;border:1.5px dashed #93b4f5}',
             '.rmx-seg{position:absolute;top:46px;height:6px;border-radius:3px;background:#86efac}',
             '.rmx-pau{position:absolute;top:46px;height:6px;border-radius:3px;background:#f59e0b}',
+            '.rmx-pau-col{background:#f59e0b}.rmx-pau-per{background:#6d28d9}',
+            '.rmx-tl-2{height:124px}.rmx-tl-2 .rmx-tick{top:108px}.rmx-ptag.rmx-ptag-b{top:84px}',
+            '.rmx-ptag.rmx-ptag-col{color:#92400e;background:#fef3c7}.rmx-ptag.rmx-ptag-per{color:#4c1d95;background:#ede9fe}',
+            '.rmx-corte{position:absolute;top:18px;height:58px;border-left:2px dashed #334155}',
+            '.rmx-ctag{position:absolute;top:2px;transform:translateX(-50%);font-size:.64rem;font-weight:700;color:#1e293b;background:#f1f5f9;border-radius:4px;padding:0 6px;white-space:nowrap}',
             '.rmx-dot{position:absolute;top:40px;width:18px;height:18px;margin-left:-9px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1.5px #475569}',
             '.rmx-dot-s{top:43px;width:12px;height:12px;margin-left:-6px;border-width:2px}',
             '.rmx-dot-in{background:#16a34a}.rmx-dot-out{background:#2563eb}',
@@ -130,31 +136,37 @@ const ReglasMarcasModule = (() => {
     // ── Foto de lo guardado, para saber si hay cambios sin guardar ───────────
     function _fotoRegla(r) {
         return { lectura: r.lectura, colacion: r.colacion, accion: r.accion, avisa: r.avisa_fuera_de_ciclo ? 1 : 0,
-                 opciones: (r.opciones_revision || []).slice().sort().join(',') };
+                 opciones: (r.opciones_revision || []).slice().sort().join(','), eleccion: r.eleccion_colacion || 'PARECIDA' };
     }
     function _hayCambios(r) {
         if (!r || !r._guardada) return false;
         const a = r._guardada, b = _fotoRegla(r);
-        return a.lectura !== b.lectura || a.colacion !== b.colacion || a.accion !== b.accion || a.avisa !== b.avisa || a.opciones !== b.opciones;
+        return a.lectura !== b.lectura || a.colacion !== b.colacion || a.accion !== b.accion || a.avisa !== b.avisa || a.opciones !== b.opciones
+            || a.eleccion !== b.eleccion;
     }
     function _revertir(r) {
         const g = r._guardada;
         if (!g) return;
         r.lectura = g.lectura; r.colacion = g.colacion; r.accion = g.accion; r.avisa_fuera_de_ciclo = g.avisa;
         r.opciones_revision = g.opciones ? g.opciones.split(',') : [];
+        r.eleccion_colacion = g.eleccion;
     }
+    // Pausas del día según cómo se leen las marcas (lo calcula el servidor por regla y lectura)
+    const pausasDe = (r) => Number(((r && r.pausas) || {})[r && r.lectura] || 0);
+    const usaCorte = (r) => (r && r.eleccion_colacion) === 'CORTE_UMBRAL';
 
     // ── Lo que ve el sistema: se arma con la forma de la secuencia ───────────
     const alterna = (sec) => /^(ES)+$/.test(String(sec || ''));
     const hayPausaMedible = (sec) => String(sec || '').slice(1, -1).indexOf('SE') >= 0;
 
-    function diagnostico(sec) {
+    function diagnostico(sec, r) {
         const s = String(sec || ''), n = s.length;
         if (n === 1) return 'El día tiene una sola marca, una ' + PALABRA[s] + '. Falta la otra: no hay cómo saber cuánto trabajó.';
         if (alterna(s)) {
             const pausas = n / 2 - 1;
             if (pausas === 0) return 'El día tiene dos marcas: una ENTRADA y una SALIDA. La persona no marcó la colación, así que no hay pausa que medir.';
             if (pausas === 1) return 'Cuatro marcas: la ENTRADA, la SALIDA a colación, la ENTRADA de regreso y la SALIDA del día. Hay una sola pausa: esa es la colación.';
+            if (usaCorte(r)) return n + ' marcas con ' + pausas + ' pausas: las que terminan antes de la ENTRADA del horario más su mínimo son permiso; entre las demás, la más parecida a la colación del horario es la colación.';
             return n + ' marcas con ' + pausas + ' pausas: la más parecida a la colación del horario es la colación; las otras cuentan como permiso.';
         }
         const partes = [n + ' marcas: ' + palabras(s) + '.'];
@@ -198,6 +210,9 @@ const ReglasMarcasModule = (() => {
         if (r.colacion === 'TURNO') f += '; se descuenta la colación del horario si la persona estuvo al menos el mínimo';
         else if (r.colacion === 'MEDIDA') f += '; se descuenta lo mayor entre la colación del horario y la pausa medida (bajo el mínimo, solo la pausa)';
         else f += '; no se descuenta colación';
+        if (pausasDe(r) >= 2) f += usaCorte(r)
+            ? '; con dos pausas, las que terminan antes de la ENTRADA del horario más su mínimo son permiso y, entre las demás, la colación es la más parecida a la del horario'
+            : '; con dos pausas, la colación es la que más se parece en minutos a la del horario y las otras son permiso';
         if (r.accion === 'CALCULA') f += r.avisa_fuera_de_ciclo ? '; avisa solo si las marcas no calzan con ningún ciclo del horario' : '; no se avisa';
         else f += '; se calcula y queda en «Días por revisar»';
         return f + '.';
@@ -351,7 +366,7 @@ const ReglasMarcasModule = (() => {
     }
 
     // ── Días de ejemplo y ensayo ─────────────────────────────────────────────
-    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, r.avisa_fuera_de_ciclo ? 1 : 0, (r.opciones_revision || []).slice().sort().join('|')].join('~');
+    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, r.avisa_fuera_de_ciclo ? 1 : 0, (r.opciones_revision || []).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA'].join('~');
 
     async function cargarEjemplos(r) {
         if (ejemplos[r.id]) return;
@@ -375,7 +390,8 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(API + r.id + '/ensayo/', {
                 method: 'POST', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion,
-                                       opciones_revision: r.opciones_revision || [], avisa_fuera_de_ciclo: r.avisa_fuera_de_ciclo ? 1 : 0 })
+                                       opciones_revision: r.opciones_revision || [], avisa_fuera_de_ciclo: r.avisa_fuera_de_ciclo ? 1 : 0,
+                                       eleccion_colacion: r.eleccion_colacion || 'PARECIDA' })
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(body.detail || ('HTTP ' + res.status));
@@ -415,7 +431,7 @@ const ReglasMarcasModule = (() => {
         hi = Math.ceil((hi + 30) / 120) * 120;
         return { lo: lo, hi: Math.max(hi, lo + 480) };
     }
-    function lineaTiempo(d, eje) {
+    function lineaTiempo(d, eje, r) {
         const tot = eje.hi - eje.lo;
         const pos = (m) => ((m - eje.lo) / tot * 100).toFixed(2) + '%';
         const ancho = (a, b) => (Math.max(0.3, (b - a) / tot * 100)).toFixed(2) + '%';
@@ -423,18 +439,37 @@ const ReglasMarcasModule = (() => {
         let out = '<div class="rmx-ax"></div>';
         const h = horarioDe(d);
         if (h) out += '<div class="rmx-hor" style="left:' + pos(h.a) + ';width:' + ancho(h.a, h.b) + '"></div>';
+        // Con dos pausas o más se dice cuál fue la colación (la que guardó el cálculo) y cuáles cuentan como permiso
+        let nPausas = 0;
+        for (let i = 1; i < ms.length - 2; i++) if (ms[i].t === 'S' && ms[i + 1].t === 'E') { nPausas++; i++; }
+        const colDesde = String(d.hora_salida_colacion || '').slice(0, 8);
+        const tipoPausa = (m) => nPausas < 2 ? '' : (colDesde && m.fh.slice(11, 19) === colDesde ? 'col' : 'per');
         for (let i = 0; i < ms.length - 1; i++) {
             const a = ms[i], b = ms[i + 1];
-            out += '<div class="' + (a.t === 'S' && b.t === 'E' ? 'rmx-pau' : 'rmx-seg') + '" style="left:' + pos(a.min) + ';width:' + ancho(a.min, b.min) + '"></div>';
+            const esPausa = a.t === 'S' && b.t === 'E';
+            const tp = esPausa ? tipoPausa(a) : '';
+            out += '<div class="' + (esPausa ? 'rmx-pau' + (tp ? ' rmx-pau-' + tp : '') : 'rmx-seg') + '" style="left:' + pos(a.min) + ';width:' + ancho(a.min, b.min) + '"></div>';
         }
         const enPausa = {};
+        let kPausa = 0;
         for (let i = 1; i < ms.length - 2; i++) {
             if (ms[i].t === 'S' && ms[i + 1].t === 'E') {
                 enPausa[i] = enPausa[i + 1] = true;
                 const mid = (ms[i].min + ms[i + 1].min) / 2;
-                out += '<div class="rmx-ptag" style="left:' + pos(mid) + '">Pausa ' + ms[i].fh.slice(11, 16) + ' → ' + ms[i + 1].fh.slice(11, 16) + ' · ' + durMin(ms[i + 1].min - ms[i].min) + '</div>';
+                const tp = tipoPausa(ms[i]);
+                const fila2 = nPausas >= 2 && (kPausa++ % 2 === 1);   // con dos pausas, etiquetas en dos filas para que no se tapen
+                const nombre = tp === 'col' ? 'Colación ' : (tp === 'per' ? 'Permiso ' : 'Pausa ');
+                // La duración se cuenta con los segundos, igual que el cálculo (si no, 114,2 min se leía 1 h 55)
+                const conSeg = (m) => m.min + (parseInt(m.fh.slice(17, 19), 10) || 0) / 60;
+                out += '<div class="rmx-ptag' + (tp ? ' rmx-ptag-' + tp : '') + (fila2 ? ' rmx-ptag-b' : '') + '" style="left:' + pos(mid) + '">' + nombre + ms[i].fh.slice(11, 16) + ' → ' + ms[i + 1].fh.slice(11, 16) + ' · ' + durMin(conSeg(ms[i + 1]) - conSeg(ms[i])) + '</div>';
                 i++;
             }
+        }
+        const umbralDia = Number(d.umbral_horas_colacion) || 0;
+        if (nPausas >= 2 && usaCorte(r) && h && umbralDia > 0) {
+            const corte = h.a + Math.round(umbralDia * 60);
+            const hhmm = String(Math.floor(((corte % 1440) + 1440) % 1440 / 60)).padStart(2, '0') + ':' + String(((corte % 60) + 60) % 60).padStart(2, '0');
+            out += '<div class="rmx-corte" style="left:' + pos(corte) + '"></div><div class="rmx-ctag" style="left:' + pos(corte) + '">Corte ' + hhmm + '</div>';
         }
         ms.forEach((m, i) => {
             const extremo = (i === 0 || i === ms.length - 1);
@@ -445,7 +480,7 @@ const ReglasMarcasModule = (() => {
         for (let t = eje.lo; t <= eje.hi; t += 120) {
             out += '<div class="rmx-tick" style="left:' + pos(t) + '">' + String(Math.floor(((t % 1440) + 1440) % 1440 / 60)).padStart(2, '0') + '</div>';
         }
-        return '<div class="rmx-tl">' + out + '</div>';
+        return '<div class="rmx-tl' + (nPausas >= 2 ? ' rmx-tl-2' : '') + '">' + out + '</div>';
     }
     function resultadoDia(d) {
         const ms = marcasDe(d);
@@ -456,6 +491,7 @@ const ReglasMarcasModule = (() => {
         if (Number(d.minutos_atraso) > 0) avisos.push('<span style="color:#b91c1c;font-weight:600">Atraso ' + durMin(d.minutos_atraso) + '</span>');
         if (Number(d.minutos_salida_adelantada) > 0) avisos.push('<span style="color:#b91c1c;font-weight:600">Salida adelantada ' + durMin(d.minutos_salida_adelantada) + '</span>');
         if (Number(d.minutos_exceso_colacion) > 0) avisos.push('<span style="color:#92400e;font-weight:600">Exceso de colación ' + durMin(d.minutos_exceso_colacion) + '</span>');
+        if (Number(d.minutos_permisos_detectados) > 0) avisos.push('<span style="color:#5b21b6;font-weight:600">Permiso ' + durMin(d.minutos_permisos_detectados) + ' · va a PER</span>');
         if (Number(d.minutos_extra_bruto) > 0) avisos.push('<span style="color:#1d4ed8;font-weight:600">' + durMin(d.minutos_extra_bruto) + ' extra</span>');
         if (ESTADO_TXT[d.estado]) avisos.push('<span style="color:#6b21a8;font-weight:600">' + ESTADO_TXT[d.estado] + '</span>');
         html += avisos.length ? '<div>' + avisos.join(' · ') + '</div>' : '<div style="color:#15803d;font-weight:600">Sin atraso ni salida adelantada</div>';
@@ -479,7 +515,7 @@ const ReglasMarcasModule = (() => {
                 return '<div class="rmx-dia"><div><div class="fw-bold">' + esc(d.persona) + '</div>'
                     + '<div class="text-muted" style="font-size:.78rem;">' + esc(d.horario || '') + ' · ' + esc(diaSemana(d.fecha)) + '</div>'
                     + '<div style="font-size:.78rem;' + (h ? 'color:#475569' : 'color:#6b21a8;font-weight:600') + '">' + (h ? 'Horario del día ' + esc(String(d.hora_entrada_teorica).slice(0, 5)) + ' – ' + esc(String(d.hora_salida_teorica).slice(0, 5)) : 'Día libre o feriado') + '</div></div>'
-                    + (eje ? lineaTiempo(d, eje) : '<div></div>')
+                    + (eje ? lineaTiempo(d, eje, r) : '<div></div>')
                     + '<div class="rmx-res">' + resultadoDia(d) + '</div></div>';
             }).join('');
         }
@@ -505,6 +541,36 @@ const ReglasMarcasModule = (() => {
             + (explicacion ? '<div class="text-muted" style="font-size:.84rem;">' + explicacion + '</div>' : '') + '</div>' + cuerpo + '</div></div>';
     }
 
+    // Horas con los decimales que tengan (6 h, 5,5 h, 4,75 h)
+    function horasTxt(x) {
+        const c = Math.round(Number(x || 0) * 100);
+        return num(c / 100, c % 100 === 0 ? 0 : (c % 10 === 0 ? 1 : 2)) + ' h';
+    }
+    // Hora de corte de cada horario y ciclo: ENTRADA + «Mínimo para descontar», y cuántas colaciones reales
+    // (días de 4 marcas) terminan antes. Todo viene del servidor (Horarios y días guardados).
+    function tablaCortes() {
+        const filas = data.cortes_colacion || [];
+        if (!filas.length) return '';
+        const porHorario = [];
+        filas.forEach(f => {
+            let g = porHorario.find(x => x.id === f.id);
+            if (!g) { g = { id: f.id, nombre: f.nombre, umbral: Number(f.umbral) || 0, ciclos: [], total: 0, antes: 0 }; porHorario.push(g); }
+            const ent = toMin(f.entrada), corte = ent + Math.round(g.umbral * 60);
+            const hhmm = String(Math.floor(((corte % 1440) + 1440) % 1440 / 60)).padStart(2, '0') + ':' + String(((corte % 60) + 60) % 60).padStart(2, '0');
+            g.ciclos.push(esc(f.entrada) + ' → ' + hhmm);
+            g.total += Number(f.colaciones) || 0;
+            g.antes += Number(f.antes_del_corte) || 0;
+        });
+        return '<table class="rmx-tab"><thead><tr><th>Horario</th><th>Mínimo para descontar</th><th>ENTRADA → hora de corte</th><th>Colaciones reales que terminan antes del corte</th></tr></thead><tbody>'
+            + porHorario.map(g => {
+                let nota;
+                if (!(g.umbral > 0)) nota = 'Con 0 no hay corte: decide como hoy';
+                else if (!g.total) nota = 'Sin días de 4 marcas para medirlo';
+                else nota = g.antes.toLocaleString('es-CL') + ' de ' + g.total.toLocaleString('es-CL') + ' (' + num(g.antes * 100 / g.total, 1) + ' %)';
+                return '<tr><td>' + esc(g.nombre) + '</td><td>' + horasTxt(g.umbral) + '</td><td>' + g.ciclos.join(' · ') + '</td><td>' + nota + '</td></tr>';
+            }).join('') + '</tbody></table>';
+    }
+
     function tablaHorarios() {
         const hs = data.horarios || [];
         if (!hs.length) return '';
@@ -513,7 +579,7 @@ const ReglasMarcasModule = (() => {
                 const sinCol = !h.descuento_colacion_auto || !(Number(h.minutos_colacion_auto) > 0);
                 const umbral = Number(h.umbral_horas_colacion) || 0;
                 return '<tr><td>' + esc(h.nombre) + '</td><td>' + (sinCol ? 'sin colación' : durMin(h.minutos_colacion_auto)) + '</td>'
-                    + '<td' + (sinCol || umbral > 0 ? '' : ' style="color:#b45309;font-weight:600"') + '>' + (sinCol ? '—' : (umbral > 0 ? num(umbral, umbral % 1 ? 1 : 0) + ' h' : '0 h: descuenta siempre')) + '</td>'
+                    + '<td' + (sinCol || umbral > 0 ? '' : ' style="color:#b45309;font-weight:600"') + '>' + (sinCol ? '—' : (umbral > 0 ? horasTxt(umbral) : '0 h: descuenta siempre')) + '</td>'
                     + '<td>' + (Number(h.tolerancia_exceso_colacion_minutos) || 0) + ' min</td>'
                     + '<td>' + (Number(h.anclaje_entrada_minutos) || 0) + ' / ' + (Number(h.anclaje_salida_minutos) || 0) + ' min</td></tr>';
             }).join('') + '</tbody></table>';
@@ -544,7 +610,7 @@ const ReglasMarcasModule = (() => {
 
         const intro = '<section class="rmx-intro">'
             + '<div class="rmx-card p-3 d-flex gap-2" style="font-size:.86rem;line-height:1.5;"><i class="bi bi-info-circle text-secondary" aria-hidden="true" style="font-size:1.2rem;"></i><div><strong>¿Qué es una regla?</strong> Cada día el reloj deja marcas. Cuando un día trae sus marcas en este orden, la regla dice cómo calcularlo. Nunca cambia ni inventa marcas: decide cómo se leen, qué colación se descuenta y si alguien tiene que mirarlo.</div></div>'
-            + '<div class="rmx-ve p-3 d-flex gap-2" style="font-size:.86rem;line-height:1.5;"><i class="bi bi-search" aria-hidden="true" style="font-size:1.1rem;"></i><div><strong>Lo que ve el sistema.</strong> ' + esc(diagnostico(s)) + '</div></div>'
+            + '<div class="rmx-ve p-3 d-flex gap-2" style="font-size:.86rem;line-height:1.5;"><i class="bi bi-search" aria-hidden="true" style="font-size:1.1rem;"></i><div><strong>Lo que ve el sistema.</strong> ' + esc(diagnostico(s, r)) + '</div></div>'
             + '</section>';
 
         // Paso 1: ¿calcula solo?
@@ -586,6 +652,20 @@ const ReglasMarcasModule = (() => {
             + '<div><div class="text-muted mb-1" style="font-size:.78rem;">Lo que tiene cada horario hoy <span class="rmx-src">Configuración → Horarios → Colación, Umbral y Tolerancia de exceso</span></div>' + tablaHorarios() + '</div>';
         const p3 = paso(3, '¿Qué colación se descuenta?', 'Los minutos no viven en la regla: se leen del horario asignado de cada persona.', cuerpo3);
 
+        // Paso «¿Cuál pausa es la colación?»: solo cuando el día tiene dos pausas o más
+        const conPausas = calcula && pausasDe(r) >= 2;
+        const nAviso = conPausas ? 5 : 4, nEnsayo = conPausas ? 6 : 5;
+        const pPausa = !conPausas ? '' : paso(4, '¿Cuál pausa es la colación?',
+            'Solo aparece cuando el día tiene dos pausas o más. Con una sola pausa, esa pausa siempre es la colación.',
+            '<div class="rmx-ops rmx-c2">'
+            + opcion('rmx-p35', 'PARECIDA', !usaCorte(r), 'La que más se parece en minutos a la colación del horario',
+                'Así funciona hoy. La otra pausa es permiso.', '', dis)
+            + opcion('rmx-p35', 'CORTE_UMBRAL', usaCorte(r), 'Las que terminan antes de la ENTRADA más el mínimo son permiso; entre las demás, la que más se parece en minutos',
+                'Usa el «Mínimo para descontar» de cada horario como hora de corte. Si ninguna termina después del corte, decide como hoy.', '',
+                Object.assign({ badge: ['rmx-b-sug', 'Sugerida'] }, dis))
+            + '</div>'
+            + '<div><div class="text-muted mb-1" style="font-size:.78rem;">Hora de corte de cada horario <span class="rmx-src">Configuración → Horarios → Mínimo para descontar</span></div>' + tablaCortes() + '</div>');
+
         // Paso 4: aviso
         const umbralCiclo = (data.ajustes || {}).reglas_marcas_fuera_ciclo_minutos;
         const opcionesHtml = (r.accion !== 'CALCULA')
@@ -604,7 +684,7 @@ const ReglasMarcasModule = (() => {
                     umbralCiclo == null ? '<span class="rmx-ef">Configure los minutos en «Ajustes de las reglas», arriba: sin ese valor no avisa.</span>' : '',
                     Object.assign({ check: true, badge: ['rmx-b-new', 'Opción nueva'] }, dis))
                 : '');
-        const p4 = paso(4, '¿Alguien tiene que mirarlo?', '«Avisar» deja el día en «Días por revisar» con un triángulo en la grilla y bloquea el cierre del área hasta que alguien lo vea.', cuerpo4);
+        const p4 = paso(nAviso, '¿Alguien tiene que mirarlo?', '«Avisar» deja el día en «Días por revisar» con un triángulo en la grilla y bloquea el cierre del área hasta que alguien lo vea.', cuerpo4);
 
         // Paso 5: ensayo
         const en = ensayos[r.id];
@@ -628,7 +708,7 @@ const ReglasMarcasModule = (() => {
         } else if (en && en.estado === 'error') ensayoHtml = '<div class="alert alert-warning py-2 mb-2">El ensayo no se pudo hacer: ' + esc(en.error || '') + '</div><button type="button" class="btn btn-sm btn-outline-success" id="rm-ensayar">Reintentar el ensayo</button>';
         else ensayoHtml = (en && en.clave !== claveAct ? '<div class="text-muted mb-1" style="font-size:.78rem;">La configuración cambió desde el último ensayo.</div>' : '')
             + '<button type="button" class="btn btn-sm btn-outline-success align-self-start" id="rm-ensayar">Ensayar con los días reales (no guarda nada)</button>';
-        const p5 = paso(5, 'Así quedan los días reales', 'Ensayo: calcula los días de arriba con lo configurado, sin guardar nada.', ensayoHtml, true);
+        const p5 = paso(nEnsayo, 'Así quedan los días reales', 'Ensayo: calcula los días de arriba con lo configurado, sin guardar nada.', ensayoHtml, true);
 
         const barra = '<div class="rmx-barra"><p><b>En una frase:</b> ' + esc(fraseRegla(r)) + '</p><div class="d-flex gap-2 flex-wrap">'
             + '<button type="button" class="rmx-btn rmx-btn-sec" id="rm-ver-dias">Ver los días</button>'
@@ -640,7 +720,7 @@ const ReglasMarcasModule = (() => {
             + '</div></div>'
             + (r.activa && puede ? '<div class="text-muted mt-1" style="font-size:.78rem;">Para cambiarla, primero apáguela: así el cambio corre con su propio antes y después.</div>' : '');
 
-        el.innerHTML = '<div class="d-flex flex-column gap-3">' + cabecera + intro + seccionDias(r) + '<section>' + p1 + p2 + p3 + p4 + p5 + '</section>' + barra + '</div>';
+        el.innerHTML = '<div class="d-flex flex-column gap-3">' + cabecera + intro + seccionDias(r) + '<section>' + p1 + p2 + p3 + pPausa + p4 + p5 + '</section>' + barra + '</div>';
         window.scrollTo(0, scrollY);
 
         // ── Cambios en pantalla (quedan en memoria hasta «Guardar») ──
@@ -657,6 +737,7 @@ const ReglasMarcasModule = (() => {
         })));
         el.querySelectorAll('input[name="rmx-p2"]').forEach(i => i.addEventListener('change', cambiar(t => { r.lectura = t.value; })));
         el.querySelectorAll('input[name="rmx-p3"]').forEach(i => i.addEventListener('change', cambiar(t => { r.colacion = t.value; })));
+        el.querySelectorAll('input[name="rmx-p35"]').forEach(i => i.addEventListener('change', cambiar(t => { r.eleccion_colacion = t.value; })));
         el.querySelectorAll('input[name="rmx-p4"]').forEach(i => i.addEventListener('change', cambiar(t => {
             r.accion = t.value;
             if (r.accion === 'CALCULA') r.opciones_revision = [];
@@ -804,7 +885,8 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(API + r.id + '/', {
                 method: 'PUT', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion, opciones_revision: r.opciones_revision || [],
-                                       avisa_fuera_de_ciclo: r.avisa_fuera_de_ciclo ? 1 : 0, nota: r.nota || '' })
+                                       avisa_fuera_de_ciclo: r.avisa_fuera_de_ciclo ? 1 : 0, eleccion_colacion: r.eleccion_colacion || 'PARECIDA',
+                                       nota: r.nota || '' })
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) { toast(body.detail || 'No se pudo guardar la regla.', 'danger'); return; }

@@ -34,6 +34,13 @@ COLACIONES = ('TURNO', 'MEDIDA', 'NINGUNA')
 #          (El descuento siempre es el mayor entre la del horario y la medida.)
 # NINGUNA = no se descuenta colación.
 
+ELECCIONES_COLACION = ('PARECIDA', 'CORTE_UMBRAL')
+# Solo cuando el día tiene dos pausas o más (con una sola pausa, esa pausa es la colación):
+# PARECIDA     = la colación es la pausa que más se parece en minutos a la colación del horario.
+# CORTE_UMBRAL = las pausas que terminan antes de la ENTRADA del horario más su «Mínimo para descontar»
+#                (umbral de colación) son permiso; entre las demás, la que más se parece en minutos.
+#                Si ninguna termina después de esa hora, o el horario tiene mínimo 0, decide como PARECIDA.
+
 ACCIONES = ('CALCULA', 'CALCULA_Y_REVISA', 'SOLO_REVISA')
 # CALCULA          = calcula y listo, sin aviso.
 # CALCULA_Y_REVISA = calcula igual y el día queda en «Días por revisar» (triángulo).
@@ -86,6 +93,32 @@ def firma_marcas(marcas_consumidas_ids) -> str:
         return ''
 
 
+def pausas_de(secuencia, lectura) -> int:
+    """Cuántas pausas (una SALIDA seguida de una ENTRADA) tiene el día según cómo se leen sus marcas.
+    RELOJ: se leen como las marcó el reloj. EXTREMOS: la primera es la ENTRADA y la última la SALIDA, y las del
+    medio solo cuentan como pausa si son una SALIDA seguida de una ENTRADA. NINGUNA: no se calcula."""
+    s = str(secuencia or '')
+    if lectura == 'NINGUNA' or len(s) < 4:
+        return 0
+    if lectura == 'RELOJ':
+        pares, i = [], 0
+        while i < len(s) - 1:
+            if s[i] == 'E' and s[i + 1] == 'S':
+                pares.append(i)
+                i += 2
+            else:
+                i += 1
+        return max(0, len(pares) - 1)
+    medio, n, j = s[1:-1], 0, 0
+    while j < len(medio) - 1:
+        if medio[j] == 'S' and medio[j + 1] == 'E':
+            n += 1
+            j += 2
+        else:
+            j += 1
+    return n
+
+
 def validar_regla(regla: dict) -> str:
     """Devuelve '' si la regla es válida, o el motivo del rechazo en palabras simples."""
     sec = str(regla.get('secuencia') or '')
@@ -99,6 +132,8 @@ def validar_regla(regla: dict) -> str:
         return "Cómo se leen las marcas: valor desconocido."
     if colacion not in COLACIONES:
         return "Colación: valor desconocido."
+    if (regla.get('eleccion_colacion') or 'PARECIDA') not in ELECCIONES_COLACION:
+        return "Cuál pausa es la colación: valor desconocido."
     if accion not in ACCIONES:
         return "Qué hace el sistema: valor desconocido."
     if not isinstance(opciones, list) or len(set(opciones)) != len(opciones):

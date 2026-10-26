@@ -76,6 +76,13 @@ class ReglasMarcasRepository:
                 await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN avisa_fuera_de_ciclo INTEGER DEFAULT 0")
         except Exception as e:
             logger.warning(f"Columna avisa_fuera_de_ciclo: {e}")
+        # «¿Cuál pausa es la colación?» (por regla; solo se pregunta cuando el día tiene dos pausas o más).
+        # Parte en la forma de siempre (PARECIDA): ninguna regla cambia hasta que alguien elija otra cosa.
+        try:
+            if 'eleccion_colacion' not in set(await self.db.get_column_names("reglas_marcas")):
+                await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN eleccion_colacion TEXT DEFAULT 'PARECIDA'")
+        except Exception as e:
+            logger.warning(f"Columna eleccion_colacion: {e}")
         # Valor inicial de cada ajuste de la pestaña (solo si la fila no existe: lo que
         # se configure desde la pantalla nunca se pisa). El cálculo los lee de `ajustes`.
         try:
@@ -283,6 +290,8 @@ class ReglasMarcasRepository:
                    z.hora_entrada_teorica, z.hora_salida_teorica, z.horas_teoricas,
                    z.minutos_colacion, z.minutos_colacion_real, z.minutos_exceso_colacion,
                    z.minutos_atraso, z.minutos_salida_adelantada, z.minutos_deuda, z.minutos_extra_bruto,
+                   z.hora_salida_colacion, z.hora_entrada_colacion, z.minutos_permisos_detectados,
+                   tu.umbral_horas_colacion,
                    COUNT(*) OVER () AS total
               FROM d JOIN empleados e ON e.id = d.empleado_id
               JOIN asistencias z ON z.id = d.aid
@@ -319,6 +328,33 @@ class ReglasMarcasRepository:
               FROM turnos t
              WHERE t.tipo_programacion = ? AND COALESCE(CAST(t.activo AS INTEGER), 1) = 1
              ORDER BY t.nombre
+        """, (tipo_horario,))
+        return [dict(r) for r in rows]
+
+    async def cortes_colacion(self, tipo_horario: str) -> List[Dict[str, Any]]:
+        """Hora de corte de cada horario y ciclo (ENTRADA + «Mínimo para descontar») y, para saber si ese mínimo
+        sirve como corte, cuántas colaciones reales terminan antes: se cuentan los días de 4 marcas, donde la única
+        pausa es la colación. Todo sale de Horarios y de los días guardados; aquí no hay ningún número propio."""
+        rows = await self.db.fetch_all("""
+            WITH t AS (SELECT id, nombre, COALESCE(umbral_horas_colacion, 0) AS umbral FROM turnos
+                        WHERE tipo_programacion = ? AND COALESCE(CAST(activo AS INTEGER), 1) = 1),
+            e AS (SELECT DISTINCT d.turno_id, SUBSTR(CAST(d.hora_entrada AS TEXT), 1, 5) AS entrada
+                    FROM turno_dias d JOIN t ON t.id = d.turno_id
+                   WHERE d.hora_entrada IS NOT NULL AND CAST(d.hora_entrada AS TEXT) <> ''
+                     AND COALESCE(CAST(d.es_libre AS INTEGER), 0) = 0),
+            c AS (SELECT a.turno_asignado_id AS turno_id, SUBSTR(CAST(a.hora_entrada_teorica AS TEXT), 1, 5) AS entrada,
+                         MOD(CAST(EXTRACT(EPOCH FROM (CAST(a.hora_entrada_colacion AS TIME) - CAST(a.hora_entrada_teorica AS TIME))) AS INTEGER) + 86400, 86400) AS seg_fin
+                    FROM asistencias a JOIN t ON t.id = a.turno_asignado_id
+                   WHERE a.hora_entrada_colacion IS NOT NULL AND a.hora_salida_colacion IS NOT NULL
+                     AND a.hora_entrada_teorica IS NOT NULL AND a.marcas_consumidas_ids ~ '^\\[ *[0-9]'
+                     AND jsonb_array_length(a.marcas_consumidas_ids::jsonb) = 4)
+            SELECT t.id, t.nombre, t.umbral, e.entrada,
+                   COUNT(c.seg_fin) AS colaciones,
+                   COUNT(c.seg_fin) FILTER (WHERE c.seg_fin <= t.umbral * 3600) AS antes_del_corte
+              FROM t JOIN e ON e.turno_id = t.id
+              LEFT JOIN c ON c.turno_id = t.id AND c.entrada = e.entrada
+             GROUP BY t.id, t.nombre, t.umbral, e.entrada
+             ORDER BY t.nombre, e.entrada
         """, (tipo_horario,))
         return [dict(r) for r in rows]
 
@@ -515,6 +551,7 @@ class ReglasMarcasRepository:
             'accion': cambios.get('accion', actual['accion']),
             'opciones_revision': cambios.get('opciones_revision', actual['opciones_revision']),
             'avisa_fuera_de_ciclo': 1 if avisa in (1, True, '1', 'true') else 0,
+            'eleccion_colacion': cambios.get('eleccion_colacion') or actual.get('eleccion_colacion') or 'PARECIDA',
         }
         motivo = validar_regla(nueva)
         if motivo:
@@ -523,10 +560,12 @@ class ReglasMarcasRepository:
         await self.db.execute(
             """UPDATE reglas_marcas
                   SET lectura = ?, colacion = ?, accion = ?, opciones_revision = ?,
-                      avisa_fuera_de_ciclo = ?, nota = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                      avisa_fuera_de_ciclo = ?, eleccion_colacion = ?, nota = ?, updated_by = ?,
+                      updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?""",
             (nueva['lectura'], nueva['colacion'], nueva['accion'],
-             json.dumps(nueva['opciones_revision']), nueva['avisa_fuera_de_ciclo'], nota, username, regla_id)
+             json.dumps(nueva['opciones_revision']), nueva['avisa_fuera_de_ciclo'], nueva['eleccion_colacion'],
+             nota, username, regla_id)
         )
         despues = await self.obtener(regla_id)
         return {'antes': actual, 'despues': despues}

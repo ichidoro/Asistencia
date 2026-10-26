@@ -16,7 +16,7 @@ from backend.core.database import Database, get_db
 from backend.core.security import RequirePermission, SecurityContext
 from backend.repositories.reglas_marcas import AJUSTES_EDITABLES, ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
-from backend.services.reglas_marcas_def import grupo_de_secuencia, validar_regla
+from backend.services.reglas_marcas_def import pausas_de, grupo_de_secuencia, validar_regla
 from backend.services.reglas_marcas_corridas import (
     JOBS, _hay_corrida_en_curso, ensayar_regla, iniciar_corrida, job_publico,
 )
@@ -47,6 +47,8 @@ async def listar_reglas(
         r["dias"] = c["dias"]
         r["dias_abiertos"] = c["dias_abiertos"]
         r["grupo"] = grupo_de_secuencia(r["secuencia"])
+        r["eleccion_colacion"] = r.get("eleccion_colacion") or "PARECIDA"
+        r["pausas"] = {lect: pausas_de(r["secuencia"], lect) for lect in ("RELOJ", "EXTREMOS")}
     sin_regla = [
         {"secuencia": sec, "dias": c["dias"], "dias_abiertos": c["dias_abiertos"],
          "grupo": grupo_de_secuencia(sec)}
@@ -66,6 +68,7 @@ async def listar_reglas(
         "ajustes": await repo.ajustes_reglas(),
         "ajustes_descripcion": {k: {"texto": v[0], "min": v[1], "max": v[2]} for k, v in AJUSTES_EDITABLES.items()},
         "horarios": await repo.horarios(tipo),
+        "cortes_colacion": await repo.cortes_colacion(tipo),
         "motor_conectado": True,
         "corrida_en_curso": job_publico(corrida) if corrida else None,
     }
@@ -236,6 +239,7 @@ async def ensayar_la_regla(
         "accion": str(payload.get("accion") or ""),
         "opciones_revision": payload.get("opciones_revision") or [],
         "avisa_fuera_de_ciclo": 1 if payload.get("avisa_fuera_de_ciclo") in (1, True, "1", "true") else 0,
+        "eleccion_colacion": str(payload.get("eleccion_colacion") or "PARECIDA"),
     }
     motivo = validar_regla(propuesta)
     if motivo:
@@ -284,13 +288,14 @@ async def actualizar_regla(
     current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
 ):
     cambios = {k: payload.get(k) for k in
-               ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo", "nota", "activa")
+               ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo", "eleccion_colacion",
+                "nota", "activa")
                if k in payload}
     resultado = await repo.actualizar(regla_id, cambios, current_user.username)
     if resultado.get("error"):
         raise HTTPException(status_code=400, detail=resultado["error"])
     antes, despues = resultado["antes"], resultado["despues"]
-    campos = ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo")
+    campos = ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo", "eleccion_colacion")
     detalle = {
         "regla_id": regla_id,
         "secuencia": antes["secuencia"],

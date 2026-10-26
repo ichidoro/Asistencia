@@ -2502,12 +2502,26 @@ class QuantumMatrixEngine:
             # del ajuste `reglas_marcas_colacion_referencia_minutos` (pestaña Reglas de marcaciones).
             target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else colacion_referencia_min
 
+            # ¿Cuál pausa es la colación? Lo decide la regla del día (asistente de Reglas de marcaciones):
+            # CORTE_UMBRAL = las pausas que terminan antes de la ENTRADA del horario más su «Mínimo para descontar»
+            # son permiso y la colación se busca entre las demás; si ninguna termina después (o el mínimo es 0),
+            # se decide entre todas, como siempre. La hora de corte sale solo del horario: aquí no hay números.
+            candidatas = pausas_intermedias
+            if (str((regla_dia or {}).get('eleccion_colacion') or '') == 'CORTE_UMBRAL'
+                    and dt_ent_teo is not None and umbral_col > 0 and len(pausas_intermedias) > 1):
+                corte_col = dt_ent_teo + timedelta(hours=umbral_col)
+                despues_corte = [p for p in pausas_intermedias if p[1] > corte_col]
+                if despues_corte and len(despues_corte) < len(pausas_intermedias):
+                    candidatas = despues_corte
+                    res['observaciones'] += (f"Regla de marcaciones: las pausas que terminan antes de las "
+                                             f"{corte_col.strftime('%H:%M')} (ENTRADA del horario más su mínimo) "
+                                             f"cuentan como permiso. ")
             # El intervalo intermedio más cercano a la duración de colación se asigna a colación;
             # sin ninguna duración de referencia configurada, la pausa más larga.
             if target_col:
-                mejor_par_col = min(pausas_intermedias, key=lambda p: abs(p[2] - target_col))
+                mejor_par_col = min(candidatas, key=lambda p: abs(p[2] - target_col))
             else:
-                mejor_par_col = max(pausas_intermedias, key=lambda p: p[2])
+                mejor_par_col = max(candidatas, key=lambda p: p[2])
             
             res['hora_salida_colacion'] = mejor_par_col[0].strftime("%H:%M:%S")
             res['hora_entrada_colacion'] = mejor_par_col[1].strftime("%H:%M:%S")

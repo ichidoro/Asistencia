@@ -35,7 +35,8 @@ _MAX_JOBS_GUARDADOS = 20
 
 CAMPOS_FOTO = ('estado', 'hora_entrada_real', 'hora_salida_real', 'horas_trabajadas',
                'minutos_atraso', 'minutos_salida_adelantada', 'minutos_deuda',
-               'minutos_extra_bruto', 'minutos_colacion', 'observaciones')
+               'minutos_extra_bruto', 'minutos_colacion', 'hora_salida_colacion', 'minutos_permisos_detectados',
+               'observaciones')
 
 
 def _hay_corrida_en_curso() -> Optional[Dict[str, Any]]:
@@ -100,7 +101,8 @@ async def _foto(pares: List[Tuple[int, str]]) -> Dict[Tuple[int, str], Dict[str,
     for eid, f in pares:
         r = await db.fetch_one(
             "SELECT estado, hora_entrada_real, hora_salida_real, horas_trabajadas, minutos_atraso, "
-            "minutos_salida_adelantada, minutos_deuda, minutos_extra_bruto, minutos_colacion, observaciones "
+            "minutos_salida_adelantada, minutos_deuda, minutos_extra_bruto, minutos_colacion, "
+            "hora_salida_colacion, minutos_permisos_detectados, observaciones "
             "FROM asistencias WHERE empleado_id = ? AND fecha = ?", (eid, f))
         out[(eid, f)] = dict(r) if r else {}
     return out
@@ -119,7 +121,7 @@ def _difiere(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     for campo in CAMPOS_FOTO:
         va, vb = a.get(campo), b.get(campo)
         if campo in ('horas_trabajadas', 'minutos_atraso', 'minutos_salida_adelantada',
-                     'minutos_deuda', 'minutos_extra_bruto', 'minutos_colacion'):
+                     'minutos_deuda', 'minutos_extra_bruto', 'minutos_colacion', 'minutos_permisos_detectados'):
             if _num(va) != _num(vb):
                 cambios[campo] = {'antes': _num(va), 'despues': _num(vb)}
         else:
@@ -165,6 +167,7 @@ async def ensayar_regla(regla: Dict[str, Any], propuesta: Dict[str, Any],
             'colacion': propuesta['colacion'],
             'accion': propuesta['accion'],
             'avisa_fuera_de_ciclo': 1 if propuesta.get('avisa_fuera_de_ciclo') else 0,
+            'eleccion_colacion': propuesta.get('eleccion_colacion') or 'PARECIDA',
         }
         despues: Dict[Tuple[int, str], Dict[str, Any]] = {}
         service = AsistenciaService(AsistenciaRepository(db))
