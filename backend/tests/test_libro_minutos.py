@@ -96,3 +96,21 @@ def test_el_motor_guarda_la_deuda_antes_del_perdon():
            'tiene_salida_adelantada': 1, 'observaciones': ''}
     out = AttendanceAdjustmentResolver.apply(res, '2026-10-22', None, None, 3)
     assert out['minutos_deuda_bruta'] == 149.12 and out['minutos_deuda'] == 0.0 and out['deuda_condonada'] == 3
+
+
+def test_excel_lee_las_columnas_del_libro():
+    """El Excel escribe las mismas columnas del libro que la grilla (claves l_<campo>); «usadas» suma deuda e inasistencia.
+    Una persona de Bolsa Flexible no tiene libro: solo lo trabajado y lo aprobado."""
+    from backend.services.report_service import ReportService
+    fila = {"esBolsa": False, "he_bruto": 999, "he_apr": 999,
+            "libro": {"he_trabajadas": 359.88, "he_usadas_deuda": 240.37, "he_usadas_inasistencia": 10.0,
+                      "he_a_pagar": 60.0, "he_no_pagadas": 49.51, "he_por_decidir": 0.0,
+                      "deuda_bruta": 393.58, "perdonado": 153.21, "cubierto": 240.37, "pendiente": 0.0, "saldo": 60.0}}
+    assert ReportService._libro_valor(fila, "l_he_usadas") == 250.37
+    assert ReportService._libro_valor(fila, "l_he_a_pagar") == 60.0
+    assert ReportService._libro_valor(fila, "l_deuda_bruta") == 393.58
+    assert ReportService._libro_valor(fila, "l_pendiente") == 0.0
+    bolsa = {"esBolsa": True, "he_bruto": 120.0, "he_apr": 90.0, "libro": {}}
+    assert ReportService._libro_valor(bolsa, "l_he_trabajadas") == 120.0
+    assert ReportService._libro_valor(bolsa, "l_he_a_pagar") == 90.0
+    assert ReportService._libro_valor(bolsa, "l_pendiente") == 0.0

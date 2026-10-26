@@ -583,6 +583,17 @@ class AsistenciaService:
             for eid_del, f_str in je_to_delete:
                 await self._delete_je_no_validada(eid_del, f_str)
 
+        # Los hechos cambiaron: la política del tramo de cada persona se vuelve a repartir sola
+        await self._reaplicar_politicas_cuadre(emp_ids, fecha)
+
+    async def _reaplicar_politicas_cuadre(self, empleado_ids, fecha: str) -> None:
+        """Tras recalcular un día, reparte de nuevo las horas extra de quienes tienen política de cuadre en ese tramo."""
+        try:
+            from backend.services.cuadre_service import CuadreService
+            await CuadreService(self).reaplicar_para(list(empleado_ids or []), fecha)
+        except Exception as e:
+            logger.warning(f"[Cuadre] No se pudo reaplicar la política ({fecha}): {e}")
+
     # ─────────────────────────────────────────────────────────────────────────
     # REPROCESO PERÍODO EMPLEADO
     # ─────────────────────────────────────────────────────────────────────────
@@ -2274,6 +2285,8 @@ class AsistenciaService:
                 await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
 
             await self.repository.upsert_asistencia(resultado)
+            if not bulk_ctx:
+                await self._reaplicar_politicas_cuadre([empleado_id], fecha)
 
         return resultado
 
@@ -2803,6 +2816,31 @@ class AsistenciaService:
                     _cell['modalidad_dia'] = regimen_del_dia(
                         _f, _inf.get('modalidad_control'), _inf.get('tipo_programacion'), corte_libreta)
 
+        # Libro mayor de minutos de cada persona (Ciclo Inteligente): la grilla, la ventana de cuadre, el cierre y el
+        # Excel leen estos mismos totales, calculados una sola vez aquí con los mismos días (25-10-2026).
+        try:
+            from backend.repositories.cuadre import CuadreRepository
+            from backend.services.cuadre_service import plegar_libro
+            _crepo = CuadreRepository(db)
+            _tol = await _crepo.tolerancia_minutos()
+            _pols = {int(p['empleado_id']): p for p in await _crepo.politicas_del_tramo(fecha_inicio, fecha_fin)}
+            for _eid, _cells in matrix.items():
+                _inf = _cells.get('info')
+                if not isinstance(_inf, dict):
+                    continue
+                if (_inf.get('tipo_programacion') or '') in ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'):
+                    continue
+                _dias = [c for k, c in _cells.items() if k != 'info' and isinstance(c, dict)]
+                _p = _pols.get(int(_eid)) if _eid is not None else None
+                _lib = plegar_libro(_dias, es_bolsa=False, tolerancia_min=_tol,
+                                    perdon_cuadre=float((_p or {}).get('minutos_perdonados') or 0.0), hay_politica=bool(_p))
+                _lib.pop('hallazgos', None)
+                _lib['politica'] = (_p or {}).get('politica')
+                _lib['minutos_a_pagar'] = (_p or {}).get('minutos_a_pagar')
+                _inf['libro'] = _lib
+        except Exception as e_lib:
+            logger.warning(f"[Matrix] No se pudo calcular el libro mayor: {e_lib}")
+
         return {
             'matrix': matrix,
             'corte_libreta': corte_libreta,
@@ -3120,7 +3158,16 @@ class AsistenciaService:
             return {"success": True, "mensaje": "Nada que procesar", "count": 0}
             
         count = await self.he_repo.aprobar_batch(params_list)
-        
+
+        # Una decisión tomada día por día a mano es una excepción: la política del tramo no la pisa
+        try:
+            from backend.repositories.cuadre import CuadreRepository
+            cuadre_repo = CuadreRepository(self.repository.db)
+            for p in params_list:
+                await cuadre_repo.marcar_excepcion(p['empleado_id'], p['fecha'], True)
+        except Exception as e:
+            logger.warning(f"[Cuadre] No se pudo marcar la excepción: {e}")
+
         return {
             "success": True,
             "mensaje": f"Se procesaron {count} registros de horas extra",

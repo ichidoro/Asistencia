@@ -26,6 +26,7 @@ class CondonarDeudaRequest(BaseModel):
     fecha_inicio: str
     fecha_fin: str
     tipo_condonacion: int
+    confirmar: bool = False   # True: la persona ya vio el aviso de que la deuda estaba cubierta con horas extra
 
 class AsignacionIndividual(BaseModel):
     empleado_id: int

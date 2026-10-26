@@ -80,6 +80,14 @@ class CierreService:
         total_deuda_colacion_min = 0.0
         total_deuda_salidas_min = 0.0
         total_deuda_permisos_min = 0.0
+        # Libro mayor de minutos (política del tramo y tolerancia): lo que el cuadre a cero perdonó y lo que la
+        # tolerancia dejó pasar ya no es deuda; se informa aparte y se descuenta de los débitos (25-10-2026).
+        total_perdon_cuadre_min = 0.0
+        total_tolerado_min = 0.0
+        total_deuda_pendiente_min = 0.0
+        total_he_a_pagar_min = 0.0
+        total_he_no_pagadas_min = 0.0
+        total_he_por_decidir_min = 0.0
         total_deficit_bolsa_min = 0.0
         total_compensado_min = 0.0
         total_meta_bolsa_min = 0.0
@@ -221,6 +229,15 @@ class CierreService:
                                         total_deuda_atrasos_min += raw_atr * factor
                                         total_deuda_salidas_min += raw_sad * factor
 
+            if not es_bolsa:
+                _lib = ((dias_dict.get('info') or {}) if isinstance(dias_dict, dict) else {}).get('libro') or {}
+                total_perdon_cuadre_min += float(_lib.get('perdon_cuadre') or 0.0)
+                total_tolerado_min += float(_lib.get('tolerado') or 0.0)
+                total_deuda_pendiente_min += float(_lib.get('pendiente') or 0.0)
+                total_he_a_pagar_min += float(_lib.get('he_a_pagar') or 0.0)
+                total_he_no_pagadas_min += float(_lib.get('he_no_pagadas') or 0.0)
+                total_he_por_decidir_min += float(_lib.get('he_por_decidir') or 0.0)
+
             if es_bolsa:
                 total_meta_bolsa_min += meta_min
                 total_acum_bolsa_min += acum_bolsa
@@ -245,7 +262,9 @@ class CierreService:
         he_espera_hrs = round(total_exceso_espera_min / 60.0, 2)
         he_total_hrs = round(he_fijos_hrs + he_bolsa_hrs + he_espera_hrs, 2)
 
-        # Débitos (tiempo no trabajado 100%)
+        # Débitos (tiempo no trabajado 100%). Lo perdonado por el cuadre a cero y lo tolerado se descuenta:
+        # el libro mayor ya no lo cuenta como deuda y el saldo de la grilla y del Excel tampoco.
+        total_deuda_fijos_min = max(0.0, total_deuda_fijos_min - total_perdon_cuadre_min - total_tolerado_min)
         deuda_fijos_hrs = round(total_deuda_fijos_min / 60.0, 2)
         deficit_bolsa_hrs = round(total_deficit_bolsa_min / 60.0, 2)
         deuda_total_hrs = round(deuda_fijos_hrs + deficit_bolsa_hrs, 2)
@@ -280,6 +299,13 @@ class CierreService:
         salida['deuda_otros_horas'] = deuda_otros_hrs
         salida['deficit_bolsa_horas'] = deficit_bolsa_hrs
         salida['deuda_total_debitos_horas'] = deuda_total_hrs
+        # Libro mayor del tramo (mismos números que la grilla, la ventana de cuadre y el Excel)
+        salida['deuda_perdonada_cuadre_horas'] = round(total_perdon_cuadre_min / 60.0, 2)
+        salida['deuda_tolerada_horas'] = round(total_tolerado_min / 60.0, 2)
+        salida['deuda_pendiente_horas'] = round(total_deuda_pendiente_min / 60.0, 2)
+        salida['he_a_pagar_horas'] = round(total_he_a_pagar_min / 60.0, 2)
+        salida['he_no_pagadas_horas'] = round(total_he_no_pagadas_min / 60.0, 2)
+        salida['he_por_decidir_horas'] = round(total_he_por_decidir_min / 60.0, 2)
 
         # Avance de la Bolsa: meta grupal (ya prorrateada por vigencias parciales),
         # acumulado y si el déficit ya es definitivo o el tramo sigue corriendo

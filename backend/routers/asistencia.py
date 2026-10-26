@@ -778,6 +778,30 @@ async def condonar_deuda(
     dias_totales = (end_date - start_date).days + 1
     fechas = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(dias_totales)]
 
+    # Aviso del cuadre: si la deuda de esos días ya está cubierta con horas extra, perdonarla libera esas horas y
+    # pasan a pagarse. Se informa el monto y se exige confirmación (la persona decide con el dato a la vista).
+    if request.tipo_condonacion > 0 and not request.confirmar:
+        from backend.services.cuadre_service import CuadreService, hhmmss
+        cuadre = CuadreService(service)
+        avisos = []
+        for emp_id in request.empleados_ids:
+            try:
+                t_ini, t_fin = await cuadre.tramo_de(request.fecha_inicio)
+                lib = await cuadre.libro_empleado(emp_id, t_ini, t_fin)
+            except Exception as e:
+                logger.warning(f"[Cuadre] aviso de perdonazo no evaluado para {emp_id}: {e}")
+                continue
+            deuda_dias = sum(float(d.get('deuda') or 0.0) for d in lib.get('dias', []) if d.get('fecha') in fechas)
+            cubierto = float(lib['libro'].get('cubierto') or 0.0)
+            pendiente = float(lib['libro'].get('pendiente') or 0.0)
+            if deuda_dias >= 1.0 and cubierto >= 1.0 and pendiente < 1.0:
+                liberados = min(deuda_dias, cubierto)
+                avisos.append({"empleado_id": emp_id, "nombre": lib.get('nombre'), "minutos_liberados": round(liberados, 2),
+                               "texto": f"La deuda de {lib.get('nombre')} ya está cubierta con horas extra. Si la perdonas, "
+                                        f"{hhmmss(liberados)} de esas horas pasan a pagarse."})
+        if avisos:
+            raise HTTPException(status_code=409, detail={"codigo": "deuda_cubierta", "avisos": avisos})
+
     try:
         # 1. Marcar condonacion en la BD en un solo batch (N+1 optimization)
         query = "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?"
@@ -793,6 +817,15 @@ async def condonar_deuda(
             )
 
         accion = "condonada" if request.tipo_condonacion > 0 else "revocada"
+        try:
+            from backend.repositories.seguridad import SeguridadRepository
+            import json as _json
+            await SeguridadRepository(service.repository.db).log_auditoria(
+                current_user.user_id, current_user.username, "CONDONAR_DEUDA" if request.tipo_condonacion > 0 else "REVOCAR_CONDONACION",
+                "MARCACIONES", _json.dumps({"empleados_ids": request.empleados_ids, "desde": request.fecha_inicio, "hasta": request.fecha_fin,
+                                            "tipo": request.tipo_condonacion, "confirmado": request.confirmar}, ensure_ascii=False))
+        except Exception as audit_err:
+            logger.warning(f"[Cuadre] Auditoría del perdonazo no registrada: {audit_err}")
         return {"success": True, "message": f"Deuda {accion} correctamente para {len(request.empleados_ids)} empleado(s) en {dias_totales} día(s)."}
     except Exception as e:
         logger.error(f"Error al condonar deuda: {str(e)}")

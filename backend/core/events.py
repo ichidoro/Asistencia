@@ -198,6 +198,10 @@ async def lifespan(app: FastAPI):
                 reglas_repo = ReglasMarcasRepository(db)
                 await reglas_repo.init_tables()
                 await cargar_reglas_marcas(db)
+
+                # Cuadre del tramo: política por persona, excepciones por día y tolerancia (25-10-2026)
+                from backend.repositories.cuadre import CuadreRepository
+                await CuadreRepository(db).init_tables()
                 
                 # Sincronizar/poblar tabla horas_extras con registros pendientes
                 from backend.repositories.hora_extra import HoraExtraRepository

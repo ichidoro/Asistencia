@@ -29,6 +29,24 @@ class ReportService:
         s = total_secs % 60
         return f"{signo}{h:02d}:{m:02d}:{s:02d}"
 
+    @staticmethod
+    def _libro_valor(r: dict, key: str) -> float:
+        """Valor (minutos) de una columna del libro mayor para la fila del Excel.
+
+        Las claves son las de la grilla (`l_<campo>`). Una persona de Bolsa Flexible no tiene libro: solo se
+        escriben sus horas extra trabajadas y las aprobadas (columna «A pagar»)."""
+        lib = r.get("libro") or {}
+        if not lib:
+            if r.get("esBolsa"):
+                if key == "l_he_trabajadas":
+                    return float(r.get("he_bruto") or 0.0)
+                if key == "l_he_a_pagar":
+                    return float(r.get("he_apr") or 0.0)
+            return 0.0
+        if key == "l_he_usadas":
+            return float(lib.get("he_usadas_deuda") or 0.0) + float(lib.get("he_usadas_inasistencia") or 0.0)
+        return float(lib.get(key[2:]) or 0.0)
+
     def _get_saldo(self, extras_aprobados: int, deuda: int) -> str:
         saldo = (extras_aprobados or 0) - (deuda or 0)
         signo = "+" if saldo > 0 else ("-" if saldo < 0 else "")
@@ -429,6 +447,11 @@ class ReportService:
                 he_pend = round(he_pend, 4)
                 
                 saldo = he_apr - d_tot - he_compensado
+                # Libro mayor de minutos (lo calcula el servidor en la matriz): el Excel escribe los mismos
+                # totales que la grilla y la ventana de cuadre, y su saldo manda (25-10-2026).
+                libro = ((dias_dict.get('info') or {}) if isinstance(dias_dict, dict) else {}).get('libro') if not es_bolsa else None
+                if libro and libro.get('saldo') is not None:
+                    saldo = float(libro.get('saldo') or 0.0)
                 saldo_meta = (acum_bolsa - meta_min) if es_bolsa else None
                 
                 # Total incidencias exacto
@@ -467,6 +490,7 @@ class ReportService:
                     "tot_incidencias": tot_incidencias_emp,
                     "cnt_efectivos": cnt_efectivos,
                     "saldo": saldo,
+                    "libro": libro or {},
                     "metaMin": meta_min,
                     "acumBolsa": acum_bolsa,
                     "saldoMeta": saldo_meta,
@@ -523,18 +547,24 @@ class ReportService:
                 ("Incidencias", "J.ESP", "cnt_esp"),
                 ("Incidencias", "TOT", "tot_incidencias")
             ])
+            # Libro mayor de minutos (mismas columnas que la grilla): cada hora extra termina usada, a pagar,
+            # no pagada o por decidir; cada minuto de deuda termina perdonado, cubierto o pendiente.
             columns_def.extend([
-                ("Horas Extra", "PEND", "he_pend"),
-                ("Horas Extra", "APR", "he_apr"),
-                ("Horas Extra", "RECH", "he_rech"),
-                ("Horas Extra", "TOT", "he_tot")
+                ("Horas Extra", "TRAB.", "l_he_trabajadas"),
+                ("Horas Extra", "USADAS", "l_he_usadas"),
+                ("Horas Extra", "A PAGAR", "l_he_a_pagar"),
+                ("Horas Extra", "NO PAG.", "l_he_no_pagadas"),
+                ("Horas Extra", "POR DEC.", "l_he_por_decidir")
             ])
             columns_def.extend([
                 ("Tiempo No Trabajado", "COL", "min_col"),
                 ("Tiempo No Trabajado", "PER", "min_per"),
                 ("Tiempo No Trabajado", "ATR", "min_atr"),
                 ("Tiempo No Trabajado", "S.ADL", "min_sad"),
-                ("Tiempo No Trabajado", "TOT", "d_tot")
+                ("Tiempo No Trabajado", "DEUDA", "l_deuda_bruta"),
+                ("Tiempo No Trabajado", "PERDON.", "l_perdonado"),
+                ("Tiempo No Trabajado", "CUBIERTO", "l_cubierto"),
+                ("Tiempo No Trabajado", "PEND.", "l_pendiente")
             ])
             columns_def.append(("Saldo Neto", "Saldo Neto", "saldo_neto"))
             
@@ -719,17 +749,21 @@ class ReportService:
                             val = tot_i if tot_i > 0 else ""
                             if tot_i > 0:
                                 cell.font = Font(name="Segoe UI", size=9, bold=True)
-                        # HE
-                        elif key == "he_pend": val = self._format_hhmmss(r["he_pend"])
-                        elif key == "he_apr": val = self._format_hhmmss(r["he_apr"])
-                        elif key == "he_rech": val = self._format_hhmmss(r["he_rec"])
-                        elif key == "he_tot": val = self._format_hhmmss(r["he_bruto"])
-                        # Deudas
+                        # Libro mayor (horas extra y deuda); una persona de Bolsa Flexible solo tiene lo trabajado y lo aprobado
+                        elif key.startswith("l_"):
+                            v_l = self._libro_valor(r, key)
+                            val = self._format_hhmmss(v_l) if v_l > 0.0083 else ""
+                            if key == "l_pendiente" and v_l > 0.0083:
+                                cell.font = Font(name="Segoe UI", size=9, color="FF0000", bold=True)
+                            elif key == "l_he_a_pagar" and v_l > 0.0083:
+                                cell.font = Font(name="Segoe UI", size=9, color="008000", bold=True)
+                            elif key == "l_he_por_decidir" and v_l > 0.0083:
+                                cell.font = Font(name="Segoe UI", size=9, color="B45309", bold=True)
+                        # Deudas por causa
                         elif key == "min_col": val = self._format_hhmmss(r["min_col"])
                         elif key == "min_per": val = self._format_hhmmss(r["min_per"])
                         elif key == "min_atr": val = self._format_hhmmss(r["min_atr"])
                         elif key == "min_sad": val = self._format_hhmmss(r["min_sad"])
-                        elif key == "d_tot": val = self._format_hhmmss(r["d_tot"])
                         # Saldo Neto — FIX: usar el saldo pre-calculado que incluye he_compensado
                         # Antes: self._get_saldo(he_apr, d_tot) → ignoraba he_compensado
                         # Ahora: r["saldo"] = he_apr - d_tot - he_compensado (idéntico a la grilla)
@@ -930,15 +964,13 @@ class ReportService:
                     elif key == "tot_incidencias":
                         s_val = sum(r["cnt_per"] + r["cnt_atr"] + r["cnt_sad"] + r["cnt_inas"] + r["cnt_esp"] for r in rows_calc)
                         val = s_val if s_val > 0 else ""
-                    elif key == "he_pend": val = self._format_hhmmss(sum(r["he_pend"] for r in rows_calc))
-                    elif key == "he_apr": val = self._format_hhmmss(sum(r["he_apr"] for r in rows_calc))
-                    elif key == "he_rech": val = self._format_hhmmss(sum(r["he_rec"] for r in rows_calc))
-                    elif key == "he_tot": val = self._format_hhmmss(sum(r["he_bruto"] for r in rows_calc))
+                    elif key.startswith("l_"):
+                        s_l = sum(self._libro_valor(r, key) for r in rows_calc)
+                        val = self._format_hhmmss(s_l) if s_l > 0.0083 else ""
                     elif key == "min_col": val = self._format_hhmmss(sum(r["min_col"] for r in rows_calc))
                     elif key == "min_per": val = self._format_hhmmss(sum(r["min_per"] for r in rows_calc))
                     elif key == "min_atr": val = self._format_hhmmss(sum(r["min_atr"] for r in rows_calc))
                     elif key == "min_sad": val = self._format_hhmmss(sum(r["min_sad"] for r in rows_calc))
-                    elif key == "d_tot": val = self._format_hhmmss(sum(r["d_tot"] for r in rows_calc))
                     elif key == "saldo_neto":
                         # FIX: usar r["saldo"] pre-calculado que incluye he_compensado
                         s_tot = sum(r["saldo"] for r in rows_calc)
