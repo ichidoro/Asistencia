@@ -100,6 +100,8 @@ async function saveTurno() {
         tolerancia_exceso_colacion_minutos: Math.max(0, parseInt(document.getElementById('toleranciaExcesoColacion')?.value, 10) || 0),
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
         anclaje_salida_minutos: Math.max(0, parseInt(formData.get('anclaje_salida_minutos') || 0, 10) || 0),
+        ventana_en_curso_minutos: Math.max(0, parseInt(formData.get('ventana_en_curso_minutos') || 0, 10) || 0),
+        espera_inasistencia_minutos: Math.max(0, parseInt(formData.get('espera_inasistencia_minutos') || 0, 10) || 0),
         permite_viajes_largos: ((formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
         rotacion_dinamica_diaria: ((formData.get('tipo_programacion') === 'CICLO_INTELIGENTE') && ((document.getElementById('chkRotacionDinamicaDiaria')?.checked) || (document.getElementById('chk-rotacion-dinamica-diaria')?.checked))) ? 1 : 0,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
@@ -358,6 +360,8 @@ async function openModalHorario(id = null) {
             form.tolerancia_retraso_alerta.value = turno.tolerancia_retraso_alerta;
             form.tolerancia_retraso_descuento.value = turno.tolerancia_retraso_descuento;
             if (form.tolerancia_salida_adelantada) form.tolerancia_salida_adelantada.value = String(turno.tolerancia_salida_adelantada || 0);
+            if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = String(turno.ventana_en_curso_minutos || 0);
+            if (form.espera_inasistencia_minutos) form.espera_inasistencia_minutos.value = String(turno.espera_inasistencia_minutos || 0);
             form.redondeo_minutos.value = String(turno.redondeo_minutos || 0);
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
@@ -445,6 +449,8 @@ async function openModalHorario(id = null) {
         if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
         if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
         if (form.tolerancia_salida_adelantada) form.tolerancia_salida_adelantada.value = 0;
+        if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = 0;
+        if (form.espera_inasistencia_minutos) form.espera_inasistencia_minutos.value = 0;
 
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = "";
@@ -1318,6 +1324,17 @@ function renderModalHtml() {
                             </div>
                             <div class="col-md-4 gobernanza-col">
                                 <div class="form-text small mt-md-4" style="font-size: 0.75rem;">La deuda del día siempre cuenta el tiempo que falta para sus horas. Las tolerancias solo deciden si el día se marca como ATRASO o SALIDA ADELANTADA.</div>
+                            </div>
+                            <!-- Día de hoy: cuánto se espera antes de cerrar el día (no cambia los cálculos de días terminados) -->
+                            <div class="col-md-4">
+                                <label for="input-ventana-en-curso" class="form-label small fw-bold">Espera para cerrar un día sin salida (min)</label>
+                                <input type="number" id="input-ventana-en-curso" class="form-control" name="ventana_en_curso_minutos" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Hoy, si la persona marcó entrada y aún no salida, el día queda «en curso» hasta estos minutos después de la hora de salida. Después se marca como anomalía «falta salida». Con 0 se marca apenas pasa la hora de salida.</div>
+                            </div>
+                            <div class="col-md-4 gobernanza-col">
+                                <label for="input-espera-inasistencia" class="form-label small fw-bold">Espera para marcar inasistencia (min)</label>
+                                <input type="number" id="input-espera-inasistencia" class="form-control" name="espera_inasistencia_minutos" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Hoy, si la persona no tiene ninguna marca, la inasistencia aparece estos minutos después de la hora de salida. Con 0 aparece a la hora de salida.</div>
                             </div>
 
                             <!-- Fila 2: Ajustes de Cálculo (Simétrica 2 columnas) -->

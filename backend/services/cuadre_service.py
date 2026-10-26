@@ -223,7 +223,8 @@ def plegar_libro(dias: List[Dict[str, Any]], es_bolsa: bool = False, tolerancia_
                 dias_parciales.append(fecha)
         elif estado_he == 'RECHAZADO':
             he_no_pagadas += bruto_d
-        elif bruto_d >= 1.0:
+        elif bruto_d > 0.0:
+            # El mínimo para contar hora extra ya lo aplicó el motor (ajuste de Configuración): toda la que existe cuenta
             he_por_decidir += bruto_d
 
     # Pago con horas extra sobre los totales del tramo (sin importar el orden de los días), causa por causa
@@ -584,7 +585,7 @@ class CuadreService:
             ja = di.get('jornada_adicional') or {}
             if esp and ja.get('estado') == 'HORAS_EXTRAS':
                 he_bruto = _f(ja.get('minutos_autorizados')) or _f(ja.get('minutos_trabajados'))
-            if bruta < 0.5 and he_bruto < 0.5 and not esp:
+            if bruta <= 0.0 and he_bruto <= 0.0 and not esp:
                 continue
             fila = filas_he.get(fecha) or {}
             detalle.append({
@@ -592,7 +593,7 @@ class CuadreService:
                 'horas_teoricas': _f(di.get('horas_teoricas')), 'horas_trabajadas': _f(di.get('horas_trabajadas')),
                 'deuda_bruta': bruta, 'deuda': neta, 'perdonado': max(0.0, bruta - neta), 'deuda_condonada': int(_f(di.get('deuda_condonada'))),
                 'he_bruto': he_bruto, 'he_autorizados': _f(di.get('minutos_extra_autorizados')) if di.get('estado_he') == 'APROBADO' else 0.0,
-                'estado_he': di.get('estado_he') or ('PENDIENTE' if he_bruto >= 1.0 else None),
+                'estado_he': di.get('estado_he') or ('PENDIENTE' if he_bruto > 0.0 else None),
                 'excepcion': int(_f(fila.get('excepcion'))), 'origen_he': fila.get('origen'), 'especial': esp,
                 'causas': {k: round(v, 4) for k, v in causas_dia(di).items()} if not esp else dict(CAUSAS_VACIAS),
             })

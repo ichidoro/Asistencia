@@ -2282,6 +2282,18 @@
                                                          <div class="form-text">Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente.</div>
                                                     </div>
 
+                                                    <!-- 1b. Mínimo para contar hora extra -->
+                                                    <div class="mb-3">
+                                                         <label for="ajuste-minimo-extras" class="form-label fw-bold small text-muted">Mínimo para contar hora extra (Minutos)</label>
+                                                         <div class="input-group">
+                                                             <input type="number" step="1" class="form-control" id="ajuste-minimo-extras" min="0" placeholder="Ej: 0">
+                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_minimo_horas_extra_minutos', 'ajuste-minimo-extras')" title="Guardar">
+                                                                 <i class="bi bi-save"></i>
+                                                             </button>
+                                                         </div>
+                                                         <div class="form-text">El tiempo trabajado de más por debajo de estos minutos no se cuenta como hora extra. Con 0 cuenta todo, aunque sean segundos. Se aplica a los días que se recalculan después de guardar.</div>
+                                                    </div>
+
                                                     <!-- 2. Gap de Emergencia -->
                                                     <div class="mb-3">
                                                          <label for="ajuste-emergencia-gap" class="form-label fw-bold small text-muted">Gap de Emergencia (Horas)</label>
@@ -5322,16 +5334,16 @@
         "/static/js/cropper.min.js",
         "/static/js/chart.js",
         "/static/js/chartjs-plugin-datalabels.min.js",
-        "/static/js/horarios.js?v={{ startup_id }}_v20",
+        "/static/js/horarios.js?v={{ startup_id }}_v21",
         "/static/js/asistencia.js?v={{ startup_id }}_v15",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v15",
-        "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v1",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v16",
+        "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v2",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v15",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v15",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v15",
         "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v21",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v24",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v25",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v10",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}",
         "/static/js/intercambios_panel.js?v={{ startup_id }}",

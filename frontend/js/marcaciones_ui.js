@@ -2293,7 +2293,8 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
         // Campo correcto: minutos_extra_bruto (usado en renderVistaAnalitica línea 2331)
         const brutoPotencial = isEsp ? 0 : (di.minutos_extra_bruto || 0);
         
-        if (brutoPotencial >= 1.0) {
+        // El mínimo para contar hora extra lo aplica el motor con el ajuste de Configuración: toda la que existe se lista
+        if (brutoPotencial > 0) {
             const dt = new Date(dateStr + 'T00:00:00');
             
             // --- CÁLCULO DE ORIGEN/CONTEXTO DE HORAS EXTRAS ---
@@ -6147,7 +6148,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
                 he_apr += apr;
             } else if (di.estado_he === 'RECHAZADO') {
                 he_rec += (di.minutos_extra_bruto || 0);
-            } else if ((di.minutos_extra_bruto || 0) >= 1.0) {
+            } else if ((di.minutos_extra_bruto || 0) > 0) {
                 he_pend += (di.minutos_extra_bruto || 0);
             }
         }

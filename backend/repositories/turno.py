@@ -32,6 +32,7 @@ class TurnoRepository:
                     hora_limite_ficticia TEXT,
                     area TEXT, -- Nuevo: Área de visibilidad
                     ventana_en_curso_minutos INTEGER DEFAULT 0,
+                    espera_inasistencia_minutos INTEGER DEFAULT 0,
                     tolerancia_exceso_colacion_minutos INTEGER DEFAULT 0,
                     activo BOOLEAN DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -50,6 +51,7 @@ class TurnoRepository:
             ("ventana_en_curso_minutos",            "INTEGER DEFAULT 0"),
             ("tolerancia_exceso_colacion_minutos",  "INTEGER DEFAULT 0"),
             ("tolerancia_salida_adelantada",        "INTEGER DEFAULT 0"),
+            ("espera_inasistencia_minutos",         "INTEGER DEFAULT 0"),
             ("umbral_horas_colacion",               "REAL DEFAULT 0.0"),
             ("rotacion_secuencial",                 "BOOLEAN DEFAULT 1"),
             ("semana_fallback_sin_marcas",          "INTEGER DEFAULT 1"),
@@ -63,6 +65,21 @@ class TurnoRepository:
             if col not in cols_turnos:
                 try: await self.db.execute(f"ALTER TABLE turnos ADD COLUMN {col} {defn}")
                 except Exception as e: logger.debug(f"[Migration] {col} en turnos: {e}")
+
+        # Migración única (corre solo cuando se crea la columna espera_inasistencia_minutos): las dos esperas del día de
+        # hoy estaban escritas en el código (3 horas para cerrar un día sin salida y 30 minutos, o el Rango Demora Salida
+        # si era mayor, para marcar inasistencia). Se escriben en cada turno para que nada cambie; desde ahí se editan en
+        # la pantalla del turno y el motor solo lee lo que diga el turno (orden del dueño, 26-10-2026).
+        if "espera_inasistencia_minutos" not in cols_turnos:
+            try:
+                await self.db.execute(
+                    "UPDATE turnos SET espera_inasistencia_minutos = CASE WHEN COALESCE(anclaje_salida_minutos, 0) > 30 "
+                    "THEN anclaje_salida_minutos ELSE 30 END")
+                await self.db.execute(
+                    "UPDATE turnos SET ventana_en_curso_minutos = 180 WHERE COALESCE(ventana_en_curso_minutos, 0) = 0")
+                logger.info("[Migration] Esperas del día de hoy escritas en cada turno (180 min sin salida; 30 min o el rango de salida sin marcas)")
+            except Exception as e:
+                logger.warning(f"[Migration] esperas del día de hoy en turnos: {e}")
 
         # 2. Tabla Turno Dias (Detalle Semanal)
         if not await self.db.table_exists("turno_dias"):
@@ -513,18 +530,18 @@ class TurnoRepository:
                     tolerancia_retraso_alerta, tolerancia_retraso_descuento, tolerancia_salida_adelantada,
                     redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
-                    ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
+                    ventana_en_curso_minutos, espera_inasistencia_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
                     activo, permite_viajes_largos, rotacion_dinamica_diaria,
                     meta_horas_espera, modalidad_control
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento, turno.tolerancia_salida_adelantada,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
-                turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
+                turno.ventana_en_curso_minutos, turno.espera_inasistencia_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
                 1 if turno.rotacion_secuencial else 0, turno.semana_fallback_sin_marcas,
                 1 if turno.activo else 0,
@@ -1012,7 +1029,7 @@ class TurnoRepository:
                     tolerancia_retraso_alerta=?, tolerancia_retraso_descuento=?, tolerancia_salida_adelantada=?,
                     redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
-                    ventana_en_curso_minutos=?, tolerancia_exceso_colacion_minutos=?,
+                    ventana_en_curso_minutos=?, espera_inasistencia_minutos=?, tolerancia_exceso_colacion_minutos=?,
                     turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?,
                     rotacion_dinamica_diaria=?, meta_horas_espera=?, modalidad_control=?
                 WHERE id=?
@@ -1022,7 +1039,7 @@ class TurnoRepository:
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento, turno.tolerancia_salida_adelantada,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
-                turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
+                turno.ventana_en_curso_minutos, turno.espera_inasistencia_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
                 1 if turno.activo else 0,
                 1 if turno.permite_viajes_largos else 0,

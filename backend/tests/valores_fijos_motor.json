@@ -1,0 +1,717 @@
+[
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "def _ajuste_numero(ajustes: Dict[str, Any], clave: str, escala: float = 1.0) -> Optional[float]:",
+  "numeros": [
+   "1.0"
+  ],
+  "tipo": "logica",
+  "motivo": "Multiplicador neutro por defecto de la función que lee un ajuste."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "return 180.0",
+  "numeros": [
+   "180.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Marcas repetidas en Bolsa Flexible: a menos de 3 minutos se toman como una sola (en Ciclo Inteligente sale de Reglas de marcaciones)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if len(orden) < 2:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "while i < len(orden) - 2:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "i += 2",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if len(parts) >= 2:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "s = float(parts[2]) if len(parts) > 2 else 0.0",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if diff > 720.0:",
+  "numeros": [
+   "720.0"
+  ],
+  "tipo": "logica",
+  "motivo": "Media vuelta del reloj de 24 horas: distancia más corta entre dos horas."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "banda_tolerancia_minutos: int = 120,",
+  "numeros": [
+   "120"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Valor por defecto del parámetro; el motor siempre le pasa el ajuste de la banda de búsqueda."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "bounce_seconds: float = 180.0",
+  "numeros": [
+   "180.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Valor por defecto del parámetro; el motor le pasa el rebote del turno o de Reglas de marcaciones."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "gap_emergencia_horas: float = 4.0,",
+  "numeros": [
+   "4.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Valor por defecto del parámetro; el motor le pasa el ajuste Gap de Emergencia."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "limite_jornada_emergencia_horas: float = 3.0,",
+  "numeros": [
+   "3.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Valor por defecto del parámetro; el motor le pasa el ajuste de límite de jornada de emergencia."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "bounce_seconds: float = 180.0,",
+  "numeros": [
+   "180.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Valor por defecto del parámetro; el motor le pasa el rebote del turno o de Reglas de marcaciones."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if len(extra_blk) >= 2:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if any(abs(QuantumPhaseTopology.circular_distance(p_teo, p_l)) <= 180.0 for p_teo in entradas_nocturnas_teo):",
+  "numeros": [
+   "180.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Turnos de noche: una entrada a menos de 3 horas de la entrada nocturna del horario se toma como entrada de noche."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "max_sal_teo = max(salidas_nocturnas_teo) if salidas_nocturnas_teo else 720.0",
+  "numeros": [
+   "720.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Turnos de noche: si el horario no tiene salida nocturna se usa el mediodía."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if p_l <= (max_sal_teo + 120.0):",
+  "numeros": [
+   "120.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Turnos de noche: se toman las marcas de la madrugada siguiente hasta 2 horas después de la salida nocturna."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "weighted_dist = (d_in * 2.0 + d_out * 1.0) / 3.0",
+  "numeros": [
+   "1.0",
+   "2.0",
+   "3.0"
+  ],
+  "tipo": "algoritmo",
+  "motivo": "Peso 2 a 1 entre la distancia a la entrada y a la salida para elegir el ciclo del día."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "semanas_diff = (monday_dt - monday_ini).days // 7",
+  "numeros": [
+   "7"
+  ],
+  "tipo": "logica",
+  "motivo": "Días de una semana."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "h_ent_lib = f\"{first_s // 4:02d}:{(first_s % 4) * 15:02d}\"",
+  "numeros": [
+   "15",
+   "4"
+  ],
+  "tipo": "logica",
+  "motivo": "Bloques de 15 minutos de la libreta (4 por hora)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "h_sal_lib = f\"{min(23, last_s // 4):02d}:{(last_s % 4) * 15:02d}\" if last_s < 96 else \"23:59\"",
+  "numeros": [
+   "15",
+   "23",
+   "4",
+   "96"
+  ],
+  "tipo": "logica",
+  "motivo": "Bloques de 15 minutos de la libreta (96 por día, 4 por hora)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "flag_calc = 3",
+  "numeros": [
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "flag_calc = 4",
+  "numeros": [
+   "4"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if prev == 5 and res.get('estado') in ('INASISTENCIA', 'FALTA'):",
+  "numeros": [
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "flag_calc = 5",
+  "numeros": [
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if prev == 5:",
+  "numeros": [
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "elif prev == 3 and flag_calc == 0:",
+  "numeros": [
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "elif prev == 2:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if flag_calc in (3, 4, 5):",
+  "numeros": [
+   "3",
+   "4",
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "elif prev in (4, 5):",
+  "numeros": [
+   "4",
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "gap_emergencia = float(ajustes.get('asistencia_emergencia_gap_horas', 4.0))",
+  "numeros": [
+   "4.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Solo si falta el ajuste Gap de Emergencia en la base (se edita en Configuración)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "limite_emergencia = float(ajustes.get('asistencia_emergencia_jornada_limite_horas', 3.0))",
+  "numeros": [
+   "3.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Solo si falta el ajuste de límite de jornada de emergencia en la base (se edita en Configuración)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "banda_horas = float(ajustes.get('asistencia_emergencia_banda_horas', 2.0))",
+  "numeros": [
+   "2.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Banda para buscar marcas (2 horas): el ajuste existe en la base pero no está en la pantalla."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "raw_max_he = ajustes.get('asistencia_max_extras_ordinarias_dia_habil', 240)",
+  "numeros": [
+   "240"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Solo si falta el ajuste Límite HE Diaria en la base (se edita en Configuración)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "max_he_ordinarias_min = 240.0",
+  "numeros": [
+   "240.0"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Solo si el ajuste Límite HE Diaria no se puede leer."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "s = int(parts[2]) if len(parts) > 2 else 0",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if dia_sem_num == 6:",
+  "numeros": [
+   "6"
+  ],
+  "tipo": "codigo",
+  "motivo": "Domingo en el calendario (6)."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "end_horizon = dt_fecha.replace(hour=18, minute=0, second=0)",
+  "numeros": [
+   "18"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if h >= 18 and tipo in _TIPOS_E:",
+  "numeros": [
+   "18"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "start_horizon = dt_ayer.replace(hour=18, minute=0, second=0)",
+  "numeros": [
+   "18"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "end_horizon = (dt_s + timedelta(seconds=1)) if dt_s else dt_fecha.replace(hour=18, minute=0, second=0)",
+  "numeros": [
+   "18"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if h_e >= 18:",
+  "numeros": [
+   "18"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Viajes largos de Bolsa Flexible: la noche empieza a las 18:00."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if len(marcas_hoy) % 2 == 1:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "diurnas = [h for h in entradas_validas if QuantumPhaseTopology.time_to_phase(h) < 1200]",
+  "numeros": [
+   "1200"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Al elegir el ciclo, una entrada antes de las 20:00 se toma como diurna."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "idx_e += 2",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "and idx_e + 2 < len(items_emparejar) and items_emparejar[idx_e + 2][1] == 'S'):",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if dur_delta >= 20.0:",
+  "numeros": [
+   "20.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Dos Entradas seguidas cuentan como jornada si están a 20 minutos o más; debería leer el ajuste de marcas repetidas."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "MAX_HE_DIARIAS_DT = 120.0   # 2 horas diarias legales",
+  "numeros": [
+   "120.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Tope legal de 2 horas extra diarias, en un optimizador que la aplicación no usa."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "MAX_HE_SEMANALES_DT = 600.0 # 10 horas semanales legales",
+  "numeros": [
+   "600.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Tope legal de 10 horas extra semanales, en un optimizador que la aplicación no usa."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "TOLERANCIA_MIN = 0.05           # diferencia que se acepta en una identidad (redondeos de segundos)",
+  "numeros": [
+   "0.05"
+  ],
+  "tipo": "precision",
+  "motivo": "3 segundos de margen para que las sumas del libro cuadren pese a los redondeos."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if len(partes) < 2:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "s = float(partes[2]) if len(partes) > 2 and partes[2] else 0.0",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "neta = 0.0 if cond == 5 else _f(di.get('minutos_deuda'))",
+  "numeros": [
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "atr = 0.0 if cond in (2, 3) else _f(di.get('minutos_atraso'))",
+  "numeros": [
+   "2",
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "sal = 0.0 if cond in (1, 3) else _f(di.get('minutos_salida_adelantada'))",
+  "numeros": [
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if atr <= 0.0 and cond not in (2, 3):",
+  "numeros": [
+   "2",
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if sal <= 0.0 and cond not in (1, 3):",
+  "numeros": [
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "neta_d = 0.0 if cond == 5 else _f(di.get('minutos_deuda'))",
+  "numeros": [
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "causas_d['atraso' if int(_f(g.get('tipo'))) in (2, 3) else 'salida'] += exceso",
+  "numeros": [
+   "2",
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "elif 0.0 < neta_d < 1.0:",
+  "numeros": [
+   "1.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Aviso informativo: días con menos de un minuto de deuda (no cambia ninguna cuenta)."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if perdonado_d >= 1.0:",
+  "numeros": [
+   "1.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Aviso informativo: días con un minuto o más perdonado cuando además quedan horas extra a pagar."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if resto >= 1.0 and aut_d > 0.0:",
+  "numeros": [
+   "1.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Aviso informativo: aprobación parcial cuando queda un minuto o más sin decir qué pasa."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if dias_perdonados and a_pagar >= 1.0:",
+  "numeros": [
+   "1.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Aviso informativo: perdonazo con un minuto o más de horas extra a pagar."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if int(_f(f.get('tipo'))) in (1, 3):",
+  "numeros": [
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if m <= 1e-6:",
+  "numeros": [
+   "1e-6"
+  ],
+  "tipo": "precision",
+  "motivo": "Cero para la computadora: menos de una millonésima de minuto."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "if sin_pagar > 1e-6:",
+  "numeros": [
+   "1e-6"
+  ],
+  "tipo": "precision",
+  "motivo": "Cero para la computadora: menos de una millonésima de minuto."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "e[causa + '_completo'] = pago <= 1e-6",
+  "numeros": [
+   "1e-6"
+  ],
+  "tipo": "precision",
+  "motivo": "Cero para la computadora: menos de una millonésima de minuto."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "marca_a = e['atraso_completo'] and c['atraso_marcado'] > 1e-6 and cond == 0",
+  "numeros": [
+   "1e-6"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "marca_s = e['salida_completo'] and c['salida_marcada'] > 1e-6 and cond == 0",
+  "numeros": [
+   "1e-6"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "tipo = 3 if (marca_a and marca_s) else (2 if marca_a else (1 if marca_s else 0))",
+  "numeros": [
+   "2",
+   "3"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "completo_dia = total >= (c['atraso'] + c['salida']) - 1e-6",
+  "numeros": [
+   "1e-6"
+  ],
+  "tipo": "precision",
+  "motivo": "Cero para la computadora: menos de una millonésima de minuto."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "and _f(d.get('minutos_compensados_he')) < 1.0 and _f(d.get('horas_teoricas')) > 0.0]",
+  "numeros": [
+   "1.0"
+  ],
+  "tipo": "pendiente",
+  "motivo": "Aviso de inasistencia: se considera sin compensar si tiene menos de un minuto compensado."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "reparto.append({'fecha': str(r.get('fecha'))[:10], 'estado': 'APROBADO' if aut >= 0.005 else 'RECHAZADO',",
+  "numeros": [
+   "0.005"
+  ],
+  "tipo": "precision",
+  "motivo": "Menos de medio segundo cuenta como cero al repartir horas extra."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "'minutos_autorizados': aut if aut >= 0.005 else 0.0, 'usadas': round(usa, 3), 'a_pagar': round(paga, 3)})",
+  "numeros": [
+   "0.005"
+  ],
+  "tipo": "precision",
+  "motivo": "Menos de medio segundo cuenta como cero al repartir horas extra."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "dc = int(aj['valor']) if aj else 25",
+  "numeros": [
+   "25"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Día de cierre solo si falta el ajuste dia_cierre_rrhh (se edita en Configuración)."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "dc = 25",
+  "numeros": [
+   "25"
+  ],
+  "tipo": "respaldo",
+  "motivo": "Día de cierre solo si el ajuste dia_cierre_rrhh no se puede leer."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "sig = (f.replace(day=1) + timedelta(days=32)).replace(day=1)",
+  "numeros": [
+   "32"
+  ],
+  "tipo": "logica",
+  "motivo": "Salto al mes siguiente."
+ },
+ {
+  "archivo": "backend/services/cuadre_service.py",
+  "linea": "neta = 0.0 if int(_f(di.get('deuda_condonada'))) == 5 else _f(di.get('minutos_deuda'))",
+  "numeros": [
+   "5"
+  ],
+  "tipo": "codigo",
+  "motivo": "Código del tipo de perdonazo del interruptor (1 salida, 2 atraso, 3 ambos, 4 y 5 día completo), no una cantidad."
+ }
+]

@@ -1728,6 +1728,8 @@ class QuantumMatrixEngine:
         repetidas_seg = _ajuste_numero(ajustes, 'reglas_marcas_repetidas_minutos', escala=60.0)
         colacion_referencia_min = _ajuste_numero(ajustes, 'reglas_marcas_colacion_referencia_minutos')
         fuera_ciclo_min = _ajuste_numero(ajustes, 'reglas_marcas_fuera_ciclo_minutos')
+        # Mínimo para contar hora extra (Configuración → Ajustes): sin ajuste, cuenta todo
+        minimo_he_min = max(0.0, _ajuste_numero(ajustes, 'asistencia_minimo_horas_extra_minutos') or 0.0)
 
         # 2. Configuración de turno y día
         t_cfg = turno_config or {}
@@ -1744,6 +1746,9 @@ class QuantumMatrixEngine:
         tolerancia_alerta = int(t_cfg.get('tolerancia_retraso_alerta', 0) or 0)
         tolerancia_descuento = int(t_cfg.get('tolerancia_retraso_descuento', 0) or 0)
         tolerancia_salida = int(t_cfg.get('tolerancia_salida_adelantada', 0) or 0)
+        # Esperas del día de hoy (pantalla del turno): con entrada y sin salida, y sin ninguna marca
+        ventana_en_curso_min = int(t_cfg.get('ventana_en_curso_minutos', 0) or 0)
+        espera_inasistencia_min = int(t_cfg.get('espera_inasistencia_minutos', 0) or 0)
         anclaje_entrada = int(t_cfg.get('anclaje_entrada_minutos', 0) or 0)
         anclaje_salida = int(t_cfg.get('anclaje_salida_minutos', 0) or 0)
         descuento_col_auto = bool(t_cfg.get('descuento_colacion_auto', False))
@@ -2271,14 +2276,12 @@ class QuantumMatrixEngine:
                     else:
                         return None
                 elif dt_sal_teo:
-                    # El turno concluye a la hora de salida teórica más el margen de anclaje de salida
-                    ventana_salida = max(anclaje_salida, 30)
-                    limite_sal_dt = dt_sal_teo + timedelta(minutes=ventana_salida)
+                    # Sin marcas: la inasistencia aparece la «Espera para marcar inasistencia» del turno después de la salida
+                    limite_sal_dt = dt_sal_teo + timedelta(minutes=espera_inasistencia_min)
                     if now_local < limite_sal_dt:
                         return None
                 elif dt_ent_teo and horas_teoricas > 0:
-                    ventana_salida = max(anclaje_salida, 30)
-                    est_sal_dt = dt_ent_teo + timedelta(hours=horas_teoricas, minutes=ventana_salida)
+                    est_sal_dt = dt_ent_teo + timedelta(hours=horas_teoricas, minutes=espera_inasistencia_min)
                     if now_local < est_sal_dt:
                         return None
                 else:
@@ -2340,7 +2343,7 @@ class QuantumMatrixEngine:
             f_sal_eval = (datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
             jornada_vigente_hoy = (fecha == today_str) or (es_nocturno and today_str == f_sal_eval)
             if jornada_vigente_hoy and es_entrada:
-                ventana_min = int(t_cfg.get('ventana_en_curso_minutos', 180) or 180)
+                ventana_min = ventana_en_curso_min
                 sigue_en_curso = True
                 if hora_sal_teo:
                     try:
@@ -2638,7 +2641,8 @@ class QuantumMatrixEngine:
                 res['minutos_permiso_personal_deuda'] = int(round(min_permiso_deuda))
 
             diff_extra = min_trab - min_teo
-            if diff_extra >= 1.0:
+            # Hora extra: al menos un segundo (resolución del reloj) y lo que pida el «Mínimo para contar hora extra»
+            if round(diff_extra * 60.0) > 0 and diff_extra >= minimo_he_min:
                 if diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
                     # [REGLA DE NEGOCIO CONFIGURADA EN INTERFAZ]:
                     # "Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente"

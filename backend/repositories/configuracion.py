@@ -222,6 +222,7 @@ class ConfiguracionRepository:
                 ("asistencia_emergencia_banda_horas", "2.0", "Horas de holgura para la banda de tolerancia envolvente"),
                 ("asistencia_emergencia_jornada_limite_horas", "3.0", "Horas límite para calificar bloque como jornada especial en vez de horas extras directas"),
                 ("asistencia_max_extras_ordinarias_dia_habil", "240", "Minutos límite de horas extras ordinarias en día hábil antes de convertirse en especial (100% del bloque)"),
+                ("asistencia_minimo_horas_extra_minutos", "0", "Minutos mínimos de tiempo trabajado de más para contarlo como hora extra (0 = cuenta todo, aunque sean segundos)"),
                 (CLAVE_CORTE_LIBRETA, VALOR_INICIAL_CORTE_LIBRETA, DESCRIPCION_CORTE_LIBRETA)
             ]
             await self.db.executemany(

@@ -429,7 +429,7 @@ class ReportService:
                             he_apr += (di.get("minutos_extra_autorizados") or 0)
                         elif di.get("estado_he") == 'RECHAZADO':
                             he_rec += (di.get("minutos_extra_bruto") or 0)
-                        elif (di.get("minutos_extra_bruto") or 0) >= 1.0:
+                        elif (di.get("minutos_extra_bruto") or 0) > 0:
                             he_pend += (di.get("minutos_extra_bruto") or 0)
                     elif es_ja_he:
                         # Jornada adicional aprobada como HE

@@ -44,6 +44,8 @@ const ReglasMarcasModule = (() => {
     const toast = (msg, tipo_) => { if (typeof showToast === 'function') showToast(msg, tipo_ || 'success'); else alert(msg); };
 
     function durMin(min) {
+        const seg = Math.round((Number(min) || 0) * 60);
+        if (seg > 0 && seg < 60) return seg + ' s';   // menos de un minuto: en segundos (con tolerancia 0 se marcan)
         const t = Math.round(Number(min) || 0);
         if (t < 60) return t + ' min';
         const h = Math.floor(t / 60), m = t % 60;
@@ -451,10 +453,10 @@ const ReglasMarcasModule = (() => {
         let html = '<b>' + num(d.horas, 2) + ' h</b>';
         html += '<div>Estuvo ' + num(estuvo, 2) + ' h · ' + (Number(d.minutos_colacion) > 0 ? 'colación descontada ' + durMin(d.minutos_colacion) : 'sin colación descontada') + '</div>';
         const avisos = [];
-        if (Number(d.minutos_atraso) >= 1) avisos.push('<span style="color:#b91c1c;font-weight:600">Atraso ' + durMin(d.minutos_atraso) + '</span>');
-        if (Number(d.minutos_salida_adelantada) >= 1) avisos.push('<span style="color:#b91c1c;font-weight:600">Salida adelantada ' + durMin(d.minutos_salida_adelantada) + '</span>');
-        if (Number(d.minutos_exceso_colacion) >= 1) avisos.push('<span style="color:#92400e;font-weight:600">Exceso de colación ' + durMin(d.minutos_exceso_colacion) + '</span>');
-        if (Number(d.minutos_extra_bruto) >= 1) avisos.push('<span style="color:#1d4ed8;font-weight:600">' + durMin(d.minutos_extra_bruto) + ' extra</span>');
+        if (Number(d.minutos_atraso) > 0) avisos.push('<span style="color:#b91c1c;font-weight:600">Atraso ' + durMin(d.minutos_atraso) + '</span>');
+        if (Number(d.minutos_salida_adelantada) > 0) avisos.push('<span style="color:#b91c1c;font-weight:600">Salida adelantada ' + durMin(d.minutos_salida_adelantada) + '</span>');
+        if (Number(d.minutos_exceso_colacion) > 0) avisos.push('<span style="color:#92400e;font-weight:600">Exceso de colación ' + durMin(d.minutos_exceso_colacion) + '</span>');
+        if (Number(d.minutos_extra_bruto) > 0) avisos.push('<span style="color:#1d4ed8;font-weight:600">' + durMin(d.minutos_extra_bruto) + ' extra</span>');
         if (ESTADO_TXT[d.estado]) avisos.push('<span style="color:#6b21a8;font-weight:600">' + ESTADO_TXT[d.estado] + '</span>');
         html += avisos.length ? '<div>' + avisos.join(' · ') + '</div>' : '<div style="color:#15803d;font-weight:600">Sin atraso ni salida adelantada</div>';
         return html;

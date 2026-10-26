@@ -38,7 +38,8 @@ class TurnoBase(BaseModel):
     umbral_horas_colacion: float = 0.0 # Umbral para no descontar colación en jornadas cortas
     anclaje_entrada_minutos: int = 0 # Nuevo campo para marcas tempranas
     anclaje_salida_minutos: int = 0 # Nuevo campo para marcas tardías filtrables
-    ventana_en_curso_minutos: int = 0 # Reemplazo de margen duro de 3h para estados EN_CURSO
+    ventana_en_curso_minutos: int = 0 # Hoy, con entrada y sin salida: minutos después de la salida que el día sigue EN_CURSO (0 = se cierra a la hora de salida)
+    espera_inasistencia_minutos: int = 0 # Hoy, sin ninguna marca: minutos después de la salida antes de marcar INASISTENCIA (0 = a la hora de salida)
     tolerancia_exceso_colacion_minutos: int = 0 # Margen para diferenciar colación de permisos
     hora_limite_ficticia: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$", description="Hora trigger para la inasistencia temprana en Horarios Bolsa")
     permite_viajes_largos: bool = False # Flag para diferenciar Bolsa Normal (0) vs Bolsa Viajes Largos (1)
