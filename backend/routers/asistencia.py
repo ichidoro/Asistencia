@@ -2569,7 +2569,27 @@ async def get_bolsa_he_disponible(
     bolsa = await service.repository.get_bolsa_he_disponible(
         empleado_id, periodo["fecha_inicio"], periodo["fecha_fin"]
     )
+    bolsa = await _bolsa_despues_de_deuda(service, empleado_id, fecha, bolsa)
     return {"success": True, "data": bolsa, "periodo": periodo}
+
+
+async def _bolsa_despues_de_deuda(service: AsistenciaService, empleado_id: int, fecha: str, bolsa: Dict[str, Any]) -> Dict[str, Any]:
+    """Regla del dueño (26-10-2026): las inasistencias compensables van al final; solo se compensan con las horas extra
+    que sobran después de pagar toda la deuda (exceso de colación, permisos, atrasos y salidas adelantadas)."""
+    try:
+        from backend.services.cuadre_service import CuadreService
+        cs = CuadreService(service)
+        t_ini, t_fin = await cs.tramo_de(str(fecha)[:10])
+        lib = await cs.libro_empleado(int(empleado_id), t_ini, t_fin)
+        if lib.get('es_bolsa'):
+            return bolsa
+        sobran = max(0.0, float(lib['libro'].get('he_a_pagar') or 0.0))
+        bolsa = dict(bolsa)
+        bolsa["minutos_disponibles"] = round(min(float(bolsa.get("minutos_disponibles") or 0.0), sobran), 2)
+        bolsa["regla"] = "Solo se compensan inasistencias con las horas extra que sobran después de pagar toda la deuda."
+    except Exception as e_cuadre:
+        logger.warning(f"[Cuadre] No se pudo revisar la deuda antes de compensar: {e_cuadre}")
+    return bolsa
 
 
 @router.get("/compensaciones/")
@@ -2628,6 +2648,7 @@ async def create_compensacion(
     bolsa = await service.repository.get_bolsa_he_disponible(
         data.empleado_id, periodo["fecha_inicio"], periodo["fecha_fin"]
     )
+    bolsa = await _bolsa_despues_de_deuda(service, data.empleado_id, data.fecha_inasistencia, bolsa)
     if data.minutos > bolsa["minutos_disponibles"]:
         if bolsa["minutos_disponibles"] > 0 and (bolsa["minutos_disponibles"] / data.minutos) >= 0.90:
             logger.info(

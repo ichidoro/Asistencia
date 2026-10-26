@@ -63,11 +63,21 @@
 
     // Base de la pregunta: qué pasa si TODAS las horas extra trabajadas se usan para cubrir la deuda.
     // Se plantea siempre sobre los números crudos (sin el perdón del cuadre), para poder cambiar la decisión.
-    function base(libro) {
-        const disp = Math.max(0, (libro.he_trabajadas || 0) - (libro.he_usadas_inasistencia || 0));
-        const deuda = Math.max(0, (libro.deuda_neta || 0));
+    // La cuenta se plantea como si se decidiera desde cero: sin los perdonazos de la guía (el servidor la simula en
+    // sin_guia), así la vista previa de cualquier opción es exacta aunque ya haya una decisión guardada.
+    function base(d) {
+        const S = (d && d.sin_guia) || (d && d.libro) || {};
+        const disp = Math.max(0, (S.he_trabajadas || 0) - (S.he_usadas_inasistencia || 0));
+        const deuda = Math.max(0, (S.deuda_neta || 0));
         const cubre = Math.min(disp, deuda);
         return { disp, deuda, cubre, sobran: disp - cubre, falta: deuda - cubre };
+    }
+    function propuesta(d) { return (d && d.propuesta) || { dias: [], total: 0, queda_no_perdonable: 0 }; }
+    function guiaCambio(d) {
+        const p = d && d.politica;
+        if (!p || p.politica !== 'CERO') return false;
+        const g = d.guia_activa, actual = g ? ((g.minutos_marca || 0) + (g.minutos_cuadre || 0)) : 0;
+        return Math.abs((propuesta(d).total || 0) - actual) > 0.0083;
     }
     function tomarPolitica(data) {
         const p = data && data.politica;
@@ -78,6 +88,7 @@
         const p = estado.data && estado.data.politica;
         if (!p || !estado.eleccion) return false;
         if (p.politica !== estado.eleccion) return false;
+        if (p.politica === 'CERO') return !guiaCambio(estado.data);
         if (p.politica !== 'PAGAR') return true;
         const pm = (p.minutos_a_pagar == null) ? null : Number(p.minutos_a_pagar);
         return pm === estado.minutos;
@@ -86,7 +97,7 @@
     function textoPolitica(pol) {
         if (!pol) return '<span class="cq-t-ambar">por decidir</span>';
         const quien = pol.decidido_por ? (' · ' + esc(pol.decidido_por)) : '';
-        if (pol.politica === 'CERO') return '<span class="cq-t-azul">llevar todo a cero' + quien + '</span>';
+        if (pol.politica === 'CERO') return '<span class="cq-t-azul">' + ((estado.data && estado.data.guia_activa) ? 'perdonar atrasos y salidas' : 'sin pagar lo que sobra') + quien + '</span>';
         const cuanto = (pol.minutos_a_pagar == null) ? 'todas las que sobren' : ('hasta ' + fmt(pol.minutos_a_pagar));
         return '<span class="cq-t-verde">pagar horas extra: ' + cuanto + quien + '</span>';
     }
@@ -131,6 +142,9 @@
         const max = cal.reduce(function (m, x) { return Math.max(m, x.he_bruto || 0, (x.deuda || 0) + (x.perdonado || 0)); }, 30);
         const escala = 70 / max;
         let tira = '';
+        // Días que perdona (o perdonó) la guía: se marcan en la línea cuando la opción está elegida
+        const enPlan = {};
+        if (estado.eleccion === 'CERO') propuesta(d).dias.forEach(function (f) { enPlan[f.fecha] = true; });
         cal.forEach(function (x, i) {
             const f = fechaObj(x.fecha);
             const libre = !x.estado || x.estado === 'LIBRE' || x.estado === 'FERIADO';
@@ -138,7 +152,7 @@
             const b = barrasDia(x, L, escala);
             const sel = estado.diaSel === i;
             const ayuda = fechaLarga(x.fecha) + ': ' + nombreEstado(x.estado) + (hay(x.deuda) ? ', deuda ' + fmt(x.deuda) : '') + (hay(x.he_bruto) ? ', horas extra ' + fmt(x.he_bruto) : '');
-            tira += '<button type="button" class="cq-dia' + (libre ? ' cq-dia-libre' : '') + (sel ? ' cq-dia-sel' : '') + '" aria-pressed="' + sel + '" aria-label="' + esc(ayuda) + '" title="' + esc(ayuda) + '" onclick="window.cuadreDia(' + i + ')">'
+            tira += '<button type="button" class="cq-dia' + (libre ? ' cq-dia-libre' : '') + (sel ? ' cq-dia-sel' : '') + (enPlan[x.fecha] ? ' cq-dia-plan' : '') + '" aria-pressed="' + sel + '" aria-label="' + esc(ayuda) + '" title="' + esc(ayuda) + '" onclick="window.cuadreDia(' + i + ')">'
                 + '<span class="cq-arriba">' + b.arriba + '</span><span class="cq-eje"></span><span class="cq-abajo">' + b.abajo + '</span>'
                 + '<span class="cq-dlab"><span>' + LETRA[f.getDay()] + '</span><b>' + f.getDate() + '</b><em class="' + (marca === 'Ina' ? 'cq-t-rojo' : '') + '">' + marca + '</em></span></button>';
         });
@@ -202,12 +216,21 @@
         if (b.sobran > 0.0083) {
             h += '<h3 class="cq-h3 cq-h3-g">¿Qué hacemos con las ' + fmt(b.sobran) + ' que sobran?</h3>'
                 + '<p class="cq-p">Las horas extra cubren primero la deuda: ' + fmt(b.cubre) + ' de ' + fmt(b.disp) + '. Eso es automático.</p>'
-                + '<div class="cq-opciones" role="radiogroup">' + opcion('CERO', 'Llevar todo a cero', 'No se paga nada. Las ' + fmt(b.sobran) + ' quedan sin pagar.') + opcionPagar(b.sobran) + '</div>';
+                + '<div class="cq-opciones" role="radiogroup">' + opcion('CERO', 'No pagar las que sobran', 'Las ' + fmt(b.sobran) + ' que sobran quedan sin pagar. Saldo 00:00:00.') + opcionPagar(b.sobran) + '</div>';
         } else if (b.falta > 0.0083) {
+            const prop = propuesta(d);
             h += '<h3 class="cq-h3 cq-h3-g">Falta cubrir ' + fmt(b.falta) + ', ¿qué hacemos?</h3>'
-                + '<p class="cq-p">' + (hay(b.disp) ? ('Las ' + fmt(b.disp) + ' de horas extra ya se usan para cubrir parte de la deuda. ') : 'No hay horas extra para cubrir la deuda. ') + 'Eso es automático.</p>'
-                + '<div class="cq-opciones" role="radiogroup">' + opcion('CERO', 'Llevar todo a cero', 'Se perdonan ' + fmt(b.falta) + ', con tu nombre y la fecha en el registro.')
-                + opcion('PAGAR', 'Dejar la deuda', 'Se descuenta en el cierre. No hay horas que pagar.') + '</div>';
+                + '<p class="cq-p">' + (hay(b.disp) ? ('Las ' + fmt(b.disp) + ' de horas extra pagan primero el exceso de colación y los permisos, después los atrasos y por último las salidas adelantadas. ') : 'No hay horas extra para pagar la deuda. ') + 'Eso es automático.</p>';
+            if (hay(prop.total)) {
+                h += '<div class="cq-opciones" role="radiogroup">'
+                    + opcion('CERO', 'Perdonar atrasos y salidas', 'Se perdonan ' + fmt(prop.total) + ' en ' + prop.dias.length + (prop.dias.length === 1 ? ' día. ' : ' días. ')
+                        + (hay(prop.queda_no_perdonable) ? ('Quedan ' + fmt(prop.queda_no_perdonable) + ' de exceso de colación y permisos como deuda: no se perdonan.') : 'La cuenta queda en cero.'))
+                    + opcion('PAGAR', 'Dejar la deuda', 'Se descuenta en el cierre. No hay horas que pagar.') + '</div>';
+                if (estado.eleccion === 'CERO') h += listaPerdon(prop);
+            } else {
+                h += '<p class="cq-nota">Lo que falta es exceso de colación o permisos: no se perdona.</p>'
+                    + '<div class="cq-opciones cq-opciones-1" role="radiogroup">' + opcion('PAGAR', 'Dejar la deuda', 'Se descuenta en el cierre. No hay horas que pagar.') + '</div>';
+            }
         } else if (b.deuda > 0.0083 || b.disp > 0.0083) {
             h += '<h3 class="cq-h3 cq-h3-g">Las horas extra cubren justo la deuda</h3>'
                 + '<div class="cq-opciones cq-opciones-1" role="radiogroup">' + opcion('CERO', 'Confirmar: todo a cero', 'Queda registrado que se cubrió con horas extra.') + '</div>';
@@ -217,27 +240,58 @@
         if (estado.eleccion && !esLaVigente() && puede) {
             h += '<label class="cq-motivo">Motivo<input type="text" id="cq-motivo" placeholder="Opcional, queda en el registro" value="' + esc(estado.motivo) + '" oninput="window.cuadreMotivo(this.value)"></label>';
         }
+        if (d.aviso_inasistencia) {
+            const av = d.aviso_inasistencia;
+            h += '<p class="cq-aviso">Las horas extra pagan primero los atrasos y salidas, y por eso no alcanzan para compensar la inasistencia del '
+                + fechaLarga(av.fecha) + ' (' + fmt(av.minutos_inasistencia) + '). Si se perdonaran los atrasos y salidas, sobrarían ' + fmt(av.libres_perdonando) + ', suficientes para compensarla.</p>';
+        }
         if (d.politica) {
             const cuando = d.politica.decidido_en ? (' el ' + fechaDMA(d.politica.decidido_en) + ' ' + String(d.politica.decidido_en).substring(11, 16)) : '';
-            h += '<p class="cq-nota">Decidido' + cuando + ': ' + textoPolitica(d.politica) + '. Elige otra opción para cambiarlo, o «Quitar política» para volver a empezar.</p>';
+            h += '<p class="cq-nota">Decidido' + cuando + ': ' + textoPolitica(d.politica) + '. Elige otra opción para cambiarlo, o «Quitar política» para volver a empezar. Al cambiarlo, los perdonazos de esta decisión se deshacen solos.</p>';
+            if (guiaCambio(d)) h += '<p class="cq-aviso">La cuenta cambió desde que se decidió: llegaron marcas nuevas o corregidas. Revisa la lista y confirma de nuevo.</p>';
         }
         if (!puede) h += '<p class="cq-nota">Solo puedes ver el cuadre; decidirlo requiere el permiso de horas extra.</p>';
         return h + '</section>';
     }
 
+    // Lista de los días que perdona la guía, para que quien confirma vea exactamente qué pasa con cada uno
+    const EFECTO = { pasa_a_ok: 'Se perdona y el día pasa a OK', marca: 'Se perdona con la marca del interruptor',
+        parcial: 'Se perdona solo una parte; el resto lo pagan las horas extra', segundos: 'Segundos dentro del margen; el día ya está en OK' };
+    function listaPerdon(prop) {
+        let filas = '';
+        prop.dias.forEach(function (f) {
+            const causa = (hay(f.atraso) && hay(f.salida)) ? 'Atraso y salida adelantada' : (hay(f.atraso) ? 'Atraso' : 'Salida adelantada');
+            let efecto = EFECTO[f.efecto] || '';
+            if (f.efecto === 'marca') {
+                // El día tiene las dos causas y solo una se perdona: la otra la pagaron las horas extra y sigue marcada
+                if (hay(f.salida) && !hay(f.atraso)) efecto = 'Se perdona la salida; el atraso lo pagan las horas extra y sigue marcado';
+                else if (hay(f.atraso) && !hay(f.salida)) efecto = 'Se perdona el atraso; la salida la pagan las horas extra y sigue marcada';
+            }
+            filas += '<tr><td>' + fechaLarga(f.fecha) + '</td><td>' + causa + '</td><td class="cq-der">' + fmt(f.total) + '</td><td class="cq-sec">' + esc(efecto) + '</td></tr>';
+        });
+        return '<div class="cq-perdon"><div class="cq-perdon-cab"><b>Días que se perdonan</b><span class="cq-sec">' + prop.dias.length + (prop.dias.length === 1 ? ' día · ' : ' días · ') + fmt(prop.total) + '</span></div>'
+            + '<div class="cq-lista-caja"><table class="cq-tabla cq-tabla-perdon"><colgroup><col style="width:96px"><col style="width:170px"><col style="width:92px"><col></colgroup>'
+            + '<thead><tr><th>Día</th><th>Causa</th><th class="cq-der">Perdonado</th><th>Qué pasa</th></tr></thead><tbody>' + filas + '</tbody></table></div>'
+            + '<p class="cq-nota">El exceso de colación y los permisos nunca se perdonan. Las horas extra pagan primero lo que no se perdona.</p></div>';
+    }
+
     // ── Cuenta: Hoy y Si confirmas lado a lado ─────────────────────────
-    function cuentaSi(L, b) {
+    function cuentaSi(d, L, b) {
         if (!estado.eleccion) return null;
         let cub = b.cubre, pend = b.falta, perdAhora = 0, pagar = 0, nopag = 0;
-        if (estado.eleccion === 'CERO') { perdAhora = b.falta; pend = 0; nopag = b.sobran; }
-        else { pagar = (estado.minutos == null) ? b.sobran : Math.min(b.sobran, Math.max(0, estado.minutos)); nopag = b.sobran - pagar; }
-        const perdPrevio = Math.max(0, (L.perdonado || 0) - (L.perdon_cuadre || 0));
+        if (estado.eleccion === 'CERO') {
+            // Solo se perdonan atrasos y salidas (lo que dice la guía del servidor); colación y permisos quedan como deuda
+            const prop = propuesta(d);
+            if (hay(b.falta)) { perdAhora = prop.total || 0; pend = prop.queda_no_perdonable || 0; }
+            nopag = b.sobran;
+        } else { pagar = (estado.minutos == null) ? b.sobran : Math.min(b.sobran, Math.max(0, estado.minutos)); nopag = b.sobran - pagar; }
+        const perdPrevio = d.sin_guia ? (d.sin_guia.perdonado || 0) : Math.max(0, (L.perdonado || 0) - (L.perdon_cuadre || 0));
         return { cubierto: cub, perdonado: perdPrevio + perdAhora, pendiente: pend, a_pagar: pagar, no_pagadas: nopag, por_decidir: 0, saldo: pagar - pend };
     }
-    function cuenta(L, b) {
-        const si = cuentaSi(L, b);
+    function cuenta(d, L, b) {
         const vigente = esLaVigente();
         const hoy = { cubierto: L.cubierto, perdonado: L.perdonado, pendiente: L.pendiente, a_pagar: L.he_a_pagar, no_pagadas: L.he_no_pagadas, por_decidir: L.he_por_decidir, saldo: L.saldo };
+        const si = vigente ? hoy : cuentaSi(d, L, b);
         const filas = [['cubierto', 'Cubierto con horas extra', ''], ['perdonado', 'Perdonado', ''], ['pendiente', 'Pendiente', 'rojo'],
             ['a_pagar', 'A pagar', 'verde'], ['no_pagadas', 'No pagadas', ''], ['por_decidir', 'Horas extra por decidir', 'ambar']];
         let h = '<div class="cq-cuenta-cab"><span></span><span>Hoy</span><span class="cq-col-si">' + (vigente ? 'Decidido' : 'Si confirmas') + '</span></div>';
@@ -258,13 +312,13 @@
     function actualizarCuenta() {
         const el = document.getElementById('cq-cuenta'), btn = document.getElementById('cq-confirmar');
         if (!el || !estado.data) return;
-        const L = estado.data.libro, b = base(L);
-        el.innerHTML = cuenta(L, b);
+        const L = estado.data.libro, b = base(estado.data);
+        el.innerHTML = cuenta(estado.data, L, b);
         if (btn) btn.disabled = !estado.eleccion || !puedeDecidir() || esLaVigente();
     }
 
     function render() {
-        const d = estado.data, L = d.libro, b = base(L);
+        const d = estado.data, L = d.libro, b = base(d);
         const el = document.getElementById('cq-cuerpo');
         if (!el) return;
         el.innerHTML = lineaTramo(d, L)
@@ -381,6 +435,12 @@
             + '.cq-dia:hover{background:#F2F5FC}'
             + '.cq-dia-libre{background:#EEF1F6}.cq-dia-libre:hover{background:#E6EAF2}'
             + '.cq-dia-sel,.cq-dia-sel:hover{background:#E3E9FA;box-shadow:inset 0 0 0 1.5px #1B2F8F}'
+            + '.cq-dia-plan{box-shadow:inset 0 0 0 1.5px #1B2F8F;background:repeating-linear-gradient(135deg,#F2F5FC,#F2F5FC 4px,#E6ECFA 4px,#E6ECFA 8px)}'
+            + '.cq-dia-plan.cq-dia-sel{background:#E3E9FA}'
+            + '.cq-aviso{margin:0;font-size:12.5px;color:#7A4B05;background:#FDF5E6;border-radius:8px;padding:8px 12px}'
+            + '.cq-perdon{display:flex;flex-direction:column;gap:8px;margin-top:4px}'
+            + '.cq-perdon-cab{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px}.cq-perdon-cab b{font-weight:600}'
+            + '.cq-tabla-perdon{min-width:520px}'
             + '.cq-arriba,.cq-abajo{display:flex;flex-direction:column;align-items:center}'
             + '.cq-arriba{height:74px;justify-content:flex-end}.cq-abajo{height:62px;justify-content:flex-start}'
             + '.cq-arriba i,.cq-abajo i{display:block;width:60%;max-width:16px}'

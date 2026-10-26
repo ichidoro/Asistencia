@@ -81,9 +81,10 @@ def test_politica_desconocida_se_rechaza():
 
 
 def dia(fecha, deuda=0.0, he=0.0, estado_he=None, aut=0.0):
-    return {'fecha': fecha, 'estado': 'OK', 'horas_teoricas': 8.0, 'horas_trabajadas': 8.0, 'minutos_deuda': deuda,
+    # La deuda de estos días es de atraso: junto con la salida adelantada, es lo único que se puede perdonar (26-10-2026)
+    return {'fecha': fecha, 'estado': 'ATRASO' if deuda else 'OK', 'horas_teoricas': 8.0, 'horas_trabajadas': 8.0, 'minutos_deuda': deuda,
             'minutos_deuda_bruta': deuda, 'deuda_condonada': 0, 'minutos_extra_bruto': he, 'estado_he': estado_he,
-            'minutos_extra_autorizados': aut, 'minutos_compensados_he': 0}
+            'minutos_extra_autorizados': aut, 'minutos_compensados_he': 0, 'minutos_atraso': deuda}
 
 
 def test_tolerancia_deja_pasar_los_segundos_y_cuadra():

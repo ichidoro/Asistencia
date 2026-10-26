@@ -2824,6 +2824,8 @@ class AsistenciaService:
             _crepo = CuadreRepository(db)
             _tol = await _crepo.tolerancia_minutos()
             _pols = {int(p['empleado_id']): p for p in await _crepo.politicas_del_tramo(fecha_inicio, fecha_fin)}
+            _guiados = await _crepo.perdonazos_del_tramo(fecha_inicio, fecha_fin)
+            from backend.services.cuadre_service import mapa_guiados
             for _eid, _cells in matrix.items():
                 _inf = _cells.get('info')
                 if not isinstance(_inf, dict):
@@ -2833,6 +2835,7 @@ class AsistenciaService:
                 _dias = [c for k, c in _cells.items() if k != 'info' and isinstance(c, dict)]
                 _p = _pols.get(int(_eid)) if _eid is not None else None
                 _lib = plegar_libro(_dias, es_bolsa=False, tolerancia_min=_tol,
+                                    guiados=mapa_guiados(_guiados.get(int(_eid), [])) if _eid is not None else None,
                                     perdon_cuadre=float((_p or {}).get('minutos_perdonados') or 0.0), hay_politica=bool(_p))
                 _lib.pop('hallazgos', None)
                 _lib['politica'] = (_p or {}).get('politica')
@@ -3141,7 +3144,15 @@ class AsistenciaService:
                  
             estado = item.get('estado')
             minutos = item.get('minutos_autorizados', 0)
-            
+
+            # Candado del cuadre (punto 1 del dueño, 26-10-2026): a quien tiene atrasos o salidas perdonados por la guía
+            # del cuadre no se le aprueban horas extra a mano: se pagarían horas que cubrían lo que ya se perdonó.
+            if estado == 'APROBADO' and emp_id and fecha:
+                from backend.repositories.cuadre import CuadreRepository
+                if await CuadreRepository(self.repository.db).tiene_perdonazos_en_fecha(int(emp_id), str(fecha)[:10]):
+                    raise ValueError("Esta persona tiene atrasos o salidas perdonados en el cuadre del tramo. "
+                                     "Para aprobar horas extra a mano, primero quita esa decisión en la ventana de cuadre.")
+
             # Blindaje: Si es RECHAZADO o PENDIENTE, forzar 0
             if estado in ('RECHAZADO', 'PENDIENTE'):
                 minutos = 0

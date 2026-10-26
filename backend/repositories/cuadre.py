@@ -38,6 +38,30 @@ class CuadreRepository:
                     UNIQUE (empleado_id, fecha_inicio, fecha_fin)
                 )
             """)
+        # Perdonazos que puso la guía del cuadre (regla del dueño, 26-10-2026): solo atrasos y salidas adelantadas.
+        # Cada fila recuerda su origen y los minutos aprobados, para no borrar nunca un perdonazo del interruptor y para
+        # no perdonar nunca más de lo aprobado aunque después cambien las marcas.
+        if not await self.db.table_exists("cuadre_perdonazos"):
+            await self.db.execute("""
+                CREATE TABLE IF NOT EXISTS cuadre_perdonazos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empleado_id INTEGER NOT NULL,
+                    fecha TEXT NOT NULL,
+                    fecha_inicio TEXT NOT NULL,
+                    fecha_fin TEXT NOT NULL,
+                    tipo INTEGER NOT NULL DEFAULT 0,
+                    minutos_atraso REAL DEFAULT 0,
+                    minutos_salida REAL DEFAULT 0,
+                    minutos_marca REAL DEFAULT 0,
+                    minutos_cuadre REAL DEFAULT 0,
+                    estado_antes TEXT,
+                    creado_por TEXT,
+                    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    activa INTEGER DEFAULT 1,
+                    revocado_por TEXT,
+                    revocado_en TIMESTAMP
+                )
+            """)
         # Una decisión tomada día por día a mano (excepción) no la pisa la política del tramo.
         try:
             if 'excepcion' not in set(await self.db.get_column_names("horas_extras")):
@@ -123,3 +147,53 @@ class CuadreRepository:
         await self.db.execute(
             "UPDATE horas_extras SET excepcion = ? WHERE empleado_id = ? AND fecha = ?",
             (1 if excepcion else 0, empleado_id, fecha))
+
+    # ── Perdonazos de la guía del cuadre ──────────────────────────────────
+    async def perdonazos_activos(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+        rows = await self.db.fetch_all(
+            "SELECT * FROM cuadre_perdonazos WHERE empleado_id = ? AND fecha_inicio = ? AND fecha_fin = ? AND activa = 1 ORDER BY fecha",
+            (empleado_id, fecha_inicio, fecha_fin))
+        return [dict(r) for r in rows]
+
+    async def perdonazos_del_tramo(self, fecha_inicio: str, fecha_fin: str) -> Dict[int, List[Dict[str, Any]]]:
+        rows = await self.db.fetch_all(
+            "SELECT * FROM cuadre_perdonazos WHERE fecha_inicio = ? AND fecha_fin = ? AND activa = 1 ORDER BY empleado_id, fecha",
+            (fecha_inicio, fecha_fin))
+        salida: Dict[int, List[Dict[str, Any]]] = {}
+        for r in rows:
+            salida.setdefault(int(r['empleado_id']), []).append(dict(r))
+        return salida
+
+    async def tiene_perdonazos_en_fecha(self, empleado_id: int, fecha: str) -> bool:
+        row = await self.db.fetch_one(
+            "SELECT COUNT(*) AS n FROM cuadre_perdonazos WHERE empleado_id = ? AND fecha_inicio <= ? AND fecha_fin >= ? AND activa = 1",
+            (empleado_id, fecha, fecha))
+        return bool(row and int(row['n'] or 0) > 0)
+
+    async def guardar_perdonazos(self, empleado_id: int, fecha_inicio: str, fecha_fin: str, filas: List[Dict[str, Any]], creado_por: str) -> None:
+        for f in filas:
+            await self.db.execute("""
+                INSERT INTO cuadre_perdonazos (empleado_id, fecha, fecha_inicio, fecha_fin, tipo, minutos_atraso, minutos_salida,
+                                               minutos_marca, minutos_cuadre, estado_antes, creado_por, creado_en, activa)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
+            """, (empleado_id, f['fecha'], fecha_inicio, fecha_fin, int(f['tipo']), float(f['atraso']), float(f['salida']),
+                  float(f['minutos_marca']), float(f['minutos_cuadre']), f.get('estado_antes'), creado_por))
+
+    async def desactivar_perdonazos(self, ids: List[int], revocado_por: str) -> None:
+        for i in ids:
+            await self.db.execute(
+                "UPDATE cuadre_perdonazos SET activa = 0, revocado_por = ?, revocado_en = CURRENT_TIMESTAMP WHERE id = ?",
+                (revocado_por, int(i)))
+
+    async def marca_del_dia(self, empleado_id: int, fecha: str) -> int:
+        row = await self.db.fetch_one("SELECT deuda_condonada FROM asistencias WHERE empleado_id = ? AND fecha = ?", (empleado_id, fecha))
+        try:
+            return int(row['deuda_condonada'] or 0) if row else 0
+        except (TypeError, ValueError):
+            return 0
+
+    async def poner_marca(self, empleado_id: int, fecha: str, tipo: int) -> None:
+        """La misma marca que escribe el interruptor de perdonazo (condonar-deuda)."""
+        await self.db.execute(
+            "UPDATE asistencias SET deuda_condonada = ?, updated_at = datetime('now') WHERE empleado_id = ? AND fecha = ?",
+            (int(tipo), empleado_id, fecha))
