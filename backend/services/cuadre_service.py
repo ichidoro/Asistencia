@@ -175,6 +175,31 @@ def plegar_libro(dias: List[Dict[str, Any]], es_bolsa: bool = False, tolerancia_
     }
 
 
+def calendario_tramo(dias: List[Dict[str, Any]], detalle: List[Dict[str, Any]], fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
+    """Un registro por cada fecha del tramo, para la línea de días de la ventana de cuadre.
+
+    Toma el estado y las marcas de cada día de la matriz y los minutos (deuda, perdonado, horas extra) del detalle del
+    libro, para que la línea y las sumas nunca difieran. Un día sin registro (futuro o sin calcular) va con estado None."""
+    por_fecha = {str(d.get('fecha'))[:10]: d for d in dias}
+    det = {x['fecha']: x for x in detalle}
+    salida: List[Dict[str, Any]] = []
+    d = date.fromisoformat(str(fecha_inicio)[:10])
+    fin = date.fromisoformat(str(fecha_fin)[:10])
+    while d <= fin:
+        f = d.isoformat()
+        di = por_fecha.get(f) or {}
+        x = det.get(f) or {}
+        salida.append({
+            'fecha': f, 'estado': di.get('estado'),
+            'hora_entrada_real': di.get('hora_entrada_real'), 'hora_salida_real': di.get('hora_salida_real'),
+            'deuda_bruta': _f(x.get('deuda_bruta')), 'deuda': _f(x.get('deuda')), 'perdonado': _f(x.get('perdonado')),
+            'he_bruto': _f(x.get('he_bruto')), 'he_autorizados': _f(x.get('he_autorizados')), 'estado_he': x.get('estado_he'),
+            'especial': bool(x.get('especial')), 'excepcion': int(_f(x.get('excepcion'))),
+        })
+        d += timedelta(days=1)
+    return salida
+
+
 # Horas extra que nacen de validar una jornada especial (cobertura de turno, día libre, feriado): las decide su propia
 # pantalla y el motor las conserva por su origen. La política del cuadre las cuenta como aprobadas fijas y nunca las reescribe.
 ORIGENES_FIJOS = ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')
@@ -319,8 +344,9 @@ class CuadreService:
             })
         nombre = f"{info.get('apellido_paterno', '')} {info.get('apellido_materno', '') or ''} {info.get('nombre', '')}".strip().replace('  ', ' ')
         return {'empleado_id': empleado_id, 'nombre': nombre or info.get('nombre_completo'), 'es_bolsa': es_bolsa,
+                'cargo': info.get('cargo') or '', 'area': info.get('area') or '', 'turno': info.get('turno') or '',
                 'tramo': {'inicio': fecha_inicio, 'fin': fecha_fin}, 'politica': politica, 'tolerancia_minutos': tolerancia,
-                'libro': libro, 'dias': detalle}
+                'libro': libro, 'dias': detalle, 'calendario': calendario_tramo(dias, detalle, fecha_inicio, fecha_fin)}
 
     # ── política del tramo ────────────────────────────────────────────────
     async def _base_para_reparto(self, empleado_id: int, fecha_inicio: str, fecha_fin: str) -> Tuple[float, float, List[Dict[str, Any]]]:

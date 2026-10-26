@@ -3,14 +3,16 @@
 // respuestas: «llevar todo a cero» (lo que falte se perdona, lo que sobre no se paga) o «pagar horas extra:
 // ¿cuántas?» (todas, un bloque o una cantidad; el resto queda escrito como no pagado). La decisión se guarda
 // como política del tramo y la aplicación la vuelve a repartir sola cada vez que cambian las marcas.
-// Diseño aprobado por el dueño el 25-10-2026 (boceto en Claude Design): misma distribución y lógica, terminación
-// más pulcra y simétrica (columnas iguales, números en JetBrains Mono, etiquetas de color suaves).
+// Estructura elegida por el dueño (25-10-2026, «C · línea del tramo», hecha con la skill Impeccable): arriba los días
+// del tramo (horas extra hacia arriba, deuda hacia abajo; tocar un día muestra su detalle), abajo la decisión y la
+// cuenta con «Hoy» y «Si confirmas» lado a lado. La lógica (base, política, guardar, quitar) no cambió.
 // Los textos van con comillas y concatenación: el minificador del servidor come los espacios de las
 // plantillas `...` anidadas dentro de ${}.
 (function () {
     'use strict';
 
     const MENOS = '−';
+    const C = { rojo: '#D2463A', azul: '#3D63DD', verde: '#2E9E6B', gris: '#C3CADA', pizarra: '#7D87A6', ambar: '#E09A2A' };
 
     function fmt(min) {
         const v = Number(min) || 0;
@@ -20,6 +22,7 @@
         return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
     }
     function signo(v) { return v > 0.0083 ? '+' : (v < -0.0083 ? MENOS : ''); }
+    function hay(v) { return Math.abs(Number(v) || 0) > 0.0083; }
     function token() {
         return (typeof AuthService !== 'undefined' && typeof AuthService.getToken === 'function') ? AuthService.getToken() : localStorage.getItem('access_token');
     }
@@ -27,16 +30,26 @@
         return typeof AuthService === 'undefined' || typeof AuthService.hasPermission !== 'function' || AuthService.hasPermission('marcaciones.horas_extras');
     }
     function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-    function fechaLarga(f) {
-        const d = new Date(f + 'T00:00:00');
-        const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-        return dias[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    }
+    const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const LETRA = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+    function fechaObj(f) { return new Date(String(f).substring(0, 10) + 'T00:00:00'); }
+    function fechaLarga(f) { const d = fechaObj(f); return DIAS[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
     function fechaDMA(f) { const p = String(f || '').substring(0, 10).split('-'); return p.length === 3 ? (p[2] + '-' + p[1] + '-' + p[0]) : String(f || ''); }
-    function mono(t, cls) { return '<b class="cq-mono' + (cls ? ' ' + cls : '') + '">' + t + '</b>'; }
+    // Los nombres se guardan en mayúsculas; en la ventana se leen como nombre propio y la labor como frase
+    function titulo(s) { return String(s || '').toLowerCase().replace(/(^|[\s\-'])([a-záéíóúñü])/g, function (m, a, b) { return a + b.toUpperCase(); }); }
+    function frase(s) { const t = String(s || '').trim().toLowerCase(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
+    function marcas(x) {
+        const e = x.hora_entrada_real ? String(x.hora_entrada_real).substring(0, 5) : '';
+        const s = x.hora_salida_real ? String(x.hora_salida_real).substring(0, 5) : '';
+        return (e || s) ? ((e || '—') + ' – ' + (s || '—')) : 'Sin marcas';
+    }
+    const ESTADOS = { OK: 'Jornada normal', ATRASO: 'Atraso', SALIDA_ADELANTADA: 'Salida adelantada', INASISTENCIA: 'Inasistencia', FALTA: 'Inasistencia',
+        LIBRE: 'Día libre', FERIADO: 'Feriado', JORNADA_ESPECIAL: 'Jornada especial', EXTRA: 'Jornada especial', PENDIENTE: 'Sin calcular todavía',
+        INASISTENCIA_COMPENSADA: 'Inasistencia compensada', JORNADA_COMPENSATORIA: 'Jornada compensatoria' };
+    function nombreEstado(e) { if (!e) return 'Sin registro'; return ESTADOS[e] || frase(String(e).replace(/_/g, ' ')); }
     function toast(msg, tipo) { if (typeof showToast === 'function') showToast(msg, tipo || 'info'); }
 
-    const estado = { data: null, eleccion: null, minutos: null, empleadoId: null, nombre: '' };
+    const estado = { data: null, eleccion: null, minutos: null, empleadoId: null, nombre: '', diaSel: null, motivo: '' };
 
     async function cargar(empleadoId) {
         const p = (window.stateMarcacionesApp && window.stateMarcacionesApp.data && window.stateMarcacionesApp.data.periodo) || {};
@@ -70,131 +83,101 @@
         return pm === estado.minutos;
     }
 
-    // Barra de 12 px sin texto: cada tramo mide lo que vale (mínimo 4 px para que se vea); el detalle va en la suma de abajo
-    function barra(partes) {
-        const total = partes.reduce((s, p) => s + Math.max(0, p.v), 0);
-        if (total <= 0.0083) return '<div class="cq-bar"></div>';
-        let html = '<div class="cq-bar">';
-        partes.forEach(function (p) {
-            if (p.v <= 0.0083) return;
-            html += '<div class="cq-seg" style="flex:' + p.v.toFixed(3) + ' 0 0;background:' + p.c + '" title="' + esc(p.t) + ' ' + fmt(p.v) + '"></div>';
-        });
-        return html + '</div>';
-    }
-
-    function chipPolitica(pol) {
-        if (!pol) return '<span class="cq-chip-pol cq-pol-nada"><i></i>Política del tramo: por decidir</span>';
+    function textoPolitica(pol) {
+        if (!pol) return '<span class="cq-t-ambar">por decidir</span>';
         const quien = pol.decidido_por ? (' · ' + esc(pol.decidido_por)) : '';
-        if (pol.politica === 'CERO') return '<span class="cq-chip-pol cq-pol-cero"><i></i>Llevar todo a cero' + quien + '</span>';
+        if (pol.politica === 'CERO') return '<span class="cq-t-azul">llevar todo a cero' + quien + '</span>';
         const cuanto = (pol.minutos_a_pagar == null) ? 'todas las que sobren' : ('hasta ' + fmt(pol.minutos_a_pagar));
-        return '<span class="cq-chip-pol cq-pol-pagar"><i></i>Pagar horas extra: ' + cuanto + quien + '</span>';
+        return '<span class="cq-t-verde">pagar horas extra: ' + cuanto + quien + '</span>';
     }
 
-    function render() {
-        const d = estado.data, L = d.libro, b = base(L);
-        const el = document.getElementById('cq-cuerpo');
-        if (!el) return;
-        const puede = puedeDecidir();
-
-        // ── Hechos ─────────────────────────────────────────────────────
-        let h = '<section class="cq-facts">'
-            + fact('Dejó de trabajar', fmt(L.deuda_bruta), (L.perdonado > 0.0083 ? ('ya perdonado ' + fmt(L.perdonado)) : 'sin perdonazos'))
-            + fact('Horas extra trabajadas', fmt(L.he_trabajadas), (L.he_por_decidir > 0.0083 ? (fmt(L.he_por_decidir) + ' por decidir') : 'todas con decisión'))
-            + fact('Deuda pendiente hoy', fmt(L.pendiente), L.pendiente > 0.0083 ? 'en rojo en la grilla' : 'nada pendiente', L.pendiente > 0.0083 ? 'cq-rojo' : 'cq-verde')
-            + fact('Saldo hoy', signo(L.saldo) + fmt(L.saldo), 'a pagar ' + MENOS + ' pendiente', L.saldo < -0.0083 ? 'cq-rojo' : (L.saldo > 0.0083 ? 'cq-verde' : ''))
-            + '</section>';
-
-        // ── Paso 1: cubrir (automático) ────────────────────────────────
-        h += '<section class="cq-pasos"><div class="cq-paso"><div class="cq-rail"><div class="cq-num cq-num-ok">1</div><div class="cq-linea"></div></div>'
-            + '<div class="cq-paso-cuerpo cq-paso-1"><div class="cq-titulo-fila"><span class="cq-titulo">Cubrir la deuda con horas extra</span><span class="cq-badge">Automático</span></div>'
-            + '<div class="cq-texto">De las ' + mono(fmt(b.disp)) + ' trabajadas de más, ' + mono(fmt(b.cubre)) + ' cubren la deuda. '
-            + (b.falta > 0.0083 ? ('Falta por cubrir ' + mono(fmt(b.falta), 'cq-rojo') + '.') : ('Sobran ' + mono(fmt(b.sobran), 'cq-verde') + '.'))
-            + (L.perdon_cuadre > 0.0083 ? (' Ya perdonado por el cuadre a cero: ' + mono(fmt(L.perdon_cuadre)) + '.') : '')
-            + '</div></div></div>';
-
-        // ── Paso 2: la única pregunta ──────────────────────────────────
-        h += '<div class="cq-paso"><div class="cq-rail"><div class="cq-num">2</div></div><div class="cq-paso-cuerpo">';
-        if (b.sobran > 0.0083) {
-            h += '<div class="cq-titulo">Una sola pregunta: sobran ' + fmt(b.sobran) + ', ¿qué hacemos?</div>'
-                + '<div class="cq-opciones">'
-                + opcion('CERO', 'Llevar todo a cero', 'saldo 00:00:00', '', 'No se paga nada. Las ' + fmt(b.sobran) + ' quedan escritas como «no pagadas».')
-                + opcionPagar(b.sobran)
-                + '</div>';
-        } else if (b.falta > 0.0083) {
-            h += '<div class="cq-titulo">Una sola pregunta: falta ' + fmt(b.falta) + ' por cubrir, ¿qué hacemos?</div>'
-                + '<div class="cq-opciones">'
-                + opcion('CERO', 'Llevar todo a cero', 'saldo 00:00:00', '', 'Se perdonan ' + fmt(b.falta) + ', con tu nombre y la fecha en el registro.')
-                + opcion('PAGAR', 'Dejar la deuda', 'saldo ' + MENOS + fmt(b.falta), 'cq-rojo', 'Se descuenta en el cierre. No hay horas que pagar.')
-                + '</div>';
-        } else if (b.deuda > 0.0083 || b.disp > 0.0083) {
-            h += '<div class="cq-titulo">Las horas extra cubren exactamente la deuda</div>'
-                + '<div class="cq-opciones">' + opcion('CERO', 'Confirmar: todo a cero', 'saldo 00:00:00', '', 'Queda registrado que se cubrió con horas extra.') + '</div>';
-        } else {
-            h += '<div class="cq-titulo">Nada que cuadrar</div><div class="cq-texto">No hay deuda ni horas extra en el tramo.</div>';
+    // ── Línea del tramo ───────────────────────────────────────────────
+    function destinoDia(x, L) {
+        const partes = [];
+        if (x.especial) partes.push({ t: 'Jornada especial', c: C.pizarra });
+        if (hay(x.perdonado)) partes.push({ t: 'Perdonado ' + fmt(x.perdonado), c: C.pizarra });
+        if (hay(x.deuda)) partes.push(hay(L.pendiente) ? { t: 'Deuda ' + fmt(x.deuda) + ', pendiente', c: C.rojo } : { t: 'Deuda ' + fmt(x.deuda) + ', cubierta con horas extra', c: C.azul });
+        if (hay(x.he_bruto)) {
+            if (x.estado_he === 'APROBADO' || (x.especial && !x.estado_he)) {
+                const aut = x.he_autorizados || x.he_bruto;
+                partes.push({ t: 'Horas extra ' + fmt(x.he_bruto) + ', aprobadas ' + fmt(aut), c: C.verde });
+                if (x.he_bruto - aut > 0.0083) partes.push({ t: 'No pagadas ' + fmt(x.he_bruto - aut), c: C.gris });
+            } else if (x.estado_he === 'RECHAZADO') partes.push({ t: 'Horas extra ' + fmt(x.he_bruto) + ', no pagadas', c: C.gris });
+            else partes.push({ t: 'Horas extra ' + fmt(x.he_bruto) + ', por decidir', c: C.ambar });
+            if (x.excepcion) partes.push({ t: 'Decidida a mano', c: '#1B2F8F' });
         }
-        if (d.politica) h += '<div class="cq-nota">Decisión vigente: ' + chipPolitica(d.politica) + ' Elige otra opción para cambiarla, o «Quitar política» para volver a empezar.</div>';
-        if (!puede) h += '<div class="cq-nota">Solo puedes ver el cuadre; decidirlo requiere el permiso de horas extra.</div>';
-        h += '</div></div></section>';
-
-        // ── Vista previa de la decisión ─────────────────────────────────
-        h += '<div id="cq-preview"></div>';
-
-        // ── Resultado actual (las sumas siempre cuadran) ───────────────
-        const usadas = L.he_usadas_deuda + L.he_usadas_inasistencia;
-        h += '<section class="cq-ident"><div class="cq-eyebrow">Hoy, con lo decidido hasta ahora</div><div class="cq-filas">'
-            + fila('Deuda', fmt(L.deuda_bruta), barra([{ v: L.perdonado, c: '#7A8296', t: 'perdonado' }, { v: L.cubierto, c: '#3B5BDB', t: 'cubierto' }, { v: L.pendiente, c: '#D64535', t: 'pendiente' }]),
-                'perdonado ' + fmt(L.perdonado) + ' + cubierto ' + fmt(L.cubierto) + ' + pendiente ' + fmt(L.pendiente))
-            + fila('Horas extra', fmt(L.he_trabajadas), barra([{ v: usadas, c: '#3B5BDB', t: 'usadas' }, { v: L.he_a_pagar, c: '#2F9E5E', t: 'a pagar' }, { v: L.he_no_pagadas, c: '#C9CED9', t: 'no pagadas' }, { v: L.he_por_decidir, c: '#E0A030', t: 'por decidir' }]),
-                'usadas ' + fmt(usadas) + ' + a pagar ' + fmt(L.he_a_pagar) + ' + no pagadas ' + fmt(L.he_no_pagadas) + ' + por decidir ' + fmt(L.he_por_decidir))
-            + '</div><div class="cq-legend">'
-            + '<span><i style="background:#7A8296"></i>Perdonado</span><span><i style="background:#3B5BDB"></i>Cubierto / usadas</span><span><i style="background:#D64535"></i>Pendiente</span>'
-            + '<span><i style="background:#2F9E5E"></i>A pagar</span><span><i style="background:#C9CED9"></i>No pagadas</span><span><i style="background:#E0A030"></i>Por decidir</span>'
-            + '</div></section>';
-
-        // ── Día por día ────────────────────────────────────────────────
-        h += '<section class="cq-dias"><div class="cq-eyebrow">Día por día: cada minuto con su destino</div><div class="cq-tabla-caja"><table class="cq-tabla">'
-            + '<colgroup><col style="width:112px"><col style="width:152px"><col style="width:112px"><col style="width:112px"><col></colgroup>'
-            + '<thead><tr><th>Día</th><th>Marcas</th><th class="cq-der">Deuda</th><th class="cq-der">Horas extra</th><th class="cq-destino">Destino</th></tr></thead><tbody>';
-        (d.dias || []).forEach(function (x) {
-            const marcas = (x.hora_entrada_real ? x.hora_entrada_real.substring(0, 5) : '—') + ' – ' + (x.hora_salida_real ? x.hora_salida_real.substring(0, 5) : '—');
-            let destino = '';
-            if (x.especial) destino += chip('Jornada especial', 'e');
-            if (x.perdonado > 0.0083) destino += chip('Perdonado', 'p', fmt(x.perdonado));
-            if (x.deuda > 0.0083) destino += (L.pendiente > 0.0083 ? chip('Deuda', 'd', fmt(x.deuda)) : chip('Cubierta con horas extra', 'c'));
-            if (x.he_bruto > 0.0083) {
-                if (x.estado_he === 'APROBADO') {
-                    destino += chip('Aprobada', 'a', fmt(x.he_autorizados));
-                    if (x.he_bruto - x.he_autorizados > 0.0083) destino += chip('No pagadas', 'n', fmt(x.he_bruto - x.he_autorizados));
-                } else if (x.estado_he === 'RECHAZADO') destino += chip('No pagada', 'n');
-                else destino += chip('Por decidir', 'x', fmt(x.he_bruto));
-                if (x.excepcion) destino += chip('Decidida a mano', 'm');
+        return partes;
+    }
+    function barrasDia(x, L, escala) {
+        const px = function (v) { return v >= 0.5 ? Math.max(3, Math.round(v * escala)) : 0; };
+        let arriba = '', abajo = '';
+        if (hay(x.he_bruto)) {
+            if (x.estado_he === 'APROBADO' || (x.especial && !x.estado_he)) {
+                const aut = Math.min(x.he_bruto, x.he_autorizados || x.he_bruto);
+                arriba = '<i style="height:' + px(x.he_bruto - aut) + 'px;background:' + C.gris + '"></i><i style="height:' + px(aut) + 'px;background:' + C.verde + '"></i>';
+            } else {
+                arriba = '<i style="height:' + px(x.he_bruto) + 'px;background:' + (x.estado_he === 'RECHAZADO' ? C.gris : C.ambar) + '"></i>';
             }
-            h += '<tr><td>' + fechaLarga(x.fecha) + '</td><td class="cq-mono-td">' + marcas + '</td>'
-                + '<td class="cq-mono-td cq-der ' + (x.deuda > 0.0083 ? 'cq-rojo' : '') + '">' + (x.deuda_bruta > 0.0083 ? fmt(x.deuda_bruta) : '') + '</td>'
-                + '<td class="cq-mono-td cq-der">' + (x.he_bruto > 0.0083 ? fmt(x.he_bruto) : '') + '</td><td class="cq-destino"><div class="cq-chips">' + destino + '</div></td></tr>';
+        }
+        if (hay(x.deuda) || hay(x.perdonado)) {
+            abajo = (hay(x.deuda) ? '<i style="height:' + px(x.deuda) + 'px;background:' + (hay(L.pendiente) ? C.rojo : C.azul) + '"></i>' : '')
+                + (hay(x.perdonado) ? '<i style="height:' + px(x.perdonado) + 'px;background:' + C.pizarra + '"></i>' : '');
+        }
+        return { arriba: arriba, abajo: abajo };
+    }
+    function lineaTramo(d, L) {
+        const cal = d.calendario || [];
+        if (!cal.length) return '';
+        const max = cal.reduce(function (m, x) { return Math.max(m, x.he_bruto || 0, (x.deuda || 0) + (x.perdonado || 0)); }, 30);
+        const escala = 70 / max;
+        let tira = '';
+        cal.forEach(function (x, i) {
+            const f = fechaObj(x.fecha);
+            const libre = !x.estado || x.estado === 'LIBRE' || x.estado === 'FERIADO';
+            const marca = (x.estado === 'INASISTENCIA' || x.estado === 'FALTA') ? 'Ina' : (x.estado === 'FERIADO' ? 'Fer' : (x.especial ? 'JE' : ''));
+            const b = barrasDia(x, L, escala);
+            const sel = estado.diaSel === i;
+            const ayuda = fechaLarga(x.fecha) + ': ' + nombreEstado(x.estado) + (hay(x.deuda) ? ', deuda ' + fmt(x.deuda) : '') + (hay(x.he_bruto) ? ', horas extra ' + fmt(x.he_bruto) : '');
+            tira += '<button type="button" class="cq-dia' + (libre ? ' cq-dia-libre' : '') + (sel ? ' cq-dia-sel' : '') + '" aria-pressed="' + sel + '" aria-label="' + esc(ayuda) + '" title="' + esc(ayuda) + '" onclick="window.cuadreDia(' + i + ')">'
+                + '<span class="cq-arriba">' + b.arriba + '</span><span class="cq-eje"></span><span class="cq-abajo">' + b.abajo + '</span>'
+                + '<span class="cq-dlab"><span>' + LETRA[f.getDay()] + '</span><b>' + f.getDate() + '</b><em class="' + (marca === 'Ina' ? 'cq-t-rojo' : '') + '">' + marca + '</em></span></button>';
         });
-        if (!(d.dias || []).length) h += '<tr><td colspan="5" class="cq-vacio">Sin días con deuda ni horas extra.</td></tr>';
-        h += '</tbody></table></div></section>';
-        el.innerHTML = h;
-        document.getElementById('cq-chip').innerHTML = chipPolitica(d.politica);
-        const btnQuitar = document.getElementById('cq-quitar');
-        if (btnQuitar) btnQuitar.hidden = !(d.politica && puede);
-        actualizarPreview();
+        const conMinutos = (d.dias || []);
+        let lista = '';
+        conMinutos.forEach(function (x) {
+            const partes = destinoDia(x, L).map(function (p) { return '<span class="cq-dest"><i style="background:' + p.c + '"></i>' + esc(p.t) + '</span>'; }).join('');
+            lista += '<tr><td>' + fechaLarga(x.fecha) + '</td><td class="cq-sec">' + esc(marcas(x)) + '</td><td class="cq-der">' + (hay(x.deuda_bruta) ? fmt(x.deuda_bruta) : '') + '</td><td class="cq-der">' + (hay(x.he_bruto) ? fmt(x.he_bruto) : '') + '</td><td><div class="cq-dests">' + partes + '</div></td></tr>';
+        });
+        return '<section class="cq-linea">'
+            + '<div class="cq-linea-cab"><h3 class="cq-h3">Los ' + cal.length + ' días del tramo</h3>'
+            + '<div class="cq-totales"><span>Trabajó de más <b class="cq-t-ambar">' + fmt(L.he_trabajadas) + '</b></span><span>Debe <b class="cq-t-rojo">' + fmt(L.deuda_bruta) + '</b></span></div></div>'
+            + '<div class="cq-tira-caja"><div class="cq-tira" style="grid-template-columns:repeat(' + cal.length + ',minmax(22px,1fr))">' + tira + '</div></div>'
+            + '<div class="cq-dia-detalle" id="cq-dia-detalle" aria-live="polite">' + detalleDia(L) + '</div>'
+            + '<div class="cq-leyenda"><span><i style="background:' + C.ambar + '"></i>Horas extra por decidir</span><span><i style="background:' + C.verde + '"></i>Aprobadas</span>'
+            + '<span><i style="background:' + C.gris + '"></i>No pagadas</span><span><i style="background:' + C.rojo + '"></i>Deuda pendiente</span>'
+            + '<span><i style="background:' + C.azul + '"></i>Deuda cubierta</span><span><i style="background:' + C.pizarra + '"></i>Perdonado</span>'
+            + '<span><i class="cq-sw-libre"></i>Libre o feriado</span></div>'
+            + (conMinutos.length ? ('<details class="cq-lista"><summary>Ver la lista de días con deuda u horas extra (' + conMinutos.length + ')</summary>'
+                + '<div class="cq-lista-caja"><table class="cq-tabla"><colgroup><col style="width:96px"><col style="width:120px"><col style="width:92px"><col style="width:92px"><col></colgroup>'
+                + '<thead><tr><th>Día</th><th>Marcas</th><th class="cq-der">Deuda</th><th class="cq-der">Horas extra</th><th>Destino</th></tr></thead><tbody>' + lista + '</tbody></table></div></details>') : '')
+            + '</section>';
+    }
+    function detalleDia(L) {
+        const cal = (estado.data && estado.data.calendario) || [];
+        const x = (estado.diaSel != null) ? cal[estado.diaSel] : null;
+        if (!x) return '<span class="cq-sec">Toca un día para ver sus marcas y el destino de sus minutos.</span>';
+        const partes = destinoDia(x, L);
+        return '<div class="cq-dd-cab"><b>' + fechaLarga(x.fecha) + '</b><span class="cq-sec">' + esc(nombreEstado(x.estado)) + ' · ' + esc(marcas(x)) + '</span></div>'
+            + (partes.length ? ('<div class="cq-dests">' + partes.map(function (p) { return '<span class="cq-dest"><i style="background:' + p.c + '"></i>' + esc(p.t) + '</span>'; }).join('') + '</div>')
+                : '<span class="cq-sec">Sin deuda ni horas extra este día.</span>');
     }
 
-    function fact(t, v, s, cls) {
-        return '<div class="cq-fact"><span class="cq-fact-t">' + t + '</span><span class="cq-valor ' + (cls || '') + '">' + v + '</span><span class="cq-fact-s">' + s + '</span></div>';
-    }
-    function fila(nombre, valor, bar, eq) {
-        return '<div class="cq-lbl"><span>' + nombre + '</span><span class="cq-mono">' + valor + '</span></div><div class="cq-fila-bar">' + bar + '<div class="cq-eq">' + eq + '</div></div>';
-    }
-    function chip(t, tipo, num) { return '<span class="cq-chip cq-chip-' + tipo + '">' + esc(t) + (num ? ' <span class="cq-mono">' + num + '</span>' : '') + '</span>'; }
+    // ── Decisión ──────────────────────────────────────────────────────
     function radio(sel) { return '<span class="cq-radio' + (sel ? ' cq-radio-on' : '') + '" aria-hidden="true"></span>'; }
-    function opcion(codigo, titulo, saldo, saldoCls, texto) {
+    function opcion(codigo, titulo, texto) {
         const sel = estado.eleccion === codigo;
-        return '<button type="button" class="cq-opt' + (sel ? ' cq-sel' : '') + '" aria-pressed="' + sel + '" onclick="window.cuadreElegir(\'' + codigo + '\')">'
-            + '<span class="cq-opt-cab"><span class="cq-opt-t">' + titulo + '</span>' + radio(sel) + '</span>'
-            + '<span class="cq-opt-saldo ' + (saldoCls || '') + '">' + saldo + '</span><span class="cq-opt-s">' + texto + '</span></button>';
+        return '<button type="button" role="radio" aria-checked="' + sel + '" class="cq-opt' + (sel ? ' cq-sel' : '') + '" onclick="window.cuadreElegir(\'' + codigo + '\')">'
+            + radio(sel) + '<span class="cq-opt-t">' + titulo + '</span><span></span><span class="cq-opt-s">' + texto + '</span></button>';
     }
     function opcionPagar(sobran) {
         const sel = estado.eleccion === 'PAGAR';
@@ -204,37 +187,101 @@
         if (b30 > 0 && b30 !== b60 && b30 < sobran - 0.0083) botones += boton(b30, fmt(b30));
         if (b60 > 0 && b60 < sobran - 0.0083) botones += boton(b60, fmt(b60));
         botones += '<label class="cq-otra"><span class="visually-hidden">Otra cantidad de horas extra a pagar</span><input type="text" id="cq-otra" placeholder="Otra H:MM" oninput="window.cuadreOtra(this.value)" onclick="event.stopPropagation()"></label>';
-        return '<div class="cq-opt cq-opt-pagar' + (sel ? ' cq-sel' : '') + '" onclick="window.cuadreElegir(\'PAGAR\', true)">'
-            + '<span class="cq-opt-cab"><span class="cq-opt-t">Pagar horas extra: ¿cuántas?</span>' + radio(sel) + '</span>'
-            + '<div class="cq-botones">' + botones + '</div>'
-            + '<span class="cq-opt-s">«Todas» son las ' + fmt(sobran) + '. Lo que no se pague queda escrito como «no pagadas».</span></div>';
+        return '<div role="radio" aria-checked="' + sel + '" tabindex="0" class="cq-opt' + (sel ? ' cq-sel' : '') + '" onclick="window.cuadreElegir(\'PAGAR\', true)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();window.cuadreElegir(\'PAGAR\', true);}">'
+            + radio(sel) + '<span class="cq-opt-t">Pagar horas extra</span><span></span>'
+            + '<div class="cq-seg">' + botones + '</div><span></span>'
+            + '<span class="cq-opt-s">«Todas» son las ' + fmt(sobran) + '. Lo que no se pague queda escrito como no pagado.</span></div>';
     }
     function boton(min, txt) {
         const act = (estado.eleccion === 'PAGAR' && ((min == null && estado.minutos == null) || (min != null && estado.minutos === min)));
         return '<button type="button" class="cq-bloque' + (act ? ' cq-bloque-act' : '') + '" aria-pressed="' + act + '" onclick="event.stopPropagation(); window.cuadreMinutos(' + (min == null ? 'null' : min) + ')">' + txt + '</button>';
     }
-
-    function actualizarPreview() {
-        const pv = document.getElementById('cq-preview'), btn = document.getElementById('cq-confirmar');
-        if (!pv || !estado.data) return;
-        const L = estado.data.libro, b = base(L);
-        if (!estado.eleccion) { pv.innerHTML = ''; if (btn) btn.disabled = true; return; }
-        let cub = b.cubre, pend = b.falta, perd = 0, pagar = 0, nopag = 0;
-        if (estado.eleccion === 'CERO') { perd = b.falta; pend = 0; nopag = b.sobran; }
-        else { pagar = (estado.minutos == null) ? b.sobran : Math.min(b.sobran, Math.max(0, estado.minutos)); nopag = b.sobran - pagar; }
-        const saldo = pagar - pend;
-        const vigente = esLaVigente();
-        pv.innerHTML = '<section class="cq-preview"><div class="cq-eyebrow cq-eyebrow-azul">' + (vigente ? 'Así está decidido hoy' : 'Si confirmas') + '</div>'
-            + '<div class="cq-pv-grid">'
-            + pv1('Cubierto', fmt(cub)) + pv1('Perdonado ahora', fmt(perd)) + pv1('Pendiente', fmt(pend), pend > 0.0083 ? 'cq-rojo' : '')
-            + pv1('A pagar', fmt(pagar), pagar > 0.0083 ? 'cq-verde' : '') + pv1('No pagadas', fmt(nopag)) + pv1('Saldo', signo(saldo) + fmt(saldo), saldo < -0.0083 ? 'cq-rojo' : (saldo > 0.0083 ? 'cq-verde' : ''))
-            + '</div>'
-            + '<div class="cq-pv-nota">Las marcas de mañana se recalculan solas con la misma decisión. Si aparece deuda nueva, vuelve a verse pendiente y te vuelve a preguntar.</div>'
-            + (vigente ? '' : '<label class="cq-motivo">Motivo (opcional, queda en el registro)<textarea id="cq-motivo" rows="2"></textarea></label>') + '</section>';
-        if (btn) btn.disabled = !puedeDecidir() || vigente;
+    function decision(d, L, b) {
+        const puede = puedeDecidir();
+        let h = '<section class="cq-decision">';
+        if (b.sobran > 0.0083) {
+            h += '<h3 class="cq-h3 cq-h3-g">¿Qué hacemos con las ' + fmt(b.sobran) + ' que sobran?</h3>'
+                + '<p class="cq-p">Las horas extra cubren primero la deuda: ' + fmt(b.cubre) + ' de ' + fmt(b.disp) + '. Eso es automático.</p>'
+                + '<div class="cq-opciones" role="radiogroup">' + opcion('CERO', 'Llevar todo a cero', 'No se paga nada. Las ' + fmt(b.sobran) + ' quedan sin pagar.') + opcionPagar(b.sobran) + '</div>';
+        } else if (b.falta > 0.0083) {
+            h += '<h3 class="cq-h3 cq-h3-g">Falta cubrir ' + fmt(b.falta) + ', ¿qué hacemos?</h3>'
+                + '<p class="cq-p">' + (hay(b.disp) ? ('Las ' + fmt(b.disp) + ' de horas extra ya se usan para cubrir parte de la deuda. ') : 'No hay horas extra para cubrir la deuda. ') + 'Eso es automático.</p>'
+                + '<div class="cq-opciones" role="radiogroup">' + opcion('CERO', 'Llevar todo a cero', 'Se perdonan ' + fmt(b.falta) + ', con tu nombre y la fecha en el registro.')
+                + opcion('PAGAR', 'Dejar la deuda', 'Se descuenta en el cierre. No hay horas que pagar.') + '</div>';
+        } else if (b.deuda > 0.0083 || b.disp > 0.0083) {
+            h += '<h3 class="cq-h3 cq-h3-g">Las horas extra cubren justo la deuda</h3>'
+                + '<div class="cq-opciones cq-opciones-1" role="radiogroup">' + opcion('CERO', 'Confirmar: todo a cero', 'Queda registrado que se cubrió con horas extra.') + '</div>';
+        } else {
+            h += '<h3 class="cq-h3 cq-h3-g">Nada que cuadrar</h3><p class="cq-p">No hay deuda ni horas extra en el tramo.</p>';
+        }
+        if (estado.eleccion && !esLaVigente() && puede) {
+            h += '<label class="cq-motivo">Motivo<input type="text" id="cq-motivo" placeholder="Opcional, queda en el registro" value="' + esc(estado.motivo) + '" oninput="window.cuadreMotivo(this.value)"></label>';
+        }
+        if (d.politica) {
+            const cuando = d.politica.decidido_en ? (' el ' + fechaDMA(d.politica.decidido_en) + ' ' + String(d.politica.decidido_en).substring(11, 16)) : '';
+            h += '<p class="cq-nota">Decidido' + cuando + ': ' + textoPolitica(d.politica) + '. Elige otra opción para cambiarlo, o «Quitar política» para volver a empezar.</p>';
+        }
+        if (!puede) h += '<p class="cq-nota">Solo puedes ver el cuadre; decidirlo requiere el permiso de horas extra.</p>';
+        return h + '</section>';
     }
-    function pv1(t, v, cls) { return '<div><span class="cq-pv-t">' + t + '</span><span class="cq-pv-v ' + (cls || '') + '">' + v + '</span></div>'; }
 
+    // ── Cuenta: Hoy y Si confirmas lado a lado ─────────────────────────
+    function cuentaSi(L, b) {
+        if (!estado.eleccion) return null;
+        let cub = b.cubre, pend = b.falta, perdAhora = 0, pagar = 0, nopag = 0;
+        if (estado.eleccion === 'CERO') { perdAhora = b.falta; pend = 0; nopag = b.sobran; }
+        else { pagar = (estado.minutos == null) ? b.sobran : Math.min(b.sobran, Math.max(0, estado.minutos)); nopag = b.sobran - pagar; }
+        const perdPrevio = Math.max(0, (L.perdonado || 0) - (L.perdon_cuadre || 0));
+        return { cubierto: cub, perdonado: perdPrevio + perdAhora, pendiente: pend, a_pagar: pagar, no_pagadas: nopag, por_decidir: 0, saldo: pagar - pend };
+    }
+    function cuenta(L, b) {
+        const si = cuentaSi(L, b);
+        const vigente = esLaVigente();
+        const hoy = { cubierto: L.cubierto, perdonado: L.perdonado, pendiente: L.pendiente, a_pagar: L.he_a_pagar, no_pagadas: L.he_no_pagadas, por_decidir: L.he_por_decidir, saldo: L.saldo };
+        const filas = [['cubierto', 'Cubierto con horas extra', ''], ['perdonado', 'Perdonado', ''], ['pendiente', 'Pendiente', 'rojo'],
+            ['a_pagar', 'A pagar', 'verde'], ['no_pagadas', 'No pagadas', ''], ['por_decidir', 'Horas extra por decidir', 'ambar']];
+        let h = '<div class="cq-cuenta-cab"><span></span><span>Hoy</span><span class="cq-col-si">' + (vigente ? 'Decidido' : 'Si confirmas') + '</span></div>';
+        filas.forEach(function (f) {
+            const k = f[0], vh = hoy[k] || 0, vs = si ? (si[k] || 0) : null;
+            const cls = function (v) { return (f[2] && hay(v)) ? ' cq-t-' + f[2] : ''; };
+            const cambia = si && !vigente && Math.abs(vh - vs) > 0.0083;
+            h += '<div class="cq-cuenta-fila' + (k === 'a_pagar' ? ' cq-cuenta-sep' : '') + '"><span>' + f[1] + '</span><span class="' + cls(vh) + '">' + fmt(vh) + '</span>'
+                + '<span class="cq-col-si"><b class="' + (cambia ? 'cq-cambia' : '') + cls(vs || 0) + '">' + (si ? fmt(vs) : '—') + '</b></span></div>';
+        });
+        const sh = hoy.saldo || 0, ss = si ? si.saldo : null;
+        const cs = function (v) { return v < -0.0083 ? ' cq-t-rojo' : (v > 0.0083 ? ' cq-t-verde' : ''); };
+        h += '<div class="cq-cuenta-saldo"><span><b>Saldo del tramo</b><small>a pagar ' + MENOS + ' pendiente</small></span><span class="' + cs(sh) + '">' + signo(sh) + fmt(sh) + '</span>'
+            + '<span class="cq-col-si"><b class="' + (si && !vigente && Math.abs(sh - ss) > 0.0083 ? 'cq-cambia' : '') + (si ? cs(ss) : '') + '">' + (si ? (signo(ss) + fmt(ss)) : '—') + '</b></span></div>';
+        h += '<p class="cq-nota">' + (si ? 'Las marcas nuevas se recalculan con esta misma decisión. Si aparece deuda nueva, vuelve a preguntar.' : 'Elige una opción para ver cómo queda la cuenta.') + '</p>';
+        return h;
+    }
+    function actualizarCuenta() {
+        const el = document.getElementById('cq-cuenta'), btn = document.getElementById('cq-confirmar');
+        if (!el || !estado.data) return;
+        const L = estado.data.libro, b = base(L);
+        el.innerHTML = cuenta(L, b);
+        if (btn) btn.disabled = !estado.eleccion || !puedeDecidir() || esLaVigente();
+    }
+
+    function render() {
+        const d = estado.data, L = d.libro, b = base(L);
+        const el = document.getElementById('cq-cuerpo');
+        if (!el) return;
+        el.innerHTML = lineaTramo(d, L)
+            + '<div class="cq-abajo-grid">' + decision(d, L, b) + '<section class="cq-cuenta" id="cq-cuenta" aria-live="polite"></section></div>';
+        actualizarCuenta();
+        const est = document.getElementById('cq-estado');
+        if (est) est.innerHTML = textoPolitica(d.politica);
+        const btnQuitar = document.getElementById('cq-quitar');
+        if (btnQuitar) btnQuitar.hidden = !(d.politica && puedeDecidir());
+    }
+
+    window.cuadreDia = function (i) {
+        estado.diaSel = (estado.diaSel === i) ? null : i;
+        document.querySelectorAll('#cq-cuerpo .cq-dia').forEach(function (b, k) { const on = k === estado.diaSel; b.classList.toggle('cq-dia-sel', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+        const det = document.getElementById('cq-dia-detalle');
+        if (det && estado.data) det.innerHTML = detalleDia(estado.data.libro);
+    };
     window.cuadreElegir = function (codigo, soloSiNoEsta) {
         if (soloSiNoEsta && estado.eleccion === codigo) return;
         estado.eleccion = codigo;
@@ -242,13 +289,14 @@
         render();
     };
     window.cuadreMinutos = function (min) { estado.eleccion = 'PAGAR'; estado.minutos = min; render(); };
+    window.cuadreMotivo = function (v) { estado.motivo = String(v || ''); };
     window.cuadreOtra = function (txt) {
         const t = String(txt || '').trim();
         const m = /^(\d{1,3})(?::(\d{1,2}))?$/.exec(t);
         if (!m) return;
         estado.eleccion = 'PAGAR';
         estado.minutos = parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
-        actualizarPreview();
+        actualizarCuenta();
         document.querySelectorAll('#cq-cuerpo .cq-bloque').forEach(function (x) { x.classList.remove('cq-bloque-act'); x.setAttribute('aria-pressed', 'false'); });
     };
 
@@ -259,12 +307,12 @@
         const d = estado.data;
         const body = { empleado_id: estado.empleadoId, fecha_inicio: d.tramo.inicio, fecha_fin: d.tramo.fin, politica: estado.eleccion,
                        minutos_a_pagar: estado.eleccion === 'PAGAR' ? estado.minutos : null,
-                       motivo: (document.getElementById('cq-motivo') || {}).value || null };
+                       motivo: estado.motivo || null };
         try {
             const r = await fetch('/api/cuadre/politica/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }, body: JSON.stringify(body) });
             const j = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(j.detail || ('Error ' + r.status));
-            estado.data = j; tomarPolitica(j);
+            estado.data = j; tomarPolitica(j); estado.motivo = '';
             toast('Cuadre guardado: ' + (body.politica === 'CERO' ? 'todo a cero' : 'pagar horas extra'), 'success');
             // Orden del dueño (25-10-2026): al confirmar, la ventana se cierra y la grilla muestra el resultado
             const mEl = document.getElementById('modalCuadre');
@@ -301,144 +349,123 @@
         if (document.getElementById('cq-estilos')) return;
         const s = document.createElement('style');
         s.id = 'cq-estilos';
-        const M = "'JetBrains Mono',ui-monospace,Consolas,monospace";
         s.textContent = ''
-            // Ventana
-            + '#modalCuadre .modal-dialog{max-width:900px}'
-            + '#modalCuadre .modal-content{border:0;border-radius:16px;overflow:hidden;font-family:"Barlow","Segoe UI",system-ui,sans-serif;color:#141B2D;font-size:14px;line-height:1.45;box-shadow:0 24px 64px rgba(20,27,45,.22)}'
-            + '#modalCuadre .modal-header{padding:24px 32px 20px;border-bottom:1px solid #E4E7EF;align-items:flex-start;gap:16px}'
-            + '#modalCuadre .modal-body{padding:24px 32px 28px;display:flex;flex-direction:column;gap:28px}'
-            + '#modalCuadre .modal-footer{padding:16px 32px;border-top:1px solid #E4E7EF;background:#FBFBFD;justify-content:space-between;gap:16px;flex-wrap:wrap}'
+            // Ventana (identidad de la aplicación: azul marino, Barlow, cifras tabulares)
+            + '#modalCuadre .modal-dialog{max-width:1080px}'
+            + '#modalCuadre .modal-content{border:0;border-radius:12px;overflow:hidden;font-family:"Barlow","Segoe UI",system-ui,sans-serif;color:#0F1A3A;font-size:13.5px;line-height:1.5;font-variant-numeric:tabular-nums;box-shadow:0 24px 64px rgba(15,26,58,.24)}'
+            + '#modalCuadre .modal-header{padding:22px 32px 18px;border-bottom:1px solid #E8EBF2;align-items:flex-start;gap:16px}'
+            + '#modalCuadre .modal-body{padding:20px 32px 26px;display:flex;flex-direction:column;gap:24px}'
+            + '#modalCuadre .modal-footer{padding:14px 32px;border-top:1px solid #E8EBF2;background:#FFFFFF;justify-content:space-between;gap:12px;flex-wrap:wrap}'
             + '#modalCuadre .modal-footer>*{margin:0}'
+            + '#modalCuadre ::selection{background:#D9E1FA}'
+            + '#modalCuadre button:focus-visible,#modalCuadre input:focus-visible,#modalCuadre [tabindex]:focus-visible,#modalCuadre summary:focus-visible{outline:2px solid #1B2F8F;outline-offset:2px}'
             + '.cq-cab{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}'
-            + '.cq-nombre{margin:0;font-family:"Barlow Semi Condensed","Barlow",sans-serif;font-weight:700;font-size:24px;line-height:1.15;letter-spacing:.01em;color:#141B2D}'
-            + '.cq-sub{font-size:13px;color:#5B6478}'
-            + '.cq-cab-der{display:flex;align-items:center;gap:12px;padding-top:4px}'
-            + '.cq-cerrar{width:36px;height:36px;display:grid;place-items:center;border:1px solid #E4E7EF;border-radius:10px;background:#fff;color:#3A4256;padding:0;cursor:pointer}'
-            + '.cq-cerrar:hover{background:#F6F7FA}'
-            + '.cq-eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#6B7489}'
-            + '.cq-eyebrow-azul{color:#1B2F8F}'
-            + '.cq-mono{font-family:' + M + ';font-weight:600}'
-            + '.cq-rojo{color:#B42318!important}.cq-verde{color:#1E6B3E!important}'
-            // Política
-            + '.cq-chip-pol{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;vertical-align:middle}'
-            + '.cq-chip-pol i{width:6px;height:6px;border-radius:50%;display:inline-block}'
-            + '.cq-pol-nada{background:#F1F2F6;border:1px solid #E1E4EB;color:#4A5368}.cq-pol-nada i{background:#A15C07}'
-            + '.cq-pol-cero{background:#EEF1FB;border:1px solid #D5DBF3;color:#1B2F8F}.cq-pol-cero i{background:#1B2F8F}'
-            + '.cq-pol-pagar{background:#E8F4EC;border:1px solid #CDE6D6;color:#1E6B3E}.cq-pol-pagar i{background:#1E6B3E}'
-            // Hechos
-            + '.cq-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}'
-            + '.cq-fact{background:#F6F7FA;border:1px solid #ECEEF4;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}'
-            + '.cq-fact-t{font-size:12px;font-weight:500;color:#5B6478}.cq-fact-s{font-size:12px;color:#6B7489}'
-            + '.cq-valor{font-family:' + M + ';font-size:22px;font-weight:600;letter-spacing:-.01em;color:#141B2D}'
-            // Pasos
-            + '.cq-pasos{display:flex;flex-direction:column}'
-            + '.cq-paso{display:grid;grid-template-columns:32px minmax(0,1fr);column-gap:16px}'
-            + '.cq-rail{display:flex;flex-direction:column;align-items:center}'
-            + '.cq-num{width:32px;height:32px;border-radius:50%;background:#EEF1FB;color:#1B2F8F;display:grid;place-items:center;font-weight:700;font-size:14px;flex:none}'
-            + '.cq-num-ok{background:#E8F4EC;color:#1E6B3E}'
-            + '.cq-linea{flex:1;width:2px;background:#E4E7EF;margin:6px 0}'
-            + '.cq-paso-cuerpo{display:flex;flex-direction:column;gap:12px;padding-top:5px;min-width:0}'
-            + '.cq-paso-1{gap:4px;padding-bottom:24px}'
-            + '.cq-titulo-fila{display:flex;align-items:center;gap:10px;flex-wrap:wrap}'
-            + '.cq-titulo{font-size:15px;font-weight:600;color:#141B2D}'
-            + '.cq-badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;background:#E8F4EC;color:#1E6B3E;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}'
-            + '.cq-texto{font-size:14px;color:#3A4256}'
-            + '.cq-nota{font-size:13px;color:#5B6478;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
-            // Opciones
-            + '.cq-opciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}'
-            + '.cq-opt{text-align:left;border:1px solid #DDE1EA;border-radius:12px;padding:16px;background:#fff;display:flex;flex-direction:column;gap:8px;cursor:pointer;color:#141B2D;font-family:inherit;transition:border-color .12s,background .12s}'
-            + '.cq-opt:hover{border-color:#B9C2D8}'
-            + '.cq-sel,.cq-sel:hover{border:1.5px solid #1B2F8F;padding:15.5px;background:#F4F6FD}'
-            + '.cq-opt-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}'
-            + '.cq-opt-t{font-size:15px;font-weight:600}'
-            + '.cq-opt-saldo{font-family:' + M + ';font-size:18px;font-weight:500;color:#141B2D}'
-            + '.cq-opt-s{font-size:13px;color:#5B6478}'
-            + '.cq-radio{width:18px;height:18px;border-radius:50%;border:1.5px solid #B8BFCC;box-sizing:border-box;flex:none;display:grid;place-items:center}'
-            + '.cq-radio-on{border:0;background:#1B2F8F}.cq-radio-on::after{content:"";width:6px;height:6px;border-radius:50%;background:#fff}'
-            + '.cq-botones{display:flex;gap:8px}'
-            + '.cq-botones>*{flex:1 1 0;min-width:0}'
-            + '.cq-bloque{height:36px;border:1px solid #CBD2E1;border-radius:8px;background:#fff;color:#1B2F8F;font-family:' + M + ';font-size:12px;font-weight:500;cursor:pointer;padding:0 4px;white-space:nowrap}'
-            + '.cq-bloque:hover{border-color:#1B2F8F}'
-            + '.cq-bloque-act,.cq-bloque-act:hover{background:#1B2F8F;border-color:#1B2F8F;color:#fff;font-weight:600}'
-            + '.cq-botones>.cq-otra{display:block;margin:0;flex:1.3 1 0}'
-            + '.cq-otra input{width:100%;box-sizing:border-box;height:36px;border:1px solid #CBD2E1;border-radius:8px;padding:0 6px;text-align:center;font-family:' + M + ';font-size:12px;background:#fff;color:#141B2D}'
-            + '.cq-otra input:focus,.cq-motivo textarea:focus{outline:2px solid #C7D0F3;border-color:#1B2F8F}'
-            // Vista previa
-            + '#cq-preview:empty{display:none}'
-            + '.cq-preview{border:1px solid #D5DBF3;background:#F7F9FE;border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:14px}'
-            + '.cq-pv-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr))}'
-            + '.cq-pv-grid>div{display:flex;flex-direction:column;gap:4px;padding:0 12px;border-left:1px solid #DDE3F5}'
-            + '.cq-pv-grid>div:first-child{padding-left:0;border-left:0}.cq-pv-grid>div:last-child{padding-right:0}'
-            + '.cq-pv-t{font-size:12px;color:#5B6478}.cq-pv-v{font-family:' + M + ';font-size:16px;font-weight:600;color:#141B2D}'
-            + '.cq-pv-nota{font-size:13px;color:#5B6478;padding-top:12px;border-top:1px solid #DDE3F5}'
-            + '.cq-motivo{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:500;color:#3A4256;margin:0}'
-            + '.cq-motivo textarea{font-family:inherit;font-size:14px;color:#141B2D;border:1px solid #CDD3E2;border-radius:8px;padding:8px 12px;background:#fff;resize:vertical}'
-            // Libro de hoy
-            + '.cq-ident{display:flex;flex-direction:column;gap:14px}'
-            + '.cq-filas{display:grid;grid-template-columns:168px minmax(0,1fr);column-gap:20px;row-gap:16px;align-items:start}'
-            + '.cq-lbl{display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:600}.cq-lbl .cq-mono{font-weight:400;color:#3A4256}'
-            + '.cq-fila-bar{display:flex;flex-direction:column;gap:8px;padding-top:3px;min-width:0}'
-            + '.cq-bar{display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;background:#EEF0F5}'
-            + '.cq-seg{min-width:4px}'
-            + '.cq-eq{font-family:' + M + ';font-size:12px;color:#5B6478}'
-            + '.cq-legend{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding-top:12px;border-top:1px solid #EEF0F5}'
-            + '.cq-legend span{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#5B6478}'
-            + '.cq-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}'
-            // Día por día
-            + '.cq-dias{display:flex;flex-direction:column;gap:12px}'
-            + '.cq-tabla-caja{border:1px solid #E4E7EF;border-radius:12px;overflow:auto}'
-            + '.cq-tabla{width:100%;min-width:640px;border-collapse:collapse;table-layout:fixed;font-size:13.5px;margin:0}'
-            + '.cq-tabla th{height:36px;padding:0 16px;background:#F6F7FA;border-bottom:1px solid #E4E7EF;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#6B7489;text-align:left;white-space:nowrap}'
-            + '.cq-tabla td{height:40px;padding:6px 16px;border-top:1px solid #EEF0F5;color:#141B2D;vertical-align:middle}'
-            + '.cq-tabla tbody tr:first-child td{border-top:0}'
-            + '.cq-tabla .cq-der{text-align:right}.cq-tabla .cq-destino{padding-left:28px}'
-            + '.cq-mono-td{font-family:' + M + ';font-size:13px;color:#3A4256;white-space:nowrap}'
-            + '.cq-vacio{color:#6B7489;text-align:center}'
-            + '.cq-chips{display:flex;flex-wrap:wrap;gap:6px}'
-            + '.cq-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}'
-            + '.cq-chip .cq-mono{font-weight:500}'
-            + '.cq-chip-d{background:#FDEDEB;color:#B42318}'
-            + '.cq-chip-p{background:#EEF0F4;color:#4A5368}'
-            + '.cq-chip-c{background:#EDF1FE;color:#2C46B8}'
-            + '.cq-chip-a{background:#E8F4EC;color:#1E6B3E}'
-            + '.cq-chip-n{background:#F1F2F6;color:#5B6478}'
-            + '.cq-chip-x{background:#FDF3E3;color:#A15C07}'
-            + '.cq-chip-e{background:#F1F2F6;border:1px solid #E1E4EB;color:#4A5368}'
-            + '.cq-chip-m{background:#EEF1FB;color:#1B2F8F}'
+            + '.cq-nombre{margin:0;font-size:22px;font-weight:600;line-height:1.2;letter-spacing:-.005em;color:#0F1A3A}'
+            + '.cq-labor{display:flex;align-items:center;gap:6px;font-size:14px;color:#2B3658;flex-wrap:wrap}.cq-labor b{font-weight:600}.cq-labor svg{flex:none}'
+            + '.cq-tramo{font-size:13px;color:#5A6487}'
+            + '.cq-cerrar{width:34px;height:34px;border:0;border-radius:8px;background:#F2F4F9;color:#2B3658;display:grid;place-items:center;padding:0;cursor:pointer;flex:none}'
+            + '.cq-cerrar:hover{background:#E6EAF3}'
+            + '.cq-t-rojo{color:#A3261C!important}.cq-t-ambar{color:#93600A!important}.cq-t-verde{color:#1E7A50!important}.cq-t-azul{color:#1B2F8F!important}'
+            + '.cq-t-ambar,.cq-t-verde,.cq-t-azul{font-weight:600}'
+            + '.cq-sec{color:#5A6487}'
+            + '.cq-h3{margin:0;font-size:15px;font-weight:600;color:#0F1A3A;line-height:1.3}.cq-h3-g{font-size:16px}'
+            + '.cq-p{margin:0;font-size:13px;color:#4A5578}'
+            + '.cq-nota{margin:0;font-size:12.5px;color:#5A6487}'
+            // Línea del tramo
+            + '.cq-linea{display:flex;flex-direction:column;gap:10px}'
+            + '.cq-linea-cab{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}'
+            + '.cq-totales{display:flex;gap:24px;font-size:13px;color:#5A6487}.cq-totales b{font-size:15px}'
+            + '.cq-tira-caja{border:1px solid #E3E7F0;border-radius:10px;padding:12px 12px 6px;overflow-x:auto}'
+            + '.cq-tira{display:grid;column-gap:4px;min-width:560px}'
+            + '.cq-dia{display:flex;flex-direction:column;align-items:stretch;border:0;border-radius:6px;background:transparent;padding:0;cursor:pointer;font-family:inherit;color:inherit;transition:background-color .15s}'
+            + '.cq-dia:hover{background:#F2F5FC}'
+            + '.cq-dia-libre{background:#EEF1F6}.cq-dia-libre:hover{background:#E6EAF2}'
+            + '.cq-dia-sel,.cq-dia-sel:hover{background:#E3E9FA;box-shadow:inset 0 0 0 1.5px #1B2F8F}'
+            + '.cq-arriba,.cq-abajo{display:flex;flex-direction:column;align-items:center}'
+            + '.cq-arriba{height:74px;justify-content:flex-end}.cq-abajo{height:62px;justify-content:flex-start}'
+            + '.cq-arriba i,.cq-abajo i{display:block;width:60%;max-width:16px}'
+            + '.cq-arriba i:first-child{border-radius:2px 2px 0 0}.cq-abajo i:last-child{border-radius:0 0 2px 2px}'
+            + '.cq-eje{height:1px;background:#0F1A3A;opacity:.7}'
+            + '.cq-dlab{display:flex;flex-direction:column;align-items:center;line-height:1.15;padding:4px 0 2px;font-size:10.5px;color:#2B3658}'
+            + '.cq-dlab b{font-weight:600;font-size:11.5px}.cq-dlab em{font-style:normal;font-size:9.5px;height:11px;color:#5A6487}'
+            + '.cq-dia-libre .cq-dlab{color:#8A93AE}'
+            + '.cq-dia-detalle{min-height:44px;border-radius:10px;background:#F4F6FB;padding:10px 14px;display:flex;flex-direction:column;gap:6px;font-size:13px}'
+            + '.cq-dd-cab{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.cq-dd-cab b{font-weight:600}'
+            + '.cq-dests{display:flex;flex-wrap:wrap;gap:4px 16px}'
+            + '.cq-dest{display:inline-flex;align-items:center;gap:7px;color:#2B3658;font-size:12.5px}.cq-dest i{width:7px;height:7px;border-radius:50%;flex:none}'
+            + '.cq-leyenda{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:11.5px;color:#5A6487}'
+            + '.cq-leyenda span{display:inline-flex;align-items:center;gap:6px}.cq-leyenda i{width:8px;height:8px;border-radius:2px;display:inline-block}'
+            + '.cq-sw-libre{background:#EEF1F6;box-shadow:inset 0 0 0 1px #D6DCE8}'
+            + '.cq-lista summary{cursor:pointer;font-size:13px;font-weight:600;color:#1B2F8F;list-style-position:inside;padding:2px 0}'
+            + '.cq-lista-caja{margin-top:8px;border:1px solid #E3E7F0;border-radius:10px;overflow:auto}'
+            + '.cq-tabla{width:100%;min-width:620px;border-collapse:collapse;table-layout:fixed;font-size:13px;margin:0}'
+            + '.cq-tabla th{height:32px;padding:0 14px;background:#F4F6FB;border-bottom:1px solid #E3E7F0;font-size:12px;font-weight:600;color:#5A6487;text-align:left}'
+            + '.cq-tabla td{padding:7px 14px;border-top:1px solid #F0F2F7;vertical-align:middle}'
+            + '.cq-tabla tbody tr:first-child td{border-top:0}.cq-tabla .cq-der{text-align:right}'
+            // Decisión
+            + '.cq-abajo-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start}'
+            + '.cq-decision{display:flex;flex-direction:column;gap:10px}'
+            + '.cq-opciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.cq-opciones-1{grid-template-columns:minmax(0,1fr)}'
+            + '.cq-opt{display:grid;grid-template-columns:16px minmax(0,1fr);column-gap:10px;row-gap:6px;align-content:start;text-align:left;padding:14px;border:1px solid #DDE2EC;border-radius:10px;background:#FFFFFF;cursor:pointer;font-family:inherit;color:#0F1A3A;transition:border-color .15s,background-color .15s}'
+            + '.cq-opt:hover{border-color:#B5BFD6}'
+            + '.cq-sel,.cq-sel:hover{border-color:#1B2F8F;background:#F7F9FE;box-shadow:0 0 0 3px rgba(27,47,143,.08)}'
+            + '.cq-opt-t{font-size:14px;font-weight:600;line-height:1.3}.cq-opt-s{font-size:12.5px;color:#5A6487}'
+            + '.cq-radio{width:16px;height:16px;border-radius:50%;border:1.5px solid #B9C1D2;box-sizing:border-box;margin-top:1px;display:grid;place-items:center}'
+            + '.cq-radio-on{border:0;background:#1B2F8F}.cq-radio-on::after{content:"";width:6px;height:6px;border-radius:50%;background:#FFFFFF}'
+            + '.cq-seg{display:flex;height:32px;border:1px solid #CDD4E3;border-radius:8px;overflow:hidden;background:#FFFFFF}'
+            + '.cq-seg>*{flex:1 1 0;min-width:0}.cq-seg>.cq-otra{flex:1.3 1 0}'
+            + '.cq-seg>*+*{border-left:1px solid #CDD4E3}'
+            + '.cq-bloque{border:0;background:transparent;font-family:inherit;font-size:13px;color:#0F1A3A;cursor:pointer;padding:0 6px;white-space:nowrap}'
+            + '.cq-bloque:hover{background:#F2F5FC}'
+            + '.cq-bloque-act,.cq-bloque-act:hover{background:#1B2F8F;color:#FFFFFF;font-weight:600}'
+            + '.cq-otra{display:flex;margin:0}'
+            + '.cq-otra input{width:100%;border:0;outline:0;text-align:center;font-family:inherit;font-size:13px;color:#0F1A3A;background:transparent;padding:0 6px}'
+            + '.cq-motivo{display:flex;align-items:center;gap:10px;font-size:12.5px;color:#2B3658;margin:2px 0 0}'
+            + '.cq-motivo input{flex:1;height:32px;border:1px solid #D6DCE8;border-radius:8px;padding:0 10px;font-family:inherit;font-size:13px;color:#0F1A3A;background:#FFFFFF}'
+            + '.cq-motivo input:focus{border-color:#1B2F8F;outline:2px solid #D9E1FA;outline-offset:0}'
+            // Cuenta: Hoy y Si confirmas
+            + '.cq-cuenta{display:flex;flex-direction:column}'
+            + '.cq-cuenta-cab,.cq-cuenta-fila,.cq-cuenta-saldo{display:grid;grid-template-columns:minmax(0,1fr) 84px 100px;align-items:center;column-gap:8px}'
+            + '.cq-cuenta-cab{font-size:12.5px;color:#5A6487;padding-bottom:6px;border-bottom:1px solid #0F1A3A}'
+            + '.cq-cuenta-cab>span:nth-child(n+2){text-align:right}.cq-cuenta-cab .cq-col-si{color:#1B2F8F;font-weight:600}'
+            + '.cq-cuenta-fila{min-height:30px;font-size:13px;border-bottom:1px solid #F0F2F7}'
+            + '.cq-cuenta-fila>span:first-child{color:#4A5578}.cq-cuenta-fila>span:nth-child(n+2){text-align:right}'
+            + '.cq-cuenta-sep{border-top:1px solid #E3E7F0}'
+            + '.cq-col-si b{font-weight:600;padding:1px 6px;border-radius:4px}'
+            + '.cq-cambia{background:#E9EEFB}'
+            + '.cq-cuenta-saldo{padding:8px 0 6px;margin-top:2px;border-top:3px double #0F1A3A;font-size:16px;font-weight:700}'
+            + '.cq-cuenta-saldo>span:first-child{display:flex;flex-direction:column;font-size:14px}.cq-cuenta-saldo small{font-size:11.5px;font-weight:400;color:#6B7596}'
+            + '.cq-cuenta-saldo>span:nth-child(n+2){text-align:right}.cq-cuenta-saldo b{font-weight:700}'
+            + '.cq-cuenta .cq-nota{padding-top:8px}'
             // Pie
-            + '.cq-pie-izq,.cq-pie-der{display:flex;align-items:center;gap:12px}.cq-pie-izq{gap:4px}'
-            + '.cq-link{height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:#3A4256;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer}'
-            + '.cq-link:hover{background:#F1F2F6}'
-            + '.cq-link-rojo{color:#B42318;position:relative;margin-left:9px}'
-            + '.cq-link-rojo::before{content:"";position:absolute;left:-7px;top:10px;bottom:10px;width:1px;background:#E4E7EF}'
-            + '.cq-link-rojo:hover{background:#FDEDEB}'
-            + '.cq-btn-sec{height:40px;padding:0 20px;border:1px solid #D6DAE3;border-radius:10px;background:#fff;color:#141B2D;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}'
-            + '.cq-btn-sec:hover{background:#F6F7FA}'
-            + '.cq-btn-pri{height:40px;padding:0 22px;border:0;border-radius:10px;background:#1B2F8F;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}'
-            + '.cq-btn-pri:hover{background:#14236B}'
-            + '.cq-btn-pri:disabled{opacity:.4;cursor:not-allowed;background:#1B2F8F}'
+            + '.cq-pie-izq,.cq-pie-der{display:flex;align-items:center;gap:8px}'
+            + '.cq-link,.cq-btn-sec,.cq-btn-pri{white-space:nowrap}'
+            + '.cq-link{height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#2B3658;font-family:inherit;font-size:13.5px;font-weight:500;cursor:pointer}'
+            + '.cq-link:hover{background:#F2F4F9}'
+            + '.cq-link-rojo{color:#A3261C}.cq-link-rojo:hover{background:#FCEDEB}'
+            + '.cq-btn-sec{height:36px;padding:0 16px;border:1px solid #D6DCE8;border-radius:8px;background:#FFFFFF;color:#0F1A3A;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer}'
+            + '.cq-btn-sec:hover{background:#F4F6FB}'
+            + '.cq-btn-pri{height:36px;padding:0 18px;border:0;border-radius:8px;background:#1B2F8F;color:#FFFFFF;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer}'
+            + '.cq-btn-pri:hover{background:#14236B}.cq-btn-pri:disabled{opacity:.4;cursor:not-allowed;background:#1B2F8F}'
             // Pantallas angostas
-            + '@media (max-width:760px){'
-            + '#modalCuadre .modal-header,#modalCuadre .modal-footer{padding-left:16px;padding-right:16px}#modalCuadre .modal-body{padding:20px 16px;gap:24px}'
-            + '#modalCuadre .modal-header{flex-wrap:wrap;position:relative;row-gap:10px}.cq-cab{flex:1 1 100%;padding-right:48px}.cq-cab-der{flex:1 1 100%;padding-top:0}'
-            + '.cq-cerrar{position:absolute;top:16px;right:16px}.cq-chip-pol{white-space:normal;height:auto;min-height:28px;padding:4px 12px}'
-            + '.cq-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.cq-opciones{grid-template-columns:1fr}'
-            + '.cq-pv-grid{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}.cq-pv-grid>div:nth-child(4){padding-left:0;border-left:0}'
-            + '.cq-filas{grid-template-columns:1fr;row-gap:8px}.cq-legend{grid-template-columns:repeat(3,minmax(0,1fr))}.cq-botones{flex-wrap:wrap}.cq-botones>*{flex:1 1 40%}}';
+            + '@media (max-width:860px){.cq-abajo-grid{grid-template-columns:minmax(0,1fr)}}'
+            + '@media (max-width:640px){#modalCuadre .modal-header,#modalCuadre .modal-footer{padding-left:16px;padding-right:16px}#modalCuadre .modal-body{padding:16px;gap:20px}'
+            + '.cq-opciones{grid-template-columns:minmax(0,1fr)}.cq-totales{gap:16px}.cq-pie-der{flex:1;justify-content:flex-end}}';
         document.head.appendChild(s);
     }
 
     window.openCuadreModal = async function (empleadoId, nombre) {
         estilos();
-        estado.empleadoId = Number(empleadoId); estado.nombre = nombre || ''; estado.eleccion = null; estado.minutos = null; estado.data = null;
+        estado.empleadoId = Number(empleadoId); estado.nombre = nombre || ''; estado.eleccion = null; estado.minutos = null; estado.data = null; estado.diaSel = null; estado.motivo = '';
         let existing = document.getElementById('modalCuadre');
         if (existing) existing.remove();
+        const icono = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#5A6487" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="12" height="8.5" rx="1.5"></rect><path d="M6 5V3.8c0-.44.36-.8.8-.8h2.4c.44 0 .8.36.8.8V5M2 8.5h12"></path></svg>';
         const html = '<div class="modal fade" id="modalCuadre" tabindex="-1" aria-labelledby="modalCuadreLabel"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">'
-            + '<div class="modal-header"><div class="cq-cab"><div class="cq-eyebrow">Cuadre del tramo</div><h5 class="cq-nombre" id="modalCuadreLabel">' + esc(nombre) + '</h5><div id="cq-sub" class="cq-sub"></div></div>'
-            + '<div class="cq-cab-der"><div id="cq-chip"></div><button type="button" class="cq-cerrar" data-bs-dismiss="modal" aria-label="Cerrar">'
-            + '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"></path></svg></button></div></div>'
-            + '<div class="modal-body" id="cq-cuerpo"><div class="cq-sub">Cargando el libro de minutos…</div></div>'
+            + '<div class="modal-header"><div class="cq-cab"><h5 class="cq-nombre" id="modalCuadreLabel">' + esc(titulo(nombre)) + '</h5>'
+            + '<div class="cq-labor" id="cq-labor">' + icono + '<span class="cq-sec">Cargando…</span></div>'
+            + '<div class="cq-tramo" id="cq-sub"></div></div>'
+            + '<button type="button" class="cq-cerrar" data-bs-dismiss="modal" aria-label="Cerrar"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"></path></svg></button></div>'
+            + '<div class="modal-body" id="cq-cuerpo"><div class="cq-sec">Cargando el tramo…</div></div>'
             + '<div class="modal-footer">'
             + '<div class="cq-pie-izq"><button type="button" class="cq-link" onclick="window.cuadreAjusteManual()">Ajuste manual por día</button>'
             + '<button type="button" class="cq-link cq-link-rojo" id="cq-quitar" hidden onclick="window.cuadreQuitar()">Quitar política</button></div>'
@@ -451,12 +478,18 @@
         new bootstrap.Modal(el).show();
         try {
             const data = await cargar(estado.empleadoId);
+            const partes = [];
+            if (data.cargo) partes.push('<b>' + esc(frase(data.cargo)) + '</b>');
+            if (data.turno) partes.push('<span class="cq-sec">' + esc(data.turno) + '</span>');
+            if (data.area) partes.push('<span class="cq-sec">' + esc(titulo(data.area)) + '</span>');
+            document.getElementById('cq-labor').innerHTML = icono + (partes.length ? partes.join('<span class="cq-sec">·</span>') : '<span class="cq-sec">Sin labor registrada</span>');
+            if (data.nombre) document.getElementById('modalCuadreLabel').textContent = titulo(data.nombre);
             if (data.es_bolsa) {
                 document.getElementById('cq-cuerpo').innerHTML = '<div class="alert alert-info mb-0">Esta persona tiene Bolsa Flexible: su balance se gestiona en la columna de la bolsa al cierre.</div>';
                 return;
             }
             estado.data = data; tomarPolitica(data);
-            document.getElementById('cq-sub').textContent = 'Tramo ' + fechaDMA(data.tramo.inicio) + ' al ' + fechaDMA(data.tramo.fin) + ' · se recalcula cada día con las marcas nuevas'
+            document.getElementById('cq-sub').innerHTML = 'Cuadre del tramo ' + fechaDMA(data.tramo.inicio) + ' al ' + fechaDMA(data.tramo.fin) + ' · <span id="cq-estado"></span>'
                 + (data.tolerancia_minutos > 0 ? (' · tolerancia ' + data.tolerancia_minutos + ' min por día') : '');
             render();
         } catch (e) {

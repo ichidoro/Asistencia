@@ -124,3 +124,18 @@ def test_la_cobertura_de_turno_no_la_reescribe_la_politica():
     assert [r['fecha'] for r in reparto] == ['2026-10-13']
     assert reparto[0]['estado'] == 'RECHAZADO' and reparto[0]['minutos_autorizados'] == 0.0
     assert resumen['cubierto'] == 100.0 and resumen['pendiente'] == 0 and resumen['a_pagar'] == 191.0
+
+
+def test_calendario_trae_todos_los_dias_del_tramo_con_los_minutos_del_libro():
+    """La línea de días de la ventana necesita cada fecha del tramo (también libres y días sin registro) con los
+    mismos minutos que el detalle del libro, para que la línea y las sumas nunca difieran."""
+    from backend.services.cuadre_service import calendario_tramo
+    dias = [{'fecha': '2026-10-01', 'estado': 'LIBRE'},
+            {'fecha': '2026-10-02', 'estado': 'SALIDA_ADELANTADA', 'hora_entrada_real': '11:25:00', 'hora_salida_real': '18:49:00'}]
+    detalle = [{'fecha': '2026-10-02', 'deuda_bruta': 70.85, 'deuda': 70.85, 'perdonado': 0.0, 'he_bruto': 0.0,
+                'he_autorizados': 0.0, 'estado_he': None, 'especial': False, 'excepcion': 0}]
+    cal = calendario_tramo(dias, detalle, '2026-10-01', '2026-10-03')
+    assert [c['fecha'] for c in cal] == ['2026-10-01', '2026-10-02', '2026-10-03']
+    assert cal[0]['estado'] == 'LIBRE' and cal[0]['deuda'] == 0.0
+    assert cal[1]['deuda'] == 70.85 and cal[1]['hora_salida_real'] == '18:49:00'
+    assert cal[2]['estado'] is None
