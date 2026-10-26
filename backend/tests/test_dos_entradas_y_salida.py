@@ -39,9 +39,10 @@ def test_dos_entradas_y_salida_cierra_con_la_salida_real(monkeypatch):
     r = _dia(monkeypatch, [("06:40:19", E), ("13:17:43", E), ("16:29:22", S)])
     assert r["hora_entrada_real"] == "06:40:19"
     assert r["hora_salida_real"] == "16:29:22"          # antes: 13:17:43 (la 2ª Entrada tomada como salida)
-    assert r["estado"] == "OK"
+    # Tolerancia Salida Adelantada 0 (la del turno): los 38 s antes de las 16:30 se marcan (ya no hay minuto fijo)
+    assert r["estado"] == "SALIDA_ADELANTADA"
     assert r["minutos_deuda"] < 2                        # antes: 192
-    assert r["minutos_salida_adelantada"] == 0
+    assert abs(r["minutos_salida_adelantada"] - 0.63) < 0.01
     assert "Dos Entradas seguidas" in r["observaciones"]  # queda avisado que falta una Salida
     assert set(r["marcas_consumidas_ids"]) == {1, 2, 3}
 
@@ -65,7 +66,7 @@ def test_entrada_de_regreso_despues_de_la_colacion_sin_salida(monkeypatch):
     # E, S (colación), E (regreso), E (otra pausa sin salida), S: el día cierra con la Salida real
     r = _dia(monkeypatch, [("06:40:19", E), ("12:30:00", S), ("13:00:00", E), ("14:30:00", E), ("16:29:22", S)])
     assert r["hora_salida_real"] == "16:29:22"
-    assert r["estado"] == "OK" and r["minutos_deuda"] < 2
+    assert r["estado"] == "SALIDA_ADELANTADA" and r["minutos_deuda"] < 2   # 38 s antes de la hora, tolerancia 0
     assert r["minutos_colacion_real"] == 30
 
 

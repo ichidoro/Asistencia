@@ -256,7 +256,7 @@
 
     // Lista de los días que perdona la guía, para que quien confirma vea exactamente qué pasa con cada uno
     const EFECTO = { pasa_a_ok: 'Se perdona y el día pasa a OK', marca: 'Se perdona con la marca del interruptor',
-        parcial: 'Se perdona solo una parte; el resto lo pagan las horas extra', segundos: 'Segundos dentro del margen; el día ya está en OK' };
+        parcial: 'Se perdona solo una parte; el resto lo pagan las horas extra', tolerancia: 'Dentro de la tolerancia del turno; el día ya está en OK' };
     function listaPerdon(prop) {
         let filas = '';
         prop.dias.forEach(function (f) {

@@ -22,6 +22,7 @@ class TurnoRepository:
                     meta_horas_semanales REAL DEFAULT 0.0,
                     tolerancia_retraso_alerta INTEGER DEFAULT 0,
                     tolerancia_retraso_descuento INTEGER DEFAULT 0,
+                    tolerancia_salida_adelantada INTEGER DEFAULT 0,
                     redondeo_minutos INTEGER DEFAULT 0,
                     descuento_colacion_auto BOOLEAN DEFAULT 0,
                     minutos_colacion_auto INTEGER DEFAULT 0,
@@ -48,6 +49,7 @@ class TurnoRepository:
             ("fecha_vigencia",                     "TEXT"),
             ("ventana_en_curso_minutos",            "INTEGER DEFAULT 0"),
             ("tolerancia_exceso_colacion_minutos",  "INTEGER DEFAULT 0"),
+            ("tolerancia_salida_adelantada",        "INTEGER DEFAULT 0"),
             ("umbral_horas_colacion",               "REAL DEFAULT 0.0"),
             ("rotacion_secuencial",                 "BOOLEAN DEFAULT 1"),
             ("semana_fallback_sin_marcas",          "INTEGER DEFAULT 1"),
@@ -508,18 +510,18 @@ class TurnoRepository:
             sql_turno = """
                 INSERT INTO turnos (
                     nombre, tipo_programacion, meta_horas_semanales,
-                    tolerancia_retraso_alerta, tolerancia_retraso_descuento,
+                    tolerancia_retraso_alerta, tolerancia_retraso_descuento, tolerancia_salida_adelantada,
                     redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
                     activo, permite_viajes_largos, rotacion_dinamica_diaria,
                     meta_horas_espera, modalidad_control
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
-                turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
+                turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento, turno.tolerancia_salida_adelantada,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,
@@ -1007,7 +1009,7 @@ class TurnoRepository:
             sql_update = """
                 UPDATE turnos SET
                     nombre=?, tipo_programacion=?, meta_horas_semanales=?,
-                    tolerancia_retraso_alerta=?, tolerancia_retraso_descuento=?,
+                    tolerancia_retraso_alerta=?, tolerancia_retraso_descuento=?, tolerancia_salida_adelantada=?,
                     redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, tolerancia_exceso_colacion_minutos=?,
@@ -1017,7 +1019,7 @@ class TurnoRepository:
             """
             params = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
-                turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento,
+                turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento, turno.tolerancia_salida_adelantada,
                 turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.tolerancia_exceso_colacion_minutos,

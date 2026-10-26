@@ -1743,6 +1743,7 @@ class QuantumMatrixEngine:
 
         tolerancia_alerta = int(t_cfg.get('tolerancia_retraso_alerta', 0) or 0)
         tolerancia_descuento = int(t_cfg.get('tolerancia_retraso_descuento', 0) or 0)
+        tolerancia_salida = int(t_cfg.get('tolerancia_salida_adelantada', 0) or 0)
         anclaje_entrada = int(t_cfg.get('anclaje_entrada_minutos', 0) or 0)
         anclaje_salida = int(t_cfg.get('anclaje_salida_minutos', 0) or 0)
         descuento_col_auto = bool(t_cfg.get('descuento_colacion_auto', False))
@@ -2463,9 +2464,8 @@ class QuantumMatrixEngine:
             if p0_in < dt_ent_teo:
                 anticip_seg = (dt_ent_teo - p0_in).total_seconds()
                 anticip_min = anticip_seg / 60.0
+                # Sin «Rango Anticipación Entrada» (0) no se ajusta ninguna marca: cuenta la hora real
                 if anclaje_entrada > 0 and anticip_min <= anclaje_entrada:
-                    p0_in = dt_ent_teo
-                elif anclaje_entrada == 0 and anticip_seg < 60.0:
                     p0_in = dt_ent_teo
 
             # 2. Anclaje de salida para el último bloque
@@ -2473,9 +2473,8 @@ class QuantumMatrixEngine:
             if pn_out > dt_sal_teo:
                 demora_seg = (pn_out - dt_sal_teo).total_seconds()
                 demora_min = demora_seg / 60.0
+                # Sin «Rango Demora Salida» (0) no se ajusta ninguna marca: cuenta la hora real
                 if anclaje_salida > 0 and demora_min <= anclaje_salida:
-                    pn_out = dt_sal_teo
-                elif demora_seg < 60.0:
                     pn_out = dt_sal_teo
 
             if len(pares_trabajo) == 1:
@@ -2571,6 +2570,8 @@ class QuantumMatrixEngine:
 
         # ─────────────────────────────────────────────────────────────────────
         # 11. EJE DISCIPLINARIO (Atrasos y Salidas Adelantadas con Anclajes de UI)
+        # Las tolerancias salen solo del turno (Tolerancia Atraso Real, Tolerancia Atraso Visual y Tolerancia
+        # Salida Adelantada); con 0, todo atraso o salida antes de la hora se marca, aunque sean segundos.
         # ─────────────────────────────────────────────────────────────────────
         diff_ent = 0.0
         diff_sal = 0.0
@@ -2580,9 +2581,9 @@ class QuantumMatrixEngine:
             p_ent_real = QuantumPhaseTopology.time_to_phase(r_ent_dt)
             delta_in = QuantumPhaseTopology.circular_distance(p_ent_teo, p_ent_real)
 
-            if delta_in > 1.0:
+            if delta_in > 0.0:
                 diff_ent = delta_in
-            elif delta_in < -1.0:
+            elif delta_in < 0.0:
                 anticip_in = abs(delta_in)
                 if anclaje_entrada > 0 and anticip_in > anclaje_entrada:
                     res['observaciones'] += f"Llegada anticipada {res['hora_entrada_real'][:5]} ({int(anticip_in)} min). "
@@ -2592,9 +2593,9 @@ class QuantumMatrixEngine:
             p_sal_real = QuantumPhaseTopology.time_to_phase(r_sal_dt)
             delta_out = QuantumPhaseTopology.circular_distance(p_sal_real, p_sal_teo)
 
-            if delta_out > 1.0:
+            if delta_out > 0.0:
                 diff_sal = delta_out
-            elif delta_out < -1.0:
+            elif delta_out < 0.0:
                 extra_out = abs(delta_out)
                 if anclaje_salida > 0 and extra_out > anclaje_salida:
                     res['observaciones'] += f"Salida extendida {res['hora_salida_real'][:5]} (+{int(extra_out)} min). "
@@ -2606,7 +2607,7 @@ class QuantumMatrixEngine:
         elif diff_ent > tolerancia_alerta:
             res['alerta_atraso'] = True
 
-        if diff_sal > 0:
+        if diff_sal > tolerancia_salida:
             res['minutos_salida_adelantada'] = round(diff_sal, 2)
             res['tiene_salida_adelantada'] = 1
             if res['estado'] == 'OK':
@@ -2703,7 +2704,7 @@ class QuantumMatrixEngine:
                 res['minutos_salida_adelantada'] = round(sal - cub_sal, 2)
                 if res['minutos_atraso'] <= tolerancia_descuento:
                     res['tiene_atraso'] = 0
-                if res['minutos_salida_adelantada'] <= 0:
+                if res['minutos_salida_adelantada'] <= tolerancia_salida:
                     res['tiene_salida_adelantada'] = 0
                 if res.get('estado') in ('ATRASO', 'SALIDA_ADELANTADA'):
                     if res['tiene_atraso']:

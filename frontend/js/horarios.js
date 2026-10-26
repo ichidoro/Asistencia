@@ -84,6 +84,7 @@ async function saveTurno() {
         tipo_programacion: formData.get('tipo_programacion'),
         tolerancia_retraso_alerta: parseInt(formData.get('tolerancia_retraso_alerta') || 0),
         tolerancia_retraso_descuento: parseInt(formData.get('tolerancia_retraso_descuento') || 0),
+        tolerancia_salida_adelantada: Math.max(0, parseInt(formData.get('tolerancia_salida_adelantada') || 0, 10) || 0),
         redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         meta_horas_espera: parseFloat(document.getElementById('input-meta-espera')?.value || 88.0),
@@ -98,6 +99,7 @@ async function saveTurno() {
         umbral_horas_colacion: document.getElementById('chkColacion').checked ? (parseFloat(document.getElementById('umbralColacion').value) || 0) : 0,
         tolerancia_exceso_colacion_minutos: Math.max(0, parseInt(document.getElementById('toleranciaExcesoColacion')?.value, 10) || 0),
         anclaje_entrada_minutos: parseInt(formData.get('anclaje_entrada_minutos') || 0),
+        anclaje_salida_minutos: Math.max(0, parseInt(formData.get('anclaje_salida_minutos') || 0, 10) || 0),
         permite_viajes_largos: ((formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') && ((document.getElementById('chkPermiteViajesLargos')?.checked) || (document.getElementById('chk-permite-viajes-largos')?.checked))) ? 1 : 0,
         rotacion_dinamica_diaria: ((formData.get('tipo_programacion') === 'CICLO_INTELIGENTE') && ((document.getElementById('chkRotacionDinamicaDiaria')?.checked) || (document.getElementById('chk-rotacion-dinamica-diaria')?.checked))) ? 1 : 0,
         areas: Array.from(document.querySelectorAll('.chk-area-turno:checked')).map(cb => cb.value),
@@ -355,6 +357,7 @@ async function openModalHorario(id = null) {
             form.tipo_programacion.value = turno.tipo_programacion;
             form.tolerancia_retraso_alerta.value = turno.tolerancia_retraso_alerta;
             form.tolerancia_retraso_descuento.value = turno.tolerancia_retraso_descuento;
+            if (form.tolerancia_salida_adelantada) form.tolerancia_salida_adelantada.value = String(turno.tolerancia_salida_adelantada || 0);
             form.redondeo_minutos.value = String(turno.redondeo_minutos || 0);
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
@@ -441,6 +444,7 @@ async function openModalHorario(id = null) {
         if (form.meta_horas_semanales) form.meta_horas_semanales.value = "";
         if (form.tolerancia_retraso_alerta) form.tolerancia_retraso_alerta.value = 0;
         if (form.tolerancia_retraso_descuento) form.tolerancia_retraso_descuento.value = 0;
+        if (form.tolerancia_salida_adelantada) form.tolerancia_salida_adelantada.value = 0;
 
         document.getElementById('chkColacion').checked = false;
         document.getElementById('numColacion').value = "";
@@ -598,7 +602,7 @@ function renderHorariosUI() {
                                                 <th style="cursor: pointer;" onclick="sortTurnos('meta_horas_semanales')" title="Ordenar por Horas">
                                                     Horas Semanales <i id="sort-icon-turnos-meta_horas_semanales" class="bi bi-arrow-down-up small text-muted"></i>
                                                 </th>
-                                                <th>Tolerancias (Alerta/Desc)</th>
+                                                <th>Tolerancias (Alerta/Atraso/Salida)</th>
                                                 <th>Áreas</th>
                                                 <th style="cursor: pointer;" onclick="sortTurnos('activo')" title="Ordenar por Estado">
                                                     Estado <i id="sort-icon-turnos-activo" class="bi bi-arrow-down-up small text-muted"></i>
@@ -1161,7 +1165,7 @@ function renderTurnosTable() {
             <td class="fw-bold">${t.nombre}</td>
             <td><span class="badge ${badgeClass}">${tipoBadge}</span></td>
             <td>${horasDisplay}</td>
-            <td>${t.tolerancia_retraso_alerta} min / ${t.tolerancia_retraso_descuento} min</td>
+            <td>${t.tolerancia_retraso_alerta} / ${t.tolerancia_retraso_descuento} / ${t.tolerancia_salida_adelantada || 0} min</td>
             <td>${(t.areas && t.areas.length > 0) ? t.areas.map(a => `<span class="badge bg-info bg-opacity-75 me-1 mb-1" style="font-size:.7em">${a}</span>`).join('') : '<span class="badge bg-warning text-dark" style="font-size:.7em"><i class="bi bi-exclamation-triangle me-1"></i>Sin Área</span>'}</td>
             <td>${estadoBadge}</td>
             <td>
@@ -1286,26 +1290,34 @@ function renderModalHtml() {
 
                         <h6>Reglas de Asistencia</h6>
                         <div class="row g-3 mb-4 p-3 bg-light rounded border">
-                            <!-- Fila 1: Gobernanza de Tiempos (Sétrica 3 columnas) -->
-                            <div class="col-md-3 gobernanza-col">
+                            <!-- Fila 1: Gobernanza de Tiempos. Entrada (3 columnas) y salida (2 columnas); con 0 no hay margen -->
+                            <div class="col-md-4 gobernanza-col">
                                 <label for="input-tol-alerta" class="form-label small fw-bold">Tolerancia Atraso Visual (min)</label>
-                                <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Si llega tarde hasta estos minutos, marca amarilla pero NO genera deuda.</div>
+                                <input type="number" id="input-tol-alerta" class="form-control" name="tolerancia_retraso_alerta" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Atraso que pasa de estos minutos sin pasar la tolerancia real: aviso amarillo, sin marcar ATRASO.</div>
                             </div>
-                            <div class="col-md-3 gobernanza-col">
+                            <div class="col-md-4 gobernanza-col">
                                 <label for="input-tol-desc" class="form-label small fw-bold">Tolerancia Atraso Real (min)</label>
-                                <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Si excede estos minutos, se genera Deuda (Atraso) y marca roja.</div>
+                                <input type="number" id="input-tol-desc" class="form-control" name="tolerancia_retraso_descuento" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Atraso que pasa de estos minutos: el día queda en ATRASO. Con 0 cuenta todo atraso, aunque sean segundos.</div>
                             </div>
-                            <div class="col-md-3 gobernanza-col">
+                            <div class="col-md-4 gobernanza-col">
                                 <label for="input-anclaje" class="form-label small fw-bold" title="Minutos antes de la entrada que se asimilan al inicio oficial">Rango Anticipación Entrada (min)</label>
-                                <input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo previo se asumen como entrada a la hora en punto.</div>
+                                <input type="number" id="input-anclaje" class="form-control" name="anclaje_entrada_minutos" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo previo se asumen como entrada a la hora en punto. Con 0 cuenta la hora real.</div>
                             </div>
-                            <div class="col-md-3 gobernanza-col">
+                            <div class="col-md-4 gobernanza-col">
+                                <label for="input-tol-salida" class="form-label small fw-bold">Tolerancia Salida Adelantada (min)</label>
+                                <input type="number" id="input-tol-salida" class="form-control" name="tolerancia_salida_adelantada" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Salida antes de la hora que pasa de estos minutos: el día queda en SALIDA ADELANTADA. Con 0 cuenta toda salida antes de la hora, aunque sean segundos.</div>
+                            </div>
+                            <div class="col-md-4 gobernanza-col">
                                 <label for="input-anclaje-salida" class="form-label small fw-bold" title="Minutos después de la salida que se asimilan al fin oficial">Rango Demora Salida (min)</label>
-                                <input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" value="0">
-                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo posterior se asumen como salida a la hora en punto.</div>
+                                <input type="number" id="input-anclaje-salida" class="form-control" name="anclaje_salida_minutos" min="0" step="1" value="0">
+                                <div class="form-text small" style="font-size: 0.75rem;">Marcas dentro de este tiempo posterior se asumen como salida a la hora en punto. Con 0 cuenta la hora real.</div>
+                            </div>
+                            <div class="col-md-4 gobernanza-col">
+                                <div class="form-text small mt-md-4" style="font-size: 0.75rem;">La deuda del día siempre cuenta el tiempo que falta para sus horas. Las tolerancias solo deciden si el día se marca como ATRASO o SALIDA ADELANTADA.</div>
                             </div>
 
                             <!-- Fila 2: Ajustes de Cálculo (Simétrica 2 columnas) -->

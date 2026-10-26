@@ -56,8 +56,8 @@ def es_dia_especial(di: Dict[str, Any], es_bolsa: bool) -> bool:
 # ── Causas de la deuda (reglas del dueño, 26-10-2026) ─────────────────────────────────────────────
 # Toda deuda se paga con horas extra, en este orden: exceso de colación (y lo que no tiene causa), permisos, atrasos y
 # salidas adelantadas; las inasistencias compensables van al final. Solo se perdonan atrasos y salidas adelantadas, de
-# cualquier tamaño (también los segundos que caen dentro del margen del horario); el exceso de colación y los permisos
-# no se perdonan nunca.
+# cualquier tamaño (también los que quedan dentro de la tolerancia del turno y el motor no marca); el exceso de colación
+# y los permisos no se perdonan nunca.
 ORDEN_PAGO = ('otra', 'colacion', 'permiso', 'atraso', 'salida')
 CAUSAS_PERDONABLES = ('atraso', 'salida')
 CAUSAS_VACIAS = {'deuda': 0.0, 'colacion': 0.0, 'permiso': 0.0, 'atraso': 0.0, 'salida': 0.0, 'otra': 0.0,
@@ -81,11 +81,13 @@ def causas_dia(di: Dict[str, Any]) -> Dict[str, float]:
     """
     Divide la deuda neta de un día (la que dejó el motor después de los perdonazos del interruptor) en sus causas.
     La suma de colacion + permiso + atraso + salida + otra es siempre la deuda neta del día. Función pura.
-      · atraso/salida: los minutos marcados por el motor más los segundos de llegar tarde o salir antes que caen dentro
-        del margen (el motor no los marca, pero el día sí los debe);
+      · atraso/salida: los minutos marcados por el motor más el atraso o la salida antes de la hora que quedan dentro de
+        la tolerancia del turno (`tolerancia_atraso_turno`, `tolerancia_salida_turno`, en minutos): el motor no los marca,
+        pero el día sí los debe. Con tolerancia 0 el motor marca todo y aquí no se agrega nada;
       · si el mismo día la persona compensó parte (se quedó más), lo compensado paga primero lo que no se perdona, igual
         que el interruptor: lo perdonable del día es min(deuda, atraso + salida).
-      · atraso_marcado / salida_marcada: la parte que borra la marca del interruptor (sin los segundos del margen).
+      · atraso_marcado / salida_marcada: la parte que borra la marca del interruptor (sin lo que queda dentro de la
+        tolerancia).
     """
     cond = int(_f(di.get('deuda_condonada')))
     neta = 0.0 if cond == 5 else _f(di.get('minutos_deuda'))
@@ -99,12 +101,14 @@ def causas_dia(di: Dict[str, Any]) -> Dict[str, float]:
     seg_a = seg_s = 0.0
     if resto > 0.0:
         if atr <= 0.0 and cond not in (2, 3):
+            tol_a = _f(di.get('tolerancia_atraso_turno'))
             e_real, e_teo = _minutos_del_dia(di.get('hora_entrada_real')), _minutos_del_dia(di.get('hora_entrada_teorica'))
-            if e_real is not None and e_teo is not None and 0.0 < e_real - e_teo < 60.0:
+            if e_real is not None and e_teo is not None and 0.0 < e_real - e_teo <= tol_a:
                 seg_a = min(resto, e_real - e_teo)
         if sal <= 0.0 and cond not in (1, 3):
+            tol_s = _f(di.get('tolerancia_salida_turno'))
             s_real, s_teo = _minutos_del_dia(di.get('hora_salida_real')), _minutos_del_dia(di.get('hora_salida_teorica'))
-            if s_real is not None and s_teo is not None and 0.0 < s_teo - s_real < 60.0:
+            if s_real is not None and s_teo is not None and 0.0 < s_teo - s_real <= tol_s:
                 seg_s = min(resto - seg_a, s_teo - s_real)
     perdonable = min(neta, atr + seg_a + sal + seg_s)
     atraso = min(perdonable, atr + seg_a)
@@ -123,8 +127,9 @@ def plegar_libro(dias: List[Dict[str, Any]], es_bolsa: bool = False, tolerancia_
     """
     Pliega los días de una persona en los totales del libro. Función pura: solo lee los dicts.
       tolerancia_min: deuda de un día por debajo de este valor se deja pasar (se informa como «tolerado»).
-      perdon_cuadre:  minutos que la guía del cuadre perdonó en la cuenta del tramo (parte de un día o segundos dentro
-                      del margen). Solo puede borrar atrasos y salidas pendientes, nunca colación ni permisos.
+      perdon_cuadre:  minutos que la guía del cuadre perdonó en la cuenta del tramo (parte de un día o lo que queda
+                      dentro de la tolerancia del turno). Solo puede borrar atrasos y salidas pendientes, nunca colación
+                      ni permisos.
       hay_politica:   con política registrada, una aprobación parcial es una decisión, no un hallazgo.
       guiados:        {fecha: {'tipo', 'minutos_marca'}} de los perdonazos que puso la guía con la marca del interruptor.
                       Lista congelada: si después la marca borra más minutos que los aprobados (cambió una marca), el
@@ -334,8 +339,8 @@ def plan_perdonazo(dias: List[Dict[str, Any]], libro: Dict[str, Any], presupuest
     luego los atrasos por fecha y luego las salidas por fecha; lo que no alcanzan de atrasos y salidas se perdona.
       · día completo con minutos marcados por el motor → se perdona con la misma marca del interruptor (1 salida,
         2 atraso, 3 ambos) y el día deja de contar como atraso o salida;
-      · día del borde (perdonado solo en parte) y segundos dentro del margen → se perdonan en la cuenta del cuadre
-        (el día no cambia);
+      · día del borde (perdonado solo en parte) y lo que queda dentro de la tolerancia del turno → se perdonan en la
+        cuenta del cuadre (el día no cambia);
       · un día que ya tiene una marca del interruptor no se toca: su parte que quede se perdona en la cuenta del cuadre.
     """
     causas_t = libro.get('causas') or {}
@@ -378,7 +383,7 @@ def plan_perdonazo(dias: List[Dict[str, Any]], libro: Dict[str, Any], presupuest
         elif not completo_dia or cond:
             efecto = 'parcial'
         else:
-            efecto = 'segundos'
+            efecto = 'tolerancia'
         filas.append({'fecha': fecha, 'estado_antes': estado, 'tipo': tipo,
                       'atraso': round(e['atraso'], 4), 'salida': round(e['salida'], 4),
                       'minutos_marca': round(minutos_marca, 4), 'minutos_cuadre': round(total - minutos_marca, 4),
@@ -669,7 +674,7 @@ class CuadreService:
 
     async def _aplicar_plan(self, empleado_id: int, fecha_inicio: str, fecha_fin: str, plan: Dict[str, Any], usuario: str) -> float:
         """Pone las marcas del interruptor de los días completos, guarda cada perdonazo con su origen y recalcula esos
-        días. Devuelve los minutos que se perdonan en la cuenta del cuadre (parte de un día y segundos del margen)."""
+        días. Devuelve los minutos que se perdonan en la cuenta del cuadre (parte de un día y lo que queda dentro de la tolerancia del turno)."""
         fechas: List[str] = []
         for f in plan['dias']:
             if int(f['tipo']) <= 0:

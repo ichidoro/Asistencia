@@ -238,7 +238,7 @@ class AsistenciaService:
             CAMPOS_TURNO_PADRE = [
                 'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
-                'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
+                'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento', 'tolerancia_salida_adelantada',
                 'redondeo_minutos', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
@@ -841,7 +841,7 @@ class AsistenciaService:
             CAMPOS_TURNO_PADRE = [
                 'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
-                'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento',
+                'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento', 'tolerancia_salida_adelantada',
                 'redondeo_minutos', 'meta_horas_semanales',
                 'tipo_programacion', 'nombre', 'permite_viajes_largos',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
@@ -2452,6 +2452,8 @@ class AsistenciaService:
 
         q_asist = f"""
             SELECT a.*, t.nombre as turno_nombre,
+                   t.tolerancia_retraso_descuento as tolerancia_atraso_turno,
+                   t.tolerancia_salida_adelantada as tolerancia_salida_turno,
                    he.estado as estado_he,
                    he.minutos_autorizados as minutos_extra_autorizados,
                    COALESCE((SELECT SUM(minutos) FROM compensaciones_he_inasistencia WHERE empleado_id = a.empleado_id AND fecha_inasistencia = a.fecha), 0.0) as minutos_compensados_he,

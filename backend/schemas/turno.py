@@ -30,6 +30,7 @@ class TurnoBase(BaseModel):
     tipo_programacion: Literal['CICLO_INTELIGENTE', 'BOLSA_FLEXIBLE'] = 'CICLO_INTELIGENTE'
     tolerancia_retraso_alerta: int = 0
     tolerancia_retraso_descuento: int = 0
+    tolerancia_salida_adelantada: int = 0 # Minutos antes de la hora de salida que no marcan SALIDA_ADELANTADA (0 = toda salida antes cuenta)
     redondeo_minutos: int = 0
     meta_horas_semanales: float = 0.0
     descuento_colacion_auto: bool = False

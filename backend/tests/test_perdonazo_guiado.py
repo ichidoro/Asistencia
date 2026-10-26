@@ -3,7 +3,8 @@
 
   · Toda deuda se paga con horas extra, en este orden: exceso de colación (y lo sin causa), permisos, atrasos, salidas
     adelantadas; las inasistencias compensables van al final.
-  · Solo se perdonan atrasos y salidas adelantadas, de cualquier tamaño (también los segundos dentro del margen).
+  · Solo se perdonan atrasos y salidas adelantadas, de cualquier tamaño (también lo que queda dentro de la tolerancia
+    del turno y el motor no marca).
   · El exceso de colación y los permisos no se perdonan nunca.
   · La guía del cuadre perdona por día, como el interruptor, lo que las horas extra no alcanzan a pagar; un día del
     borde se perdona en parte en la cuenta del cuadre; un día con marca del interruptor no se toca.
@@ -45,12 +46,26 @@ def test_lo_compensado_el_mismo_dia_paga_primero_lo_que_no_se_perdona():
     assert c['atraso'] == 25.0 and c['colacion'] == 0.0
 
 
-def test_segundos_dentro_del_margen_son_salida_adelantada():
-    # Héctor 28-09: salió 16:29:20 con salida 16:30; el motor no lo marca, pero el día debe 40 segundos
+def test_lo_que_queda_dentro_de_la_tolerancia_del_turno_es_salida_adelantada():
+    # Turno con Tolerancia Salida Adelantada 1 min: salió 16:29:20 con salida 16:30; el motor no lo marca, pero el día
+    # debe 40 segundos y son salida adelantada
     c = causas_dia(dia('2026-09-28', deuda=0.67, hora_entrada_real='06:57:13', hora_entrada_teorica='07:00',
-                       hora_salida_real='16:29:20', hora_salida_teorica='16:30'))
+                       hora_salida_real='16:29:20', hora_salida_teorica='16:30', tolerancia_salida_turno=1))
     assert abs(c['salida'] - 0.6667) < 0.01 and c['atraso'] == 0.0 and c['salida_marcada'] == 0.0
     assert c['otra'] < 0.01
+
+
+def test_sin_tolerancia_no_hay_minuto_fijo_que_agregue_causas():
+    # Tolerancia 0: el motor marca toda salida antes de la hora; si no la marcó, el cuadre no la inventa
+    c = causas_dia(dia('2026-09-28', deuda=0.67, hora_salida_real='16:29:20', hora_salida_teorica='16:30'))
+    assert c['salida'] == 0.0 and abs(c['otra'] - 0.67) < 0.01
+
+
+def test_lo_que_pasa_la_tolerancia_no_se_toma_como_atraso_sin_marca():
+    # Tolerancia de atraso 2 min y llegó 5 min tarde sin atraso marcado (lo cubrió otra cosa): no se cuenta como atraso
+    c = causas_dia(dia('2026-10-02', deuda=5.0, hora_entrada_real='07:05:00', hora_entrada_teorica='07:00',
+                       tolerancia_atraso_turno=2))
+    assert c['atraso'] == 0.0 and c['otra'] == 5.0
 
 
 def test_un_dia_con_marca_del_interruptor_no_vuelve_a_ofrecer_esa_causa():
@@ -130,11 +145,19 @@ def test_las_horas_extra_pagan_atrasos_por_fecha_y_luego_salidas_lo_que_falta_se
     assert p['total'] == 55.0 and p['por_cuadre'] == 15.0 and p['por_marca'] == 40.0
 
 
-def test_los_segundos_del_margen_se_perdonan_en_el_cuadre_sin_marca():
-    d = dia('2026-09-28', deuda=0.67, hora_salida_real='16:29:20', hora_salida_teorica='16:30')
+def test_lo_que_queda_dentro_de_la_tolerancia_se_perdona_en_el_cuadre_sin_marca():
+    d = dia('2026-09-28', deuda=0.67, hora_salida_real='16:29:20', hora_salida_teorica='16:30', tolerancia_salida_turno=1)
     p = _plan([d], [])
-    assert len(p['dias']) == 1 and p['dias'][0]['tipo'] == 0 and p['dias'][0]['efecto'] == 'segundos'
+    assert len(p['dias']) == 1 and p['dias'][0]['tipo'] == 0 and p['dias'][0]['efecto'] == 'tolerancia'
     assert abs(p['por_cuadre'] - 0.6667) < 0.01
+
+
+def test_con_tolerancia_cero_los_segundos_marcados_se_perdonan_con_la_marca():
+    # Con tolerancia 0 el motor marca los 40 s como salida adelantada: la guía los perdona con la marca y el día pasa a OK
+    d = dia('2026-09-28', deuda=0.67, sal=0.67, hora_salida_real='16:29:20', hora_salida_teorica='16:30')
+    p = _plan([d], [])
+    assert p['dias'][0]['tipo'] == 1 and p['dias'][0]['efecto'] == 'pasa_a_ok'
+    assert abs(p['por_marca'] - 0.67) < 0.01 and p['por_cuadre'] == 0.0
 
 
 def test_un_dia_con_marca_del_interruptor_no_se_pisa():
