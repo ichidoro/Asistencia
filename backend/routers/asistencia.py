@@ -14,6 +14,7 @@ from loguru import logger
 from backend.services.gemini_vision_service import gemini_vision_service
 from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
+from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
 from backend.services.turno_service import TurnoService
@@ -3694,6 +3695,62 @@ async def reasignar_turno_acompanante_180h(
     except Exception as e:
         logger.exception(f"❌ Error en reasignar_turno_acompanante_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
         raise HTTPException(status_code=500, detail=f"Error reasignando turno: {str(e)}")
+
+
+class Libreta180hInasistenciaRequest(BaseModel):
+    empleado_id: int
+    fecha: str
+    observaciones: Optional[str] = None
+
+
+@router.post("/libreta-180h/inasistencia/")
+async def marcar_inasistencia_libreta_180h(
+    payload: Libreta180hInasistenciaRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
+):
+    """
+    Registra la INASISTENCIA de un día de un empleado que se controla con libreta 180h (bolsa de horas): guarda una libreta vacía con la marca
+    de inasistencia y recalcula el día, que queda como INA en Marcaciones. Se deshace con "Borrar registro del día" (DELETE) o guardando la libreta con tramos.
+    """
+    try:
+        repo = service.repository
+        if await repo.check_rango_cerrado(payload.fecha, payload.fecha, payload.empleado_id):
+            raise HTTPException(status_code=403, detail="La fecha se encuentra en un período cerrado.")
+        asignacion = await repo.get_asignacion_vigente(payload.empleado_id, payload.fecha)
+        ajustes = {r['clave']: r['valor'] for r in await repo.db.fetch_all("SELECT clave, valor FROM ajustes")}
+        if not QuantumMatrixEngine.resolve_control_modality(asignacion or {}, payload.fecha, ajustes):
+            raise HTTPException(status_code=400, detail="Este empleado no se controla con libreta 180h ese día.")
+        existente = await repo.get_libreta_180h(payload.empleado_id, payload.fecha)
+        if existente:
+            if int(existente.get('cerrado') or 0) == 1:
+                raise HTTPException(status_code=409, detail="El día está cerrado: la libreta es de solo lectura.")
+            if int(existente.get('minutos_efectivos') or 0) > 0 or int(existente.get('minutos_espera') or 0) > 0 or int(existente.get('minutos_descanso') or 0) > 0:
+                raise HTTPException(status_code=409, detail="El día ya tiene tramos registrados: bórralos antes de marcar la inasistencia.")
+
+        val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
+        nota = (payload.observaciones or '').strip()[:200]
+        await repo.upsert_libreta_180h({
+            'empleado_id': payload.empleado_id, 'fecha': payload.fecha, 'slots_96': [0] * 96,
+            'minutos_conduccion': 0, 'minutos_espera': 0, 'minutos_auxiliares': 0, 'minutos_descanso': 0, 'minutos_efectivos': 0,
+            'cerrado': 0, 'validador_id': val_id, 'observaciones': f"{MARCA_INASISTENCIA_LIBRETA} {nota}".strip(),
+        })
+        res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
+        estado = (res_dia or {}).get('estado') if isinstance(res_dia, dict) else None
+        try:
+            await repo.db.execute(
+                "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+                (current_user.user_id, current_user.username, 'MARCAR_INASISTENCIA_LIBRETA', 'Marcaciones',
+                 f"Inasistencia del {payload.fecha} registrada desde la libreta 180h (empleado {payload.empleado_id}); día resultante: {estado}"))
+        except Exception as aud_err:
+            logger.warning(f"No se pudo registrar auditoría de la inasistencia de libreta: {aud_err}")
+        logger.warning(f"🚫 Inasistencia registrada desde libreta 180h por {current_user.username}: emp={payload.empleado_id} fecha={payload.fecha} -> {estado}")
+        return {"status": "success", "message": "Inasistencia registrada en Marcaciones.", "estado": estado}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error en marcar_inasistencia_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
+        raise HTTPException(status_code=500, detail=f"Error registrando la inasistencia: {str(e)}")
 
 
 @router.delete("/libreta-180h/")

@@ -3138,6 +3138,9 @@ function m180SetBadge(kind) {
     if (kind === 'cerrado') {
         badge.className = 'badge bg-success-subtle text-success-emphasis border border-success px-2 py-1';
         badge.textContent = 'DÍA CERRADO';
+    } else if (kind === 'inasistencia') {
+        badge.className = 'badge bg-danger-subtle text-danger-emphasis border border-danger px-2 py-1';
+        badge.textContent = 'INASISTENCIA';
     } else if (kind === 'borrador') {
         badge.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning px-2 py-1';
         badge.textContent = 'BORRADOR / ABIERTO';
@@ -3222,8 +3225,9 @@ async function proceedToMarcacion180h() {
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
                 // Registros viejos traían "Acompañante del chofer ID n" escrito a mano por el sistema: ya lo dice la tarjeta del chofer.
-                document.getElementById('m180-observaciones').value = (data.observaciones || '').replace(/\s*·?\s*Acompañante del chofer ID \d+/g, '').trim();
-                m180SetBadge(Number(data.cerrado) ? 'cerrado' : 'borrador');
+                const esInasistencia = String(data.observaciones || '').trimStart().startsWith('[INASISTENCIA]');
+                document.getElementById('m180-observaciones').value = (data.observaciones || '').replace('[INASISTENCIA]', '').replace(/\s*·?\s*Acompañante del chofer ID \d+/g, '').trim();
+                m180SetBadge(Number(data.cerrado) ? 'cerrado' : (esInasistencia ? 'inasistencia' : 'borrador'));
                 m180SetLocked(Number(data.cerrado) === 1);
             }
 
@@ -3467,6 +3471,51 @@ window.libreta180hUndo = libreta180hUndo;
 window.limpiarGrilla180h = limpiarGrilla180h;
 window.guardarLibreta180h = guardarLibreta180h;
 window.eliminarRegistroLibretaDia = eliminarRegistroLibretaDia;
+
+// Registra la inasistencia del día en Marcaciones para quien se controla con libreta (bolsa de 180 horas).
+async function marcarInasistenciaLibreta() {
+    const empId = parseInt(document.getElementById('m180-empleado-id').value);
+    const dateStr = document.getElementById('m180-fecha-str').value;
+    const empNombre = document.getElementById('m180-conductor-nombre').textContent || 'el chofer';
+    if (m180_slots.some(v => v > 0)) {
+        Swal.fire({ icon: 'info', title: 'La libreta tiene tramos', text: 'Para marcar la inasistencia el día no debe tener tramos dibujados. Límpialos primero (o usa "Borrar Registro del Día").', confirmButtonColor: '#059669' });
+        return;
+    }
+    const r = await Swal.fire({
+        title: '¿Marcar inasistencia?',
+        html: `Se registrará la <b>inasistencia</b> de <b>${empNombre}</b> el <b>${window.formatFechaDDMMYYYY(dateStr)}</b> en Marcaciones.<br><br><span class="text-muted small">Se puede deshacer con "Borrar Registro del Día".</span>`,
+        icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc2626', cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="bi bi-person-x-fill me-1"></i> Sí, marcar inasistencia', cancelButtonText: 'Cancelar'
+    });
+    if (!r.isConfirmed) return;
+    const btn = document.getElementById('m180-btn-inasistencia');
+    try {
+        if (btn) btn.disabled = true;
+        const resp = await fetch('/api/asistencia/libreta-180h/inasistencia/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getLibretaAuthHeaders() },
+            body: JSON.stringify({ empleado_id: empId, fecha: dateStr, observaciones: (document.getElementById('m180-observaciones').value || '').trim() })
+        });
+        if (!resp.ok) {
+            let errMsg = `Error ${resp.status} al registrar la inasistencia`;
+            try { const d = await resp.json(); if (d.detail) errMsg = d.detail; } catch (_) {}
+            throw new Error(errMsg);
+        }
+        m180_dirty = false;
+        if (typeof showToast === 'function') showToast('Inasistencia registrada en Marcaciones', 'success');
+        const modalEl = document.getElementById('modalMarcacion180h');
+        const modal = modalEl && bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        if (typeof window.reloadSingleEmployeeRow === 'function') await window.reloadSingleEmployeeRow(empId);
+        else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+    } catch (err) {
+        console.error('Error registrando inasistencia de libreta:', err);
+        Swal.fire({ icon: 'error', title: 'No se pudo registrar', text: err.message, confirmButtonColor: '#059669' });
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+window.marcarInasistenciaLibreta = marcarInasistenciaLibreta;
 window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 

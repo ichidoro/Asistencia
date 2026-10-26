@@ -1101,6 +1101,15 @@ class JustificationTensorResolver:
         return min_cubre, min_deuda, obs
 
 
+# Una libreta cuyas observaciones empiezan con esta marca es una INASISTENCIA registrada a mano desde la libreta (botón "Marcar inasistencia"): sin tramos, el motor la
+# resuelve como INASISTENCIA y no como OK con 0 horas. Guardar la libreta normal reemplaza las observaciones y la quita sola; "Borrar registro del día" también.
+MARCA_INASISTENCIA_LIBRETA = '[INASISTENCIA]'
+
+
+def libreta_es_inasistencia(libreta: Optional[Dict[str, Any]]) -> bool:
+    return bool(libreta) and str(libreta.get('observaciones') or '').lstrip().startswith(MARCA_INASISTENCIA_LIBRETA)
+
+
 class LibretaArt25BisResolver:
     """Resolución Art. 25 bis (Libreta Digital 180h) DENTRO del motor."""
 
@@ -1129,7 +1138,7 @@ class LibretaArt25BisResolver:
         h_efec = round(min_efec / 60.0, 2)
         cerrado = _flag(libreta.get('cerrado'))
 
-        return {
+        res = {
             'empleado_id': empleado_id,
             'fecha': fecha,
             'hora_entrada_real': h_ent_lib,
@@ -1165,6 +1174,14 @@ class LibretaArt25BisResolver:
             '_jornada_especial': None,
             '_jornada_adicional': None,
         }
+        if libreta_es_inasistencia(libreta):
+            nota = str(libreta.get('observaciones') or '').lstrip()[len(MARCA_INASISTENCIA_LIBRETA):].strip()
+            res.update({
+                'estado': 'INASISTENCIA', 'horas_trabajadas': 0.0, 'hora_entrada_real': None, 'hora_salida_real': None,
+                'minutos_deuda': float(horas_teoricas or 0.0) * 60.0,
+                'observaciones': 'Inasistencia registrada desde la libreta 180h' + (f': {nota}' if nota else ''),
+            })
+        return res
 
     @staticmethod
     def resolve_sin_libreta(
@@ -1545,7 +1562,7 @@ class QuantumMatrixEngine:
 
         # ── Capa 1: Fuente de tiempo (Libreta Art. 25 bis o Reloj) ──
         if es_modalidad_180h:
-            if libreta_180h:
+            if libreta_180h and not (libreta_es_inasistencia(libreta_180h) and (is_holiday or es_libre_dia)):
                 res = LibretaArt25BisResolver.resolve(empleado_id, fecha, libreta_180h, horas_teo_dia)
             else:
                 res = LibretaArt25BisResolver.resolve_sin_libreta(
