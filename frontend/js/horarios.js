@@ -207,12 +207,18 @@ async function saveTurno() {
             } catch (_) {}
             throw new Error(errMsg);
         }
+        let respuesta = {};
+        try { respuesta = await response.json(); } catch (_) {}
 
         await loadTurnos();
         window._isSavingTurno = true;
         window._hasTurnos = true;
         closeModalHorario(true);
-        showNotification(currentTurnoId ? "Turno actualizado" : "Turno creado", "success");
+        const rec = respuesta && respuesta.recalculo;
+        const avisoRecalculo = (rec && rec.personas > 0)
+            ? ` Se está recalculando el tramo abierto de ${rec.personas} persona${rec.personas === 1 ? '' : 's'}; la grilla se actualiza en unos segundos.`
+            : '';
+        showNotification((currentTurnoId ? "Turno actualizado." : "Turno creado.") + avisoRecalculo, "success");
 
         if (window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
             Swal.fire({

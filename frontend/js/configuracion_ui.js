@@ -1768,8 +1768,12 @@ window.saveAjusteSistema = async function(clave, inputId) {
             const err = await response.json();
             throw new Error(err.detail || "Error al guardar el ajuste");
         }
-
-        showToast(`Ajuste actualizado correctamente`, "success");
+        let respuesta = {};
+        try { respuesta = await response.json(); } catch (_) {}
+        const aviso = (respuesta && respuesta.recalculo)
+            ? ' Se está recalculando el tramo abierto; la grilla se actualiza en unos segundos.'
+            : '';
+        showToast(`Ajuste actualizado correctamente.${aviso}`, "success");
     } catch (e) {
         console.error("Error guardando ajuste:", e);
         showToast(e.message, "error");

@@ -262,7 +262,14 @@ async def update_turno(
     updated = await service.update_turno(turno_id, turno)
     if not updated:
         raise HTTPException(status_code=404, detail="Turno no encontrado")
-    return {"id": turno_id, "message": "Turno actualizado correctamente"}
+    # Los valores del turno cambian el cálculo: se recalcula solo el tramo abierto de sus personas (en segundo plano)
+    from backend.services.recalculo_service import recalcular_por_turno
+    try:
+        recalculo = await recalcular_por_turno(db, turno_id, turno.nombre)
+    except Exception as e:
+        logger.warning(f"[Recálculo] no se pudo programar para el turno {turno_id}: {e}")
+        recalculo = None
+    return {"id": turno_id, "message": "Turno actualizado correctamente", "recalculo": recalculo}
 
 @router.patch("/asignacion/update-date/")
 async def update_assignment_date(

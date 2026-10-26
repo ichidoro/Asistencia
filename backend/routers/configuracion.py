@@ -497,7 +497,16 @@ async def set_ajuste(
     success = await service.set_ajuste(clave, valor)
     if clave == CLAVE_CORTE_LIBRETA:
         logger.warning(f"🗓️ Fecha de corte reloj→libreta 180h cambiada a {valor} por {current_user.username}")
-    return {"success": success, "message": "Ajuste guardado"}
+    # Si el motor usa este ajuste, se recalcula solo el tramo abierto de todas las personas (en segundo plano)
+    recalculo = None
+    if success:
+        from backend.core.database import db as _db
+        from backend.services.recalculo_service import recalcular_por_ajuste
+        try:
+            recalculo = await recalcular_por_ajuste(_db, clave)
+        except Exception as e:
+            logger.warning(f"[Recálculo] no se pudo programar para el ajuste {clave}: {e}")
+    return {"success": success, "message": "Ajuste guardado", "recalculo": recalculo}
 
 # --- NOTIFICACIONES POR AREA ---
 @router.get("/notificaciones_areas/")
