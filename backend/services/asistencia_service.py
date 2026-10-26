@@ -3350,7 +3350,7 @@ class AsistenciaService:
                 hora_termino_permiso, minutos_permisos_detectados,
                 tiene_atraso, tiene_salida_adelantada, tiene_permiso,
                 num_semana_ganadora, marcas_consumidas_ids, deuda_condonada,
-                minutos_espera, justificacion_id, nomenclatura
+                minutos_espera, justificacion_id, nomenclatura, minutos_deuda_bruta
             ) VALUES (
                 ?, ?, ?,
                 ?, ?, ?,
@@ -3363,7 +3363,7 @@ class AsistenciaService:
                 ?, ?,
                 ?, ?, ?,
                 ?, ?, ?,
-                ?, ?, ?
+                ?, ?, ?, ?
             )
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 turno_asignado_id = excluded.turno_asignado_id,
@@ -3399,6 +3399,7 @@ class AsistenciaService:
                 minutos_espera = excluded.minutos_espera,
                 justificacion_id = excluded.justificacion_id,
                 nomenclatura = excluded.nomenclatura,
+                minutos_deuda_bruta = excluded.minutos_deuda_bruta,
                 updated_at = CURRENT_TIMESTAMP
         """
 
@@ -3417,7 +3418,8 @@ class AsistenciaService:
                 a.get('hora_termino_permiso'), a.get('minutos_permisos_detectados', 0),
                 a.get('tiene_atraso', 0), a.get('tiene_salida_adelantada', 0), a.get('tiene_permiso', 0),
                 a.get('num_semana_ganadora', 1), a.get('marcas_consumidas_ids', '[]'), a.get('deuda_condonada', 0),
-                a.get('minutos_espera', 0), a.get('justificacion_id'), a.get('nomenclatura')
+                a.get('minutos_espera', 0), a.get('justificacion_id'), a.get('nomenclatura'),
+                a.get('minutos_deuda_bruta', a.get('minutos_deuda', 0)) or 0
             )
             await db.execute(q_upsert_asis, params_asis)
             dias_replicados += 1

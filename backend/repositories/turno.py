@@ -205,6 +205,8 @@ class TurnoRepository:
             ("minutos_exceso_colacion", "INTEGER DEFAULT 0"),
             ("minutos_colacion_auto", "INTEGER DEFAULT 0"),
             ("minutos_permiso_personal_deuda", "INTEGER DEFAULT 0"),
+            # Deuda del día antes de perdonazos, intercambios y compensaciones (libro mayor de minutos, 25-10-2026)
+            ("minutos_deuda_bruta", "REAL DEFAULT 0"),
             ("hora_salida_colacion", "TEXT"),
             ("hora_entrada_colacion", "TEXT"),
             ("hora_inicio_permiso", "TEXT"),

@@ -1354,6 +1354,9 @@ class AttendanceAdjustmentResolver:
     ) -> Dict[str, Any]:
         prev = int(deuda_condonada_prev or 0)
         flag_calc = 0
+        # Deuda del día ANTES de cualquier perdón, intercambio o compensación: el libro mayor de minutos
+        # (cuadre_service) la necesita para mostrar cuánto se perdonó; después de este método ya no se reconstruye.
+        res['minutos_deuda_bruta'] = float(res.get('minutos_deuda') or 0.0)
 
         # 1. Intercambio de días 1x1
         if intercambio:

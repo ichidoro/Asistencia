@@ -146,7 +146,7 @@ class AsistenciaRepository:
         "jornada_especial_id",
         "fuente_marcacion", "hash_marcacion",
         "minutos_colacion_auto", "tolerancia_aplicada_tipo",
-        "minutos_espera",
+        "minutos_espera", "minutos_deuda_bruta",
     })
 
     async def update_asistencia(self, empleado_id: int, fecha: str, update_data: Dict[str, Any]) -> None:
@@ -219,8 +219,8 @@ class AsistenciaRepository:
                 hora_termino_permiso, minutos_permisos_detectados,
                 tiene_atraso, tiene_salida_adelantada, tiene_permiso,
                 num_semana_ganadora, marcas_consumidas_ids, deuda_condonada,
-                minutos_espera, justificacion_id, nomenclatura
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                minutos_espera, justificacion_id, nomenclatura, minutos_deuda_bruta
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 turno_asignado_id=excluded.turno_asignado_id,
                 hora_entrada_teorica=excluded.hora_entrada_teorica,
@@ -255,9 +255,10 @@ class AsistenciaRepository:
                 minutos_espera=excluded.minutos_espera,
                 justificacion_id=excluded.justificacion_id,
                 nomenclatura=excluded.nomenclatura,
+                minutos_deuda_bruta=excluded.minutos_deuda_bruta,
                 updated_at=datetime('now')
         """
-        
+
         params_list = []
         for d in data_list:
             params = (
@@ -286,6 +287,8 @@ class AsistenciaRepository:
                 d.get('minutos_espera', 0),
                 d.get('justificacion_id'),
                 d.get('nomenclatura'),
+                # Deuda antes del perdón (la fija el motor); si no viene, la deuda final (nada que informar como perdonado)
+                d.get('minutos_deuda_bruta', d.get('minutos_deuda', 0)) or 0,
             )
             params_list.append(params)
 
