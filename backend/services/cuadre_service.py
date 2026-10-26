@@ -175,6 +175,16 @@ def plegar_libro(dias: List[Dict[str, Any]], es_bolsa: bool = False, tolerancia_
     }
 
 
+# Horas extra que nacen de validar una jornada especial (cobertura de turno, día libre, feriado): las decide su propia
+# pantalla y el motor las conserva por su origen. La política del cuadre las cuenta como aprobadas fijas y nunca las reescribe.
+ORIGENES_FIJOS = ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')
+
+
+def marcar_filas_fijas(filas_he: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Copia de las filas con `excepcion = 1` en las que vienen de una jornada especial validada (ORIGENES_FIJOS)."""
+    return [{**r, 'excepcion': 1} if (r.get('origen') or '') in ORIGENES_FIJOS else dict(r) for r in filas_he]
+
+
 def asignar_minutos(filas_he: List[Dict[str, Any]], deuda_a_cubrir: float, politica: str,
                     minutos_a_pagar: Optional[float] = None, aprobadas_fijas: float = 0.0) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
     """
@@ -320,7 +330,7 @@ class CuadreService:
         filas = await self.repo.filas_he(empleado_id, fecha_inicio, fecha_fin)
         # Las filas de horas extra solo valen para días que el cálculo trata como jornada normal
         especiales = {str(d.get('fecha'))[:10] for d in dias if es_dia_especial(d, self._es_bolsa(info))}
-        filas = [r for r in filas if str(r['fecha'])[:10] not in especiales]
+        filas = marcar_filas_fijas([r for r in filas if str(r['fecha'])[:10] not in especiales])
         return base['deuda_neta'], base['he_jornadas_especiales'], filas
 
     async def aplicar_politica(self, empleado_id: int, fecha_inicio: str, fecha_fin: str,

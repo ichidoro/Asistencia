@@ -246,7 +246,9 @@
             if (!r.ok) throw new Error(j.detail || ('Error ' + r.status));
             estado.data = j; tomarPolitica(j);
             toast('Cuadre guardado: ' + (body.politica === 'CERO' ? 'todo a cero' : 'pagar horas extra'), 'success');
-            render();
+            // Orden del dueño (25-10-2026): al confirmar, la ventana se cierra y la grilla muestra el resultado
+            const mEl = document.getElementById('modalCuadre');
+            if (mEl) { const m = bootstrap.Modal.getInstance(mEl); if (m) m.hide(); }
             if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData({ silent: true });
         } catch (e) {
             toast('No se pudo guardar el cuadre: ' + e.message, 'danger');

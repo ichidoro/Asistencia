@@ -110,3 +110,17 @@ def test_con_politica_la_aprobacion_parcial_no_es_hallazgo():
     dias = [dia('2026-10-05', deuda=240.37), dia('2026-10-23', he=119.98, estado_he='APROBADO', aut=0.47)]
     assert any(h['codigo'] == 'aprobacion_parcial' for h in plegar_libro(dias)['hallazgos'])
     assert not any(h['codigo'] == 'aprobacion_parcial' for h in plegar_libro(dias, hay_politica=True)['hallazgos'])
+
+
+def test_la_cobertura_de_turno_no_la_reescribe_la_politica():
+    """Una cobertura de turno validada como horas extra (origen COBERTURA_TURNO) cuenta como aprobada fija:
+    cubre deuda primero y no aparece en el reparto, así la política nunca cambia su estado ni su origen."""
+    from backend.services.cuadre_service import marcar_filas_fijas
+    filas = marcar_filas_fijas([
+        {'fecha': '2026-10-02', 'minutos_bruto': 291.0, 'minutos_autorizados': 291.0, 'estado': 'APROBADO', 'origen': 'COBERTURA_TURNO', 'excepcion': 0},
+        {'fecha': '2026-10-13', 'minutos_bruto': 60.0, 'minutos_autorizados': 0, 'estado': 'PENDIENTE', 'origen': 'SISTEMA', 'excepcion': 0},
+    ])
+    reparto, resumen = asignar_minutos(filas, 100.0, 'CERO')
+    assert [r['fecha'] for r in reparto] == ['2026-10-13']
+    assert reparto[0]['estado'] == 'RECHAZADO' and reparto[0]['minutos_autorizados'] == 0.0
+    assert resumen['cubierto'] == 100.0 and resumen['pendiente'] == 0 and resumen['a_pagar'] == 191.0

@@ -113,7 +113,8 @@ class CuadreRepository:
         for r in reparto:
             await self.db.execute(
                 "UPDATE horas_extras SET estado = ?, minutos_autorizados = ?, origen = 'POLITICA', updated_at = datetime('now') "
-                "WHERE empleado_id = ? AND fecha = ? AND COALESCE(excepcion, 0) = 0",
+                "WHERE empleado_id = ? AND fecha = ? AND COALESCE(excepcion, 0) = 0 "
+                "AND COALESCE(origen, '') NOT IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')",
                 (r['estado'], float(r['minutos_autorizados']), empleado_id, r['fecha']))
             n += 1
         return n
