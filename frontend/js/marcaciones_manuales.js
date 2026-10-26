@@ -3528,23 +3528,30 @@ const M180_GPS_COLOR = { 0: '#e5e7eb', 1: '#16a34a', 2: '#f59e0b' };
 
 function m180GpsReset() {
     m180_gps = null;
-    const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
-    const c = document.getElementById('m180-gps-chip'); if (c) c.classList.add('d-none');
+    const r = document.getElementById('m180-gps-resultado');
+    if (r) r.innerHTML = '<div class="text-muted small">Elige la patente del camión que usó el chofer y pulsa <b>Ver recorrido</b>: se compara su día con los tramos de la libreta.</div>';
+    const k = document.getElementById('m180-gps-kpis'); if (k) k.innerHTML = '';
     const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = '';
+    m180GpsCargarVehiculos();
 }
 
-async function m180GpsAbrir(det) {
-    if (!det.open || m180_gps_vehiculos) return;
+// Patentes de la plataforma de GPS (una vez por sesión); recuerda la última elegida para ese empleado.
+async function m180GpsCargarVehiculos() {
     const sel = document.getElementById('m180-gps-patente');
+    if (!sel) return;
+    const elegir = () => {
+        const emp = document.getElementById('m180-empleado-id').value;
+        let guardada = ''; try { guardada = localStorage.getItem('asistencia_gps_patente:' + emp) || ''; } catch (_) {}
+        sel.value = guardada && (m180_gps_vehiculos || []).some(v => v.id === guardada) ? guardada : '';
+    };
+    if (m180_gps_vehiculos) { elegir(); return; }
     try {
         const resp = await fetch('/api/asistencia/libreta-180h/gps/vehiculos/', { headers: getLibretaAuthHeaders() });
         const d = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
         m180_gps_vehiculos = d.vehiculos || [];
         sel.innerHTML = '<option value="">Elegir patente…</option>' + m180_gps_vehiculos.map(v => `<option value="${v.id}">${String(v.patente).replace(/[<>&"]/g, '')}</option>`).join('');
-        const emp = document.getElementById('m180-empleado-id').value;
-        let guardada = ''; try { guardada = localStorage.getItem('asistencia_gps_patente:' + emp) || ''; } catch (_) {}
-        if (guardada && m180_gps_vehiculos.some(v => v.id === guardada)) sel.value = guardada;
+        elegir();
     } catch (err) {
         sel.innerHTML = '<option value="">No disponible</option>';
         const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = err.message;
@@ -3576,12 +3583,24 @@ function m180GpsHora(i) { return String(Math.floor(i / 4)).padStart(2, '0') + ':
 function m180GpsSeg(hms) { const p = String(hms || '').split(':').map(Number); return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0); }
 function m180GpsEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+function m180GpsHM(min) { min = Math.round(Math.abs(min)); return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`; }
+
+// Tarjeta de mini KPI con el mismo estilo del resumen de la libreta
+function m180GpsKpi(titulo, valor, sub, color, extra) {
+    return `<div class="col-6 col-lg"><div class="p-2 px-3 rounded-3 border bg-white h-100" style="border-left:4px solid ${color} !important;">
+        <div class="text-muted text-uppercase fw-semibold" style="font-size:0.625rem;letter-spacing:0.5px;">${titulo}</div>
+        <div class="fw-bold font-monospace" style="font-size:1.25rem;line-height:1.25;color:${color};">${valor}</div>
+        ${extra || ''}<div class="text-muted" style="font-size:0.7rem;">${sub}</div></div></div>`;
+}
+
 function m180GpsPintar() {
     const host = document.getElementById('m180-gps-resultado');
+    const kpis = document.getElementById('m180-gps-kpis');
     if (!host || !m180_gps) return;
     const g = m180_gps;
     const patente = m180GpsEsc(g.vehiculo && g.vehiculo.patente);
     if (!g.hay_datos) {
+        if (kpis) kpis.innerHTML = '';
         host.innerHTML = `<div class="alert alert-secondary py-2 small mb-0">${g.todo_el_dia_en_planta ? 'El camión estuvo todo el día dentro de la planta.' : 'El GPS no tiene datos de ' + patente + ' en este día.'}</div>`;
         return;
     }
@@ -3599,14 +3618,8 @@ function m180GpsPintar() {
         if (marca[i]) fallan++;
     }
     const pct = juzgados ? Math.round(((juzgados - fallan) / juzgados) * 100) : null;
-    const chip = document.getElementById('m180-gps-chip');
-    if (chip) {
-        chip.classList.remove('d-none');
-        chip.className = 'badge ms-2 ' + (pct == null ? 'bg-secondary' : pct >= 90 ? 'bg-success' : pct >= 70 ? 'bg-warning text-dark' : 'bg-danger');
-        chip.textContent = pct == null ? 'sin tramos para comparar' : `${pct}% calza`;
-    }
+    const colPct = pct == null ? '#6b7280' : pct >= 90 ? '#16a34a' : pct >= 70 ? '#d97706' : '#dc2626';
     const TXT = { cond_detenido: 'Libreta: conducción · GPS: detenido', espera_mov: 'Libreta: espera/descanso · GPS: en movimiento', sin_libreta_mov: 'Libreta: sin registrar · GPS: en movimiento' };
-    // Rangos seguidos con la misma diferencia
     const rangos = [];
     for (let i = 0; i < 96;) {
         if (!marca[i]) { i++; continue; }
@@ -3618,31 +3631,53 @@ function m180GpsPintar() {
     const barraGps = g.slots_gps.map((c, i) => `<div title="${m180GpsHora(i)}" style="flex:1;background:${M180_GPS_COLOR[c]};${marca[i] ? 'outline:2px solid #dc2626;outline-offset:-2px;' : ''}"></div>`).join('');
     const regla = [0, 3, 6, 9, 12, 15, 18, 21].map(h => `<span style="flex:1;font-size:.65rem;color:#6b7280">${String(h).padStart(2, '0')}h</span>`).join('');
     const minCondLib = sl.filter(v => v === 1).length * 15;
+    const difCond = g.min_mov_gps - minCondLib;
     // Paradas del GPS contra lo que la libreta tenía en ese momento
+    let paradasMin = 0, paradasCalzan = 0;
     const filasParadas = (g.paradas || []).map(p => {
         const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
         const m = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
         for (let i = 0; i < 96; i++) { const ov = Math.min(fin, (i + 1) * 900) - Math.max(ini, i * 900); if (ov > 0) m[sl[i] || 0] += ov / 60; }
         const total = Object.values(m).reduce((x, y) => x + y, 0) || 1;
+        paradasMin += p.min;
         let badge;
         if (m[1] / total >= 0.5) badge = `<span class="badge bg-danger">libreta: conducción</span>`;
         else if (m[0] / total >= 0.5) badge = `<span class="badge bg-warning text-dark">libreta: sin registrar</span>`;
-        else badge = `<span class="badge bg-success">calza</span>`;
+        else { badge = `<span class="badge bg-success">calza</span>`; paradasCalzan++; }
         const det = [m[2] ? `${Math.round(m[2])} min espera` : '', m[4] ? `${Math.round(m[4])} min descanso` : '', m[3] ? `${Math.round(m[3])} min aux.` : '', m[1] ? `${Math.round(m[1])} min conducción` : '', m[0] ? `${Math.round(m[0])} min sin registrar` : ''].filter(Boolean).join(' · ');
         return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsc(p.lugar) || '—'}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
     }).join('');
+    const nPar = (g.paradas || []).length;
     const r = g.resumen || {};
+    // Primer y último tramo con libreta
+    const idxLib = sl.map((v, i) => v ? i : -1).filter(i => i >= 0);
+    const libIni = idxLib.length ? m180GpsHora(idxLib[0]) : '—', libFin = idxLib.length ? m180GpsHora(idxLib[idxLib.length - 1] + 1) : '—';
+
+    if (kpis) {
+        kpis.innerHTML =
+            m180GpsKpi('Coincidencia', pct == null ? '—' : pct + '%', pct == null ? 'sin tramos para comparar' : `${juzgados - fallan} de ${juzgados} tramos calzan`, colPct,
+                `<div class="progress my-1" style="height:5px;"><div class="progress-bar" style="width:${pct || 0}%;background:${colPct};"></div></div>`) +
+            m180GpsKpi('Conducción', m180GpsHM(g.min_mov_gps), `GPS · libreta ${m180GpsHM(minCondLib)} (${difCond === 0 ? 'igual' : (difCond > 0 ? '+' : '−') + m180GpsHM(difCond)})`, '#2563eb') +
+            m180GpsKpi('Paradas', String(nPar), nPar ? `${m180GpsHM(paradasMin)} detenido · ${paradasCalzan} de ${nPar} calzan` : 'desde 5 min, fuera de planta', '#d97706') +
+            m180GpsKpi('Recorrido', r.km != null ? `${r.km} km` : '—', r.velMax != null ? `vel. máx. ${r.velMax} km/h` : '', '#0f766e') +
+            m180GpsKpi('No calzan', m180GpsHM(fallan * 15), `${rangos.length} ${rangos.length === 1 ? 'tramo' : 'tramos'}`, fallan ? '#dc2626' : '#16a34a') +
+            m180GpsKpi('Jornada', r.primero ? `${m180GpsEsc(r.primero).slice(0, 5)}–${m180GpsEsc(r.ultimo).slice(0, 5)}` : '—', `GPS · libreta ${libIni}–${libFin}`, '#7c3aed');
+    }
     host.innerHTML = `
-        <div class="small text-muted mb-2">${patente} · ${r.km != null ? r.km + ' km' : ''} · ${g.min_mov_gps} min en movimiento (GPS) vs ${minCondLib} min de conducción en la libreta${r.primero ? ` · primer reporte ${m180GpsEsc(r.primero).slice(0, 5)}, último ${m180GpsEsc(r.ultimo).slice(0, 5)}` : ''}</div>
-        <div class="mb-1 small fw-semibold">Libreta</div><div class="d-flex" style="height:20px;border-radius:4px;overflow:hidden">${barraLib}</div>
-        <div class="mt-2 mb-1 small fw-semibold">GPS <span class="fw-normal text-muted">(verde: en movimiento · naranja: detenido · gris: sin dato o en planta · rojo: no calza)</span></div>
-        <div class="d-flex" style="height:20px;border-radius:4px;overflow:hidden">${barraGps}</div>
+        <div class="d-flex align-items-center gap-2 mb-1"><span class="small fw-semibold">Libreta</span></div>
+        <div class="d-flex" style="height:22px;border-radius:5px;overflow:hidden">${barraLib}</div>
+        <div class="d-flex align-items-center gap-2 mt-2 mb-1 flex-wrap"><span class="small fw-semibold">GPS · ${patente}</span>
+            <span class="text-muted" style="font-size:.7rem"><i class="bi bi-square-fill" style="color:#16a34a"></i> en movimiento &nbsp; <i class="bi bi-square-fill" style="color:#f59e0b"></i> detenido &nbsp; <i class="bi bi-square-fill" style="color:#d1d5db"></i> sin dato o en planta &nbsp; <i class="bi bi-square" style="color:#dc2626"></i> no calza</span></div>
+        <div class="d-flex" style="height:22px;border-radius:5px;overflow:hidden">${barraGps}</div>
         <div class="d-flex mt-1">${regla}</div>
-        ${rangos.length ? `<div class="mt-3"><div class="small fw-semibold mb-1">Tramos que no calzan (${rangos.length})</div><ul class="small mb-0 ps-3">${rangos.map(x => `<li>${m180GpsHora(x.de)}–${m180GpsHora(x.a)} (${(x.a - x.de) * 15} min): ${TXT[x.tipo]}</li>`).join('')}</ul></div>` : '<div class="alert alert-success py-2 small mt-3 mb-0">Todos los tramos con GPS calzan con la libreta.</div>'}
-        <div class="mt-3"><div class="small fw-semibold mb-1">Paradas del camión (${(g.paradas || []).length}, desde 5 min)</div>
-        ${filasParadas ? `<div class="table-responsive"><table class="table table-sm align-middle mb-0" style="font-size:.8rem"><thead><tr><th>Hora</th><th class="text-end">Duración</th><th>Lugar</th><th>Libreta en ese tramo</th></tr></thead><tbody>${filasParadas}</tbody></table></div>` : '<div class="text-muted small">Sin paradas de 5 minutos o más fuera de la planta.</div>'}</div>`;
+        <div class="row g-3 mt-1">
+            <div class="col-lg-5"><div class="small fw-semibold mb-1">Tramos que no calzan</div>
+                ${rangos.length ? `<ul class="small mb-0 ps-3">${rangos.map(x => `<li>${m180GpsHora(x.de)}–${m180GpsHora(x.a)} (${(x.a - x.de) * 15} min): ${TXT[x.tipo]}</li>`).join('')}</ul>` : '<div class="alert alert-success py-2 small mb-0">Todos los tramos con GPS calzan con la libreta.</div>'}</div>
+            <div class="col-lg-7"><div class="small fw-semibold mb-1">Paradas del camión (${nPar}, desde 5 min)</div>
+                ${filasParadas ? `<div class="table-responsive" style="max-height:260px;overflow:auto"><table class="table table-sm align-middle mb-0" style="font-size:.8rem"><thead><tr><th>Hora</th><th class="text-end">Duración</th><th>Lugar</th><th>Libreta en ese tramo</th></tr></thead><tbody>${filasParadas}</tbody></table></div>` : '<div class="text-muted small">Sin paradas de 5 minutos o más fuera de la planta.</div>'}</div>
+        </div>`;
 }
-window.m180GpsAbrir = m180GpsAbrir; window.m180GpsVer = m180GpsVer; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset;
+window.m180GpsVer = m180GpsVer; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset; window.m180GpsCargarVehiculos = m180GpsCargarVehiculos;
 window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 
