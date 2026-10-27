@@ -82,12 +82,10 @@ async def _recalcular_periodo_activo():
         asist_repo = AsistenciaRepository(db)
         asist_service = AsistenciaService(asist_repo)
 
+        # Solo el período abierto: un día cerrado nunca se vuelve a calcular (orden del dueño, 27-10-2026; antes se
+        # recalculaba y guardaba el último día cerrado en cada arranque y cambiaba días ya pagados). El turno de noche
+        # que cruza al primer día abierto no lo necesita: ese día hereda las marcas que el día cerrado ya consumió.
         dias_a_recalc = []
-        # Incluir el último día de cierre (día puente) para que turnos nocturnos que cruzan la medianoche
-        # sincronicen y propaguen sus marcas consumidas hacia el primer día del período abierto.
-        if ultimo_cierre and ultimo_cierre.get("fecha_fin"):
-            dias_a_recalc.append(ultimo_cierre["fecha_fin"])
-
         cur = fecha_inicio
         while cur <= fecha_fin:
             f_s = cur.strftime("%Y-%m-%d")

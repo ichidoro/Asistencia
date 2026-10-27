@@ -35,3 +35,11 @@ def test_un_turno_sin_personas_no_lanza_nada(monkeypatch):
     monkeypatch.setattr(rs.asyncio, "create_task", lambda c: lanzados.append(c))
     rs.lanzar([], "prueba")
     assert lanzados == []
+
+
+def test_el_arranque_no_vuelve_a_calcular_el_ultimo_dia_cerrado():
+    # Orden del dueño (27-10-2026): un día cerrado nunca se recalcula; antes el arranque guardaba de nuevo el último día
+    # cerrado (25-09) en cada despliegue y cambiaba días ya pagados.
+    from pathlib import Path
+    eventos = (Path(__file__).resolve().parents[1] / "core" / "events.py").read_text(encoding="utf-8")
+    assert 'dias_a_recalc.append(ultimo_cierre["fecha_fin"])' not in eventos
