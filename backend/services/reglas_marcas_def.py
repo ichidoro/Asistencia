@@ -154,6 +154,19 @@ def validar_regla(regla: dict) -> str:
     return ''
 
 
+# Orden de los grupos en la pantalla. El número de cada regla («Regla N») sale de este orden
+# (grupo y, dentro del grupo, la más antigua primero) la primera vez y queda guardado en la base:
+# una regla nueva toma el número siguiente y las que ya tienen número no se mueven.
+ORDEN_GRUPOS = ('Bien marcadas', 'Se repite un tipo', 'Falta una marca', 'Una sola marca')
+
+
+def numerar_sin_numero(reglas, ultimo: int = 0) -> dict:
+    """{id: número} para las reglas que todavía no tienen número, a continuación de `ultimo`."""
+    pendientes = sorted((r for r in reglas if not r.get('numero')),
+                        key=lambda r: (ORDEN_GRUPOS.index(grupo_de_secuencia(r['secuencia'])), r['id']))
+    return {r['id']: ultimo + i for i, r in enumerate(pendientes, 1)}
+
+
 def grupo_de_secuencia(sec: str) -> str:
     """Familia de una secuencia, para agrupar en la pantalla."""
     if len(sec) == 1:

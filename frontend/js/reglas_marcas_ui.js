@@ -330,23 +330,24 @@ const ReglasMarcasModule = (() => {
         const sum = $('rm-lista-sum');
         if (sum) sum.innerHTML = '<span class="d-inline-flex align-items-center flex-wrap gap-2" style="vertical-align:middle;">'
             + '<span class="fw-semibold">Secuencia elegida</span>'
-            + (actual ? '<span class="rmx-fila">' + chipsSecuencia(actual.secuencia, false) + '</span>' : '<span class="text-muted">ninguna</span>')
+            + (actual ? (actual.numero ? '<span class="fw-semibold">Regla ' + actual.numero + '</span>' : '') + '<span class="rmx-fila">' + chipsSecuencia(actual.secuencia, false) + '</span>' : '<span class="text-muted">ninguna</span>')
             + '<span class="text-muted" style="font-size:.82rem;">· cambiar (' + data.reglas.length + ' secuencias)</span></span>';
         let filas = '';
         GRUPOS.forEach(g => {
             const grupo = data.reglas.filter(r => r.grupo === g);
             if (!grupo.length) return;
-            filas += '<tr><td colspan="3" class="text-muted border-0 pt-2 pb-1" style="font-size:.74rem;font-weight:600;">' + esc(g) + '</td></tr>';
+            filas += '<tr><td colspan="4" class="text-muted border-0 pt-2 pb-1" style="font-size:.74rem;font-weight:600;">' + esc(g) + '</td></tr>';
             grupo.forEach(r => {
                 const sel = r.id === selId;
                 filas += '<tr data-rm-id="' + r.id + '" class="' + (sel ? 'rmx-sel' : '') + '" style="cursor:pointer;">'
+                    + '<td class="text-nowrap fw-semibold" style="font-size:.8rem;">' + (r.numero ? 'Regla ' + r.numero : '') + '</td>'
                     + '<td><span class="rmx-fila">' + chipsSecuencia(r.secuencia, false) + '</span></td>'
                     + '<td class="text-end text-nowrap" style="font-size:.78rem;"><strong>' + Number(r.dias_abiertos).toLocaleString('es-CL') + '</strong><div class="text-muted" style="font-size:.68rem;">' + Number(r.dias).toLocaleString('es-CL') + ' en total</div></td>'
                     + '<td class="text-center">' + (r.activa ? '<i class="bi bi-check-circle-fill text-success" title="Encendida: el cálculo la usa"></i>' : '<span class="text-muted" title="Apagada: el cálculo no la usa">—</span>') + '</td></tr>';
             });
         });
         el.innerHTML = '<div class="table-responsive"><table class="table table-sm table-hover mb-0 rmx-lista">'
-            + '<thead><tr class="text-muted" style="font-size:.68rem;"><th class="fw-semibold">SECUENCIA</th><th class="fw-semibold text-end">DÍAS EN EL TRAMO ABIERTO</th><th class="fw-semibold text-center">ENCENDIDA</th></tr></thead>'
+            + '<thead><tr class="text-muted" style="font-size:.68rem;"><th class="fw-semibold">N.º</th><th class="fw-semibold">SECUENCIA</th><th class="fw-semibold text-end">DÍAS EN EL TRAMO ABIERTO</th><th class="fw-semibold text-center">ENCENDIDA</th></tr></thead>'
             + '<tbody>' + filas + '</tbody></table></div>';
         el.querySelectorAll('[data-rm-id]').forEach(b => b.addEventListener('click', () => {
             const nuevoId = parseInt(b.dataset.rmId, 10);
@@ -601,7 +602,7 @@ const ReglasMarcasModule = (() => {
 
         const cabecera = '<header class="rmx-card p-3 d-flex flex-column gap-3">'
             + '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div class="d-flex flex-column gap-2">'
-            + '<div class="rmx-kicker">DÍAS CON ' + n + ' ' + (n === 1 ? 'MARCA' : 'MARCAS') + ' · ' + esc((r.grupo || '').toUpperCase()) + '</div>'
+            + '<div class="rmx-kicker">' + (r.numero ? 'REGLA ' + r.numero + ' · ' : '') + 'DÍAS CON ' + n + ' ' + (n === 1 ? 'MARCA' : 'MARCAS') + ' · ' + esc((r.grupo || '').toUpperCase()) + '</div>'
             + '<div class="d-flex align-items-center flex-wrap" style="gap:6px 0;">' + chipsSecuencia(s, true) + '</div></div>'
             + '<span class="rmx-pill ' + (r.activa ? 'rmx-on' : 'rmx-off') + '">' + (r.activa ? 'Encendida · el cálculo la usa' : 'Apagada · el cálculo no la usa') + '</span></div>'
             + '<div class="rmx-stats"><div class="rmx-stat"><b>' + Number(r.dias_abiertos).toLocaleString('es-CL') + '</b><span>días así en el tramo abierto</span></div>'
@@ -893,7 +894,7 @@ const ReglasMarcasModule = (() => {
             Object.assign(r, body.regla, { dias: r.dias, dias_abiertos: r.dias_abiertos, grupo: r.grupo });
             r.avisa_fuera_de_ciclo = r.avisa_fuera_de_ciclo ? 1 : 0;
             r._guardada = _fotoRegla(r);
-            toast('Regla ' + palabras(r.secuencia) + ' guardada.');
+            toast('Regla ' + (r.numero ? r.numero + ' (' + palabras(r.secuencia) + ')' : palabras(r.secuencia)) + ' guardada.');
             renderLista(); renderEditor();
         } catch (e) {
             toast('No se pudo guardar la regla: sin conexión.', 'danger');

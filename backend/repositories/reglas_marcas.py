@@ -17,7 +17,7 @@ from loguru import logger
 
 from backend.core.database import Database
 from backend.services.reglas_marcas_def import (
-    MARCA_REVISION_REGLA, firma_marcas, secuencia_en_revision, validar_regla,
+    MARCA_REVISION_REGLA, firma_marcas, numerar_sin_numero, secuencia_en_revision, validar_regla,
 )
 
 CLAVE_REBOTE = 'reglas_marcas_rebote_segundos'
@@ -83,6 +83,19 @@ class ReglasMarcasRepository:
                 await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN eleccion_colacion TEXT DEFAULT 'PARECIDA'")
         except Exception as e:
             logger.warning(f"Columna eleccion_colacion: {e}")
+        # Número de cada regla («Regla N»): se guarda una vez en el orden de la pantalla y no se mueve.
+        try:
+            if 'numero' not in set(await self.db.get_column_names("reglas_marcas")):
+                await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN numero INTEGER")
+            filas = [dict(r) for r in await self.db.fetch_all(
+                "SELECT id, tipo_horario, secuencia, numero FROM reglas_marcas")]
+            for tipo in sorted({f['tipo_horario'] for f in filas}):
+                del_tipo = [f for f in filas if f['tipo_horario'] == tipo]
+                ultimo = max([f['numero'] or 0 for f in del_tipo] + [0])
+                for rid, numero in numerar_sin_numero(del_tipo, ultimo).items():
+                    await self.db.execute("UPDATE reglas_marcas SET numero = ? WHERE id = ?", (numero, rid))
+        except Exception as e:
+            logger.warning(f"Número de las reglas: {e}")
         # Valor inicial de cada ajuste de la pestaña (solo si la fila no existe: lo que
         # se configure desde la pantalla nunca se pisa). El cálculo los lee de `ajustes`.
         try:
@@ -136,7 +149,7 @@ class ReglasMarcasRepository:
 
     async def listar(self, tipo_horario: str) -> List[Dict[str, Any]]:
         rows = await self.db.fetch_all(
-            "SELECT * FROM reglas_marcas WHERE tipo_horario = ? ORDER BY id",
+            "SELECT * FROM reglas_marcas WHERE tipo_horario = ? ORDER BY numero, id",
             (tipo_horario,)
         )
         out = []
@@ -517,13 +530,15 @@ class ReglasMarcasRepository:
             (tipo_horario, secuencia))
         if existente:
             return {'error': 'Esa secuencia ya tiene su regla.'}
+        ultimo = await self.db.fetch_one(
+            "SELECT COALESCE(MAX(numero), 0) AS n FROM reglas_marcas WHERE tipo_horario = ?", (tipo_horario,))
         await self.db.execute(
             """INSERT INTO reglas_marcas (tipo_horario, secuencia, lectura, colacion, accion,
-                                          opciones_revision, activa, nota, updated_by)
-               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
+                                          opciones_revision, activa, nota, updated_by, numero)
+               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
             (tipo_horario, secuencia, nueva['lectura'], nueva['colacion'], nueva['accion'],
              json.dumps(nueva['opciones_revision']),
-             'Creada desde la bandeja de secuencias sin regla.', username))
+             'Creada desde la bandeja de secuencias sin regla.', username, int(ultimo['n']) + 1))
         creado = await self.db.fetch_one(
             "SELECT id FROM reglas_marcas WHERE tipo_horario = ? AND secuencia = ?",
             (tipo_horario, secuencia))
