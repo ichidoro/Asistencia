@@ -52,7 +52,7 @@ async def avisar_marca(emp: dict, tipo: str, hora: str, registrado_por: str) -> 
                 return
             _chat_id = chat
             apodo = APODOS[(_norm(emp.get("apellido_paterno")), _norm(emp.get("nombre")).split()[0])]
-            verbo, icono = ("entró", "🟢") if tipo == "E" else ("salió", "🔴")
+            verbo, icono = ("entró a la planta", "🟢") if tipo == "E" else ("salió de la planta", "🔴")
             hoy = datetime.now(ZoneInfo("America/Santiago")).strftime("%d-%m-%Y")
             msg = f"{icono} <b>{apodo}</b> {verbo} a las <b>{html.escape(hora[:5])}</b>\n📅 {hoy} · 🛂 Portería, Art. 22 · registró {html.escape(str(registrado_por))}"
             async with ses.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat, "text": msg, "parse_mode": "HTML"}) as r:
