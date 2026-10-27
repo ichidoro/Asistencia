@@ -222,7 +222,7 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
     items: List[Dict[str, Any]] = []
     for e in entregas:
         item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
-                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": [], "coincide": [], "esquina": False}
+                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": [], "coincide": [], "esquina": False, "comuna_la": e.get("comunaLat"), "comuna_lo": e.get("comunaLon")}
         # La comuna y la calle se comparan por palabras ("San Francisco Mostazal" calza con "San Francisco de Mostazal")
         comuna = [w for w in _norm(e.get("comuna")).split() if w not in _ARTICULOS]
         ident = _identificadores_calle(e.get("calle"))
@@ -266,11 +266,63 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
     return {"entregas": items, "paradas": por_parada, "resumen": {"total": len(items), **cuenta}}
 
 
+RADIO_COMUNA_KM = 12   # una calle recorrida cuenta como de la comuna de la factura si queda a menos de esto del centro de la comuna
+
+
+def _hm(s: Any) -> str:
+    s = int(s)
+    return f"{s // 3600:02d}:{s % 3600 // 60:02d}"
+
+
+def pasos_por_direccion(entregas: List[Dict[str, Any]], pasos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """¿El camión PASÓ por la calle de cada factura, aunque no se detuviera? Se compara el nombre de la calle de la factura con las calles por las que anduvo
+    (nombres de OpenStreetMap, con la hora). Para no confundir calles de igual nombre de otra ciudad, la calle recorrida debe quedar a menos de RADIO_COMUNA_KM del
+    centro de la comuna de la factura. En una dirección de esquina se dice además si pasó por las dos calles casi seguidas (es decir, por la esquina).
+    Devuelve, por entrega: {"estado": "paso" | "no_paso", "pasadas": [{"nombre", "desde", "hasta"}], "esquina": bool, "coincide": [...]}.
+    «no_paso» = no se detectó: el ajuste del recorrido a las calles puede dejar tramos sin emparejar."""
+    def num(v: Any) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    pn = []
+    for q in pasos:
+        pal = _palabras(q.get("nombre"))
+        pn.append((q, set(pal), {f"{a} {b}" for a, b in zip(pal, pal[1:])}))
+    out: List[Dict[str, Any]] = []
+    for e in entregas:
+        ident = _identificadores_calle(e.get("calle"))
+        res: Dict[str, Any] = {"estado": "no_paso", "pasadas": [], "esquina": False, "coincide": []}
+        hallados = []
+        for q, pal, pares in pn:
+            c = _coincide(ident, pal, pares)
+            if not c:
+                continue
+            if num(e.get("comuna_la")) and num(e.get("comuna_lo")) and num(q.get("la")) and num(q.get("lo")):
+                if _metros(q["la"], q["lo"], e["comuna_la"], e["comuna_lo"]) > RADIO_COMUNA_KM * 1000:
+                    continue
+            hallados.append((q, c))
+        if hallados:
+            res["estado"] = "paso"
+            res["pasadas"] = [{"nombre": q.get("nombre"), "desde": _hm(q["desde"]), "hasta": _hm(q["hasta"])} for q, _ in hallados[:4]]
+            res["coincide"] = sorted({x for _, c in hallados for x in c})
+            if len(ident["pares"]) >= 2:
+                por_par = [[q for q, c in hallados if par in c] for par in ident["pares"]]
+                res["esquina"] = any(abs(a["desde"] - b["desde"]) <= 600 for a in por_par[0] for b in por_par[1]) if all(por_par[:2]) else False
+        out.append(res)
+    return out
+
+
 async def entregas_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
     ruta = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha})
     patente = str((ruta.get("vehiculo") or {}).get("patente") or "")
     paradas = (ruta.get("resumen") or {}).get("paradas") or []
     fac = await _get("/api/reports/camiones-gps-facturas", {"id": vehiculo_id, "patente": patente, "fecha": fecha, "geo": "1"})
     cruce = cruzar_entregas(fac.get("entregas") or [], paradas)
+    # ¿Pasó por la calle de cada factura? (si esta consulta falla, la pantalla simplemente no muestra esa línea)
+    try:
+        calles = await _get("/api/reports/camiones-gps-calles-recorridas", {"id": vehiculo_id, "fecha": fecha})
+        for it, paso in zip(cruce["entregas"], pasos_por_direccion(cruce["entregas"], calles.get("pasos") or [])):
+            it["paso"] = paso
+    except GpsNexacolError:
+        pass
     return {"success": True, "patente": patente, "fecha": fecha, "salio": fac.get("salio") is not False, "desde": fac.get("desde"), "hasta": fac.get("hasta"),
             "total_facturas": fac.get("total") or 0, "umbrales": {"calza_m": CALZA_M, "cerca_m": CERCA_M}, **cruce}

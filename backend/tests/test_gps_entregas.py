@@ -1,4 +1,4 @@
-from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas, tramos_movimiento
+from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas, pasos_por_direccion, tramos_movimiento
 
 PARADAS = [
     {"desde": "09:05:00", "hasta": "09:40:00", "min": 35, "lugar": "Shell, Avenida Bernardo OHiggins, El Trapiche, San Fernando, Región del Libertador, Chile", "la": -34.6000, "lo": -70.9600},
@@ -113,3 +113,38 @@ def test_tramos_de_conduccion_con_su_hora_exacta():
     assert tramos_movimiento(pts) == [[3600, 3800], [4230, 4440]]
     # un hueco de más de 15 min sin reportes no cuenta como conducción
     assert tramos_movimiento([{"s": 1000, "v": 30}, {"s": 3000, "v": 30}]) == []
+
+
+PASOS = [
+    {"nombre": "Ruta 5 Sur", "desde": 24000, "hasta": 28000, "la": -35.0, "lo": -71.2},
+    {"nombre": "Calle 14 Norte", "desde": 31620, "hasta": 31680, "la": -35.42, "lo": -71.65},
+    {"nombre": "6 Oriente", "desde": 31680, "hasta": 33000, "la": -35.42, "lo": -71.65},
+    {"nombre": "Pasaje 16½ Norte B", "desde": 33120, "hasta": 33200, "la": -35.42, "lo": -71.65},
+    {"nombre": "Calle 14 Norte", "desde": 50000, "hasta": 50100, "la": -34.0, "lo": -70.9},   # otra ciudad: 160 km de Talca
+]
+
+
+def paso(calle, comuna="Talca", **k):
+    e = {"cliente": "X", "calle": calle, "comuna": comuna, "comuna_la": -35.4264, "comuna_lo": -71.6554, **k}
+    return pasos_por_direccion([e], PASOS)[0]
+
+
+def test_paso_por_la_calle_y_por_la_esquina():
+    r = paso("14 NORTE 6 ORIENTE 1297")
+    assert r["estado"] == "paso" and r["esquina"] is True and r["coincide"] == ["14 norte", "6 oriente"]
+    assert [x["desde"] for x in r["pasadas"]] == ["08:47", "08:48"]   # la «14 Norte» de otra ciudad no cuenta
+    assert paso("16 1/2 NORTE 1795 B")["estado"] == "paso"
+
+
+def test_no_paso_por_la_calle():
+    r = paso("17 ORIENTE 801")
+    assert r["estado"] == "no_paso" and r["pasadas"] == []
+
+
+def test_una_esquina_con_una_sola_calle_recorrida_no_es_esquina():
+    r = paso("14 NORTE 1 SUR 55")
+    assert r["estado"] == "paso" and r["esquina"] is False
+
+
+def test_la_calle_de_otra_ciudad_no_cuenta():
+    assert pasos_por_direccion([{"calle": "14 NORTE 5", "comuna": "Curicó", "comuna_la": -34.98, "comuna_lo": -71.23}], PASOS)[0]["estado"] == "no_paso"

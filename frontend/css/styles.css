@@ -4516,3 +4516,8 @@ tr:hover .emp-name-cell {
 .m180-block.es-mini b, .m180-block.es-mini i { display: none; }
 .m180-par-real.es-corto i { display: none; }
 .m180-par-real { justify-content: center; padding: 0 3px; }
+
+/* Facturas del camión: ¿pasó por la calle? */
+.m180-ent-paso { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: .84rem; font-weight: 600; }
+.m180-ent-paso.es-si { color: #0e7490; }
+.m180-ent-paso.es-no { color: #64748b; font-weight: 500; }
