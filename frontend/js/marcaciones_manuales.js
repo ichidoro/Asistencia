@@ -3552,7 +3552,9 @@ function m180GpsTabla(g) {
         // Conduciendo: la hora exacta de cada tramo en que el camión andaba (como las paradas, sin redondear a 15 min); si el servidor no los trae, los tramos de 15 min
         if (v === 1) {
             const tramos = Array.isArray(g.tramos_mov) ? g.tramos_mov : (g.slots_gps || []).reduce((a, x, i) => { if (x === 1) { const u = a[a.length - 1]; if (u && u[1] === i * 900) u[1] += 900; else a.push([i * 900, i * 900 + 900]); } return a; }, []);
-            tramos.forEach(([ini, fin]) => {
+            // Los cortes de menos de 5 min entre dos tramos (semáforo, cola) no son una detención: se unen para que no se vea trozado
+            const unidos = tramos.reduce((o, [ini, fin]) => { const u = o[o.length - 1]; if (u && ini - u[1] < 300) u[1] = Math.max(u[1], fin); else o.push([ini, fin]); return o; }, []);
+            unidos.forEach(([ini, fin]) => {
                 const dur = formatMinToHHMM(Math.max(1, Math.round((fin - ini) / 60))), h = x => String(Math.floor(x / 3600)).padStart(2, '0') + ':' + String(Math.floor(x % 3600 / 60)).padStart(2, '0');
                 html += `<div class="m180-block" style="left:${(ini / 86400) * 100}%; width:${((fin - ini) / 86400) * 100}%;" title="${h(ini)} – ${h(fin)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
             });
