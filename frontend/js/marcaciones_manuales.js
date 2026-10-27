@@ -3616,6 +3616,13 @@ function m180GpsAjustarEtiquetas() {
     });
 }
 window.addEventListener('resize', () => { if (m180_gps) m180GpsAjustarEtiquetas(); });
+// Las dos grillas (libreta y GPS) se desplazan juntas para que la misma hora quede siempre en la misma vertical
+(function m180SincronizarDesplazamiento() {
+    const a = document.getElementById('m180-grid-scroll'), b = document.querySelector('#m180-gps-card .m180-grid-container');
+    if (!a || !b) return;
+    let lock = false;
+    [[a, b], [b, a]].forEach(([x, y]) => x.addEventListener('scroll', () => { if (lock) return; lock = true; y.scrollLeft = x.scrollLeft; requestAnimationFrame(() => { lock = false; }); }, { passive: true }));
+})();
 
 // Tarjeta flotante de una parada de la grilla del GPS: la misma información (hora y dirección) que la tabla de paradas
 (function () {
