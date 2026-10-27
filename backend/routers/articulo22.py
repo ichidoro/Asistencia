@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+import asyncio
 from loguru import logger
 
 from backend.core.config import settings
@@ -16,6 +17,7 @@ def _now_chile():
     return datetime.now(tz).replace(tzinfo=None)
 
 from backend.core.database import get_db, Database
+from backend.services.telegram_porteria import avisar_marca
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
 
 router = APIRouter(
@@ -141,7 +143,7 @@ async def marcar_presencia(
 
     # Verificar que sea empleado Art. 22
     emp = await db.fetch_one(
-        "SELECT id, nombre, apellido_paterno, excluido_asistencia FROM empleados WHERE id = ?",
+        "SELECT id, nombre, apellido_paterno, apellido_materno, excluido_asistencia FROM empleados WHERE id = ?",
         (empleado_id,)
     )
     if not emp:
@@ -204,6 +206,7 @@ async def marcar_presencia(
          registrador, observaciones)
     )
 
+    asyncio.create_task(avisar_marca(emp, nuevo_tipo, hora_actual, registrador))
     nombre_emp = f"{emp.get('apellido_paterno', '')} {emp.get('nombre', '')}"
     tipo_label = "ENTRADA" if nuevo_tipo == "E" else "SALIDA"
     logger.info(f"[ART22] {tipo_label}: {nombre_emp} (ID={empleado_id}) a las {hora_actual} - Reg: {registrador}")
