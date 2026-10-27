@@ -3533,6 +3533,7 @@ function m180GpsReset() {
     const k = document.getElementById('m180-gps-kpis'); if (k) k.innerHTML = '';
     const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = '';
     m180GpsTabla(null);
+    m180_gps_ent_tok++; m180_gps_ent = null; m180GpsEntregasPintar();
     m180GpsCargarVehiculos();
 }
 
@@ -3560,6 +3561,11 @@ function m180GpsTabla(g) {
             const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
             html += `<div class="m180-gps-shell" style="left:${(((ini + fin) / 2) / 86400) * 100}%;" title="Detenido en Shell · ${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)} (${p.min} min) · ${m180GpsEsc(p.lugar)}"><i class="bi bi-fuel-pump-fill"></i></div>`;
         });
+        // Entregas que calzan con una parada (o están muy cerca): ícono de caja sobre la detención
+        if (v === 2 && m180_gps_ent && m180_gps_ent.entregas) m180_gps_ent.entregas.filter(e => e.parada && (e.estado === 'calza' || e.estado === 'cercana')).forEach(e => {
+            const ini = m180GpsSeg(e.parada.desde), fin = Math.max(m180GpsSeg(e.parada.hasta), ini + 60), st = M180_ENT_ESTADO[e.estado];
+            html += `<div class="m180-gps-ent" style="left:${(((ini + fin) / 2) / 86400) * 100}%;--c:${st.c}" title="${st.t} · ${m180GpsEsc(e.cliente || '')} · ${e.dist_m} m de la parada"><i class="bi bi-box-seam-fill"></i></div>`;
+        });
         document.getElementById('m180-gps-' + b).innerHTML = html;
         document.getElementById('m180-gps-' + t).textContent = formatMinToHHMM(min || 0);
     });
@@ -3568,6 +3574,80 @@ function m180GpsTabla(g) {
     document.getElementById('m180-gps-card-titulo').textContent = 'GPS · ' + ((g.vehiculo && g.vehiculo.patente) || 'camión');
     card.style.display = '';
 }
+
+// ── Facturas del camión contra sus paradas ────────────────────────────────────────────────────────────────
+// Nexacol calza las facturas con el camión por su patente; el servidor mide cuánto está cada entrega de la parada más cercana del GPS
+// (calza ≤ 150 m · muy cercana ≤ 500 m). Llega después de la ruta, así que la pantalla del GPS no espera por esto.
+let m180_gps_ent = null;
+let m180_gps_ent_tok = 0;
+const M180_ENT_ESTADO = {
+    calza:         { t: 'Calza con una parada', c: '#15803d', bg: '#dcfce7', ic: 'bi-check-circle-fill' },
+    cercana:       { t: 'Parada muy cercana', c: '#b45309', bg: '#fef3c7', ic: 'bi-record-circle-fill' },
+    lejos:         { t: 'Sin parada cerca', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
+    sin_parada:    { t: 'El camión no se detuvo', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
+    aprox:         { t: 'Dirección aproximada', c: '#475569', bg: '#e2e8f0', ic: 'bi-geo-fill' },
+    sin_ubicacion: { t: 'No se pudo ubicar', c: '#475569', bg: '#e2e8f0', ic: 'bi-question-circle-fill' }
+};
+
+async function m180GpsEntregas(vehiculoId, fecha) {
+    const tok = ++m180_gps_ent_tok;
+    m180_gps_ent = { cargando: true };
+    m180GpsEntregasPintar();
+    try {
+        const resp = await fetch(`/api/asistencia/libreta-180h/gps/entregas/?vehiculo_id=${encodeURIComponent(vehiculoId)}&fecha=${encodeURIComponent(fecha)}`, { headers: getLibretaAuthHeaders() });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
+        if (tok !== m180_gps_ent_tok) return;
+        m180_gps_ent = d;
+    } catch (err) {
+        if (tok !== m180_gps_ent_tok) return;
+        m180_gps_ent = { error: err.message };
+    }
+    m180GpsEntregasPintar();
+    m180GpsPintar();   // las paradas y la línea de tiempo señalan a qué entrega corresponde cada una
+}
+
+function m180GpsEntregasPintar() {
+    const card = document.getElementById('m180-gps-entregas');
+    if (!card) return;
+    const d = m180_gps_ent;
+    if (!d) { card.style.display = 'none'; return; }
+    const primera = card.style.display === 'none';
+    card.style.display = '';
+    if (primera) { card.classList.remove('mx-entra'); void card.offsetWidth; card.classList.add('mx-entra'); }
+    const body = document.getElementById('m180-ent-body'), sub = document.getElementById('m180-ent-sub');
+    const esc = m180GpsEsc;
+    if (d.cargando) {
+        sub.textContent = 'Buscando las facturas de esta salida…';
+        body.innerHTML = '<div class="mx-skel" role="status"><span class="visually-hidden">Cargando facturas…</span>' + Array.from({ length: 4 }, (_, n) => `<div class="mx-skel-fila" style="--d:${n * 80}ms"><i></i><i></i><i></i><i></i><i></i><i></i></div>`).join('') + '</div>';
+        return;
+    }
+    if (d.error) { sub.textContent = ''; body.innerHTML = `<div class="alert alert-warning py-2 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i>No se pudieron cargar las facturas del camión: ${esc(d.error)}</div>`; return; }
+    sub.textContent = d.desde ? `Facturas emitidas el ${m180GpsFechaCorta(d.desde)} · calzadas por la patente ${esc(d.patente)}` : `Calzadas por la patente ${esc(d.patente)}`;
+    if (!d.salio) { body.innerHTML = '<div class="alert alert-secondary py-2 small mb-0">El camión casi no se movió este día: no salió a repartir.</div>'; return; }
+    if (!d.entregas.length) { body.innerHTML = `<div class="alert alert-secondary py-2 small mb-0">No hay facturas emitidas para esta salida de ${esc(d.patente)}.</div>`; return; }
+    const r = d.resumen || {}, U = d.umbrales || { calza_m: 150, cerca_m: 500 };
+    const orden = e => (e.parada ? m180GpsSeg(e.parada.desde) : 99999);
+    const entregas = d.entregas.slice().sort((a, b) => orden(a) - orden(b));
+    const kpi = (n, txt, k) => `<span class="m180-ent-kpi" style="--c:${M180_ENT_ESTADO[k].c};--bg:${M180_ENT_ESTADO[k].bg}"><b>${n}</b> ${txt}</span>`;
+    const filas = entregas.map((e, i) => {
+        const st = M180_ENT_ESTADO[e.estado] || M180_ENT_ESTADO.sin_ubicacion;
+        const pct = e.dist_m == null ? 0 : Math.min(e.dist_m, 1000) / 10;
+        const dir = [e.calle, e.comuna].filter(Boolean).map(esc).join(', ');
+        const par = e.parada
+            ? `<div class="m180-ent-hora">${esc(String(e.parada.desde).slice(0, 5))}–${esc(String(e.parada.hasta).slice(0, 5))} · ${e.parada.min} min</div>
+               <div class="m180-ent-barra" title="Distancia entre la dirección de la factura y la parada más cercana"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div>
+               <small>${e.dist_m} m de la parada${e.exacto ? '' : ' · ubicación por comuna'}</small>`
+            : '<div class="m180-ent-hora text-muted">sin parada</div>';
+        return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
+            <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>
+            <div class="m180-ent-main"><div class="m180-ent-cli">${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(f)).join(', ')}</div></div>
+            <div class="m180-ent-par">${par}</div>
+            <span class="m180-ent-badge">${st.t}</span></div>`;
+    }).join('');
+    body.innerHTML = `<div class="m180-ent-kpis">${kpi(r.calza || 0, 'calzan', 'calza')}${kpi(r.cercana || 0, 'muy cercanas', 'cercana')}${kpi((r.lejos || 0) + (r.sin_parada || 0), 'sin parada cerca', 'lejos')}${(r.aprox || 0) + (r.sin_ubicacion || 0) ? kpi((r.aprox || 0) + (r.sin_ubicacion || 0), 'sin juzgar', 'aprox') : ''}<span class="m180-ent-nota">${r.total} ${r.total === 1 ? 'entrega' : 'entregas'} · calza hasta ${U.calza_m} m · muy cercana hasta ${U.cerca_m} m</span></div><div class="m180-ent-lista">${filas}</div>`;
+}
+function m180GpsFechaCorta(iso) { const p = String(iso || '').split('-'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : iso; }
 
 // Patentes de la plataforma de GPS (una vez por sesión); recuerda la última elegida para ese empleado.
 async function m180GpsCargarVehiculos() {
@@ -3607,8 +3687,9 @@ async function m180GpsVer() {
         if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
         m180_gps = d; estado.textContent = '';
         m180GpsPintar();
+        m180GpsEntregas(sel.value, fecha);
     } catch (err) {
-        m180_gps = null; estado.textContent = err.message; m180GpsTabla(null);
+        m180_gps = null; estado.textContent = err.message; m180GpsTabla(null); m180_gps_ent_tok++; m180_gps_ent = null; m180GpsEntregasPintar();
         const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
     } finally { btn.disabled = false; }
 }
@@ -3666,7 +3747,7 @@ function m180GpsPintar() {
     const difCond = g.min_mov_gps - minCondLib;
     // Paradas del GPS contra lo que la libreta tenía en ese momento
     let paradasMin = 0, paradasCalzan = 0;
-    const filasParadas = (g.paradas || []).map(p => {
+    const filasParadas = (g.paradas || []).map((p, pi) => {
         const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
         const m = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
         for (let i = 0; i < 96; i++) { const ov = Math.min(fin, (i + 1) * 900) - Math.max(ini, i * 900); if (ov > 0) m[sl[i] || 0] += ov / 60; }
@@ -3677,7 +3758,7 @@ function m180GpsPintar() {
         else if (m[0] / total >= 0.5) badge = `<span class="badge bg-warning text-dark">libreta: sin registrar</span>`;
         else { badge = `<span class="badge bg-success">calza</span>`; paradasCalzan++; }
         const det = [m[2] ? `${Math.round(m[2])} min espera` : '', m[4] ? `${Math.round(m[4])} min descanso` : '', m[3] ? `${Math.round(m[3])} min aux.` : '', m[1] ? `${Math.round(m[1])} min conducción` : '', m[0] ? `${Math.round(m[0])} min sin registrar` : ''].filter(Boolean).join(' · ');
-        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
+        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}${(m180_gps_ent && m180_gps_ent.paradas && m180_gps_ent.paradas[pi]) ? `<div class="m180-ent-tag"><i class="bi bi-box-seam-fill"></i> Entrega: ${m180GpsEsc(m180_gps_ent.paradas[pi].cliente || '')} · ${m180_gps_ent.paradas[pi].dist_m} m</div>` : ''}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
     }).join('');
     const nPar = (g.paradas || []).length;
     const r = g.resumen || {};

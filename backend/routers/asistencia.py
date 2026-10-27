@@ -3776,6 +3776,19 @@ async def gps_dia_libreta(
         raise HTTPException(status_code=e.status, detail=e.mensaje)
 
 
+@router.get("/libreta-180h/gps/entregas/")
+async def gps_entregas_libreta(
+    vehiculo_id: str = Query(..., pattern=r"^\d{1,6}$"),
+    fecha: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Las facturas que llevaba el camión (calzadas por su patente en Nexacol) contra las paradas del GPS: cuáles calzan, cuáles quedan muy cerca y cuáles lejos."""
+    try:
+        return await gps_nexacol.entregas_dia(vehiculo_id, fecha)
+    except gps_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
+
+
 @router.delete("/libreta-180h/")
 async def delete_libreta_180h(
     empleado_id: int = Query(...),

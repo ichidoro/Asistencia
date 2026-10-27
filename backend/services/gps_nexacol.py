@@ -128,3 +128,59 @@ async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
         "min_mov_gps": calc["min_mov"],
         "min_det_gps": calc["min_det"],
     }
+
+
+# ── Facturas del camión contra sus paradas ────────────────────────────────────────────────────────────
+# Nexacol calza las facturas con el camión SOLO por la patente (las emitidas el día hábil anterior a la salida) y las agrupa por entrega
+# (cliente + dirección de envío, con la coordenada de la dirección). Acá se mide cuánto está cada entrega de la parada más cercana del GPS.
+CALZA_M = 150   # hasta esta distancia la entrega "calza" con una parada
+CERCA_M = 500   # hasta esta, la parada es "muy cercana" (el camión paró en la cuadra de al lado, no en la dirección)
+
+
+def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    dla, dlo = radians(la2 - la1), radians(lo2 - lo1)
+    h = sin(dla / 2) ** 2 + cos(radians(la1)) * cos(radians(la2)) * sin(dlo / 2) ** 2
+    return 2 * 6371000 * asin(sqrt(h))
+
+
+def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Para cada entrega, la parada más cercana y su estado; y para cada parada, la entrega a la que corresponde (si hay una a menos de CERCA_M).
+    Estados: calza · cercana · lejos · sin_parada (el camión no se detuvo) · aprox (dirección ubicada solo por comuna: no se juzga) · sin_ubicacion."""
+    def num(v: Any) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    ps = [(i, p) for i, p in enumerate(paradas) if num(p.get("la")) and num(p.get("lo"))]
+    items: List[Dict[str, Any]] = []
+    for e in entregas:
+        item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
+                "exacto": bool(e.get("exacto")), "estado": "sin_ubicacion", "dist_m": None, "parada": None, "parada_idx": None}
+        if num(e.get("lat")) and num(e.get("lon")):
+            if not ps:
+                item["estado"] = "sin_parada"
+            else:
+                d, i, p = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q in ps), key=lambda t: t[0])
+                item["dist_m"] = round(d)
+                item["parada_idx"] = i
+                item["parada"] = {k: p.get(k) for k in ("desde", "hasta", "min", "lugar")}
+                item["estado"] = "aprox" if not item["exacto"] else "calza" if d <= CALZA_M else "cercana" if d <= CERCA_M else "lejos"
+        items.append(item)
+    # Cada parada con la entrega (de ubicación exacta) más cercana a ella, si queda a menos de CERCA_M
+    por_parada: List[Any] = [None] * len(paradas)
+    for it in items:
+        if it["exacto"] and it["parada_idx"] is not None and it["dist_m"] is not None and it["dist_m"] <= CERCA_M:
+            actual = por_parada[it["parada_idx"]]
+            if actual is None or it["dist_m"] < actual["dist_m"]:
+                por_parada[it["parada_idx"]] = {"cliente": it["cliente"], "dist_m": it["dist_m"], "estado": it["estado"]}
+    cuenta = {k: sum(1 for it in items if it["estado"] == k) for k in ("calza", "cercana", "lejos", "sin_parada", "aprox", "sin_ubicacion")}
+    return {"entregas": items, "paradas": por_parada, "resumen": {"total": len(items), **cuenta}}
+
+
+async def entregas_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
+    ruta = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha})
+    patente = str((ruta.get("vehiculo") or {}).get("patente") or "")
+    paradas = (ruta.get("resumen") or {}).get("paradas") or []
+    fac = await _get("/api/reports/camiones-gps-facturas", {"id": vehiculo_id, "patente": patente, "fecha": fecha, "geo": "1"})
+    cruce = cruzar_entregas(fac.get("entregas") or [], paradas)
+    return {"success": True, "patente": patente, "fecha": fecha, "salio": fac.get("salio") is not False, "desde": fac.get("desde"), "hasta": fac.get("hasta"),
+            "total_facturas": fac.get("total") or 0, "umbrales": {"calza_m": CALZA_M, "cerca_m": CERCA_M}, **cruce}
