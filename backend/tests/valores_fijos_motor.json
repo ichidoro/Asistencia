@@ -127,33 +127,6 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "if any(abs(QuantumPhaseTopology.circular_distance(p_teo, p_l)) <= 180.0 for p_teo in entradas_nocturnas_teo):",
-  "numeros": [
-   "180.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Turnos de noche: una entrada a menos de 3 horas de la entrada nocturna del horario se toma como entrada de noche."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "max_sal_teo = max(salidas_nocturnas_teo) if salidas_nocturnas_teo else 720.0",
-  "numeros": [
-   "720.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Turnos de noche: si el horario no tiene salida nocturna se usa el mediodía."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "if p_l <= (max_sal_teo + 120.0):",
-  "numeros": [
-   "120.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Turnos de noche: se toman las marcas de la madrugada siguiente hasta 2 horas después de la salida nocturna."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
   "linea": "weighted_dist = (d_in * 2.0 + d_out * 1.0) / 3.0",
   "numeros": [
    "1.0",
@@ -397,15 +370,6 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "diurnas = [h for h in entradas_validas if QuantumPhaseTopology.time_to_phase(h) < 1200]",
-  "numeros": [
-   "1200"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Al elegir el ciclo, una entrada antes de las 20:00 se toma como diurna."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
   "linea": "idx_e += 2",
   "numeros": [
    "2"
@@ -421,33 +385,6 @@
   ],
   "tipo": "logica",
   "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "if dur_delta >= 20.0:",
-  "numeros": [
-   "20.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Dos Entradas seguidas cuentan como jornada si están a 20 minutos o más; debería leer el ajuste de marcas repetidas."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "MAX_HE_DIARIAS_DT = 120.0   # 2 horas diarias legales",
-  "numeros": [
-   "120.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Tope legal de 2 horas extra diarias, en un optimizador que la aplicación no usa."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "MAX_HE_SEMANALES_DT = 600.0 # 10 horas semanales legales",
-  "numeros": [
-   "600.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Tope legal de 10 horas extra semanales, en un optimizador que la aplicación no usa."
  },
  {
   "archivo": "backend/services/cuadre_service.py",

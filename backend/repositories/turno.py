@@ -23,7 +23,6 @@ class TurnoRepository:
                     tolerancia_retraso_alerta INTEGER DEFAULT 0,
                     tolerancia_retraso_descuento INTEGER DEFAULT 0,
                     tolerancia_salida_adelantada INTEGER DEFAULT 0,
-                    redondeo_minutos INTEGER DEFAULT 0,
                     descuento_colacion_auto BOOLEAN DEFAULT 0,
                     minutos_colacion_auto INTEGER DEFAULT 0,
                     umbral_horas_colacion REAL DEFAULT 0.0,
@@ -42,7 +41,6 @@ class TurnoRepository:
         # Migraciones tabla turnos: 1 get_column_names() en vez de 10 column_exists() individuales
         cols_turnos = set(await self.db.get_column_names("turnos"))
         migraciones_turnos = [
-            ("minutos_colacion",                    "INTEGER DEFAULT 0"),
             ("anclaje_salida_minutos",              "INTEGER DEFAULT 0"),
             ("hora_limite_ficticia",                "TEXT"),
             ("area",                               "TEXT"),
@@ -65,6 +63,16 @@ class TurnoRepository:
             if col not in cols_turnos:
                 try: await self.db.execute(f"ALTER TABLE turnos ADD COLUMN {col} {defn}")
                 except Exception as e: logger.debug(f"[Migration] {col} en turnos: {e}")
+        # Campos que el cálculo ya no usa (26-10-2026): «minutos_colacion» repetía la colación de «minutos_colacion_auto»
+        # y «redondeo_minutos» se mostraba como redondeo pero el cálculo lo usaba como ventana de doble toque.
+        # Estaban en 0 en todos los turnos: se quitan para que nadie los confunda.
+        for col in ("minutos_colacion", "redondeo_minutos"):
+            if col in cols_turnos:
+                try:
+                    await self.db.execute(f"ALTER TABLE turnos DROP COLUMN {col}")
+                    logger.info(f"[Migration] Columna {col} quitada de turnos (sin uso)")
+                except Exception as e:
+                    logger.warning(f"[Migration] No se pudo quitar {col} de turnos: {e}")
 
         # Migración única (corre solo cuando se crea la columna espera_inasistencia_minutos): las dos esperas del día de
         # hoy estaban escritas en el código (3 horas para cerrar un día sin salida y 30 minutos, o el Rango Demora Salida
@@ -528,18 +536,18 @@ class TurnoRepository:
                 INSERT INTO turnos (
                     nombre, tipo_programacion, meta_horas_semanales,
                     tolerancia_retraso_alerta, tolerancia_retraso_descuento, tolerancia_salida_adelantada,
-                    redondeo_minutos, descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion,
+                    descuento_colacion_auto, minutos_colacion_auto, umbral_horas_colacion,
                     anclaje_entrada_minutos, anclaje_salida_minutos, hora_limite_ficticia,
                     ventana_en_curso_minutos, espera_inasistencia_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
                     activo, permite_viajes_largos, rotacion_dinamica_diaria,
                     meta_horas_espera, modalidad_control
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento, turno.tolerancia_salida_adelantada,
-                turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
+                1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.espera_inasistencia_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,
@@ -1027,7 +1035,7 @@ class TurnoRepository:
                 UPDATE turnos SET
                     nombre=?, tipo_programacion=?, meta_horas_semanales=?,
                     tolerancia_retraso_alerta=?, tolerancia_retraso_descuento=?, tolerancia_salida_adelantada=?,
-                    redondeo_minutos=?, descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?,
+                    descuento_colacion_auto=?, minutos_colacion_auto=?, umbral_horas_colacion=?,
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, espera_inasistencia_minutos=?, tolerancia_exceso_colacion_minutos=?,
                     turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?,
@@ -1037,7 +1045,7 @@ class TurnoRepository:
             params = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
                 turno.tolerancia_retraso_alerta, turno.tolerancia_retraso_descuento, turno.tolerancia_salida_adelantada,
-                turno.redondeo_minutos, 1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
+                1 if turno.descuento_colacion_auto else 0, turno.minutos_colacion_auto, turno.umbral_horas_colacion,
                 turno.anclaje_entrada_minutos, turno.anclaje_salida_minutos, turno.hora_limite_ficticia,
                 turno.ventana_en_curso_minutos, turno.espera_inasistencia_minutos, turno.tolerancia_exceso_colacion_minutos,
                 turno.turno_padre_id, turno.fecha_vigencia,

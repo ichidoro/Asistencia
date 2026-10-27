@@ -17,7 +17,6 @@ Arquitectura Matemática Integral:
    - Clase A: Con Viajes Largos (horas de manejo/descanso reconocidas, marcas terminales consumidas, estado VIAJE_LARGO).
    - Clase B: Sin Viajes Largos (bolsa local presencial, horas efectivas de reloj, deuda diaria = 0).
 6. SpecialWorkdayClassifier: Segregación estricta de JORNADA_ESPECIAL (minutos_extra_bruto = 0).
-7. QUBOEnergyOptimizer: Aplicación de topes legales del Código del Trabajo (2h/día, 10h/semana).
 """
 
 from datetime import datetime, timedelta, date
@@ -76,9 +75,14 @@ def _ajuste_numero(ajustes: Dict[str, Any], clave: str, escala: float = 1.0) -> 
         return None
 
 
+def banda_minutos_de(ajustes: Optional[Dict[str, Any]]) -> float:
+    """Banda de tolerancia de Configuración → Ajustes (`asistencia_emergencia_banda_horas`, en horas) en minutos; sin el ajuste, 0."""
+    return _ajuste_numero(ajustes or {}, 'asistencia_emergencia_banda_horas', escala=60.0) or 0.0
+
+
 def _rebote_defecto(tipo_prog: str) -> float:
-    """Rebote cuando el turno no fija `redondeo_minutos`: en Ciclo Inteligente sale del ajuste
-    de la pestaña Reglas de marcaciones (180 s por defecto); Bolsa Flexible conserva sus 180 s."""
+    """Rebote (doble toque): en Ciclo Inteligente sale del ajuste de la pestaña Reglas de marcaciones
+    (180 s por defecto); Bolsa Flexible conserva sus 180 s."""
     if tipo_prog == 'CICLO_INTELIGENTE' and REGLAS_MARCAS_REBOTE and REGLAS_MARCAS_REBOTE > 0:
         return float(REGLAS_MARCAS_REBOTE)
     return 180.0
@@ -189,7 +193,6 @@ class QuantumPhaseTopology:
         Determina si un turno cruza medianoche basándose estrictamente en su configuración:
         - Flag explícito cruza_medianoche == True.
         - hora_salida < hora_entrada (cuando ambas están definidas).
-        - Si solo se define hora_entrada, si empieza tarde en la noche (>= 20:00).
         """
         if isinstance(hora_sal_teo_str, bool):
             cruza_medianoche = hora_sal_teo_str
@@ -811,6 +814,7 @@ class QuantumShiftWeekMatcher:
         f_asig_ini: Optional[datetime] = None,
         last_matched_sem: Optional[int] = None,
         rotacion_dinamica: bool = False,
+        banda_minutos: float = 0.0,
     ) -> int:
         if total_sems <= 1:
             return 1
@@ -833,45 +837,36 @@ class QuantumShiftWeekMatcher:
         marcas_madrugada_next = []
 
         if tiene_nocturno:
-            entradas_nocturnas_teo = [
-                QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada'))
-                for s_dict in turnos_dict.values()
-                for cfg in [s_dict.get(dia_semana, {})]
-                if cfg and not cfg.get('es_libre') and (
-                    cfg.get('cruza_medianoche') or
-                    (cfg.get('hora_entrada') and cfg.get('hora_salida') and
-                     QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
-                )
-            ]
-            hay_entrada_noche_hoy = False
+            # Los ciclos del horario de ese día, se llamen como se llamen; si cruzan la medianoche lo dice su configuración.
+            ciclos_dia = [cfg for s_dict in turnos_dict.values() for cfg in [s_dict.get(dia_semana, {})]
+                          if cfg and not cfg.get('es_libre') and cfg.get('hora_entrada')]
+
+            def _cruza(cfg):
+                return bool(cfg.get('cruza_medianoche')) or bool(
+                    cfg.get('hora_salida') and QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida'))
+                    < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
+
+            # Una ENTRADA de hoy pertenece al ciclo cuya ENTRADA le queda más cerca; si ese ciclo cruza la medianoche,
+            # su SALIDA viene en la madrugada siguiente.
+            ciclo_noche = None
             for l in marcas_hoy:
-                tipo_l = str(l.get('tipo', '')).strip().lower()
-                if tipo_l in _TIPOS_E:
+                if str(l.get('tipo', '')).strip().lower() in _TIPOS_E:
                     p_l = QuantumPhaseTopology.time_to_phase(str(l.get('fecha_hora', ''))[11:16])
-                    if any(abs(QuantumPhaseTopology.circular_distance(p_teo, p_l)) <= 180.0 for p_teo in entradas_nocturnas_teo):
-                        hay_entrada_noche_hoy = True
+                    cercano = min(ciclos_dia, key=lambda c: abs(QuantumPhaseTopology.circular_distance(
+                        QuantumPhaseTopology.time_to_phase(c.get('hora_entrada')), p_l)))
+                    if _cruza(cercano):
+                        ciclo_noche = cercano
                         break
 
-            if hay_entrada_noche_hoy:
-                # Solo las salidas de los ciclos NOCTURNOS: si se mezclaran las de un ciclo diurno (p. ej. 23:00),
-                # el límite subiría a ~25:00 y entraría al análisis todo el día siguiente, incluida su última salida.
-                salidas_nocturnas_teo = [
-                    QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida'))
-                    for s_dict in turnos_dict.values()
-                    for cfg in [s_dict.get(dia_semana, {})]
-                    if cfg and not cfg.get('es_libre') and cfg.get('hora_salida') and (
-                        cfg.get('cruza_medianoche') or
-                        (cfg.get('hora_entrada') and
-                         QuantumPhaseTopology.time_to_phase(cfg.get('hora_salida')) < QuantumPhaseTopology.time_to_phase(cfg.get('hora_entrada')))
-                    )
-                ]
-                max_sal_teo = max(salidas_nocturnas_teo) if salidas_nocturnas_teo else 720.0
+            # Esa SALIDA se busca hasta la SALIDA del ciclo más su «Rango demora salida» y la banda de tolerancia
+            # (Configuración). Sin SALIDA configurada en el ciclo no se toma ninguna marca del día siguiente.
+            if ciclo_noche is not None and ciclo_noche.get('hora_salida'):
+                limite = (QuantumPhaseTopology.time_to_phase(ciclo_noche.get('hora_salida'))
+                          + float(ciclo_noche.get('anclaje_salida_minutos') or 0) + float(banda_minutos or 0))
                 for l in logs:
                     fh = str(l.get('fecha_hora', ''))
-                    if fh[:10] == next_day_str:
-                        p_l = QuantumPhaseTopology.time_to_phase(fh[11:16])
-                        if p_l <= (max_sal_teo + 120.0):
-                            marcas_madrugada_next.append(l)
+                    if fh[:10] == next_day_str and QuantumPhaseTopology.time_to_phase(fh[11:16]) <= limite:
+                        marcas_madrugada_next.append(l)
 
         marcas_cand = marcas_hoy + marcas_madrugada_next
 
@@ -1772,8 +1767,7 @@ class QuantumMatrixEngine:
         minutos_col_auto = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
         umbral_col = float(t_cfg.get('umbral_horas_colacion', 0.0) or 0.0)
         tolerancia_exceso_col = int(t_cfg.get('tolerancia_exceso_colacion_minutos', 0) or 0)
-        redondeo_min = int(t_cfg.get('redondeo_minutos', 0) or 0)
-        bounce_sec = max(60.0, float(redondeo_min * 60.0)) if redondeo_min > 0 else _rebote_defecto(tipo_prog)
+        bounce_sec = _rebote_defecto(tipo_prog)
 
         hora_limite_ficticia = t_cfg.get('hora_limite_ficticia')
 
@@ -2018,9 +2012,7 @@ class QuantumMatrixEngine:
             if todos_ciclos_dia:
                 entradas_validas = [c.get('hora_entrada') for c in todos_ciclos_dia if c and c.get('hora_entrada') and not c.get('es_libre')]
                 if entradas_validas:
-                    diurnas = [h for h in entradas_validas if QuantumPhaseTopology.time_to_phase(h) < 1200]
-                    cand_in = diurnas if diurnas else entradas_validas
-                    hora_min_ciclos = min(cand_in, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
+                    hora_min_ciclos = min(entradas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
                 salidas_validas = [c.get('hora_salida') for c in todos_ciclos_dia if c and c.get('hora_salida') and not c.get('es_libre')]
                 if salidas_validas:
                     hora_max_ciclos = max(salidas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
@@ -2447,7 +2439,8 @@ class QuantumMatrixEngine:
                                                  f"falta una marca de colación; la jornada se calculó desde la primera Entrada hasta la Salida. ")
                         del items_emparejar[idx_e + 1]
                         continue
-                    if dur_delta >= 20.0:
+                    # A menos de «marcas repetidas» (Reglas de marcaciones) son la misma ENTRADA; a esa distancia o más, la segunda cierra.
+                    if dur_delta >= (repetidas_seg or 0.0) / 60.0:
                         pares_trabajo.append((dt_ini, dt_fin))
                         idx_e += 2
                     else:
@@ -2514,7 +2507,7 @@ class QuantumMatrixEngine:
         minutos_permisos_detectados = 0.0
 
         if pausas_intermedias:
-            t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or t_cfg.get('minutos_colacion', 0) or 0)
+            t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
             # Duración que se busca: la colación del horario; si el horario no tiene, la colación de referencia
             # del ajuste `reglas_marcas_colacion_referencia_minutos` (pestaña Reglas de marcaciones).
             target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else colacion_referencia_min
@@ -2559,7 +2552,7 @@ class QuantumMatrixEngine:
                 res['observaciones'] += f"Permiso intermedio detectado ({int(round(minutos_permisos_detectados))} min). "
 
         # 9. Operador Asimétrico Unidireccional de Colación: Descuento = max(T_pactado, T_real)
-        t_col_pactado = int(t_cfg.get('minutos_colacion_auto', 0) or t_cfg.get('minutos_colacion', 0) or 0)
+        t_col_pactado = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
         horas_netas, min_col_ap, min_exc_col = AutoMealOperator.apply_meal_deduction(
             horas_presenciales_brutas=horas_brutas,
             minutos_colacion_real=minutos_col_real,
@@ -2701,12 +2694,12 @@ class QuantumMatrixEngine:
 
                     if min_anticipo >= max_he_ordinarias_min:
                         # Cobertura previa: llegó horas antes de la entrada programada para cubrir el turno previo
-                        h_ent_je = res['hora_entrada_real'] or '07:00'
-                        h_sal_je = dt_ent_teo.strftime("%H:%M") if dt_ent_teo else '15:00'
+                        h_ent_je = res['hora_entrada_real']
+                        h_sal_je = dt_ent_teo.strftime("%H:%M") if dt_ent_teo else None
                     else:
                         # Cobertura posterior: se quedó horas después de la salida programada para cubrir el turno siguiente
-                        h_ent_je = dt_sal_teo.strftime("%H:%M") if dt_sal_teo else '15:00'
-                        h_sal_je = res['hora_salida_real'] or '23:00'
+                        h_ent_je = dt_sal_teo.strftime("%H:%M") if dt_sal_teo else None
+                        h_sal_je = res['hora_salida_real']
 
                     res['_jornada_especial'] = {
                         'empleado_id': empleado_id,
@@ -2750,31 +2743,3 @@ class QuantumMatrixEngine:
                         res['estado'] = 'OK'
 
         return res
-
-
-class QUBOEnergyOptimizer:
-    """Optimizador global de balances, compensaciones y límites de la Dirección del Trabajo (DT)."""
-
-    MAX_HE_DIARIAS_DT = 120.0   # 2 horas diarias legales
-    MAX_HE_SEMANALES_DT = 600.0 # 10 horas semanales legales
-
-    @classmethod
-    def optimize_weekly_balance(
-        cls,
-        dias_calculados: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Ajusta los balances semanales aplicando topes legales de horas extras ordinarias."""
-        he_acumulada_semana = 0.0
-
-        for dia in dias_calculados:
-            he_bruta = float(dia.get('minutos_extra_bruto', 0.0) or 0.0)
-            he_dia_legal = min(he_bruta, cls.MAX_HE_DIARIAS_DT)
-            
-            if he_acumulada_semana + he_dia_legal > cls.MAX_HE_SEMANALES_DT:
-                he_dia_legal = max(0.0, cls.MAX_HE_SEMANALES_DT - he_acumulada_semana)
-
-            he_acumulada_semana += he_dia_legal
-            dia['minutos_extra_legal_50'] = round(he_dia_legal, 2)
-            dia['minutos_extra_exceso_tope'] = round(max(0.0, he_bruta - he_dia_legal), 2)
-
-        return dias_calculados

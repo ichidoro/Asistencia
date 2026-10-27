@@ -32,6 +32,7 @@ from backend.services.quantum_matrix_engine import (
     QuantumMatrixEngine,
     QuantumShiftWeekMatcher,
     HumanDecisionMerger,
+    banda_minutos_de,
 )
 from asyncio import Lock
 
@@ -236,10 +237,10 @@ class AsistenciaService:
             # Estos campos están en `turnos` no en `turno_dias`, por lo que
             # necesitamos inyectarlos en cada config_dia para que el motor los use.
             CAMPOS_TURNO_PADRE = [
-                'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
+                'descuento_colacion_auto', 'minutos_colacion_auto',
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento', 'tolerancia_salida_adelantada',
-                'redondeo_minutos', 'meta_horas_semanales',
+                'meta_horas_semanales',
                 'tipo_programacion', 'nombre',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'permite_viajes_largos', 'rotacion_dinamica_diaria',
@@ -839,10 +840,10 @@ class AsistenciaService:
             )
             turno_padre_map_rep = {r['id']: dict(r) for r in p_rows}
             CAMPOS_TURNO_PADRE = [
-                'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
+                'descuento_colacion_auto', 'minutos_colacion_auto',
                 'anclaje_entrada_minutos', 'anclaje_salida_minutos',
                 'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento', 'tolerancia_salida_adelantada',
-                'redondeo_minutos', 'meta_horas_semanales',
+                'meta_horas_semanales',
                 'tipo_programacion', 'nombre', 'permite_viajes_largos',
                 'rotacion_secuencial', 'semana_fallback_sin_marcas',
                 'rotacion_dinamica_diaria',
@@ -2109,6 +2110,12 @@ class AsistenciaService:
                     last_matched_sem = last_rec['num_semana_ganadora'] if last_rec else None
 
                 marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
+                if bulk_ctx and 'global_ajustes' in bulk_ctx:
+                    ajustes_banda = bulk_ctx['global_ajustes']
+                else:
+                    fila_banda = await self.repository.db.fetch_one(
+                        "SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_banda_horas'")
+                    ajustes_banda = {'asistencia_emergencia_banda_horas': fila_banda['valor']} if fila_banda else {}
 
                 semana_ganadora = QuantumShiftWeekMatcher.resolve_winner_week(
                     empleado_id=empleado_id,
@@ -2122,6 +2129,7 @@ class AsistenciaService:
                     f_asig_ini=f_asig_ini,
                     last_matched_sem=last_matched_sem,
                     rotacion_dinamica=is_rot_dinamica,
+                    banda_minutos=banda_minutos_de(ajustes_banda),
                 )
 
                 if bulk_ctx:

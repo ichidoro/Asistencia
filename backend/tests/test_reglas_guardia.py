@@ -76,12 +76,13 @@ def test_el_marcador_vive_solo_en_reglas_marcas_def():
 # ── 3. Sin números fijos nuevos en lo parametrizado ──────────────────────────
 
 def test_el_rebote_del_motor_sale_del_ajuste_y_no_de_un_180_suelto():
-    # Los 180.0 permitidos en el motor son exactamente estos cuatro, ninguno más:
-    # el respaldo dentro de _rebote_defecto, los dos valores por defecto de la
-    # firma de bounce_seconds (los llamadores siempre pasan el real) y la distancia
-    # de fase de 180 minutos de los turnos nocturnos (otro significado). Si este
-    # conteo cambia, alguien metió o sacó un número fijo: revisar antes de subir.
-    assert MOTOR.count("180.0") == 4, "cambió un 180.0 en el motor: revisar _rebote_defecto y esta lista"
+    # Los 180.0 permitidos en el motor son exactamente estos tres, ninguno más:
+    # el respaldo dentro de _rebote_defecto y los dos valores por defecto de la
+    # firma de bounce_seconds (los llamadores siempre pasan el real). La distancia
+    # de 180 minutos de los turnos nocturnos se quitó el 26-10-2026: la noche se
+    # reconoce por los ciclos del horario. Si este conteo cambia, alguien metió o
+    # sacó un número fijo: revisar antes de subir.
+    assert MOTOR.count("180.0") == 3, "cambió un 180.0 en el motor: revisar _rebote_defecto y esta lista"
     assert "_rebote_defecto(tipo_prog)" in MOTOR
     assert "REGLAS_MARCAS_REBOTE" in MOTOR
 

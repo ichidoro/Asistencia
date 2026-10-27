@@ -113,10 +113,10 @@ class AsistenciaRepository:
         padre_row = await self.db.fetch_one("SELECT * FROM turnos WHERE id = ?", (turno_id,))
         padre = dict(padre_row) if padre_row else {}
         CAMPOS_TURNO_PADRE = [
-            'descuento_colacion_auto', 'minutos_colacion_auto', 'minutos_colacion',
+            'descuento_colacion_auto', 'minutos_colacion_auto',
             'anclaje_entrada_minutos', 'anclaje_salida_minutos',
             'tolerancia_retraso_alerta', 'tolerancia_retraso_descuento', 'tolerancia_salida_adelantada',
-            'redondeo_minutos', 'meta_horas_semanales',
+            'meta_horas_semanales',
             'tipo_programacion', 'nombre',
             'rotacion_secuencial', 'semana_fallback_sin_marcas',
             'permite_viajes_largos', 'hora_limite_ficticia',

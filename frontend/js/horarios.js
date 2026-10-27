@@ -85,7 +85,6 @@ async function saveTurno() {
         tolerancia_retraso_alerta: parseInt(formData.get('tolerancia_retraso_alerta') || 0),
         tolerancia_retraso_descuento: parseInt(formData.get('tolerancia_retraso_descuento') || 0),
         tolerancia_salida_adelantada: Math.max(0, parseInt(formData.get('tolerancia_salida_adelantada') || 0, 10) || 0),
-        redondeo_minutos: parseInt(formData.get('redondeo_minutos') || 0),
         meta_horas_semanales: 0, // Se actualizará abajo
         meta_horas_espera: parseFloat(document.getElementById('input-meta-espera')?.value || 88.0),
         // El selector vive en el bloque de Bolsa Flexible (oculto en los demás tipos, donde no se puede editar): fuera de Bolsa Flexible
@@ -368,7 +367,6 @@ async function openModalHorario(id = null) {
             if (form.tolerancia_salida_adelantada) form.tolerancia_salida_adelantada.value = String(turno.tolerancia_salida_adelantada || 0);
             if (form.ventana_en_curso_minutos) form.ventana_en_curso_minutos.value = String(turno.ventana_en_curso_minutos || 0);
             if (form.espera_inasistencia_minutos) form.espera_inasistencia_minutos.value = String(turno.espera_inasistencia_minutos || 0);
-            form.redondeo_minutos.value = String(turno.redondeo_minutos || 0);
             if (form.anclaje_entrada_minutos) form.anclaje_entrada_minutos.value = String(turno.anclaje_entrada_minutos || 0);
             if (form.anclaje_salida_minutos) form.anclaje_salida_minutos.value = String(turno.anclaje_salida_minutos || 0);
             if (form.hora_limite_ficticia) form.hora_limite_ficticia.value = turno.hora_limite_ficticia || "";
@@ -1344,15 +1342,6 @@ function renderModalHtml() {
                             </div>
 
                             <!-- Fila 2: Ajustes de Cálculo (Simétrica 2 columnas) -->
-                            <div class="col-md-6">
-                                <label for="input-redondeo" class="form-label small fw-bold">Redondeo de Marcas</label>
-                                <select id="input-redondeo" class="form-select" name="redondeo_minutos">
-                                    <option value="0">Exacto (Sin Redondeo)</option>
-                                    <option value="15">Intervalos de 15 min</option>
-                                    <option value="30">Intervalos de 30 min</option>
-                                </select>
-                                <div class="form-text small">Redondea la hora real de la marca a bloques cerrados (Ej: 08:04 -> 08:00).</div>
-                            </div>
                             <div class="col-md-6">
                                 <label for="chkColacion" class="form-label small fw-bold">Colación Automática</label>
                                 <div class="d-flex flex-column gap-2">
