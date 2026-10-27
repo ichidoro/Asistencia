@@ -277,6 +277,7 @@ def test_una_sola_colacion_aunque_la_jornada_pase_el_tope_de_horas_extra(monkeyp
     # Calderón 02-10: 05:54–19:45 son 13 h 51; menos una colación, 13 h 21: 5 h 21 sobre las 8 h. Pasa el tope de 4 h de
     # horas extra ordinarias y va a cobertura de turno, sin descontar una segunda colación (antes quedaba en 4 h 51).
     largo = [L(1, "2026-10-15 05:54:00", E), L(2, "2026-10-15 19:45:00", S)]
+    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "asistencia_max_extras_ordinarias_dia_habil", "240")
     r = _dia(monkeypatch, largo, dia=BODEGA)
     assert r["_jornada_especial"]["origen"] == "COBERTURA_TURNO"
     assert r["_jornada_especial"]["minutos_trabajados"] == 321

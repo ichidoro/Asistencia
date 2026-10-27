@@ -1701,12 +1701,9 @@ class QuantumMatrixEngine:
         limite_emergencia = float(ajustes.get('asistencia_emergencia_jornada_limite_horas', 3.0))
         banda_horas = float(ajustes.get('asistencia_emergencia_banda_horas', 2.0))
         banda_minutos = int(round(banda_horas * 60.0))
-        raw_max_he = ajustes.get('asistencia_max_extras_ordinarias_dia_habil', 240)
-        try:
-            val_he = float(raw_max_he)
-            max_he_ordinarias_min = val_he if val_he > 24 else val_he * 60.0
-        except (ValueError, TypeError):
-            max_he_ordinarias_min = 240.0
+        # «Límite HE Diaria en Día Hábil» (Configuración → Ajustes; se guarda en minutos). Con 0, o sin el ajuste, no hay
+        # límite: todo lo trabajado de más es hora extra (orden del dueño, 27-10-2026).
+        max_he_ordinarias_min = _ajuste_numero(ajustes, 'asistencia_max_extras_ordinarias_dia_habil') or 0.0
         # Ajustes de la pestaña Reglas de marcaciones (None si la fila no existe: entonces no se usan).
         repetidas_seg = _ajuste_numero(ajustes, 'reglas_marcas_repetidas_minutos', escala=60.0)
         colacion_referencia_min = _ajuste_numero(ajustes, 'reglas_marcas_colacion_referencia_minutos')
@@ -2635,7 +2632,7 @@ class QuantumMatrixEngine:
             diff_extra = min_trab - min_teo
             # Hora extra: al menos un segundo (resolución del reloj) y lo que pida el «Mínimo para contar hora extra»
             if round(diff_extra * 60.0) > 0 and diff_extra >= minimo_he_min:
-                if diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
+                if max_he_ordinarias_min > 0 and diff_extra > max_he_ordinarias_min and horas_teoricas > 0:
                     # [REGLA DE NEGOCIO CONFIGURADA EN INTERFAZ]:
                     # "Si las extras superan este límite, la totalidad del bloque pasa a ser Jornada Especial Pendiente"
                     # El turno base cubre min_teo (horas_teoricas)

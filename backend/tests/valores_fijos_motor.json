@@ -280,24 +280,6 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "raw_max_he = ajustes.get('asistencia_max_extras_ordinarias_dia_habil', 240)",
-  "numeros": [
-   "240"
-  ],
-  "tipo": "respaldo",
-  "motivo": "Solo si falta el ajuste Límite HE Diaria en la base (se edita en Configuración)."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "max_he_ordinarias_min = 240.0",
-  "numeros": [
-   "240.0"
-  ],
-  "tipo": "respaldo",
-  "motivo": "Solo si el ajuste Límite HE Diaria no se puede leer."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
   "linea": "s = int(parts[2]) if len(parts) > 2 else 0",
   "numeros": [
    "2"
