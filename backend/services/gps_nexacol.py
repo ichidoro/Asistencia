@@ -125,6 +125,7 @@ async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
         "resumen": {k: res.get(k) for k in ("km", "velMax", "minMovimiento", "minTotal", "primero", "ultimo")},
         "paradas": res.get("paradas") or [],
         "slots_gps": calc["slots"],
+        "planta": {k: (data.get("casaMatriz") or {}).get(src) for k, src in (("nombre", "nombre"), ("salidas", "salidas"))},
         "min_mov_gps": calc["min_mov"],
         "min_det_gps": calc["min_det"],
     }
@@ -175,11 +176,11 @@ def _tokens_calle(calle: Any) -> List[str]:
     return _identificadores_calle(calle)["nombre"]
 
 
-def _calle_en_lugar(ident: Dict[str, List[str]], palabras: Any, pares: Any) -> bool:
+def _coincide(ident: Dict[str, List[str]], palabras: Any, pares: Any) -> List[str]:
+    """Las calles de la dirección que aparecen en la parada ([] si ninguna). Una esquina ("14 Norte con 6 Oriente") puede coincidir con una sola de sus dos calles."""
     if ident["pares"]:
-        # En una esquina ("6 Oriente esquina 3 Norte") basta con que la parada esté en una de las dos calles
-        return any(p in pares for p in ident["pares"])
-    return bool(ident["nombre"]) and all(t in palabras for t in ident["nombre"])
+        return [p for p in ident["pares"] if p in pares]
+    return list(ident["nombre"]) if ident["nombre"] and all(t in palabras for t in ident["nombre"]) else []
 
 
 def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
@@ -191,7 +192,8 @@ def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
 
 def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Para cada entrega, la parada que le corresponde y su estado; y para cada parada, la entrega a la que corresponde.
-    Estados: calza (la calle y la comuna están en la dirección de una parada, o la parada queda a ≤ CALZA_M) · cercana (con coordenada, ≤ CERCA_M)
+    Estados: calza (con coordenada exacta, la parada queda a ≤ CALZA_M) · cercana (con coordenada, ≤ CERCA_M) · calle (la calle y la comuna de la factura
+    están en la dirección de una parada: es la MISMA CALLE, pero el GPS no da el número ni la cuadra; en una esquina puede coincidir solo una de las dos calles)
     · comuna (el camión paró en esa comuna, pero NO se sabe en cuál de esas paradas: no se elige ninguna) · lejos (con coordenada, a más de CERCA_M de
     toda parada) · sin_parada (el camión no paró en esa comuna)."""
     def num(v: Any) -> bool:
@@ -204,13 +206,14 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
     items: List[Dict[str, Any]] = []
     for e in entregas:
         item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
-                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": []}
+                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": [], "coincide": [], "esquina": False}
         # La comuna y la calle se comparan por palabras ("San Francisco Mostazal" calza con "San Francisco de Mostazal")
         comuna = [w for w in _norm(e.get("comuna")).split() if w not in _ARTICULOS]
         ident = _identificadores_calle(e.get("calle"))
+        item["esquina"] = len(ident["pares"]) >= 2
         en_comuna = [(i, p) for i, p, pal, _ in ps if comuna and all(w in pal for w in comuna)]
-        # Si varias paradas coinciden en calle y comuna, la que corresponde a una entrega es la más larga
-        en_calle = sorted(((i, p) for i, p, pal, pares in ps if comuna and all(w in pal for w in comuna) and _calle_en_lugar(ident, pal, pares)), key=lambda t: -(t[1].get("min") or 0))
+        # Si varias paradas coinciden en calle y comuna, la que corresponde a una entrega es la que coincide con más calles y, luego, la más larga
+        en_calle = sorted(((i, p, c) for i, p, pal, pares in ps if comuna and all(w in pal for w in comuna) for c in [_coincide(ident, pal, pares)] if c), key=lambda t: (-len(t[2]), -(t[1].get("min") or 0)))
         # con coordenada guardada: distancia a la parada más cercana
         con_coord = num(e.get("lat")) and num(e.get("lon"))
         near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
@@ -218,7 +221,8 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
         if near and item["exacto"] and near[0] <= CALZA_M:
             item["estado"], item["via"], elegida = "calza", "distancia", (near[1], near[2])
         elif en_calle:
-            item["estado"], item["via"], elegida = "calza", "direccion", en_calle[0]
+            item["estado"], item["via"], elegida = "calle", "direccion", (en_calle[0][0], en_calle[0][1])
+            item["coincide"] = en_calle[0][2]
         elif near and item["exacto"] and near[0] <= CERCA_M:
             item["estado"], item["via"], elegida = "cercana", "distancia", (near[1], near[2])
         elif en_comuna:
@@ -234,13 +238,13 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
             item["parada"] = {k: elegida[1].get(k) for k in ("desde", "hasta", "min", "lugar")}
         items.append(item)
     # Cada parada con la entrega que le corresponde (la de mejor estado)
-    peso = {"calza": 2, "cercana": 1}
+    peso = {"calza": 3, "calle": 2, "cercana": 1}
     por_parada: List[Any] = [None] * len(paradas)
     for it in items:
         k = it["parada_idx"]
         if k is not None and it["estado"] in peso and (por_parada[k] is None or peso[it["estado"]] > peso[por_parada[k]["estado"]]):
             por_parada[k] = {"cliente": it["cliente"], "dist_m": it["dist_m"], "estado": it["estado"], "via": it["via"]}
-    cuenta = {k: sum(1 for it in items if it["estado"] == k) for k in ("calza", "cercana", "comuna", "lejos", "sin_parada")}
+    cuenta = {k: sum(1 for it in items if it["estado"] == k) for k in ("calza", "calle", "cercana", "comuna", "lejos", "sin_parada")}
     return {"entregas": items, "paradas": por_parada, "resumen": {"total": len(items), **cuenta}}
 
 

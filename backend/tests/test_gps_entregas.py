@@ -19,15 +19,17 @@ def test_las_palabras_de_la_calle_ignoran_abreviaturas_y_numeros():
     assert _tokens_calle("Pasaje Los Aromos 12") == ["aromos"]
 
 
-def test_calza_por_calle_y_comuna():
+def test_misma_calle_y_comuna_no_es_calza():
+    # La parada está en la misma calle, pero el GPS no da el número ni la cuadra: se dice «misma calle», no «calza»
     r = cruzar_entregas([entrega("AV BERNARDO O'HIGGINS 1234", "San Fernando")], PARADAS)
-    assert r["entregas"][0]["estado"] == "calza" and r["entregas"][0]["via"] == "direccion" and r["entregas"][0]["parada_idx"] == 0
+    it = r["entregas"][0]
+    assert it["estado"] == "calle" and it["via"] == "direccion" and it["parada_idx"] == 0
     assert r["paradas"][0]["cliente"] == "X" and r["paradas"][1] is None
 
 
 def test_la_comuna_se_compara_por_palabras():
     paradas = [{"desde": "10:00:00", "hasta": "10:20:00", "min": 20, "lugar": "San Guillermo, Villa Mostazal, San Francisco de Mostazal, Región del Libertador"}]
-    assert estados([entrega("SAN GUILLERMO 49", "San Francisco Mostazal")], paradas) == ["calza"]
+    assert estados([entrega("SAN GUILLERMO 49", "San Francisco Mostazal")], paradas) == ["calle"]
 
 
 def test_misma_comuna_pero_otra_calle():
@@ -59,19 +61,27 @@ TALCA = [
 
 
 def test_calles_numeradas_se_comparan_por_numero_y_direccion():
-    # "18 ORIENTE" NO es "6 Oriente" ni "Barrio Norte"; "1 SUR" NO es "Culenar Sur" (esto salía como «calza» por comparar solo "oriente"/"sur")
+    # "18 ORIENTE" NO es "6 Oriente" ni "Barrio Norte"; "1 SUR" NO es "Culenar Sur" (esto salía como coincidencia por comparar solo "oriente"/"sur")
     assert estados([entrega("18 ORIENTE 480", "Talca"), entrega("1 SUR 2227", "Talca"), entrega("17 ORIENTE 801", "Talca")], TALCA) == ["comuna", "comuna", "comuna"]
-    # una esquina calza si la parada está en CUALQUIERA de sus dos calles
-    assert estados([entrega("14 NORTE 6 ORIENTE 1297", "Talca")], TALCA) == ["calza"]
-    assert estados([entrega("6 ORIENTE 1399 ESQUINA 3 NORTE", "Talca")], TALCA) == ["calza"]
-    assert estados([entrega("6 ORIENTE 55", "Talca")], TALCA) == ["calza"]
+    assert estados([entrega("6 ORIENTE 55", "Talca")], TALCA) == ["calle"]
     # "16 1/2 NORTE" es la parada «16½ Norte»
-    assert estados([entrega("16 1/2 NORTE 1795 B", "Talca")], TALCA) == ["calza"]
+    assert estados([entrega("16 1/2 NORTE 1795 B", "Talca")], TALCA) == ["calle"]
+
+
+def test_esquina_que_coincide_con_una_sola_calle_se_avisa():
+    # «14 Norte con 6 Oriente» y la parada «6 Oriente»: coincide UNA de las dos calles, y no se sabe en qué cuadra paró
+    it = cruzar_entregas([entrega("14 NORTE 6 ORIENTE 1297", "Talca")], TALCA)["entregas"][0]
+    assert it["estado"] == "calle" and it["esquina"] is True and it["coincide"] == ["6 oriente"]
+    assert cruzar_entregas([entrega("6 ORIENTE 55", "Talca")], TALCA)["entregas"][0]["esquina"] is False
+    # una parada que coincide con las dos calles de la esquina se prefiere
+    paradas = TALCA + [{"desde": "12:00:00", "hasta": "12:05:00", "min": 5, "lugar": "6 Oriente, 14 Norte, Talca, Región del Maule"}]
+    it = cruzar_entregas([entrega("14 NORTE 6 ORIENTE 1297", "Talca")], paradas)["entregas"][0]
+    assert it["parada_idx"] == 3 and sorted(it["coincide"]) == ["14 norte", "6 oriente"]
 
 
 def test_numeros_en_letras():
     paradas = [{"desde": "10:00:00", "hasta": "10:20:00", "min": 20, "lugar": "2 Sur, Población Ferroviaria, Talca, Región del Maule"}]
-    assert estados([entrega("DOS SUR 1773 A1", "Talca")], paradas) == ["calza"]
+    assert estados([entrega("DOS SUR 1773 A1", "Talca")], paradas) == ["calle"]
 
 
 def test_misma_comuna_no_inventa_la_parada():
@@ -86,4 +96,4 @@ def test_misma_comuna_no_inventa_la_parada():
 
 def test_resumen():
     r = cruzar_entregas([entrega("AV BERNARDO O'HIGGINS 1", "San Fernando"), entrega("X 1", "Curicó"), entrega("Y 1", "Romeral")], PARADAS)
-    assert r["resumen"] == {"total": 3, "calza": 1, "cercana": 0, "comuna": 1, "lejos": 0, "sin_parada": 1}
+    assert r["resumen"] == {"total": 3, "calza": 0, "calle": 1, "cercana": 0, "comuna": 1, "lejos": 0, "sin_parada": 1}
