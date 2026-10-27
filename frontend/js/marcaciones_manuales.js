@@ -3684,7 +3684,7 @@ function m180GpsEntregasPintar() {
         // Una fila corta: quién y dónde, cuál fue la parada (o por qué no hay) y un solo estado; el detalle sale al pasar el mouse sobre el estado
         const hora = q => `${esc(String(q.desde).slice(0, 5))}–${esc(String(q.hasta).slice(0, 5))} · ${q.min} min`;
         const par = e.parada
-            ? `<div class="m180-ent-hora"><span class="m180-par-n">P${e.parada_idx + 1}</span> ${hora(e.parada)}</div>
+            ? `<div class="m180-ent-hora" title="Parada P${e.parada_idx + 1} del recorrido (la numeración de la grilla y de la tabla de paradas)">${hora(e.parada)}</div>
                ${e.dist_m != null
                     ? `<div class="m180-ent-barra"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div><small>${e.dist_m} m de la parada${e.aprendida ? ' · ubicación aprendida' : ''}</small>`
                     : `<small class="m180-ent-lugar" title="${esc(e.parada.lugar)}">${esc(String(e.parada.lugar || '').split(',').slice(0, 2).join(',').trim())}</small>`}`
@@ -3703,7 +3703,7 @@ function m180GpsEntregasPintar() {
             : e.estado === 'sin_parada' ? 'El camión no paró en la comuna de la factura.' : '';
         return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
             <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>
-            <div class="m180-ent-main"><div class="m180-ent-cli">${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(String(f).replace(/^DTE-JJV-Folio-/, ''))).join(', ')}</div>${pasoHtml}</div>
+            <div class="m180-ent-main"><div class="m180-ent-cli"><span class="m180-ent-n">${i + 1}</span>${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(String(f).replace(/^DTE-JJV-Folio-/, ''))).join(', ')}</div>${pasoHtml}</div>
             <div class="m180-ent-par">${par}</div>
             <span class="m180-ent-badge" title="${esc(tip)}">${st.t}</span></div>`;
     }).join('');
