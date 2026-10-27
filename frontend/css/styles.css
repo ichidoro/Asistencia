@@ -4493,3 +4493,6 @@ tr:hover .emp-name-cell {
 .m180-ent-kpi { font-size: .88rem; }
 .m180-ent-nota { font-size: .8rem; }
 .m180-ent-tag { font-size: .8rem; }
+
+/* Parada con su hora exacta sobre la fila Detenido (los tramos de 15 min no muestran las paradas cortas) */
+.m180-par-exacta { position: absolute; bottom: 3px; height: 9px; z-index: 1; min-width: 8px; border-radius: 4px; background: #9a3412; box-shadow: 0 0 0 1.5px #fff; pointer-events: auto; cursor: help; }

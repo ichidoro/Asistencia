@@ -3556,6 +3556,12 @@ function m180GpsTabla(g) {
             html += `<div class="m180-block" style="left:${(i / 96) * 100}%; width:${((j - i) / 96) * 100}%;" title="${m180GpsHora(i)} – ${m180GpsHora(j)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
             i = j;
         }
+        // Cada parada (desde 5 min) con su hora EXACTA: los tramos de 15 min esconden las paradas cortas (una de 6 min dentro de un tramo en que el camión
+        // mayormente andaba cuenta como conducción y no dibujaba nada, aunque el ícono de la Shell sí aparecía).
+        if (v === 2) (g.paradas || []).forEach(p => {
+            const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
+            html += `<div class="m180-par-exacta" style="left:${(ini / 86400) * 100}%;width:${((fin - ini) / 86400) * 100}%" title="Parada ${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)} (${p.min} min) · ${m180GpsEsc(p.lugar)}"></div>`;
+        });
         // Paradas en una Shell: ícono sobre el tramo detenido (la plataforma de GPS nombra el lugar, "Shell, Ruta 5 Sur…")
         if (v === 2) (g.paradas || []).filter(p => m180GpsEsShell(p.lugar)).forEach(p => {
             const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
