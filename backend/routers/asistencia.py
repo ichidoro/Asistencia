@@ -34,6 +34,7 @@ from backend.schemas.asistencia import (
     CondonarDeudaRequest,
     IntercambioCreate,
     CompensacionCreate,
+    CompensarInasistenciaRequest,
     ReasignarTurnoRequest,
     ViajeLargoCreate,
     Libreta180hRequest,
@@ -1406,7 +1407,7 @@ async def validar_jornada_endpoint(
         if isinstance(resultado, dict) and 'error' in resultado:
             raise HTTPException(status_code=400, detail=resultado['error'])
         if accion == "APROBAR_COMO_HE":
-            mensaje = "Cobertura (+2) validada exitosamente como Horas Extras al 50%"
+            mensaje = "Jornada validada exitosamente como Horas Extras al 50%"
         elif accion == "APROBAR":
             mensaje = "Jornada validada exitosamente como Jornada Especial"
         elif accion == "REVERTIR":
@@ -1414,10 +1415,13 @@ async def validar_jornada_endpoint(
         else:
             mensaje = "Jornada rechazada exitosamente"
         return {
-            "success": True, 
-            "mensaje": mensaje, 
+            "success": True,
+            "mensaje": mensaje,
             "asistencia": resultado
         }
+    except HTTPException:
+        # El aviso (400) y el conflicto de concurrencia (409) llegan tal cual a la pantalla, no como «error interno»
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -2580,22 +2584,62 @@ async def get_bolsa_he_disponible(
 
 
 async def _bolsa_despues_de_deuda(service: AsistenciaService, empleado_id: int, fecha: str, bolsa: Dict[str, Any]) -> Dict[str, Any]:
-    """Regla del dueño (26-10-2026): las inasistencias compensables van al final; solo se compensan con las horas extra
-    que sobran después de pagar toda la deuda (exceso de colación, permisos, atrasos y salidas adelantadas)."""
+    """Regla del dueño (26-10-2026): solo se compensan inasistencias con las horas extra que sobran después de pagar toda la deuda."""
+    from backend.services.compensar_inasistencia import bolsa_despues_de_deuda
+    return await bolsa_despues_de_deuda(service, empleado_id, fecha, bolsa)
+
+
+async def _empleado_visible(service: AsistenciaService, current_user: SecurityContext, empleado_id: int):
+    emp = await EmpleadoRepository(service.repository.db).get_by_id(empleado_id)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    current_user.verificar_acceso_area(emp.area, "este empleado")
+    return emp
+
+
+@router.get("/compensar-inasistencia/opciones/")
+async def opciones_compensar_inasistencia(
+    empleado_id: int = Query(...),
+    fecha: str = Query(..., description="Día de la inasistencia AAAA-MM-DD"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.compensar", "marcaciones.intercambio"]))
+):
+    """Con qué se puede compensar una inasistencia: una jornada EXTRA del tramo (día completo) o horas extra (minuto a minuto)."""
+    await _empleado_visible(service, current_user, empleado_id)
+    from backend.services import compensar_inasistencia as ci
+    return {"success": True, "data": await ci.opciones(service, empleado_id, fecha)}
+
+
+@router.post("/compensar-inasistencia/")
+async def compensar_inasistencia(
+    req: CompensarInasistenciaRequest,
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.compensar", "marcaciones.intercambio"]))
+):
+    """Compensa una inasistencia con una jornada EXTRA (que se gasta) o con horas extra que cubran todo el turno."""
+    await _empleado_visible(service, current_user, req.empleado_id)
+    from backend.services import compensar_inasistencia as ci
     try:
-        from backend.services.cuadre_service import CuadreService
-        cs = CuadreService(service)
-        t_ini, t_fin = await cs.tramo_de(str(fecha)[:10])
-        lib = await cs.libro_empleado(int(empleado_id), t_ini, t_fin)
-        if lib.get('es_bolsa'):
-            return bolsa
-        sobran = max(0.0, float(lib['libro'].get('he_a_pagar') or 0.0))
-        bolsa = dict(bolsa)
-        bolsa["minutos_disponibles"] = round(min(float(bolsa.get("minutos_disponibles") or 0.0), sobran), 2)
-        bolsa["regla"] = "Solo se compensan inasistencias con las horas extra que sobran después de pagar toda la deuda."
-    except Exception as e_cuadre:
-        logger.warning(f"[Cuadre] No se pudo revisar la deuda antes de compensar: {e_cuadre}")
-    return bolsa
+        return await ci.compensar(service, req.empleado_id, req.fecha, req.modo, req.fecha_jornada, req.observaciones,
+                                  current_user.username, current_user.user_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+
+@router.delete("/compensar-inasistencia/")
+async def quitar_compensacion_inasistencia(
+    empleado_id: int = Query(...),
+    fecha: str = Query(..., description="Día de la inasistencia AAAA-MM-DD"),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.compensar", "marcaciones.intercambio"]))
+):
+    """Quita la compensación del día: la jornada usada vuelve a ser EXTRA y las horas extra quedan libres."""
+    await _empleado_visible(service, current_user, empleado_id)
+    from backend.services import compensar_inasistencia as ci
+    try:
+        return await ci.quitar(service, empleado_id, fecha, current_user.username, current_user.user_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
 
 
 @router.get("/compensaciones/")
@@ -2650,24 +2694,16 @@ async def create_compensacion(
     if not periodo:
         raise HTTPException(status_code=400, detail="No se encontró un periodo para la fecha de inasistencia.")
 
-    # Validar que tenga saldo suficiente en la bolsa (o aplicar compensación parcial si cubre >= 90%)
+    # Las horas extra deben alcanzar: se compensa minuto a minuto, sin compensación parcial (orden del dueño, 27-10-2026)
     bolsa = await service.repository.get_bolsa_he_disponible(
         data.empleado_id, periodo["fecha_inicio"], periodo["fecha_fin"]
     )
     bolsa = await _bolsa_despues_de_deuda(service, data.empleado_id, data.fecha_inasistencia, bolsa)
-    if data.minutos > bolsa["minutos_disponibles"]:
-        if bolsa["minutos_disponibles"] > 0 and (bolsa["minutos_disponibles"] / data.minutos) >= 0.90:
-            logger.info(
-                f"Aplicando compensación parcial automática: solicitados {data.minutos} min, "
-                f"disponibles {bolsa['minutos_disponibles']} min "
-                f"({(bolsa['minutos_disponibles'] / data.minutos) * 100:.1f}% cobertura)"
-            )
-            data.minutos = round(bolsa["minutos_disponibles"], 2)
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Saldo insuficiente de horas extras en la bolsa del periodo (Disponible: {bolsa['minutos_disponibles']} min)."
-            )
+    if round(data.minutos) > round(bolsa["minutos_disponibles"]):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Saldo insuficiente de horas extras en la bolsa del periodo (Disponible: {bolsa['minutos_disponibles']} min)."
+        )
 
     # Registrar la compensación
     payload = {

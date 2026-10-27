@@ -4437,22 +4437,6 @@
                                     </div>
                                 </button>
 
-                                <!-- Reasignar / Mover Turno Nocturno -->
-                                <button id="btn-reasignar-turno"
-                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
-                                    onclick="proceedToReasignarTurno()" style="overflow:hidden;">
-                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
-                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef3c7;border-radius:10px;">
-                                            <i class="bi bi-arrow-right-square" style="font-size:1rem;color:#d97706;"></i>
-                                        </div>
-                                        <div>
-                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Reasignar / Mover Turno</div>
-                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Mover marcaciones nocturnas a inasistencia</div>
-                                        </div>
-                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
-                                    </div>
-                                </button>
-
                                 <!-- Separator for contextual actions -->
                                 <hr class="my-1" style="border-color:#f1f5f9;">
 
@@ -4505,17 +4489,33 @@
                                     </div>
                                 </button>
 
-                                <!-- Compensar con Horas Extras (condicional) -->
+                                <!-- Compensar inasistencia (condicional): una jornada EXTRA o horas extra -->
                                 <button id="btn-compensar-he-action"
                                     class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
                                     onclick="proceedToCompensateHE()" style="overflow:hidden;">
                                     <div class="d-flex align-items-center gap-3 py-2 px-3">
                                         <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#ecfdf5;border-radius:10px;">
-                                            <i class="bi bi-clock-history" style="font-size:1rem;color:#10b981;"></i>
+                                            <i class="bi bi-arrow-left-right" style="font-size:1rem;color:#10b981;"></i>
                                         </div>
                                         <div>
-                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Compensar con Horas Extras</div>
-                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Usar saldo HE para cubrir falta</div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Compensar inasistencia</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">Con una jornada EXTRA o con horas extra</div>
+                                        </div>
+                                        <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
+                                    </div>
+                                </button>
+
+                                <!-- Quitar compensación (condicional): el día ya está compensado -->
+                                <button id="btn-quitar-compensacion"
+                                    class="btn text-start p-0 border-0 rounded-3 decision-action-btn d-none"
+                                    onclick="proceedToQuitarCompensacion()" style="overflow:hidden;">
+                                    <div class="d-flex align-items-center gap-3 py-2 px-3">
+                                        <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:#fef2f2;border-radius:10px;">
+                                            <i class="bi bi-arrow-counterclockwise" style="font-size:1rem;color:#dc2626;"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold text-dark" style="font-size:0.82rem;line-height:1.2;">Quitar compensación</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;line-height:1.3;">La jornada o las horas extra quedan libres otra vez</div>
                                         </div>
                                         <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
                                     </div>
@@ -5387,6 +5387,7 @@
         "/static/js/perdonazo_panel.js?v={{ startup_id }}",
         "/static/js/intercambios_panel.js?v={{ startup_id }}",
         "/static/js/compensaciones_he_panel.js?v={{ startup_id }}",
+        "/static/js/compensar_inasistencia.js?v={{ startup_id }}_v1",
         "/static/js/seguridad_ui.js?v={{ startup_id }}",
         "/static/js/libs/qrcode.min.js",
         "/static/js/porteria_ui.js?v={{ startup_id }}_v4",

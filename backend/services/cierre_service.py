@@ -497,7 +497,7 @@ class CierreService:
             LEFT JOIN areas ar ON ha.area_id = ar.id
             WHERE je.fecha BETWEEN ? AND ?
               AND je.origen = 'COBERTURA_TURNO'
-              AND je.estado != 'RECHAZADA'
+              AND je.estado NOT IN ('RECHAZADA', 'COMPENSATORIA')
               AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA')
             {filtro_area}
         """

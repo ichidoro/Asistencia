@@ -104,6 +104,8 @@ class ReportService:
             lbl, color, bold = "ESP", "0284C7", True
         elif di_estado == 'EXTRA':
             lbl, color, bold = "EXT", "0284C7", True
+        elif di_estado == 'JORNADA_COMPENSATORIA':
+            lbl, color, bold = "COMP", "0284C7", True
 
         # 4. Caso Especial: Jornada Adicional / Cobertura (+2)
         ja = di.get("jornada_adicional")
@@ -120,6 +122,8 @@ class ReportService:
                     lbl, color, bold = ("+2 HE" if es_mas_dos else "HE"), "D97706", True
                 elif ja_est == 'EXTRA':
                     lbl, color, bold = "EXT", "0284C7", True
+                elif ja_est == 'COMPENSATORIA':
+                    lbl, color, bold = "COMP", "0284C7", True
                 else:
                     lbl, color, bold = ("+2" if es_mas_dos else "ESP"), "0284C7", True
             else:
@@ -128,6 +132,8 @@ class ReportService:
                     der = "+2 HE" if es_mas_dos else "HE"
                 elif ja_est == 'EXTRA':
                     der = "EXT"
+                elif ja_est == 'COMPENSATORIA':
+                    der = "COMP"
                 else:
                     der = "+2" if es_mas_dos else "ESP"
                 lbl = f"{lbl}\n{der}"
@@ -319,7 +325,9 @@ class ReportService:
                     es_ja_rechazada = (ja_est == 'RECHAZADA')
                     es_ja_he = (ja_est == 'HORAS_EXTRAS')
                     tiene_ja_activa = bool(ja and (ja_est in ('PENDIENTE', 'JORNADA_ESPECIAL', 'EXTRA') or not ja_est))
-                    es_dia_esp_valido = not es_ja_rechazada and not es_ja_he and (
+                    # Una jornada gastada en compensar una inasistencia ya no se paga como jornada especial
+                    es_compensatoria = ja_est == 'COMPENSATORIA' or di_estado == 'JORNADA_COMPENSATORIA'
+                    es_dia_esp_valido = not es_ja_rechazada and not es_ja_he and not es_compensatoria and (
                         di_estado in ('JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA') or
                         (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0 and di_estado != 'RECHAZADA')
                     )

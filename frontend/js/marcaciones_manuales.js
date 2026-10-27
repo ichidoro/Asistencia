@@ -112,12 +112,16 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     }
 
     if (dualBox) {
-        if (jaGeneral && asistGeneral && (asistGeneral.horas_teoricas > 0 || asistGeneral.hora_entrada_real)) {
+        // «+2» es solo una segunda jornada del mismo día; trabajar un día libre o un feriado es una jornada especial
+        // y no lleva este recuadro de dos jornadas (orden del dueño, 27-10-2026)
+        if (jaGeneral && jaGeneral.origen === 'COBERTURA_TURNO' && asistGeneral && (asistGeneral.horas_teoricas > 0 || asistGeneral.hora_entrada_real)) {
             const horasJa = jaGeneral.minutos_trabajados ? (Math.round(jaGeneral.minutos_trabajados / 60.0 * 10) / 10) : 0;
             const estadoJaBadge = jaGeneral.estado === 'HORAS_EXTRAS'
                 ? '<span class="badge bg-warning-subtle text-dark border border-warning fw-bold">⏱️ Horas Extras (50%)</span>'
                 : jaGeneral.estado === 'EXTRA'
                 ? '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">EXTRA Aprobada</span>'
+                : jaGeneral.estado === 'COMPENSATORIA'
+                ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold">Usada para compensar</span>'
                 : jaGeneral.estado === 'RECHAZADA'
                 ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">Rechazada</span>'
                 : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle fw-bold">Pendiente Validación</span>';
@@ -219,12 +223,16 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     if (btnCompensarHE) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
-        const hasPerm = typeof AuthService !== 'undefined' ? AuthService.hasPermission("marcaciones.compensar") : true;
+        const hasPerm = typeof AuthService !== 'undefined'
+            ? (AuthService.hasPermission("marcaciones.compensar") || AuthService.hasPermission("marcaciones.intercambio")) : true;
         if (asistJ && (asistJ.estado === 'INASISTENCIA' || asistJ.estado === 'FALTA') && hasPerm) {
             btnCompensarHE.classList.remove('d-none');
         } else {
             btnCompensarHE.classList.add('d-none');
         }
+        // Un día ya compensado ofrece deshacerlo desde el mismo lugar
+        const btnQuitarComp = document.getElementById('btn-quitar-compensacion');
+        if (btnQuitarComp) btnQuitarComp.classList.toggle('d-none', !(asistJ && asistJ.estado === 'INASISTENCIA_COMPENSADA' && hasPerm));
     }
 
 
@@ -236,18 +244,21 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         // O cuando hay una jornada adicional (cobertura) pendiente, por validar o rechazada.
         const tieneJornadaAdicionalPorValidar = ja &&
             (ja.estado === 'PENDIENTE' || ja.estado === 'RECHAZADA' || ja.estado === 'JORNADA_ESPECIAL');
-            
-        if (asistJ && (asistJ.estado === 'JORNADA_ESPECIAL' || tieneJornadaAdicionalPorValidar)) {
+        // Una jornada usada para compensar una inasistencia ya se gastó: no se vuelve a validar
+        const jaCompensatoria = Boolean(ja && ja.estado === 'COMPENSATORIA');
+
+        if (asistJ && !jaCompensatoria && (asistJ.estado === 'JORNADA_ESPECIAL' || tieneJornadaAdicionalPorValidar)) {
             btnValidarJornada.classList.remove('d-none');
             const titleEl = btnValidarJornada.querySelector('.fw-semibold');
             const subEl = btnValidarJornada.querySelector('.text-muted');
-            if (ja) {
-                const horasJa = ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10) : 0;
+            const horasJa = ja && ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10) : 0;
+            if (ja && ja.origen === 'COBERTURA_TURNO') {
                 if (titleEl) titleEl.innerText = "Validar Cobertura (+2)";
-                if (subEl) subEl.innerText = `Aprobar o rechazar cobertura (${horasJa}h)`;
+                if (subEl) subEl.innerText = `Segunda jornada del día (${horasJa}h)`;
             } else {
                 if (titleEl) titleEl.innerText = "Validar Jornada Especial";
-                if (subEl) subEl.innerText = "Aprobar día libre trabajado";
+                if (subEl) subEl.innerText = ja && ja.origen === 'FERIADO' ? `Feriado trabajado (${horasJa}h)`
+                    : (ja ? `Día libre trabajado (${horasJa}h)` : "Día libre o feriado trabajado");
             }
         } else {
             btnValidarJornada.classList.add('d-none');
@@ -289,19 +300,8 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
-    // --- MOSTRAR/OCULTAR BOTÓN REASIGNAR / MOVER TURNO ---
-    const btnReasignarTurno = document.getElementById('btn-reasignar-turno');
-    if (btnReasignarTurno) {
-        const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
-        const isNotBolsa = (!empInfo || (empInfo.tipo_programacion !== 'BOLSA_FLEXIBLE' && empInfo.tipo_programacion !== 'FLEXIBLE_BOLSA'));
-        
-        // Mostrar siempre para empleados con turno agendado (no bolsa flexible)
-        if (isNotBolsa) {
-            btnReasignarTurno.classList.remove('d-none');
-        } else {
-            btnReasignarTurno.classList.add('d-none');
-        }
-    }
+    // «Reasignar / Mover Turno» se quitó (27-10-2026): para cubrir una inasistencia queda una sola acción,
+    // «Compensar inasistencia», en el día faltado.
 
     // --- MOSTRAR/OCULTAR BOTÓN MARCACIÓN 180 HORAS (ART. 25 BIS DT) ---
     const btnMarcacion180h = document.getElementById('btn-marcacion-180h');
@@ -349,18 +349,28 @@ function proceedToHoraExtra() {
     }
 }
 
+// Compensar inasistencia: una sola ventana con dos formas (una jornada EXTRA o horas extra), y quitar la compensación
 function proceedToCompensateHE() {
     closeAsistenciaActionModal();
-    if (typeof abrirModalCompensacionHE === 'function') {
-        abrirModalCompensacionHE(
+    if (typeof window.abrirCompensarInasistencia === 'function') {
+        window.abrirCompensarInasistencia(
             marcacionesManualesState.currentEmpId,
-            marcacionesManualesState.currentDate
+            marcacionesManualesState.currentDate,
+            marcacionesManualesState.currentEmpNombre
         );
     } else {
-        console.error("Función abrirModalCompensacionHE no encontrada.");
+        console.error("Función abrirCompensarInasistencia no encontrada.");
     }
 }
 window.proceedToCompensateHE = proceedToCompensateHE;
+
+function proceedToQuitarCompensacion() {
+    closeAsistenciaActionModal();
+    if (typeof window.quitarCompensacionInasistencia === 'function') {
+        window.quitarCompensacionInasistencia(marcacionesManualesState.currentEmpId, marcacionesManualesState.currentDate);
+    }
+}
+window.proceedToQuitarCompensacion = proceedToQuitarCompensacion;
 
 
 function proceedToValidation() {
@@ -1322,30 +1332,31 @@ function openValidationModal(empId, dateStr, empNombre) {
     const empInfo = stateMarcacionesApp.data && stateMarcacionesApp.data.empleados ? stateMarcacionesApp.data.empleados.find(e => e.id == empId) : null;
     const isBolsa = Boolean(asist && asist._esBolsa) || Boolean(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'));
 
-    // REGLA DE NEGOCIO: La bifurcación a Horas Extras aplica EXCLUSIVAMENTE a Ciclos Inteligentes en días hábiles programados
-    const esDiaHabilProgramado = Boolean(
-        !isBolsa &&
-        asist &&
-        (asist.horas_teoricas || 0) > 0 &&
-        asist.estado !== 'LIBRE' &&
-        asist.estado !== 'FERIADO' &&
-        ja &&
-        (ja.origen === 'COBERTURA_TURNO' || (asist.observaciones && asist.observaciones.includes('(+2)')))
-    );
+    // Un +2 y una jornada especial (día libre o feriado) se validan igual: EXTRA (monto fijo), horas extra o rechazar
+    // (orden del dueño, 27-10-2026). Solo Bolsa Flexible no pasa a horas extra.
+    const esMasDos = Boolean(ja && ja.origen === 'COBERTURA_TURNO');
+    const permiteHE = Boolean(!isBolsa && (ja || (asist && asist.estado === 'JORNADA_ESPECIAL')));
+    const horasJa = ja && ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10)
+        : (asist && asist.horas_trabajadas ? Math.round(asist.horas_trabajadas * 10) / 10 : 0);
+    const notaOpciones = '<div class="small text-muted mt-2 border-top pt-2">'
+        + '<div>• <strong>Validar Jornada (EXTRA):</strong> se paga con el monto fijo y no genera horas extra al 50 %. Una jornada EXTRA puede compensar una inasistencia completa.</div>'
+        + (permiteHE ? '<div>• <strong>Validar como Horas Extras:</strong> pasa al acumulador de horas extra al 50 %. Compensan una inasistencia minuto a minuto.</div>' : '')
+        + '</div>';
+    const subtituloModal = marcacionesManualesState.validationModal.querySelector('.modal-header .small');
+    if (subtituloModal) subtituloModal.textContent = esMasDos ? 'Segunda jornada del mismo día (+2)' : 'Día libre o feriado trabajado';
 
     const alertBox = document.getElementById('val-alert-box');
     const promptText = document.getElementById('val-prompt-text');
     const extraInfo = document.getElementById('val-extra-info');
     const footerNote = document.getElementById('val-footer-note');
 
-    if (ja && asist && (asist.horas_teoricas > 0 || asist.hora_entrada_real)) {
-        const horasJa = ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10) : 0;
+    if (esMasDos && asist && (asist.horas_teoricas > 0 || asist.hora_entrada_real)) {
         if (alertBox) {
             alertBox.className = "alert alert-warning py-2 mb-3";
-            alertBox.innerHTML = '<i class="bi bi-lightning-fill me-2 text-warning"></i> <strong>Cobertura de Turno (+2) Detectada</strong><br><small class="text-muted">El trabajador cubrió un turno adicional fuera de su jornada ordinaria.</small>';
+            alertBox.innerHTML = '<i class="bi bi-lightning-fill me-2 text-warning"></i> <strong>Cobertura de Turno (+2) Detectada</strong><br><small class="text-muted">El trabajador hizo una segunda jornada el mismo día.</small>';
         }
         if (promptText) {
-            promptText.innerHTML = `¿Desea validar la <strong>cobertura adicional (${horasJa}h)</strong> como Jornada Especial?`;
+            promptText.innerHTML = `¿Cómo desea validar la <strong>segunda jornada (${horasJa}h)</strong>?`;
         }
         if (extraInfo) {
             extraInfo.innerHTML = `
@@ -1356,41 +1367,35 @@ function openValidationModal(empId, dateStr, empNombre) {
             `;
             extraInfo.classList.remove('d-none');
         }
-        if (footerNote) {
-            if (esDiaHabilProgramado) {
-                footerNote.innerHTML = `
-                    <div class="small text-muted mt-2 border-top pt-2">
-                        <div>• <strong>Validar Jornada:</strong> Aprueba la cobertura como Jornada Especial (EXTRA) para pago plano/bono de faena. No genera horas extras al 50%.</div>
-                        <div>• <strong>Validar como Horas Extras:</strong> Pasa la cobertura directamente al acumulador de Horas Extras al 50% legal.</div>
-                    </div>
-                `;
-            } else {
-                footerNote.innerHTML = `Al validar, la cobertura se aprueba como Jornada Especial (EXTRA). En días libres o festivos no genera horas extras al 50%. El turno base ordinario (${asist.estado || 'OK'}) permanecerá intacto.`;
-            }
-        }
+        if (footerNote) footerNote.innerHTML = notaOpciones;
     } else {
+        const tipoDia = (ja && ja.origen === 'FERIADO') || (asist && asist.estado === 'FERIADO') ? 'feriado' : 'día libre';
         if (alertBox) {
             alertBox.className = "alert alert-info py-2 mb-3";
-            alertBox.innerHTML = '<i class="bi bi-info-circle-fill me-2"></i> Día libre o festivo detectado con marcaciones.';
+            alertBox.innerHTML = '<i class="bi bi-star-fill me-2"></i> <strong>Jornada especial</strong> · trabajo en ' + tipoDia + ' (no es un +2)';
         }
         if (promptText) {
-            promptText.innerHTML = '¿Desea validar esta jornada como <strong>trabajada</strong>?';
+            promptText.innerHTML = '¿Cómo desea validar la <strong>jornada especial (' + horasJa + 'h)</strong>?';
         }
         if (extraInfo) {
-            extraInfo.innerHTML = '';
-            extraInfo.classList.add('d-none');
+            if (ja) {
+                extraInfo.innerHTML = '<div class="mt-2 pt-2 border-top small"><div><strong>Trabajó:</strong> '
+                    + (ja.hora_entrada || '--:--') + ' a ' + (ja.hora_salida || '--:--') + ' (' + horasJa + ' h)</div></div>';
+                extraInfo.classList.remove('d-none');
+            } else {
+                extraInfo.innerHTML = '';
+                extraInfo.classList.add('d-none');
+            }
         }
-        if (footerNote) {
-            footerNote.innerHTML = 'Al validar, el estado cambiará a <strong>EXTRA</strong>.';
-        }
+        if (footerNote) footerNote.innerHTML = notaOpciones;
     }
 
     const footer = marcacionesManualesState.validationModal.querySelector('.modal-footer');
     if (footer) {
         let btnHeHtml = '';
-        if (esDiaHabilProgramado) {
+        if (permiteHE) {
             btnHeHtml = `
-            <button type="button" class="btn btn-warning text-dark fw-bold px-3" onclick="validateJornada('APROBAR_COMO_HE')" title="Aprobar cobertura (+2) e inyectar al 50% en la bolsa de Horas Extras">
+            <button type="button" class="btn btn-warning text-dark fw-bold px-3" onclick="validateJornada('APROBAR_COMO_HE')" title="Aprobar la jornada como horas extra al 50 %">
                 ⏱️ Validar como Horas Extras
             </button>`;
         }
@@ -1404,7 +1409,7 @@ function openValidationModal(empId, dateStr, empNombre) {
             </button>
             ${btnHeHtml}
             <button type="button" class="btn btn-success" onclick="validateJornada('APROBAR')">
-                ✅ Validar Jornada
+                ✅ Validar Jornada (EXTRA)
             </button>
         `;
     }
@@ -1445,7 +1450,7 @@ async function validateJornada(accion = 'APROBAR') {
         if (resp.ok) {
             let msg = "Jornada validada exitosamente";
             if (accion === 'APROBAR_COMO_HE') {
-                msg = "Cobertura (+2) validada exitosamente como Horas Extras al 50%";
+                msg = "Jornada validada como Horas Extras al 50%";
             } else if (accion === 'APROBAR') {
                 msg = "Jornada validada exitosamente como Jornada Especial";
             } else if (accion === 'RECHAZAR') {

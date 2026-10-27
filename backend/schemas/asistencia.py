@@ -75,6 +75,13 @@ class ViajeLargoCreate(BaseModel):
     horas_reconocidas_totales: Optional[float] = None
     observaciones: Optional[str] = None
 
+class CompensarInasistenciaRequest(BaseModel):
+    empleado_id: int
+    fecha: str                          # YYYY-MM-DD, el día de la inasistencia
+    modo: str                           # 'EXTRA' (una jornada EXTRA, día completo) o 'HORAS_EXTRA' (minuto a minuto)
+    fecha_jornada: Optional[str] = None # la jornada EXTRA que se usa (solo con modo 'EXTRA')
+    observaciones: Optional[str] = None
+
 class ReasignarTurnoRequest(BaseModel):
     empleado_id: int
     fecha_origen: str

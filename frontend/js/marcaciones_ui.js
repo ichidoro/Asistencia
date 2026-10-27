@@ -513,11 +513,8 @@ function renderMarcacionesToolbar(container) {
                 </div>
                 ` : ''}
 
-                ${AuthService.hasPermission("marcaciones.intercambio") ? `
-                <button class="btn btn-sm btn-outline-primary shadow-sm ms-2 mx-act-wide" onclick="window.abrirModalIntercambio ? window.abrirModalIntercambio() : console.warn('Intercambios panel not loaded')" title="Registrar Día Compensatorio" style="height:38px; border-color:#e2e8f0; display:flex; align-items:center; gap:5px;">
-                    <i class="bi bi-arrow-left-right"></i> <span class="fw-bold">Días Compensatorios</span>
-                </button>
-                ` : ''}
+                <!-- «Días Compensatorios» se quitó de aquí (27-10-2026): compensar una inasistencia se hace desde el día
+                     faltado, en Acciones de asistencia → Compensar inasistencia -->
 
                 <!-- Días que una regla de marcaciones dejó en revisión: solo aparece cuando hay alguno -->
                 <button class="btn btn-sm btn-outline-danger shadow-sm ms-2 mx-act-wide" id="btn-por-revisar"
@@ -6349,8 +6346,10 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         const jaEst = di.jornada_adicional ? di.jornada_adicional.estado : null;
         const esJaRechazada = jaEst === 'RECHAZADA';
         const esJaHE = jaEst === 'HORAS_EXTRAS';
+        // Una jornada gastada en compensar una inasistencia ya no se paga como jornada especial
+        const esCompensatoria = jaEst === 'COMPENSATORIA' || di.estado === 'JORNADA_COMPENSATORIA';
         const tieneJaPendienteOExtra = Boolean(di.jornada_adicional && (jaEst === 'PENDIENTE' || jaEst === 'JORNADA_ESPECIAL' || jaEst === 'EXTRA'));
-        const esDiaEspecialValido = !esJaRechazada && !esJaHE && (
+        const esDiaEspecialValido = !esJaRechazada && !esJaHE && !esCompensatoria && (
             di.estado === 'JORNADA_ESPECIAL' ||
             di.estado === 'EXTRA' ||
             di.estado === 'FERIADO Y JORNADA EXTRA' ||
@@ -7703,6 +7702,9 @@ function _analiticaCellBadge(di) {
             if (ja.estado === 'RECHAZADA') {
                 // REGLA DE NEGOCIO: Si fue rechazada en día libre/festivo, no abulta la grilla con badge especial
                 primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle} (Jornada rechazada)"` : ''}><span>${label}</span></div>`;
+            } else if (ja.estado === 'COMPENSATORIA') {
+                // Jornada EXTRA gastada en compensar una inasistencia: la celda muestra su propio estado (COMP)
+                primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" title="Jornada usada para compensar una inasistencia"><span>${label}</span></div>`;
             } else if (ja.estado === 'HORAS_EXTRAS') {
                 const class_esp = 'badge-state-warning badge-he';
                 const label_esp = esMasDos ? '+2 HE' : 'HE';
@@ -7745,6 +7747,10 @@ function _analiticaCellBadge(di) {
                     class_der = _getEstadoColor('EXTRA') || 'badge-state-info';
                     label_der = (estadosCache['EXTRA'] || {}).short_label || 'EXT';
                     title_der = 'Jornada Adicional Aprobada como Extra (Bono Plano)';
+                } else if (ja.estado === 'COMPENSATORIA') {
+                    class_der = 'badge-compensatorio';
+                    label_der = 'COMP';
+                    title_der = 'Segunda jornada (+2) usada para compensar una inasistencia';
                 }
                 
                 primaryBadge = `

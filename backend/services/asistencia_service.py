@@ -1253,7 +1253,7 @@ class AsistenciaService:
                         je_to_save = []
                     if je_to_delete:
                         for eid_del, f_str in je_to_delete:
-                            await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'", (eid_del, f_str))
+                            await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA', 'COMPENSATORIA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'", (eid_del, f_str))
                         je_to_delete = []
                 except Exception as e:
                     logger.error(f"Error en checkpoint batch (emp {empleado_id}): {e}")
@@ -1301,7 +1301,7 @@ class AsistenciaService:
                         await self.repository.upsert_jornada_especial(je_rec)
                 if je_to_delete:
                     for eid_del, f_str in je_to_delete:
-                        await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'", (eid_del, f_str))
+                        await self.repository.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? AND estado NOT IN ('EXTRA', 'RECHAZADA', 'COMPENSATORIA') AND observaciones NOT LIKE '%[VALIDADO]%' AND observaciones NOT LIKE '%[RECHAZADO]%'", (eid_del, f_str))
                 t_save = int((_time() - t_save_start) * 1000)
                 logger.info(f"💾 Batch final: {len(results_to_save)} upserts, {len(results_to_delete)} deletes en {t_save}ms (emp {empleado_id})")
             except Exception as e:
@@ -1479,7 +1479,7 @@ class AsistenciaService:
                     chunk = all_je_to_delete[i:i + chunk_size]
                     await self.repository.db.executemany(
                         "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? "
-                        "AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') "
+                        "AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA') "
                         "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO]%' "
                         "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO_COMO_HE]%' "
                         "AND COALESCE(observaciones, '') NOT LIKE '%[RECHAZADO]%'",
@@ -1546,6 +1546,13 @@ class AsistenciaService:
         
         jornada_dict = dict(jornada)
 
+        # Una jornada usada para compensar una inasistencia ya se gastó: primero se quita la compensación
+        if jornada_dict.get('estado') == 'COMPENSATORIA':
+            return {
+                'error': 'Esta jornada está usada para compensar una inasistencia. Quite primero la compensación desde el día de la inasistencia.',
+                'codigo': 'JORNADA_COMPENSATORIA'
+            }
+
         # ─── TELA DE ARAÑA: Bloquear APROBAR si falta marcación de salida ────
         # Una JE aprobada sin hora_salida genera ANOMALIA en asistencias porque
         # el motor no puede calcular horas trabajadas. El ciclo debe estar completo.
@@ -1558,11 +1565,8 @@ class AsistenciaService:
                 'codigo': 'FALTA_SALIDA'
             }
 
-        es_dia_habil = asist and float(asist.get('horas_teoricas') or 0.0) > 0.0
-
-        # REGLA DE NEGOCIO: Transformar a Horas Extras al 50%
-        # SOLO permitido para Ciclos Inteligentes en días hábiles programados (horas_teoricas > 0).
-        # En días festivos, días libres o bolsa flexible: PROHIBIDO.
+        # REGLA DE NEGOCIO: Transformar a Horas Extras al 50%. Una jornada especial (día libre o feriado) se valida igual
+        # que un +2: como EXTRA (monto fijo) o como horas extra (orden del dueño, 27-10-2026). Solo Bolsa Flexible no aplica.
         is_bolsa = False
         if asist and asist.get('_esBolsa'):
             is_bolsa = True
@@ -1585,34 +1589,32 @@ class AsistenciaService:
                     'error': 'En Bolsa Flexible no aplica validación de Horas Extras por este canal.',
                     'codigo': 'BOLSA_NO_PERMITIDA'
                 }
-            if not es_dia_habil or (asist and asist.get('estado') in ('LIBRE', 'FERIADO')) or jornada_dict.get('origen') in ('DIA_LIBRE', 'FERIADO'):
-                return {
-                    'error': 'Las jornadas en días libres o festivos no pueden convertirse en horas extras. Solo pueden validarse como Jornada Especial (EXTRA).',
-                    'codigo': 'DIA_LIBRE_NO_HE'
-                }
 
             min_auth = float(minutos_autorizados) if minutos_autorizados is not None else float(jornada_dict.get('minutos_trabajados') or 0)
             tag_obs = '[VALIDADO_COMO_HE]'
             estado_ret = 'APROBADO_HE'
+            # La fila de horas extra dice de dónde vienen: de un día libre, de un feriado o de un +2
+            origen_he = jornada_dict.get('origen') if jornada_dict.get('origen') in ('DIA_LIBRE', 'FERIADO') else 'COBERTURA_TURNO'
+            texto_he = {'DIA_LIBRE': 'Jornada especial (día libre)', 'FERIADO': 'Jornada especial (feriado)'}.get(origen_he, 'Cobertura (+2)')
 
             # 1. Inyectar/actualizar en horas_extras con recargo al 50%
             await db.execute(
                 """
                 INSERT INTO horas_extras (
-                    empleado_id, fecha, minutos_bruto, minutos_autorizados, 
+                    empleado_id, fecha, minutos_bruto, minutos_autorizados,
                     estado, origen, comentario, updated_at
-                ) VALUES (?, ?, ?, ?, 'APROBADO', 'COBERTURA_TURNO', ?, datetime('now'))
+                ) VALUES (?, ?, ?, ?, 'APROBADO', ?, ?, datetime('now'))
                 ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                     minutos_bruto = excluded.minutos_bruto,
                     minutos_autorizados = excluded.minutos_autorizados,
                     estado = 'APROBADO',
-                    origen = 'COBERTURA_TURNO',
+                    origen = excluded.origen,
                     comentario = excluded.comentario,
                     updated_at = datetime('now')
                 """,
                 (
-                    empleado_id, fecha, min_auth, min_auth,
-                    f"Cobertura (+2) aprobada como Horas Extras al 50% ({round(min_auth/60.0, 1)}h)"
+                    empleado_id, fecha, min_auth, min_auth, origen_he,
+                    f"{texto_he} aprobada como Horas Extras al 50% ({round(min_auth/60.0, 1)}h)"
                 )
             )
 
@@ -2312,7 +2314,7 @@ class AsistenciaService:
         """Elimina una propuesta de Jornada Especial huérfana que NO tenga decisión humana."""
         await self.repository.db.execute(
             "DELETE FROM jornadas_especiales WHERE empleado_id = ? AND fecha = ? "
-            "AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA') "
+            "AND estado NOT IN ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA') "
             "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO]%' "
             "AND COALESCE(observaciones, '') NOT LIKE '%[VALIDADO_COMO_HE]%' "
             "AND COALESCE(observaciones, '') NOT LIKE '%[RECHAZADO]%'",

@@ -1523,7 +1523,10 @@ class AttendanceAdjustmentResolver:
                 res['minutos_deuda'] = 0.0
                 flag_calc = 3
                 res['observaciones'] = (res.get('observaciones') or '') + ' [Día Compensado por Intercambio]'
-            elif fecha == intercambio.get('fecha_destino') and res.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA', 'OK'):
+            elif (fecha == intercambio.get('fecha_destino') and res.get('estado') in ('JORNADA_ESPECIAL', 'EXTRA', 'OK')
+                  and not float(res.get('horas_teoricas') or 0.0)):
+                # Día libre o feriado trabajado que se cambió por la inasistencia. Si el día tenía turno, lo usado fue un +2:
+                # la jornada principal no cambia y solo la segunda jornada queda gastada (COMPENSATORIA en jornadas_especiales).
                 res['estado'] = 'JORNADA_COMPENSATORIA'
                 res['minutos_extra_bruto'] = 0.0
                 res['_jornada_especial'] = None
@@ -1532,11 +1535,16 @@ class AttendanceAdjustmentResolver:
         # 2. Compensación de inasistencia con horas extras
         if compensaciones and res.get('estado') in ('INASISTENCIA', 'FALTA', 'PENDIENTE'):
             total = sum(float(c.get('minutos') or 0) for c in compensaciones)
-            if total > 0:
+            # Minuto a minuto: las horas extra deben cubrir todo el turno del día faltado (orden del dueño, 27-10-2026)
+            requerido = float(res.get('horas_teoricas') or 0.0) * 60.0
+            if total > 0 and round(total) >= round(requerido):
                 res['estado'] = 'INASISTENCIA_COMPENSADA'
                 res['minutos_deuda'] = max(0.0, float(res.get('minutos_deuda') or 0.0) - total)
                 flag_calc = 4
                 res['observaciones'] = (res.get('observaciones') or '') + f' [Inasistencia Compensada con Horas Extras: {int(total)} min]'
+            elif total > 0:
+                res['observaciones'] = (res.get('observaciones') or '') + (
+                    f' [Horas extra insuficientes para compensar: {int(total)} de {int(round(requerido))} min]')
 
         # 3. Cierre de faena / turno condonado
         if prev == 5 and res.get('estado') in ('INASISTENCIA', 'FALTA'):
@@ -1591,7 +1599,8 @@ class HumanDecisionMerger:
     """
 
     VALIDATION_TAGS = ('[VALIDADO]', '[VALIDADO_COMO_HE]', '[RECHAZADO]')
-    JE_HUMAN_STATES = ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA')
+    # COMPENSATORIA: una jornada EXTRA que se gastó compensando una inasistencia (ya no se paga con el monto fijo)
+    JE_HUMAN_STATES = ('EXTRA', 'HORAS_EXTRAS', 'RECHAZADA', 'COMPENSATORIA')
 
     @classmethod
     def je_is_validated(cls, je_prev: Optional[Dict[str, Any]]) -> bool:
