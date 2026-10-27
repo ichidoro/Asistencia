@@ -3532,7 +3532,32 @@ function m180GpsReset() {
     if (r) r.innerHTML = '<div class="text-muted small">Elige la patente del camión que usó el chofer y pulsa <b>Ver recorrido</b>: se compara su día con los tramos de la libreta.</div>';
     const k = document.getElementById('m180-gps-kpis'); if (k) k.innerHTML = '';
     const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = '';
+    m180GpsCarril(null);
     m180GpsCargarVehiculos();
+}
+
+// Carril "GPS" dentro de la línea de tiempo 24 h (mismos bloques que los carriles de actividad). Sin datos de GPS queda oculto.
+function m180GpsCarril(g, rangos, TXT) {
+    const lane = document.getElementById('m180-gps-lane');
+    if (!lane) return;
+    if (!g || !g.hay_datos) { lane.style.display = 'none'; return; }
+    const NOMBRE = { 1: ['MOV', 'En movimiento'], 2: ['DET', 'Detenido'] };
+    let html = '';
+    for (let i = 0; i < 96;) {
+        const v = g.slots_gps[i];
+        if (v !== 1 && v !== 2) { i++; continue; }
+        let j = i; while (j < 96 && g.slots_gps[j] === v) j++;
+        const dur = formatMinToHHMM((j - i) * 15);
+        html += `<div class="m180-block" style="left:${(i / 96) * 100}%; width:${((j - i) / 96) * 100}%; --c:${M180_GPS_COLOR[v]};" title="${m180GpsHora(i)} – ${m180GpsHora(j)} · GPS ${NOMBRE[v][1]} (${dur})"><b>${NOMBRE[v][0]}</b><i>${dur}</i></div>`;
+        i = j;
+    }
+    (rangos || []).forEach(x => {
+        html += `<div class="m180-gps-mark" style="left:${(x.de / 96) * 100}%; width:${((x.a - x.de) / 96) * 100}%;" title="${m180GpsHora(x.de)} – ${m180GpsHora(x.a)} · no calza: ${TXT[x.tipo]}"></div>`;
+    });
+    document.getElementById('m180-gps-blocks').innerHTML = html;
+    document.getElementById('m180-gps-lane-label').textContent = 'GPS · ' + ((g.vehiculo && g.vehiculo.patente) || '');
+    document.getElementById('m180-gps-lane-total').textContent = formatMinToHHMM(g.min_mov_gps);
+    lane.style.display = '';
 }
 
 // Patentes de la plataforma de GPS (una vez por sesión); recuerda la última elegida para ese empleado.
@@ -3574,7 +3599,7 @@ async function m180GpsVer() {
         m180_gps = d; estado.textContent = '';
         m180GpsPintar();
     } catch (err) {
-        m180_gps = null; estado.textContent = err.message;
+        m180_gps = null; estado.textContent = err.message; m180GpsCarril(null);
         const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
     } finally { btn.disabled = false; }
 }
@@ -3600,6 +3625,7 @@ function m180GpsPintar() {
     const g = m180_gps;
     const patente = m180GpsEsc(g.vehiculo && g.vehiculo.patente);
     if (!g.hay_datos) {
+        m180GpsCarril(null);
         if (kpis) kpis.innerHTML = '';
         host.innerHTML = `<div class="alert alert-secondary py-2 small mb-0">${g.todo_el_dia_en_planta ? 'El camión estuvo todo el día dentro de la planta.' : 'El GPS no tiene datos de ' + patente + ' en este día.'}</div>`;
         return;
@@ -3626,10 +3652,7 @@ function m180GpsPintar() {
         let j = i; while (j < 96 && marca[j] === marca[i]) j++;
         rangos.push({ de: i, a: j, tipo: marca[i] }); i = j;
     }
-    const act = M180_ACTIVIDADES;
-    const barraLib = sl.map((a, i) => `<div title="${m180GpsHora(i)}" style="flex:1;background:${a ? act[a].color : '#f1f3f5'}"></div>`).join('');
-    const barraGps = g.slots_gps.map((c, i) => `<div title="${m180GpsHora(i)}" style="flex:1;background:${M180_GPS_COLOR[c]};${marca[i] ? 'outline:2px solid #dc2626;outline-offset:-2px;' : ''}"></div>`).join('');
-    const regla = [0, 3, 6, 9, 12, 15, 18, 21].map(h => `<span style="flex:1;font-size:.65rem;color:#6b7280">${String(h).padStart(2, '0')}h</span>`).join('');
+    m180GpsCarril(g, rangos, TXT);
     const minCondLib = sl.filter(v => v === 1).length * 15;
     const difCond = g.min_mov_gps - minCondLib;
     // Paradas del GPS contra lo que la libreta tenía en ese momento
@@ -3664,12 +3687,8 @@ function m180GpsPintar() {
             m180GpsKpi('Jornada', r.primero ? `${m180GpsEsc(r.primero).slice(0, 5)}–${m180GpsEsc(r.ultimo).slice(0, 5)}` : '—', `GPS · libreta ${libIni}–${libFin}`, '#7c3aed');
     }
     host.innerHTML = `
-        <div class="d-flex align-items-center gap-2 mb-1"><span class="small fw-semibold">Libreta</span></div>
-        <div class="d-flex" style="height:22px;border-radius:5px;overflow:hidden">${barraLib}</div>
-        <div class="d-flex align-items-center gap-2 mt-2 mb-1 flex-wrap"><span class="small fw-semibold">GPS · ${patente}</span>
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap"><span class="small fw-semibold">GPS · ${patente}</span><span class="text-muted" style="font-size:.7rem">(carril «GPS» en la línea de tiempo de arriba)</span>
             <span class="text-muted" style="font-size:.7rem"><i class="bi bi-square-fill" style="color:#16a34a"></i> en movimiento &nbsp; <i class="bi bi-square-fill" style="color:#f59e0b"></i> detenido &nbsp; <i class="bi bi-square-fill" style="color:#d1d5db"></i> sin dato o en planta &nbsp; <i class="bi bi-square" style="color:#dc2626"></i> no calza</span></div>
-        <div class="d-flex" style="height:22px;border-radius:5px;overflow:hidden">${barraGps}</div>
-        <div class="d-flex mt-1">${regla}</div>
         <div class="row g-3 mt-1">
             <div class="col-lg-5"><div class="small fw-semibold mb-1">Tramos que no calzan</div>
                 ${rangos.length ? `<ul class="small mb-0 ps-3">${rangos.map(x => `<li>${m180GpsHora(x.de)}–${m180GpsHora(x.a)} (${(x.a - x.de) * 15} min): ${TXT[x.tipo]}</li>`).join('')}</ul>` : '<div class="alert alert-success py-2 small mb-0">Todos los tramos con GPS calzan con la libreta.</div>'}</div>
