@@ -705,7 +705,9 @@ const ReglasMarcasModule = (() => {
 
         const barra = '<div class="rmx-barra"><p><b>En una frase:</b> ' + esc(fraseRegla(r)) + '</p><div class="d-flex gap-2 flex-wrap">'
             + '<button type="button" class="rmx-btn rmx-btn-sec" id="rm-ver-dias">Ver los días</button>'
-            + (edit ? '<button type="button" class="rmx-btn rmx-btn-pri" id="rm-guardar"' + (_hayCambios(r) ? '' : ' disabled') + '>' + (_hayCambios(r) ? '1. Guardar cambios' : 'Guardado') + '</button>' : '')
+            // Paso 1 «Guardar» y paso 2 «Correr»: el 1 está gris solo cuando no hay nada nuevo que guardar (pedido del dueño, 27-10-2026).
+            + (edit ? '<button type="button" class="rmx-btn rmx-btn-pri" id="rm-guardar"' + (_hayCambios(r) ? '' : ' disabled title="No hay cambios por guardar: ya puede correr la regla (paso 2)."') + '>'
+                + (_hayCambios(r) ? '1. Guardar cambios' : '1. Guardado ✓') + '</button>' : '')
             + (puede && data.motor_conectado
                 ? (r.activa ? '<button type="button" class="rmx-btn rmx-btn-no" id="rm-correr" data-encender="0">Apagar esta regla</button>'
                             : '<button type="button" class="rmx-btn rmx-btn-ok" id="rm-correr" data-encender="1">' + (edit ? '2. ' : '') + 'Correr esta regla</button>')
@@ -809,7 +811,7 @@ const ReglasMarcasModule = (() => {
 
     async function correrRegla(r, encender) {
         if (encender && _hayCambios(r)) {
-            toast('La regla ' + palabras(r.secuencia) + ' tiene cambios sin guardar: apriete «Guardar» antes de correrla.', 'warning');
+            toast('La regla ' + palabras(r.secuencia) + ' tiene cambios sin guardar: apriete «1. Guardar cambios» antes de correrla.', 'warning');
             return;
         }
         const verbo = encender ? 'Correr' : 'Apagar';
