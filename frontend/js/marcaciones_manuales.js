@@ -3552,8 +3552,16 @@ function m180GpsTabla(g) {
         // Conduciendo: la hora exacta de cada tramo en que el camión andaba (como las paradas, sin redondear a 15 min); si el servidor no los trae, los tramos de 15 min
         if (v === 1) {
             const tramos = Array.isArray(g.tramos_mov) ? g.tramos_mov : (g.slots_gps || []).reduce((a, x, i) => { if (x === 1) { const u = a[a.length - 1]; if (u && u[1] === i * 900) u[1] += 900; else a.push([i * 900, i * 900 + 900]); } return a; }, []);
-            // Los cortes de menos de 5 min entre dos tramos (semáforo, cola) no son una detención: se unen para que no se vea trozado
-            const unidos = tramos.reduce((o, [ini, fin]) => { const u = o[o.length - 1]; if (u && ini - u[1] < 300) u[1] = Math.max(u[1], fin); else o.push([ini, fin]); return o; }, []);
+            // Entre una parada y la siguiente el camión iba conduciendo: la fila queda continua, complementaria a Detenido (como la línea de tiempo de la libreta).
+            // Solo se dibuja el tramo si el GPS vio movimiento dentro de él (así un hueco sin reportes no se pinta como conducción).
+            const rs0 = g.resumen || {}, par = (g.paradas || []).map(p => [m180GpsSeg(p.desde), Math.max(m180GpsSeg(p.hasta), m180GpsSeg(p.desde) + 60)]).sort((a, b) => a[0] - b[0]);
+            const puntos = [rs0.primero ? m180GpsSeg(rs0.primero) : null, ...par.flat(), rs0.ultimo ? m180GpsSeg(rs0.ultimo) : null];
+            const entre = [];
+            if (par.length && puntos[0] != null && puntos[puntos.length - 1] != null) {
+                const lim = [[puntos[0], par[0][0]], ...par.slice(1).map((q, k) => [par[k][1], q[0]]), [par[par.length - 1][1], puntos[puntos.length - 1]]];
+                lim.forEach(([a, b]) => { if (b - a >= 120 && (!Array.isArray(g.tramos_mov) || g.tramos_mov.some(([x, y]) => x < b && y > a))) entre.push([a, b]); });
+            }
+            const unidos = entre.length ? entre : tramos.reduce((o, [ini, fin]) => { const u = o[o.length - 1]; if (u && ini - u[1] < 300) u[1] = Math.max(u[1], fin); else o.push([ini, fin]); return o; }, []);
             unidos.forEach(([ini, fin]) => {
                 const dur = formatMinToHHMM(Math.max(1, Math.round((fin - ini) / 60))), h = x => String(Math.floor(x / 3600)).padStart(2, '0') + ':' + String(Math.floor(x % 3600 / 60)).padStart(2, '0');
                 html += `<div class="m180-block" style="left:${(ini / 86400) * 100}%; width:${((fin - ini) / 86400) * 100}%;" title="${h(ini)} – ${h(fin)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
