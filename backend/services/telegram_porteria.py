@@ -52,9 +52,13 @@ async def avisar_marca(emp: dict, tipo: str, hora: str, registrado_por: str) -> 
                 return
             _chat_id = chat
             apodo = APODOS[(_norm(emp.get("apellido_paterno")), _norm(emp.get("nombre")).split()[0])]
-            verbo, icono = ("entró a la planta", "🟢") if tipo == "E" else ("salió de la planta", "🔴")
-            hoy = datetime.now(ZoneInfo("America/Santiago")).strftime("%d-%m-%Y")
-            msg = f"{icono} <b>{apodo}</b> {verbo} a las <b>{html.escape(hora[:5])}</b>\n📅 {hoy} · 🛂 Portería, Art. 22 · registró {html.escape(str(registrado_por))}"
+            verbo, icono, barra = ("entró a la planta", "🟢", "🟩") if tipo == "E" else ("salió de la planta", "🔴", "🟥")
+            ahora = datetime.now(ZoneInfo("America/Santiago"))
+            dia = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")[ahora.weekday()]
+            # Telegram no admite fondos: la barra de cuadros de color y el recuadro de cita dan el aspecto de tarjeta
+            msg = (f"{barra * 12}\n\n{icono}  <b>{apodo}</b> {verbo}\n\n"
+                   f"<blockquote>🕐  <b>{html.escape(hora[:5])} hrs</b>\n📅  {dia} {ahora:%d-%m-%Y}\n🛂  Portería · Artículo 22\n✍️  Registró: {html.escape(str(registrado_por))}</blockquote>\n"
+                   f"{barra * 12}")
             async with ses.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat, "text": msg, "parse_mode": "HTML"}) as r:
                 if r.status != 200:
                     logger.warning(f"[ART22] Telegram respondió {r.status}: {(await r.text())[:200]}")
