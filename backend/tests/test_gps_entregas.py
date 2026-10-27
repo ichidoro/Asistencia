@@ -94,6 +94,12 @@ def test_misma_comuna_no_inventa_la_parada():
     assert r["paradas"] == [None, None]
 
 
+def test_una_sola_parada_en_la_comuna_se_muestra_sin_marcarla():
+    it = cruzar_entregas([entrega("Los Aromos 9", "Curicó")], PARADAS)["entregas"][0]
+    assert it["estado"] == "comuna" and it["parada_idx"] == 1 and it["parada"]["desde"] == "11:00:00"
+    assert cruzar_entregas([entrega("Los Aromos 9", "Curicó")], PARADAS)["paradas"] == [None, None]
+
+
 def test_resumen():
     r = cruzar_entregas([entrega("AV BERNARDO O'HIGGINS 1", "San Fernando"), entrega("X 1", "Curicó"), entrega("Y 1", "Romeral")], PARADAS)
     assert r["resumen"] == {"total": 3, "calza": 0, "calle": 1, "cercana": 0, "comuna": 1, "lejos": 0, "sin_parada": 1}

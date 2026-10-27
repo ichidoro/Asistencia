@@ -4503,3 +4503,11 @@ tr:hover .emp-name-cell {
 #m180-gps-card-sub b { color: #fff; font-variant-numeric: tabular-nums; }
 .m180-gps-hito { position: absolute; top: 50%; z-index: 3; display: grid; place-items: center; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #1e3a8a; color: #fff; font-size: .74rem; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(15, 23, 42, .35); pointer-events: auto; cursor: help; animation: mxChipIn .5s var(--mx-ease) .25s both; }
 @media (prefers-reduced-motion: reduce) { .m180-gps-hito { animation: none; } }
+
+/* Parada en la fila Detenido, con su hora exacta, numerada igual que en la tabla de paradas */
+.m180-par-real { min-width: 7px; padding: 0 5px; pointer-events: auto; cursor: help; }
+.m180-par-n { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px; background: #9a3412; color: #fff; font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.m180-par-tip { position: fixed; z-index: 3000; max-width: min(420px, calc(100vw - 16px)); padding: 10px 14px; border-radius: 12px; background: #0f172a; color: #e2e8f0; font-size: .9rem; line-height: 1.35; box-shadow: 0 14px 32px -10px rgba(15, 23, 42, .6), 0 2px 6px rgba(15, 23, 42, .25); pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .18s var(--mx-ease); }
+.m180-par-tip.es-visible { opacity: 1; transform: none; }
+.m180-par-tip-h { margin-bottom: 4px; color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .m180-par-tip { transition: none; } }

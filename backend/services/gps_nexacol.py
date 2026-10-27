@@ -229,6 +229,8 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
             # Solo se sabe que el camión paró en esa comuna: no se asigna ninguna parada (sería inventar cuál)
             item["estado"], item["via"] = "comuna", "comuna"
             item["paradas_comuna"] = [{k: p.get(k) for k in ("desde", "hasta", "min")} for _, p in en_comuna]
+            if len(en_comuna) == 1:   # una sola parada en esa comuna: se muestra (sin marcarla en la línea de tiempo: solo coincide la comuna)
+                item["parada_idx"], item["parada"] = en_comuna[0][0], {k: en_comuna[0][1].get(k) for k in ("desde", "hasta", "min", "lugar")}
         elif near and item["exacto"]:
             item["estado"], item["via"], elegida = "lejos", "distancia", (near[1], near[2])
         if near:
