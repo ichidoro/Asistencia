@@ -152,7 +152,9 @@ def _norm(t: Any) -> str:
     """Minúsculas, sin tildes ni signos: "AV. O'Higgins 12" -> "av ohiggins 12"."""
     import re
     import unicodedata
-    t = unicodedata.normalize("NFD", str(t or "")).encode("ascii", "ignore").decode().lower().replace("'", "")
+    # "16 1/2 Norte" y "16½ Norte" son la misma calle
+    t = re.sub(r"(\d+)\s*(?:1\s*/\s*2|½)", r"\1medio", str(t or ""))
+    t = unicodedata.normalize("NFD", t).encode("ascii", "ignore").decode().lower().replace("'", "")
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", t)).strip()
 
 
@@ -175,7 +177,8 @@ def _tokens_calle(calle: Any) -> List[str]:
 
 def _calle_en_lugar(ident: Dict[str, List[str]], palabras: Any, pares: Any) -> bool:
     if ident["pares"]:
-        return all(p in pares for p in ident["pares"])
+        # En una esquina ("6 Oriente esquina 3 Norte") basta con que la parada esté en una de las dos calles
+        return any(p in pares for p in ident["pares"])
     return bool(ident["nombre"]) and all(t in palabras for t in ident["nombre"])
 
 

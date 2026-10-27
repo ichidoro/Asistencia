@@ -3647,7 +3647,7 @@ function m180GpsEntregasPintar() {
                     ? `<div class="m180-ent-barra" title="Distancia entre la dirección de la factura y la parada"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div><small>${e.dist_m} m de la parada</small>`
                     : `<small class="m180-ent-lugar" title="${esc(e.parada.lugar)}">Parada: ${esc(e.parada.lugar)}</small>`}`
             : (e.paradas_comuna && e.paradas_comuna.length
-                ? `<div class="m180-ent-hora">${e.paradas_comuna.length} ${e.paradas_comuna.length === 1 ? 'parada' : 'paradas'} en ${esc(e.comuna)}</div><small class="m180-ent-lugar" title="No se sabe en cuál de ellas se entregó">${e.paradas_comuna.slice(0, 4).map(p => esc(String(p.desde).slice(0, 5)) + ' (' + p.min + ' min)').join(' · ')}${e.paradas_comuna.length > 4 ? ' …' : ''}</small>`
+                ? `<div class="m180-ent-hora" title="${esc(e.paradas_comuna.map(p => String(p.desde).slice(0, 5) + ' (' + p.min + ' min)').join(' · '))}">${e.paradas_comuna.length} ${e.paradas_comuna.length === 1 ? 'parada' : 'paradas'} en ${esc(e.comuna)}</div><small class="m180-ent-lugar">La dirección no coincide con ninguna: no se sabe cuál es</small>`
                 : '<div class="m180-ent-hora text-muted">El camión no paró en esa comuna</div>');
         return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
             <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>

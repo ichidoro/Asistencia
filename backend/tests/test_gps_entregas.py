@@ -61,10 +61,12 @@ TALCA = [
 def test_calles_numeradas_se_comparan_por_numero_y_direccion():
     # "18 ORIENTE" NO es "6 Oriente" ni "Barrio Norte"; "1 SUR" NO es "Culenar Sur" (esto salía como «calza» por comparar solo "oriente"/"sur")
     assert estados([entrega("18 ORIENTE 480", "Talca"), entrega("1 SUR 2227", "Talca"), entrega("17 ORIENTE 801", "Talca")], TALCA) == ["comuna", "comuna", "comuna"]
-    # "6 ORIENTE" sí es la parada «6 Oriente»; el orden de la esquina no importa
-    assert estados([entrega("14 NORTE 6 ORIENTE 1297", "Talca")], TALCA) == ["comuna"]  # falta "14 norte": no se afirma
-    assert estados([entrega("6 ORIENTE 1399 ESQUINA 3 NORTE", "Talca")], TALCA) == ["comuna"]
+    # una esquina calza si la parada está en CUALQUIERA de sus dos calles
+    assert estados([entrega("14 NORTE 6 ORIENTE 1297", "Talca")], TALCA) == ["calza"]
+    assert estados([entrega("6 ORIENTE 1399 ESQUINA 3 NORTE", "Talca")], TALCA) == ["calza"]
     assert estados([entrega("6 ORIENTE 55", "Talca")], TALCA) == ["calza"]
+    # "16 1/2 NORTE" es la parada «16½ Norte»
+    assert estados([entrega("16 1/2 NORTE 1795 B", "Talca")], TALCA) == ["calza"]
 
 
 def test_numeros_en_letras():
