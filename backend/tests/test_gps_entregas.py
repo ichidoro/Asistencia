@@ -161,3 +161,11 @@ def test_si_paro_en_la_calle_entonces_paso_por_ella():
     assert paso_coherente(it, real) is real
     sin = cruzar_entregas([entrega("Los Aromos 9", "Romeral")], PARADAS)["entregas"][0]
     assert paso_coherente(sin, {"estado": "no_paso"})["estado"] == "no_paso"
+
+
+def test_comuna_grande_se_acepta_si_es_de_las_dos_mas_cercanas():
+    # Un punto en la zona rural de Talca (a más de 12 km del centro) sigue siendo de Talca; una calle con el mismo nombre en Curicó, no
+    pasos = [{"nombre": "Camino Los Aromos", "desde": 30000, "hasta": 30100, "la": -35.30, "lo": -71.75}]
+    e = {"calle": "CAMINO LOS AROMOS 5", "comuna": "Talca", "comuna_la": -35.4264, "comuna_lo": -71.6554}
+    assert pasos_por_direccion([e], pasos)[0]["estado"] == "paso"
+    assert pasos_por_direccion([{**e, "comuna": "Curicó", "comuna_la": -34.98, "comuna_lo": -71.23}], pasos)[0]["estado"] == "no_paso"

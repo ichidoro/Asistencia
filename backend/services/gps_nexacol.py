@@ -266,7 +266,22 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
     return {"entregas": items, "paradas": por_parada, "resumen": {"total": len(items), **cuenta}}
 
 
-RADIO_COMUNA_KM = 12   # una calle recorrida cuenta como de la comuna de la factura si queda a menos de esto del centro de la comuna
+RADIO_COMUNA_KM = 12   # una calle recorrida cuenta como de la comuna de la factura si queda a menos de esto del centro de la comuna...
+_COMUNAS: List[Dict[str, Any]] = []   # ...o si esa comuna es una de las 2 más cercanas (por su centro) al punto: así las comunas grandes no se quedan fuera. Tabla con CUT, de Nexacol.
+
+
+def _comunas_cercanas(la: float, lo: float, k: int = 2) -> List[str]:
+    """Nombres normalizados de las k comunas cuyo centro queda más cerca del punto."""
+    global _COMUNAS
+    if not _COMUNAS:
+        import json
+        import os
+        try:
+            with open(os.path.join(os.path.dirname(__file__), "comunas_cut.json"), encoding="utf8") as f:
+                _COMUNAS = json.load(f)
+        except Exception:
+            _COMUNAS = [{"k": "", "la": 0.0, "lo": 0.0}]
+    return [c["k"] for c in sorted(_COMUNAS, key=lambda c: _metros(la, lo, c["la"], c["lo"]))[:k]]
 
 
 def _hm(s: Any) -> str:
@@ -297,7 +312,8 @@ def pasos_por_direccion(entregas: List[Dict[str, Any]], pasos: List[Dict[str, An
             if not c:
                 continue
             if num(e.get("comuna_la")) and num(e.get("comuna_lo")) and num(q.get("la")) and num(q.get("lo")):
-                if _metros(q["la"], q["lo"], e["comuna_la"], e["comuna_lo"]) > RADIO_COMUNA_KM * 1000:
+                lejos = _metros(q["la"], q["lo"], e["comuna_la"], e["comuna_lo"]) > RADIO_COMUNA_KM * 1000
+                if lejos and _norm(e.get("comuna")) not in _comunas_cercanas(q["la"], q["lo"]):
                     continue
             hallados.append((q, c))
         if hallados:
