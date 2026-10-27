@@ -141,8 +141,6 @@ def validar_regla(regla: dict) -> str:
     for op in opciones:
         if op not in OPCIONES_REVISION:
             return f"Opción de revisión desconocida: {op}."
-    if regla.get('avisa_fuera_de_ciclo') not in (None, 0, 1, True, False):
-        return "Avisar si no calza con ningún ciclo: valor desconocido."
     if len(sec) == 1 and lectura != 'NINGUNA':
         return "Con una sola marca no se puede calcular: la lectura debe ser «no leer»."
     if lectura == 'NINGUNA' and accion != 'SOLO_REVISA':

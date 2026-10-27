@@ -166,7 +166,6 @@ async def ensayar_regla(regla: Dict[str, Any], propuesta: Dict[str, Any],
             'lectura': propuesta['lectura'],
             'colacion': propuesta['colacion'],
             'accion': propuesta['accion'],
-            'avisa_fuera_de_ciclo': 1 if propuesta.get('avisa_fuera_de_ciclo') else 0,
             'eleccion_colacion': propuesta.get('eleccion_colacion') or 'PARECIDA',
         }
         despues: Dict[Tuple[int, str], Dict[str, Any]] = {}

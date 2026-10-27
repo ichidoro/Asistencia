@@ -70,9 +70,10 @@ def test_entrada_exacta_y_salida_exacta_no_marcan_nada(monkeypatch):
 
 def test_sin_rango_de_anticipacion_cuenta_la_hora_real_de_entrada(monkeypatch):
     # Rango Anticipación Entrada 0: llegar 30 s antes ya no se ajusta a las 07:00; esos 30 s se trabajaron y pagan
-    # parte de los 20 s que salió antes. El día marca la salida adelantada, pero no queda deuda.
+    # los 20 s que salió antes. Salió antes menos de lo que llegó antes: jornada corrida, no salida adelantada
+    # (orden del dueño, 27-10-2026), y no queda deuda.
     r = _dia(monkeypatch, [("06:59:30", E), ("16:29:40", S)], anclaje_entrada_minutos=0)
-    assert r["estado"] == "SALIDA_ADELANTADA" and abs(r["minutos_salida_adelantada"] - 0.33) < 0.01
+    assert r["estado"] == "OK" and r["minutos_salida_adelantada"] == 0 and "Jornada corrida" in r["observaciones"]
     assert r["minutos_deuda"] == 0
 
 

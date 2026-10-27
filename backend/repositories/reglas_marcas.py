@@ -28,7 +28,6 @@ CLAVE_COLACION_MIN = 'reglas_marcas_colacion_min_minutos'
 CLAVE_COLACION_MAX = 'reglas_marcas_colacion_max_minutos'
 CLAVE_REPETIDAS = 'reglas_marcas_repetidas_minutos'
 CLAVE_COLACION_REFERENCIA = 'reglas_marcas_colacion_referencia_minutos'
-CLAVE_FUERA_CICLO = 'reglas_marcas_fuera_ciclo_minutos'
 
 # Ajustes que la pestaña deja cambiar: clave → (descripción, mínimo, máximo).
 # El valor de cada uno vive en la tabla `ajustes`, no aquí.
@@ -38,8 +37,6 @@ AJUSTES_EDITABLES = {
                       '(se queda la primera ENTRADA o la última SALIDA).', 0, 240),
     CLAVE_COLACION_REFERENCIA: ('Minutos de colación de referencia para elegir cuál pausa es la colación '
                                 'cuando el horario no tiene colación configurada.', 0, 240),
-    CLAVE_FUERA_CICLO: ('Minutos de diferencia entre la ENTRADA y la del ciclo más cercano del horario '
-                        'para avisar que el día no calza con ningún ciclo.', 0, 720),
 }
 
 # La cuenta de jornadas por secuencia recorre todo el historial: se guarda 10 minutos.
@@ -70,12 +67,15 @@ class ReglasMarcasRepository:
                     UNIQUE (tipo_horario, secuencia)
                 )
             """)
-        # Opción «avisar si las marcas no calzan con ningún ciclo del horario» (por regla).
+        # La opción «avisar si las marcas no calzan con ningún ciclo del horario» y sus minutos se quitaron (27-10-2026):
+        # esos días se calculan solos (salida adelantada solo si salió antes más de lo que llegó antes). Estaba apagada en todas.
         try:
-            if 'avisa_fuera_de_ciclo' not in set(await self.db.get_column_names("reglas_marcas")):
-                await self.db.execute("ALTER TABLE reglas_marcas ADD COLUMN avisa_fuera_de_ciclo INTEGER DEFAULT 0")
+            if 'avisa_fuera_de_ciclo' in set(await self.db.get_column_names("reglas_marcas")):
+                await self.db.execute("ALTER TABLE reglas_marcas DROP COLUMN avisa_fuera_de_ciclo")
+                await self.db.execute("DELETE FROM ajustes WHERE clave = 'reglas_marcas_fuera_ciclo_minutos'")
+                logger.info("[Migration] Opción de ciclos quitada de las reglas de marcaciones")
         except Exception as e:
-            logger.warning(f"Columna avisa_fuera_de_ciclo: {e}")
+            logger.warning(f"Quitar la opción de ciclos de las reglas: {e}")
         # «¿Cuál pausa es la colación?» (por regla; solo se pregunta cuando el día tiene dos pausas o más).
         # Parte en la forma de siempre (PARECIDA): ninguna regla cambia hasta que alguien elija otra cosa.
         try:
@@ -109,7 +109,6 @@ class ReglasMarcasRepository:
                      'Reglas de marcaciones: minutos máximos de una pausa para que la pantalla la señale como colación.'),
                     (CLAVE_REPETIDAS, '20', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_REPETIDAS][0]),
                     (CLAVE_COLACION_REFERENCIA, '60', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_COLACION_REFERENCIA][0]),
-                    (CLAVE_FUERA_CICLO, '120', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_FUERA_CICLO][0]),
                 ]
             )
         except Exception as e:
@@ -558,14 +557,12 @@ class ReglasMarcasRepository:
         if actual.get('activa'):
             return {'error': 'Esta regla está encendida y el motor la está usando: '
                              'apáguela antes de cambiarla, para que el cambio corra con su propio antes y después.'}
-        avisa = cambios.get('avisa_fuera_de_ciclo', actual.get('avisa_fuera_de_ciclo') or 0)
         nueva = {
             'secuencia': actual['secuencia'],
             'lectura': cambios.get('lectura', actual['lectura']),
             'colacion': cambios.get('colacion', actual['colacion']),
             'accion': cambios.get('accion', actual['accion']),
             'opciones_revision': cambios.get('opciones_revision', actual['opciones_revision']),
-            'avisa_fuera_de_ciclo': 1 if avisa in (1, True, '1', 'true') else 0,
             'eleccion_colacion': cambios.get('eleccion_colacion') or actual.get('eleccion_colacion') or 'PARECIDA',
         }
         motivo = validar_regla(nueva)
@@ -575,11 +572,11 @@ class ReglasMarcasRepository:
         await self.db.execute(
             """UPDATE reglas_marcas
                   SET lectura = ?, colacion = ?, accion = ?, opciones_revision = ?,
-                      avisa_fuera_de_ciclo = ?, eleccion_colacion = ?, nota = ?, updated_by = ?,
+                      eleccion_colacion = ?, nota = ?, updated_by = ?,
                       updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?""",
             (nueva['lectura'], nueva['colacion'], nueva['accion'],
-             json.dumps(nueva['opciones_revision']), nueva['avisa_fuera_de_ciclo'], nueva['eleccion_colacion'],
+             json.dumps(nueva['opciones_revision']), nueva['eleccion_colacion'],
              nota, username, regla_id)
         )
         despues = await self.obtener(regla_id)

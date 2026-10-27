@@ -249,33 +249,37 @@ BODEGA = {"es_libre": 0, "horas_teoricas": 8.0, "hora_entrada": "11:30", "hora_s
 CALDERON = [L(1, "2026-10-15 06:18:00", E), L(2, "2026-10-15 18:33:00", S)]
 
 
-def _regla_ciclo(avisa):
-    qme.REGLAS_MARCAS_ACTIVAS["ES"] = {"secuencia": "ES", "lectura": "EXTREMOS", "colacion": "TURNO",
-                                       "accion": "CALCULA", "avisa_fuera_de_ciclo": avisa}
-
-
-def test_avisa_si_no_calza_con_ningun_ciclo(monkeypatch):
-    _regla_ciclo(1)
-    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "reglas_marcas_fuera_ciclo_minutos", "120")
+def test_jornada_corrida_temprano_no_es_salida_adelantada(monkeypatch):
+    # Calderón 23-10: horario 11:30–20:00, marcó 06:18–18:33 (llegó 5 h 12 antes y salió 1 h 27 antes). No es salida
+    # adelantada: las horas van de su ENTRADA a su SALIDA reales menos una colación, y lo que pasa de 8 h es hora extra.
     r = _dia(monkeypatch, CALDERON, dia=BODEGA)
-    assert qme.MARCA_REVISION_REGLA in r["observaciones"]
-    assert "no calzan con ningún ciclo" in r["observaciones"] and "06:18" in r["observaciones"]
-    assert r["horas_trabajadas"] > 0                               # se calcula igual
+    assert r["tiene_salida_adelantada"] == 0 and r["estado"] == "OK" and r["minutos_salida_adelantada"] == 0
+    assert "Jornada corrida" in r["observaciones"]
+    assert abs(r["horas_trabajadas"] - (12.25 - 0.5)) < 0.02 and round(r["minutos_extra_bruto"]) == 225
 
 
-def test_no_avisa_si_calza_o_si_la_opcion_esta_apagada(monkeypatch):
-    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "reglas_marcas_fuera_ciclo_minutos", "120")
-    _regla_ciclo(0)
-    assert qme.MARCA_REVISION_REGLA not in (_dia(monkeypatch, CALDERON, dia=BODEGA).get("observaciones") or "")
-    _regla_ciclo(1)
-    a_tiempo = [L(1, "2026-10-15 11:20:00", E), L(2, "2026-10-15 20:05:00", S)]
-    assert qme.MARCA_REVISION_REGLA not in (_dia(monkeypatch, a_tiempo, dia=BODEGA).get("observaciones") or "")
+def test_si_sale_antes_mas_de_lo_que_llego_antes_sigue_siendo_salida_adelantada(monkeypatch):
+    chacon = [L(1, "2026-10-15 05:54:00", E), L(2, "2026-10-15 13:45:00", S)]   # llegó 5 h 36 antes, salió 6 h 15 antes
+    r = _dia(monkeypatch, chacon, dia=BODEGA)
+    assert r["tiene_salida_adelantada"] == 1 and r["estado"] == "SALIDA_ADELANTADA"
+    assert round(r["minutos_deuda"]) == 39 and "Jornada corrida" not in r["observaciones"]
 
 
-def test_sin_el_ajuste_configurado_la_opcion_no_avisa(monkeypatch):
-    _regla_ciclo(1)
-    r = _dia(monkeypatch, CALDERON, dia=BODEGA)                    # sin reglas_marcas_fuera_ciclo_minutos
-    assert qme.MARCA_REVISION_REGLA not in (r.get("observaciones") or "")
+def test_llegar_antes_dentro_del_rango_de_anticipacion_no_compensa(monkeypatch):
+    # Con rango de anticipación de 15 min, llegar 10 min antes cuenta desde la hora del horario: salir 5 min antes sigue
+    # siendo salida adelantada.
+    turno = dict(TURNO, anclaje_entrada_minutos=15)
+    r = _dia(monkeypatch, [L(1, "2026-10-15 11:20:00", E), L(2, "2026-10-15 19:55:00", S)], turno=turno, dia=BODEGA)
+    assert r["tiene_salida_adelantada"] == 1 and round(r["minutos_salida_adelantada"]) == 5
+
+
+def test_una_sola_colacion_aunque_la_jornada_pase_el_tope_de_horas_extra(monkeypatch):
+    # Calderón 02-10: 05:54–19:45 son 13 h 51; menos una colación, 13 h 21: 5 h 21 sobre las 8 h. Pasa el tope de 4 h de
+    # horas extra ordinarias y va a cobertura de turno, sin descontar una segunda colación (antes quedaba en 4 h 51).
+    largo = [L(1, "2026-10-15 05:54:00", E), L(2, "2026-10-15 19:45:00", S)]
+    r = _dia(monkeypatch, largo, dia=BODEGA)
+    assert r["_jornada_especial"]["origen"] == "COBERTURA_TURNO"
+    assert r["_jornada_especial"]["minutos_trabajados"] == 321
 
 
 def test_las_marcas_repetidas_se_juntan_segun_el_ajuste():

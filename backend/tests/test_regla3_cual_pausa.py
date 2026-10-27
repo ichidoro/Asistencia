@@ -28,7 +28,7 @@ def _dia(monkeypatch, marcas, eleccion, **turno):
     monkeypatch.setattr(qme, "_get_now_local", lambda: datetime(2026, 9, 1, 12, 0))
     monkeypatch.setattr(qme, "REGLAS_MARCAS_ACTIVAS", {"ESESES": {
         "secuencia": "ESESES", "lectura": "RELOJ", "colacion": "MEDIDA", "accion": "CALCULA",
-        "avisa_fuera_de_ciclo": 0, "eleccion_colacion": eleccion}})
+        "eleccion_colacion": eleccion}})
     t = dict(TURNO, **turno)
     logs = [{"id": i + 1, "fecha_hora": f"2026-08-28 {h}", "tipo": tp} for i, (h, tp) in enumerate(marcas)]
     return Q.solve_attendance_day(fecha="2026-08-28", empleado_id=1, logs=logs, turno_config=t, dia_config=dict(DIA),

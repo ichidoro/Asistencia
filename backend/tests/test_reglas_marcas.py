@@ -59,13 +59,6 @@ def test_validacion_rechaza_valores_desconocidos():
     assert validar_regla(_base(colacion='OTRA')) != ''
     assert validar_regla(_base(accion='OTRA')) != ''
     assert validar_regla(_base(accion='CALCULA_Y_REVISA', opciones_revision=['X'])) != ''
-    assert validar_regla(_base(avisa_fuera_de_ciclo='quizas')) != ''
-
-
-def test_avisar_fuera_de_ciclo_es_una_opcion_de_la_regla():
-    assert validar_regla(_base(avisa_fuera_de_ciclo=1)) == ''
-    assert validar_regla(_base(avisa_fuera_de_ciclo=0)) == ''
-    assert validar_regla(_base()) == ''          # sin el campo: apagada
 
 
 def test_validacion_combinaciones_coherentes():

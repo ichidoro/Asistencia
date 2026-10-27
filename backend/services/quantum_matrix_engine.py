@@ -88,35 +88,6 @@ def _rebote_defecto(tipo_prog: str) -> float:
     return 180.0
 
 
-def _fuera_de_ciclo(primera_marca: Dict[str, Any], fecha: str, ciclos: List[Optional[Dict[str, Any]]],
-                    umbral_minutos: float) -> Optional[Dict[str, str]]:
-    """Si la primera marca del día queda más lejos que `umbral_minutos` de la ENTRADA de TODOS los ciclos
-    del día (los días del horario que no son libres), devuelve la hora de la ENTRADA y los ciclos para
-    anotarlo; si calza con alguno, o no hay ciclos con hora, devuelve None."""
-    try:
-        dt_ent = datetime.strptime(str(primera_marca.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
-    except Exception:
-        return None
-    entradas = []
-    for c in ciclos or []:
-        if not c or _flag(c.get('es_libre', False)):
-            continue
-        h = str(c.get('hora_entrada') or '').strip()
-        if not h:
-            continue
-        try:
-            entradas.append(datetime.strptime(f"{fecha} {h[:5]}", "%Y-%m-%d %H:%M"))
-        except Exception:
-            continue
-    if not entradas:
-        return None
-    mas_cerca = min(abs((dt_ent - e).total_seconds()) / 60.0 for e in entradas)
-    if mas_cerca <= float(umbral_minutos):
-        return None
-    return {'entrada': dt_ent.strftime("%H:%M"),
-            'ciclos': ', '.join(sorted({e.strftime("%H:%M") for e in entradas}))}
-
-
 def _aplicar_extremos(consumidos: List[Dict[str, Any]], colacion: str) -> List[Dict[str, Any]]:
     """Lectura «extremos» de una regla de marcaciones: la primera marca del día es la Entrada y la
     última la Salida, sin importar el rótulo del reloj. Las marcas del medio solo valen como pausa
@@ -1739,7 +1710,6 @@ class QuantumMatrixEngine:
         # Ajustes de la pestaña Reglas de marcaciones (None si la fila no existe: entonces no se usan).
         repetidas_seg = _ajuste_numero(ajustes, 'reglas_marcas_repetidas_minutos', escala=60.0)
         colacion_referencia_min = _ajuste_numero(ajustes, 'reglas_marcas_colacion_referencia_minutos')
-        fuera_ciclo_min = _ajuste_numero(ajustes, 'reglas_marcas_fuera_ciclo_minutos')
         # Mínimo para contar hora extra (Configuración → Ajustes): sin ajuste, cuenta todo
         minimo_he_min = max(0.0, _ajuste_numero(ajustes, 'asistencia_minimo_horas_extra_minutos') or 0.0)
 
@@ -2170,17 +2140,6 @@ class QuantumMatrixEngine:
                             minutos_col_auto = 0
                         if regla_dia.get('accion') == 'CALCULA_Y_REVISA':
                             obs_regla += marcador
-                        # «Avisar si las marcas no calzan con ningún ciclo del horario»: la ENTRADA se compara con la
-                        # ENTRADA de cada ciclo del día; si la más cercana queda más lejos que el ajuste, el día va a
-                        # revisión (se calcula igual). No aplica a días libres ni feriados (no tienen ciclo).
-                        if (_flag(regla_dia.get('avisa_fuera_de_ciclo')) and fuera_ciclo_min and fuera_ciclo_min > 0
-                                and consumidos_dia and not is_holiday and not es_libre_dia):
-                            fuera = _fuera_de_ciclo(consumidos_dia[0], fecha, todos_ciclos_dia or [d_cfg], fuera_ciclo_min)
-                            if fuera:
-                                obs_regla += (f"Las marcas no calzan con ningún ciclo del horario: ENTRADA a las "
-                                              f"{fuera['entrada']}, ciclos del día {fuera['ciclos']}. ")
-                                if marcador not in obs_regla:
-                                    obs_regla += marcador
 
         # Resultado base
         res: Dict[str, Any] = {
@@ -2602,6 +2561,7 @@ class QuantumMatrixEngine:
         # ─────────────────────────────────────────────────────────────────────
         diff_ent = 0.0
         diff_sal = 0.0
+        llegada_temprana = 0.0
 
         if hora_ent_teo:
             p_ent_teo = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
@@ -2614,6 +2574,9 @@ class QuantumMatrixEngine:
                 anticip_in = abs(delta_in)
                 if anclaje_entrada > 0 and anticip_in > anclaje_entrada:
                     res['observaciones'] += f"Llegada anticipada {res['hora_entrada_real'][:5]} ({int(anticip_in)} min). "
+                # Fuera del «Rango anticipación entrada» la marca no se ajusta: esos minutos se cuentan como trabajados.
+                if anticip_in > anclaje_entrada:
+                    llegada_temprana = anticip_in
 
         if hora_sal_teo:
             p_sal_teo = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
@@ -2634,7 +2597,12 @@ class QuantumMatrixEngine:
         elif diff_ent > tolerancia_alerta:
             res['alerta_atraso'] = True
 
-        if diff_sal > tolerancia_salida:
+        # Llegó antes de su ciclo y salió antes: la jornada se corrió (el jefe puede pedir entrar antes o entre dos ciclos).
+        # Solo es salida adelantada si salió más temprano de lo que llegó temprano; las horas no cambian (orden del dueño, 27-10-2026).
+        if not is_bolsa and tolerancia_salida < diff_sal <= llegada_temprana:   # Bolsa Flexible no tiene horario fijo
+            res['observaciones'] += (f"Jornada corrida: llegó {int(round(llegada_temprana))} min antes de su horario y salió "
+                                     f"{int(round(diff_sal))} min antes; no es salida adelantada. ")
+        elif diff_sal > tolerancia_salida:
             res['minutos_salida_adelantada'] = round(diff_sal, 2)
             res['tiene_salida_adelantada'] = 1
             if res['estado'] == 'OK':
@@ -2679,12 +2647,9 @@ class QuantumMatrixEngine:
                     res['tiene_salida_adelantada'] = 0
                     res['minutos_salida_adelantada'] = 0.0
 
-                    # Calcular colación para el segundo bloque (+2)
-                    min_extra_bruto_bloque2 = diff_extra
-                    min_col_je = 0
-                    if descuento_col_auto and minutos_col_auto > 0 and (min_extra_bruto_bloque2 / 60.0) >= umbral_col:
-                        min_col_je = minutos_col_auto
-                    min_trab_je = max(0, int(round(min_extra_bruto_bloque2 - min_col_je)))
+                    # Una jornada lleva una sola colación (orden del dueño, 27-10-2026): la del día ya se descontó de las
+                    # horas trabajadas, así que la cobertura no descuenta otra.
+                    min_trab_je = max(0, int(round(diff_extra)))
 
                     min_anticipo = 0
                     if r_ent_dt and dt_ent_teo:

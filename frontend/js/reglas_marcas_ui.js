@@ -135,19 +135,19 @@ const ReglasMarcasModule = (() => {
 
     // ── Foto de lo guardado, para saber si hay cambios sin guardar ───────────
     function _fotoRegla(r) {
-        return { lectura: r.lectura, colacion: r.colacion, accion: r.accion, avisa: r.avisa_fuera_de_ciclo ? 1 : 0,
+        return { lectura: r.lectura, colacion: r.colacion, accion: r.accion,
                  opciones: (r.opciones_revision || []).slice().sort().join(','), eleccion: r.eleccion_colacion || 'PARECIDA' };
     }
     function _hayCambios(r) {
         if (!r || !r._guardada) return false;
         const a = r._guardada, b = _fotoRegla(r);
-        return a.lectura !== b.lectura || a.colacion !== b.colacion || a.accion !== b.accion || a.avisa !== b.avisa || a.opciones !== b.opciones
+        return a.lectura !== b.lectura || a.colacion !== b.colacion || a.accion !== b.accion || a.opciones !== b.opciones
             || a.eleccion !== b.eleccion;
     }
     function _revertir(r) {
         const g = r._guardada;
         if (!g) return;
-        r.lectura = g.lectura; r.colacion = g.colacion; r.accion = g.accion; r.avisa_fuera_de_ciclo = g.avisa;
+        r.lectura = g.lectura; r.colacion = g.colacion; r.accion = g.accion;
         r.opciones_revision = g.opciones ? g.opciones.split(',') : [];
         r.eleccion_colacion = g.eleccion;
     }
@@ -213,7 +213,7 @@ const ReglasMarcasModule = (() => {
         if (pausasDe(r) >= 2) f += usaCorte(r)
             ? '; con dos pausas, las que terminan antes de la ENTRADA del horario más su mínimo son permiso y, entre las demás, la colación es la más parecida a la del horario'
             : '; con dos pausas, la colación es la que más se parece en minutos a la del horario y las otras son permiso';
-        if (r.accion === 'CALCULA') f += r.avisa_fuera_de_ciclo ? '; avisa solo si las marcas no calzan con ningún ciclo del horario' : '; no se avisa';
+        if (r.accion === 'CALCULA') f += '; no se avisa';
         else f += '; se calcula y queda en «Días por revisar»';
         return f + '.';
     }
@@ -227,7 +227,7 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(API + '?tipo=' + encodeURIComponent(tipo), { headers: headers() });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             data = await res.json();
-            data.reglas.forEach(r => { r.avisa_fuera_de_ciclo = r.avisa_fuera_de_ciclo ? 1 : 0; r._guardada = _fotoRegla(r); });
+            data.reglas.forEach(r => { r._guardada = _fotoRegla(r); });
             Object.keys(ejemplos).forEach(k => delete ejemplos[k]);
             Object.keys(ensayos).forEach(k => delete ensayos[k]);
             if (!selId && data.reglas.length) selId = data.reglas[0].id;
@@ -367,7 +367,7 @@ const ReglasMarcasModule = (() => {
     }
 
     // ── Días de ejemplo y ensayo ─────────────────────────────────────────────
-    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, r.avisa_fuera_de_ciclo ? 1 : 0, (r.opciones_revision || []).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA'].join('~');
+    const claveEnsayo = (r) => [r.lectura, r.colacion, r.accion, (r.opciones_revision || []).slice().sort().join('|'), r.eleccion_colacion || 'PARECIDA'].join('~');
 
     async function cargarEjemplos(r) {
         if (ejemplos[r.id]) return;
@@ -391,7 +391,7 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(API + r.id + '/ensayo/', {
                 method: 'POST', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion,
-                                       opciones_revision: r.opciones_revision || [], avisa_fuera_de_ciclo: r.avisa_fuera_de_ciclo ? 1 : 0,
+                                       opciones_revision: r.opciones_revision || [],
                                        eleccion_colacion: r.eleccion_colacion || 'PARECIDA' })
             });
             const body = await res.json().catch(() => ({}));
@@ -668,7 +668,6 @@ const ReglasMarcasModule = (() => {
             + '<div><div class="text-muted mb-1" style="font-size:.78rem;">Hora de corte de cada horario <span class="rmx-src">Configuración → Horarios → Mínimo para descontar</span></div>' + tablaCortes() + '</div>');
 
         // Paso 4: aviso
-        const umbralCiclo = (data.ajustes || {}).reglas_marcas_fuera_ciclo_minutos;
         const opcionesHtml = (r.accion !== 'CALCULA')
             ? '<div><div class="text-muted mb-1" style="font-size:.78rem;">Al revisar, la persona podrá (el sistema nunca inventa una marca):</div><div class="rmx-ops rmx-c2">'
               + OPCIONES.map(o => opcion('rmx-op-' + o[0], o[0], (r.opciones_revision || []).includes(o[0]), o[1], '', '', Object.assign({ check: true }, dis))).join('') + '</div></div>'
@@ -677,14 +676,7 @@ const ReglasMarcasModule = (() => {
             + opcion('rmx-p4', 'CALCULA', r.accion === 'CALCULA', 'No avisar', 'El resultado se ve en la grilla.', '', Object.assign({}, dis, calcula ? {} : { disabled: true, apagada: true }))
             + opcion('rmx-p4', 'CALCULA_Y_REVISA', r.accion === 'CALCULA_Y_REVISA', 'Avisar, pero calcular igual', 'Queda en «Días por revisar» con sus horas.', '', Object.assign({}, dis, calcula ? {} : { disabled: true, apagada: true }))
             + opcion('rmx-p4', 'SOLO_REVISA', r.accion === 'SOLO_REVISA', 'Revisar antes de calcular', 'Queda sin horas hasta que alguien lo vea.', '', dis)
-            + '</div>' + opcionesHtml
-            + (calcula
-                ? opcion('rmx-ciclo', '1', !!r.avisa_fuera_de_ciclo, 'Además, avisar si las marcas no calzan con ningún ciclo del horario',
-                    'Compara la ENTRADA con la de cada ciclo del día (mañana, tarde o noche). Si la más cercana queda a más de '
-                    + (umbralCiclo == null ? '[sin configurar]' : durMin(umbralCiclo)) + ', el día va a revisión y se calcula igual. Los días libres y feriados no tienen ciclo y no avisan.',
-                    umbralCiclo == null ? '<span class="rmx-ef">Configure los minutos en «Ajustes de las reglas», arriba: sin ese valor no avisa.</span>' : '',
-                    Object.assign({ check: true, badge: ['rmx-b-new', 'Opción nueva'] }, dis))
-                : '');
+            + '</div>' + opcionesHtml;
         const p4 = paso(nAviso, '¿Alguien tiene que mirarlo?', '«Avisar» deja el día en «Días por revisar» con un triángulo en la grilla y bloquea el cierre del área hasta que alguien lo vea.', cuerpo4);
 
         // Paso 5: ensayo
@@ -751,7 +743,6 @@ const ReglasMarcasModule = (() => {
             if (t.checked && k < 0) lista.push(o[0]);
             if (!t.checked && k >= 0) lista.splice(k, 1);
         }))));
-        el.querySelectorAll('input[name="rmx-ciclo"]').forEach(i => i.addEventListener('change', cambiar(t => { r.avisa_fuera_de_ciclo = t.checked ? 1 : 0; })));
         const ens = $('rm-ensayar'); if (ens) ens.addEventListener('click', () => ensayar(r));
         const vd = $('rm-ver-dias'); if (vd) vd.addEventListener('click', () => verDias(r));
         const g = $('rm-guardar'); if (g) g.addEventListener('click', () => guardar(r));
@@ -886,13 +877,12 @@ const ReglasMarcasModule = (() => {
             const res = await fetch(API + r.id + '/', {
                 method: 'PUT', headers: headers(),
                 body: JSON.stringify({ lectura: r.lectura, colacion: r.colacion, accion: r.accion, opciones_revision: r.opciones_revision || [],
-                                       avisa_fuera_de_ciclo: r.avisa_fuera_de_ciclo ? 1 : 0, eleccion_colacion: r.eleccion_colacion || 'PARECIDA',
+                                       eleccion_colacion: r.eleccion_colacion || 'PARECIDA',
                                        nota: r.nota || '' })
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) { toast(body.detail || 'No se pudo guardar la regla.', 'danger'); return; }
             Object.assign(r, body.regla, { dias: r.dias, dias_abiertos: r.dias_abiertos, grupo: r.grupo });
-            r.avisa_fuera_de_ciclo = r.avisa_fuera_de_ciclo ? 1 : 0;
             r._guardada = _fotoRegla(r);
             toast('Regla ' + (r.numero ? r.numero + ' (' + palabras(r.secuencia) + ')' : palabras(r.secuencia)) + ' guardada.');
             renderLista(); renderEditor();

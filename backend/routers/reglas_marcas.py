@@ -238,7 +238,6 @@ async def ensayar_la_regla(
         "colacion": str(payload.get("colacion") or ""),
         "accion": str(payload.get("accion") or ""),
         "opciones_revision": payload.get("opciones_revision") or [],
-        "avisa_fuera_de_ciclo": 1 if payload.get("avisa_fuera_de_ciclo") in (1, True, "1", "true") else 0,
         "eleccion_colacion": str(payload.get("eleccion_colacion") or "PARECIDA"),
     }
     motivo = validar_regla(propuesta)
@@ -288,14 +287,14 @@ async def actualizar_regla(
     current_user: SecurityContext = Depends(RequirePermission(PERMISO_EDITAR)),
 ):
     cambios = {k: payload.get(k) for k in
-               ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo", "eleccion_colacion",
+               ("lectura", "colacion", "accion", "opciones_revision", "eleccion_colacion",
                 "nota", "activa")
                if k in payload}
     resultado = await repo.actualizar(regla_id, cambios, current_user.username)
     if resultado.get("error"):
         raise HTTPException(status_code=400, detail=resultado["error"])
     antes, despues = resultado["antes"], resultado["despues"]
-    campos = ("lectura", "colacion", "accion", "opciones_revision", "avisa_fuera_de_ciclo", "eleccion_colacion")
+    campos = ("lectura", "colacion", "accion", "opciones_revision", "eleccion_colacion")
     detalle = {
         "regla_id": regla_id,
         "secuencia": antes["secuencia"],

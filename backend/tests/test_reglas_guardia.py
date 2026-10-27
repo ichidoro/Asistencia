@@ -173,13 +173,13 @@ def test_ninguna_pantalla_ni_anotacion_usa_las_iniciales():
 
 
 def test_lo_configurable_no_vuelve_a_quedar_escrito_en_el_motor():
-    for clave in ("reglas_marcas_repetidas_minutos", "reglas_marcas_colacion_referencia_minutos",
-                  "reglas_marcas_fuera_ciclo_minutos"):
+    for clave in ("reglas_marcas_repetidas_minutos", "reglas_marcas_colacion_referencia_minutos"):
         assert clave in MOTOR, f"el motor ya no lee el ajuste {clave}"
         assert clave in REPO, f"la pestaña ya no ofrece el ajuste {clave}"
     assert ">= 1200.0" not in MOTOR, "volvieron los 20 minutos escritos para las marcas repetidas"
     assert "else 60.0" not in MOTOR, "volvió la colación de referencia escrita en el motor"
-    assert "avisa_fuera_de_ciclo" in MOTOR and "avisa_fuera_de_ciclo" in REPO
+    # La opción de ciclos y sus minutos se quitaron el 27-10-2026: los días que no calzan se calculan solos.
+    assert "avisa_fuera_de_ciclo" not in MOTOR and "reglas_marcas_fuera_ciclo_minutos" not in MOTOR
 
 
 def test_la_tolerancia_de_exceso_se_configura_en_cada_horario():
@@ -194,7 +194,6 @@ def test_los_textos_del_asistente_sobreviven_al_minificador():
     for frase in (
         "¿El sistema puede calcular estos días solo?",
         "Lo mayor entre la del horario y la pausa medida",
-        "Además, avisar si las marcas no calzan con ningún ciclo del horario",
         "Día libre o feriado (jornada especial):",
         "días así en el tramo abierto",
         " con marcas del reloj, más los que tengan marcas manuales). Nunca el día en curso ni períodos cerrados.",
