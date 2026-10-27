@@ -3549,12 +3549,13 @@ function m180GpsTabla(g) {
     [1, 2].forEach(v => {
         const [b, t, corto, largo, min] = FILAS[v];
         let html = '';
-        for (let i = 0; i < 96 && v === 1;) {   // Conduciendo va en tramos de 15 min; Detenido se dibuja con la hora exacta de cada parada (más abajo)
-            if (g.slots_gps[i] !== v) { i++; continue; }
-            let j = i; while (j < 96 && g.slots_gps[j] === v) j++;
-            const dur = formatMinToHHMM((j - i) * 15);
-            html += `<div class="m180-block" style="left:${(i / 96) * 100}%; width:${((j - i) / 96) * 100}%;" title="${m180GpsHora(i)} – ${m180GpsHora(j)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
-            i = j;
+        // Conduciendo: la hora exacta de cada tramo en que el camión andaba (como las paradas, sin redondear a 15 min); si el servidor no los trae, los tramos de 15 min
+        if (v === 1) {
+            const tramos = Array.isArray(g.tramos_mov) ? g.tramos_mov : (g.slots_gps || []).reduce((a, x, i) => { if (x === 1) { const u = a[a.length - 1]; if (u && u[1] === i * 900) u[1] += 900; else a.push([i * 900, i * 900 + 900]); } return a; }, []);
+            tramos.forEach(([ini, fin]) => {
+                const dur = formatMinToHHMM(Math.max(1, Math.round((fin - ini) / 60))), h = x => String(Math.floor(x / 3600)).padStart(2, '0') + ':' + String(Math.floor(x % 3600 / 60)).padStart(2, '0');
+                html += `<div class="m180-block" style="left:${(ini / 86400) * 100}%; width:${((fin - ini) / 86400) * 100}%;" title="${h(ini)} – ${h(fin)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
+            });
         }
         // Cada parada (desde 5 min) con su hora EXACTA de llegada y salida
         // Numeradas igual que en la tabla de paradas; al pasar el mouse sale la misma información (hora y dirección)
@@ -3593,7 +3594,18 @@ function m180GpsTabla(g) {
     if (regla) document.getElementById('m180-gps-ruler').innerHTML = regla.innerHTML;
     document.getElementById('m180-gps-card-titulo').textContent = 'GPS · ' + ((g.vehiculo && g.vehiculo.patente) || 'camión');
     card.style.display = '';
+    m180GpsAjustarEtiquetas();
 }
+
+// Un bloque muestra solo lo que le cabe: nombre y duración, solo el nombre, o nada (la hora y la dirección salen al pasar el mouse)
+function m180GpsAjustarEtiquetas() {
+    document.querySelectorAll('#m180-gps-b1 .m180-block, #m180-gps-b2 .m180-block').forEach(el => {
+        el.classList.remove('es-corto', 'es-mini');
+        if (el.scrollWidth > el.clientWidth) el.classList.add('es-corto');
+        if (el.scrollWidth > el.clientWidth) el.classList.add('es-mini');
+    });
+}
+window.addEventListener('resize', () => { if (m180_gps) m180GpsAjustarEtiquetas(); });
 
 // Tarjeta flotante de una parada de la grilla del GPS: la misma información (hora y dirección) que la tabla de paradas
 (function () {
