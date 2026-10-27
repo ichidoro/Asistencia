@@ -16,6 +16,7 @@ VEL_MOVIENDO = 3        # km/h: bajo esto el camión está detenido (misma regla
 HUECO_MAX = 15 * 60     # sin reportar más que esto mientras se mueve: no hay dato
 
 SIN_DATO, MOVIMIENTO, DETENIDO = 0, 1, 2
+PARADA_MIN_ASISTENCIA = 3   # minutos detenido para contar como parada (Nexacol usa 5; una entrega suele durar menos)
 
 
 class GpsNexacolError(Exception):
@@ -127,7 +128,7 @@ async def vehiculos() -> List[Dict[str, str]]:
 
 
 async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
-    data = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha})
+    data = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha, "parada_min": str(PARADA_MIN_ASISTENCIA)})
     puntos = data.get("puntos") or []
     res = data.get("resumen") or {}
     calc = calcular_slots(puntos)
@@ -159,6 +160,7 @@ CERCA_M = 500   # con coordenada: hasta esta, la parada es "muy cercana"
 _ABREV_CALLE = {"av", "avda", "avenida", "calle", "cll", "pasaje", "psje", "pje", "camino", "cam", "ruta", "ruta5", "carretera", "kilometro", "km", "poblacion", "pob", "villa", "block", "depto", "dpto", "casa", "lote", "parcela", "sitio", "sector", "nro", "numero", "sn", "las", "los", "del"}
 
 
+_CORTE_CALLE = {"st", "sitio", "parcela", "lote", "km", "local", "depto", "dpto", "casa", "block", "nro", "numero", "sn"}
 _ARTICULOS = {"de", "del", "la", "las", "los", "el", "y"}
 # Calles numeradas (Talca: "14 Norte", "6 Oriente"): el número va a veces en letras ("Dos Sur", "Once Oriente")
 _NUM_PALABRA = {"uno": "1", "un": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5", "seis": "6", "siete": "7", "ocho": "8", "nueve": "9", "diez": "10", "once": "11", "doce": "12",
@@ -185,7 +187,14 @@ def _identificadores_calle(calle: Any) -> Dict[str, List[str]]:
     sueltas ("norte", "oriente") están en medio Talca y no sirven. En el resto, las palabras del nombre (sin "avenida", "pasaje", números ni artículos)."""
     pal = _palabras(calle)
     pares = [f"{pal[i]} {_DIRECCIONES[pal[i + 1]]}" for i in range(len(pal) - 1) if pal[i].isdigit() and pal[i + 1] in _DIRECCIONES]
-    nombre = [w for w in pal if len(w) >= 3 and not w.isdigit() and w not in _ABREV_CALLE]
+    nombre: List[str] = []
+    for w in pal:
+        if w.isdigit() or w in _CORTE_CALLE:   # el número de casa o el marcador de sitio: lo que sigue es sector o detalle, no la calle
+            if nombre:
+                break
+            continue
+        if len(w) >= 3 and w not in _ABREV_CALLE:
+            nombre.append(w)
     return {"pares": pares, "nombre": nombre}
 
 
@@ -385,7 +394,7 @@ def observaciones_de(items: List[Dict[str, Any]], fecha: str, patente: str) -> L
 
 
 async def entregas_dia(vehiculo_id: str, fecha: str, aprendidas_fn: Any = None, con_pasos: bool = True) -> Dict[str, Any]:
-    ruta = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha})
+    ruta = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha, "parada_min": str(PARADA_MIN_ASISTENCIA)})
     patente = str((ruta.get("vehiculo") or {}).get("patente") or "")
     paradas = (ruta.get("resumen") or {}).get("paradas") or []
     fac = await _get("/api/reports/camiones-gps-facturas", {"id": vehiculo_id, "patente": patente, "fecha": fecha, "geo": "1"})

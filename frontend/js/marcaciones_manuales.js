@@ -3681,25 +3681,31 @@ function m180GpsEntregasPintar() {
         const st = M180_ENT_ESTADO[e.estado] || M180_ENT_ESTADO.sin_ubicacion;
         const pct = e.dist_m == null ? 0 : Math.min(e.dist_m, 1000) / 10;
         const dir = [e.calle, e.comuna].filter(Boolean).map(esc).join(', ');
+        // Una fila corta: quién y dónde, cuál fue la parada (o por qué no hay) y un solo estado; el detalle sale al pasar el mouse sobre el estado
+        const hora = q => `${esc(String(q.desde).slice(0, 5))}–${esc(String(q.hasta).slice(0, 5))} · ${q.min} min`;
         const par = e.parada
-            ? `<div class="m180-ent-hora"><span class="m180-par-n">P${e.parada_idx + 1}</span> ${esc(String(e.parada.desde).slice(0, 5))}–${esc(String(e.parada.hasta).slice(0, 5))} · ${e.parada.min} min</div>
+            ? `<div class="m180-ent-hora"><span class="m180-par-n">P${e.parada_idx + 1}</span> ${hora(e.parada)}</div>
                ${e.dist_m != null
-                    ? `<div class="m180-ent-barra" title="Distancia entre la dirección de la factura y la parada"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div><small>${e.dist_m} m de la parada${e.aprendida ? ' · ubicación del cliente aprendida de ' + e.aprendida + ' días' : ''}</small>`
-                    : `<small class="m180-ent-lugar" title="${esc(e.parada.lugar)}">Parada: ${esc(e.parada.lugar)}</small>${e.esquina && (e.coincide || []).length < 2 ? `<small class="m180-ent-aviso">Es una esquina: la parada coincide solo con ${esc((e.coincide || []).join(', '))}. No se sabe la cuadra.</small>` : (e.estado === 'calle' ? '<small class="m180-ent-aviso">Misma calle: no se confirma la cuadra ni el número.</small>' : (e.estado === 'comuna' ? '<small class="m180-ent-aviso">Única parada en ' + esc(e.comuna) + ': no se confirma que sea esta entrega.</small>' : ''))}`}`
+                    ? `<div class="m180-ent-barra"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div><small>${e.dist_m} m de la parada${e.aprendida ? ' · ubicación aprendida' : ''}</small>`
+                    : `<small class="m180-ent-lugar" title="${esc(e.parada.lugar)}">${esc(String(e.parada.lugar || '').split(',').slice(0, 2).join(',').trim())}</small>`}`
             : (e.paradas_comuna && e.paradas_comuna.length
-                ? `<div class="m180-ent-hora">Parada sin identificar</div><small class="m180-ent-lugar" title="${esc(e.paradas_comuna.map(p => String(p.desde).slice(0, 5) + ' (' + p.min + ' min)').join(' · '))}">El camión paró ${e.paradas_comuna.length} ${e.paradas_comuna.length === 1 ? 'vez' : 'veces'} en ${esc(e.comuna)}: ${e.paradas_comuna.slice(0, 4).map(p => esc(String(p.desde).slice(0, 5))).join(', ')}${e.paradas_comuna.length > 4 ? '…' : ''}</small>`
+                ? `<div class="m180-ent-hora text-muted">Sin parada identificada</div><small class="m180-ent-lugar" title="${esc(e.paradas_comuna.map(q => String(q.desde).slice(0, 5) + ' (' + q.min + ' min)').join(' · '))}">El camión paró ${e.paradas_comuna.length} ${e.paradas_comuna.length === 1 ? 'vez' : 'veces'} en ${esc(e.comuna)}</small>`
                 : '<div class="m180-ent-hora text-muted">El camión no paró en esa comuna</div>');
-        // ¿Pasó el camión por la calle de la factura (aunque no se detuviera)? Sale del recorrido ajustado a las calles
+        // Si no hay parada pero el recorrido pasó por la calle, se dice (el caso contrario no se muestra: «no se detectó» era ruido)
         const ps = e.paso;
         const unicos = arr => arr.filter((v, k, a) => a.indexOf(v) === k);
-        const pasoHtml = !ps ? '' : (ps.estado === 'paso'
-            ? `<div class="m180-ent-paso es-si" title="${esc(ps.pasadas.map(x => x.nombre + ' ' + x.desde + '–' + x.hasta).join(' · '))}"><i class="bi bi-sign-turn-right-fill" aria-hidden="true"></i> ${ps.origen === 'parada' ? 'Paró en esa calle a las ' + esc(ps.pasadas[0].desde) : 'Pasó por ' + esc(unicos(ps.pasadas.map(x => x.nombre)).slice(0, 2).join(' y ')) + ' a las ' + esc(unicos(ps.pasadas.map(x => x.desde)).slice(0, 3).join(', '))}${ps.esquina ? ' · pasó por la esquina' : ''}</div>`
-            : '<div class="m180-ent-paso es-no"><i class="bi bi-slash-circle" aria-hidden="true"></i> No se detectó que pasara por esa calle</div>');
+        const pasoHtml = (!ps || ps.estado !== 'paso' || e.parada || ps.origen === 'parada') ? ''
+            : `<div class="m180-ent-paso es-si" title="${esc(ps.pasadas.map(x => x.nombre + ' ' + x.desde + '–' + x.hasta).join(' · '))}"><i class="bi bi-sign-turn-right-fill" aria-hidden="true"></i> Pasó por ${esc(unicos(ps.pasadas.map(x => x.nombre)).slice(0, 2).join(' y '))} a las ${esc(unicos(ps.pasadas.map(x => x.desde)).slice(0, 3).join(', '))}${ps.esquina ? ' · por la esquina' : ''}</div>`;
+        const tip = e.estado === 'calle' ? 'Hay una parada en la misma calle y comuna que la factura. El GPS no da el número ni la cuadra.' + (e.esquina && (e.coincide || []).length < 2 ? ' Es una esquina y la parada coincide solo con ' + (e.coincide || []).join(', ') + '.' : '')
+            : e.estado === 'calza' ? `La parada queda a menos de ${U.calza_m} m de la dirección del cliente.`
+            : e.estado === 'cercana' ? `La parada queda a menos de ${U.cerca_m} m de la dirección del cliente.`
+            : e.estado === 'comuna' ? 'El camión paró en esa comuna, pero ninguna parada nombra la calle de la factura.'
+            : e.estado === 'sin_parada' ? 'El camión no paró en la comuna de la factura.' : '';
         return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
             <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>
-            <div class="m180-ent-main"><div class="m180-ent-cli">${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(f)).join(', ')}</div>${pasoHtml}</div>
+            <div class="m180-ent-main"><div class="m180-ent-cli">${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(String(f).replace(/^DTE-JJV-Folio-/, ''))).join(', ')}</div>${pasoHtml}</div>
             <div class="m180-ent-par">${par}</div>
-            <span class="m180-ent-badge">${st.t}</span></div>`;
+            <span class="m180-ent-badge" title="${esc(tip)}">${st.t}</span></div>`;
     }).join('');
     body.innerHTML = `<div class="m180-ent-kpis">${kpi(r.calle || 0, 'en la misma calle', 'calle')}${r.calza ? kpi(r.calza, 'calzan (≤ ' + U.calza_m + ' m)', 'calza') : ''}${r.cercana ? kpi(r.cercana, 'muy cercanas', 'cercana') : ''}${kpi(r.comuna || 0, 'solo en la comuna', 'comuna')}${kpi((r.lejos || 0) + (r.sin_parada || 0), 'sin parada', 'lejos')}${entregas.some(e => e.paso) ? kpi(entregas.filter(e => e.paso && e.paso.estado === 'paso').length, 'pasó por su calle', 'paso') : ''}<span class="m180-ent-nota">${r.total} ${r.total === 1 ? 'entrega' : 'entregas'} · «misma calle» = la calle y la comuna de la factura están en la dirección de una parada (el GPS no da el número)</span></div><div class="m180-ent-lista">${filas}</div>`;
 }

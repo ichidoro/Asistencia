@@ -218,3 +218,12 @@ def test_solo_se_aprende_de_entregas_con_una_unica_parada_candidata():
     assert len(obs) == 1 and obs[0]["la"] == -35.40 and obs[0]["clave"] == clave_entrega(it)
     dos = paradas + [{"desde": "11:00:00", "hasta": "11:10:00", "min": 10, "lugar": "6 Oriente, Talca", "la": -35.41, "lo": -71.61}]
     assert observaciones_de(cruzar_entregas([entrega("6 ORIENTE 55", "Talca")], dos)["entregas"], "2026-10-27", "VPLD55") == []   # ambigua: no se aprende
+
+
+def test_la_calle_es_lo_que_va_antes_del_numero_o_del_sitio():
+    assert _tokens_calle("CAMPO LINDO ST 87 EL GUINDAL") == ["campo", "lindo"]          # «el guindal» es el sector
+    assert _tokens_calle("TORIBIO VALDIVIA 04 PIRCAS ORIENTE MACHALI") == ["toribio", "valdivia"]
+    assert _tokens_calle("KM. 5 CAMINO SAN JAVIER") == ["san", "javier"]               # el «km 5» del principio no corta
+    assert _tokens_calle("M O SOTO 131 OLIVAR") == ["soto"]
+    paradas = [{"desde": "17:17:00", "hasta": "17:31:00", "min": 15, "lugar": "Campo Lindo, Condominio Parque Sanfuentes, Nogales, Machalí, Región del Libertador, Chile"}]
+    assert estados([entrega("CAMPO LINDO ST 87 EL GUINDAL", "Machalí")], paradas) == ["calle"]
