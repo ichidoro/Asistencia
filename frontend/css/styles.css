@@ -4522,3 +4522,10 @@ tr:hover .emp-name-cell {
 .m180-ent-paso.es-si { color: #0e7490; }
 .m180-ent-paso.es-no { color: #64748b; font-weight: 500; }
 .m180-ent-n { display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-right: 8px; padding: 0 6px; border-radius: 99px; background: #e8edf5; color: #334155; font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; vertical-align: middle; }
+
+/* Grilla del GPS: se ajusta al ancho de la tarjeta (las 24 h a la vista, sin desplazamiento ni columna de totales cortada). El tablero de actividades sigue con su ancho mínimo. */
+#m180-gps-card .m180-grid-container { overflow-x: visible; }
+#m180-gps-card .m180-board { min-width: 0; --label-w: 128px; --total-w: 62px; }
+#m180-gps-card .m180-ruler-min { display: none; }
+#m180-gps-card .m180-ruler-header { padding-left: 2px; font-size: .7rem; }
+#m180-gps-card .m180-lane-label { padding: 0 8px; font-size: .72rem; }
