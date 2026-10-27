@@ -140,52 +140,6 @@ class HoraExtraRepository:
         await self.db.executemany(query, params_list)
         return len(items)
 
-    async def run_backfill(self) -> None:
-        """
-        Sincroniza registros históricos al inicio del servidor.
-        Inserta registros pendientes en horas_extras solo para asistencias con HE brutas válidas
-        y limpia registros huérfanos o correspondientes a jornadas especiales/libres/feriados.
-        """
-        # 1. Limpieza preventiva de huérfanos y días especiales en horas_extras
-        # EXCEPCIÓN: Preservar coberturas (+2) en días hábiles formalmente validadas como Horas Extras (estado='APROBADO', origen='COBERTURA_TURNO')
-        cleanup_query = """
-            DELETE FROM horas_extras
-            WHERE NOT (origen = 'COBERTURA_TURNO' AND estado = 'APROBADO')
-            AND (
-                (empleado_id, fecha) IN (
-                    SELECT a.empleado_id, a.fecha
-                    FROM asistencias a
-                    WHERE a.estado IN ('JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'INASISTENCIA')
-                       OR a.horas_teoricas = 0
-                       OR COALESCE(a.minutos_extra_bruto, 0) < 1.0
-                )
-                OR (empleado_id, fecha) IN (
-                    SELECT je.empleado_id, je.fecha
-                    FROM jornadas_especiales je
-                    WHERE je.estado != 'HORAS_EXTRAS'
-                )
-                OR origen IN ('COBERTURA_TURNO', 'DIA_LIBRE', 'FERIADO', 'JORNADA_ESPECIAL')
-                OR origen LIKE '%JORNADA%'
-            )
-        """
-        await self.db.execute(cleanup_query)
-
-        # 2. Backfill seguro de horas extras ordinarias pendientes
-        query = """
-            INSERT OR IGNORE INTO horas_extras (empleado_id, fecha, minutos_bruto, minutos_autorizados, estado, origen, updated_at)
-            SELECT a.empleado_id, a.fecha, a.minutos_extra_bruto, 0, 'PENDIENTE', 'SISTEMA', datetime('now')
-            FROM asistencias a
-            WHERE a.minutos_extra_bruto >= 1.0
-              AND a.horas_teoricas > 0
-              AND a.estado NOT IN ('JORNADA_ESPECIAL', 'EXTRA', 'LIBRE', 'FERIADO', 'INASISTENCIA')
-              AND NOT EXISTS (
-                  SELECT 1 FROM jornadas_especiales je
-                  WHERE je.empleado_id = a.empleado_id AND je.fecha = a.fecha
-              )
-        """
-        await self.db.execute(query)
-
-
     async def delete_by_empleado_fecha(self, empleado_id: int, fecha: str) -> None:
         """Elimina un registro HE (usado para JE interceptadas o días sin sobretiempo ordinario)."""
         await self.db.execute(

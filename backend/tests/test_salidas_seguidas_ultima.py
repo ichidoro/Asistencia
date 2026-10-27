@@ -52,7 +52,8 @@ def test_foto_2_entrada_salida_salida_cierra_con_la_ultima_salida(monkeypatch):
     assert r["hora_entrada_real"] == "07:52:18"
     assert r["hora_salida_real"] == "17:16:10"            # antes: 13:24:04 (la más cercana a la salida teórica)
     assert r["minutos_deuda"] == 0 and r["minutos_salida_adelantada"] == 0   # antes: 148 min de deuda
-    assert round(r["minutos_atraso"]) == 52
+    # Llegó 52 min después y salió 136 min después en un horario de tres ciclos: jornada corrida, no atraso (27-10-2026)
+    assert r["minutos_atraso"] == 0 and "Jornada corrida" in r["observaciones"]
     assert abs(r["horas_trabajadas"] - 8.8978) < 0.001     # 9 h 23 min 52 s menos 30 min de colación automática del turno
     assert round(r["minutos_extra_bruto"]) == 84
     assert set(r["marcas_consumidas_ids"]) == {1, 2, 3}    # la del medio queda consumida, no se arrastra a otro día
@@ -139,7 +140,8 @@ def test_entrada_aislada_sin_salida_sigue_siendo_anomalia(monkeypatch):
 
 def test_ultima_marca_rotulada_entrada_sigue_cerrando_el_dia(monkeypatch):
     r = _dia(monkeypatch, _d([("07:25:00", E), ("15:38:00", E)]))
-    assert r["hora_entrada_real"] == "07:25:00" and r["hora_salida_real"] == "15:38:00" and r["estado"] == "ATRASO"
+    # Llegó 25 min después y salió 38 min después en un horario de tres ciclos: jornada corrida, no atraso (27-10-2026)
+    assert r["hora_entrada_real"] == "07:25:00" and r["hora_salida_real"] == "15:38:00" and r["estado"] == "OK"
 
 
 def test_turno_noche_salida_huerfana_inicial_sigue_descartandose(monkeypatch):
@@ -155,3 +157,22 @@ def test_bolsa_flexible_no_se_toca(monkeypatch):
     r = _dia(monkeypatch, _d([("07:52:18", E), ("13:24:04", S), ("17:16:10", S)]), turno=bolsa)
     assert "Salidas seguidas" not in (r["observaciones"] if r else "")
     assert r["hora_salida_real"] == "13:24:04"             # igual que antes
+
+
+def test_un_solo_ciclo_llegar_tarde_es_siempre_atraso(monkeypatch):
+    # Orden del dueño (27-10-2026): la jornada corrida hacia después solo vale en horarios con dos o más ciclos ese día.
+    r = _dia(monkeypatch, _d([("07:25:00", E), ("15:38:00", S)]), ciclos=[MANANA])
+    assert r["estado"] == "ATRASO" and round(r["minutos_atraso"]) == 25
+
+
+def test_entre_dos_ciclos_si_sale_antes_de_reponer_el_atraso_sigue_siendo_atraso(monkeypatch):
+    # Llegó 25 min después y salió solo 10 min después: no repuso lo que llegó tarde.
+    r = _dia(monkeypatch, _d([("07:25:00", E), ("15:10:00", S)]))
+    assert r["estado"] == "ATRASO" and round(r["minutos_atraso"]) == 25
+
+
+def test_quedarse_despues_dentro_del_rango_de_demora_no_repone_el_atraso(monkeypatch):
+    # Con «Rango demora salida» de 45 min, salir 15:20 se cuenta como salida a las 15:00: esos minutos no reponen el atraso.
+    turno = dict(TURNO, anclaje_salida_minutos=45)
+    r = _dia(monkeypatch, _d([("07:10:00", E), ("15:20:00", S)]), turno=turno)
+    assert r["estado"] == "ATRASO" and round(r["minutos_atraso"]) == 10

@@ -1706,7 +1706,6 @@ class QuantumMatrixEngine:
         max_he_ordinarias_min = _ajuste_numero(ajustes, 'asistencia_max_extras_ordinarias_dia_habil') or 0.0
         # Ajustes de la pestaña Reglas de marcaciones (None si la fila no existe: entonces no se usan).
         repetidas_seg = _ajuste_numero(ajustes, 'reglas_marcas_repetidas_minutos', escala=60.0)
-        colacion_referencia_min = _ajuste_numero(ajustes, 'reglas_marcas_colacion_referencia_minutos')
         # Mínimo para contar hora extra (Configuración → Ajustes): sin ajuste, cuenta todo
         minimo_he_min = max(0.0, _ajuste_numero(ajustes, 'asistencia_minimo_horas_extra_minutos') or 0.0)
 
@@ -2464,9 +2463,9 @@ class QuantumMatrixEngine:
 
         if pausas_intermedias:
             t_col_pactado_target = int(t_cfg.get('minutos_colacion_auto', 0) or 0)
-            # Duración que se busca: la colación del horario; si el horario no tiene, la colación de referencia
-            # del ajuste `reglas_marcas_colacion_referencia_minutos` (pestaña Reglas de marcaciones).
-            target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else colacion_referencia_min
+            # Duración que se busca: la colación del horario asignado (obligatoria al guardar un horario). Si un horario
+            # antiguo no la tuviera, la colación es la pausa más larga: no hay valor de referencia aparte (orden del dueño, 27-10-2026).
+            target_col = float(t_col_pactado_target) if t_col_pactado_target > 0 else None
 
             # ¿Cuál pausa es la colación? Lo decide la regla del día (asistente de Reglas de marcaciones):
             # CORTE_UMBRAL = las pausas que terminan antes de la ENTRADA del horario más su «Mínimo para descontar»
@@ -2559,6 +2558,7 @@ class QuantumMatrixEngine:
         diff_ent = 0.0
         diff_sal = 0.0
         llegada_temprana = 0.0
+        salida_tardia = 0.0
 
         if hora_ent_teo:
             p_ent_teo = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
@@ -2584,10 +2584,20 @@ class QuantumMatrixEngine:
                 diff_sal = delta_out
             elif delta_out < 0.0:
                 extra_out = abs(delta_out)
+                # Fuera del «Rango demora salida» la marca no se ajusta a la hora del horario: esos minutos se cuentan.
+                if extra_out > anclaje_salida:
+                    salida_tardia = extra_out
                 if anclaje_salida > 0 and extra_out > anclaje_salida:
                     res['observaciones'] += f"Salida extendida {res['hora_salida_real'][:5]} (+{int(extra_out)} min). "
 
-        if diff_ent > tolerancia_descuento:
+        # En un horario con dos o más ciclos ese día el jefe puede pedir entrar entre dos ciclos: si llegó después de la hora de
+        # su ciclo y se quedó después de la salida al menos lo mismo, la jornada se corrió y no es atraso; si no cumple las horas,
+        # queda la deuda. En los demás horarios llegar tarde es siempre atraso (orden del dueño, 27-10-2026).
+        ciclos_del_dia = [c for c in (todos_ciclos_dia or []) if c and not _flag(c.get('es_libre')) and c.get('hora_entrada')]
+        if not is_bolsa and diff_ent > tolerancia_descuento and len(ciclos_del_dia) >= 2 and salida_tardia >= diff_ent:
+            res['observaciones'] += (f"Jornada corrida: llegó {int(round(diff_ent))} min después de su horario y salió "
+                                     f"{int(round(salida_tardia))} min después; no es atraso. ")
+        elif diff_ent > tolerancia_descuento:
             res['minutos_atraso'] = round(diff_ent, 2)
             res['tiene_atraso'] = 1
             res['estado'] = 'ATRASO'

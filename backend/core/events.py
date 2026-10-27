@@ -201,11 +201,8 @@ async def lifespan(app: FastAPI):
                 from backend.repositories.cuadre import CuadreRepository
                 await CuadreRepository(db).init_tables()
                 
-                # Sincronizar/poblar tabla horas_extras con registros pendientes
-                from backend.repositories.hora_extra import HoraExtraRepository
-                he_repo = HoraExtraRepository(db)
-                await he_repo.run_backfill()
-                logger.info("✅ [Startup] Backfill de horas extras completado")
+                # (La «limpieza» de horas extra del arranque se quitó el 27-10-2026: recorría toda la historia, también días
+                # cerrados, con un minuto fijo. Las horas extra las mantiene el cálculo de cada día.)
 
                 # ── Rolling Window Sync de Feriados ──────────────────────────────
                 # Garantiza año actual completo + 2 meses adelante.

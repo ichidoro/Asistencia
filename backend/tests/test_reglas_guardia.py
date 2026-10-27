@@ -173,7 +173,7 @@ def test_ninguna_pantalla_ni_anotacion_usa_las_iniciales():
 
 
 def test_lo_configurable_no_vuelve_a_quedar_escrito_en_el_motor():
-    for clave in ("reglas_marcas_repetidas_minutos", "reglas_marcas_colacion_referencia_minutos"):
+    for clave in ("reglas_marcas_repetidas_minutos",):
         assert clave in MOTOR, f"el motor ya no lee el ajuste {clave}"
         assert clave in REPO, f"la pestaña ya no ofrece el ajuste {clave}"
     assert ">= 1200.0" not in MOTOR, "volvieron los 20 minutos escritos para las marcas repetidas"

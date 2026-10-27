@@ -27,7 +27,6 @@ DESCRIPCION_REBOTE = ('Reglas de marcaciones: segundos entre dos marcas para con
 CLAVE_COLACION_MIN = 'reglas_marcas_colacion_min_minutos'
 CLAVE_COLACION_MAX = 'reglas_marcas_colacion_max_minutos'
 CLAVE_REPETIDAS = 'reglas_marcas_repetidas_minutos'
-CLAVE_COLACION_REFERENCIA = 'reglas_marcas_colacion_referencia_minutos'
 
 # Ajustes que la pestaña deja cambiar: clave → (descripción, mínimo, máximo).
 # El valor de cada uno vive en la tabla `ajustes`, no aquí.
@@ -35,8 +34,6 @@ AJUSTES_EDITABLES = {
     CLAVE_REBOTE: ('Segundos entre dos marcas para considerarlas un doble toque (rebote).', 0, 1800),
     CLAVE_REPETIDAS: ('Minutos entre dos ENTRADAS o dos SALIDAS seguidas para juntarlas en una '
                       '(se queda la primera ENTRADA o la última SALIDA).', 0, 240),
-    CLAVE_COLACION_REFERENCIA: ('Minutos de colación de referencia para elegir cuál pausa es la colación '
-                                'cuando el horario no tiene colación configurada.', 0, 240),
 }
 
 # La cuenta de jornadas por secuencia recorre todo el historial: se guarda 10 minutos.
@@ -67,6 +64,11 @@ class ReglasMarcasRepository:
                     UNIQUE (tipo_horario, secuencia)
                 )
             """)
+        # La «colación de referencia» se quitó (27-10-2026): la colación viene siempre del horario asignado.
+        try:
+            await self.db.execute("DELETE FROM ajustes WHERE clave = 'reglas_marcas_colacion_referencia_minutos'")
+        except Exception as e:
+            logger.warning(f"Quitar la colación de referencia: {e}")
         # La opción «avisar si las marcas no calzan con ningún ciclo del horario» y sus minutos se quitaron (27-10-2026):
         # esos días se calculan solos (salida adelantada solo si salió antes más de lo que llegó antes). Estaba apagada en todas.
         try:
@@ -108,7 +110,6 @@ class ReglasMarcasRepository:
                     (CLAVE_COLACION_MAX, '150',
                      'Reglas de marcaciones: minutos máximos de una pausa para que la pantalla la señale como colación.'),
                     (CLAVE_REPETIDAS, '20', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_REPETIDAS][0]),
-                    (CLAVE_COLACION_REFERENCIA, '60', 'Reglas de marcaciones: ' + AJUSTES_EDITABLES[CLAVE_COLACION_REFERENCIA][0]),
                 ]
             )
         except Exception as e:

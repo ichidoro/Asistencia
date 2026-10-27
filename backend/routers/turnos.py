@@ -93,6 +93,13 @@ async def bulk_assign_turnos(
             )
     return res
 
+def _exigir_colacion(turno: TurnoCreate) -> None:
+    """La colación del horario es obligatoria (orden del dueño, 27-10-2026): el cálculo la descuenta y la usa para
+    reconocer cuál pausa es la colación; no hay un valor de referencia aparte."""
+    if not turno.descuento_colacion_auto or int(turno.minutos_colacion_auto or 0) <= 0:
+        raise HTTPException(status_code=400, detail="La colación del horario es obligatoria: marque «Descontar» e indique los minutos de colación.")
+
+
 @router.post("/", response_model=Dict[str, Any])
 async def create_turno(
     turno: TurnoCreate, 
@@ -100,6 +107,7 @@ async def create_turno(
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
 ):
     """Crear un nuevo Turno con sus días configurados"""
+    _exigir_colacion(turno)
     if not current_user.alcance_global:
         if not turno.areas:
             raise HTTPException(status_code=403, detail="Un usuario zonal debe asignar al menos una área a la que tenga permisos.")
@@ -238,6 +246,7 @@ async def update_turno(
     current_user: SecurityContext = Depends(RequireAnyPermission(["configuracion.horarios", "configuracion.wizard"]))
 ):
     """Actualizar configuración de un turno"""
+    _exigir_colacion(turno)
     db = service.repository.db
     areas_res = await db.fetch_all(
         "SELECT a.nombre FROM turno_areas ta JOIN areas a ON ta.area_id = a.id WHERE ta.turno_id = ?",

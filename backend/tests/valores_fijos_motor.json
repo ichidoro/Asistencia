@@ -369,6 +369,15 @@
   "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
  },
  {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "if not is_bolsa and diff_ent > tolerancia_descuento and len(ciclos_del_dia) >= 2 and salida_tardia >= diff_ent:",
+  "numeros": [
+   "2"
+  ],
+  "tipo": "logica",
+  "motivo": "«Entre dos ciclos»: el horario tiene dos o más ciclos ese día (definición, no un valor del negocio)."
+ },
+ {
   "archivo": "backend/services/cuadre_service.py",
   "linea": "TOLERANCIA_MIN = 0.05           # diferencia que se acepta en una identidad (redondeos de segundos)",
   "numeros": [

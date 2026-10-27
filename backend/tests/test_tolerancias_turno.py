@@ -80,3 +80,17 @@ def test_sin_rango_de_anticipacion_cuenta_la_hora_real_de_entrada(monkeypatch):
 def test_con_rango_de_anticipacion_la_entrada_temprana_se_ajusta_a_la_hora(monkeypatch):
     r = _dia(monkeypatch, [("06:59:30", E), ("16:29:40", S)], anclaje_entrada_minutos=35)
     assert abs(r["minutos_deuda"] - 0.33) < 0.02
+
+
+def test_un_horario_sin_colacion_no_se_guarda():
+    # La colación del horario es obligatoria (orden del dueño, 27-10-2026): no hay colación de referencia aparte.
+    import pytest
+    from fastapi import HTTPException
+    from backend.routers.turnos import _exigir_colacion
+    from backend.schemas.turno import TurnoCreate
+    base = {"nombre": "Prueba", "dias": []}
+    with pytest.raises(HTTPException):
+        _exigir_colacion(TurnoCreate(**base, descuento_colacion_auto=False, minutos_colacion_auto=30))
+    with pytest.raises(HTTPException):
+        _exigir_colacion(TurnoCreate(**base, descuento_colacion_auto=True, minutos_colacion_auto=0))
+    _exigir_colacion(TurnoCreate(**base, descuento_colacion_auto=True, minutos_colacion_auto=60))

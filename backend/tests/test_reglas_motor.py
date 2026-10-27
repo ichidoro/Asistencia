@@ -290,13 +290,11 @@ def test_las_marcas_repetidas_se_juntan_segun_el_ajuste():
     assert [l["id"] for l in M.collapse_consecutive_same_type(dos, repetidas_segundos=5 * 60)] == [1, 2, 3]
 
 
-def test_colacion_de_referencia_sale_del_ajuste_y_sin_el_ajuste_la_pausa_mas_larga(monkeypatch):
-    sin_colacion = dict(TURNO, descuento_colacion_auto=0, minutos_colacion_auto=0, umbral_horas_colacion=0)
+def test_la_colacion_se_busca_con_la_del_horario_y_sin_ella_es_la_pausa_mas_larga(monkeypatch):
+    # No hay «colación de referencia» aparte (orden del dueño, 27-10-2026): la colación viene del horario asignado.
     dos_pausas = [L(1, "2026-10-15 07:00:00", E), L(2, "2026-10-15 09:00:00", S), L(3, "2026-10-15 09:20:00", E),
                   L(4, "2026-10-15 12:30:00", S), L(5, "2026-10-15 13:30:00", E), L(6, "2026-10-15 16:30:00", S)]
-    monkeypatch.setitem(AJUSTES_CONFIGURADOS, "reglas_marcas_colacion_referencia_minutos", "20")
-    r = _dia(monkeypatch, dos_pausas, turno=sin_colacion)
-    assert r["hora_salida_colacion"] == "09:00:00"                 # la de 20 min es la más parecida a 20
-    monkeypatch.delitem(AJUSTES_CONFIGURADOS, "reglas_marcas_colacion_referencia_minutos")
-    r2 = _dia(monkeypatch, dos_pausas, turno=sin_colacion)
-    assert r2["hora_salida_colacion"] == "12:30:00"                # sin ajuste: la más larga (60 min)
+    con_20 = dict(TURNO, minutos_colacion_auto=20)
+    assert _dia(monkeypatch, dos_pausas, turno=con_20)["hora_salida_colacion"] == "09:00:00"   # la más parecida a 20
+    sin_colacion = dict(TURNO, descuento_colacion_auto=0, minutos_colacion_auto=0, umbral_horas_colacion=0)
+    assert _dia(monkeypatch, dos_pausas, turno=sin_colacion)["hora_salida_colacion"] == "12:30:00"   # la más larga

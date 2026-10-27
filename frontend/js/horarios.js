@@ -53,11 +53,10 @@ async function saveTurno() {
     const form = document.getElementById('formTurno');
     const formData = new FormData(form);
 
-    if (document.getElementById('chkColacion').checked) {
-        if (!document.getElementById('numColacion').value) {
-            alert("Debe ingresar los minutos de colación automática.");
-            return;
-        }
+    // La colación del horario es obligatoria: el cálculo la descuenta y la usa para reconocer la pausa de colación.
+    if (!document.getElementById('chkColacion').checked || !(parseInt(document.getElementById('numColacion').value, 10) > 0)) {
+        alert("La colación del horario es obligatoria: marque «Descontar» e indique los minutos de colación.");
+        return;
     }
 
     if (formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') {
