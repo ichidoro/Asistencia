@@ -1,4 +1,4 @@
-from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas
+from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas, tramos_movimiento
 
 PARADAS = [
     {"desde": "09:05:00", "hasta": "09:40:00", "min": 35, "lugar": "Shell, Avenida Bernardo OHiggins, El Trapiche, San Fernando, Región del Libertador, Chile", "la": -34.6000, "lo": -70.9600},
@@ -103,3 +103,13 @@ def test_una_sola_parada_en_la_comuna_se_muestra_sin_marcarla():
 def test_resumen():
     r = cruzar_entregas([entrega("AV BERNARDO O'HIGGINS 1", "San Fernando"), entrega("X 1", "Curicó"), entrega("Y 1", "Romeral")], PARADAS)
     assert r["resumen"] == {"total": 3, "calza": 0, "calle": 1, "cercana": 0, "comuna": 1, "lejos": 0, "sin_parada": 1}
+
+
+def test_tramos_de_conduccion_con_su_hora_exacta():
+    pts = [{"s": s, "v": v} for s, v in ((3600, 20), (3630, 25), (3660, 0), (4000, 0), (4030, 30), (4060, 40), (4090, 0))]
+    # anda de 3600 a 3660 (llega a la parada), está detenido hasta 4030, y vuelve a andar de 4030 a 4090: el primero dura 60 s (< 2 min) y no se dibuja
+    assert tramos_movimiento(pts) == []
+    pts = [{"s": s, "v": v} for s, v in ((3600, 20), (3700, 25), (3760, 18), (3800, 0), (4200, 0), (4230, 30), (4400, 35), (4440, 0))]
+    assert tramos_movimiento(pts) == [[3600, 3800], [4230, 4440]]
+    # un hueco de más de 15 min sin reportes no cuenta como conducción
+    assert tramos_movimiento([{"s": 1000, "v": 30}, {"s": 3000, "v": 30}]) == []

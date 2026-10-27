@@ -3549,7 +3549,12 @@ function m180GpsTabla(g) {
     [1, 2].forEach(v => {
         const [b, t, corto, largo, min] = FILAS[v];
         let html = '';
-        for (let i = 0; i < 96 && v === 1;) {   // Conduciendo va en tramos de 15 min; Detenido se dibuja con la hora exacta de cada parada (más abajo)
+        // Conduciendo y Detenido se dibujan a su hora exacta (los tramos de 15 min mezclaban: un tramo con 10 min andando y 5 parado salía como «conducción»)
+        const hms = x => String(Math.floor(x / 3600)).padStart(2, '0') + ':' + String(Math.floor((x % 3600) / 60)).padStart(2, '0');
+        if (v === 1 && Array.isArray(g.tramos_mov)) g.tramos_mov.forEach(([a, z]) => {
+            html += `<div class="m180-block" style="left:${(a / 86400) * 100}%; width:${((z - a) / 86400) * 100}%;" title="Conduciendo ${hms(a)}–${hms(z)}"><b>COND</b><i>${formatMinToHHMM(Math.max(1, Math.round((z - a) / 60)))}</i></div>`;
+        });
+        for (let i = 0; i < 96 && v === 1 && !Array.isArray(g.tramos_mov);) {   // (sin tramos exactos del servidor: tramos de 15 min)
             if (g.slots_gps[i] !== v) { i++; continue; }
             let j = i; while (j < 96 && g.slots_gps[j] === v) j++;
             const dur = formatMinToHHMM((j - i) * 15);
@@ -3669,7 +3674,10 @@ function m180GpsEntregasPintar() {
     if (!d.salio) { body.innerHTML = '<div class="alert alert-secondary py-2 small mb-0">El camión casi no se movió este día: no salió a repartir.</div>'; return; }
     if (!d.entregas.length) { body.innerHTML = `<div class="alert alert-secondary py-2 small mb-0">No hay facturas emitidas para esta salida de ${esc(d.patente)}.</div>`; return; }
     const r = d.resumen || {}, U = d.umbrales || { calza_m: 150, cerca_m: 500 };
-    const orden = e => (e.parada ? m180GpsSeg(e.parada.desde) : 99999);
+    // En el orden del recorrido del camión: a la hora de su parada; las que solo coinciden en la comuna, a la hora en que el camión llegó por primera vez a esa
+    // comuna; las de comunas donde no paró, al final.
+    const orden = e => (e.parada ? m180GpsSeg(e.parada.desde)
+        : (e.paradas_comuna && e.paradas_comuna.length ? Math.min(...e.paradas_comuna.map(p => m180GpsSeg(p.desde))) : 99999));
     const entregas = d.entregas.slice().sort((a, b) => orden(a) - orden(b));
     const kpi = (n, txt, k) => `<span class="m180-ent-kpi" style="--c:${M180_ENT_ESTADO[k].c};--bg:${M180_ENT_ESTADO[k].bg}"><b>${n}</b> ${txt}</span>`;
     const filas = entregas.map((e, i) => {

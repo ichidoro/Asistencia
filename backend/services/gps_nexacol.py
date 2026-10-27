@@ -56,6 +56,21 @@ def calcular_slots(puntos: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"slots": slots, "min_mov": round(min_mov / 60), "min_det": round(min_det / 60)}
 
 
+def tramos_movimiento(puntos: List[Dict[str, Any]]) -> List[List[int]]:
+    """[[desde_s, hasta_s], ...]: los tramos del día en que el camión andaba (segundos desde las 00:00), uno por cada recorrido entre paradas. Cada segmento entre
+    dos reportes cuenta si el primero iba a más de VEL_MOVIENDO y no hay un hueco sin reportes de más de HUECO_MAX. Los de menos de 2 min (un tironeo en una cola)
+    no se dibujan. Las paradas empiezan en el primer reporte detenido, donde termina el tramo: no se solapan."""
+    pts = sorted(((p["s"], p["v"]) for p in puntos if isinstance(p.get("s"), (int, float)) and isinstance(p.get("v"), (int, float))), key=lambda t: t[0])
+    out: List[List[int]] = []
+    for (s0, v0), (s1, _) in zip(pts, pts[1:]):
+        if v0 > VEL_MOVIENDO and 0 < s1 - s0 <= HUECO_MAX:
+            if out and s0 - out[-1][1] <= 1:
+                out[-1][1] = int(s1)
+            else:
+                out.append([int(s0), int(s1)])
+    return [t for t in out if t[1] - t[0] >= 120]
+
+
 _cookie = {"valor": ""}
 _lock = asyncio.Lock()
 
@@ -126,6 +141,7 @@ async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
         "paradas": res.get("paradas") or [],
         "slots_gps": calc["slots"],
         "planta": {k: (data.get("casaMatriz") or {}).get(src) for k, src in (("nombre", "nombre"), ("salidas", "salidas"))},
+        "tramos_mov": tramos_movimiento(puntos),
         "min_mov_gps": calc["min_mov"],
         "min_det_gps": calc["min_det"],
     }
