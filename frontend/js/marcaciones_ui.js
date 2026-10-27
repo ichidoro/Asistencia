@@ -6065,11 +6065,14 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
 window.GRID_COLLAPSED_W = 76;
 
 // ── Corte reloj → libreta (Bolsa flexible) ─────────────────────────────────────
-// Antes de la fecha de corte el horario se controlaba con el reloj biométrico; desde ella, con la libreta
-// ingresada a mano. La fecha la entrega el servidor (ajuste configurable); aquí no se escribe ninguna fecha.
-window.getCorteLibreta = function() {
-    const d = (typeof stateMarcacionesApp !== 'undefined' && stateMarcacionesApp.data) ? stateMarcacionesApp.data : null;
-    return (d && d.corte_libreta) || null;
+// Antes de la fecha «Sin reloj a partir de» de su horario la persona se controlaba con el reloj biométrico; desde ella,
+// con la libreta ingresada a mano. Cada horario tiene su fecha y la entrega el servidor; aquí no se escribe ninguna fecha.
+window.getCorteLibreta = function(empInfo) {
+    return (empInfo && (empInfo.libreta_desde || (empInfo.info && empInfo.info.libreta_desde))) || null;
+};
+// Fechas de libreta distintas entre las filas visibles (de menor a mayor)
+window.getCortesLibreta = function(rows) {
+    return [...new Set((rows || []).map(r => window.getCorteLibreta(r && r.emp)).filter(Boolean))].sort();
 };
 window._empEsHorarioLibreta = function(empInfo) {
     return !!(empInfo && (empInfo.tipo_programacion === 'BOLSA_FLEXIBLE' || empInfo.tipo_programacion === 'FLEXIBLE_BOLSA'
@@ -6080,7 +6083,7 @@ window.esDiaControlPorReloj = function(di, dateStr, empInfo) {
     if (!window._empEsHorarioLibreta(empInfo)) return false;
     if (di && (di.slots_96 || di.origen === 'LIBRETA_180H')) return false;       // hay libreta real: es libreta
     if (di && di.modalidad_dia) return di.modalidad_dia === 'RELOJ';
-    const corte = window.getCorteLibreta();
+    const corte = window.getCorteLibreta(empInfo);
     return !!corte && String(dateStr) < corte;
 };
 window.getGridFlags = function(allRows) {
@@ -6493,7 +6496,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         // los datos en memoria y el tooltip se arma al pasar el mouse (ver _getCellTipHtml).
         const tipKey = emp.id + '|' + d;
         (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp: Object.assign({}, emp, { stats: r }) });
-        const _corteC = (window._gridFlags && window._gridFlags.esBolsa) ? window.getCorteLibreta() : null;
+        const _corteC = (window._gridFlags && window._gridFlags.esBolsa) ? window.getCorteLibreta(emp) : null;
         const corteCelda = (_corteC && d === _corteC) ? 'border-left:3px solid #8b5cf6;' : '';
         return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}, ${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
@@ -7069,7 +7072,9 @@ function renderVistaAnalitica(respData, container) {
         const perdonazoStyle = window._perdonazoState?.activo
             ? 'cursor:pointer;border-bottom:2px solid #10b981;'
             : '';
-        const _corte = gf.esBolsa ? window.getCorteLibreta() : null;
+        // La línea del encabezado solo si todas las filas visibles tienen la misma fecha; si no, cada fila marca la suya
+        const _cortes = gf.esBolsa ? window.getCortesLibreta(rows) : [];
+        const _corte = _cortes.length === 1 ? _cortes[0] : null;
         const esCorte = !!_corte && d === _corte;
         const corteStyle = esCorte ? 'border-left:3px solid #8b5cf6;' : '';
         const titleHdr = esCorte ? 'Desde este día: libreta (antes: reloj biométrico)'
@@ -7302,7 +7307,13 @@ function renderVistaAnalitica(respData, container) {
     </div>`}
     ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
         ${_leyendaEstadosHtml()}
-        ${(gf.esBolsa && window.getCorteLibreta() && dates.includes(window.getCorteLibreta())) ? `<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> Línea violeta: desde ${window.getCorteLibreta().split('-').reverse().join('-')} se usa libreta; antes, reloj biométrico</span>` : ''}
+        ${(() => {
+            const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
+            if (!cs.length) return '';
+            const fechas = cs.map(c => c.split('-').reverse().join('-')).join(', ');
+            return '<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> '
+                + 'Línea violeta: desde ' + fechas + ' se usa libreta (fecha del horario de cada persona); antes, reloj biométrico</span>';
+        })()}
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
     </div>`}`;
 

@@ -50,6 +50,7 @@ class TurnoBase(BaseModel):
     semana_fallback_sin_marcas: int = 1
     meta_horas_espera: float = 88.0 # Meta de horas de espera para Art. 25 bis (default 88.0 hrs mensuales)
     modalidad_control: str = 'RELOJ' # 'RELOJ' (Biométrico estándar) o 'LIBRETA_180H' (Libreta Art. 25 bis)
+    libreta_desde: Optional[str] = None # AAAA-MM-DD «Sin reloj a partir de»: desde ese día el horario de libreta se controla sin reloj
     activo: bool = True
 
     @validator('activo', pre=True, always=True)
@@ -57,6 +58,16 @@ class TurnoBase(BaseModel):
         if v is None:
             return True
         return bool(v)
+
+    @validator('libreta_desde', pre=True, always=True)
+    def fecha_libreta_valida(cls, v):
+        if v in (None, ''):
+            return None
+        from backend.services.libreta_corte import normalizar_fecha_corte
+        fecha = normalizar_fecha_corte(v)
+        if not fecha:
+            raise ValueError("«Sin reloj a partir de» debe ser una fecha válida (AAAA-MM-DD).")
+        return fecha
 
 class TurnoCreate(TurnoBase):
     dias: List[TurnoDiaCreate]

@@ -58,6 +58,7 @@ class TurnoRepository:
             ("rotacion_dinamica_diaria",            "INTEGER DEFAULT 0"),
             ("meta_horas_espera",                   "REAL DEFAULT 88.0"),
             ("modalidad_control",                   "TEXT DEFAULT 'RELOJ'"),
+            ("libreta_desde",                       "TEXT"),
         ]
         for col, defn in migraciones_turnos:
             if col not in cols_turnos:
@@ -88,6 +89,23 @@ class TurnoRepository:
                 logger.info("[Migration] Esperas del día de hoy escritas en cada turno (180 min sin salida; 30 min o el rango de salida sin marcas)")
             except Exception as e:
                 logger.warning(f"[Migration] esperas del día de hoy en turnos: {e}")
+
+        # Migración única (corre solo cuando se crea la columna libreta_desde): la fecha desde la que un horario de libreta
+        # se controla sin reloj era una sola para todos (ajuste asistencia_libreta_180h_bolsa_desde). Cada horario tiene
+        # ahora la suya (orden del dueño, 27-10-2026); se copia la que regía a cada horario de libreta para que nada
+        # cambie y el ajuste se quita.
+        if "libreta_desde" not in cols_turnos:
+            try:
+                fila = await self.db.fetch_one("SELECT valor FROM ajustes WHERE clave = 'asistencia_libreta_180h_bolsa_desde'")
+                if fila and fila['valor']:
+                    await self.db.execute(
+                        "UPDATE turnos SET libreta_desde = ? WHERE UPPER(COALESCE(modalidad_control, 'RELOJ')) = 'LIBRETA_180H' "
+                        "OR UPPER(COALESCE(tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')",
+                        (str(fila['valor'])[:10],))
+                    logger.info(f"[Migration] Fecha de libreta {str(fila['valor'])[:10]} copiada a cada horario de libreta")
+                await self.db.execute("DELETE FROM ajustes WHERE clave = 'asistencia_libreta_180h_bolsa_desde'")
+            except Exception as e:
+                logger.warning(f"[Migration] fecha de libreta por horario: {e}")
 
         # 2. Tabla Turno Dias (Detalle Semanal)
         if not await self.db.table_exists("turno_dias"):
@@ -541,8 +559,8 @@ class TurnoRepository:
                     ventana_en_curso_minutos, espera_inasistencia_minutos, tolerancia_exceso_colacion_minutos,
                     turno_padre_id, fecha_vigencia, rotacion_secuencial, semana_fallback_sin_marcas,
                     activo, permite_viajes_largos, rotacion_dinamica_diaria,
-                    meta_horas_espera, modalidad_control
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    meta_horas_espera, modalidad_control, libreta_desde
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params_turno = (
                 turno.nombre, turno.tipo_programacion, turno.meta_horas_semanales,
@@ -556,9 +574,10 @@ class TurnoRepository:
                 1 if turno.permite_viajes_largos else 0,
                 1 if turno.rotacion_dinamica_diaria else 0,
                 getattr(turno, 'meta_horas_espera', 88.0) or 88.0,
-                getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ'
+                getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ',
+                getattr(turno, 'libreta_desde', None)
             )
-            
+
             cursor = await self.db.execute(sql_turno, params_turno)
             turno_id = cursor.lastrowid
             
@@ -1039,7 +1058,7 @@ class TurnoRepository:
                     anclaje_entrada_minutos=?, anclaje_salida_minutos=?, hora_limite_ficticia=?,
                     ventana_en_curso_minutos=?, espera_inasistencia_minutos=?, tolerancia_exceso_colacion_minutos=?,
                     turno_padre_id=?, fecha_vigencia=?, activo=?, permite_viajes_largos=?,
-                    rotacion_dinamica_diaria=?, meta_horas_espera=?, modalidad_control=?
+                    rotacion_dinamica_diaria=?, meta_horas_espera=?, modalidad_control=?, libreta_desde=?
                 WHERE id=?
             """
             params = (
@@ -1054,6 +1073,7 @@ class TurnoRepository:
                 1 if turno.rotacion_dinamica_diaria else 0,
                 getattr(turno, 'meta_horas_espera', 88.0) or 88.0,
                 getattr(turno, 'modalidad_control', 'RELOJ') or 'RELOJ',
+                getattr(turno, 'libreta_desde', None),
                 turno_id
             )
             await self.db.execute(sql_update, params)

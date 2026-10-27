@@ -21,7 +21,7 @@ from loguru import logger
 from backend.core.config import settings
 from backend.repositories.asistencia import AsistenciaRepository, LOGS_CON_TIPO_CORREGIDO
 from backend.services.libreta_corte import (
-    obtener_corte_libreta, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
+    fecha_libreta_del_horario, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
 )
 from backend.repositories.empleado import EmpleadoRepository
 from backend.services.bolsa_prorrateo import calcular_prorrateo_bolsa
@@ -2166,7 +2166,7 @@ class AsistenciaService:
             logger.debug(f"Blindaje Manual Aplicado (MODO OVERRIDE) para {empleado_id} - {fecha}")
             resultado = HumanDecisionMerger.apply(dict(asist_actual), fecha, he_previo, None)
         else:
-            es_180h = QuantumMatrixEngine.resolve_control_modality(asignacion or {}, fecha, global_ajustes_ctx)
+            es_180h = QuantumMatrixEngine.resolve_control_modality(asignacion or {}, fecha)
 
             libreta_180h = None
             if es_180h:
@@ -2484,7 +2484,7 @@ class AsistenciaService:
         
         q_asig = f"""
             SELECT a.empleado_id, a.turno_id, t.meta_horas_semanales, t.tipo_programacion, t.permite_viajes_largos, t.nombre as turno_nombre,
-                   t.meta_horas_espera, t.modalidad_control
+                   t.meta_horas_espera, t.modalidad_control, t.libreta_desde
             FROM asignacion_turnos a
             JOIN turnos t ON a.turno_id = t.id
             WHERE a.empleado_id IN ({ids_ph})
@@ -2595,6 +2595,7 @@ class AsistenciaService:
                 emp['meta_horas_semanales'] = t_info.get('meta_horas_semanales') or 45.0
                 emp['meta_horas_espera'] = t_info.get('meta_horas_espera') if t_info.get('meta_horas_espera') is not None else 88.0
                 emp['modalidad_control'] = t_info.get('modalidad_control') or 'RELOJ'
+                emp['libreta_desde'] = fecha_libreta_del_horario(t_info)
                 emp['tipo_programacion'] = t_info.get('tipo_programacion') or 'CICLO_INTELIGENTE'
                 emp['permite_viajes_largos'] = t_info.get('permite_viajes_largos') or 0
                 emp['turno'] = t_info.get('turno_nombre')
@@ -2817,14 +2818,13 @@ class AsistenciaService:
             res_rrhh = await db.fetch_one(q_rrhh, (fecha_fin, fecha_inicio))
             periodo_cerrado = res_rrhh['count'] > 0 if res_rrhh else False
 
-        # Régimen de control de cada día (reloj biométrico antes del corte, libreta desde el corte)
-        corte_libreta = await obtener_corte_libreta(db)
+        # Régimen de control de cada día (reloj biométrico antes de la fecha de libreta del horario, libreta desde ella)
         for _eid, _cells in matrix.items():
             _inf = _cells.get('info') or {}
             for _f, _cell in _cells.items():
                 if _f != 'info' and isinstance(_cell, dict):
                     _cell['modalidad_dia'] = regimen_del_dia(
-                        _f, _inf.get('modalidad_control'), _inf.get('tipo_programacion'), corte_libreta)
+                        _f, _inf.get('modalidad_control'), _inf.get('tipo_programacion'), _inf.get('libreta_desde'))
 
         # Libro mayor de minutos de cada persona (Ciclo Inteligente): la grilla, la ventana de cuadre, el cierre y el
         # Excel leen estos mismos totales, calculados una sola vez aquí con los mismos días (25-10-2026).
@@ -2856,7 +2856,6 @@ class AsistenciaService:
 
         return {
             'matrix': matrix,
-            'corte_libreta': corte_libreta,
             'empleados': empleados,
             'feriados': feriados_list,
             'periodo': {
@@ -3197,37 +3196,35 @@ class AsistenciaService:
 
     async def purgar_y_recalcular_libreta_180h(self, fecha_desde: Optional[str] = None) -> Dict[str, Any]:
         """
-        Purga todas las marcaciones biométricas de reloj físico (logs_raw donde manual=0 o manual IS NULL)
-        para todos los empleados asignados a turnos cuya modalidad de control sea 'LIBRETA_180H'
-        o de tipo Bolsa Flexible a partir de `fecha_desde`.
+        Purga todas las marcaciones biométricas de reloj físico (logs_raw donde manual=0 o manual IS NULL), y lo que
+        cuelga de ellas (cambios de tipo y revisiones del día), en los días que cada horario de libreta ('LIBRETA_180H'
+        o Bolsa Flexible) controla con libreta: desde su propia fecha «Sin reloj a partir de» (`libreta_desde`).
+        `fecha_desde` solo acota el comienzo (nunca antes de la fecha del horario); un horario sin fecha se purga solo
+        si se indica `fecha_desde`.
 
         Luego recalcula la asistencia día por día para los empleados afectados, garantizando
         que los días sin libreta digital queden estrictamente en 'PENDIENTE' (esperando libreta),
         con 0 horas trabajadas, 0 deuda y sin marcas de reloj.
         """
         db = self.repository.db
-        # Sin fecha explícita, se usa la fecha de corte configurada (Configuración → ajuste de libreta 180h)
-        fecha_desde = normalizar_fecha_corte(fecha_desde) or await obtener_corte_libreta(db)
-        if not fecha_desde:
-            raise ValueError("No hay fecha de corte de libreta configurada ni se indicó 'fecha_desde'.")
-        logger.info(f"🧹 [Libreta 180h] Iniciando purga de marcas de reloj y recálculo desde {fecha_desde}...")
+        fecha_desde = normalizar_fecha_corte(fecha_desde)
+        logger.info(f"🧹 [Libreta 180h] Iniciando purga de marcas de reloj en días de libreta (desde {fecha_desde or 'la fecha de cada horario'})...")
 
         # 1. Buscar asignaciones relevantes
         q_asigs = """
             SELECT ast.empleado_id, ast.fecha_inicio, ast.fecha_fin,
                    t.id as turno_id, t.nombre as turno_nombre,
-                   t.modalidad_control, t.tipo_programacion
+                   t.modalidad_control, t.tipo_programacion, t.libreta_desde
             FROM asignacion_turnos ast
             JOIN turnos t ON ast.turno_id = t.id
             WHERE (
                 UPPER(COALESCE(t.modalidad_control, 'RELOJ')) = 'LIBRETA_180H'
                 OR UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
             )
-            AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?)
         """
-        asig_rows = await db.fetch_all(q_asigs, (fecha_desde,))
+        asig_rows = await db.fetch_all(q_asigs)
         if not asig_rows:
-            logger.info("ℹ️ [Libreta 180h] No se encontraron asignaciones en modalidad libreta 180h desde esa fecha.")
+            logger.info("ℹ️ [Libreta 180h] No se encontraron asignaciones en modalidad libreta 180h.")
             return {"success": True, "marcas_purgadas": 0, "dias_recalculados": 0, "empleados_afectados": 0}
 
         total_marcas_borradas = 0
@@ -3238,9 +3235,12 @@ class AsistenciaService:
             emp_id = asig['empleado_id']
             f_ini_asig = str(asig['fecha_inicio'])[:10]
             f_fin_asig = str(asig['fecha_fin'])[:10] if asig['fecha_fin'] else None
+            fecha_horario = fecha_libreta_del_horario(asig)
+            if fecha_horario is None and fecha_desde is None:
+                continue
 
-            # Rango efectivo para esta asignación a partir de fecha_desde
-            f_ini = max(f_ini_asig, fecha_desde)
+            # Rango efectivo: desde la fecha de libreta del horario (y no antes de fecha_desde, si se indicó)
+            f_ini = max(f for f in (f_ini_asig, fecha_horario, fecha_desde) if f)
             f_fin = min(f_fin_asig, hoy_str) if f_fin_asig else hoy_str
 
             # Expandir días y purgar únicamente en períodos abiertos (respetando cierres)
@@ -3261,6 +3261,12 @@ class AsistenciaService:
                     cnt_row = await db.fetch_one(q_cnt, (emp_id, dt_ini_str, dt_fin_str))
                     cnt_borrar = cnt_row['cnt'] if cnt_row else 0
                     if cnt_borrar > 0:
+                        await db.execute("""
+                            DELETE FROM logs_tipo_override WHERE log_id IN (
+                                SELECT id FROM logs_raw WHERE empleado_id = ? AND fecha_hora >= ? AND fecha_hora <= ?
+                                  AND (manual = 0 OR manual IS NULL))
+                        """, (emp_id, dt_ini_str, dt_fin_str))
+                        await db.execute("DELETE FROM revisiones_marcas WHERE empleado_id = ? AND fecha = ?", (emp_id, cur_s))
                         q_del = """
                             DELETE FROM logs_raw
                             WHERE empleado_id = ?

@@ -1704,8 +1704,7 @@ window.loadAjustesSistema = async function() {
             'asistencia_emergencia_gap_horas': 'ajuste-emergencia-gap',
             'asistencia_emergencia_jornada_limite_horas': 'ajuste-emergencia-limite',
             'asistencia_max_extras_ordinarias_dia_habil': 'ajuste-max-extras-dia-habil',
-            'asistencia_minimo_horas_extra_minutos': 'ajuste-minimo-extras',
-            'asistencia_libreta_180h_bolsa_desde': 'ajuste-libreta-corte'
+            'asistencia_minimo_horas_extra_minutos': 'ajuste-minimo-extras'
         };
 
         // Rellenar valores
@@ -1751,10 +1750,6 @@ window.saveAjusteSistema = async function(clave, inputId) {
         valorEnviar = String(Math.round(hrs * 60));
     }
 
-    if (clave === 'asistencia_libreta_180h_bolsa_desde') {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) { showToast("Indica una fecha válida", "error"); return; }
-        if (!confirm(`Desde ${valor} los horarios de bolsa se controlarán por libreta, y antes por reloj biométrico.\n\nNo se recalculan los días ya guardados. ¿Guardar la fecha de corte?`)) return;
-    }
     // El backend espera int, así que enviaremos como número o string validable
     try {
         const response = await fetch(`${API_CONFIG}ajustes/${clave}/`, {

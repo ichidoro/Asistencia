@@ -5,7 +5,6 @@ from backend.schemas.bono import BonoCreate, BonoReglaCreate, BonoAsignacionCrea
 from backend.schemas.justificacion import JustificacionTipoCreate, JustificacionCreate
 import json
 
-from backend.services.libreta_corte import CLAVE_CORTE_LIBRETA, VALOR_INICIAL_CORTE_LIBRETA, DESCRIPCION_CORTE_LIBRETA
 
 class ConfiguracionRepository:
     _bonos_cache = None
@@ -222,7 +221,6 @@ class ConfiguracionRepository:
                 ("asistencia_emergencia_jornada_limite_horas", "3.0", "Horas límite para calificar bloque como jornada especial en vez de horas extras directas"),
                 ("asistencia_max_extras_ordinarias_dia_habil", "0", "Minutos límite de horas extra en un día hábil: lo que pase va a cobertura de turno (0 = sin límite, todo es hora extra)"),
                 ("asistencia_minimo_horas_extra_minutos", "0", "Minutos mínimos de tiempo trabajado de más para contarlo como hora extra (0 = cuenta todo, aunque sean segundos)"),
-                (CLAVE_CORTE_LIBRETA, VALOR_INICIAL_CORTE_LIBRETA, DESCRIPCION_CORTE_LIBRETA)
             ]
             await self.db.executemany(
                 "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",

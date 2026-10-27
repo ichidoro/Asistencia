@@ -91,6 +91,9 @@ async function saveTurno() {
         modalidad_control: ['BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'].includes(formData.get('tipo_programacion'))
             ? (document.getElementById('select-modalidad-control')?.value || 'RELOJ')
             : 'RELOJ',
+        libreta_desde: ['BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA'].includes(formData.get('tipo_programacion'))
+            ? (document.getElementById('input-libreta-desde')?.value || null)
+            : null,
         hora_limite_ficticia: formData.get('hora_limite_ficticia') || null,
         descuento_colacion_auto: !!document.getElementById('chkColacion').checked,
         minutos_colacion_auto: document.getElementById('chkColacion').checked ? parseInt(document.getElementById('numColacion').value) : 0,
@@ -386,6 +389,9 @@ async function openModalHorario(id = null) {
             const selectModControl = document.getElementById('select-modalidad-control');
             if (selectModControl) selectModControl.value = turno.modalidad_control || 'RELOJ';
 
+            const inputLibretaDesde = document.getElementById('input-libreta-desde');
+            if (inputLibretaDesde) inputLibretaDesde.value = turno.libreta_desde || '';
+
             const chkViajes = document.getElementById('chkPermiteViajesLargos') || document.getElementById('chk-permite-viajes-largos');
             if (chkViajes) chkViajes.checked = Boolean(turno.permite_viajes_largos === 1 || turno.permite_viajes_largos === true);
 
@@ -468,6 +474,8 @@ async function openModalHorario(id = null) {
         if (inputMetaEsp) inputMetaEsp.value = "88.0";
         const selectModControl = document.getElementById('select-modalidad-control');
         if (selectModControl) selectModControl.value = 'RELOJ';
+        const inputLibretaDesde = document.getElementById('input-libreta-desde');
+        if (inputLibretaDesde) inputLibretaDesde.value = '';
         // [FIX] setupModalListeners NO llama handleTipoProgramacionChange - llamar aquí una sola vez
         setupModalListeners();
         handleTipoProgramacionChange();
@@ -1273,10 +1281,16 @@ function renderModalHtml() {
                                     </label>
                                     <select id="select-modalidad-control" name="modalidad_control" class="form-select border-success">
                                         <option value="RELOJ">Reloj Control Biométrico Tradicional</option>
-                                        <option value="LIBRETA_180H">Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj a partir de 01-10-2026)</option>
+                                        <option value="LIBRETA_180H">Libreta Digital Art. 25 bis (Marcación Dinámica 180h / 88h - Sin Reloj)</option>
                                     </select>
                                     <div class="form-text small text-muted mt-1">
                                         Define si la asistencia del trabajador se registra vía Libreta Digital Art. 25 bis (sin marcas biométricas) o mediante reloj control físico.
+                                    </div>
+                                    <label for="input-libreta-desde" class="form-label fw-bold text-success mt-2 mb-1">Sin reloj a partir de</label>
+                                    <input type="date" id="input-libreta-desde" class="form-control border-success">
+                                    <div class="form-text small text-muted mt-1">
+                                        Desde este día el horario se controla con la libreta y no se guardan marcas del reloj; antes de este día, con el reloj.
+                                        Cada horario tiene su propia fecha. Vacío: siempre con libreta.
                                     </div>
                                 </div>
                             </div>

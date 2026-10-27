@@ -3719,8 +3719,7 @@ async def marcar_inasistencia_libreta_180h(
         if await repo.check_rango_cerrado(payload.fecha, payload.fecha, payload.empleado_id):
             raise HTTPException(status_code=403, detail="La fecha se encuentra en un período cerrado.")
         asignacion = await repo.get_asignacion_vigente(payload.empleado_id, payload.fecha)
-        ajustes = {r['clave']: r['valor'] for r in await repo.db.fetch_all("SELECT clave, valor FROM ajustes")}
-        if not QuantumMatrixEngine.resolve_control_modality(asignacion or {}, payload.fecha, ajustes):
+        if not QuantumMatrixEngine.resolve_control_modality(asignacion or {}, payload.fecha):
             raise HTTPException(status_code=400, detail="Este empleado no se controla con libreta 180h ese día.")
         existente = await repo.get_libreta_180h(payload.empleado_id, payload.fecha)
         if existente:
@@ -3845,7 +3844,7 @@ async def delete_libreta_180h(
 
 
 class PurgaMarcasRelojRequest(BaseModel):
-    fecha_desde: Optional[str] = None   # None = usar la fecha de corte configurada
+    fecha_desde: Optional[str] = None   # None = desde la fecha «Sin reloj a partir de» de cada horario
 
 
 @router.post("/libreta-180h/purgar-marcas-reloj/")
@@ -3856,7 +3855,7 @@ async def purgar_marcas_reloj_libreta_180h(
 ):
     """
     Purga todas las marcas biométricas del reloj físico (logs_raw donde manual=0 o NULL)
-    para empleados con turnos en modalidad 'LIBRETA_180H' o Bolsa Flexible a partir de fecha_desde.
+    para empleados con turnos en modalidad 'LIBRETA_180H' o Bolsa Flexible, en los días que su horario controla con libreta.
     Recalcula la asistencia para todos los días afectados garantizando que días sin libreta digital
     permanezcan estrictamente como PENDIENTE sin marcas de reloj.
     """

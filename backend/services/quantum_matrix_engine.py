@@ -1708,20 +1708,17 @@ class QuantumMatrixEngine:
         return res
 
     @staticmethod
-    def resolve_control_modality(
-        turno_config: Optional[Dict[str, Any]], fecha: str, global_ajustes: Optional[Dict[str, Any]] = None
-    ) -> bool:
+    def resolve_control_modality(turno_config: Optional[Dict[str, Any]], fecha: str) -> bool:
         """
         Determina si el día se controla por Libreta Art. 25 bis (180h).
-        Aplica a turnos con modalidad_control = 'LIBRETA_180H' o de Bolsa Flexible, y solo desde la fecha de corte
-        configurada (ajuste 'asistencia_libreta_180h_bolsa_desde'); antes de ella rige el reloj biométrico.
+        Aplica a turnos con modalidad_control = 'LIBRETA_180H' o de Bolsa Flexible, y solo desde la fecha «Sin reloj a
+        partir de» del propio horario (`libreta_desde`); antes de ella rige el reloj biométrico.
         Ver backend/services/libreta_corte.py.
         """
-        from backend.services.libreta_corte import corte_desde_ajustes, regimen_del_dia, REGIMEN_LIBRETA
+        from backend.services.libreta_corte import fecha_libreta_del_horario, regimen_del_dia, REGIMEN_LIBRETA
         t_cfg = turno_config or {}
         return regimen_del_dia(
-            fecha, t_cfg.get('modalidad_control'), t_cfg.get('tipo_programacion'),
-            corte_desde_ajustes(global_ajustes),
+            fecha, t_cfg.get('modalidad_control'), t_cfg.get('tipo_programacion'), fecha_libreta_del_horario(t_cfg),
         ) == REGIMEN_LIBRETA
 
     @classmethod
