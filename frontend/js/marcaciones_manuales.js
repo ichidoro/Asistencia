@@ -3584,7 +3584,7 @@ const M180_ENT_ESTADO = {
     calza:         { t: 'Calza con una parada', c: '#15803d', bg: '#dcfce7', ic: 'bi-check-circle-fill' },
     cercana:       { t: 'Parada muy cercana', c: '#b45309', bg: '#fef3c7', ic: 'bi-record-circle-fill' },
     lejos:         { t: 'Sin parada cerca', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
-    comuna:        { t: 'Parada en la misma comuna', c: '#1d4ed8', bg: '#dbeafe', ic: 'bi-geo-alt-fill' },
+    comuna:        { t: 'Solo coincide la comuna', c: '#1d4ed8', bg: '#dbeafe', ic: 'bi-geo-alt-fill' },
     sin_parada:    { t: 'Sin parada en esa comuna', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
     aprox:         { t: 'Dirección aproximada', c: '#475569', bg: '#e2e8f0', ic: 'bi-geo-fill' },
     sin_ubicacion: { t: 'No se pudo ubicar', c: '#475569', bg: '#e2e8f0', ic: 'bi-question-circle-fill' }
@@ -3640,7 +3640,9 @@ function m180GpsEntregasPintar() {
                ${e.dist_m != null
                     ? `<div class="m180-ent-barra" title="Distancia entre la dirección de la factura y la parada"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div><small>${e.dist_m} m de la parada</small>`
                     : `<small class="m180-ent-lugar" title="${esc(e.parada.lugar)}">Parada: ${esc(e.parada.lugar)}</small>`}`
-            : '<div class="m180-ent-hora text-muted">El camión no paró en esa comuna</div>';
+            : (e.paradas_comuna && e.paradas_comuna.length
+                ? `<div class="m180-ent-hora">${e.paradas_comuna.length} ${e.paradas_comuna.length === 1 ? 'parada' : 'paradas'} en ${esc(e.comuna)}</div><small class="m180-ent-lugar" title="No se sabe en cuál de ellas se entregó">${e.paradas_comuna.slice(0, 4).map(p => esc(String(p.desde).slice(0, 5)) + ' (' + p.min + ' min)').join(' · ')}${e.paradas_comuna.length > 4 ? ' …' : ''}</small>`
+                : '<div class="m180-ent-hora text-muted">El camión no paró en esa comuna</div>');
         return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
             <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>
             <div class="m180-ent-main"><div class="m180-ent-cli">${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(f)).join(', ')}</div></div>
@@ -3760,7 +3762,7 @@ function m180GpsPintar() {
         else if (m[0] / total >= 0.5) badge = `<span class="badge bg-warning text-dark">libreta: sin registrar</span>`;
         else { badge = `<span class="badge bg-success">calza</span>`; paradasCalzan++; }
         const det = [m[2] ? `${Math.round(m[2])} min espera` : '', m[4] ? `${Math.round(m[4])} min descanso` : '', m[3] ? `${Math.round(m[3])} min aux.` : '', m[1] ? `${Math.round(m[1])} min conducción` : '', m[0] ? `${Math.round(m[0])} min sin registrar` : ''].filter(Boolean).join(' · ');
-        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}${(m180_gps_ent && m180_gps_ent.paradas && m180_gps_ent.paradas[pi]) ? `<div class="m180-ent-tag es-${m180_gps_ent.paradas[pi].estado}"><i class="bi bi-box-seam-fill"></i> ${m180_gps_ent.paradas[pi].estado === 'comuna' ? 'Misma comuna' : 'Entrega'}: ${m180GpsEsc(m180_gps_ent.paradas[pi].cliente || '')}${m180_gps_ent.paradas[pi].dist_m != null ? ' · ' + m180_gps_ent.paradas[pi].dist_m + ' m' : ''}</div>` : ''}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
+        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}${(m180_gps_ent && m180_gps_ent.paradas && m180_gps_ent.paradas[pi]) ? `<div class="m180-ent-tag es-${m180_gps_ent.paradas[pi].estado}"><i class="bi bi-box-seam-fill"></i> ${m180_gps_ent.paradas[pi].estado === 'comuna' ? 'Misma comuna' : 'Entrega'}: ${m180GpsEsc(m180_gps_ent.paradas[pi].cliente || '')}${m180_gps_ent.paradas[pi].dist_m != null ? ' · ' + m180_gps_ent.paradas[pi].dist_m + ' m' : ''}</div>` : ''}</td><td>${badge}<div class="text-muted" style="font-size:.82rem">${det}</div></td></tr>`;
     }).join('');
     const nPar = (g.paradas || []).length;
     const r = g.resumen || {};
@@ -3782,10 +3784,10 @@ function m180GpsPintar() {
         <div class="d-flex align-items-center gap-2 mb-1 flex-wrap"><span class="small fw-semibold">GPS · ${patente}</span><span class="text-muted" style="font-size:.7rem">(carril «GPS» en la línea de tiempo de arriba)</span>
             <span class="text-muted" style="font-size:.7rem"><i class="bi bi-square-fill" style="color:#16a34a"></i> en movimiento &nbsp; <i class="bi bi-square-fill" style="color:#f59e0b"></i> detenido &nbsp; <i class="bi bi-square-fill" style="color:#d1d5db"></i> sin dato o en planta &nbsp; <i class="bi bi-square" style="color:#dc2626"></i> no calza</span></div>
         <div class="row g-3 mt-1">
-            <div class="col-lg-5"><div class="small fw-semibold mb-1">Tramos que no calzan</div>
-                ${rangos.length ? `<ul class="small mb-0 ps-3">${rangos.map(x => `<li>${m180GpsHora(x.de)}–${m180GpsHora(x.a)} (${(x.a - x.de) * 15} min): ${TXT[x.tipo]}</li>`).join('')}</ul>` : '<div class="alert alert-success py-2 small mb-0">Todos los tramos con GPS calzan con la libreta.</div>'}</div>
-            <div class="col-lg-7"><div class="small fw-semibold mb-1">Paradas del camión (${nPar}, desde 5 min)</div>
-                ${filasParadas ? `<div class="table-responsive" style="max-height:260px;overflow:auto"><table class="table table-sm align-middle mb-0" style="font-size:.8rem"><thead><tr><th>Hora</th><th class="text-end">Duración</th><th>Lugar</th><th>Libreta en ese tramo</th></tr></thead><tbody>${filasParadas}</tbody></table></div>` : '<div class="text-muted small">Sin paradas de 5 minutos o más fuera de la planta.</div>'}</div>
+            <div class="col-lg-5"><div class="fw-semibold mb-2" style="font-size:1rem">Tramos que no calzan</div>
+                ${rangos.length ? `<ul class="mb-0 ps-3" style="font-size:.92rem">${rangos.map(x => `<li>${m180GpsHora(x.de)}–${m180GpsHora(x.a)} (${(x.a - x.de) * 15} min): ${TXT[x.tipo]}</li>`).join('')}</ul>` : '<div class="alert alert-success py-2 small mb-0">Todos los tramos con GPS calzan con la libreta.</div>'}</div>
+            <div class="col-lg-7"><div class="fw-semibold mb-2" style="font-size:1rem">Paradas del camión (${nPar}, desde 5 min)</div>
+                ${filasParadas ? `<div class="table-responsive" style="max-height:420px;overflow:auto"><table class="table align-middle mb-0 m180-par-tabla" style="font-size:.95rem"><thead><tr><th>Hora</th><th class="text-end">Duración</th><th>Lugar</th><th>Libreta en ese tramo</th></tr></thead><tbody>${filasParadas}</tbody></table></div>` : '<div class="text-muted small">Sin paradas de 5 minutos o más fuera de la planta.</div>'}</div>
         </div>`;
 }
 window.m180GpsVer = m180GpsVer; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset; window.m180GpsCargarVehiculos = m180GpsCargarVehiculos;

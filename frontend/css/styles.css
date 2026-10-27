@@ -4480,3 +4480,16 @@ tr:hover .emp-name-cell {
 .mx-reset-btn:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .mx-reset-btn, .mx-reset-btn.es-visible { animation: none; transition: none; } }
 .mx-ver-col .btn { max-width: 160px; }
+
+/* ── Libreta: letras más grandes en las paradas y en las facturas del camión ─────────────────────────── */
+.m180-par-tabla th { font-size: .82rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: #4b5a70; }
+.m180-par-tabla td { padding-top: .6rem; padding-bottom: .6rem; }
+#m180-gps-resultado .badge { font-size: .8rem; font-weight: 700; padding: .4em .7em; }
+.m180-ent-cli { font-size: .98rem; }
+.m180-ent-dir { font-size: .84rem; }
+.m180-ent-hora { font-size: .9rem; }
+.m180-ent-par small, .m180-ent-lugar { font-size: .8rem; }
+.m180-ent-badge { padding: 5px 13px; font-size: .84rem; }
+.m180-ent-kpi { font-size: .88rem; }
+.m180-ent-nota { font-size: .8rem; }
+.m180-ent-tag { font-size: .8rem; }

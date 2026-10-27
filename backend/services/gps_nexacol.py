@@ -142,6 +142,10 @@ _ABREV_CALLE = {"av", "avda", "avenida", "calle", "cll", "pasaje", "psje", "pje"
 
 
 _ARTICULOS = {"de", "del", "la", "las", "los", "el", "y"}
+# Calles numeradas (Talca: "14 Norte", "6 Oriente"): el número va a veces en letras ("Dos Sur", "Once Oriente")
+_NUM_PALABRA = {"uno": "1", "un": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5", "seis": "6", "siete": "7", "ocho": "8", "nueve": "9", "diez": "10", "once": "11", "doce": "12",
+                "trece": "13", "catorce": "14", "quince": "15", "dieciseis": "16", "diecisiete": "17", "dieciocho": "18", "diecinueve": "19", "veinte": "20"}
+_DIRECCIONES = {"norte": "norte", "nte": "norte", "sur": "sur", "oriente": "oriente", "ote": "oriente", "poniente": "poniente", "pte": "poniente"}
 
 
 def _norm(t: Any) -> str:
@@ -152,9 +156,27 @@ def _norm(t: Any) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", t)).strip()
 
 
+def _palabras(t: Any) -> List[str]:
+    return [_NUM_PALABRA.get(w, w) for w in _norm(t).split()]
+
+
+def _identificadores_calle(calle: Any) -> Dict[str, List[str]]:
+    """Lo que identifica la calle. En las calles numeradas la identidad es el PAR número + dirección ("14 norte", "6 oriente"): las palabras
+    sueltas ("norte", "oriente") están en medio Talca y no sirven. En el resto, las palabras del nombre (sin "avenida", "pasaje", números ni artículos)."""
+    pal = _palabras(calle)
+    pares = [f"{pal[i]} {_DIRECCIONES[pal[i + 1]]}" for i in range(len(pal) - 1) if pal[i].isdigit() and pal[i + 1] in _DIRECCIONES]
+    nombre = [w for w in pal if len(w) >= 3 and not w.isdigit() and w not in _ABREV_CALLE]
+    return {"pares": pares, "nombre": nombre}
+
+
 def _tokens_calle(calle: Any) -> List[str]:
-    """Las palabras que identifican la calle (sin 'avenida', 'pasaje', números ni artículos)."""
-    return [w for w in _norm(calle).split() if len(w) >= 3 and not w.isdigit() and w not in _ABREV_CALLE]
+    return _identificadores_calle(calle)["nombre"]
+
+
+def _calle_en_lugar(ident: Dict[str, List[str]], palabras: Any, pares: Any) -> bool:
+    if ident["pares"]:
+        return all(p in pares for p in ident["pares"])
+    return bool(ident["nombre"]) and all(t in palabras for t in ident["nombre"])
 
 
 def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
@@ -167,24 +189,28 @@ def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
 def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Para cada entrega, la parada que le corresponde y su estado; y para cada parada, la entrega a la que corresponde.
     Estados: calza (la calle y la comuna están en la dirección de una parada, o la parada queda a ≤ CALZA_M) · cercana (con coordenada, ≤ CERCA_M)
-    · comuna (el camión paró en esa comuna, pero no se puede decir dónde) · lejos (con coordenada, a más de CERCA_M de toda parada)
-    · sin_parada (el camión no paró en esa comuna)."""
+    · comuna (el camión paró en esa comuna, pero NO se sabe en cuál de esas paradas: no se elige ninguna) · lejos (con coordenada, a más de CERCA_M de
+    toda parada) · sin_parada (el camión no paró en esa comuna)."""
     def num(v: Any) -> bool:
         return isinstance(v, (int, float)) and not isinstance(v, bool)
 
-    ps = [(i, p, set(_norm(p.get("lugar")).split())) for i, p in enumerate(paradas)]
+    ps = []
+    for i, p in enumerate(paradas):
+        pal = _palabras(p.get("lugar"))
+        ps.append((i, p, set(pal), {f"{a} {b}" for a, b in zip(pal, pal[1:])}))
     items: List[Dict[str, Any]] = []
     for e in entregas:
         item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
-                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None}
+                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": []}
         # La comuna y la calle se comparan por palabras ("San Francisco Mostazal" calza con "San Francisco de Mostazal")
         comuna = [w for w in _norm(e.get("comuna")).split() if w not in _ARTICULOS]
-        toks = _tokens_calle(e.get("calle"))
-        en_comuna = [(i, p) for i, p, palabras in ps if comuna and all(w in palabras for w in comuna)]
-        en_calle = [(i, p) for i, p, palabras in ps if comuna and all(w in palabras for w in comuna) and toks and all(t in palabras for t in toks)]
+        ident = _identificadores_calle(e.get("calle"))
+        en_comuna = [(i, p) for i, p, pal, _ in ps if comuna and all(w in pal for w in comuna)]
+        # Si varias paradas coinciden en calle y comuna, la que corresponde a una entrega es la más larga
+        en_calle = sorted(((i, p) for i, p, pal, pares in ps if comuna and all(w in pal for w in comuna) and _calle_en_lugar(ident, pal, pares)), key=lambda t: -(t[1].get("min") or 0))
         # con coordenada guardada: distancia a la parada más cercana
         con_coord = num(e.get("lat")) and num(e.get("lon"))
-        near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
+        near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
         elegida = None
         if near and item["exacto"] and near[0] <= CALZA_M:
             item["estado"], item["via"], elegida = "calza", "distancia", (near[1], near[2])
@@ -193,7 +219,9 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
         elif near and item["exacto"] and near[0] <= CERCA_M:
             item["estado"], item["via"], elegida = "cercana", "distancia", (near[1], near[2])
         elif en_comuna:
-            item["estado"], item["via"], elegida = "comuna", "comuna", en_comuna[0]
+            # Solo se sabe que el camión paró en esa comuna: no se asigna ninguna parada (sería inventar cuál)
+            item["estado"], item["via"] = "comuna", "comuna"
+            item["paradas_comuna"] = [{k: p.get(k) for k in ("desde", "hasta", "min")} for _, p in en_comuna]
         elif near and item["exacto"]:
             item["estado"], item["via"], elegida = "lejos", "distancia", (near[1], near[2])
         if near:
@@ -203,7 +231,7 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
             item["parada"] = {k: elegida[1].get(k) for k in ("desde", "hasta", "min", "lugar")}
         items.append(item)
     # Cada parada con la entrega que le corresponde (la de mejor estado)
-    peso = {"calza": 3, "cercana": 2, "comuna": 1}
+    peso = {"calza": 2, "cercana": 1}
     por_parada: List[Any] = [None] * len(paradas)
     for it in items:
         k = it["parada_idx"]

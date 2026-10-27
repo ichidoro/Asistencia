@@ -51,6 +51,37 @@ def test_coordenada_aproximada_no_se_mide():
     assert r["entregas"][0]["estado"] == "sin_parada" and r["entregas"][0]["dist_m"] is None
 
 
+TALCA = [
+    {"desde": "08:49:00", "hasta": "09:07:00", "min": 18, "lugar": "6 Oriente, Cancha Rayada, Barrio Norte, Talca, Región del Maule, Chile"},
+    {"desde": "09:12:00", "hasta": "09:20:00", "min": 8, "lugar": "Pasaje 16½ Norte B, Don Arturo, Barrio Norte, Talca, Región del Maule, Chile"},
+    {"desde": "10:07:00", "hasta": "10:21:00", "min": 15, "lugar": "Arturo Prat, El Culenar Sur, La Florida, Talca, Región del Maule, Chile"},
+]
+
+
+def test_calles_numeradas_se_comparan_por_numero_y_direccion():
+    # "18 ORIENTE" NO es "6 Oriente" ni "Barrio Norte"; "1 SUR" NO es "Culenar Sur" (esto salía como «calza» por comparar solo "oriente"/"sur")
+    assert estados([entrega("18 ORIENTE 480", "Talca"), entrega("1 SUR 2227", "Talca"), entrega("17 ORIENTE 801", "Talca")], TALCA) == ["comuna", "comuna", "comuna"]
+    # "6 ORIENTE" sí es la parada «6 Oriente»; el orden de la esquina no importa
+    assert estados([entrega("14 NORTE 6 ORIENTE 1297", "Talca")], TALCA) == ["comuna"]  # falta "14 norte": no se afirma
+    assert estados([entrega("6 ORIENTE 1399 ESQUINA 3 NORTE", "Talca")], TALCA) == ["comuna"]
+    assert estados([entrega("6 ORIENTE 55", "Talca")], TALCA) == ["calza"]
+
+
+def test_numeros_en_letras():
+    paradas = [{"desde": "10:00:00", "hasta": "10:20:00", "min": 20, "lugar": "2 Sur, Población Ferroviaria, Talca, Región del Maule"}]
+    assert estados([entrega("DOS SUR 1773 A1", "Talca")], paradas) == ["calza"]
+
+
+def test_misma_comuna_no_inventa_la_parada():
+    paradas = [{"desde": "09:25:00", "hasta": "09:33:00", "min": 9, "lugar": "Cruce J-60, Dollimo, Constitución, Región del Maule"},
+               {"desde": "10:30:00", "hasta": "10:59:00", "min": 29, "lugar": "Freire, Población La Poza, Constitución, Región del Maule"}]
+    r = cruzar_entregas([entrega("KM 5 CAMINO SAN JAVIER", "Constitución")], paradas)
+    it = r["entregas"][0]
+    assert it["estado"] == "comuna" and it["parada"] is None and it["parada_idx"] is None
+    assert [p["desde"] for p in it["paradas_comuna"]] == ["09:25:00", "10:30:00"]
+    assert r["paradas"] == [None, None]
+
+
 def test_resumen():
     r = cruzar_entregas([entrega("AV BERNARDO O'HIGGINS 1", "San Fernando"), entrega("X 1", "Curicó"), entrega("Y 1", "Romeral")], PARADAS)
     assert r["resumen"] == {"total": 3, "calza": 1, "cercana": 0, "comuna": 1, "lejos": 0, "sin_parada": 1}
