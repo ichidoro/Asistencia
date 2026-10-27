@@ -3536,6 +3536,9 @@ function m180GpsReset() {
     m180GpsCargarVehiculos();
 }
 
+const m180GpsEsShell = lugar => /^\s*shell\b/i.test(String(lugar || ''));
+const M180_GPS_ICONO_SHELL = '<span class="m180-gps-shell-tag" title="Bencinera Shell"><i class="bi bi-fuel-pump-fill"></i></span> ';
+
 // Tabla "GPS del camión" (tarjeta aparte, mismo formato de la línea de tiempo 24 h): una fila con lo que condujo y otra con lo que estuvo detenido. Sin datos de GPS queda oculta.
 function m180GpsTabla(g) {
     const card = document.getElementById('m180-gps-card');
@@ -3552,6 +3555,11 @@ function m180GpsTabla(g) {
             html += `<div class="m180-block" style="left:${(i / 96) * 100}%; width:${((j - i) / 96) * 100}%;" title="${m180GpsHora(i)} – ${m180GpsHora(j)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
             i = j;
         }
+        // Paradas en una Shell: ícono sobre el tramo detenido (la plataforma de GPS nombra el lugar, "Shell, Ruta 5 Sur…")
+        if (v === 2) (g.paradas || []).filter(p => m180GpsEsShell(p.lugar)).forEach(p => {
+            const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
+            html += `<div class="m180-gps-shell" style="left:${(((ini + fin) / 2) / 86400) * 100}%;" title="Detenido en Shell · ${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)} (${p.min} min) · ${m180GpsEsc(p.lugar)}"><i class="bi bi-fuel-pump-fill"></i></div>`;
+        });
         document.getElementById('m180-gps-' + b).innerHTML = html;
         document.getElementById('m180-gps-' + t).textContent = formatMinToHHMM(min || 0);
     });
@@ -3669,7 +3677,7 @@ function m180GpsPintar() {
         else if (m[0] / total >= 0.5) badge = `<span class="badge bg-warning text-dark">libreta: sin registrar</span>`;
         else { badge = `<span class="badge bg-success">calza</span>`; paradasCalzan++; }
         const det = [m[2] ? `${Math.round(m[2])} min espera` : '', m[4] ? `${Math.round(m[4])} min descanso` : '', m[3] ? `${Math.round(m[3])} min aux.` : '', m[1] ? `${Math.round(m[1])} min conducción` : '', m[0] ? `${Math.round(m[0])} min sin registrar` : ''].filter(Boolean).join(' · ');
-        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsc(p.lugar) || '—'}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
+        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
     }).join('');
     const nPar = (g.paradas || []).length;
     const r = g.resumen || {};
