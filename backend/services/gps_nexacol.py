@@ -311,6 +311,16 @@ def pasos_por_direccion(entregas: List[Dict[str, Any]], pasos: List[Dict[str, An
     return out
 
 
+def paso_coherente(item: Dict[str, Any], paso: Dict[str, Any]) -> Dict[str, Any]:
+    """Si el camión PARÓ en la calle de la factura (misma calle, o a ≤ CALZA_M de la dirección), obviamente pasó por ella: la parada es la prueba, aunque el ajuste del
+    recorrido a las calles no haya emparejado ese tramo. Sin esto salía «misma calle» junto a «no se detectó que pasara», una contradicción."""
+    if paso.get("estado") == "paso" or item.get("estado") not in ("calza", "calle") or not item.get("parada"):
+        return paso
+    par = item["parada"]
+    return {"estado": "paso", "origen": "parada", "esquina": False, "coincide": item.get("coincide") or [],
+            "pasadas": [{"nombre": "", "desde": str(par.get("desde") or "")[:5], "hasta": str(par.get("hasta") or "")[:5]}]}
+
+
 async def entregas_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
     ruta = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha})
     patente = str((ruta.get("vehiculo") or {}).get("patente") or "")
@@ -321,7 +331,7 @@ async def entregas_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
     try:
         calles = await _get("/api/reports/camiones-gps-calles-recorridas", {"id": vehiculo_id, "fecha": fecha})
         for it, paso in zip(cruce["entregas"], pasos_por_direccion(cruce["entregas"], calles.get("pasos") or [])):
-            it["paso"] = paso
+            it["paso"] = paso_coherente(it, paso)
     except GpsNexacolError:
         pass
     return {"success": True, "patente": patente, "fecha": fecha, "salio": fac.get("salio") is not False, "desde": fac.get("desde"), "hasta": fac.get("hasta"),

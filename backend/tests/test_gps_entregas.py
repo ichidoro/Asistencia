@@ -1,4 +1,4 @@
-from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas, pasos_por_direccion, tramos_movimiento
+from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas, paso_coherente, pasos_por_direccion, tramos_movimiento
 
 PARADAS = [
     {"desde": "09:05:00", "hasta": "09:40:00", "min": 35, "lugar": "Shell, Avenida Bernardo OHiggins, El Trapiche, San Fernando, Región del Libertador, Chile", "la": -34.6000, "lo": -70.9600},
@@ -148,3 +148,16 @@ def test_una_esquina_con_una_sola_calle_recorrida_no_es_esquina():
 
 def test_la_calle_de_otra_ciudad_no_cuenta():
     assert pasos_por_direccion([{"calle": "14 NORTE 5", "comuna": "Curicó", "comuna_la": -34.98, "comuna_lo": -71.23}], PASOS)[0]["estado"] == "no_paso"
+
+
+def test_si_paro_en_la_calle_entonces_paso_por_ella():
+    # «Misma calle» (hubo una parada en esa calle) junto a «no se detectó que pasara» era una contradicción
+    it = cruzar_entregas([entrega("6 ORIENTE 55", "Talca")], TALCA)["entregas"][0]
+    assert it["estado"] == "calle"
+    r = paso_coherente(it, {"estado": "no_paso", "pasadas": [], "esquina": False, "coincide": []})
+    assert r["estado"] == "paso" and r["origen"] == "parada" and r["pasadas"][0]["desde"] == "08:49"
+    # lo que sí se detectó por el recorrido no se pisa; y una entrega sin parada sigue en «no_paso»
+    real = {"estado": "paso", "pasadas": [{"nombre": "6 Oriente", "desde": "08:48", "hasta": "08:50"}], "esquina": False, "coincide": ["6 oriente"]}
+    assert paso_coherente(it, real) is real
+    sin = cruzar_entregas([entrega("Los Aromos 9", "Romeral")], PARADAS)["entregas"][0]
+    assert paso_coherente(sin, {"estado": "no_paso"})["estado"] == "no_paso"

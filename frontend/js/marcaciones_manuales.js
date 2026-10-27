@@ -3693,7 +3693,7 @@ function m180GpsEntregasPintar() {
         const ps = e.paso;
         const unicos = arr => arr.filter((v, k, a) => a.indexOf(v) === k);
         const pasoHtml = !ps ? '' : (ps.estado === 'paso'
-            ? `<div class="m180-ent-paso es-si" title="${esc(ps.pasadas.map(x => x.nombre + ' ' + x.desde + '–' + x.hasta).join(' · '))}"><i class="bi bi-sign-turn-right-fill" aria-hidden="true"></i> Pasó por ${esc(unicos(ps.pasadas.map(x => x.nombre)).slice(0, 2).join(' y '))} a las ${esc(unicos(ps.pasadas.map(x => x.desde)).slice(0, 3).join(', '))}${ps.esquina ? ' · pasó por la esquina' : ''}</div>`
+            ? `<div class="m180-ent-paso es-si" title="${esc(ps.pasadas.map(x => x.nombre + ' ' + x.desde + '–' + x.hasta).join(' · '))}"><i class="bi bi-sign-turn-right-fill" aria-hidden="true"></i> ${ps.origen === 'parada' ? 'Paró en esa calle a las ' + esc(ps.pasadas[0].desde) : 'Pasó por ' + esc(unicos(ps.pasadas.map(x => x.nombre)).slice(0, 2).join(' y ')) + ' a las ' + esc(unicos(ps.pasadas.map(x => x.desde)).slice(0, 3).join(', '))}${ps.esquina ? ' · pasó por la esquina' : ''}</div>`
             : '<div class="m180-ent-paso es-no"><i class="bi bi-slash-circle" aria-hidden="true"></i> No se detectó que pasara por esa calle</div>');
         return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
             <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>
