@@ -4369,3 +4369,66 @@ tr:hover .emp-name-cell {
     .mx-chip, .mx-chip.es-nuevo, .mx-entra, .mx-skel-fila i { animation: none !important; }
     .marcaciones-filter-bar .btn, .mx-chip button, .marcaciones-filter-bar .form-select { transition: none; }
 }
+
+/* ── Marcaciones: selectores con buscador y coreografía de entrada ─────────────────────────────────────── */
+.mx-combo { position: relative; }
+.mx-select-oculto { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); opacity: 0; pointer-events: none; }
+.mx-combo-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 31px; padding: 4px 10px; background: #fff; border: 1px solid #c5d3f1; border-radius: 8px; color: #1e293b; font-size: .85rem; text-align: left; cursor: pointer; transition: border-color .2s var(--mx-ease), box-shadow .25s var(--mx-ease), transform .2s var(--mx-ease), background-color .2s; }
+.mx-combo-btn:hover { border-color: var(--primary-color); transform: translateY(-1px); box-shadow: 0 6px 14px -8px rgba(63, 111, 214, .55); }
+.mx-combo-btn:active { transform: scale(.985); }
+.mx-combo-btn:focus-visible, .mx-combo.abierto .mx-combo-btn { outline: 0; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, .18); }
+.mx-combo-btn.mx-activo { background: #f5f8ff; border-color: var(--primary-color); }
+.mx-combo-ic { flex: none; color: #3f6fd6; font-size: .85rem; transition: transform .4s var(--mx-ease); }
+.mx-combo.abierto .mx-combo-ic { transform: scale(1.18) rotate(-8deg); }
+.mx-combo-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mx-combo-btn.es-vacio .mx-combo-txt { font-weight: 400; color: #5b6678; }
+.mx-combo-chev { flex: none; color: #5b6678; font-size: .7rem; transition: transform .4s var(--mx-ease); }
+.mx-combo.abierto .mx-combo-chev { transform: rotate(180deg); }
+
+.mx-combo-pop { position: absolute; z-index: 1055; top: calc(100% + 6px); left: 0; min-width: 100%; width: max-content; max-width: min(360px, calc(100vw - 24px)); padding: 6px; background: #fff; border: 1px solid #d5deef; border-radius: 14px; box-shadow: 0 18px 40px -12px rgba(15, 23, 42, .34), 0 3px 8px rgba(15, 23, 42, .08); outline: 0;
+    opacity: 0; visibility: hidden; pointer-events: none; transform-origin: 20% 0; transform: translateY(-10px) scale(.94); filter: blur(5px);
+    transition: opacity .18s ease-out, transform .34s var(--mx-ease), filter .28s ease-out, visibility 0s .34s; }
+.mx-combo.mx-combo-der .mx-combo-pop { left: auto; right: 0; transform-origin: 80% 0; }
+.mx-combo.abierto .mx-combo-pop { opacity: 1; visibility: visible; pointer-events: auto; transform: none; filter: none; transition-delay: 0s; }
+.mx-combo-bus { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin: 0 0 4px; padding: 7px 10px; background: #fff; border-bottom: 1px solid #eef2f8; color: #5b6678; }
+.mx-combo-q { flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #1e293b; font-size: .85rem; }
+.mx-combo-q::placeholder { color: #7a8599; }
+.mx-combo-lista { position: relative; max-height: 264px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #c5d3f1 transparent; }
+.mx-combo-hl { position: absolute; left: 0; right: 0; top: 0; height: 0; border-radius: 9px; background: #e8efff; opacity: 0; pointer-events: none; transition: transform .24s var(--mx-ease), height .24s var(--mx-ease), opacity .15s; }
+.mx-combo-hl.visible { opacity: 1; }
+.mx-combo-hl.sin-trans { transition: none; }
+.mx-combo-gr-t { padding: 10px 12px 4px; color: #5b6678; font-size: .66rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.mx-combo-op { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 9px; color: #1e293b; font-size: .84rem; cursor: pointer; user-select: none; }
+.mx-combo-op.es-todos { color: #5b6678; }
+.mx-combo-op.es-sel { font-weight: 700; }
+.mx-combo-op i { color: #3f6fd6; opacity: 0; transform: scale(.3) rotate(-35deg); transition: opacity .2s, transform .42s var(--mx-ease); }
+.mx-combo-op.es-sel i { opacity: 1; transform: none; }
+.mx-combo.abierto .mx-combo-op { animation: mxOpIn .4s var(--mx-ease) both; animation-delay: calc(var(--i, 0) * 24ms + 50ms); }
+.mx-combo-nada { display: none; padding: 16px 12px; color: #5b6678; font-size: .82rem; text-align: center; }
+.mx-combo-pop.sin-resultados .mx-combo-nada { display: block; animation: mxOpIn .3s var(--mx-ease) both; }
+.mx-combo-pop.sin-resultados .mx-combo-lista { display: none; }
+@keyframes mxOpIn { from { opacity: 0; transform: translateY(9px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* Entrada de la pantalla: título, acciones y cada filtro llegan en cascada */
+.page.active .mx-page-head { animation: mxHeadIn .55s var(--mx-ease) both; }
+.marcaciones-filter-bar { animation: mxBarIn .6s var(--mx-ease) .05s both; }
+.marcaciones-filter-bar .row > [class*="col-"] { animation: mxColIn .55s var(--mx-ease) both; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(1) { animation-delay: .10s; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(2) { animation-delay: .16s; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(3) { animation-delay: .22s; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(4) { animation-delay: .28s; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(5) { animation-delay: .34s; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(6) { animation-delay: .40s; }
+@keyframes mxHeadIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@keyframes mxBarIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes mxColIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+/* la grilla llega con un leve desenfoque que se aclara y sus primeras filas en cascada (más marcado que antes) */
+@keyframes mxEntra { from { opacity: 0; transform: translateY(14px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes mxFilaIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes mxChipIn { from { opacity: 0; transform: translateY(-8px) scale(.82); } 60% { opacity: 1; transform: translateY(1px) scale(1.04); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .mx-combo-pop, .mx-combo-op, .mx-combo-op i, .mx-combo-hl, .mx-combo-btn, .mx-combo-chev, .mx-combo-ic { transition: none !important; animation: none !important; }
+    .mx-combo-pop { filter: none; }
+    .page.active .mx-page-head, .marcaciones-filter-bar, .marcaciones-filter-bar .row > [class*="col-"] { animation: none !important; }
+}

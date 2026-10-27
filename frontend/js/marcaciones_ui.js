@@ -104,6 +104,138 @@ window.mxQuitarFiltro = function (k) {
     updateMarcacionesState(mapa[k][1], '');
 };
 
+// ── Selectores con buscador ───────────────────────────────────────────────────────────────────────────
+// El <select> nativo sigue siendo la fuente de verdad (el resto del código lo lee y lo escribe igual); se esconde y encima se
+// dibuja un botón con una lista que se puede buscar y recorrer con el teclado. Lo que el código cambie (value, opciones) se refleja solo.
+const MX_COMBO_IDS = { 'rrhh-periodo-select': 'bi-calendar3', 'marcacion-area': 'bi-diagram-3', 'marcacion-turno': 'bi-clock', 'marcacion-empleado': 'bi-person' };
+let _mxComboAbierto = null;
+const mxNorm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function mxComboCerrar(wrap, devolverFoco) {
+    if (!wrap) return;
+    wrap.classList.remove('abierto');
+    const btn = wrap.querySelector('.mx-combo-btn');
+    if (btn) { btn.setAttribute('aria-expanded', 'false'); if (devolverFoco) btn.focus(); }
+    if (_mxComboAbierto === wrap) _mxComboAbierto = null;
+}
+function mxComboRefrescar(sel) {
+    const wrap = sel.closest('.mx-combo');
+    if (!wrap) return;
+    const btn = wrap.querySelector('.mx-combo-btn');
+    const o = sel.selectedOptions && sel.selectedOptions[0];
+    btn.querySelector('.mx-combo-txt').textContent = o ? o.textContent.trim() : '';
+    btn.classList.toggle('es-vacio', !sel.value || sel.value === 'custom');
+    btn.classList.toggle('mx-activo', !!sel.value && sel.value !== 'custom' && sel.id !== 'rrhh-periodo-select');
+    if (wrap.classList.contains('abierto')) mxComboLista(sel);
+}
+function mxComboLista(sel) {
+    const wrap = sel.closest('.mx-combo'), pop = wrap.querySelector('.mx-combo-pop');
+    const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const opciones = [...sel.querySelectorAll('option')];
+    const conBuscador = opciones.length > 7;
+    let k = 0; // posición para la cascada de entrada (solo las primeras filas se animan)
+    const op = o => `<div class="mx-combo-op${o.value === sel.value ? ' es-sel' : ''}${o.value === '' ? ' es-todos' : ''}" style="--i:${Math.min(k++, 11)}" role="option" aria-selected="${o.value === sel.value}" data-v="${esc(o.value)}" data-t="${esc(mxNorm(o.textContent))}">${esc(o.textContent.trim())}<i class="bi bi-check2" aria-hidden="true"></i></div>`;
+    const cuerpo = [...sel.children].map(n => n.tagName === 'OPTGROUP'
+        ? `<div class="mx-combo-gr" role="group" aria-label="${esc(n.label)}"><div class="mx-combo-gr-t">${esc(n.label)}</div>${[...n.children].map(op).join('')}</div>`
+        : op(n)).join('');
+    const buscar = pop.querySelector('.mx-combo-q') ? pop.querySelector('.mx-combo-q').value : '';
+    pop.innerHTML = (conBuscador ? '<label class="mx-combo-bus"><i class="bi bi-search" aria-hidden="true"></i><input type="text" class="mx-combo-q" placeholder="Buscar…" autocomplete="off" aria-label="Buscar en la lista"></label>' : '')
+        + `<div class="mx-combo-lista"><div class="mx-combo-hl" aria-hidden="true"></div>${cuerpo}</div><div class="mx-combo-nada">Sin resultados</div>`;
+    const q = pop.querySelector('.mx-combo-q');
+    const filtrar = () => {
+        const t = mxNorm(q ? q.value : '');
+        let n = 0;
+        pop.querySelectorAll('.mx-combo-op').forEach(e => { const ok = !t || e.dataset.t.includes(t); e.hidden = !ok; if (ok) n++; });
+        pop.querySelectorAll('.mx-combo-gr').forEach(g => { g.hidden = !g.querySelector('.mx-combo-op:not([hidden])'); });
+        pop.classList.toggle('sin-resultados', n === 0);
+        mxComboMarcar(pop, pop.querySelector('.mx-combo-op:not([hidden])'));
+    };
+    if (q) { q.value = buscar; q.addEventListener('input', filtrar); }
+    pop.querySelectorAll('.mx-combo-op').forEach(e => {
+        e.addEventListener('click', () => mxComboElegir(sel, e.dataset.v));
+        e.addEventListener('mousemove', () => mxComboMarcar(pop, e, false));
+    });
+    if (q && buscar) filtrar(); else mxComboMarcar(pop, pop.querySelector('.mx-combo-op.es-sel') || pop.querySelector('.mx-combo-op:not([hidden])'));
+}
+function mxComboMarcar(pop, el, desplazar = true) {
+    pop.querySelectorAll('.mx-combo-op.is-activo').forEach(e => e.classList.remove('is-activo'));
+    const hl = pop.querySelector('.mx-combo-hl');
+    if (!el) { if (hl) hl.classList.remove('visible'); return; }
+    el.classList.add('is-activo');
+    if (desplazar) el.scrollIntoView({ block: 'nearest' });
+    // Un resalte que se desliza de una opción a otra (en vez de saltar): la primera vez se coloca sin animar
+    if (hl) {
+        const primera = !hl.classList.contains('visible');
+        if (primera) hl.classList.add('sin-trans');
+        hl.style.transform = `translateY(${el.offsetTop}px)`;
+        hl.style.height = el.offsetHeight + 'px';
+        hl.classList.add('visible');
+        if (primera) requestAnimationFrame(() => requestAnimationFrame(() => hl.classList.remove('sin-trans')));
+    }
+}
+function mxComboElegir(sel, valor) {
+    const wrap = sel.closest('.mx-combo');
+    const cambio = sel.value !== valor;
+    sel.value = valor;
+    mxComboCerrar(wrap, true);
+    if (cambio) sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+function mxComboAbrir(sel) {
+    const wrap = sel.closest('.mx-combo'), btn = wrap.querySelector('.mx-combo-btn'), pop = wrap.querySelector('.mx-combo-pop');
+    if (_mxComboAbierto && _mxComboAbierto !== wrap) mxComboCerrar(_mxComboAbierto);
+    _mxComboAbierto = wrap;
+    mxComboLista(sel);
+    // Si no cabe hacia la derecha, la lista se abre alineada al borde derecho del botón
+    wrap.classList.toggle('mx-combo-der', btn.getBoundingClientRect().left + 280 > window.innerWidth - 12);
+    wrap.classList.add('abierto');
+    btn.setAttribute('aria-expanded', 'true');
+    const q = pop.querySelector('.mx-combo-q');
+    (q || pop).focus({ preventScroll: true });
+}
+window.mxMejorarSelects = function () {
+    Object.keys(MX_COMBO_IDS).forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel || sel.dataset.mxCombo) return;
+        sel.dataset.mxCombo = '1';
+        const wrap = document.createElement('div');
+        wrap.className = 'mx-combo';
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        sel.classList.add('mx-select-oculto');
+        sel.tabIndex = -1;
+        sel.setAttribute('aria-hidden', 'true');
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.id = id + '-combo'; btn.className = 'mx-combo-btn';
+        btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false');
+        btn.innerHTML = `<i class="bi ${MX_COMBO_IDS[id]} mx-combo-ic" aria-hidden="true"></i><span class="mx-combo-txt"></span><i class="bi bi-chevron-down mx-combo-chev" aria-hidden="true"></i>`;
+        const pop = document.createElement('div');
+        pop.className = 'mx-combo-pop'; pop.tabIndex = -1; pop.setAttribute('role', 'listbox');
+        wrap.append(btn, pop);
+        const lab = document.querySelector(`label[for="${id}"]`);
+        if (lab) lab.setAttribute('for', btn.id);
+        const refrescar = () => mxComboRefrescar(sel);
+        new MutationObserver(refrescar).observe(sel, { childList: true, subtree: true, characterData: true });
+        ['value', 'selectedIndex'].forEach(p => {
+            const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, p);
+            Object.defineProperty(sel, p, { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); refrescar(); } });
+        });
+        btn.addEventListener('click', () => (wrap.classList.contains('abierto') ? mxComboCerrar(wrap, true) : mxComboAbrir(sel)));
+        btn.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); mxComboAbrir(sel); } });
+        pop.addEventListener('keydown', e => {
+            const visibles = [...pop.querySelectorAll('.mx-combo-op:not([hidden])')];
+            const i = visibles.findIndex(x => x.classList.contains('is-activo'));
+            if (e.key === 'ArrowDown') { e.preventDefault(); mxComboMarcar(pop, visibles[Math.min(i + 1, visibles.length - 1)]); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); mxComboMarcar(pop, visibles[Math.max(i - 1, 0)]); }
+            else if (e.key === 'Home') { e.preventDefault(); mxComboMarcar(pop, visibles[0]); }
+            else if (e.key === 'End') { e.preventDefault(); mxComboMarcar(pop, visibles[visibles.length - 1]); }
+            else if (e.key === 'Enter') { e.preventDefault(); if (visibles[i]) mxComboElegir(sel, visibles[i].dataset.v); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); mxComboCerrar(wrap, true); }
+            else if (e.key === 'Tab') mxComboCerrar(wrap);
+        });
+        refrescar();
+    });
+};
+document.addEventListener('click', e => { if (_mxComboAbierto && !_mxComboAbierto.contains(e.target)) mxComboCerrar(_mxComboAbierto); });
+
 // Chips con lo que está filtrado ahora: cada uno se quita con su ✕, y «Restablecer» vuelve a los valores de fábrica.
 let _mxChipsPrev = {};
 window.mxPintarChips = function () {
@@ -256,7 +388,7 @@ async function initMarcacionesUI() {
             if (activeResp.ok) {
                 const activePeriod = await activeResp.json();
                 if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
-                    if (stateMarcacionesApp.usuarioModificoFechas) {
+                    if (stateMarcacionesApp.usuarioModificoFechas || stateMarcacionesApp.fechasElegidas) {
                         console.log("loadActivePeriodPromise: el usuario ya modificó las fechas manualmente. No sobreescribiendo.");
                         return;
                     }
@@ -283,7 +415,7 @@ async function initMarcacionesUI() {
             if (resp.ok) {
                 const ultimo = await resp.json();
                 if (ultimo && ultimo.fecha_fin) {
-                    if (stateMarcacionesApp.usuarioModificoFechas) {
+                    if (stateMarcacionesApp.usuarioModificoFechas || stateMarcacionesApp.fechasElegidas) {
                         console.log("Fallback ultimo-cierre: el usuario ya modificó las fechas manualmente. No sobreescribiendo.");
                         return;
                     }
@@ -505,6 +637,7 @@ function renderMarcacionesToolbar(container) {
             </div>
         </div>
     `;
+    window.mxMejorarSelects();
 }
 
 window.syncPeriodoDropdownConFechas = function() {
@@ -779,7 +912,7 @@ function updateMarcacionesState(key, value) {
         })
         .then(activePeriod => {
             if (activePeriod && activePeriod.fecha_inicio && activePeriod.fecha_fin) {
-                if (stateMarcacionesApp.usuarioModificoFechas) {
+                if (stateMarcacionesApp.usuarioModificoFechas || stateMarcacionesApp.fechasElegidas) {
                     console.log("updateMarcacionesState: el usuario ya modificó las fechas manualmente. No sobreescribiendo.");
                     return;
                 }
