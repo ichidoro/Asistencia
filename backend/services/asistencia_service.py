@@ -529,6 +529,10 @@ class AsistenciaService:
                 eid for eid in emp_ids
                 if bulk_ctx['empleados'].get(eid, {}).get('area') in areas
             ]
+        # Un día cerrado (cierre de su área) nunca se vuelve a calcular ni a escribir, tampoco con force: el 27-10-2026 el
+        # recálculo del arranque cambió un día de un área ya cerrada y la política del cuadre volvió a repartir sus horas extra.
+        cerrados = bulk_ctx.get('closed_dates') or {}
+        emp_ids = [eid for eid in emp_ids if fecha not in cerrados.get(eid, set())]
 
         results_to_save = []
         he_to_save = []

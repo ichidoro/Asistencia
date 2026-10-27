@@ -806,6 +806,24 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         inputSalida.value = asist.hora_salida_teorica;
     }
 
+    // Segunda jornada sin SALIDA (volvió a marcar ENTRADA 4 h o más después de salir): la primera jornada está completa y lo
+    // que falta es la SALIDA de la segunda. Los campos muestran esa segunda jornada; al guardar la SALIDA queda un +2 por aprobar.
+    const segundaJornada = (asist && !asist.jornada_adicional)
+        ? (String(asist.observaciones || '').match(/Segunda jornada sin SALIDA: ENTRADA de las (\d{2}:\d{2}:\d{2})/) || [])[1]
+        : null;
+    const lblEnt = document.querySelector('label[for="manual-hora-entrada"]');
+    const lblSal = document.querySelector('label[for="manual-hora-salida"]');
+    if (lblEnt && lblEnt.dataset.base === undefined) lblEnt.dataset.base = lblEnt.innerHTML;
+    if (lblSal && lblSal.dataset.base === undefined) lblSal.dataset.base = lblSal.innerHTML;
+    if (lblEnt) lblEnt.innerHTML = lblEnt.dataset.base + (segundaJornada ? ' · segunda jornada' : '');
+    if (lblSal) lblSal.innerHTML = lblSal.dataset.base + (segundaJornada ? ' · segunda jornada' : '');
+    if (segundaJornada) {
+        inputEntrada.value = segundaJornada;
+        inputEntrada.disabled = true;
+        inputSalida.value = '';
+        inputSalida.disabled = false;
+    }
+
     // --- NUEVO: Alerta visual de marca huérfana ---
     const alertDiv = document.getElementById('manual-alert-huerfana') || (() => {
         const div = document.createElement('div');
@@ -820,7 +838,15 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         return div;
     })();
 
-    if (isValidTime(horaEntrada) && isValidTime(horaSalida)) {
+    if (segundaJornada) {
+        alertDiv.className = 'alert alert-warning py-2 mb-3 mt-2';
+        alertDiv.innerHTML = '<strong><i class="bi bi-info-circle-fill"></i> Segunda jornada sin SALIDA.</strong> '
+            + ((isValidTime(horaEntrada) && isValidTime(horaSalida)) ? 'La jornada de las ' + horaEntrada + ' a las ' + horaSalida + ' está completa. ' : '')
+            + 'Volvió a marcar ENTRADA a las ' + segundaJornada + ': ingrese solo la SALIDA de esa segunda jornada. '
+            + 'Quedará como +2 por aprobar (jornada especial u horas extra).';
+        alertDiv.style.display = 'block';
+        if (btnUnlock) btnUnlock.style.display = 'none';
+    } else if (isValidTime(horaEntrada) && isValidTime(horaSalida)) {
         alertDiv.className = 'alert alert-info py-2 mb-3 mt-2';
         alertDiv.innerHTML = '<strong><i class="bi bi-shield-check"></i> Marcaciones Completas.</strong> Esta jornada cuenta con marcaciones biométricas válidas de Entrada y Salida. Si desea condonar un atraso o salida anticipada, utilice la función oficial de <strong>Perdonazo</strong>.';
         alertDiv.style.display = 'block';
@@ -842,7 +868,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
 
     // El aviso amarillo fijo ("Ingrese la marcación faltante...") solo corresponde cuando de verdad falta una marca
     const avisoFalta = document.getElementById('manual-alert-faltante');
-    if (avisoFalta) avisoFalta.style.display = (isValidTime(horaEntrada) && isValidTime(horaSalida)) ? 'none' : '';
+    if (avisoFalta) avisoFalta.style.display = (isValidTime(horaEntrada) && isValidTime(horaSalida) && !segundaJornada) ? 'none' : '';
 
     // Panel con TODAS las marcaciones del día para elegir cuál es Entrada / Salida (y ver cuál sería la colación)
     cargarPanelMarcacionesDia(empId, dateStr, alertDiv);

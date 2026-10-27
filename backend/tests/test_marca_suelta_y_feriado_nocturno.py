@@ -102,6 +102,18 @@ def test_el_mas_dos_aprobado_como_horas_extra_se_suma_a_las_de_la_jornada():
     assert qme.HumanDecisionMerger.apply(cobertura, "2026-10-10", None, je_previo)["minutos_extra_bruto"] == 227
 
 
+def test_la_salida_de_la_segunda_jornada_se_escribe_desde_el_ingreso_manual():
+    # Orden del dueño (27-10-2026): desde el modal de acciones se agrega solo la SALIDA que cierra el +2, también un jefe de
+    # área (antes el servidor lo rechazaba porque el reloj ya tenía ENTRADA y SALIDA ese día, y el modal bloqueaba los campos).
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parents[2]
+    router = (raiz / "backend" / "routers" / "asistencia.py").read_text(encoding="utf-8")
+    assert "cierra_entrada = solo_salida and bool(await _hora_de_entrada_sin_cerrar(db, empleado_id, fecha))" in router
+    assert "has_bio_in and has_bio_out and not cierra_entrada and not getattr(current_user, 'is_superuser', False)" in router
+    modal = (raiz / "frontend" / "js" / "marcaciones_manuales.js").read_text(encoding="utf-8")
+    assert "Segunda jornada sin SALIDA: ENTRADA de las (\\d{2}:\\d{2}:\\d{2})" in modal and qme.TEXTO_JORNADA_SIN_SALIDA == "Segunda jornada sin SALIDA"
+
+
 def test_la_salida_olvidada_despues_de_colacion_es_otro_caso_regla_26(monkeypatch):
     # Caso Katherine Galaz 09-10-2026: ENTRADA 06:23, SALIDA 13:06 y vuelta de colación 13:27 sin SALIDA final: es la misma
     # jornada (vuelve antes de las 4 h), le falta la última marca y la Regla 26 la deja por revisar antes de calcular.

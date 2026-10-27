@@ -1581,7 +1581,11 @@ async def agregar_marcacion_manual(
         )
         has_bio_in = any(str(b.get('tipo', '')).strip().lower() in ('entrada', 'entry', 'e', 'in', '1') for b in bio_logs)
         has_bio_out = any(str(b.get('tipo', '')).strip().lower() in ('salida', 'exit', 's', 'out', '2') for b in bio_logs)
-        if has_bio_in and has_bio_out and not getattr(current_user, 'is_superuser', False):
+        # Una SALIDA sola que cierra la última ENTRADA del día (segunda jornada, u olvido tras la colación) no pisa al reloj:
+        # completa la marca que falta, así que se permite aunque el reloj ya tenga Entrada y Salida ese día.
+        solo_salida = bool((hora_salida and not hora_entrada) or (tipo == "Salida" and hora and not hora_entrada and not hora_salida))
+        cierra_entrada = solo_salida and bool(await _hora_de_entrada_sin_cerrar(db, empleado_id, fecha))
+        if has_bio_in and has_bio_out and not cierra_entrada and not getattr(current_user, 'is_superuser', False):
             raise HTTPException(
                 status_code=400,
                 detail="Esta jornada ya cuenta con marcaciones biométricas válidas de Entrada y Salida en el reloj. Si desea condonar un atraso o salida anticipada, utilice la función oficial de Perdonazo."
