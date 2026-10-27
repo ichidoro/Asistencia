@@ -15,7 +15,7 @@ import aiohttp
 from loguru import logger
 
 # (apellido paterno, primer nombre) normalizados: «OTEIZA CANALES, DANIEL ANTONIO» y «BARBOZA., PEDRO PABLO»
-VIGILADOS = {("oteiza", "daniel"), ("barboza", "pedro")}
+APODOS = {("oteiza", "daniel"): "Danielcito", ("barboza", "pedro"): "Pedrito"}
 _chat_id: Optional[str] = None
 
 
@@ -26,7 +26,7 @@ def _norm(t: object) -> str:
 
 def es_vigilado(paterno: object, nombre: object) -> bool:
     partes = _norm(nombre).split()
-    return bool(partes) and (_norm(paterno), partes[0]) in VIGILADOS
+    return bool(partes) and (_norm(paterno), partes[0]) in APODOS
 
 
 async def _buscar_chat(ses: aiohttp.ClientSession, token: str) -> Optional[str]:
@@ -51,13 +51,10 @@ async def avisar_marca(emp: dict, tipo: str, hora: str, registrado_por: str) -> 
                 logger.warning("[ART22] Telegram: no hay chat id (escríbele al bot o define TELEGRAM_PORTERIA_CHAT_ID)")
                 return
             _chat_id = chat
-            nombre = f"{emp.get('apellido_paterno') or ''} {emp.get('apellido_materno') or ''}".strip() + f", {emp.get('nombre') or ''}"
-            barra, titulo = ("🟩" * 10, "🟢 <b>ENTRADA A PLANTA</b>") if tipo == "E" else ("🟥" * 10, "🔴 <b>SALIDA DE PLANTA</b>")
+            apodo = APODOS[(_norm(emp.get("apellido_paterno")), _norm(emp.get("nombre")).split()[0])]
+            verbo, icono = ("entró", "🟢") if tipo == "E" else ("salió", "🔴")
             hoy = datetime.now(ZoneInfo("America/Santiago")).strftime("%d-%m-%Y")
-            # Telegram no admite fondos de color: la barra de cuadros de color y el recuadro de cita hacen ese papel
-            msg = (f"{barra}\n{titulo}\n{barra}\n\n"
-                   f"👤 <b>{html.escape(nombre)}</b>\n\n"
-                   f"<blockquote>🕐 Hora: <b>{html.escape(hora[:5])}</b>\n📅 Fecha: <b>{hoy}</b>\n🛂 Portería · Art. 22\n✍️ Registró: {html.escape(str(registrado_por))}</blockquote>")
+            msg = f"{icono} <b>{apodo}</b> {verbo} a las <b>{html.escape(hora[:5])}</b>\n📅 {hoy} · 🛂 Portería, Art. 22 · registró {html.escape(str(registrado_por))}"
             async with ses.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat, "text": msg, "parse_mode": "HTML"}) as r:
                 if r.status != 200:
                     logger.warning(f"[ART22] Telegram respondió {r.status}: {(await r.text())[:200]}")
