@@ -96,14 +96,6 @@ window.mxRestablecerFiltros = function () {
     try { localStorage.removeItem(mxClaveFiltros()); } catch (_) {}
     location.reload();
 };
-window.mxQuitarFiltro = function (k) {
-    const mapa = { area: ['marcacion-area', 'area'], turno: ['marcacion-turno', 'turnoId'], empleado: ['marcacion-empleado', 'empleadoId'] };
-    if (!mapa[k]) return;
-    const el = document.getElementById(mapa[k][0]);
-    if (el) el.value = '';
-    updateMarcacionesState(mapa[k][1], '');
-};
-
 // ── Selectores con buscador ───────────────────────────────────────────────────────────────────────────
 // El <select> nativo sigue siendo la fuente de verdad (el resto del código lo lee y lo escribe igual); se esconde y encima se
 // dibuja un botón con una lista que se puede buscar y recorrer con el teclado. Lo que el código cambie (value, opciones) se refleja solo.
@@ -236,42 +228,15 @@ window.mxMejorarSelects = function () {
 };
 document.addEventListener('click', e => { if (_mxComboAbierto && !_mxComboAbierto.contains(e.target)) mxComboCerrar(_mxComboAbierto); });
 
-// Chips con lo que está filtrado ahora: cada uno se quita con su ✕, y «Restablecer» vuelve a los valores de fábrica.
-let _mxChipsPrev = {};
+// Marca los selectores con un valor elegido y muestra «Restablecer» solo cuando hay algo guardado.
 window.mxPintarChips = function () {
     const s = stateMarcacionesApp;
     ['marcacion-area', 'marcacion-turno', 'marcacion-empleado'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('mx-activo', !!el.value);
     });
-    const host = document.getElementById('mx-chips');
-    if (!host) return;
-    const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const opt = id => { const el = document.getElementById(id); const o = el && el.selectedOptions && el.selectedOptions[0]; return o && o.value ? o.textContent.trim() : ''; };
-    const dmy = iso => String(iso).split('-').reverse().join('/');
-    const selPer = document.getElementById('rrhh-periodo-select');
-    const items = [];
-    if (s.fechaInicioRRHH && s.fechaFinRRHH) {
-        const nombre = selPer && selPer.value && selPer.value !== 'custom' ? opt('rrhh-periodo-select') : '';
-        items.push({ k: 'periodo', ic: 'bi-calendar3', t: 'Período', v: nombre || `${dmy(s.fechaInicioRRHH)} → ${dmy(s.fechaFinRRHH)}` });
-    }
-    if (s.area) items.push({ k: 'area', ic: 'bi-diagram-3', t: 'Área', v: opt('marcacion-area') || s.area, q: true });
-    if (s.turnoId && opt('marcacion-turno')) items.push({ k: 'turno', ic: 'bi-clock', t: 'Horario', v: opt('marcacion-turno'), q: true });
-    if (s.empleadoId && opt('marcacion-empleado')) items.push({ k: 'empleado', ic: 'bi-person', t: 'Empleado', v: opt('marcacion-empleado'), q: true });
-    const hayAlgo = !!(s.area || s.turnoId || s.empleadoId || s.fechasElegidas);
-    const sig = JSON.stringify([items.map(i => [i.k, i.v]), hayAlgo]);
-    if (host.dataset.sig === sig) return;
-    host.dataset.sig = sig;
-    host.innerHTML = items.map(i => `<span class="mx-chip${_mxChipsPrev[i.k] === i.v ? '' : ' es-nuevo'}" data-k="${i.k}"><i class="bi ${i.ic}" aria-hidden="true"></i><small>${i.t}</small>${esc(i.v)}${i.q ? `<button type="button" data-quitar="${i.k}" aria-label="Quitar filtro ${i.t}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>` : ''}</span>`).join('')
-        + (hayAlgo ? '<button type="button" class="mx-reset" onclick="mxRestablecerFiltros()" title="Borra los filtros guardados y vuelve al período activo"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Restablecer</button>' : '');
-    _mxChipsPrev = Object.fromEntries(items.map(i => [i.k, i.v]));
-    host.onclick = ev => {
-        const b = ev.target.closest('[data-quitar]');
-        if (!b) return;
-        const chip = b.closest('.mx-chip');
-        if (chip) chip.classList.add('is-saliendo');
-        setTimeout(() => window.mxQuitarFiltro(b.dataset.quitar), chip ? 150 : 0);
-    };
+    const b = document.getElementById('mx-reset-btn');
+    if (b) b.classList.toggle('es-visible', !!(s.area || s.turnoId || s.empleadoId || s.fechasElegidas));
 };
 
 // Esqueleto de carga (en vez del círculo que gira) y entrada suave de la grilla. Solo cuando la persona pidió la carga:
@@ -568,7 +533,7 @@ function renderMarcacionesToolbar(container) {
         <div class="marcaciones-filter-bar">
             <div class="row g-2 align-items-end">
                 <!-- Filtro Período (NUEVO) -->
-                <div class="col-md-2">
+                <div class="col-12 col-md-6 col-lg-4 col-xxl-2">
                     <label for="rrhh-periodo-select" class="form-label small fw-semibold text-muted mb-1">Período de Cierre</label>
                     <select class="form-select form-select-sm" id="rrhh-periodo-select" onchange="window.cambiarPeriodoFiltro(this.value)" style="border-color:#c5d3f1">
                         <option value="custom">-- Rango Personalizado --</option>
@@ -576,7 +541,7 @@ function renderMarcacionesToolbar(container) {
                 </div>
 
                 <!-- Filtro Tiempo (Dinámico) -->
-                <div class="col-md-3">
+                <div class="col-12 col-md-6 col-lg-5 col-xxl-3">
                     <div id="filter-time-rrhh">
                         <div class="d-flex gap-2">
                             <div class="flex-grow-1">
@@ -594,7 +559,7 @@ function renderMarcacionesToolbar(container) {
                 </div>
 
                 <!-- Área -->
-                <div class="col-md-2">
+                <div class="col-6 col-md-4 col-lg-4 col-xxl-2 order-lg-2 order-xxl-0">
                     <label for="marcacion-area" class="form-label small fw-semibold text-muted mb-1">Área</label>
                     <select class="form-select form-select-sm" id="marcacion-area" onchange="updateMarcacionesState('area', this.value)">
                         <option value="">Todas las Áreas</option>
@@ -602,7 +567,7 @@ function renderMarcacionesToolbar(container) {
                 </div>
 
                 <!-- Horario -->
-                <div class="col-md-2">
+                <div class="col-6 col-md-4 col-lg-4 col-xxl-2 order-lg-2 order-xxl-0">
                     <label for="marcacion-turno" class="form-label small fw-semibold text-muted mb-1">Horario</label>
                     <select class="form-select form-select-sm" id="marcacion-turno" onchange="updateMarcacionesState('turnoId', this.value)">
                         <option value="">Todos los Horarios</option>
@@ -610,7 +575,7 @@ function renderMarcacionesToolbar(container) {
                 </div>
 
                 <!-- Empleado -->
-                <div class="col-md-2">
+                <div class="col-12 col-md-4 col-lg-4 col-xxl-2 order-lg-2 order-xxl-0">
                     <label for="marcacion-empleado" class="form-label small fw-semibold text-muted mb-1">Empleado</label>
                     <select class="form-select form-select-sm" id="marcacion-empleado" onchange="updateMarcacionesState('empleadoId', this.value)">
                         <option value="">-- Ver Todo el Equipo --</option>
@@ -618,16 +583,14 @@ function renderMarcacionesToolbar(container) {
                 </div>
 
                 <!-- Botón Ver -->
-                <div class="col-md-1">
+                <div class="col-12 col-lg-3 col-xxl-1 order-lg-1 order-xxl-0 d-flex gap-2 justify-content-lg-end mx-ver-col">
+                    <button type="button" id="mx-reset-btn" class="mx-reset-btn" onclick="mxRestablecerFiltros()" title="Restablecer filtros (borra lo guardado y vuelve al período activo)" aria-label="Restablecer filtros"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>
                     <button class="btn btn-sm w-100 fw-bold shadow-sm" onclick="loadMarcacionesData()" style="background:linear-gradient(135deg,#3f6fd6,#1b2f8f);color:white;border:none;border-radius:6px;height: 31px;margin-bottom: 2px;" title="Ver">
                         <i class="bi bi-search"></i><span class="d-md-none ms-2">Ver asistencia</span>
                     </button>
                 </div>
             </div>
         </div>
-
-        <!-- Filtros activos (chips) -->
-        <div id="mx-chips" class="mx-chips" role="group" aria-label="Filtros activos"></div>
 
         <!-- Contenedor Principal de Vistas -->
         <div id="marcaciones-view-container" class="position-relative">

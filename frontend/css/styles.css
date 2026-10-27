@@ -4410,9 +4410,9 @@ tr:hover .emp-name-cell {
 @keyframes mxOpIn { from { opacity: 0; transform: translateY(9px) scale(.97); } to { opacity: 1; transform: none; } }
 
 /* Entrada de la pantalla: título, acciones y cada filtro llegan en cascada */
-.page.active .mx-page-head { animation: mxHeadIn .55s var(--mx-ease) both; }
-.marcaciones-filter-bar { animation: mxBarIn .6s var(--mx-ease) .05s both; }
-.marcaciones-filter-bar .row > [class*="col-"] { animation: mxColIn .55s var(--mx-ease) both; }
+.page.active .mx-page-head { animation: mxHeadIn .55s var(--mx-ease) backwards; }
+.marcaciones-filter-bar { animation: mxBarIn .6s var(--mx-ease) .05s backwards; }
+.marcaciones-filter-bar .row > [class*="col-"] { animation: mxColIn .55s var(--mx-ease) backwards; }
 .marcaciones-filter-bar .row > [class*="col-"]:nth-child(1) { animation-delay: .10s; }
 .marcaciones-filter-bar .row > [class*="col-"]:nth-child(2) { animation-delay: .16s; }
 .marcaciones-filter-bar .row > [class*="col-"]:nth-child(3) { animation-delay: .22s; }
@@ -4461,3 +4461,22 @@ tr:hover .emp-name-cell {
     .m180-ent-nota { margin-left: 0; flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .m180-ent-fila, .m180-ent-barra span, .m180-gps-ent { animation: none !important; transition: none !important; } }
+
+/* ── Marcaciones: barra de filtros más grande y siempre por encima de la grilla ──────────────────────────── */
+.marcaciones-filter-bar { position: relative; z-index: 300; padding: 20px 24px 22px; }
+.marcaciones-filter-bar .form-label { margin-bottom: 6px; font-size: .78rem; }
+.marcaciones-filter-bar .form-control,
+.marcaciones-filter-bar .form-control-sm { min-height: 44px; padding: .5rem .85rem; border-radius: 10px; font-size: .94rem; }
+.mx-combo-btn { min-height: 44px; padding: 8px 14px; gap: 10px; border-radius: 10px; font-size: .94rem; }
+.mx-combo-ic { font-size: 1.05rem; }
+.mx-combo-chev { font-size: .75rem; }
+.mx-combo-op { padding: 10px 14px; font-size: .92rem; }
+.mx-combo-q { font-size: .92rem; }
+.mx-combo-pop { border-radius: 16px; padding: 8px; }
+.mx-ver-col .btn { height: 44px !important; border-radius: 10px !important; }
+.mx-reset-btn { display: none; flex: none; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid #c5d3f1; border-radius: 10px; background: #fff; color: #4b5a70; font-size: 1.05rem; cursor: pointer; transition: background-color .15s, color .15s, border-color .15s, transform .2s var(--mx-ease); }
+.mx-reset-btn.es-visible { display: grid; animation: mxChipIn .4s var(--mx-ease) both; }
+.mx-reset-btn:hover { border-color: #ef4444; background: #fee2e2; color: #b91c1c; transform: rotate(-90deg); }
+.mx-reset-btn:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .mx-reset-btn, .mx-reset-btn.es-visible { animation: none; transition: none; } }
+.mx-ver-col .btn { max-width: 160px; }
