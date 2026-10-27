@@ -4321,3 +4321,51 @@ tr:hover .emp-name-cell {
     .emp-cargo-ico svg { width:14px; height:14px; }
 }
 @media print { .emp-cargo-ico { box-shadow:none; } }
+
+/* ── Marcaciones: filtros que se recuerdan, chips de filtros activos y entrada suave de la grilla ───────── */
+:root { --mx-ease: cubic-bezier(.16, 1, .3, 1); }
+
+.marcaciones-filter-bar .form-select,
+.marcaciones-filter-bar .form-control { transition: border-color .2s var(--mx-ease), box-shadow .2s var(--mx-ease), background-color .25s var(--mx-ease); }
+.marcaciones-filter-bar .form-select:hover:not(:focus):not(:disabled) { border-color: var(--primary-color); }
+/* Un selector con valor elegido se distingue de uno en «Todos» sin tener que leerlo */
+.marcaciones-filter-bar .form-select.mx-activo { border-color: var(--primary-color); background-color: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(63, 111, 214, .16); }
+.marcaciones-filter-bar .btn { transition: transform .18s var(--mx-ease), filter .2s; }
+.marcaciones-filter-bar .btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.marcaciones-filter-bar .btn:active { transform: scale(.97); }
+
+.mx-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -4px 2px 14px; }
+.mx-chips:empty { display: none; }
+.mx-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 5px 3px 11px; border-radius: 999px; background: #eef3ff; border: 1px solid #c5d3f1; color: #1e293b; font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums; box-shadow: 0 1px 2px rgba(15, 23, 42, .06); }
+.mx-chip > i { color: #3f6fd6; font-size: .8rem; }
+.mx-chip small { color: #4b5a70; font-size: .72rem; font-weight: 500; }
+.mx-chip small::after { content: ":"; }
+.mx-chip button { display: grid; place-items: center; width: 22px; height: 22px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #4b5a70; cursor: pointer; transition: background-color .15s, color .15s, transform .18s var(--mx-ease); }
+.mx-chip button:hover { background: #dbe5fb; color: #1b2f8f; }
+.mx-chip button:active { transform: scale(.88); }
+.mx-chip button:focus-visible, .mx-reset:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
+.mx-chip button i { font-size: .65rem; }
+.mx-chip.es-nuevo { animation: mxChipIn .34s var(--mx-ease) both; }
+.mx-chip.is-saliendo { animation: mxChipOut .15s ease-in both; pointer-events: none; }
+.mx-reset { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 4px 10px; border: 0; border-radius: 8px; background: transparent; color: #4b5a70; font-size: .78rem; font-weight: 600; cursor: pointer; transition: background-color .15s, color .15s; }
+.mx-reset:hover { background: #fee2e2; color: #b91c1c; }
+@keyframes mxChipIn { from { opacity: 0; transform: translateY(-5px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes mxChipOut { to { opacity: 0; transform: scale(.88); } }
+
+/* Esqueleto de carga de la grilla */
+.mx-skel { display: grid; gap: 8px; padding: 2px 0; }
+.mx-skel-fila { display: grid; grid-template-columns: 2.2fr repeat(5, 1fr); gap: 12px; align-items: center; padding: 12px 16px; border-radius: 10px; background: #fff; border: 1px solid var(--ui-line); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+.mx-skel-fila i { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, #e8edf5 25%, #f6f8fc 50%, #e8edf5 75%); background-size: 200% 100%; animation: mxShimmer 1.5s ease-in-out infinite; animation-delay: var(--d, 0ms); }
+.mx-skel-cab { background: #f1f5fb; }
+.mx-skel-cab i { height: 9px; background: #dbe3f1; animation: none; }
+@keyframes mxShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* Entrada de la grilla cuando la persona pidió la carga */
+.mx-entra { animation: mxEntra .42s var(--mx-ease) both; }
+@keyframes mxEntra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes mxFilaIn { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .mx-chip, .mx-chip.es-nuevo, .mx-entra, .mx-skel-fila i { animation: none !important; }
+    .marcaciones-filter-bar .btn, .mx-chip button, .marcaciones-filter-bar .form-select { transition: none; }
+}

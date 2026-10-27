@@ -53,6 +53,117 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
     tabTipo: null         // Pestaña activa en áreas con ambos tipos: 'ciclo' | 'bolsa'
 };
 
+// ── Filtros recordados ───────────────────────────────────────────────────────────────────────────────
+// Lo que la persona elige (período, área, horario, empleado, vista y columnas abiertas) se guarda en este navegador y vuelve al
+// recargar o regresar. La clave lleva el usuario: otra cuenta en el mismo navegador entra con los filtros limpios.
+const MX_FILTROS_VERSION = 1;
+const MX_VISTAS = ['conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos'];
+const MX_VA_BOOL = ['showBonos', 'showHE', 'showDeudas', 'showIncidencias', 'showSaldoMeta', 'soloNegativo', 'soloConHE'];
+function mxClaveFiltros() {
+    let u = 'anon';
+    try { const d = JSON.parse(localStorage.getItem('auth_user_data') || '{}'); u = String(d.username || d.email || d.id || 'anon'); } catch (_) {}
+    return 'asistencia_marc_filtros:' + u;
+}
+window.mxGuardarFiltros = function () {
+    try {
+        const s = stateMarcacionesApp, va = window.vistaAnaliticaState || {};
+        const snap = { v: MX_FILTROS_VERSION, area: s.area || '', turnoId: String(s.turnoId || ''), empleadoId: String(s.empleadoId || ''), viewMode: s.viewMode || 'conceptos', va: { tabTipo: va.tabTipo === undefined ? null : va.tabTipo } };
+        MX_VA_BOOL.forEach(k => { snap.va[k] = va[k] === undefined ? null : va[k]; });
+        // Las fechas solo se recuerdan si la persona las eligió: si no, cada visita sigue el período activo.
+        if (s.fechasElegidas) snap.fechas = { ini: s.fechaInicioRRHH, fin: s.fechaFinRRHH, manual: !!s.usuarioModificoFechas };
+        localStorage.setItem(mxClaveFiltros(), JSON.stringify(snap));
+    } catch (_) { /* sin almacenamiento: los filtros simplemente no se recuerdan */ }
+};
+window.mxRestaurarFiltros = function () {
+    let snap = null;
+    try { snap = JSON.parse(localStorage.getItem(mxClaveFiltros()) || 'null'); } catch (_) {}
+    if (!snap || snap.v !== MX_FILTROS_VERSION) return;
+    const s = stateMarcacionesApp, va = window.vistaAnaliticaState;
+    const esFecha = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
+    if (typeof snap.area === 'string') s.area = snap.area;
+    if (typeof snap.turnoId === 'string') s.turnoId = snap.turnoId;
+    if (typeof snap.empleadoId === 'string') s.empleadoId = snap.empleadoId;
+    if (MX_VISTAS.includes(snap.viewMode)) s.viewMode = snap.viewMode;
+    const f = snap.fechas;
+    if (f && esFecha(f.ini) && esFecha(f.fin) && f.ini <= f.fin) {
+        s.fechaInicioRRHH = f.ini; s.fechaFinRRHH = f.fin; s.usuarioModificoFechas = !!f.manual; s.fechasElegidas = true;
+    }
+    const v = snap.va || {};
+    MX_VA_BOOL.forEach(k => { if (typeof v[k] === 'boolean' || v[k] === null) va[k] = v[k]; });
+    if (v.tabTipo === 'ciclo' || v.tabTipo === 'bolsa' || v.tabTipo === null) va.tabTipo = v.tabTipo;
+};
+window.mxRestablecerFiltros = function () {
+    try { localStorage.removeItem(mxClaveFiltros()); } catch (_) {}
+    location.reload();
+};
+window.mxQuitarFiltro = function (k) {
+    const mapa = { area: ['marcacion-area', 'area'], turno: ['marcacion-turno', 'turnoId'], empleado: ['marcacion-empleado', 'empleadoId'] };
+    if (!mapa[k]) return;
+    const el = document.getElementById(mapa[k][0]);
+    if (el) el.value = '';
+    updateMarcacionesState(mapa[k][1], '');
+};
+
+// Chips con lo que está filtrado ahora: cada uno se quita con su ✕, y «Restablecer» vuelve a los valores de fábrica.
+let _mxChipsPrev = {};
+window.mxPintarChips = function () {
+    const s = stateMarcacionesApp;
+    ['marcacion-area', 'marcacion-turno', 'marcacion-empleado'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('mx-activo', !!el.value);
+    });
+    const host = document.getElementById('mx-chips');
+    if (!host) return;
+    const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const opt = id => { const el = document.getElementById(id); const o = el && el.selectedOptions && el.selectedOptions[0]; return o && o.value ? o.textContent.trim() : ''; };
+    const dmy = iso => String(iso).split('-').reverse().join('/');
+    const selPer = document.getElementById('rrhh-periodo-select');
+    const items = [];
+    if (s.fechaInicioRRHH && s.fechaFinRRHH) {
+        const nombre = selPer && selPer.value && selPer.value !== 'custom' ? opt('rrhh-periodo-select') : '';
+        items.push({ k: 'periodo', ic: 'bi-calendar3', t: 'Período', v: nombre || `${dmy(s.fechaInicioRRHH)} → ${dmy(s.fechaFinRRHH)}` });
+    }
+    if (s.area) items.push({ k: 'area', ic: 'bi-diagram-3', t: 'Área', v: opt('marcacion-area') || s.area, q: true });
+    if (s.turnoId && opt('marcacion-turno')) items.push({ k: 'turno', ic: 'bi-clock', t: 'Horario', v: opt('marcacion-turno'), q: true });
+    if (s.empleadoId && opt('marcacion-empleado')) items.push({ k: 'empleado', ic: 'bi-person', t: 'Empleado', v: opt('marcacion-empleado'), q: true });
+    const hayAlgo = !!(s.area || s.turnoId || s.empleadoId || s.fechasElegidas);
+    const sig = JSON.stringify([items.map(i => [i.k, i.v]), hayAlgo]);
+    if (host.dataset.sig === sig) return;
+    host.dataset.sig = sig;
+    host.innerHTML = items.map(i => `<span class="mx-chip${_mxChipsPrev[i.k] === i.v ? '' : ' es-nuevo'}" data-k="${i.k}"><i class="bi ${i.ic}" aria-hidden="true"></i><small>${i.t}</small>${esc(i.v)}${i.q ? `<button type="button" data-quitar="${i.k}" aria-label="Quitar filtro ${i.t}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>` : ''}</span>`).join('')
+        + (hayAlgo ? '<button type="button" class="mx-reset" onclick="mxRestablecerFiltros()" title="Borra los filtros guardados y vuelve al período activo"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Restablecer</button>' : '');
+    _mxChipsPrev = Object.fromEntries(items.map(i => [i.k, i.v]));
+    host.onclick = ev => {
+        const b = ev.target.closest('[data-quitar]');
+        if (!b) return;
+        const chip = b.closest('.mx-chip');
+        if (chip) chip.classList.add('is-saliendo');
+        setTimeout(() => window.mxQuitarFiltro(b.dataset.quitar), chip ? 150 : 0);
+    };
+};
+
+// Esqueleto de carga (en vez del círculo que gira) y entrada suave de la grilla. Solo cuando la persona pidió la carga:
+// el refresco automático en silencio no anima. Todo con opacidad/transform, que no recalcula el diseño de la tabla.
+const MX_SKELETON_HTML = '<div class="mx-skel" role="status" aria-live="polite"><span class="visually-hidden">Cargando asistencia…</span>'
+    + '<div class="mx-skel-fila mx-skel-cab"><i></i><i></i><i></i><i></i><i></i><i></i></div>'
+    + Array.from({ length: 9 }, (_, n) => `<div class="mx-skel-fila" style="--d:${n * 70}ms"><i></i><i></i><i></i><i></i><i></i><i></i></div>`).join('')
+    + '</div>';
+window._mxAnimarProximo = false;
+window.mxTrasPintar = function (container) {
+    if (!container || !window._mxAnimarProximo) return;
+    window._mxAnimarProximo = false;
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    container.classList.remove('mx-entra');
+    void container.offsetWidth;
+    container.classList.add('mx-entra');
+    container.addEventListener('animationend', e => { if (e.target === container) container.classList.remove('mx-entra'); }, { once: false });
+    container.querySelectorAll('tbody tr').forEach((tr, i) => {
+        if (i >= 16) return;
+        tr.style.animation = `mxFilaIn .45s var(--mx-ease) ${i * 24}ms both`;
+        tr.addEventListener('animationend', () => { tr.style.animation = ''; }, { once: true });
+    });
+};
+
 // ── Generador robusto de rango de fechas (inmune a saltos DST / Timezone offset) ──
 window.getDatesInRange = function(fechaInicio, fechaFin) {
     if (!fechaInicio || !fechaFin) return [];
@@ -102,6 +213,7 @@ async function initMarcacionesUI() {
 
     const container = document.getElementById('page-marcaciones');
     if (!container) return; // No estamos en la página correcta o no existe el contenedor
+    if (!stateMarcacionesApp._filtrosRestaurados) { stateMarcacionesApp._filtrosRestaurados = true; window.mxRestaurarFiltros(); }
 
     // Estimar fechas locales temporales para pintar el Toolbar de inmediato si no están cargadas
     let datesAlreadyLoaded = false;
@@ -205,7 +317,7 @@ async function initMarcacionesUI() {
                 ? metadata.areas_con_horario
                 : (metadata.areas || []);
             if (areaSelect && areasList) {
-                const currentVal = areaSelect.value;
+                const currentVal = stateMarcacionesApp.area || areaSelect.value;
                 areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
                     areasList.map(a => `<option value="${a}">${a}</option>`).join('');
                 if (currentVal && areasList.includes(currentVal)) {
@@ -382,6 +494,9 @@ function renderMarcacionesToolbar(container) {
             </div>
         </div>
 
+        <!-- Filtros activos (chips) -->
+        <div id="mx-chips" class="mx-chips" role="group" aria-label="Filtros activos"></div>
+
         <!-- Contenedor Principal de Vistas -->
         <div id="marcaciones-view-container" class="position-relative">
             <div class="text-center py-5 text-muted opacity-50">
@@ -423,6 +538,7 @@ window.syncPeriodoDropdownConFechas = function() {
 };
 
 window.cambiarPeriodoFiltro = function(val) {
+    stateMarcacionesApp.fechasElegidas = true;
     const inputInicio = document.getElementById('rrhh-fecha-inicio');
     const inputFin = document.getElementById('rrhh-fecha-fin');
     
@@ -447,6 +563,8 @@ window.cambiarPeriodoFiltro = function(val) {
         
         loadMarcacionesData();
     }
+    mxGuardarFiltros();
+    mxPintarChips();
 };
 
 async function cargarPeriodosEnToolbar() {
@@ -518,6 +636,7 @@ async function loadMarcacionesFilters() {
 
 async function loadMarcacionesDependentFilters(onlyEmployees = false) {
     console.time("⏱️ CargaFiltrosDependientes");
+    let _mxReacotarEmpleados = false;
     try {
         // Cancelar peticiones anteriores
         if (stateMarcacionesApp.controllers.filters) {
@@ -550,7 +669,7 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
         if (!onlyEmployees && areas.length > 0) {
             const areaSelect = document.getElementById('marcacion-area');
             if (areaSelect) {
-                const currentVal = areaSelect.value;
+                const currentVal = stateMarcacionesApp.area || areaSelect.value;
                 areaSelect.innerHTML = '<option value="">Todas las Áreas</option>' +
                     areas.map(a => `<option value="${a}">${a}</option>`).join('');
                 if (currentVal && areas.includes(currentVal)) {
@@ -564,7 +683,7 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
 
         // Renderizar Turnos (solo si no es carga parcial de empleados)
         if (!onlyEmployees && turnoSelect) {
-            const currentTurnoVal = turnoSelect.value;
+            const currentTurnoVal = stateMarcacionesApp.turnoId || turnoSelect.value;
             // Agrupado por tipo cuando hay de ambos (misma regla que la grilla: tipo_programacion o 'TRANSPORTE')
             const _esTurnoBolsa = t => t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA'
                                     || String(t.nombre || '').toUpperCase().includes('TRANSPORTE');
@@ -590,7 +709,12 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
                     empleados.map(e => `<option value="${e.id}">${e.nombre_completo.toUpperCase()}</option>`).join('');
             }
 
-            if (stateMarcacionesApp.empleadoId) empSelect.value = stateMarcacionesApp.empleadoId;
+            if (stateMarcacionesApp.empleadoId) {
+                if (empleados.some(e => String(e.id) === String(stateMarcacionesApp.empleadoId))) empSelect.value = stateMarcacionesApp.empleadoId;
+                else stateMarcacionesApp.empleadoId = ''; // ya no está en esta área/horario/período
+            }
+            // Con un horario recordado, la lista de empleados se acota a ese horario (como al elegirlo a mano).
+            _mxReacotarEmpleados = !onlyEmployees && !!stateMarcacionesApp.turnoId;
         }
 
     } catch (e) {
@@ -600,6 +724,8 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
     } finally {
         console.timeEnd("⏱️ CargaFiltrosDependientes");
     }
+    if (_mxReacotarEmpleados) await loadMarcacionesDependentFilters(true);
+    window.mxPintarChips();
 }
 
 let _dependentFiltersDebounceTimer = null;
@@ -607,6 +733,7 @@ let _dependentFiltersDebounceTimer = null;
 function updateMarcacionesState(key, value) {
     if (key === 'fechaInicioRRHH' || key === 'fechaFinRRHH') {
         stateMarcacionesApp.usuarioModificoFechas = true;
+        stateMarcacionesApp.fechasElegidas = true;
         stateMarcacionesApp[key] = value;
         if (window.syncPeriodoDropdownConFechas) {
             window.syncPeriodoDropdownConFechas();
@@ -679,13 +806,21 @@ function updateMarcacionesState(key, value) {
         onlyEmployees = true;
     }
 
+    mxGuardarFiltros();
+    mxPintarChips();
+    // Los filtros se aplican solos al cambiarlos (sin esperar el botón); con fechas incompletas o invertidas no se consulta.
+    const fechasOk = !!(stateMarcacionesApp.fechaInicioRRHH && stateMarcacionesApp.fechaFinRRHH && stateMarcacionesApp.fechaInicioRRHH <= stateMarcacionesApp.fechaFinRRHH);
     if (shouldLoadFilters) {
         if (_dependentFiltersDebounceTimer) {
             clearTimeout(_dependentFiltersDebounceTimer);
         }
-        _dependentFiltersDebounceTimer = setTimeout(() => {
-            loadMarcacionesDependentFilters(onlyEmployees);
-        }, 500);
+        _dependentFiltersDebounceTimer = setTimeout(async () => {
+            await loadMarcacionesDependentFilters(onlyEmployees);
+            mxGuardarFiltros();
+            if (fechasOk) window.loadMarcacionesData();
+        }, 400);
+    } else if (key === 'empleadoId' && fechasOk) {
+        window.loadMarcacionesData();
     }
 }
 
@@ -694,6 +829,7 @@ function updateMarcacionesState(key, value) {
 let _loadMarcacionesInProgress = false;
 let _loadMarcacionesDebounceTimer = null;
 let _lastLoadMarcacionesCall = 0;
+let _loadMarcacionesPendiente = false;
 
 // Exponer globalmente para ser visible desde bypassSecurityWall y otros modales
 // ── «Por revisar (N)»: días que una regla de marcaciones dejó en revisión ────
@@ -764,7 +900,8 @@ window.loadMarcacionesData = async function(opts) {
 
     // Guard: si ya está cargando, ignorar la solicitud duplicada
     if (_loadMarcacionesInProgress) {
-        console.log('⏳ loadMarcacionesData: ya en progreso, ignorando llamada duplicada');
+        console.log('⏳ loadMarcacionesData: ya en progreso, se repite al terminar');
+        if (!(opts && opts.silent)) _loadMarcacionesPendiente = true; // el refresco automático sí se descarta
         return;
     }
 
@@ -783,7 +920,8 @@ window.loadMarcacionesData = async function(opts) {
 
     // Verificar nuevamente después del debounce (otra llamada puede haber tomado el lock)
     if (_loadMarcacionesInProgress) {
-        console.log('⏳ loadMarcacionesData: tomada por otra llamada durante debounce, saliendo');
+        console.log('⏳ loadMarcacionesData: tomada por otra llamada durante debounce, se repite al terminar');
+        if (!(opts && opts.silent)) _loadMarcacionesPendiente = true;
         return;
     }
 
@@ -795,6 +933,7 @@ window.loadMarcacionesData = async function(opts) {
     } finally {
         _loadMarcacionesInProgress = false;
         _loadMarcacionesDebounceTimer = null;
+        if (_loadMarcacionesPendiente) { _loadMarcacionesPendiente = false; setTimeout(() => window.loadMarcacionesData(), 0); }
     }
 };
 
@@ -837,7 +976,7 @@ async function _loadMarcacionesDataImpl(opts) {
 
     const container = document.getElementById('marcaciones-view-container');
     const scrollSnap = silent ? _marcSnapScroll(container) : null;
-    if (!silent) container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando datos...</p></div>';
+    if (!silent) { container.innerHTML = MX_SKELETON_HTML; window._mxAnimarProximo = true; }
 
     // 🛑 BLOQUEO DE SEGURIDAD (PLAN V29+)
     // El sistema valida SIEMPRE si hay empleados con marcas pero sin turno (Fantasmas)
@@ -9146,3 +9285,13 @@ function cargoIconoHtml(cargo) {
 }
 window.cargoIconoHtml = cargoIconoHtml;
 window.categoriaCargo = categoriaCargo;
+
+// ── Filtros recordados y entrada suave: se enganchan al pintado de la grilla sin tocar su cuerpo ───────
+(function () {
+    const original = renderVistaAnalitica;
+    renderVistaAnalitica = function () {
+        const r = original.apply(this, arguments);
+        try { mxGuardarFiltros(); mxPintarChips(); mxTrasPintar(arguments[1]); } catch (e) { console.warn('filtros/animación:', e); }
+        return r;
+    };
+})();
