@@ -145,10 +145,12 @@ def test_ultima_marca_rotulada_entrada_sigue_cerrando_el_dia(monkeypatch):
 
 
 def test_turno_noche_salida_huerfana_inicial_sigue_descartandose(monkeypatch):
-    # Una Salida suelta al comienzo del día (22:52) y la Salida de la mañana (07:02) no se juntan: no tienen Entrada antes
+    # Una Salida suelta al comienzo del día (22:52) y la Salida de la mañana (07:02) no se juntan: no tienen Entrada antes.
+    # Sin banda fija (27-10-2026) la de las 22:52 ni entra a la noche (empieza con su ENTRADA) y la de las 07:02 es una SALIDA
+    # en el borde donde termina la noche y empieza la mañana: queda en la noche, sin ENTRADA (anomalía).
     marcas = [("2026-09-28", "22:52:00", S), ("2026-09-29", "07:02:00", S)]
     r = _dia(monkeypatch, marcas, fecha="2026-09-28", dia=NOCHE)
-    assert "Salida huérfana inicial a las 22:52:00." in r["observaciones"]
+    assert r["estado"] == "ANOMALIA" and set(r["marcas_consumidas_ids"]) == {2}
     assert "Salidas seguidas" not in r["observaciones"]
 
 

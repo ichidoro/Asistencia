@@ -75,9 +75,56 @@ def _ajuste_numero(ajustes: Dict[str, Any], clave: str, escala: float = 1.0) -> 
         return None
 
 
-def banda_minutos_de(ajustes: Optional[Dict[str, Any]]) -> float:
-    """Banda de tolerancia de Configuración → Ajustes (`asistencia_emergencia_banda_horas`, en horas) en minutos; sin el ajuste, 0."""
-    return _ajuste_numero(ajustes or {}, 'asistencia_emergencia_banda_horas', escala=60.0) or 0.0
+def _bordes_ciclos(fecha: str, ciclos: Optional[List[Dict[str, Any]]]) -> Tuple[List[datetime], List[datetime]]:
+    """ENTRADAS y SALIDAS programadas (fecha y hora) de los ciclos de un día del horario, se llamen como se llamen."""
+    entradas, salidas = [], []
+    base = datetime.strptime(fecha, "%Y-%m-%d")
+    for c in ciclos or []:
+        if not c or _flag(c.get('es_libre')) or not c.get('hora_entrada'):
+            continue
+        p_in = QuantumPhaseTopology.time_to_phase(c.get('hora_entrada'))
+        dt_in = base + timedelta(minutes=p_in)
+        entradas.append(dt_in)
+        if c.get('hora_salida'):
+            dt_out = base + timedelta(minutes=QuantumPhaseTopology.time_to_phase(c.get('hora_salida')))
+            if dt_out <= dt_in or _flag(c.get('cruza_medianoche')):
+                dt_out += timedelta(days=1)
+            salidas.append(dt_out)
+    return entradas, salidas
+
+
+def _es_el_borde_mas_cercano(dt: datetime, borde_propio: datetime, rivales: List[datetime]) -> bool:
+    """El borde del horario de esta jornada es el más cercano a la marca (en un empate, también)."""
+    if not rivales:
+        return True
+    return abs((dt - borde_propio).total_seconds()) <= min(abs((dt - r).total_seconds()) for r in rivales)
+
+
+def _sigue_en_esta_jornada(dt: datetime, es_entrada: bool, salida_propia: datetime,
+                           bordes_dia_siguiente: List[datetime], abierta: bool) -> bool:
+    """Después de la SALIDA del horario, una marca sigue siendo de esta jornada si esa SALIDA es el borde del horario más
+    cercano, comparada con el comienzo y el término de cada ciclo del día siguiente. En un empate (un ciclo termina justo
+    cuando empieza otro), una SALIDA es de esta jornada, y una ENTRADA solo si la jornada quedó abierta (su última marca es
+    una ENTRADA: es la salida mal rotulada); si no, esa ENTRADA empieza la jornada siguiente."""
+    d_propia = abs((dt - salida_propia).total_seconds())
+    if not bordes_dia_siguiente:
+        return True
+    d_rival = min(abs((dt - b).total_seconds()) for b in bordes_dia_siguiente)
+    if d_propia != d_rival:
+        return d_propia < d_rival
+    return (not es_entrada) or abierta
+
+
+def _lo_trabajado_entra_en_el_ciclo(fecha: str, ciclo: Dict[str, Any], marcas_dt: List[datetime]) -> bool:
+    """Lo trabajado ese día (de la primera a la última marca) entra en las horas del ciclo, de su ENTRADA a su SALIDA. Una
+    sola marca entra si cae dentro de esas horas. Terminar justo cuando el ciclo empieza no es trabajarlo."""
+    ent, sal = _bordes_ciclos(fecha, [ciclo])
+    if not ent or not sal or not marcas_dt:
+        return False
+    primera, ultima = min(marcas_dt), max(marcas_dt)
+    if primera == ultima:
+        return ent[0] <= primera < sal[0]
+    return primera < sal[0] and ultima > ent[0]
 
 
 def _rebote_defecto(tipo_prog: str) -> float:
@@ -186,52 +233,77 @@ class QuantumPhaseTopology:
         hora_ent_teo_str: Optional[str],
         hora_sal_teo_str: Optional[str],
         cruza_medianoche: bool = False,
-        anclaje_entrada_minutos: int = 0,
-        anclaje_salida_minutos: int = 0,
-        ventana_en_curso_minutos: int = 0,
-        banda_tolerancia_minutos: int = 120,
-        hora_min_ciclos_str: Optional[str] = None,
-        hora_max_ciclos_str: Optional[str] = None
+        marcas: Optional[List[Dict[str, Any]]] = None,
+        ciclos_dia: Optional[List[Dict[str, Any]]] = None,
+        ciclos_dia_siguiente: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[datetime, datetime]:
         """
-        Calcula la ventana temporal de observación derivada del horario asignado,
-        los anclajes de UI y la banda de tolerancia configurada en ajustes.
+        Desde dónde y hasta dónde son las marcas de la jornada, sin márgenes fijos (orden del dueño, 27-10-2026): cada marca de
+        alrededor de la jornada es de la jornada cuyo borde del horario le queda más cerca.
+        - Día natural completo siempre; un ciclo que cruza la medianoche empieza con la primera ENTRADA del día cuya ENTRADA de
+          ciclo más cercana es la suya.
+        - Después de la SALIDA del ciclo, la jornada sigue mientras esa SALIDA sea el borde más cercano a la marca, comparada con
+          el comienzo y el término de los ciclos del día siguiente (empates: `_sigue_en_esta_jornada`), y nunca pasa de la
+          ENTRADA del mismo ciclo al día siguiente.
         """
         dt_base = datetime.strptime(fecha_str, "%Y-%m-%d")
-        
-        hora_ent_efectiva = hora_min_ciclos_str or hora_ent_teo_str
-        hora_sal_efectiva = hora_max_ciclos_str or hora_sal_teo_str
-        is_overnight = cls.is_evening_or_night_shift(hora_ent_efectiva or hora_ent_teo_str, hora_sal_efectiva, cruza_medianoche)
+        fin_dia = dt_base + timedelta(days=1, seconds=-1)
+        if not hora_ent_teo_str:
+            return dt_base, fin_dia
+        dt_in = dt_base + timedelta(minutes=cls.time_to_phase(hora_ent_teo_str))
+        nocturno = cls.is_evening_or_night_shift(hora_ent_teo_str, hora_sal_teo_str, cruza_medianoche)
+        dt_out = None
+        if hora_sal_teo_str:
+            dt_out = dt_base + timedelta(minutes=cls.time_to_phase(hora_sal_teo_str))
+            if nocturno or dt_out <= dt_in:
+                dt_out += timedelta(days=1)
+        limite = dt_in + timedelta(days=1)
+        ordenadas = []
+        for l in marcas or []:
+            try:
+                ordenadas.append((datetime.strptime(str(l.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S"),
+                                  str(l.get('tipo', '')).strip().lower() in _TIPOS_E))
+            except Exception:
+                continue
+        ordenadas.sort()
 
-        if is_overnight:
-            # Turno nocturno: la observación de entrada inicia antes de la entrada programada
-            # y se extiende hasta la salida teórica del día siguiente más su margen de salida.
-            margen_in = anclaje_entrada_minutos + banda_tolerancia_minutos
-            margen_out = anclaje_salida_minutos + banda_tolerancia_minutos
-            if hora_ent_efectiva:
-                p_in = cls.time_to_phase(hora_ent_efectiva)
-                start_dt = dt_base + timedelta(minutes=max(0.0, p_in - margen_in))
-            else:
-                start_dt = dt_base
-            if hora_sal_efectiva:
-                p_out = cls.time_to_phase(hora_sal_efectiva)
-                end_dt = dt_base + timedelta(days=1, minutes=p_out + margen_out)
-            else:
-                end_dt = dt_base + timedelta(days=1, seconds=-1)
-        else:
-            # Turno diurno regular o día libre: el horizonte de observación cubre el día natural completo
-            # (00:00:00 a 23:59:59). Si su margen de salida desborda la medianoche, se extiende dinámicamente.
-            start_dt = dt_base
-            if hora_sal_efectiva:
-                p_sal = cls.time_to_phase(hora_sal_efectiva)
-                margen_out = anclaje_salida_minutos + banda_tolerancia_minutos
-                if (p_sal + margen_out) >= 1440.0:
-                    end_dt = dt_base + timedelta(minutes=p_sal + margen_out)
-                else:
-                    end_dt = dt_base + timedelta(days=1, seconds=-1)
-            else:
-                end_dt = dt_base + timedelta(days=1, seconds=-1)
+        # Inicio: el día natural; en un ciclo de noche, desde la primera ENTRADA del día que es suya por el borde más cercano.
+        start_dt = dt_base
+        if nocturno:
+            start_dt = dt_in
+            ent_hoy, _ = _bordes_ciclos(fecha_str, ciclos_dia)
+            otras = [e for e in ent_hoy if e != dt_in]
+            for dt, es_e in ordenadas:
+                if dt < dt_base or dt >= dt_in:
+                    continue
+                if es_e and _es_el_borde_mas_cercano(dt, dt_in, otras):
+                    start_dt = dt
+                    break
 
+        fecha_sig = (dt_base + timedelta(days=1)).strftime("%Y-%m-%d")
+        ent_sig, sal_sig = _bordes_ciclos(fecha_sig, ciclos_dia_siguiente)
+
+        # Una noche sin marcas antes de la medianoche no se queda con una ENTRADA de la madrugada que está más cerca del
+        # comienzo de un ciclo del día siguiente que del suyo: esa ENTRADA empieza la jornada del día siguiente.
+        if nocturno and dt_out is not None:
+            propias = [(dt, es_e) for dt, es_e in ordenadas if start_dt <= dt <= dt_out]
+            if (propias and propias[0][1] and propias[0][0] > fin_dia
+                    and not _es_el_borde_mas_cercano(propias[0][0], dt_in, ent_sig)):
+                return start_dt, propias[0][0] - timedelta(seconds=1)
+
+        # Fin: el día natural (o la SALIDA del ciclo de noche) y, después, mientras la SALIDA de esta jornada sea el borde del
+        # horario más cercano a la marca, comparada con el comienzo y el término de los ciclos del día siguiente.
+        end_dt = max(fin_dia, dt_out) if dt_out else fin_dia
+        if dt_out is not None:
+            abierta = False
+            for dt, es_e in ordenadas:
+                if dt < start_dt:
+                    continue
+                if dt > end_dt:
+                    if dt >= limite or not _sigue_en_esta_jornada(dt, es_e, dt_out, ent_sig + sal_sig, abierta):
+                        break
+                    end_dt = dt
+                abierta = es_e
         return start_dt, end_dt
 
 
@@ -785,7 +857,6 @@ class QuantumShiftWeekMatcher:
         f_asig_ini: Optional[datetime] = None,
         last_matched_sem: Optional[int] = None,
         rotacion_dinamica: bool = False,
-        banda_minutos: float = 0.0,
     ) -> int:
         if total_sems <= 1:
             return 1
@@ -829,15 +900,45 @@ class QuantumShiftWeekMatcher:
                         ciclo_noche = cercano
                         break
 
-            # Esa SALIDA se busca hasta la SALIDA del ciclo más su «Rango demora salida» y la banda de tolerancia
-            # (Configuración). Sin SALIDA configurada en el ciclo no se toma ninguna marca del día siguiente.
+            # Quien llega a la noche pasada la medianoche no tiene ENTRADA hoy: su primera ENTRADA de la madrugada es de esa
+            # noche si llega antes de su SALIDA y la ENTRADA de la noche es el borde más cercano, comparada con las ENTRADAS de
+            # los ciclos del día siguiente (la misma regla de la ventana de la jornada). Caso Orlando Carreño 29-06-2026:
+            # noche del feriado con ENTRADA a las 00:01.
+            ciclos_sig = [s_dict.get((dia_semana + 1) % 7, {}) for s_dict in turnos_dict.values()]
+            if ciclo_noche is None and not any(str(l.get('tipo', '')).strip().lower() in _TIPOS_E for l in marcas_hoy):
+                ent_sig_dia, _ = _bordes_ciclos(next_day_str, ciclos_sig)
+                entradas_madrugada = sorted(
+                    (d for d in (MultiBlockTensorSolver.parse_dt(x) for x in logs
+                                 if str(x.get('fecha_hora', ''))[:10] == next_day_str
+                                 and str(x.get('tipo', '')).strip().lower() in _TIPOS_E) if d is not None))
+                if entradas_madrugada:
+                    for c in ciclos_dia:
+                        ent_c, sal_c = _bordes_ciclos(fecha_str, [c])
+                        if (_cruza(c) and ent_c and sal_c and entradas_madrugada[0] < sal_c[0]
+                                and _es_el_borde_mas_cercano(entradas_madrugada[0], ent_c[0], ent_sig_dia)):
+                            ciclo_noche = c
+                            break
+
+            # Las marcas de la madrugada siguiente son de esa noche hasta su SALIDA y, después, mientras esa SALIDA sea el borde
+            # del horario más cercano (sin banda fija; orden del dueño, 27-10-2026).
             if ciclo_noche is not None and ciclo_noche.get('hora_salida'):
-                limite = (QuantumPhaseTopology.time_to_phase(ciclo_noche.get('hora_salida'))
-                          + float(ciclo_noche.get('anclaje_salida_minutos') or 0) + float(banda_minutos or 0))
-                for l in logs:
-                    fh = str(l.get('fecha_hora', ''))
-                    if fh[:10] == next_day_str and QuantumPhaseTopology.time_to_phase(fh[11:16]) <= limite:
-                        marcas_madrugada_next.append(l)
+                _, sal_noche = _bordes_ciclos(fecha_str, [ciclo_noche])
+                ent_noche, _ = _bordes_ciclos(fecha_str, [ciclo_noche])
+                dt_out_noche, limite_noche = sal_noche[0], ent_noche[0] + timedelta(days=1)
+                ent_sig, sal_sig = _bordes_ciclos(next_day_str, ciclos_sig)
+                hoy_ord = sorted(marcas_hoy, key=lambda x: str(x.get('fecha_hora', '')))
+                abierta = bool(hoy_ord) and str(hoy_ord[-1].get('tipo', '')).strip().lower() in _TIPOS_E
+                for l in sorted((x for x in logs if str(x.get('fecha_hora', ''))[:10] == next_day_str),
+                                key=lambda x: str(x.get('fecha_hora', ''))):
+                    dt_l = MultiBlockTensorSolver.parse_dt(l)
+                    if dt_l is None:
+                        continue
+                    es_e = str(l.get('tipo', '')).strip().lower() in _TIPOS_E
+                    if dt_l > dt_out_noche and (dt_l >= limite_noche or not _sigue_en_esta_jornada(
+                            dt_l, es_e, dt_out_noche, ent_sig + sal_sig, abierta)):
+                        break
+                    marcas_madrugada_next.append(l)
+                    abierta = es_e
 
         marcas_cand = marcas_hoy + marcas_madrugada_next
 
@@ -851,9 +952,18 @@ class QuantumShiftWeekMatcher:
             first_m = entradas_cand[0] if entradas_cand else (marcas_cand[0] if marcas_cand else None)
             last_m = salidas_cand[-1] if salidas_cand else (marcas_cand[-1] if len(marcas_cand) > 1 else None)
 
+            # Rotación diaria: cada día la persona elige una opción, también la libre. Una opción que trabaja compite solo si
+            # lo trabajado entra en sus horas; si no entra en ninguna, eligió la libre y lo trabajado es jornada especial
+            # (orden del dueño, 27-10-2026: «si no tiene marcaciones a las 23:00 o pasado, ¿por qué sería inasistencia?»).
+            hay_opcion_libre = rotacion_dinamica and any(
+                turnos_dict.get(s, {}).get(dia_semana, {}).get('es_libre') for s in range(1, total_sems + 1))
+            marcas_dt = [d for d in (MultiBlockTensorSolver.parse_dt(m) for m in marcas_cand) if d is not None]
+
             for sem_idx in range(1, total_sems + 1):
                 cfg_sem = turnos_dict.get(sem_idx, {}).get(dia_semana, {})
                 if not cfg_sem or cfg_sem.get('es_libre'):
+                    continue
+                if hay_opcion_libre and not _lo_trabajado_entra_en_el_ciclo(fecha_str, cfg_sem, marcas_dt):
                     continue
 
                 h_ent_str = cfg_sem.get('hora_entrada')
@@ -1509,6 +1619,7 @@ class QuantumMatrixEngine:
         je_previo: Optional[Dict[str, Any]] = None,
         holiday_desc: Optional[str] = None,
         vispera_feriado: bool = False,
+        todos_ciclos_dia_siguiente: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Resolución holística y ÚNICA del día:
@@ -1555,6 +1666,7 @@ class QuantumMatrixEngine:
                 todos_ciclos_dia=todos_ciclos_dia,
                 holiday_desc=holiday_desc,
                 vispera_feriado=vispera_feriado,
+                todos_ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
             )
 
         # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
@@ -1692,6 +1804,7 @@ class QuantumMatrixEngine:
         todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
         holiday_desc: Optional[str] = None,
         vispera_feriado: bool = False,
+        todos_ciclos_dia_siguiente: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Núcleo cuántico: resolución de marcas vs turno (reloj biométrico)."""
         
@@ -1699,8 +1812,6 @@ class QuantumMatrixEngine:
         ajustes = global_ajustes or {}
         gap_emergencia = float(ajustes.get('asistencia_emergencia_gap_horas', 4.0))
         limite_emergencia = float(ajustes.get('asistencia_emergencia_jornada_limite_horas', 3.0))
-        banda_horas = float(ajustes.get('asistencia_emergencia_banda_horas', 2.0))
-        banda_minutos = int(round(banda_horas * 60.0))
         # «Límite HE Diaria en Día Hábil» (Configuración → Ajustes; se guarda en minutos). Con 0, o sin el ajuste, no hay
         # límite: todo lo trabajado de más es hora extra (orden del dueño, 27-10-2026).
         max_he_ordinarias_min = _ajuste_numero(ajustes, 'asistencia_max_extras_ordinarias_dia_habil') or 0.0
@@ -1973,27 +2084,16 @@ class QuantumMatrixEngine:
             else:
                 end_horizon = dt_fecha + timedelta(days=1, seconds=-1)
         else:
-            hora_min_ciclos = None
-            hora_max_ciclos = None
-            if todos_ciclos_dia:
-                entradas_validas = [c.get('hora_entrada') for c in todos_ciclos_dia if c and c.get('hora_entrada') and not c.get('es_libre')]
-                if entradas_validas:
-                    hora_min_ciclos = min(entradas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
-                salidas_validas = [c.get('hora_salida') for c in todos_ciclos_dia if c and c.get('hora_salida') and not c.get('es_libre')]
-                if salidas_validas:
-                    hora_max_ciclos = max(salidas_validas, key=lambda h: QuantumPhaseTopology.time_to_phase(h))
-
+            # Sin banda fija (orden del dueño, 27-10-2026): cada marca de alrededor de la jornada es de la jornada cuyo borde del
+            # horario le queda más cerca, entre esta jornada y los otros ciclos del día o los del día siguiente.
             start_horizon, end_horizon = QuantumPhaseTopology.get_dynamic_observation_horizon(
                 fecha_str=fecha,
                 hora_ent_teo_str=hora_ent_teo,
                 hora_sal_teo_str=hora_sal_teo,
                 cruza_medianoche=es_nocturno,
-                anclaje_entrada_minutos=anclaje_entrada,
-                anclaje_salida_minutos=anclaje_salida,
-                ventana_en_curso_minutos=int(t_cfg.get('ventana_en_curso_minutos', 0) or 0),
-                banda_tolerancia_minutos=banda_minutos,
-                hora_min_ciclos_str=hora_min_ciclos,
-                hora_max_ciclos_str=hora_max_ciclos,
+                marcas=marcas_no_consumidas,
+                ciclos_dia=todos_ciclos_dia or [d_cfg],
+                ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
             )
 
         # Si es turno nocturno, verificar si existe presencia física en la víspera (fecha)
@@ -2042,29 +2142,8 @@ class QuantumMatrixEngine:
             except Exception as e:
                 logger.warning(f"Error evaluando marca candidata {l.get('id')}: {e}")
 
-        # Jornada que termina pasada la medianoche, justo fuera del horizonte (caso Orlando Carreño 05-10-2026: turno 15:00-23:00, salida
-        # a las 01:00:06 con horizonte hasta 01:00:00). Si la última marca del día quedó como Entrada sin cerrar y la marca siguiente
-        # (en orden de tiempo) es una Salida del día siguiente que cae dentro de una banda extra después del horizonte, es la salida
-        # de esta jornada: si no, queda como Salida suelta en el día siguiente y rompe su cálculo (y su colación).
-        if not is_bolsa and not es_nocturno and marcas_disponibles:
-            try:
-                ult = marcas_disponibles[-1]
-                if str(ult.get('tipo', '')).strip().lower() in _TIPOS_E:
-                    dt_ult = datetime.strptime(str(ult.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
-                    ids_disp = {l.get('id') for l in marcas_disponibles}
-                    for cand in marcas_no_consumidas:
-                        if cand.get('id') in ids_disp:
-                            continue
-                        dt_c = datetime.strptime(str(cand.get('fecha_hora', ''))[:19], "%Y-%m-%d %H:%M:%S")
-                        if dt_c <= dt_ult:
-                            continue
-                        if (str(cand.get('tipo', '')).strip().lower() in _TIPOS_S
-                                and dt_c.strftime("%Y-%m-%d") > fecha
-                                and end_horizon < dt_c <= end_horizon + timedelta(minutes=banda_minutos)):
-                            marcas_disponibles.append(cand)
-                        break  # solo la PRIMERA marca posterior cuenta: si no es esa Salida, no se absorbe nada
-            except Exception as e:
-                logger.warning(f"Error evaluando salida pasada la medianoche: {e}")
+        # (El caso Orlando Carreño 05-10-2026 —turno 15:00-23:00 con SALIDA a las 01:00:06— lo resuelve la ventana por bordes:
+        # esa SALIDA está más cerca de la SALIDA de su ciclo que de cualquier SALIDA de ciclo del día siguiente.)
 
         # (Antes aquí se elegía, con 1 Entrada y >= 2 Salidas, la Salida más cercana a la salida teórica. Eso contradecía la regla de
         # collapse_consecutive_same_type —"Salidas seguidas: se queda la última"— y cortaba la jornada en la Salida a colación cuando la persona
@@ -2560,10 +2639,14 @@ class QuantumMatrixEngine:
         llegada_temprana = 0.0
         salida_tardia = 0.0
 
+        # Se mide con la fecha y la hora, no en un reloj de 24 h: llegar a las 07:00 a un ciclo que empieza a las 23:00 es llegar
+        # 16 h antes, no 8 h tarde.
         if hora_ent_teo:
-            p_ent_teo = QuantumPhaseTopology.time_to_phase(hora_ent_teo)
-            p_ent_real = QuantumPhaseTopology.time_to_phase(r_ent_dt)
-            delta_in = QuantumPhaseTopology.circular_distance(p_ent_teo, p_ent_real)
+            if dt_ent_teo is not None:
+                delta_in = (r_ent_dt - dt_ent_teo).total_seconds() / 60.0
+            else:
+                delta_in = QuantumPhaseTopology.circular_distance(QuantumPhaseTopology.time_to_phase(hora_ent_teo),
+                                                                  QuantumPhaseTopology.time_to_phase(r_ent_dt))
 
             if delta_in > 0.0:
                 diff_ent = delta_in
@@ -2576,9 +2659,11 @@ class QuantumMatrixEngine:
                     llegada_temprana = anticip_in
 
         if hora_sal_teo:
-            p_sal_teo = QuantumPhaseTopology.time_to_phase(hora_sal_teo)
-            p_sal_real = QuantumPhaseTopology.time_to_phase(r_sal_dt)
-            delta_out = QuantumPhaseTopology.circular_distance(p_sal_real, p_sal_teo)
+            if dt_sal_teo is not None:
+                delta_out = (dt_sal_teo - r_sal_dt).total_seconds() / 60.0
+            else:
+                delta_out = QuantumPhaseTopology.circular_distance(QuantumPhaseTopology.time_to_phase(r_sal_dt),
+                                                                   QuantumPhaseTopology.time_to_phase(hora_sal_teo))
 
             if delta_out > 0.0:
                 diff_sal = delta_out

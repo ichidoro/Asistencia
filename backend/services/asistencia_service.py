@@ -32,7 +32,6 @@ from backend.services.quantum_matrix_engine import (
     QuantumMatrixEngine,
     QuantumShiftWeekMatcher,
     HumanDecisionMerger,
-    banda_minutos_de,
 )
 from asyncio import Lock
 
@@ -2110,12 +2109,6 @@ class AsistenciaService:
                     last_matched_sem = last_rec['num_semana_ganadora'] if last_rec else None
 
                 marcas_disp_semana = [l for l in raw_logs if l.get('id') not in consumidas_emp]
-                if bulk_ctx and 'global_ajustes' in bulk_ctx:
-                    ajustes_banda = bulk_ctx['global_ajustes']
-                else:
-                    fila_banda = await self.repository.db.fetch_one(
-                        "SELECT valor FROM ajustes WHERE clave = 'asistencia_emergencia_banda_horas'")
-                    ajustes_banda = {'asistencia_emergencia_banda_horas': fila_banda['valor']} if fila_banda else {}
 
                 semana_ganadora = QuantumShiftWeekMatcher.resolve_winner_week(
                     empleado_id=empleado_id,
@@ -2129,7 +2122,6 @@ class AsistenciaService:
                     f_asig_ini=f_asig_ini,
                     last_matched_sem=last_matched_sem,
                     rotacion_dinamica=is_rot_dinamica,
-                    banda_minutos=banda_minutos_de(ajustes_banda),
                 )
 
                 if bulk_ctx:
@@ -2196,11 +2188,18 @@ class AsistenciaService:
                 compensaciones = await self.repository.get_compensacion_por_fecha(empleado_id, fecha)
 
             todos_ciclos_dia = None
+            todos_ciclos_dia_siguiente = None
             if asignacion and turnos_src:
                 todos_ciclos_dia = [
                     turnos_src[s][dia_semana]
                     for s in sorted(turnos_src.keys())
                     if isinstance(turnos_src[s], dict) and dia_semana in turnos_src[s]
+                ]
+                dia_siguiente = (dia_semana + 1) % 7
+                todos_ciclos_dia_siguiente = [
+                    turnos_src[s][dia_siguiente]
+                    for s in sorted(turnos_src.keys())
+                    if isinstance(turnos_src[s], dict) and dia_siguiente in turnos_src[s]
                 ]
 
             # ── INVOCACIÓN MATRICIAL CUÁNTICA ÚNICA ─────────────────────────
@@ -2216,6 +2215,7 @@ class AsistenciaService:
                 consumidas_previas=consumidas_emp,
                 viaje_largo_info=viaje_largo,
                 todos_ciclos_dia=todos_ciclos_dia,
+                todos_ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
                 es_modalidad_180h=es_180h,
                 libreta_180h=libreta_180h,
                 intercambio=intercambio,

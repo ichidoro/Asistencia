@@ -219,7 +219,6 @@ class ConfiguracionRepository:
         try:
             semillas_emergencia = [
                 ("asistencia_emergencia_gap_horas", "4.0", "Horas de gap para segmentación de marcas de emergencia"),
-                ("asistencia_emergencia_banda_horas", "2.0", "Horas de holgura para la banda de tolerancia envolvente"),
                 ("asistencia_emergencia_jornada_limite_horas", "3.0", "Horas límite para calificar bloque como jornada especial en vez de horas extras directas"),
                 ("asistencia_max_extras_ordinarias_dia_habil", "0", "Minutos límite de horas extra en un día hábil: lo que pase va a cobertura de turno (0 = sin límite, todo es hora extra)"),
                 ("asistencia_minimo_horas_extra_minutos", "0", "Minutos mínimos de tiempo trabajado de más para contarlo como hora extra (0 = cuenta todo, aunque sean segundos)"),

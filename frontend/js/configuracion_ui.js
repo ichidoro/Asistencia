@@ -1702,7 +1702,6 @@ window.loadAjustesSistema = async function() {
             'dia_cierre_rrhh': 'ajuste-dia-cierre',
             'bioalba_dias_volatilidad': 'ajuste-dias-volatilidad',
             'asistencia_emergencia_gap_horas': 'ajuste-emergencia-gap',
-            'asistencia_emergencia_banda_horas': 'ajuste-emergencia-banda',
             'asistencia_emergencia_jornada_limite_horas': 'ajuste-emergencia-limite',
             'asistencia_max_extras_ordinarias_dia_habil': 'ajuste-max-extras-dia-habil',
             'asistencia_minimo_horas_extra_minutos': 'ajuste-minimo-extras',

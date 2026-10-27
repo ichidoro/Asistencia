@@ -19,7 +19,6 @@ CLAVES_AJUSTE_QUE_RECALCULAN = (
     "asistencia_minimo_horas_extra_minutos",
     "asistencia_max_extras_ordinarias_dia_habil",
     "asistencia_emergencia_gap_horas",
-    "asistencia_emergencia_banda_horas",
     "asistencia_emergencia_jornada_limite_horas",
 )
 

@@ -73,15 +73,6 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "banda_tolerancia_minutos: int = 120,",
-  "numeros": [
-   "120"
-  ],
-  "tipo": "respaldo",
-  "motivo": "Valor por defecto del parámetro; el motor siempre le pasa el ajuste de la banda de búsqueda."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
   "linea": "bounce_seconds: float = 180.0",
   "numeros": [
    "180.0"
@@ -124,6 +115,15 @@
   ],
   "tipo": "logica",
   "motivo": "Marcas de a pares (entrada y salida) o partes de una hora escrita como texto."
+ },
+ {
+  "archivo": "backend/services/quantum_matrix_engine.py",
+  "linea": "ciclos_sig = [s_dict.get((dia_semana + 1) % 7, {}) for s_dict in turnos_dict.values()]",
+  "numeros": [
+   "7"
+  ],
+  "tipo": "logica",
+  "motivo": "Días de la semana: el día siguiente del domingo es el lunes."
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
@@ -268,15 +268,6 @@
   ],
   "tipo": "respaldo",
   "motivo": "Solo si falta el ajuste de límite de jornada de emergencia en la base (se edita en Configuración)."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "banda_horas = float(ajustes.get('asistencia_emergencia_banda_horas', 2.0))",
-  "numeros": [
-   "2.0"
-  ],
-  "tipo": "pendiente",
-  "motivo": "Banda para buscar marcas (2 horas): el ajuste existe en la base pero no está en la pantalla."
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
