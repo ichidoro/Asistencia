@@ -4,7 +4,7 @@ Nexacol (rutas /api/reports/camiones-gps-*, sin cambios en Nexacol) entrega los 
 (igual que la libreta) para que la pantalla los pueda comparar tramo a tramo.
 """
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -224,7 +224,7 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
     items: List[Dict[str, Any]] = []
     for e in entregas:
         item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
-                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": [], "coincide": [], "esquina": False, "comuna_la": e.get("comunaLat"), "comuna_lo": e.get("comunaLon")}
+                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None, "paradas_comuna": [], "coincide": [], "esquina": False, "aprendida": int(e.get("aprendida") or 0), "candidatos": 0, "comuna_la": e.get("comunaLat"), "comuna_lo": e.get("comunaLon")}
         # La comuna y la calle se comparan por palabras ("San Francisco Mostazal" calza con "San Francisco de Mostazal")
         comuna = [w for w in _norm(e.get("comuna")).split() if w not in _ARTICULOS]
         ident = _identificadores_calle(e.get("calle"))
@@ -235,7 +235,9 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
             return bool((comuna and all(w in pal for w in comuna)) or (cut_e and pcut == cut_e))
         en_comuna = [(i, p) for i, p, pal, _, pcut in ps if de_la_comuna(pal, pcut)]
         # Si varias paradas coinciden en calle y comuna, la que corresponde a una entrega es la que coincide con más calles y, luego, la más larga
+        # (candidatas: cuántas paradas coinciden en calle y comuna; el aprendizaje de ubicaciones solo usa las entregas con una única candidata)
         en_calle = sorted(((i, p, c) for i, p, pal, pares, pcut in ps if de_la_comuna(pal, pcut) for c in [_coincide(ident, pal, pares)] if c), key=lambda t: (-len(t[2]), -(t[1].get("min") or 0)))
+        item["candidatos"] = len(en_calle)
         # con coordenada guardada: distancia a la parada más cercana
         con_coord = num(e.get("lat")) and num(e.get("lon"))
         near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _, _, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
@@ -259,7 +261,7 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
             item["dist_m"] = round(near[0]) if item["exacto"] else None
         if elegida:
             item["parada_idx"] = elegida[0]
-            item["parada"] = {k: elegida[1].get(k) for k in ("desde", "hasta", "min", "lugar")}
+            item["parada"] = {k: elegida[1].get(k) for k in ("desde", "hasta", "min", "lugar", "la", "lo")}
         items.append(item)
     # Cada parada con la entrega que le corresponde (la de mejor estado)
     peso = {"calza": 3, "calle": 2, "cercana": 1}
@@ -348,18 +350,66 @@ def paso_coherente(item: Dict[str, Any], paso: Dict[str, Any]) -> Dict[str, Any]
             "pasadas": [{"nombre": "", "desde": str(par.get("desde") or "")[:5], "hasta": str(par.get("hasta") or "")[:5]}]}
 
 
-async def entregas_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
+UMBRAL_APRENDIDA_M = 120   # dos días distintos que paran a menos de esto confirman dónde está el cliente
+
+
+def clave_entrega(e: Dict[str, Any]) -> str:
+    """Cliente + dirección de envío, normalizados: identifica un destino de entrega."""
+    return "|".join(_norm(e.get(k)) for k in ("cliente", "calle", "comuna"))
+
+
+def consolidar_ubicacion(obs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """La ubicación confirmada de un cliente: el mayor grupo de paradas de DÍAS DISTINTOS que quedan a menos de UMBRAL_APRENDIDA_M entre sí (mínimo 2 días).
+    Una sola visita, o visitas que no coinciden, no confirman nada."""
+    mejor = None
+    for c in obs:
+        grupo = [o for o in obs if _metros(c["la"], c["lo"], o["la"], o["lo"]) <= UMBRAL_APRENDIDA_M]
+        dias = {o["fecha"] for o in grupo}
+        if len(dias) >= 2 and (mejor is None or len(dias) > mejor[0]):
+            mejor = (len(dias), grupo)
+    if not mejor:
+        return None
+    g = mejor[1]
+    return {"la": sum(o["la"] for o in g) / len(g), "lo": sum(o["lo"] for o in g) / len(g), "n": mejor[0]}
+
+
+def observaciones_de(items: List[Dict[str, Any]], fecha: str, patente: str) -> List[Dict[str, Any]]:
+    """Dónde paró el camión para cada entrega que se pudo atribuir a UNA sola parada (misma calle y comuna, sin ambigüedad) y cuya ubicación aún no se conoce."""
+    out = []
+    for it in items:
+        par = it.get("parada") or {}
+        if it.get("estado") == "calle" and it.get("candidatos") == 1 and not it.get("aprendida") and isinstance(par.get("la"), (int, float)) and isinstance(par.get("lo"), (int, float)):
+            out.append({"clave": clave_entrega(it), "fecha": fecha, "cliente": it.get("cliente"), "calle": it.get("calle"), "comuna": it.get("comuna"),
+                        "patente": patente, "la": par["la"], "lo": par["lo"], "min": par.get("min")})
+    return out
+
+
+async def entregas_dia(vehiculo_id: str, fecha: str, aprendidas_fn: Any = None, con_pasos: bool = True) -> Dict[str, Any]:
     ruta = await _get("/api/reports/camiones-gps-ruta", {"id": vehiculo_id, "fecha": fecha})
     patente = str((ruta.get("vehiculo") or {}).get("patente") or "")
     paradas = (ruta.get("resumen") or {}).get("paradas") or []
     fac = await _get("/api/reports/camiones-gps-facturas", {"id": vehiculo_id, "patente": patente, "fecha": fecha, "geo": "1"})
-    cruce = cruzar_entregas(fac.get("entregas") or [], paradas)
+    entregas = fac.get("entregas") or []
+    # Direcciones cuya ubicación ya se aprendió de visitas anteriores: la entrega se mide en metros contra las paradas
+    if aprendidas_fn:
+        try:
+            ap = await aprendidas_fn([clave_entrega(e) for e in entregas])
+            for e in entregas:
+                u = ap.get(clave_entrega(e))
+                if u and not (e.get("lat") is not None and e.get("exacto")):
+                    e["lat"], e["lon"], e["exacto"], e["aprendida"] = u["la"], u["lo"], True, u["n"]
+        except Exception:
+            pass   # sin la tabla de ubicaciones, simplemente se compara por nombre
+    cruce = cruzar_entregas(entregas, paradas)
     # ¿Pasó por la calle de cada factura? (si esta consulta falla, la pantalla simplemente no muestra esa línea)
     try:
+        if not con_pasos:
+            raise GpsNexacolError(0, "sin pasos")
         calles = await _get("/api/reports/camiones-gps-calles-recorridas", {"id": vehiculo_id, "fecha": fecha})
         for it, paso in zip(cruce["entregas"], pasos_por_direccion(cruce["entregas"], calles.get("pasos") or [])):
             it["paso"] = paso_coherente(it, paso)
     except GpsNexacolError:
         pass
     return {"success": True, "patente": patente, "fecha": fecha, "salio": fac.get("salio") is not False, "desde": fac.get("desde"), "hasta": fac.get("hasta"),
-            "total_facturas": fac.get("total") or 0, "umbrales": {"calza_m": CALZA_M, "cerca_m": CERCA_M}, **cruce}
+            "total_facturas": fac.get("total") or 0, "umbrales": {"calza_m": CALZA_M, "cerca_m": CERCA_M}, **cruce,
+            "observaciones": observaciones_de(cruce["entregas"], fecha, patente)}

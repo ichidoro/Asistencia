@@ -3775,15 +3775,45 @@ async def gps_dia_libreta(
         raise HTTPException(status_code=e.status, detail=e.mensaje)
 
 
+_APRENDIDO_EN: Dict[str, float] = {}
+
+
+async def _aprender_historial(vehiculo_id: str, repo: Any) -> None:
+    """Aprende en segundo plano de los últimos 21 días del camión (una vez cada 6 h): dónde paró para cada cliente, para que la próxima consulta ya tenga su ubicación."""
+    import asyncio
+    import time
+    if time.time() - _APRENDIDO_EN.get(vehiculo_id, 0) < 6 * 3600:
+        return
+    _APRENDIDO_EN[vehiculo_id] = time.time()
+    hoy = datetime.now().date()
+    for k in range(1, 22):
+        try:
+            r = await gps_nexacol.entregas_dia(vehiculo_id, (hoy - timedelta(days=k)).isoformat(), aprendidas_fn=None, con_pasos=False)
+            await repo.guardar(r.get("observaciones") or [])
+        except Exception:
+            continue
+        await asyncio.sleep(0.3)
+
+
 @router.get("/libreta-180h/gps/entregas/")
 async def gps_entregas_libreta(
     vehiculo_id: str = Query(..., pattern=r"^\d{1,6}$"),
     fecha: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+    db: Database = Depends(get_db),
 ):
     """Las facturas que llevaba el camión (calzadas por su patente en Nexacol) contra las paradas del GPS: cuáles calzan, cuáles quedan muy cerca y cuáles lejos."""
     try:
-        return await gps_nexacol.entregas_dia(vehiculo_id, fecha)
+        from backend.repositories.entrega_ubicaciones import EntregaUbicacionesRepository
+        import asyncio
+        repo = EntregaUbicacionesRepository(db)
+        res = await gps_nexacol.entregas_dia(vehiculo_id, fecha, aprendidas_fn=repo.aprendidas)
+        try:
+            await repo.guardar(res.pop("observaciones", []))
+            asyncio.create_task(_aprender_historial(vehiculo_id, repo))
+        except Exception as ex:   # aprender es un extra: si falla, la pantalla sigue igual
+            logger.warning(f"No se pudieron guardar las ubicaciones aprendidas: {ex}")
+        return res
     except gps_nexacol.GpsNexacolError as e:
         raise HTTPException(status_code=e.status, detail=e.mensaje)
 

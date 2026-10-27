@@ -1,4 +1,4 @@
-from backend.services.gps_nexacol import _tokens_calle, cruzar_entregas, paso_coherente, pasos_por_direccion, tramos_movimiento
+from backend.services.gps_nexacol import _tokens_calle, clave_entrega, consolidar_ubicacion, cruzar_entregas, observaciones_de, paso_coherente, pasos_por_direccion, tramos_movimiento
 
 PARADAS = [
     {"desde": "09:05:00", "hasta": "09:40:00", "min": 35, "lugar": "Shell, Avenida Bernardo OHiggins, El Trapiche, San Fernando, Región del Libertador, Chile", "la": -34.6000, "lo": -70.9600},
@@ -193,3 +193,28 @@ def test_parada_de_la_comuna_aunque_su_direccion_no_la_nombre():
     fuera = {"nombre": "Camino Los Aromos", "desde": 30000, "hasta": 30100, "la": -35.4264, "lo": -71.6554}   # Talca
     assert pasos_por_direccion([e], [en])[0]["estado"] == "paso"
     assert pasos_por_direccion([e], [fuera])[0]["estado"] == "no_paso"
+
+
+def test_ubicacion_aprendida_solo_con_dos_dias_que_coinciden():
+    o = lambda f, la, lo: {"fecha": f, "la": la, "lo": lo}
+    assert consolidar_ubicacion([o("2026-10-20", -35.4000, -71.6000)]) is None                                   # una sola visita no confirma
+    assert consolidar_ubicacion([o("2026-10-20", -35.4000, -71.6000), o("2026-10-20", -35.4001, -71.6000)]) is None   # el mismo día no cuenta dos veces
+    assert consolidar_ubicacion([o("2026-10-20", -35.4000, -71.6000), o("2026-10-21", -35.4100, -71.6000)]) is None   # 1,1 km: no coinciden
+    u = consolidar_ubicacion([o("2026-10-20", -35.4000, -71.6000), o("2026-10-21", -35.4005, -71.6000), o("2026-10-22", -35.5, -71.7)])
+    assert u["n"] == 2 and abs(u["la"] + 35.40025) < 1e-6
+
+
+def test_la_ubicacion_aprendida_mide_metros_contra_las_paradas():
+    paradas = [{"desde": "09:00:00", "hasta": "09:10:00", "min": 10, "lugar": "Otra calle, Talca", "la": -35.4000, "lo": -71.6000}]
+    e = entrega("Calle Nueva 12", "Talca", lat=-35.40030, lon=-71.6000, exacto=True, aprendida=2)   # a ~33 m de la parada
+    it = cruzar_entregas([e], paradas)["entregas"][0]
+    assert it["estado"] == "calza" and it["via"] == "distancia" and it["aprendida"] == 2 and it["dist_m"] < 60
+
+
+def test_solo_se_aprende_de_entregas_con_una_unica_parada_candidata():
+    paradas = [{"desde": "09:00:00", "hasta": "09:10:00", "min": 10, "lugar": "6 Oriente, Talca", "la": -35.40, "lo": -71.60}]
+    it = cruzar_entregas([entrega("6 ORIENTE 55", "Talca")], paradas)["entregas"][0]
+    obs = observaciones_de([it], "2026-10-27", "VPLD55")
+    assert len(obs) == 1 and obs[0]["la"] == -35.40 and obs[0]["clave"] == clave_entrega(it)
+    dos = paradas + [{"desde": "11:00:00", "hasta": "11:10:00", "min": 10, "lugar": "6 Oriente, Talca", "la": -35.41, "lo": -71.61}]
+    assert observaciones_de(cruzar_entregas([entrega("6 ORIENTE 55", "Talca")], dos)["entregas"], "2026-10-27", "VPLD55") == []   # ambigua: no se aprende

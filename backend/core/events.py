@@ -188,6 +188,10 @@ async def lifespan(app: FastAPI):
                 flota_repo = FlotaRepository(db)
                 await flota_repo.init_tables()
 
+                # Ubicaciones de clientes aprendidas de las paradas del camión (libreta art. 25)
+                from backend.repositories.entrega_ubicaciones import EntregaUbicacionesRepository
+                await EntregaUbicacionesRepository(db).init_tables()
+
                 # Inicializar Reglas de marcaciones (la semilla nunca pisa lo editado)
                 # y cargar en memoria las reglas ENCENDIDAS antes de cualquier recálculo:
                 # con todas apagadas, el motor se comporta exactamente igual que antes.
