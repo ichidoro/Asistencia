@@ -3545,14 +3545,23 @@ function m180GpsTabla(g) {
     const card = document.getElementById('m180-gps-card');
     if (!card) return;
     if (!g || !g.hay_datos) { card.style.display = 'none'; return; }
+    // La grilla muestra solo las horas del día en que el camión estuvo en ruta (con un mínimo de 6 h), no las 24: así cada bloque tiene espacio y las letras caben
+    const rs0 = g.resumen || {}, marcas = [];
+    (g.tramos_mov || []).forEach(t => marcas.push(t[0], t[1]));
+    (g.paradas || []).forEach(p => marcas.push(m180GpsSeg(p.desde), m180GpsSeg(p.hasta)));
+    if (rs0.primero) marcas.push(m180GpsSeg(rs0.primero));
+    if (rs0.ultimo) marcas.push(m180GpsSeg(rs0.ultimo));
+    let h0 = marcas.length ? Math.floor(Math.min(...marcas) / 3600) : 0, h1 = marcas.length ? Math.ceil(Math.max(...marcas) / 3600) : 24;
+    while (h1 - h0 < 6) { if (h0 > 0) h0--; if (h1 - h0 < 6 && h1 < 24) h1++; if (h0 === 0 && h1 === 24) break; }
+    const W0 = h0 * 3600, SP = (h1 - h0) * 3600, NH = h1 - h0;
     const FILAS = { 1: ['b1', 't1', 'COND', 'Conduciendo', g.min_mov_gps], 2: ['b2', 't2', 'DET', 'Detenido', (g.paradas || []).reduce((a, p) => a + (p.min || 0), 0)] };
     [1, 2].forEach(v => {
         const [b, t, corto, largo, min] = FILAS[v];
         let html = '';
         // Conduciendo y Detenido se dibujan a su hora exacta (los tramos de 15 min mezclaban: un tramo con 10 min andando y 5 parado salía como «conducción»)
         const hms = x => String(Math.floor(x / 3600)).padStart(2, '0') + ':' + String(Math.floor((x % 3600) / 60)).padStart(2, '0');
-        if (v === 1 && Array.isArray(g.tramos_mov)) g.tramos_mov.forEach(([a, z]) => {
-            html += `<div class="m180-block" style="left:${(a / 86400) * 100}%; width:${((z - a) / 86400) * 100}%;" title="Conduciendo ${hms(a)}–${hms(z)}"><b>COND</b><i>${formatMinToHHMM(Math.max(1, Math.round((z - a) / 60)))}</i></div>`;
+        if (v === 1 && Array.isArray(g.tramos_mov)) g.tramos_mov.filter(t => t[1] - t[0] >= 300).forEach(([a, z]) => {
+            html += `<div class="m180-block${(z - a) / SP < 0.07 ? ' es-mini' : ''}" style="left:${((a - W0) / SP) * 100}%; width:${((z - a) / SP) * 100}%;" title="Conduciendo ${hms(a)}–${hms(z)}"><b>COND</b><i>${formatMinToHHMM(Math.max(1, Math.round((z - a) / 60)))}</i></div>`;
         });
         for (let i = 0; i < 96 && v === 1 && !Array.isArray(g.tramos_mov);) {   // (sin tramos exactos del servidor: tramos de 15 min)
             if (g.slots_gps[i] !== v) { i++; continue; }
@@ -3565,24 +3574,24 @@ function m180GpsTabla(g) {
         // Numeradas igual que en la tabla de paradas; al pasar el mouse sale la misma información (hora y dirección)
         if (v === 2) (g.paradas || []).forEach((p, pi) => {
             const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
-            html += `<div class="m180-block m180-par-real" style="left:${(ini / 86400) * 100}%;width:${((fin - ini) / 86400) * 100}%" data-n="${pi + 1}" data-hora="${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}" data-min="${p.min}" data-lugar="${m180GpsEsc(p.lugar)}" aria-label="Parada ${pi + 1}, ${p.desde.slice(0, 5)} a ${p.hasta.slice(0, 5)}, ${m180GpsEsc(p.lugar)}"><b>${pi + 1}</b><i>${formatMinToHHMM(p.min)}</i></div>`;
+            html += `<div class="m180-block m180-par-real${p.min / 60 / NH < 0.045 ? ' es-corto' : ''}" style="left:${((ini - W0) / SP) * 100}%;width:${((fin - ini) / SP) * 100}%" data-n="${pi + 1}" data-hora="${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}" data-min="${p.min}" data-lugar="${m180GpsEsc(p.lugar)}" aria-label="Parada ${pi + 1}, ${p.desde.slice(0, 5)} a ${p.hasta.slice(0, 5)}, ${m180GpsEsc(p.lugar)}"><b>${pi + 1}</b><i>${formatMinToHHMM(p.min)}</i></div>`;
         });
         // Paradas en una Shell: ícono sobre el tramo detenido (la plataforma de GPS nombra el lugar, "Shell, Ruta 5 Sur…")
         if (v === 2) (g.paradas || []).filter(p => m180GpsEsShell(p.lugar)).forEach(p => {
             const ini = m180GpsSeg(p.desde), fin = Math.max(m180GpsSeg(p.hasta), ini + 60);
-            html += `<div class="m180-gps-shell" style="left:${(((ini + fin) / 2) / 86400) * 100}%;" title="Detenido en Shell · ${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)} (${p.min} min) · ${m180GpsEsc(p.lugar)}"><i class="bi bi-fuel-pump-fill"></i></div>`;
+            html += `<div class="m180-gps-shell" style="left:${((((ini + fin) / 2) - W0) / SP) * 100}%;" title="Detenido en Shell · ${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)} (${p.min} min) · ${m180GpsEsc(p.lugar)}"><i class="bi bi-fuel-pump-fill"></i></div>`;
         });
         // Salida y regreso de la planta (primer y último reporte fuera de ella)
         if (v === 1) {
             const salio = ((g.planta || {}).salidas || 0) > 0, rs = g.resumen || {};
             [[rs.primero, salio ? 'Salió de la planta' : 'Primer reporte', 'bi-box-arrow-right'], [rs.ultimo, salio ? 'Volvió a la planta' : 'Último reporte', 'bi-box-arrow-in-left']].forEach(([hora, nombre, ic]) => {
-                if (hora) html += `<div class="m180-gps-hito" style="left:${(m180GpsSeg(hora) / 86400) * 100}%" title="${nombre} ${String(hora).slice(0, 5)}"><i class="bi ${ic}"></i></div>`;
+                if (hora) html += `<div class="m180-gps-hito" style="left:${((m180GpsSeg(hora) - W0) / SP) * 100}%" title="${nombre} ${String(hora).slice(0, 5)}"><i class="bi ${ic}"></i></div>`;
             });
         }
         // Entregas que calzan con una parada (o están muy cerca): ícono de caja sobre la detención
         if (v === 2 && m180_gps_ent && m180_gps_ent.entregas) m180_gps_ent.entregas.filter(e => e.parada && (e.estado === 'calza' || e.estado === 'calle' || e.estado === 'cercana')).forEach(e => {
             const ini = m180GpsSeg(e.parada.desde), fin = Math.max(m180GpsSeg(e.parada.hasta), ini + 60), st = M180_ENT_ESTADO[e.estado];
-            html += `<div class="m180-gps-ent" style="left:${(((ini + fin) / 2) / 86400) * 100}%;--c:${st.c}" title="${st.t} · ${m180GpsEsc(e.cliente || '')}${e.dist_m != null ? ' · ' + e.dist_m + ' m de la parada' : ' · por dirección'}"><i class="bi bi-box-seam-fill"></i></div>`;
+            html += `<div class="m180-gps-ent" style="left:${((((ini + fin) / 2) - W0) / SP) * 100}%;--c:${st.c}" title="${st.t} · ${m180GpsEsc(e.cliente || '')}${e.dist_m != null ? ' · ' + e.dist_m + ' m de la parada' : ' · por dirección'}"><i class="bi bi-box-seam-fill"></i></div>`;
         });
         document.getElementById('m180-gps-' + b).innerHTML = html;
         document.getElementById('m180-gps-' + t).textContent = formatMinToHHMM(min || 0);
@@ -3595,7 +3604,12 @@ function m180GpsTabla(g) {
         if (sub) sub.innerHTML = partes.join(' · ') || 'Solo lectura · lo que hizo el camión según el GPS';
     }
     const regla = document.getElementById('m180-ruler');
-    if (regla) document.getElementById('m180-gps-ruler').innerHTML = regla.innerHTML;
+    if (regla) {
+        const reglaGps = document.getElementById('m180-gps-ruler');
+        reglaGps.innerHTML = [...regla.children].slice(h0, h1).map(x => x.outerHTML).join('');
+        reglaGps.style.gridTemplateColumns = `repeat(${NH}, 1fr)`;
+    }
+    card.querySelectorAll('.m180-track').forEach(tr => { tr.style.backgroundSize = `calc(100% / ${NH}) 100%, calc(100% / ${NH * 2}) 100%, calc(100% / ${NH * 4}) 100%`; });
     document.getElementById('m180-gps-card-titulo').textContent = 'GPS · ' + ((g.vehiculo && g.vehiculo.patente) || 'camión');
     card.style.display = '';
 }

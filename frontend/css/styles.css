@@ -4511,3 +4511,8 @@ tr:hover .emp-name-cell {
 .m180-par-tip.es-visible { opacity: 1; transform: none; }
 .m180-par-tip-h { margin-bottom: 4px; color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .m180-par-tip { transition: none; } }
+
+/* Grilla del GPS: los bloques angostos no llevan letras (la hora y la dirección salen al pasar el mouse) */
+.m180-block.es-mini b, .m180-block.es-mini i { display: none; }
+.m180-par-real.es-corto i { display: none; }
+.m180-par-real { justify-content: center; padding: 0 3px; }
