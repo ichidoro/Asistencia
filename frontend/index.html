@@ -4962,12 +4962,6 @@
                                             <div class="m180-lane-total m180-ruler-label">Hrs</div>
                                         </div>
                                         <div id="m180-lanes"></div>
-                                        <!-- Carril del GPS del camión: solo se muestra cuando se consulta (m180GpsVer) -->
-                                        <div id="m180-gps-lane" class="m180-lane" style="display:none; --c:#0d6efd; --soft:#eef4ff; --ink:#1e3a8a;">
-                                            <div class="m180-lane-label"><span class="m180-lane-dot"></span><span id="m180-gps-lane-label">GPS</span></div>
-                                            <div class="m180-track m180-track-ro"><div id="m180-gps-blocks" class="m180-blocks"></div></div>
-                                            <div class="m180-lane-total" id="m180-gps-lane-total">00:00</div>
-                                        </div>
                                     </div>
                                 </div>
 
@@ -4983,6 +4977,33 @@
                                     </div>
                                     <div id="m180-alerta-fatiga" class="d-none text-danger fw-bold bg-danger-subtle border border-danger-subtle px-2 py-1 rounded">
                                         <i class="bi bi-exclamation-triangle-fill me-1"></i> Alerta Art. 25 bis: conducción continua superior a 5 horas sin descanso.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabla del GPS del camión (mismo formato de la línea de tiempo, aparte): solo se muestra cuando se consulta (m180GpsVer) -->
+                            <div id="m180-gps-card" class="m180-card mb-3" style="display:none;">
+                                <div class="m180-card-head">
+                                    <span class="m180-card-title"><i class="bi bi-geo-alt-fill"></i> <span id="m180-gps-card-titulo">GPS del camión</span> · tramos de 15 min</span>
+                                    <span class="m180-readout">Solo lectura · lo que hizo el camión según el GPS</span>
+                                </div>
+                                <div class="m180-grid-container">
+                                    <div class="m180-board">
+                                        <div class="m180-ruler-row">
+                                            <div class="m180-lane-label m180-ruler-label">GPS</div>
+                                            <div id="m180-gps-ruler" class="m180-ruler"></div>
+                                            <div class="m180-lane-total m180-ruler-label">Hrs</div>
+                                        </div>
+                                        <div class="m180-lane" style="--c:#16a34a; --soft:#f0fdf4; --ink:#166534;">
+                                            <div class="m180-lane-label"><span class="m180-lane-dot"></span><span>Conduciendo</span></div>
+                                            <div class="m180-track m180-track-ro"><div id="m180-gps-b1" class="m180-blocks"></div></div>
+                                            <div class="m180-lane-total" id="m180-gps-t1">00:00</div>
+                                        </div>
+                                        <div class="m180-lane" style="--c:#f59e0b; --soft:#fffbeb; --ink:#92400e;">
+                                            <div class="m180-lane-label"><span class="m180-lane-dot"></span><span>Detenido</span></div>
+                                            <div class="m180-track m180-track-ro"><div id="m180-gps-b2" class="m180-blocks"></div></div>
+                                            <div class="m180-lane-total" id="m180-gps-t2">00:00</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -3532,32 +3532,33 @@ function m180GpsReset() {
     if (r) r.innerHTML = '<div class="text-muted small">Elige la patente del camión que usó el chofer y pulsa <b>Ver recorrido</b>: se compara su día con los tramos de la libreta.</div>';
     const k = document.getElementById('m180-gps-kpis'); if (k) k.innerHTML = '';
     const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = '';
-    m180GpsCarril(null);
+    m180GpsTabla(null);
     m180GpsCargarVehiculos();
 }
 
-// Carril "GPS" dentro de la línea de tiempo 24 h (mismos bloques que los carriles de actividad). Sin datos de GPS queda oculto.
-function m180GpsCarril(g, rangos, TXT) {
-    const lane = document.getElementById('m180-gps-lane');
-    if (!lane) return;
-    if (!g || !g.hay_datos) { lane.style.display = 'none'; return; }
-    const NOMBRE = { 1: ['MOV', 'En movimiento'], 2: ['DET', 'Detenido'] };
-    let html = '';
-    for (let i = 0; i < 96;) {
-        const v = g.slots_gps[i];
-        if (v !== 1 && v !== 2) { i++; continue; }
-        let j = i; while (j < 96 && g.slots_gps[j] === v) j++;
-        const dur = formatMinToHHMM((j - i) * 15);
-        html += `<div class="m180-block" style="left:${(i / 96) * 100}%; width:${((j - i) / 96) * 100}%; --c:${M180_GPS_COLOR[v]};" title="${m180GpsHora(i)} – ${m180GpsHora(j)} · GPS ${NOMBRE[v][1]} (${dur})"><b>${NOMBRE[v][0]}</b><i>${dur}</i></div>`;
-        i = j;
-    }
-    (rangos || []).forEach(x => {
-        html += `<div class="m180-gps-mark" style="left:${(x.de / 96) * 100}%; width:${((x.a - x.de) / 96) * 100}%;" title="${m180GpsHora(x.de)} – ${m180GpsHora(x.a)} · no calza: ${TXT[x.tipo]}"></div>`;
+// Tabla "GPS del camión" (tarjeta aparte, mismo formato de la línea de tiempo 24 h): una fila con lo que condujo y otra con lo que estuvo detenido. Sin datos de GPS queda oculta.
+function m180GpsTabla(g) {
+    const card = document.getElementById('m180-gps-card');
+    if (!card) return;
+    if (!g || !g.hay_datos) { card.style.display = 'none'; return; }
+    const FILAS = { 1: ['b1', 't1', 'COND', 'Conduciendo', g.min_mov_gps], 2: ['b2', 't2', 'DET', 'Detenido', g.min_det_gps] };
+    [1, 2].forEach(v => {
+        const [b, t, corto, largo, min] = FILAS[v];
+        let html = '';
+        for (let i = 0; i < 96;) {
+            if (g.slots_gps[i] !== v) { i++; continue; }
+            let j = i; while (j < 96 && g.slots_gps[j] === v) j++;
+            const dur = formatMinToHHMM((j - i) * 15);
+            html += `<div class="m180-block" style="left:${(i / 96) * 100}%; width:${((j - i) / 96) * 100}%;" title="${m180GpsHora(i)} – ${m180GpsHora(j)} · ${largo} (${dur})"><b>${corto}</b><i>${dur}</i></div>`;
+            i = j;
+        }
+        document.getElementById('m180-gps-' + b).innerHTML = html;
+        document.getElementById('m180-gps-' + t).textContent = formatMinToHHMM(min || 0);
     });
-    document.getElementById('m180-gps-blocks').innerHTML = html;
-    document.getElementById('m180-gps-lane-label').textContent = 'GPS · ' + ((g.vehiculo && g.vehiculo.patente) || '');
-    document.getElementById('m180-gps-lane-total').textContent = formatMinToHHMM(g.min_mov_gps);
-    lane.style.display = '';
+    const regla = document.getElementById('m180-ruler');
+    if (regla) document.getElementById('m180-gps-ruler').innerHTML = regla.innerHTML;
+    document.getElementById('m180-gps-card-titulo').textContent = 'GPS · ' + ((g.vehiculo && g.vehiculo.patente) || 'camión');
+    card.style.display = '';
 }
 
 // Patentes de la plataforma de GPS (una vez por sesión); recuerda la última elegida para ese empleado.
@@ -3599,7 +3600,7 @@ async function m180GpsVer() {
         m180_gps = d; estado.textContent = '';
         m180GpsPintar();
     } catch (err) {
-        m180_gps = null; estado.textContent = err.message; m180GpsCarril(null);
+        m180_gps = null; estado.textContent = err.message; m180GpsTabla(null);
         const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
     } finally { btn.disabled = false; }
 }
@@ -3625,7 +3626,7 @@ function m180GpsPintar() {
     const g = m180_gps;
     const patente = m180GpsEsc(g.vehiculo && g.vehiculo.patente);
     if (!g.hay_datos) {
-        m180GpsCarril(null);
+        m180GpsTabla(null);
         if (kpis) kpis.innerHTML = '';
         host.innerHTML = `<div class="alert alert-secondary py-2 small mb-0">${g.todo_el_dia_en_planta ? 'El camión estuvo todo el día dentro de la planta.' : 'El GPS no tiene datos de ' + patente + ' en este día.'}</div>`;
         return;
@@ -3652,7 +3653,7 @@ function m180GpsPintar() {
         let j = i; while (j < 96 && marca[j] === marca[i]) j++;
         rangos.push({ de: i, a: j, tipo: marca[i] }); i = j;
     }
-    m180GpsCarril(g, rangos, TXT);
+    m180GpsTabla(g);
     const minCondLib = sl.filter(v => v === 1).length * 15;
     const difCond = g.min_mov_gps - minCondLib;
     // Paradas del GPS contra lo que la libreta tenía en ese momento
