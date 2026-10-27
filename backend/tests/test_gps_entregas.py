@@ -164,8 +164,32 @@ def test_si_paro_en_la_calle_entonces_paso_por_ella():
 
 
 def test_comuna_grande_se_acepta_si_es_de_las_dos_mas_cercanas():
-    # Un punto en la zona rural de Talca (a más de 12 km del centro) sigue siendo de Talca; una calle con el mismo nombre en Curicó, no
-    pasos = [{"nombre": "Camino Los Aromos", "desde": 30000, "hasta": 30100, "la": -35.30, "lo": -71.75}]
+    # Un punto de Talca a más de 12 km de su centro (por polígono) sigue siendo de Talca; una calle con el mismo nombre en Curicó, no
+    pasos = [{"nombre": "Camino Los Aromos", "desde": 30000, "hasta": 30100, "la": -35.525, "lo": -71.575}]
     e = {"calle": "CAMINO LOS AROMOS 5", "comuna": "Talca", "comuna_la": -35.4264, "comuna_lo": -71.6554}
     assert pasos_por_direccion([e], pasos)[0]["estado"] == "paso"
     assert pasos_por_direccion([{**e, "comuna": "Curicó", "comuna_la": -34.98, "comuna_lo": -71.23}], pasos)[0]["estado"] == "no_paso"
+
+
+def test_comunas_por_poligono():
+    from backend.services import comunas_geo as cg
+    assert cg.comuna_en(-35.4264, -71.6554) == "07101"      # Talca
+    assert cg.comuna_en(-34.1708, -70.7444) == "06101"      # Rancagua
+    assert cg.comuna_en(-34.98, -71.23) == "07301"          # Curicó
+    assert cg.comuna_en(-33.0, -60.0) is None               # fuera de los límites
+    assert cg.cut_de_nombre("Talca") == "07101"
+    assert cg.cut_de_nombre("Sarmiento") == "07301"         # localidad de la comuna de Curicó
+    assert cg.cut_de_nombre("San Francisco Mostazal") == cg.cut_de_nombre("Mostazal") is not None
+
+
+def test_parada_de_la_comuna_aunque_su_direccion_no_la_nombre():
+    # La dirección de la parada («Camino X, Chile») no nombra la comuna, pero el punto cae dentro de Curicó
+    paradas = [{"desde": "10:00:00", "hasta": "10:20:00", "min": 20, "lugar": "Camino Rural, Chile", "la": -34.98, "lo": -71.23}]
+    it = cruzar_entregas([entrega("Los Aromos 9", "Curicó")], paradas)["entregas"][0]
+    assert it["estado"] == "comuna"
+    # y una calle recorrida dentro de la comuna cuenta; una de igual nombre en otra comuna, no
+    e = {"calle": "CAMINO LOS AROMOS 5", "comuna": "Curicó", "comuna_la": -34.98, "comuna_lo": -71.23}
+    en = {"nombre": "Camino Los Aromos", "desde": 30000, "hasta": 30100, "la": -34.95, "lo": -71.28}      # dentro de Curicó
+    fuera = {"nombre": "Camino Los Aromos", "desde": 30000, "hasta": 30100, "la": -35.4264, "lo": -71.6554}   # Talca
+    assert pasos_por_direccion([e], [en])[0]["estado"] == "paso"
+    assert pasos_por_direccion([e], [fuera])[0]["estado"] == "no_paso"

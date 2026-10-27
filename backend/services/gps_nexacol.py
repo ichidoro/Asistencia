@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 import aiohttp
 
 from backend.core.config import settings
+from backend.services import comunas_geo
 
 SLOT_SEG = 900          # 15 minutos
 VEL_MOVIENDO = 3        # km/h: bajo esto el camión está detenido (misma regla de Nexacol)
@@ -218,7 +219,8 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
     ps = []
     for i, p in enumerate(paradas):
         pal = _palabras(p.get("lugar"))
-        ps.append((i, p, set(pal), {f"{a} {b}" for a, b in zip(pal, pal[1:])}))
+        pcut = comunas_geo.comuna_en(p["la"], p["lo"]) if isinstance(p.get("la"), (int, float)) and isinstance(p.get("lo"), (int, float)) else None
+        ps.append((i, p, set(pal), {f"{a} {b}" for a, b in zip(pal, pal[1:])}, pcut))
     items: List[Dict[str, Any]] = []
     for e in entregas:
         item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
@@ -226,13 +228,17 @@ def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]
         # La comuna y la calle se comparan por palabras ("San Francisco Mostazal" calza con "San Francisco de Mostazal")
         comuna = [w for w in _norm(e.get("comuna")).split() if w not in _ARTICULOS]
         ident = _identificadores_calle(e.get("calle"))
+        cut_e = comunas_geo.cut_de_nombre(e.get("comuna"))   # CUT de la comuna (o localidad) de la factura
         item["esquina"] = len(ident["pares"]) >= 2
-        en_comuna = [(i, p) for i, p, pal, _ in ps if comuna and all(w in pal for w in comuna)]
+        # Una parada es de la comuna de la factura si el texto de su dirección la nombra O si el punto cae dentro de sus límites (polígono)
+        def de_la_comuna(pal: Any, pcut: Any) -> bool:
+            return bool((comuna and all(w in pal for w in comuna)) or (cut_e and pcut == cut_e))
+        en_comuna = [(i, p) for i, p, pal, _, pcut in ps if de_la_comuna(pal, pcut)]
         # Si varias paradas coinciden en calle y comuna, la que corresponde a una entrega es la que coincide con más calles y, luego, la más larga
-        en_calle = sorted(((i, p, c) for i, p, pal, pares in ps if comuna and all(w in pal for w in comuna) for c in [_coincide(ident, pal, pares)] if c), key=lambda t: (-len(t[2]), -(t[1].get("min") or 0)))
+        en_calle = sorted(((i, p, c) for i, p, pal, pares, pcut in ps if de_la_comuna(pal, pcut) for c in [_coincide(ident, pal, pares)] if c), key=lambda t: (-len(t[2]), -(t[1].get("min") or 0)))
         # con coordenada guardada: distancia a la parada más cercana
         con_coord = num(e.get("lat")) and num(e.get("lon"))
-        near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
+        near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _, _, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
         elegida = None
         if near and item["exacto"] and near[0] <= CALZA_M:
             item["estado"], item["via"], elegida = "calza", "distancia", (near[1], near[2])
@@ -305,13 +311,18 @@ def pasos_por_direccion(entregas: List[Dict[str, Any]], pasos: List[Dict[str, An
     out: List[Dict[str, Any]] = []
     for e in entregas:
         ident = _identificadores_calle(e.get("calle"))
+        cut_e = comunas_geo.cut_de_nombre(e.get("comuna"))
         res: Dict[str, Any] = {"estado": "no_paso", "pasadas": [], "esquina": False, "coincide": []}
         hallados = []
         for q, pal, pares in pn:
             c = _coincide(ident, pal, pares)
             if not c:
                 continue
-            if num(e.get("comuna_la")) and num(e.get("comuna_lo")) and num(q.get("la")) and num(q.get("lo")):
+            cut_q = comunas_geo.comuna_en(q["la"], q["lo"]) if cut_e and num(q.get("la")) and num(q.get("lo")) else None
+            if cut_e and cut_q:
+                if cut_q != cut_e:
+                    continue   # la calle recorrida queda en otra comuna (por polígono): es una calle de igual nombre de otro lugar
+            elif num(e.get("comuna_la")) and num(e.get("comuna_lo")) and num(q.get("la")) and num(q.get("lo")):
                 lejos = _metros(q["la"], q["lo"], e["comuna_la"], e["comuna_lo"]) > RADIO_COMUNA_KM * 1000
                 if lejos and _norm(e.get("comuna")) not in _comunas_cercanas(q["la"], q["lo"]):
                     continue
