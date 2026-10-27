@@ -113,10 +113,23 @@ def test_si_se_va_antes_la_ultima_salida_marca_salida_adelantada(monkeypatch):
     assert r["estado"] == "SALIDA_ADELANTADA" and round(r["minutos_salida_adelantada"]) == 80
 
 
-def test_rebote_de_menos_de_3_minutos_se_queda_con_la_primera(monkeypatch):
-    # Anti-rebote existente (180 s): dos Salidas a 70 s son un doble toque; sigue valiendo la primera
+def test_rebote_de_dos_salidas_se_queda_con_la_ultima(monkeypatch):
+    # Anti-rebote (180 s): dos Salidas a 70 s son un doble toque; vale la última, igual que «marcas repetidas» (orden del dueño,
+    # 27-10-2026: antes valía la primera y la jornada se acortaba), y queda anotado.
     r = _dia(monkeypatch, _d([("06:58:00", E), ("15:02:00", S), ("15:03:10", S)]))
-    assert r["hora_salida_real"] == "15:02:00" and r["estado"] == "OK" and r["minutos_deuda"] == 0
+    assert r["hora_salida_real"] == "15:03:10" and r["estado"] == "OK" and r["minutos_deuda"] == 0
+    assert "Doble toque: se usó la marca de las 15:03:10 y se descartó la de las 15:02:00" in r["observaciones"]
+
+
+def test_rebote_de_dos_entradas_se_queda_con_la_primera(monkeypatch):
+    r = _dia(monkeypatch, _d([("06:58:00", E), ("06:59:30", E), ("15:02:00", S)]))
+    assert r["hora_entrada_real"] == "06:58:00" and "se descartó la de las 06:59:30" in r["observaciones"]
+
+
+def test_rebote_de_tipos_distintos_se_queda_con_la_primera(monkeypatch):
+    # Caso Orlando Carreño 10-10-2026: SALIDA 13:11:15 y ENTRADA 13:12:19 (un minuto después).
+    r = _dia(monkeypatch, _d([("06:58:00", E), ("15:01:15", S), ("15:02:19", E)]))
+    assert r["hora_salida_real"] == "15:01:15" and "se descartó la de las 15:02:19" in r["observaciones"]
 
 
 def test_jornada_normal_con_colacion_real_no_cambia(monkeypatch):

@@ -30,9 +30,6 @@ logger = logging.getLogger(__name__)
 
 _CHILE_TZ = ZoneInfo(settings.TIMEZONE)
 
-# Ajuste global (tabla `ajustes`): '1' activa el pago automático del turno nocturno de víspera de feriado.
-CLAVE_VISPERA_FERIADO_PAGADO = "asistencia_vispera_feriado_nocturno_pagado"
-
 
 def _get_now_local() -> datetime:
     """Retorna la fecha/hora actual naive en la zona horaria de Chile."""
@@ -91,6 +88,46 @@ def _bordes_ciclos(fecha: str, ciclos: Optional[List[Dict[str, Any]]]) -> Tuple[
                 dt_out += timedelta(days=1)
             salidas.append(dt_out)
     return entradas, salidas
+
+
+# Texto con que el día anota una segunda jornada sin SALIDA (la grilla lo lee para mostrar la anomalía debajo del estado)
+TEXTO_JORNADA_SIN_SALIDA = "Segunda jornada sin SALIDA"
+
+
+def _minutos_netos_jornada_aparte(logs: List[Dict[str, Any]], t_cfg: Dict[str, Any], tipo_prog: str) -> int:
+    """Minutos trabajados de una jornada aparte (+2): de su primera a su última marca, sin sus pausas, y menos su propia
+    colación con la regla del horario (orden del dueño, 27-10-2026: cada jornada descuenta su colación). La pausa más larga
+    es la colación; sin pausa, se descuenta la del horario si la jornada dura al menos su «Mínimo para descontar»."""
+    marcas = sorted((m for m in logs if MultiBlockTensorSolver.parse_dt(m)), key=lambda m: MultiBlockTensorSolver.parse_dt(m))
+    if not marcas[1:]:           # una jornada necesita su ENTRADA y su SALIDA
+        return 0
+    total =(MultiBlockTensorSolver.parse_dt(marcas[-1]) - MultiBlockTensorSolver.parse_dt(marcas[0])).total_seconds() / 60.0
+    pausas = [(MultiBlockTensorSolver.parse_dt(b) - MultiBlockTensorSolver.parse_dt(a)).total_seconds() / 60.0
+              for a, b in zip(marcas, marcas[1:])
+              if str(a.get('tipo', '')).strip().lower() in _TIPOS_S and str(b.get('tipo', '')).strip().lower() in _TIPOS_E]
+    horas_netas, _, _ = AutoMealOperator.apply_meal_deduction(
+        horas_presenciales_brutas=max(0.0, total - sum(pausas)) / 60.0,
+        minutos_colacion_real=max(pausas, default=0.0),
+        minutos_colacion_pactada=int(t_cfg.get('minutos_colacion_auto', 0) or 0),
+        descuento_colacion_auto=bool(t_cfg.get('descuento_colacion_auto', False)),
+        umbral_horas_colacion=float(t_cfg.get('umbral_horas_colacion', 0.0) or 0.0),
+        tolerancia_exceso_minutos=int(t_cfg.get('tolerancia_exceso_colacion_minutos', 0) or 0),
+        umbral_con_pausa=(tipo_prog == 'CICLO_INTELIGENTE'),
+    )
+    return int(round(horas_netas * 60.0))
+
+
+def fecha_feriado_de_la_jornada(fecha: str, ciclo: Optional[Dict[str, Any]]) -> str:
+    """El día que cuenta para saber si la jornada es de feriado: una jornada que cruza la medianoche es del día donde caen la
+    mayoría de sus horas, según el propio horario (orden del dueño, 27-10-2026: la noche del domingo 11-10 de 23:00 a 07:00 es del
+    feriado 12-10; la del 12-10 de 23:00 a 07:00 es del martes 13-10). Un empate queda en el día en que empieza."""
+    ent, sal = _bordes_ciclos(fecha, [ciclo] if ciclo else [])
+    if not ent or not sal:
+        return fecha
+    medianoche = datetime.strptime(fecha, "%Y-%m-%d") + timedelta(days=1)
+    if sal[0] <= medianoche:
+        return fecha
+    return medianoche.strftime("%Y-%m-%d") if (sal[0] - medianoche) > (medianoche - ent[0]) else fecha
 
 
 def _es_el_borde_mas_cercano(dt: datetime, borde_propio: datetime, rivales: List[datetime]) -> bool:
@@ -314,11 +351,15 @@ class TensorMarkDeduplicator:
     def deduplicate_and_sort(
         cls,
         raw_logs: List[Dict[str, Any]],
-        bounce_seconds: float = 180.0
+        bounce_seconds: float = 180.0,
+        descartadas: Optional[List[Tuple[Dict[str, Any], Dict[str, Any]]]] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Elimina rebotes biométricos en ventanas menores a bounce_seconds (definido por UI/ajustes),
-        manteniendo la marca más representativa.
+        Elimina rebotes biométricos (doble toque) en ventanas menores a bounce_seconds (Reglas de marcaciones), manteniendo la
+        marca más representativa: de dos ENTRADAS la primera y de dos SALIDAS la última, igual que «marcas repetidas» (orden del
+        dueño, 27-10-2026: antes quedaba siempre la primera y una SALIDA repetida acortaba la jornada); de dos tipos distintos, la
+        primera. Una manual del mismo tipo cede ante la del reloj, salvo [SOBREESCRITURA]. Cada marca descartada se anota en
+        `descartadas` como (descartada, conservada).
         """
         if not raw_logs:
             return []
@@ -347,12 +388,26 @@ class TensorMarkDeduplicator:
                 if diff_sec >= bounce_seconds:
                     clean_logs.append(log)
                     last_dt = curr_dt
-                elif cls._reloj_reemplaza_manual(clean_logs[-1], log):
-                    # Rebote entre una marca manual y una del reloj del mismo tipo: gana la del reloj (es la que midió la persona)
+                elif cls._reloj_reemplaza_manual(clean_logs[-1], log) or cls._salida_posterior_reemplaza(clean_logs[-1], log):
+                    # Rebote entre una marca manual y una del reloj del mismo tipo: gana la del reloj (es la que midió la persona).
+                    # Dos SALIDAS del mismo origen: gana la última (la persona se fue al marcar la segunda).
+                    if descartadas is not None:
+                        descartadas.append((clean_logs[-1], log))
                     clean_logs[-1] = log
                     last_dt = curr_dt
+                elif descartadas is not None:
+                    descartadas.append((log, clean_logs[-1]))
 
         return clean_logs
+
+    @classmethod
+    def _salida_posterior_reemplaza(cls, conservada: Dict[str, Any], nueva: Dict[str, Any]) -> bool:
+        """True si las dos son SALIDAS del mismo origen (reloj con reloj, o manual con manual sin [SOBREESCRITURA])."""
+        if str(conservada.get('tipo', '')).strip().lower() not in _TIPOS_S or str(nueva.get('tipo', '')).strip().lower() not in _TIPOS_S:
+            return False
+        if cls._es_sobreescritura(conservada):
+            return False
+        return (conservada.get('manual') == 1) == (nueva.get('manual') == 1)
 
     @staticmethod
     def _es_sobreescritura(log: Dict[str, Any]) -> bool:
@@ -599,13 +654,15 @@ class MultiBlockTensorSolver:
             'emergencia_detectada': None,
             'marcas_consumidas_ids': [],
             'descartadas_estructura': [],
-            'manuales_cubiertas': []
+            'manuales_cubiertas': [],
+            'rebotes': [],
+            'marcas_sueltas': []
         }
 
         if not logs:
             return result
 
-        clean_logs = TensorMarkDeduplicator.deduplicate_and_sort(logs, bounce_seconds=bounce_seconds)
+        clean_logs = TensorMarkDeduplicator.deduplicate_and_sort(logs, bounce_seconds=bounce_seconds, descartadas=result['rebotes'])
         clean_logs = TensorMarkDeduplicator.apply_override_mask(clean_logs)
         # El reloj gana: una marca manual del mismo tipo que una del reloj, en el mismo bloque continuo, no se usa. Queda anotada y como
         # consumida de esta jornada para que ningún día vecino la tome como suya.
@@ -693,6 +750,14 @@ class MultiBlockTensorSolver:
                                 'minutos_trabajados': dur_min,
                                 'logs': extra_blk
                             })
+                else:
+                    # Una ENTRADA sola, lejos de la jornada: es otra jornada a la que le falta su SALIDA. No se bota (antes se perdía
+                    # sin aviso): queda en este día, cuenta en su secuencia de marcas y se anota para completarla (orden del dueño,
+                    # 27-10-2026; caso Maximiliano Badilla 10-10-2026, ENTRADA 14:13 después de su jornada 04:49–09:19).
+                    for l in extra_blk:
+                        if l.get('id'):
+                            result['marcas_consumidas_ids'].append(l['id'])
+                        result['marcas_sueltas'].append(l)
 
         return result
 
@@ -1563,7 +1628,10 @@ class HumanDecisionMerger:
         if cobertura_he:
             min_cob = float((he_previo or {}).get('minutos_autorizados') or (je_previo or {}).get('minutos_autorizados') or 0)
             if min_cob > 0:
-                res['minutos_extra_bruto'] = min_cob
+                # Una segunda jornada del día (+2) aprobada como horas extra se SUMA a las de la jornada principal; en una
+                # cobertura la jornada principal no tiene horas extra propias (todas pasaron a la cobertura).
+                propias = float(res.get('minutos_extra_bruto') or 0.0) if res.get('_jornada_adicional') else 0.0
+                res['minutos_extra_bruto'] = round(propias + min_cob, 2)
                 res['_he_minutos_autorizados'] = min_cob
                 res['_he_estado'] = 'APROBADO'
 
@@ -1618,7 +1686,6 @@ class QuantumMatrixEngine:
         he_previo: Optional[Dict[str, Any]] = None,
         je_previo: Optional[Dict[str, Any]] = None,
         holiday_desc: Optional[str] = None,
-        vispera_feriado: bool = False,
         todos_ciclos_dia_siguiente: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
@@ -1665,9 +1732,10 @@ class QuantumMatrixEngine:
                 viaje_largo_info=viaje_largo_info,
                 todos_ciclos_dia=todos_ciclos_dia,
                 holiday_desc=holiday_desc,
-                vispera_feriado=vispera_feriado,
                 todos_ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
             )
+            if not is_bolsa:
+                cls._registrar_jornada_adicional(res, empleado_id, fecha)
 
         # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
         # Un día dentro de un viaje largo registrado no es ausencia ni anomalía.
@@ -1706,6 +1774,38 @@ class QuantumMatrixEngine:
         # ── Capa 4: Decisiones humanas previas ──
         res = HumanDecisionMerger.apply(res, fecha, he_previo, je_previo)
         return res
+
+    @staticmethod
+    def _registrar_jornada_adicional(res: Optional[Dict[str, Any]], empleado_id: int, fecha: str) -> None:
+        """Una jornada aparte de 3 horas o más (+2) queda como jornada especial por aprobar, igual que una cobertura: en la
+        ventana «Validar Cobertura (+2)» se aprueba como jornada especial o como horas extra, o se rechaza. Sin esto sus horas
+        no contaban en ningún lado (se perdió el 24-09-2026; antes se sumaban a las horas extra). En un día libre, feriado o con
+        cobertura, sus horas se suman a la jornada especial que el día ya tiene."""
+        ja = (res or {}).get('_jornada_adicional')
+        if not ja or not ja.get('bloques') or not ja.get('minutos_netos'):
+            return
+        primero, ultimo = ja['bloques'][0], ja['bloques'][-1]
+        texto = (f"[Jornada Adicional (+2): {primero['hora_entrada']} - {ultimo['hora_salida']} "
+                 f"({round(ja['minutos_netos'] / 60.0, 1)}h netas)]")
+        je = res.get('_jornada_especial')
+        if je:
+            je['minutos_trabajados'] = int(je.get('minutos_trabajados') or 0) + ja['minutos_netos']
+            je['hora_salida'] = ultimo['hora_salida']
+            obs_je = je.get('observaciones') or ''
+            for b in ja['bloques']:      # la nota sin horas netas que el día ya copió se reemplaza por la que las trae
+                obs_je = obs_je.replace(f"[Jornada Adicional (+2): {b['hora_entrada']} - {b['hora_salida']}]", '')
+            je['observaciones'] = f"{' '.join(obs_je.split())} {texto}".strip()
+            return
+        res['_jornada_especial'] = {
+            'empleado_id': empleado_id,
+            'fecha': fecha,
+            'hora_entrada': primero['hora_entrada'],
+            'hora_salida': ultimo['hora_salida'],
+            'minutos_trabajados': ja['minutos_netos'],
+            'estado': 'JORNADA_ESPECIAL',
+            'origen': 'COBERTURA_TURNO',
+            'observaciones': texto,
+        }
 
     @staticmethod
     def resolve_control_modality(turno_config: Optional[Dict[str, Any]], fecha: str) -> bool:
@@ -1800,7 +1900,6 @@ class QuantumMatrixEngine:
         viaje_largo_info: Optional[Dict[str, Any]] = None,
         todos_ciclos_dia: Optional[List[Dict[str, Any]]] = None,
         holiday_desc: Optional[str] = None,
-        vispera_feriado: bool = False,
         todos_ciclos_dia_siguiente: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Núcleo cuántico: resolución de marcas vs turno (reloj biométrico)."""
@@ -2178,8 +2277,10 @@ class QuantumMatrixEngine:
             fin_jornada = (dt_fecha + timedelta(days=1)).strftime("%Y-%m-%d") if es_nocturno else fecha
             if fin_jornada < hoy_regla:
                 por_id = {l.get('id'): l for l in marcas_disponibles if l.get('id') is not None}
+                # Una ENTRADA suelta es otra jornada (se revisa aparte): no cuenta en la secuencia de esta jornada.
+                sueltas_ids = {l.get('id') for l in segment_res['marcas_sueltas']}
                 consumidos_dia = sorted(
-                    (por_id[i] for i in marcas_consumidas_ids if i in por_id),
+                    (por_id[i] for i in marcas_consumidas_ids if i in por_id and i not in sueltas_ids),
                     key=lambda l: str(l.get('fecha_hora', ''))
                 )
                 letras = ''.join(
@@ -2248,7 +2349,8 @@ class QuantumMatrixEngine:
             res['observaciones'] += segment_res['jornada_adicional_obs']
             res['_jornada_adicional'] = {
                 'minutos': segment_res['jornada_adicional_minutos'],
-                'bloques': segment_res['bloques_extras']
+                'bloques': segment_res['bloques_extras'],
+                'minutos_netos': sum(_minutos_netos_jornada_aparte(b['logs'], t_cfg, tipo_prog) for b in segment_res['bloques_extras']),
             }
         if segment_res['emergencia_detectada']:
             res['observaciones'] += segment_res['emergencia_detectada']['texto'] + " "
@@ -2258,6 +2360,22 @@ class QuantumMatrixEngine:
             if horas_desc:
                 res['observaciones'] += ("Salidas seguidas: se tomó la última y se descartó la de las " if len(horas_desc) == 1
                                          else "Salidas seguidas: se tomó la última y se descartaron las de las ") + ", ".join(horas_desc) + ". "
+        for descartada, conservada in segment_res['rebotes']:
+            h_d, h_c = MultiBlockTensorSolver.parse_dt(descartada), MultiBlockTensorSolver.parse_dt(conservada)
+            if h_d and h_c:
+                res['observaciones'] += (f"Doble toque: se usó la marca de las {h_c.strftime('%H:%M:%S')} y se descartó la de las "
+                                         f"{h_d.strftime('%H:%M:%S')}. ")
+        # Una ENTRADA suelta, lejos de la jornada, es una segunda jornada a la que le falta su SALIDA: la jornada principal se
+        # calcula como siempre y la segunda jornada sigue la regla de una ENTRADA sola (Regla 28): si está encendida, el día queda
+        # por revisar hasta que alguien agregue esa SALIDA (entonces se vuelve +2 o emergencia); apagada, solo queda anotada.
+        # Solo en días terminados, igual que las reglas de marcaciones (orden del dueño, 27-10-2026).
+        terminado = fecha < _get_now_local().strftime("%Y-%m-%d")
+        regla_suelta = reglas_marcas.get('E') if (reglas_marcas and not is_bolsa and tipo_prog == 'CICLO_INTELIGENTE') else None
+        for l in segment_res['marcas_sueltas']:
+            h_s = MultiBlockTensorSolver.parse_dt(l)
+            if h_s:
+                res['observaciones'] += (f"{TEXTO_JORNADA_SIN_SALIDA}: ENTRADA de las {h_s.strftime('%H:%M:%S')}, falta su SALIDA. "
+                                         + (f"{MARCA_REVISION_REGLA}{secuencia_en_palabras('E')}). " if terminado and regla_suelta else ''))
         for c in segment_res['manuales_cubiertas']:
             h_man, h_rel = MultiBlockTensorSolver.parse_dt(c['manual']), MultiBlockTensorSolver.parse_dt(c['reloj'])
             if h_man and h_rel:
@@ -2326,18 +2444,6 @@ class QuantumMatrixEngine:
                         return None
                 else:
                     return None
-
-            # Víspera de feriado: el turno nocturno que empieza el día anterior a un feriado y cruza a él se
-            # paga aunque no haya marcas (ajuste 'asistencia_vispera_feriado_nocturno_pagado', apagado por defecto).
-            # Si el trabajador sí marcó, este bloque no se ejecuta y el turno se calcula normal.
-            if (vispera_feriado and (cruza_med or es_nocturno) and not is_bolsa
-                    and _flag(ajustes.get(CLAVE_VISPERA_FERIADO_PAGADO))):
-                res['estado'] = 'OK'
-                res['observaciones'] += 'Víspera de feriado: turno nocturno a pago sin marcas. '
-                res['origen'] = 'VISPERA_FERIADO'
-                res['horas_trabajadas'] = 0.0
-                res['minutos_deuda'] = 0.0
-                return res
 
             # Día sin marcas (día pasado o hoy superada la hora límite sin actividad):
             res['estado'] = 'INASISTENCIA'

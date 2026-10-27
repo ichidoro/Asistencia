@@ -28,6 +28,7 @@ from backend.repositories.reglas_marcas import ReglasMarcasRepository
 from backend.repositories.seguridad import SeguridadRepository
 from backend.services import quantum_matrix_engine as qme
 from backend.services.asistencia_service import AsistenciaService
+from backend.services.reglas_marcas_def import secuencia_en_palabras
 from backend.services.reglas_marcas_runtime import cargar as cargar_reglas
 
 JOBS: Dict[str, Dict[str, Any]] = {}
@@ -54,7 +55,10 @@ def job_publico(j: Dict[str, Any]) -> Dict[str, Any]:
 async def _candidatos(repo: ReglasMarcasRepository, regla: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Días del tramo abierto (jornadas terminadas, sin cierres de área o turno) cuya
     secuencia de marcas consumidas es exactamente la de la regla. Incluye días con
-    marcas manuales: la regla también los leerá."""
+    marcas manuales: la regla también los leerá. La regla de una ENTRADA sola también
+    gobierna la segunda jornada sin SALIDA de un día (su ENTRADA suelta), así que esos
+    días entran aunque el día entero tenga más marcas."""
+    es_entrada_sola = secuencia_en_palabras(regla['secuencia']) == 'ENTRADA'
     desde = await repo.inicio_tramo_abierto()
     hoy = datetime.now().strftime("%Y-%m-%d")
     rows = await repo.db.fetch_all("""
@@ -81,7 +85,8 @@ async def _candidatos(repo: ReglasMarcasRepository, regla: Dict[str, Any]) -> Li
                e.apellido_paterno || ' ' || e.apellido_materno || ', ' || e.nombre AS persona
           FROM d
           JOIN empleados e ON e.id = d.empleado_id
-         WHERE d.pat = ?
+         WHERE (d.pat = ? OR (? AND EXISTS (SELECT 1 FROM asistencias a2
+                                            WHERE a2.id = d.aid AND a2.observaciones LIKE ?)))
            AND NOT EXISTS (
                 SELECT 1 FROM cierres_periodos cp
                  WHERE cp.fecha_inicio <= d.fecha AND cp.fecha_fin >= d.fecha
@@ -92,7 +97,7 @@ async def _candidatos(repo: ReglasMarcasRepository, regla: Dict[str, Any]) -> Li
                                          AND d.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
                                        LIMIT 1)))
          ORDER BY d.fecha, persona
-    """, (regla['tipo_horario'], desde, hoy, regla['secuencia']))
+    """, (regla['tipo_horario'], desde, hoy, regla['secuencia'], es_entrada_sola, f"%{qme.TEXTO_JORNADA_SIN_SALIDA}%"))
     return [dict(r) for r in rows]
 
 

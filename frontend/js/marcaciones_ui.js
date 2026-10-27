@@ -7824,6 +7824,16 @@ function _analiticaCellBadge(di) {
         <div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">
             ${esRetornoManana ? badgeAnoHtml + badgeLocalHtml : badgeLocalHtml + badgeAnoHtml}
         </div>`;
+    } else if (!di.jornada_adicional && est !== 'ANOMALIA' && (di.observaciones || '').includes('Segunda jornada sin SALIDA')) {
+        // Segunda jornada sin SALIDA (orden del dueño, 27-10-2026): arriba el estado de la jornada principal y debajo la anomalía;
+        // al agregar esa SALIDA la segunda jornada se vuelve +2 (o llamado de emergencia).
+        const [anc, anl] = badgeMap['ANOMALIA'] || ['bg-dark text-white', '<i class="bi bi-exclamation-triangle-fill me-1"></i>ANO'];
+        const hAno = ((di.observaciones || '').match(/Segunda jornada sin SALIDA: ENTRADA de las (\d{2}:\d{2}:\d{2})/) || [])[1] || '';
+        primaryBadge = `
+        <div class="d-flex flex-column align-items-center justify-content-center gap-1 w-100">
+            <div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>
+            <div class="badge-status ${anc}" style="${stdBadgeStyle}" title="Segunda jornada sin SALIDA (ENTRADA ${hAno}): falta su SALIDA"><span>${anl}</span></div>
+        </div>`;
     } else if (!di.jornada_adicional) {
         primaryBadge = `<div class="badge-status ${pillClass}" style="${stdBadgeStyle}" ${tooltipTitle ? `title="${tooltipTitle}"` : ''}><span>${label}</span></div>`;
     }

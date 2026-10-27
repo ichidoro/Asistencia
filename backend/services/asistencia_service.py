@@ -32,6 +32,7 @@ from backend.services.quantum_matrix_engine import (
     QuantumMatrixEngine,
     QuantumShiftWeekMatcher,
     HumanDecisionMerger,
+    fecha_feriado_de_la_jornada,
 )
 from asyncio import Lock
 
@@ -1982,9 +1983,6 @@ class AsistenciaService:
         bonos_asignados = []
         is_holiday = fecha in feriados_dict
         is_weekend = dia_semana >= 5  # 5=Sat, 6=Sun
-        _sig = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
-        # El 1-ene es feriado fijo: cubre el 31-dic aunque el calendario cargado sea solo del año de `fecha`.
-        vispera_feriado = (_sig in feriados_dict) or _sig.endswith("-01-01")
 
         # ── PARADIGMA DE CONSUMO (STATE MACHINE) ──────────────────────────────
         if marcas_consumidas_session is None:
@@ -2129,6 +2127,15 @@ class AsistenciaService:
 
                 config_dia = turnos_src.get(semana_ganadora, {}).get(dia_semana)
 
+        # Una jornada que cruza la medianoche es de feriado si la mayoría de sus horas cae en un feriado (orden del dueño, 27-10-2026)
+        fecha_feriado = fecha_feriado_de_la_jornada(fecha, config_dia) if config_dia and not config_dia.get('es_libre') else fecha
+        if fecha_feriado[:4] != fecha[:4] and fecha_feriado not in feriados_dict:
+            # La noche del 31-12 cae en el año siguiente: su calendario puede no estar cargado
+            from backend.services.calendario_service import CalendarioService
+            feriados_dict = dict(feriados_dict)
+            feriados_dict.update({f['fecha']: f['descripcion'] for f in await CalendarioService().get_feriados(int(fecha_feriado[:4]))})
+        is_holiday = fecha_feriado in feriados_dict
+
         # ── MARCAS DISPONIBLES EN LA VENTANA DE OBSERVACIÓN ──────────────────
         marcas_candidatas = [l for l in raw_logs if l.get('id') not in consumidas_emp]
 
@@ -2223,8 +2230,7 @@ class AsistenciaService:
                 deuda_condonada_prev=int((asist_actual or {}).get('deuda_condonada') or 0),
                 he_previo=he_previo,
                 je_previo=je_prev,
-                holiday_desc=feriados_dict.get(fecha),
-                vispera_feriado=vispera_feriado,
+                holiday_desc=feriados_dict.get(fecha_feriado),
             )
 
         if resultado is None:

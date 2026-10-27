@@ -73,7 +73,7 @@
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "bounce_seconds: float = 180.0",
+  "linea": "bounce_seconds: float = 180.0,",
   "numeros": [
    "180.0"
   ],
@@ -97,15 +97,6 @@
   ],
   "tipo": "respaldo",
   "motivo": "Valor por defecto del parámetro; el motor le pasa el ajuste de límite de jornada de emergencia."
- },
- {
-  "archivo": "backend/services/quantum_matrix_engine.py",
-  "linea": "bounce_seconds: float = 180.0,",
-  "numeros": [
-   "180.0"
-  ],
-  "tipo": "respaldo",
-  "motivo": "Valor por defecto del parámetro; el motor le pasa el rebote del turno o de Reglas de marcaciones."
  },
  {
   "archivo": "backend/services/quantum_matrix_engine.py",
