@@ -132,9 +132,29 @@ async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
 
 # ── Facturas del camión contra sus paradas ────────────────────────────────────────────────────────────
 # Nexacol calza las facturas con el camión SOLO por la patente (las emitidas el día hábil anterior a la salida) y las agrupa por entrega
-# (cliente + dirección de envío, con la coordenada de la dirección). Acá se mide cuánto está cada entrega de la parada más cercana del GPS.
-CALZA_M = 150   # hasta esta distancia la entrega "calza" con una parada
-CERCA_M = 500   # hasta esta, la parada es "muy cercana" (el camión paró en la cuadra de al lado, no en la dirección)
+# (cliente + dirección de envío). Cada parada del GPS trae su dirección en texto ("Shell, Avenida X, Curicó, Región…"), así que la entrega se
+# compara con las paradas por CALLE y COMUNA. Si la dirección de la factura tiene coordenada guardada, además se mide la distancia a la parada
+# (en producción la geocodificación por red está apagada y casi ninguna dirección tiene coordenada: el texto es lo que decide).
+CALZA_M = 150   # con coordenada: hasta esta distancia la entrega "calza" con una parada
+CERCA_M = 500   # con coordenada: hasta esta, la parada es "muy cercana"
+
+_ABREV_CALLE = {"av", "avda", "avenida", "calle", "cll", "pasaje", "psje", "pje", "camino", "cam", "ruta", "ruta5", "carretera", "kilometro", "km", "poblacion", "pob", "villa", "block", "depto", "dpto", "casa", "lote", "parcela", "sitio", "sector", "nro", "numero", "sn", "las", "los", "del"}
+
+
+_ARTICULOS = {"de", "del", "la", "las", "los", "el", "y"}
+
+
+def _norm(t: Any) -> str:
+    """Minúsculas, sin tildes ni signos: "AV. O'Higgins 12" -> "av ohiggins 12"."""
+    import re
+    import unicodedata
+    t = unicodedata.normalize("NFD", str(t or "")).encode("ascii", "ignore").decode().lower().replace("'", "")
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", t)).strip()
+
+
+def _tokens_calle(calle: Any) -> List[str]:
+    """Las palabras que identifican la calle (sin 'avenida', 'pasaje', números ni artículos)."""
+    return [w for w in _norm(calle).split() if len(w) >= 3 and not w.isdigit() and w not in _ABREV_CALLE]
 
 
 def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
@@ -145,34 +165,51 @@ def _metros(la1: float, lo1: float, la2: float, lo2: float) -> float:
 
 
 def cruzar_entregas(entregas: List[Dict[str, Any]], paradas: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Para cada entrega, la parada más cercana y su estado; y para cada parada, la entrega a la que corresponde (si hay una a menos de CERCA_M).
-    Estados: calza · cercana · lejos · sin_parada (el camión no se detuvo) · aprox (dirección ubicada solo por comuna: no se juzga) · sin_ubicacion."""
+    """Para cada entrega, la parada que le corresponde y su estado; y para cada parada, la entrega a la que corresponde.
+    Estados: calza (la calle y la comuna están en la dirección de una parada, o la parada queda a ≤ CALZA_M) · cercana (con coordenada, ≤ CERCA_M)
+    · comuna (el camión paró en esa comuna, pero no se puede decir dónde) · lejos (con coordenada, a más de CERCA_M de toda parada)
+    · sin_parada (el camión no paró en esa comuna)."""
     def num(v: Any) -> bool:
         return isinstance(v, (int, float)) and not isinstance(v, bool)
 
-    ps = [(i, p) for i, p in enumerate(paradas) if num(p.get("la")) and num(p.get("lo"))]
+    ps = [(i, p, set(_norm(p.get("lugar")).split())) for i, p in enumerate(paradas)]
     items: List[Dict[str, Any]] = []
     for e in entregas:
         item = {"cliente": e.get("cliente"), "calle": e.get("calle"), "comuna": e.get("comuna"), "folios": e.get("folios") or [], "kilos": e.get("kilos"),
-                "exacto": bool(e.get("exacto")), "estado": "sin_ubicacion", "dist_m": None, "parada": None, "parada_idx": None}
-        if num(e.get("lat")) and num(e.get("lon")):
-            if not ps:
-                item["estado"] = "sin_parada"
-            else:
-                d, i, p = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q in ps), key=lambda t: t[0])
-                item["dist_m"] = round(d)
-                item["parada_idx"] = i
-                item["parada"] = {k: p.get(k) for k in ("desde", "hasta", "min", "lugar")}
-                item["estado"] = "aprox" if not item["exacto"] else "calza" if d <= CALZA_M else "cercana" if d <= CERCA_M else "lejos"
+                "exacto": bool(e.get("exacto")), "estado": "sin_parada", "via": None, "dist_m": None, "parada": None, "parada_idx": None}
+        # La comuna y la calle se comparan por palabras ("San Francisco Mostazal" calza con "San Francisco de Mostazal")
+        comuna = [w for w in _norm(e.get("comuna")).split() if w not in _ARTICULOS]
+        toks = _tokens_calle(e.get("calle"))
+        en_comuna = [(i, p) for i, p, palabras in ps if comuna and all(w in palabras for w in comuna)]
+        en_calle = [(i, p) for i, p, palabras in ps if comuna and all(w in palabras for w in comuna) and toks and all(t in palabras for t in toks)]
+        # con coordenada guardada: distancia a la parada más cercana
+        con_coord = num(e.get("lat")) and num(e.get("lon"))
+        near = min(((_metros(e["lat"], e["lon"], q["la"], q["lo"]), i, q) for i, q, _ in ps if num(q.get("la")) and num(q.get("lo"))), key=lambda t: t[0], default=None) if con_coord else None
+        elegida = None
+        if near and item["exacto"] and near[0] <= CALZA_M:
+            item["estado"], item["via"], elegida = "calza", "distancia", (near[1], near[2])
+        elif en_calle:
+            item["estado"], item["via"], elegida = "calza", "direccion", en_calle[0]
+        elif near and item["exacto"] and near[0] <= CERCA_M:
+            item["estado"], item["via"], elegida = "cercana", "distancia", (near[1], near[2])
+        elif en_comuna:
+            item["estado"], item["via"], elegida = "comuna", "comuna", en_comuna[0]
+        elif near and item["exacto"]:
+            item["estado"], item["via"], elegida = "lejos", "distancia", (near[1], near[2])
+        if near:
+            item["dist_m"] = round(near[0]) if item["exacto"] else None
+        if elegida:
+            item["parada_idx"] = elegida[0]
+            item["parada"] = {k: elegida[1].get(k) for k in ("desde", "hasta", "min", "lugar")}
         items.append(item)
-    # Cada parada con la entrega (de ubicación exacta) más cercana a ella, si queda a menos de CERCA_M
+    # Cada parada con la entrega que le corresponde (la de mejor estado)
+    peso = {"calza": 3, "cercana": 2, "comuna": 1}
     por_parada: List[Any] = [None] * len(paradas)
     for it in items:
-        if it["exacto"] and it["parada_idx"] is not None and it["dist_m"] is not None and it["dist_m"] <= CERCA_M:
-            actual = por_parada[it["parada_idx"]]
-            if actual is None or it["dist_m"] < actual["dist_m"]:
-                por_parada[it["parada_idx"]] = {"cliente": it["cliente"], "dist_m": it["dist_m"], "estado": it["estado"]}
-    cuenta = {k: sum(1 for it in items if it["estado"] == k) for k in ("calza", "cercana", "lejos", "sin_parada", "aprox", "sin_ubicacion")}
+        k = it["parada_idx"]
+        if k is not None and it["estado"] in peso and (por_parada[k] is None or peso[it["estado"]] > peso[por_parada[k]["estado"]]):
+            por_parada[k] = {"cliente": it["cliente"], "dist_m": it["dist_m"], "estado": it["estado"], "via": it["via"]}
+    cuenta = {k: sum(1 for it in items if it["estado"] == k) for k in ("calza", "cercana", "comuna", "lejos", "sin_parada")}
     return {"entregas": items, "paradas": por_parada, "resumen": {"total": len(items), **cuenta}}
 
 

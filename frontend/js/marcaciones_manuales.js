@@ -3564,7 +3564,7 @@ function m180GpsTabla(g) {
         // Entregas que calzan con una parada (o están muy cerca): ícono de caja sobre la detención
         if (v === 2 && m180_gps_ent && m180_gps_ent.entregas) m180_gps_ent.entregas.filter(e => e.parada && (e.estado === 'calza' || e.estado === 'cercana')).forEach(e => {
             const ini = m180GpsSeg(e.parada.desde), fin = Math.max(m180GpsSeg(e.parada.hasta), ini + 60), st = M180_ENT_ESTADO[e.estado];
-            html += `<div class="m180-gps-ent" style="left:${(((ini + fin) / 2) / 86400) * 100}%;--c:${st.c}" title="${st.t} · ${m180GpsEsc(e.cliente || '')} · ${e.dist_m} m de la parada"><i class="bi bi-box-seam-fill"></i></div>`;
+            html += `<div class="m180-gps-ent" style="left:${(((ini + fin) / 2) / 86400) * 100}%;--c:${st.c}" title="${st.t} · ${m180GpsEsc(e.cliente || '')}${e.dist_m != null ? ' · ' + e.dist_m + ' m de la parada' : ' · por dirección'}"><i class="bi bi-box-seam-fill"></i></div>`;
         });
         document.getElementById('m180-gps-' + b).innerHTML = html;
         document.getElementById('m180-gps-' + t).textContent = formatMinToHHMM(min || 0);
@@ -3584,7 +3584,8 @@ const M180_ENT_ESTADO = {
     calza:         { t: 'Calza con una parada', c: '#15803d', bg: '#dcfce7', ic: 'bi-check-circle-fill' },
     cercana:       { t: 'Parada muy cercana', c: '#b45309', bg: '#fef3c7', ic: 'bi-record-circle-fill' },
     lejos:         { t: 'Sin parada cerca', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
-    sin_parada:    { t: 'El camión no se detuvo', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
+    comuna:        { t: 'Parada en la misma comuna', c: '#1d4ed8', bg: '#dbeafe', ic: 'bi-geo-alt-fill' },
+    sin_parada:    { t: 'Sin parada en esa comuna', c: '#b91c1c', bg: '#fee2e2', ic: 'bi-x-circle-fill' },
     aprox:         { t: 'Dirección aproximada', c: '#475569', bg: '#e2e8f0', ic: 'bi-geo-fill' },
     sin_ubicacion: { t: 'No se pudo ubicar', c: '#475569', bg: '#e2e8f0', ic: 'bi-question-circle-fill' }
 };
@@ -3636,16 +3637,17 @@ function m180GpsEntregasPintar() {
         const dir = [e.calle, e.comuna].filter(Boolean).map(esc).join(', ');
         const par = e.parada
             ? `<div class="m180-ent-hora">${esc(String(e.parada.desde).slice(0, 5))}–${esc(String(e.parada.hasta).slice(0, 5))} · ${e.parada.min} min</div>
-               <div class="m180-ent-barra" title="Distancia entre la dirección de la factura y la parada más cercana"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div>
-               <small>${e.dist_m} m de la parada${e.exacto ? '' : ' · ubicación por comuna'}</small>`
-            : '<div class="m180-ent-hora text-muted">sin parada</div>';
+               ${e.dist_m != null
+                    ? `<div class="m180-ent-barra" title="Distancia entre la dirección de la factura y la parada"><span style="width:${pct}%;background:${st.c}"></span><u style="left:${U.calza_m / 10}%"></u><u style="left:${U.cerca_m / 10}%"></u></div><small>${e.dist_m} m de la parada</small>`
+                    : `<small class="m180-ent-lugar" title="${esc(e.parada.lugar)}">Parada: ${esc(e.parada.lugar)}</small>`}`
+            : '<div class="m180-ent-hora text-muted">El camión no paró en esa comuna</div>';
         return `<div class="m180-ent-fila" style="--d:${i * 55}ms;--c:${st.c};--bg:${st.bg}">
             <span class="m180-ent-ic"><i class="bi ${st.ic}" aria-hidden="true"></i></span>
             <div class="m180-ent-main"><div class="m180-ent-cli">${esc(e.cliente || 'Sin cliente')}</div><div class="m180-ent-dir">${dir || 'Sin dirección'} · ${e.folios.map(f => 'Folio ' + esc(f)).join(', ')}</div></div>
             <div class="m180-ent-par">${par}</div>
             <span class="m180-ent-badge">${st.t}</span></div>`;
     }).join('');
-    body.innerHTML = `<div class="m180-ent-kpis">${kpi(r.calza || 0, 'calzan', 'calza')}${kpi(r.cercana || 0, 'muy cercanas', 'cercana')}${kpi((r.lejos || 0) + (r.sin_parada || 0), 'sin parada cerca', 'lejos')}${(r.aprox || 0) + (r.sin_ubicacion || 0) ? kpi((r.aprox || 0) + (r.sin_ubicacion || 0), 'sin juzgar', 'aprox') : ''}<span class="m180-ent-nota">${r.total} ${r.total === 1 ? 'entrega' : 'entregas'} · calza hasta ${U.calza_m} m · muy cercana hasta ${U.cerca_m} m</span></div><div class="m180-ent-lista">${filas}</div>`;
+    body.innerHTML = `<div class="m180-ent-kpis">${kpi(r.calza || 0, 'calzan', 'calza')}${r.cercana ? kpi(r.cercana, 'muy cercanas', 'cercana') : ''}${kpi(r.comuna || 0, 'solo en la comuna', 'comuna')}${kpi((r.lejos || 0) + (r.sin_parada || 0), 'sin parada', 'lejos')}<span class="m180-ent-nota">${r.total} ${r.total === 1 ? 'entrega' : 'entregas'} · «calza» = la calle y la comuna de la factura están en la dirección de una parada</span></div><div class="m180-ent-lista">${filas}</div>`;
 }
 function m180GpsFechaCorta(iso) { const p = String(iso || '').split('-'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : iso; }
 
@@ -3758,7 +3760,7 @@ function m180GpsPintar() {
         else if (m[0] / total >= 0.5) badge = `<span class="badge bg-warning text-dark">libreta: sin registrar</span>`;
         else { badge = `<span class="badge bg-success">calza</span>`; paradasCalzan++; }
         const det = [m[2] ? `${Math.round(m[2])} min espera` : '', m[4] ? `${Math.round(m[4])} min descanso` : '', m[3] ? `${Math.round(m[3])} min aux.` : '', m[1] ? `${Math.round(m[1])} min conducción` : '', m[0] ? `${Math.round(m[0])} min sin registrar` : ''].filter(Boolean).join(' · ');
-        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}${(m180_gps_ent && m180_gps_ent.paradas && m180_gps_ent.paradas[pi]) ? `<div class="m180-ent-tag"><i class="bi bi-box-seam-fill"></i> Entrega: ${m180GpsEsc(m180_gps_ent.paradas[pi].cliente || '')} · ${m180_gps_ent.paradas[pi].dist_m} m</div>` : ''}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
+        return `<tr><td class="text-nowrap">${p.desde.slice(0, 5)}–${p.hasta.slice(0, 5)}</td><td class="text-end">${p.min} min</td><td>${m180GpsEsShell(p.lugar) ? M180_GPS_ICONO_SHELL : ''}${m180GpsEsc(p.lugar) || '—'}${(m180_gps_ent && m180_gps_ent.paradas && m180_gps_ent.paradas[pi]) ? `<div class="m180-ent-tag es-${m180_gps_ent.paradas[pi].estado}"><i class="bi bi-box-seam-fill"></i> ${m180_gps_ent.paradas[pi].estado === 'comuna' ? 'Misma comuna' : 'Entrega'}: ${m180GpsEsc(m180_gps_ent.paradas[pi].cliente || '')}${m180_gps_ent.paradas[pi].dist_m != null ? ' · ' + m180_gps_ent.paradas[pi].dist_m + ' m' : ''}</div>` : ''}</td><td>${badge}<div class="text-muted" style="font-size:.7rem">${det}</div></td></tr>`;
     }).join('');
     const nPar = (g.paradas || []).length;
     const r = g.resumen || {};
