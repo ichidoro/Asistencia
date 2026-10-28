@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DP_CSS } from './styles';
 import { ErrorBoundary, Skeleton, num, fmt, pct, plural, fechaCorta, diasHasta } from './ui';
+import Indicadores from './Indicadores';
 
 const API_BASE_URL = '/api';
 
@@ -291,6 +292,19 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const reqId = useRef(0);
+  // Pestaña elegida: se recuerda en este navegador (si el almacenamiento falla, abre «Lo que falta hacer»)
+  const [vista, setVista] = useState(() => {
+    try { return localStorage.getItem('dashboard_vista') === 'indicadores' ? 'indicadores' : 'pendientes'; } catch (e) { return 'pendientes'; }
+  });
+  const [tramoId, setTramoId] = useState('');
+  const [ind, setInd] = useState(null);
+  const [indLoading, setIndLoading] = useState(false);
+  const [indError, setIndError] = useState(null);
+  const indReq = useRef(0);
+  const elegirVista = (v) => {
+    setVista(v);
+    try { localStorage.setItem('dashboard_vista', v); } catch (e) { /* sin almacenamiento: solo esta vez */ }
+  };
 
   const headers = useCallback(() => {
     const token = localStorage.getItem('access_token');
@@ -330,7 +344,38 @@ function Dashboard() {
     }
   }, [area, headers]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  const cargarIndicadores = useCallback(async () => {
+    const mine = ++indReq.current;
+    setIndLoading(true);
+    setIndError(null);
+    try {
+      const q = new URLSearchParams();
+      if (area !== 'Todas') q.set('area', area);
+      if (tramoId) q.set('tramo', tramoId);
+      const res = await fetch(`${API_BASE_URL}/dashboard/indicadores/${q.toString() ? `?${q}` : ''}`, { headers: headers() });
+      if (!res.ok) throw new Error('No se pudieron calcular los indicadores. Reintente en un momento.');
+      const json = await res.json();
+      if (mine !== indReq.current) return;
+      setInd((json && json.data) || null);
+    } catch (err) {
+      if (mine === indReq.current) setIndError(err.message);
+    } finally {
+      if (mine === indReq.current) setIndLoading(false);
+    }
+  }, [area, tramoId, headers]);
+
+  useEffect(() => { if (vista === 'pendientes') cargar(); }, [cargar, vista]);
+  useEffect(() => { if (vista === 'indicadores') cargarIndicadores(); }, [cargarIndicadores, vista]);
+
+  const verDetalle = (i) => {
+    const t = ind && ind.tramo;
+    if (i.accion === 'empleados') { if (typeof window.switchPage === 'function') window.switchPage('empleados'); return; }
+    const zona = (i.donde && i.donde[0] && i.donde[0].area) || (area !== 'Todas' ? area : '');
+    irAMarcaciones({ area: zona, desde: t ? t.fecha_inicio : '', hasta: t ? t.fecha_fin : '', accion: i.accion === 'he' ? 'he' : 'grilla' });
+  };
+  const esInd = vista === 'indicadores';
+  const ocupado = esInd ? indLoading : loading;
+  const actualizar = esInd ? cargarIndicadores : cargar;
 
   const d = data;
   const tramoActual = d && d.tramo_en_curso;
@@ -340,20 +385,41 @@ function Dashboard() {
   return (
     <div className="dp">
       <div className="dp-top">
-        <h1>Lo que falta hacer</h1>
+        <div className="dp-tabs" role="tablist" aria-label="Vista del dashboard">
+          <button type="button" role="tab" aria-selected={!esInd} onClick={() => elegirVista('pendientes')}>Lo que falta hacer</button>
+          <button type="button" role="tab" aria-selected={esInd} onClick={() => elegirVista('indicadores')}>Indicadores</button>
+        </div>
         <div className="dp-tools">
           <select className="dp-select" aria-label="Área" value={area} onChange={(e) => setArea(e.target.value)}>
             <option value="Todas">Todas las áreas</option>
             {areas.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
-          {d ? <span className="dp-stamp dp-num">{fechaCorta(d.hoy)} · {String(d.generado || '').slice(11, 16)}</span> : null}
-          <button type="button" className="dp-btn" onClick={cargar} aria-label="Actualizar el dashboard">
-            <i className={`bi bi-arrow-clockwise ${loading ? 'dp-spin' : ''}`} aria-hidden="true" /> Actualizar
+          {esInd && ind && Array.isArray(ind.tramos) && ind.tramos.length ? (
+            <select className="dp-select" aria-label="Tramo" value={tramoId || (ind.tramo ? String(ind.tramo.id) : '')} onChange={(e) => setTramoId(e.target.value)}>
+              {[...ind.tramos].reverse().map((t) => <option key={t.id} value={String(t.id)}>{t.mes}{t.en_curso ? ' (en curso)' : ''}</option>)}
+            </select>
+          ) : null}
+          {!esInd && d ? <span className="dp-stamp dp-num">{fechaCorta(d.hoy)} · {String(d.generado || '').slice(11, 16)}</span> : null}
+          <button type="button" className="dp-btn" onClick={actualizar} aria-label="Actualizar el dashboard">
+            <i className={`bi bi-arrow-clockwise ${ocupado ? 'dp-spin' : ''}`} aria-hidden="true" /> <span className="dp-btn-txt">Actualizar</span>
           </button>
         </div>
       </div>
 
-      {error ? (
+      {esInd ? (
+        <>
+          {indError ? (
+            <div className="dp-alert" role="alert">
+              <i className="bi bi-exclamation-triangle-fill" aria-hidden="true" />
+              <div style={{ flex: 1 }}><b>No se pudo actualizar.</b> {indError}</div>
+              <button type="button" className="dp-btn" onClick={cargarIndicadores}>Reintentar</button>
+            </div>
+          ) : null}
+          {ind ? <Indicadores data={ind} onDetalle={verDetalle} /> : (indLoading || !indError ? <Cargando /> : null)}
+        </>
+      ) : null}
+
+      {!esInd && error ? (
         <div className="dp-alert" role="alert">
           <i className="bi bi-exclamation-triangle-fill" aria-hidden="true" />
           <div style={{ flex: 1 }}><b>No se pudo actualizar.</b> {error}</div>
@@ -361,7 +427,7 @@ function Dashboard() {
         </div>
       ) : null}
 
-      {!d ? (loading || !error ? <Cargando /> : null) : (
+      {esInd ? null : !d ? (loading || !error ? <Cargando /> : null) : (
         <div className="dp-layout">
           <div className="dp-a-main">
             {d.tramos_por_cerrar.length === 0 ? (

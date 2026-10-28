@@ -139,6 +139,29 @@ Cada jornada muestra **las marcas que usó su cálculo**, no las que caen en su 
 - **Garantía medida**: con todas las reglas apagadas, el recálculo forzado del tramo abierto (2.439 días reales) dio **0 diferencias**.
 - **Dónde está en el código**: el motor lee `REGLAS_MARCAS_ACTIVAS` (o la variable de contexto `REGLAS_MARCAS_ENSAYO` durante un ensayo) en `quantum_matrix_engine.py` (hook tras `segment_blocks`, `_aplicar_extremos`, `_fuera_de_ciclo`, `_rebote_defecto`, `AutoMealOperator.apply_meal_deduction`); los valores, la validación y las palabras en `services/reglas_marcas_def.py`; la tabla, los ajustes y las consultas en `repositories/reglas_marcas.py` (`dias_ejemplo`, `horarios`, `ajustes_reglas`); la carga en memoria en `services/reglas_marcas_runtime.py`; las corridas y el ensayo (`ensayar_regla`) en `services/reglas_marcas_corridas.py`; la API en `routers/reglas_marcas.py`; el bloqueo del cierre en `services/cierre_service.py`; el triángulo en `services/asistencia_service.py` (`get_asistencia_matrix`) y `frontend/js/marcaciones_ui.js`; la pestaña en `frontend/js/reglas_marcas_ui.js`; la tolerancia de exceso en `frontend/js/horarios.js`; el cuadro en `frontend/js/marcaciones_manuales.js` (`cargarReglaDia`, `confirmarDiaRevision`).
 
+## 8. Dashboard: qué cuenta cada número
+
+El Dashboard tiene dos pestañas y solo lee (no recalcula ni escribe nada). Respeta el alcance por áreas del usuario.
+Definiciones comunes (`backend/services/dashboard_pendientes.py`):
+- **Área de un día** = la vigente en esa fecha según `historial_areas` validado (igual que el cierre).
+- **Libreta** = horario con `modalidad_control = LIBRETA_180H` desde su fecha «Sin reloj a partir de»; un día de libreta sin registrar queda `PENDIENTE` y no es una falta.
+- **Justificado** = tiene `justificacion_id`, o su estado es el nombre de un tipo de justificación, `PERMISO` o una inasistencia compensada.
+- **Programado con reloj** = tiene horas del horario, no es libreta, no está justificado y no es libre ni feriado.
+
+**«Lo que falta hacer»:** hoy por área (con reloj, llegaron, atrasos, faltas sin aviso, licencias, libretas por registrar); el cierre de cada tramo terminado y abierto por área con lo que lo bloquea, tomado de `CierreService.bloqueos_cierre` (la misma revisión del asistente de cierre: horas extra por decidir, anomalías y pendientes, jornadas en curso, días por revisar; las inasistencias se aceptan al cerrar); horas extra `PENDIENTE` y jornadas especiales sin decidir; contratos por vencer con la ventana del ajuste `vencimiento_dias_alerta`.
+
+**«Indicadores»** (`backend/services/dashboard_indicadores.py`): cada indicador del tramo elegido (por defecto el último terminado) contra el **promedio simple de los tramos anteriores** con días programados. No hay metas: se compara con la propia historia. Se ordena desde el que más empeoró (en proporción a su promedio).
+- Puntualidad = días con entrada sin atraso / días con entrada (programados con reloj).
+- Ausentismo = (programados sin entrada + días hábiles justificados) / (programados + días hábiles justificados).
+- Faltas sin aviso = días `INASISTENCIA` fuera de libreta.
+- Minutos por atraso = minutos de atraso / días con atraso.
+- Sobretiempo = horas extra aprobadas (minutos autorizados) / horas programadas.
+- Horas extra aprobadas, jornadas especiales (minutos trabajados en días libres o feriados) y deuda horaria = sumas del tramo.
+- Marcas a mano = marcas con `manual = 1` / todas las marcas.
+- Rotación = bajas (inactivos que salieron en el tramo) / dotación al cierre del tramo.
+«Dónde»: en una tasa, las áreas que empeoraron contra su propio promedio; en un total, las que más suman. Un tramo cerrado guarda el cálculo de su época: una comparación entre tramos lo advierte, y el ausentismo avisa si tramos anteriores no tienen licencias registradas.
+Pruebas: `test_dashboard_pendientes.py` y `test_dashboard_indicadores.py`.
+
 ## Cómo se prueba
 
 Cada error que se encuentra queda como regla en este documento **y** como prueba en `backend/tests/`:
