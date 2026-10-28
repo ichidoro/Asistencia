@@ -6514,7 +6514,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         const feriadoDesc = getFeriadoDesc(d);
         const isFer = !!feriadoDesc;
         const isWE  = (dt.getDay()===0||dt.getDay()===6);
-        const bg = isFer ? 'background:#fff9c4;' : isWE ? 'background:#f8f9fa;' : '';
+        const bg = isFer ? 'background:#fff8e6;' : dt.getDay() === 0 ? 'background:#f6f7fa;' : isWE ? 'background:#fafbfd;' : '';
         const empNameEsc = (emp.nombre_completo||'').replace(/'/g,"\\'");
         const hEnt = di && di.hora_entrada_real ? `'${di.hora_entrada_real}'` : 'null';
         const hSal = di && di.hora_salida_real ? `'${di.hora_salida_real}'` : 'null';
@@ -6550,8 +6550,8 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
             <div class="emp-id-row">
                 ${cargoIconoHtml(emp.cargo)}
                 <div class="emp-id-txt">
-                    <div class="emp-name-link">${emp.nombre_completo||'—'}${heIndicator}</div>
-                    <div class="emp-area-label">${emp.area}${emp.turno?' · '+emp.turno:''}</div>
+                    <div class="emp-name-link" title="${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}">${window.nombreTitulo(emp.nombre_completo)||'—'}${heIndicator}</div>
+                    <div class="emp-area-label">${emp.cargo ? emp.cargo + (stateMarcacionesApp.area ? '' : ' · ' + emp.area) : emp.area}${emp.turno?' · '+emp.turno:''}</div>
                     ${r.esBolsa ? (() => { const sm = r.saldoMeta || 0, ab = Math.abs(sm), hh = Math.floor(ab/60), mm = Math.round(ab%60); const t = (sm < 0 ? '\u2212' : sm > 0 ? '+' : '') + String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0'); const pb = r.emp._prorrateoBolsa; const metaH = Math.round((r.metaMin || 0) / 60); const tit = (pb && Number.isFinite(pb.factor) && pb.factor < 1) ? ('Balance de la bolsa; meta ajustada a ' + metaH + ' h: vigencia de ' + pb.dias_disponibles + ' de ' + pb.dias_tramo + ' d\u00edas del tramo') : 'Balance de la bolsa de 180 h'; const warn = (pb && pb.aviso_21_dias) ? '\u26a0 ' : ''; return '<span class="gc-bolsa-chip ' + (sm < 0 ? 'neg' : sm > 0 ? 'pos' : '') + '" title="' + tit + '">' + warn + metaH + 'h ' + t + '</span>'; })() : ''}
                 </div>
             </div>
@@ -7107,10 +7107,11 @@ function renderVistaAnalitica(respData, container) {
         const corteStyle = esCorte ? 'border-left:3px solid #8b5cf6;' : '';
         const titleHdr = esCorte ? 'Desde este día: libreta (antes: reloj biométrico)'
                        : (window._perdonazoState?.activo ? 'Clic para gestionar perdonazos del día' : '');
-        return `<th class="col-day text-center p-1" style="min-width:48px;font-size: 0.75rem;white-space:nowrap;${bg}${perdonazoStyle}${corteStyle}" ${perdonazoClick}
-                    title="${titleHdr}">
-                    <div style="font-weight:700;font-size: 0.75rem;line-height:1.1">${dateStrObj}</div>
-                    <div style="opacity:0.8;font-size: 0.75rem;line-height:1.1">${dayShortName}</div>
+        const dhClase = isFer ? 'dh-fer' : dt.getDay() === 0 ? 'dh-dom' : isWE ? 'dh-sab' : '';
+        return `<th class="col-day text-center p-1 ${dhClase}" style="min-width:48px;font-size: 0.75rem;white-space:nowrap;${perdonazoStyle}${corteStyle}" ${perdonazoClick}
+                    title="${titleHdr || (isFer ? (getFeriadoDesc(d) || 'Feriado') : dateStrObj)}">
+                    <div class="dh-wd">${dayShortName}</div>
+                    <div class="dh-dn">${dt.getDate().toString().padStart(2, '0')}</div>
                     ${window._perdonazoState?.activo ? '<div style="font-size: 0.75rem;color:#10b981;font-weight:600;"><i class="bi bi-gift" aria-hidden="true"></i></div>' : ''}
                 </th>`;
     }).join('');
@@ -7305,6 +7306,17 @@ function renderVistaAnalitica(respData, container) {
     container.innerHTML = `
     ${tabsHtml}
     ${sw}
+    ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
+        ${_leyendaEstadosHtml()}
+        ${(() => {
+            const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
+            if (!cs.length) return '';
+            const fechas = cs.map(c => c.split('-').reverse().join('-')).join(', ');
+            return '<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> '
+                + 'Línea violeta: desde ' + fechas + ' se usa libreta (fecha del horario de cada persona); antes, reloj biométrico</span>';
+        })()}
+        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
+    </div>`}
     ${vaciaHtml || `<div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
     <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
@@ -7317,7 +7329,13 @@ function renderVistaAnalitica(respData, container) {
             ${sh.hasSaldo ? `<th rowspan="2" class="align-middle text-start px-2 sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:120; background:#f0fdf4;left:${getStickyLeft('saldo')}px;${getStickyWidthStyle('saldo')}">Saldo<br>Neto</th>` : ''}
             ${saldoMetaHeaderTop}
             ${esperaHeaderTop}
-            <th colspan="${dates.length}" class="text-start px-2" style="background:#f0f7ff">Días del período</th>
+            ${(() => {
+                // Los meses sobre los días (en vez de «Días del período»): una celda por mes con su cantidad de días
+                const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                const grupos = [];
+                dates.forEach(d => { const k = d.slice(0, 7); const g = grupos[grupos.length - 1]; if (g && g.k === k) g.n++; else grupos.push({ k, n: 1, t: meses[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) }); });
+                return grupos.map(g => `<th colspan="${g.n}" class="text-start px-2 dh-mes">${g.t}</th>`).join('');
+            })()}
         </tr>
         <tr class="text-center" style="background:#f8f9fa;font-size: 0.75rem">
             ${bonosHeadersSub}
@@ -7333,17 +7351,7 @@ function renderVistaAnalitica(respData, container) {
     <tfoot>${totalsRow}</tfoot>
     </table>
     </div>`}
-    ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
-        ${_leyendaEstadosHtml()}
-        ${(() => {
-            const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
-            if (!cs.length) return '';
-            const fechas = cs.map(c => c.split('-').reverse().join('-')).join(', ');
-            return '<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> '
-                + 'Línea violeta: desde ' + fechas + ' se usa libreta (fecha del horario de cada persona); antes, reloj biométrico</span>';
-        })()}
-        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
-    </div>`}`;
+`;
 
     window._gridApplyPinCap();
 
@@ -7563,6 +7571,13 @@ function _fallbackEstadoColor(codigo) {
 
 // Leyenda de la grilla: siglas e íconos salen de la tabla maestra de estados (Configuración › Estados),
 // con respaldo local; así nunca contradice lo que muestran las celdas.
+// Grilla HD: la base guarda los nombres en mayúsculas; se muestran con mayúscula inicial (partículas en minúscula)
+window.nombreTitulo = window.nombreTitulo || function (s) {
+    const menores = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
+    return String(s || '').toLowerCase().split(/\s+/).filter(Boolean)
+        .map((p, i) => (i > 0 && menores.has(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+};
+
 function _leyendaEstadosHtml() {
     const c = window._estadosAsistencia || {};
     const items = [

@@ -1,0 +1,134 @@
+/* ════════════════════════════════════════════════════════════════════
+   GRILLA HD — etapa 2 del orden visual común (propuesta aprobada por el dueño, 27-10-2026)
+   - Cada estado es una pastilla de color suave con la sigla en su color oscuro; lo normal
+     (verde) va sin fondo y lo libre, apagado: lo que pide atención resalta.
+   - Celda con varios estados: se ve el primero y un «+N» chico (el detalle sigue en el tooltip).
+   - Encabezado: día de la semana arriba, número abajo; los meses en la fila de arriba;
+     domingos, sábados y feriados con su tono.
+   - Columnas de resumen sin franjas de color; nombre completo en dos líneas con el cargo.
+   - Solo el modo normal de la grilla: con el botón «Estados» en rectángulos o círculos
+     (body.estados-chip) se mantiene el aspecto anterior.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Pares de color (fondo suave / sigla) por cada color configurable de Estados */
+.badge-status { --st-bg: #eef0f5; --st-fg: #3c4767; }
+.badge-status.badge-state-success  { --st-bg: #e6f5ec; --st-fg: #167a46; }
+.badge-status.badge-state-warning  { --st-bg: #fff3d9; --st-fg: #a35f00; }
+.badge-status.color-verde          { --st-bg: transparent; --st-fg: #167a46; }
+.badge-status.color-naranja        { --st-bg: #fff0e2; --st-fg: #b0500b; }
+.badge-status.color-fluor-rosa     { --st-bg: #fde7f1; --st-fg: #c0267a; }
+.badge-status.badge-state-danger,
+.badge-status.badge-state-blink-red { --st-bg: #fdecea; --st-fg: #b0352c; }
+.badge-status.badge-state-info     { --st-bg: #e8f0fe; --st-fg: #1f5fd1; }
+.badge-status.badge-state-neutral,
+.badge-status.color-gris,
+.badge-status.color-glitter-plata  { --st-bg: transparent; --st-fg: #a1a9be; }
+.badge-status.badge-state-orange   { --st-bg: #fff3d9; --st-fg: #a35f00; }
+.badge-status.badge-state-cyan,
+.badge-status.color-fluor-azul,
+.badge-status.color-pulso-azul,
+.badge-status.color-teal           { --st-bg: #e2f4f5; --st-fg: #0f7c86; }
+.badge-status.color-indigo         { --st-bg: #eaeefb; --st-fg: #1b2f8f; }
+.badge-status.color-rosa,
+.badge-status.badge-state-fluor-pink { --st-bg: #fde7f1; --st-fg: #c0267a; }
+.badge-status.color-lima,
+.badge-status.badge-state-fluor-green,
+.badge-status.color-pulso-verde    { --st-bg: #eef7df; --st-fg: #4d7c0f; }
+.badge-status.color-fluor-amarillo,
+.badge-status.color-glitter-oro    { --st-bg: #fff6d6; --st-fg: #8a6200; }
+.badge-status.color-negro          { --st-bg: #eceef3; --st-fg: #101a3d; }
+.badge-status.color-purpura        { --st-bg: #efe9fb; --st-fg: #6a3eaf; }
+/* Estados con clase propia (van después: mandan sobre el color base) */
+.badge-status.badge-he             { --st-bg: #eaeefb; --st-fg: #1b2f8f; }
+.badge-status.badge-pen            { --st-bg: #eef0f5; --st-fg: #69738f; }
+.badge-status.badge-compensatorio,
+.badge-status.badge-inasistencia-compensada-he { --st-bg: #e2f4f5; --st-fg: #0f7c86; }
+.badge-status.bg-dark              { --st-bg: #2a3150; --st-fg: #ffffff; }
+
+/* La pastilla (grilla y leyenda) */
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status,
+body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center; justify-content: center;
+  width: auto !important; min-width: 36px; max-width: 56px;
+  height: 22px !important; min-height: 22px !important;
+  margin: 0 auto !important; padding: 0 6px !important;
+  border: 0 !important; border-radius: 6px !important;
+  background: var(--st-bg) !important; color: var(--st-fg) !important;
+  box-shadow: none !important; font-size: 0 !important; line-height: 1 !important;
+  vertical-align: middle;
+}
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status > span,
+body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status > span {
+  position: static !important; transform: none !important;
+  font: 600 11px/1 'Barlow', 'Segoe UI', system-ui, sans-serif !important;
+  letter-spacing: 0.04em; color: var(--st-fg) !important; white-space: nowrap;
+}
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-state-neutral > span,
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .color-gris > span { font-weight: 500 !important; }
+
+/* Varios estados en una celda: el primero y un «+N» */
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi {
+  display: inline-flex !important; width: auto; max-width: none;
+  margin: 0 auto !important; gap: 0; position: relative; line-height: 1; vertical-align: middle;
+}
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi > .badge-status { flex: none; margin: 0 !important; }
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi > .badge-status:not(:first-child) { display: none !important; }
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi::after {
+  bottom: auto; top: -5px; left: auto; right: -10px; margin: 0 !important; transform: none;
+  font: 700 9px/1 'Barlow', sans-serif; color: #1f5fd1; background: #fff;
+  border-radius: 6px; padding: 1px 3px; box-shadow: 0 0 0 1px #dde3f7;
+}
+
+/* Al pasar o enfocar un día se marca su pastilla */
+#marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:hover .badge-status,
+#marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:focus-visible .badge-status {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #1b2f8f !important;
+}
+#marcaciones-view-container .matrix-table-premium td.col-day.cell-clickable:focus-visible { outline: none; }
+
+/* Encabezado: blanco, con los meses arriba y el día en dos líneas */
+#marcaciones-view-container .matrix-table-premium thead th { background: #fff !important; color: var(--ov-ink-3, #69738f); font-weight: 600; }
+#marcaciones-view-container .matrix-table-premium thead th.dh-dom { background: #f6f7fa !important; }
+#marcaciones-view-container .matrix-table-premium thead th.dh-sab { background: #fafbfd !important; }
+#marcaciones-view-container .matrix-table-premium thead th.dh-fer { background: #fff8e6 !important; }
+#marcaciones-view-container .matrix-table-premium thead th.dh-mes {
+  font: 600 10.5px 'Barlow', sans-serif !important; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ov-ink-4, #9ca4ba) !important; border-left: 1px solid var(--ov-line-2, #eff1f6);
+}
+.matrix-table-premium .dh-wd { font: 600 10px/1 'Barlow', sans-serif; letter-spacing: 0.08em; color: var(--ov-ink-4, #9ca4ba); }
+.matrix-table-premium .dh-dn { font: 600 14px/1.1 'Barlow', sans-serif; color: var(--ov-ink, #101a3d); margin-top: 3px; }
+.matrix-table-premium .dh-dom .dh-dn, .matrix-table-premium .dh-dom .dh-wd { color: var(--ov-ink-4, #9ca4ba); }
+.matrix-table-premium .dh-fer .dh-dn { color: #a35f00; }
+
+/* Columnas de resumen: sin franjas de color, cifras alineadas */
+#marcaciones-view-container .matrix-table-premium .sticky-premium-col {
+  border-left-width: 1px !important; border-left-color: var(--ov-line, #e6e9f1) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nombre completo en dos líneas y el cargo debajo */
+#marcaciones-view-container .matrix-table-premium td.emp-name-cell { white-space: normal !important; }
+#marcaciones-view-container .matrix-table-premium .emp-name-link {
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  font-size: 0.8125rem; font-weight: 500; line-height: 1.25; max-width: none; color: var(--ov-ink, #101a3d);
+}
+#marcaciones-view-container .matrix-table-premium .emp-area-label {
+  font-size: 0.66rem; font-weight: 600; letter-spacing: 0.06em; color: var(--ov-ink-4, #9ca4ba); margin-top: 2px;
+}
+
+/* Leyenda arriba, en una franja tranquila */
+#marcaciones-view-container .va-legend-bar {
+  gap: 14px !important; padding: 10px 14px !important; margin: 0 0 10px !important;
+  background: var(--ov-sunk, #f9fafc); border: 1px solid var(--ov-line, #e6e9f1); border-radius: 12px;
+  font-size: 12px !important; color: var(--ov-ink-3, #69738f) !important;
+}
+#marcaciones-view-container .va-legend-bar .badge-status { margin-right: 6px !important; }
+
+/* Celular: la leyenda en una sola fila que se desliza; la ayuda larga se esconde */
+@media (max-width: 768px) {
+  #marcaciones-view-container .va-legend-bar { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; align-items: center; white-space: nowrap; gap: 10px !important; padding: 8px 10px !important; }
+  #marcaciones-view-container .va-legend-bar > * { flex: none; white-space: nowrap; }
+  #marcaciones-view-container .va-legend-bar > .ms-auto { display: none !important; }
+}
