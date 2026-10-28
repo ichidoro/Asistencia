@@ -1,3 +1,20 @@
+// Fechas aaaa-mm-dd dentro de un texto (motivos y detalles que arma el servidor) pasan a dd-mm-aaaa
+window.fechasLegibles = function (texto) {
+    return String(texto == null ? '' : texto).replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3-$2-$1');
+};
+// La base guarda los nombres en mayúsculas; se muestran con mayúscula inicial (partículas en minúscula)
+window.nombreTitulo = window.nombreTitulo || function (s) {
+    const menores = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
+    return String(s || '').toLowerCase().split(/\s+/).filter(Boolean)
+        .map((p, i) => (i > 0 && menores.has(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+};
+// Nombre visible de un estado (Configuración › Estados) en minúsculas con mayúscula inicial; las siglas cortas quedan igual
+window.textoEstado = function (codigo) {
+    const e = (window._estadosAsistencia || {})[codigo] || {};
+    const t = String(e.nombre_display || codigo || '').replace(/_/g, ' ').trim();
+    return t.length <= 3 ? t : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+};
+
 window.formatFechaDDMMYYYY = function(dateInput) {
     if (dateInput === null || dateInput === undefined) return '';
     

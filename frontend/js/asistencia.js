@@ -344,7 +344,7 @@ function renderReporte(list) {
                 <td>${formatExactMinutesToTime(row.minutos_atraso || 0)}</td>
                 <td>${formatExactMinutesToTime(row.minutos_colacion || 0)}</td>
                 <td class="fw-bold text-primary">${formatExactMinutesToTime((row.horas_trabajadas || 0) * 60)}</td>
-                <td><span class="badge ${estadoClass}">${row.estado}</span></td>
+                <td><span class="badge ${estadoClass}">${window.textoEstado(row.estado)}</span></td>
             </tr>
         `;
     }).join('');

@@ -5,8 +5,8 @@
   var MODES = ['expanded', 'rail', 'auto'];
 
   function read() {
-    try { var m = localStorage.getItem(KEY); return MODES.indexOf(m) >= 0 ? m : 'expanded'; }
-    catch (e) { return 'expanded'; }
+    try { var m = localStorage.getItem(KEY); return MODES.indexOf(m) >= 0 ? m : 'rail'; }
+    catch (e) { return 'rail'; }
   }
   function apply(mode, persist) {
     document.body.setAttribute('data-sidebar', mode);
@@ -33,7 +33,7 @@
     box.setAttribute('aria-label', 'Modo de la barra lateral');
     [
       ['expanded', 'bi-layout-sidebar-inset', 'Expandida'],
-      ['rail', 'bi-layout-sidebar', 'Riel (solo íconos)'],
+      ['rail', 'bi-layout-sidebar', 'Angosta (ícono y nombre corto)'],
       ['auto', 'bi-eye-slash', 'Auto-ocultar (se abre al pasar el mouse)']
     ].forEach(function (d) {
       var b = document.createElement('button');

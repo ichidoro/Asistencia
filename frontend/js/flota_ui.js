@@ -1503,7 +1503,7 @@ const FlotaModule = (() => {
 
             tbody.innerHTML = data.map(v => {
                 const f = v.created_at ? v.created_at.split(' ')[0].split('-') : null;
-                const fechaFmt = f ? `${f[2]}/${f[1]}/${f[0]}` : '—';
+                const fechaFmt = f ? `${f[2]}-${f[1]}-${f[0]}` : '—';
                 const statusBadge = v.activo ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>' : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>';
 
                 return `

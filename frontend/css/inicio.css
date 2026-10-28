@@ -1,0 +1,75 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Etapa 8 «Inicio» del orden visual común — solo presentación.
+   «Lo que falta hacer» e «Indicadores» con la terminación HD: tarjetas con
+   esquinas de 16 px y sombra suave, cifras en Barlow con números del mismo
+   ancho (sin la letra de máquina de escribir), barras finas, etiquetas en
+   pastilla y nombres de área como rótulo.
+   Los estilos del Dashboard vienen dentro de js/dashboard_react.js (se agregan
+   después de este archivo); por eso cada regla parte de #page-dashboard.
+   Va al final de bundle-tema (después de riel.css). No toca datos ni lógica.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#page-dashboard .dp {
+  --dp-line: var(--ov-line);
+  --dp-line-soft: var(--ov-line-2);
+  --dp-muted: var(--ov-ink-3);
+  --dp-body: var(--ov-ink-2);
+  --dp-text: var(--ov-ink);
+  --dp-ink: var(--ov-ink);
+}
+
+/* Cifras: Barlow con números del mismo ancho */
+#page-dashboard .dp .dp-num,
+#page-dashboard .dp .dp-stamp {
+  font-family: 'Barlow', system-ui, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+#page-dashboard .dp .dp-num { font-weight: 600; }
+
+/* Pestañas */
+#page-dashboard .dp-tabs { background: var(--ov-line-2); border-radius: 11px; box-shadow: inset 0 0 0 1px var(--ov-line); }
+#page-dashboard .dp-tabs button { font-size: 14.5px; border-radius: 8px; }
+
+/* Tarjetas */
+#page-dashboard .dp-card {
+  border: 1px solid var(--ov-line);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(16, 26, 61, .04), 0 8px 24px -16px rgba(16, 26, 61, .18);
+}
+#page-dashboard .dp-card-head h2 { font: 600 19px/1.25 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif; color: var(--ov-ink); }
+#page-dashboard .dp-card-sub { font-size: 13px; }
+
+/* Nombres de área como rótulo (la base los guarda en mayúsculas) */
+#page-dashboard .dp-close-area,
+#page-dashboard .dp-bar-row > :first-child,
+#page-dashboard .dp-today-top > :first-child {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: var(--ov-ink);
+}
+#page-dashboard .dp-close-why { font-size: 13.5px; line-height: 1.45; }
+
+/* Etiquetas en pastilla */
+#page-dashboard .dp-chip { border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+#page-dashboard .dp-chip[data-tone="ok"] { background: #e5f3ea; color: #16673b; }
+#page-dashboard .dp-chip[data-tone="ready"] { background: #e9edfb; color: #1b2f8f; }
+#page-dashboard .dp-chip[data-tone="warn"] { background: #fdf0e1; color: #9a4a08; }
+
+/* Barras finas */
+#page-dashboard .dp-track,
+#page-dashboard .dp-stack { height: 6px; border-radius: 999px; }
+#page-dashboard .dp-track > span { border-radius: 999px; background: #3f6fd6; }
+#page-dashboard .dp-segs { gap: 5px; }
+#page-dashboard .dp-segs span { height: 6px; border-radius: 999px; }
+
+/* Botones y lista */
+#page-dashboard .dp-btn { border-radius: 9px; font-size: 13.5px; }
+#page-dashboard .dp-btn:not(.dp-pr) { border-color: var(--ov-line-strong); color: var(--ov-ink-2); }
+#page-dashboard .dp-btn:not(.dp-pr):hover { background: var(--ov-line-2); border-color: var(--ov-line-strong); }
+#page-dashboard .dp-select { border-radius: 9px; border-color: var(--ov-line-strong); font-size: 13.5px; }
+#page-dashboard .dp-list-row,
+#page-dashboard .dp-close-row { border-top-color: var(--ov-line-2); }
+#page-dashboard .dp-today-row:hover { background: var(--ov-sunk); }

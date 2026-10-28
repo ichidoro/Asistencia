@@ -140,7 +140,7 @@ function showMandatoryLock(urgentAlerts, processedAlerts = []) {
                 <td colspan="7" class="py-2">
                     <div class="d-flex align-items-center text-muted small fw-bold text-uppercase">
                         <hr class="flex-grow-1 me-2"> 
-                        <i class="bi bi-check-circle-fill me-1"></i> Bajas Programadas / Confirmadas
+                        <i class="bi bi-check-circle-fill me-1"></i> Ya decididos
                         <hr class="flex-grow-1 ms-2">
                     </div>
                 </td>
@@ -250,7 +250,7 @@ function renderVencimientoRow(emp, isProcessed) {
     return `
         <tr class="${opacityClass}">
             <td style="white-space: nowrap;">
-                <div class="fw-bold ${isProcessed ? 'text-muted' : ''}" style="white-space: nowrap;">${emp.nombre_completo}</div>
+                <div class="fw-bold ${isProcessed ? 'text-muted' : ''}" style="white-space: nowrap;">${window.nombreTitulo(emp.nombre_completo)}</div>
                 <div class="small text-muted" style="white-space: nowrap;">${emp.area || '-'} - ${emp.cargo || '-'}</div>
             </td>
             <td class="text-center">

@@ -176,10 +176,64 @@ async function loadAreasParaSeguridad() {
 }
 
 // ================== AUDITORÍA ==================
+// ── Registro de cambios en palabras: el servidor guarda códigos (DECIDIR_CUADRE) y detalles en JSON ──
+const _ACCIONES_AUDITORIA = {
+    LOGIN: 'Entró a la aplicación', CREATE: 'Creó', UPDATE: 'Modificó', DELETE: 'Eliminó',
+    INTENTO_ACCESO_DENEGADO: 'Intentó entrar sin permiso',
+    ASSIGN_PRODUCTOS_PROPIOS: 'Asignó productos', DELIVER_PRODUCTOS_PROPIOS: 'Entregó productos',
+    REVERT_DELIVER_PRODUCTOS_PROPIOS: 'Deshizo una entrega de productos', UPDATE_PRODUCTO_PROPIO: 'Modificó un producto',
+    CLOSE_PERIOD_PRODUCTOS_4: 'Cerró el período de 4 Productos', REOPEN_PERIOD_PRODUCTOS_4: 'Reabrió el período de 4 Productos',
+    ELIMINAR_MARCA_MANUAL: 'Eliminó una marca a mano', ELIMINAR_MARCAS_MANUALES_DEL_DIA: 'Eliminó las marcas a mano de un día',
+    REINTEGRAR_MARCAS_MANUALES: 'Devolvió marcas a mano',
+    DECIDIR_CUADRE: 'Decidió el cuadre del tramo', QUITAR_POLITICA_CUADRE: 'Quitó la decisión del cuadre', PUNTO_CERO_CUADRE: 'Llevó el cuadre a cero',
+    CORRER_REGLA: 'Aplicó una regla de marcas', APAGAR_REGLA: 'Apagó una regla de marcas',
+    CREATE_VIAJE_LARGO: 'Registró un viaje largo', DELETE_LIBRETA_180H: 'Borró una libreta de 180 horas', REPLICA_LIBRETA_180H: 'Copió una libreta de 180 horas',
+    MARCAR_INASISTENCIA_LIBRETA: 'Marcó una inasistencia en la libreta', LIBRETA_DESDE_HORARIO: 'Fijó desde cuándo un horario usa libreta',
+    PURGA_MARCAS_RELOJ_LIBRETA_180H: 'Quitó marcas del reloj de personas con libreta',
+    REASIGNAR_TURNO_ACOMPANANTE_180H: 'Pasó el turno del chofer a su acompañante',
+    REAPERTURA_PERIODO: 'Reabrió un período', TEST_REAPERTURA_PERIODO: 'Probó reabrir un período', REPROCESAR_PERIODO: 'Volvió a calcular un período',
+    CREATE_PORTERIA_UBICACION: 'Creó una ubicación de portería', UPDATE_PORTERIA_UBICACION: 'Modificó una ubicación de portería', DELETE_PORTERIA_UBICACION: 'Eliminó una ubicación de portería',
+    CREATE_PORTERIA_HALLAZGO_CATALOGO: 'Creó un hallazgo del catálogo', UPDATE_PORTERIA_HALLAZGO_CATALOGO: 'Modificó un hallazgo del catálogo',
+    SYNC_PORTERIA_RONDAS: 'Sincronizó las rondas',
+    TOGGLE_CARGO_EXCLUSION: 'Cambió la exclusión de un cargo', CREATE_CARGO_MANUAL: 'Creó un cargo', CREATE_AREA_MANUAL: 'Creó un área',
+    REVOCAR_CONDONACION: 'Quitó un perdonazo', CONDONAR_DEUDA: 'Perdonó una deuda', REVOCAR_PERDONAZOS_GUIADOS: 'Quitó perdonazos del cuadre',
+    CORREGIR_HE_COBERTURA: 'Corrigió horas extra de una cobertura', CREATE_COMPENSACION: 'Registró una compensación', COMPENSAR_INASISTENCIA: 'Compensó una inasistencia',
+    APROBAR_JORNADAS_ESPECIALES: 'Aprobó jornadas especiales', ACTUALIZAR_TURNO: 'Modificó un turno', REASIGNAR_TURNO: 'Cambió el turno de una persona',
+    RESTAURAR_EMPLEADO: 'Restauró a una persona', DEVOLVER_DIAS_CERRADOS: 'Devolvió días cerrados al respaldo'
+};
+const _MODULOS_AUDITORIA = { PORTERIA: 'Portería', CONFIGURACION: 'Configuración', REGLAS_MARCAS: 'Reglas de marcas', EMPLEADOS: 'Empleados', MARCACIONES: 'Asistencia' };
+function _escAud(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function _frase(t) {
+    const s = String(t || '').replace(/_/g, ' ').trim().toLowerCase();
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function _accionEnPalabras(codigo) {
+    return _ACCIONES_AUDITORIA[codigo] || _frase(codigo);
+}
+function _moduloEnPalabras(modulo) {
+    const m = String(modulo || '').trim();
+    const clave = m.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ /g, '_');
+    return _MODULOS_AUDITORIA[clave] || (m === m.toUpperCase() ? _frase(m) : m);
+}
+function _detalleEnPalabras(detalle) {
+    if (detalle == null || detalle === '') return '';
+    const t = String(detalle).trim();
+    if (t.charAt(0) === '{') {
+        try {
+            const o = JSON.parse(t);
+            const valor = v => Array.isArray(v) ? v.map(valor).join(', ') : (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
+            return window.fechasLegibles(Object.keys(o).map(k => `${k.replace(/_/g, ' ')}: ${valor(o[k])}`).join(' · '));
+        } catch (e) { /* no es JSON: se muestra como texto */ }
+    }
+    return window.fechasLegibles(t);
+}
+
 async function loadAuditoria() {
     const tbody = document.getElementById('table-auditoria');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> Extrayendo Bitácora Inmutable...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> Cargando el registro de cambios…</td></tr>';
 
     try {
         const response = await fetch('/api/seguridad/auditoria/?limit=200');
@@ -189,7 +243,7 @@ async function loadAuditoria() {
         const logs = data.data;
 
         if (logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Sin registros de auditoría</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Todavía no hay cambios registrados.</td></tr>';
             return;
         }
 
@@ -210,17 +264,17 @@ async function loadAuditoria() {
             return `
                 <tr>
                     <td class="small text-muted">${fecha}</td>
-                    <td class="fw-bold">${log.username} <span class="badge bg-light text-dark border">ID:${log.usuario_id}</span></td>
-                    <td><span class="badge ${badgeColor}">${log.accion}</span></td>
-                    <td class="fw-bold text-secondary">${log.modulo}</td>
-                    <td class="small" style="max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${log.detalle || ''}">${log.detalle || '-'}</td>
+                    <td class="fw-bold">${_escAud(log.username)}</td>
+                    <td><span class="badge ${badgeColor}">${_escAud(_accionEnPalabras(log.accion))}</span></td>
+                    <td class="fw-bold text-secondary">${_escAud(_moduloEnPalabras(log.modulo))}</td>
+                    <td class="small" style="max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${_escAud(_detalleEnPalabras(log.detalle))}">${_escAud(_detalleEnPalabras(log.detalle)) || '—'}</td>
                     <td class="text-muted font-monospace small">${log.ip_address || '127.0.0.1'}</td>
                 </tr>
             `;
         }).join('');
     } catch (error) {
         console.error(error);
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">🔒 Error de Acceso a Bitácora. Privilegios Insuficientes.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">No se pudo cargar el registro de cambios. Puede que su usuario no tenga permiso para verlo.</td></tr>`;
     }
 }
 

@@ -680,14 +680,14 @@ function _executeSwitchPage(pageName) {
 
   // Update title
   const titles = {
-    'dashboard': 'Dashboard',
-    'empleados': 'Gestión de Empleados',
-    'marcaciones': 'Marcaciones de Asistencia',
-    'calendario': 'Calendario Mensual',
-    'reportes': 'Reportes y Estadísticas',
+    'dashboard': 'Inicio',
+    'empleados': 'Empleados',
+    'marcaciones': 'Asistencia',
+    'calendario': 'Calendario',
+    'reportes': 'Reportes',
     'productos_4': '4 Productos',
-    'configuracion': 'Panel de Configuración',
-    'porteria': 'Portería y Control de Ronda'
+    'configuracion': 'Configuración',
+    'porteria': 'Portería'
   };
   document.getElementById('page-title').textContent = titles[pageName] || pageName;
   _recordarPagina(pageName);

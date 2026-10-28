@@ -575,7 +575,7 @@ function renderMarcacionesToolbar(container) {
                 <div class="col-12 col-md-4 col-lg-4 col-xxl-2 order-lg-2 order-xxl-0">
                     <label for="marcacion-empleado" class="form-label small fw-semibold text-muted mb-1">Empleado</label>
                     <select class="form-select form-select-sm" id="marcacion-empleado" onchange="updateMarcacionesState('empleadoId', this.value)">
-                        <option value="">-- Ver Todo el Equipo --</option>
+                        <option value="">Todo el equipo</option>
                     </select>
                 </div>
 
@@ -798,7 +798,7 @@ async function loadMarcacionesDependentFilters(onlyEmployees = false) {
             if (empleados.length === 0) {
                 empSelect.innerHTML = '<option value="">-- Sin empleados en esta área/horario --</option>';
             } else {
-                empSelect.innerHTML = '<option value="">-- Ver Todo el Equipo (Matriz) --</option>' +
+                empSelect.innerHTML = '<option value="">Todo el equipo</option>' +
                     empleados.map(e => `<option value="${e.id}">${e.nombre_completo.toUpperCase()}</option>`).join('');
             }
 
@@ -3963,13 +3963,13 @@ function openRegularizacionModal(anomalias, fecha) {
         return `
         <tr>
             <td>
-                <div class="fw-bold text-dark">${fullNombre}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">RUT: ${a.rut || 'No Registrado'}</div>
+                <div class="fw-bold text-dark">${window.nombreTitulo(fullNombre)}</div>
+                <div class="text-muted" style="font-size: 0.75rem;">RUT ${a.rut || 'sin registrar'}</div>
             </td>
             <td><span class="badge bg-light text-dark border">${a.area}</span></td>
             <td>
                 <div class="text-info small fw-bold"><i class="bi bi-calendar-check-fill me-1"></i>Desde: ${window.formatFechaDDMMYYYY(a.fecha)}</div>
-                <div class="text-muted x-small">Pendiente de regularización</div>
+                <div class="text-muted x-small">Sin turno asignado</div>
             </td>
             <td class="text-end">
                 <button class="btn btn-sm btn-primary fw-bold shadow-sm" 
@@ -4669,7 +4669,7 @@ async function mostrarSelectorPeriodosParaCierre() {
             <div class="d-flex justify-content-between align-items-center p-3 mb-2 border rounded bg-white shadow-sm">
                 <div>
                     <h6 class="fw-bold mb-1 text-dark">${p.mes_cierre}${activeBadge}</h6>
-                    <small class="text-muted"><i class="bi bi-calendar-range"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong></small>
+                    <small class="text-muted"><i class="bi bi-calendar-range"></i> Tramo: <strong>${fIniFormateada} al ${fFinFormateada}</strong></small>
                 </div>
                 <button class="btn btn-sm btn-warning fw-bold px-3 shadow-sm btn-cierre-action" 
                         onclick="cierreFiltrarGrillaYIniciarCierre('${p.fecha_inicio}', '${p.fecha_fin}')"
@@ -4852,7 +4852,7 @@ async function openCierrePeriodoModal() {
             <div class="modal-dialog modal-xl">
                 <div class="modal-content border-0 shadow-lg">
                     <div class="modal-header bg-dark text-white border-0">
-                        <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill text-warning me-2"></i> Asistente de Cierre de Periodo (Zero-Trust)</h5>
+                        <h5 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill text-warning me-2"></i> Cierre del período</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body bg-light p-4">
@@ -4872,7 +4872,7 @@ async function openCierrePeriodoModal() {
                                     <div id="cierre-periodo-badge-container" class="mb-2"></div>
                                     
                                     <div class="small text-muted mb-0">
-                                        Rango: <strong id="cierre-rango-text">${fIni && fFin ? `${fIni} al ${fFin}` : 'No definido'}</strong><br>
+                                        Tramo: <strong id="cierre-rango-text">${fIni && fFin ? `${window.formatFechaDDMMYYYY(fIni)} al ${window.formatFechaDDMMYYYY(fFin)}` : 'Sin definir'}</strong><br>
                                         Área: <strong id="cierre-area-sidebar">${area || 'No seleccionada'}</strong>
                                     </div>
                                 </div>
@@ -4931,7 +4931,7 @@ window.actualizarInfoPeriodoEnWizard = function() {
     const rangoText = document.getElementById('cierre-rango-text');
     const areaSidebar = document.getElementById('cierre-area-sidebar');
     
-    if (rangoText) rangoText.innerHTML = fIni && fFin ? `${fIni} al ${fFin}` : '<i>No definido</i>';
+    if (rangoText) rangoText.innerHTML = fIni && fFin ? `${window.formatFechaDDMMYYYY(fIni)} al ${window.formatFechaDDMMYYYY(fFin)}` : '<i>Sin definir</i>';
     if (areaSidebar) areaSidebar.textContent = area || 'No seleccionada';
     
     if (!fIni || !fFin) {
@@ -5231,7 +5231,7 @@ function renderWizardStep(step) {
                     </div>
                     <div class="fw-bold text-dark fs-5 mb-1">${vigente.mes_cierre}</div>
                     <div class="small text-muted mb-2">
-                        <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
+                        <i class="bi bi-calendar-range me-1"></i> Tramo: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
                     </div>
                     ${vigente.estado === 'cerrado' 
                         ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle align-self-start"><i class="bi bi-lock-fill me-1"></i> Período Cerrado</span>'
@@ -5249,7 +5249,7 @@ function renderWizardStep(step) {
                     </div>
                     <div class="fw-bold text-dark fs-6 mb-1">Rango Fuera de Calendario</div>
                     <div class="small text-muted mb-2">
-                        <i class="bi bi-calendar-range me-1"></i> Rango: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
+                        <i class="bi bi-calendar-range me-1"></i> Tramo: <strong>${fIniFormateada} al ${fFinFormateada}</strong>
                     </div>
                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle align-self-start">
                         No oficial
@@ -6526,7 +6526,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         (window.__mxTipReg || (window.__mxTipReg = new Map())).set(tipKey, { di, d, dt, feriadoDesc, isWE, emp: Object.assign({}, emp, { stats: r }) });
         const _corteC = (window._gridFlags && window._gridFlags.esBolsa) ? window.getCorteLibreta(emp) : null;
         const corteCelda = (_corteC && d === _corteC) ? 'border-left:3px solid #8b5cf6;' : '';
-        return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${String(emp.nombre_completo || '').replace(/"/g, '&quot;')}, ${d}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
+        return `<td class="col-day text-center p-0 align-middle cell-clickable" tabindex="0" role="button" aria-label="Acciones de asistencia: ${window.nombreTitulo(emp.nombre_completo).replace(/"/g, '&quot;')}, ${window.formatFechaDDMMYYYY(d)}" style="${bg}${corteCelda}min-width:48px;height:28px;cursor:pointer;position:relative;overflow:visible !important;"
                     onclick="openAsistenciaActionModal(${emp.id},'${d}','${empNameEsc}',${hEnt},${hSal})"
                     ondblclick="openJustifyModal(${emp.id},'${empNameEsc}','${d}')"
                     data-grid-tooltip data-tip="${tipKey}">

@@ -193,7 +193,7 @@
             <nav class="sidebar-nav">
                 <a href="#" class="sidebar-item active" data-page="dashboard" data-permiso="dashboard.ver">
                     <span class="icon" aria-hidden="true"></span>
-                    <span>Dashboard</span>
+                    <span>Inicio</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="empleados" data-permiso="empleados.ver">
                     <span class="icon" aria-hidden="true"></span>
@@ -201,7 +201,7 @@
                 </a>
                 <a href="#" class="sidebar-item" data-page="marcaciones" data-permiso="marcaciones.ver">
                     <span class="icon" aria-hidden="true"></span>
-                    <span>Marcaciones</span>
+                    <span>Asistencia</span>
                 </a>
 
                 <a href="#" class="sidebar-item" data-page="reportes" data-permiso="reportes.ver">
@@ -210,7 +210,7 @@
                 </a>
                 <a href="#" class="sidebar-item" data-page="productos_4" data-permiso="productos_4.asignar || productos_4.consolidar || productos_4.entregar">
                     <span class="icon" aria-hidden="true"></span>
-                    <span>4 Productos</span>
+                    <span data-corto="Productos">4 Productos</span>
                 </a>
                 <a href="#" class="sidebar-item" data-page="porteria" data-permiso="porteria.ver || porteria.registrar || porteria.rondas || porteria.llaves || porteria.art22 || porteria.proveedores || porteria.visitas">
                     <span class="icon" aria-hidden="true"></span>
@@ -218,7 +218,7 @@
                 </a>
                 <a href="#" class="sidebar-item" data-page="configuracion" data-permiso="configuracion.ver">
                     <span class="icon" aria-hidden="true"></span>
-                    <span>Configuración</span>
+                    <span data-corto="Ajustes">Configuración</span>
                 </a>
             </nav>
 
@@ -242,10 +242,13 @@
                     <button id="sidebar-toggle" class="menu-toggle" aria-label="Alternar menú lateral">
                         <i class="bi bi-list" aria-hidden="true"></i>
                     </button>
-                    <h2 id="page-title" class="mb-0">Dashboard</h2>
+                    <h2 id="page-title" class="mb-0">Inicio</h2>
                 </div>
                 <div class="header-right">
                     <!-- Centro de Notificaciones (Alertas de Contrato) -->
+                    <button type="button" class="hd-buscar" id="hd-buscar" aria-label="Buscar persona o pantalla (Ctrl K)">
+                        <i class="bi bi-search" aria-hidden="true"></i><span>Buscar persona o pantalla</span><kbd>Ctrl K</kbd>
+                    </button>
                     <div id="notification-center" role="list" class="notification-center me-3" title="No hay alertas críticas">
                         <li class="nav-item list-unstyled">
                             <a class="nav-link position-relative" href="#" aria-label="Centro de Notificaciones y Alertas"
@@ -259,7 +262,7 @@
                         </li>
                     </div>
 
-                    <button class="btn-sync" id="btn-sync" title="Wizard de Inicialización" aria-label="Empleados: wizard de sincronización" data-permiso="configuracion.wizard">
+                    <button class="btn-sync" id="btn-sync" title="Sincronizar con BioAlba" aria-label="Sincronizar personas con BioAlba" data-permiso="configuracion.wizard">
                         <span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
                         <span>Empleados</span>
                     </button>
@@ -1765,8 +1768,8 @@
                                                 <table class="table table-hover align-middle mb-0">
                                                     <thead class="bg-light">
                                                         <tr>
-                                                            <th>Fecha/Hora</th>
-                                                            <th>Usuario (ID)</th>
+                                                            <th>Fecha y hora</th>
+                                                            <th>Usuario</th>
                                                             <th>Acción</th>
                                                             <th>Módulo</th>
                                                             <th>Detalle</th>
@@ -2779,13 +2782,13 @@
                                 <span style="width: 10%;">Áreas</span>
                                 <span style="width: 10%;">Cargos</span>
                                 <span style="width: 10%;">Pagadores</span>
-                                <span style="width: 10%;">Justific.</span>
+                                <span style="width: 10%;">Justificaciones</span>
                                 <span style="width: 10%;">Bonos</span>
                                 <span style="width: 10%;">Turnos</span>
-                                <span style="width: 10%;">Preview</span>
-                                <span style="width: 10%;">Sync SSE</span>
+                                <span style="width: 10%;">Vista previa</span>
+                                <span style="width: 10%;">Sincronizar</span>
                                 <span style="width: 10%;">Fichas</span>
-                                <span style="width: 10%;">Turnos Ind.</span>
+                                <span style="width: 10%;">Turnos individuales</span>
                             </div>
 
                             <!-- PASO 1: Áreas -->
@@ -3290,7 +3293,7 @@
                     <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
                         <div class="modal-header bg-danger text-white border-0 py-3">
                             <h4 class="mb-0 fw-bold d-flex align-items-center justify-content-between w-100">
-                                <span><i class="bi bi-shield-lock-fill me-2"></i> Bloqueo de Seguridad Mandatorio</span>
+                                <span><i class="bi bi-file-earmark-text me-2"></i> Contratos por decidir</span>
                                 <button type="button" id="btn-cerrar-bloqueo" class="btn-close btn-close-white d-none"
                                     onclick="hideMandatoryLock()" aria-label="Close"></button>
                             </h4>
@@ -3299,25 +3302,19 @@
                             <div class="text-center mb-4">
                                 <div class="stat-icon bg-danger-subtle text-danger mx-auto mb-3"
                                     style="width: 80px; height: 80px; font-size: 2.5rem; line-height: 80px;"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i></div>
-                                <h3 class="fw-bold">Gestión de Contratos Requerida</h3>
-                                <p class="text-muted">Se han detectado vencimientos de contrato vencidos o fuera de
-                                    término
-                                    legal.
-                                    Para garantizar el cumplimiento normativo, la plataforma permanecerá restringida
-                                    hasta que
-                                    se
-                                    tome una decisión para estos casos.</p>
+                                <h3 class="fw-bold">Hay contratos que necesitan una decisión</h3>
+                                <p class="text-muted">Hay contratos vencidos o por vencer fuera del plazo legal. Hasta decidir cada uno, la aplicación queda limitada.</p>
                             </div>
 
                             <div class="table-responsive rounded-3 border mb-4">
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="white-space: nowrap;">Empleado</th>
-                                            <th class="text-center" style="white-space: nowrap;">N° Contrato</th>
+                                            <th style="white-space: nowrap;">Persona</th>
+                                            <th class="text-center" style="white-space: nowrap;">N° de contrato</th>
                                             <th style="white-space: nowrap;">Tipo</th>
-                                            <th style="white-space: nowrap;">Fecha Término</th>
-                                            <th class="text-center" style="white-space: nowrap;">Días Restantes</th>
+                                            <th style="white-space: nowrap;">Término</th>
+                                            <th class="text-center" style="white-space: nowrap;">Quedan</th>
                                             <th style="white-space: nowrap;">Estado</th>
                                             <th class="text-end" style="white-space: nowrap;">Acción</th>
                                         </tr>
@@ -3330,8 +3327,7 @@
 
                             <div class="alert alert-warning d-flex align-items-center mb-0" style="font-size: 0.9rem;">
                                 <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-                                <div>Una vez que proceses todos los vencimientos críticos, la aplicación se desbloqueará
-                                    automáticamente.</div>
+                                <div>Cuando cada contrato tenga su decisión, la aplicación vuelve a quedar completa.</div>
                             </div>
                         </div>
                     </div>
@@ -3343,27 +3339,26 @@
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-danger text-white">
-                            <h3 class="modal-title fw-bold"><i class="bi bi-shield-lock-fill me-2"></i>Muro de Integridad de Asistencia</h3>
+                            <h3 class="modal-title fw-bold"><i class="bi bi-person-exclamation me-2"></i>Personas con marcas y sin turno</h3>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="display:none;"></button>
                         </div>
                         <div class="modal-body p-4">
                             <div class="alert alert-danger d-flex align-items-center mb-4 border-0 shadow-sm" style="background: #fef2f2; color: #991b1b;">
                                 <i class="bi bi-exclamation-octagon-fill me-3 fs-2"></i>
                                 <div>
-                                    <h5 class="fw-bold mb-1">Acceso Restringido</h5>
-                                    Se han detectado empleados con marcaciones biométricas pero <strong>sin turno asignado</strong> en su área de responsabilidad. 
-                                    Debe regularizar estas situaciones para poder visualizar la grilla de asistencia.
+                                    <h5 class="fw-bold mb-1">Falta asignar un turno</h5>
+                                    Estas personas marcaron en el reloj y no tienen <strong>turno asignado</strong> en su área. Asígneles un turno para ver la grilla de asistencia.
                                 </div>
                             </div>
                             
-                            <p class="text-muted mb-3 small">Empleados pendientes de asignación oficial:</p>
+                            <p class="text-muted mb-3 small">Personas sin turno:</p>
                             <div class="table-responsive rounded border shadow-sm" style="max-height: 300px;">
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light sticky-top">
                                         <tr>
-                                            <th>Empleado / RUT</th>
+                                            <th>Persona</th>
                                             <th>Área</th>
-                                            <th>Marcación</th>
+                                            <th>Marcas</th>
                                             <th class="text-end">Acción</th>
                                         </tr>
                                     </thead>
@@ -3908,7 +3903,7 @@
                                     <i class="bi bi-pencil-square fs-4"></i>
                                 </div>
                                 <div>
-                                    <h5 class="modal-title fw-bold mb-0">Corregir Anomalía de Asistencia</h5>
+                                    <h5 class="modal-title fw-bold mb-0">Corregir marcas del día</h5>
                                     <div class="small opacity-75">Ingrese las horas manualmente</div>
                                 </div>
                                 <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeManualEntryModal()"></button>
@@ -3921,7 +3916,7 @@
                             </div>
                             <div class="mb-3">
                                 <label for="manual-empleado-display"
-                                    class="form-label text-muted small fw-bold">Empleado</label>
+                                    class="form-label text-muted small fw-bold">Persona</label>
                                 <input type="text" class="form-control bg-light" id="manual-empleado-display" readonly
                                     disabled>
                             </div>
@@ -3942,7 +3937,7 @@
                             <div class="row g-3 mb-3">
                                 <div class="col-6">
                                     <label for="manual-turno-display"
-                                        class="form-label text-muted small fw-bold">Turno Asignado</label>
+                                        class="form-label text-muted small fw-bold">Turno asignado</label>
                                     <input type="text" class="form-control bg-light" id="manual-turno-display" readonly
                                         disabled>
                                 </div>
@@ -4920,39 +4915,36 @@
 
             <!-- Modal para Validación de Jornada Especial -->
 
-            <div id="modal-validacion-jornada" class="modal fade" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0" style="border-radius:16px; overflow:hidden;">
-                        <div class="modal-header border-0 text-white pb-3 pt-4 px-4" style="background: linear-gradient(135deg, #1b2f8f 0%, #14235c 100%);">
-                            <div class="d-flex align-items-center gap-3 w-100">
-                                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;background:rgba(255,255,255,0.1);backdrop-filter:blur(4px);">
+            <div id="modal-validacion-jornada" class="modal fade" tabindex="-1" aria-hidden="true" aria-labelledby="val-titulo">
+                <div class="modal-dialog modal-dialog-centered" style="max-width: 600px;">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header">
+                            <div class="d-flex align-items-start gap-3 w-100">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:48px;height:48px;background:rgba(255,255,255,0.1);">
                                     <i class="bi bi-lightning-fill fs-4"></i>
                                 </div>
-                                <div>
-                                    <h5 class="modal-title fw-bold mb-0">Validar Jornada Especial</h5>
-                                    <div class="small opacity-75">Aprobación de días libres trabajados</div>
+                                <div class="flex-grow-1" style="min-width: 0;">
+                                    <h5 class="modal-title fw-bold mb-0" id="val-titulo">Validar jornada especial</h5>
+                                    <div class="small">Días libres o feriados trabajados</div>
                                 </div>
-                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeValidationModal()"></button>
+                                <button aria-label="Cerrar" type="button" class="btn-close ms-auto" onclick="closeValidationModal()"></button>
                             </div>
                         </div>
-                        <div class="modal-body p-4">
+                        <div class="modal-body">
                             <div id="val-alert-box" class="alert alert-info py-2 mb-3">
-                                <i class="bi bi-info-circle-fill me-2"></i>Día libre detectado (Domingo/Festivo).
+                                <i class="bi bi-info-circle-fill me-2"></i>Día libre o feriado trabajado.
                             </div>
-                            <p id="val-prompt-text">¿Desea validar esta jornada como <strong>trabajada</strong>?</p>
-                            <div class="card bg-light border-0 mb-3">
-                                <div class="card-body py-2">
-                                    <div><strong>Empleado:</strong> <span id="val-empleado-display"></span></div>
-                                    <div><strong>Fecha:</strong> <span id="val-fecha-display"></span></div>
-                                    <div id="val-extra-info" class="d-none"></div>
-                                </div>
+                            <div class="vn-kvs">
+                                <div><span>Persona</span><b id="val-empleado-display"></b></div>
+                                <div><span>Fecha</span><b id="val-fecha-display"></b></div>
                             </div>
-                            <p id="val-footer-note" class="small text-muted mb-0">Al validar, el estado cambiará a <strong>EXTRA</strong>.
-                            </p>
+                            <div id="val-extra-info" class="d-none"></div>
+                            <p id="val-prompt-text" class="vn-pregunta">¿Cómo se valida la jornada?</p>
+                            <div id="val-ops" class="vn-ops" role="radiogroup" aria-labelledby="val-prompt-text"></div>
+                            <p id="val-footer-note" class="small text-muted mb-0 d-none"></p>
                         </div>
                         <div class="modal-footer">
                             <button class="btn btn-secondary" onclick="closeValidationModal()">Cancelar</button>
-                            <button class="btn btn-success" onclick="validateJornada()"><i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i> Validar Jornada</button>
                         </div>
                     </div>
                 </div>
@@ -5066,8 +5058,8 @@
             <!-- Componentes de UI (Orden de dependencia) -->
             <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v16" defer></script>
-            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v16" defer></script>
-            <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v17" defer></script>
+            <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v16" defer></script>
             <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/dashboard_react.js?v={{ startup_id }}" defer></script>
 
@@ -5081,6 +5073,7 @@
             <!-- Inicializador Principal -->
             <script src="/static/js/main.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/sidebar_riel.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/buscador.js?v={{ startup_id }}" defer></script>
 
     <!-- Carga diferida de pantallas secundarias (rendimiento): se descargan de a una, con el navegador
          libre, DESPUÉS de pintar el dashboard. switchPage() espera a __lazyPromise si alguien navega antes. -->
@@ -5091,15 +5084,15 @@
         "/static/js/chart.js",
         "/static/js/chartjs-plugin-datalabels.min.js",
         "/static/js/horarios.js?v={{ startup_id }}_v25",
-        "/static/js/asistencia.js?v={{ startup_id }}_v16",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v18",
+        "/static/js/asistencia.js?v={{ startup_id }}_v18",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v19",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v10",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v16",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v16",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v16",
-        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v23",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v26",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v25",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v27",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v10",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}",
         "/static/js/intercambios_panel.js?v={{ startup_id }}",
@@ -5112,7 +5105,7 @@
         "/static/js/articulo22_ui.js?v={{ startup_id }}_v11",
         "/static/js/visitas_ui.js?v={{ startup_id }}_v3",
         "/static/js/llaves_ui.js?v={{ startup_id }}_v1",
-        "/static/js/flota_ui.js?v={{ startup_id }}_v4",
+        "/static/js/flota_ui.js?v={{ startup_id }}_v5",
         "/static/js/productos_4.js?v={{ startup_id }}",
         "/static/js/sync_wizard.js?v={{ startup_id }}"
 ];
@@ -5362,7 +5355,7 @@
     <nav class="mobile-bottom-nav d-md-none" id="mobile-bottom-nav" aria-label="Navegación móvil inferior">
         <button type="button" class="mobile-nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">
             <span class="mobile-nav-icon"><i class="bi bi-grid-1x2" aria-hidden="true"></i></span>
-            <span class="mobile-nav-label">Dashboard</span>
+            <span class="mobile-nav-label">Inicio</span>
         </button>
         <button type="button" class="mobile-nav-item" data-page="empleados" onclick="switchPage('empleados')">
             <span class="mobile-nav-icon"><i class="bi bi-people" aria-hidden="true"></i></span>

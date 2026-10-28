@@ -365,7 +365,7 @@ const Productos4Module = {
                 seleccionBadge = `
                     <div class="mt-3 p-2.5 bg-danger-subtle text-danger-emphasis rounded text-start small" style="min-height: 60px;">
                         <i class="bi bi-shield-slash-fill me-1"></i> <strong>Motivo de Bloqueo:</strong>
-                        <div class="mt-1 small" style="font-size: 0.75rem; line-height: 1.3;">${e.motivo}</div>
+                        <div class="mt-1 small" style="font-size: 0.75rem; line-height: 1.3;">${window.fechasLegibles(e.motivo)}</div>
                     </div>
                 `;
                 cardAction = `
@@ -849,7 +849,7 @@ const Productos4Module = {
                 <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px;">
                     <div class="card-header bg-white pt-3 pb-2 border-bottom-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
-                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Matriz de Distribución de Stock por Área</h5>
+                            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Stock por área</h5>
                             <p class="text-muted small mb-0 mt-0.5">Resumen consolidado global de las unidades asignadas por tipo de producto y departamento para la preparación logística en bodega.</p>
                         </div>
                         <div>
@@ -1628,11 +1628,11 @@ const Productos4Module = {
 
         let fechaBadge = '';
         if (this.periodoEstado && this.periodoEstado.fecha_inicio && this.periodoEstado.fecha_fin) {
-            const fIni = this.periodoEstado.fecha_inicio.split('-').reverse().join('/');
-            const fFin = this.periodoEstado.fecha_fin.split('-').reverse().join('/');
+            const fIni = window.formatFechaDDMMYYYY(this.periodoEstado.fecha_inicio);
+            const fFin = window.formatFechaDDMMYYYY(this.periodoEstado.fecha_fin);
             fechaBadge = `
                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle d-inline-flex align-items-center px-3 py-2 rounded-pill fw-bold me-1">
-                    <i class="bi bi-calendar-range me-1.5"></i> Ciclo RRHH: ${fIni} al ${fFin}
+                    <i class="bi bi-calendar-range me-1.5"></i> Tramo: ${fIni} al ${fFin}
                 </span>
             `;
         }
@@ -1808,7 +1808,7 @@ const Productos4Module = {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(33, 37, 41);
-        doc.text("1. Matriz de Distribución de Stock por Área", 40, 95);
+        doc.text("1. Stock por área", 40, 95);
 
         const resumen = data.resumen || [];
         const tempAreas = new Set();

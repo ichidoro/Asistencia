@@ -295,35 +295,38 @@ async function confirmProcesarVencimiento() {
     }
 
     // Mapeo detallado para confirmación humana
-    let confirmMsg = "";
-    const nombre = currentEmpleadoVencimiento.nombre_completo;
+    const nombre = window.nombreTitulo(currentEmpleadoVencimiento.nombre_completo);
     const fechaSalida = currentEmpleadoVencimiento.fecha_salida || "hoy";
+    let pregunta = '', items = [], boton = 'Confirmar', peligro = false;
 
     if (action === 'renovar') {
-        const fNueva = nuevaFecha.split('-').reverse().join('/');
-        confirmMsg = `¿Confirmar RENOVACIÓN de contrato para ${nombre} hasta el ${fNueva}?`;
+        pregunta = `¿Renovar el contrato de ${nombre}?`;
+        items = [`Queda vigente hasta el ${window.formatFechaDDMMYYYY(nuevaFecha)}.`];
+        boton = 'Renovar contrato';
     } else if (action === 'indefinido') {
-        confirmMsg = `¿Confirmar PASO A CONTRATO INDEFINIDO (Planta) para ${nombre}?`;
+        pregunta = `¿Pasar a ${nombre} a contrato indefinido?`;
+        items = ['La persona queda de planta, sin fecha de término.'];
+        boton = 'Pasar a indefinido';
     } else if (action === 'desactivar') {
-        // Formatear fecha para el mensaje: DD/MM/YYYY
-        const fParte = fechaSalida.split('-');
-        const fFmt = fParte.length === 3 ? `${fParte[2]}/${fParte[1]}/${fParte[0]}` : fechaSalida;
-
         // Determinar si es programada o inmediata basándose en la fecha
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const fVenc = new Date(fechaSalida + 'T00:00:00');
 
         if (fVenc > hoy) {
-            confirmMsg = `¿Confirmar BAJA PROGRAMADA para ${nombre}?\n\nEl contrato finalizará y el empleado será desactivado automáticamente el día: ${fFmt}.`;
+            pregunta = `¿Programar la baja de ${nombre}?`;
+            items = [`El contrato termina y la persona queda inactiva el ${window.formatFechaDDMMYYYY(fechaSalida)}.`];
         } else {
-            confirmMsg = `¿Confirmar BAJA INMEDIATA para ${nombre}?\n\nEl empleado será desactivado del sistema hoy mismo.`;
+            pregunta = `¿Dar de baja hoy a ${nombre}?`;
+            items = ['La persona queda inactiva desde hoy.'];
         }
+        boton = 'Registrar baja';
+        peligro = true;
     } else {
-        confirmMsg = `¿Está seguro de procesar esta acción (${action}) para ${nombre}?`;
+        pregunta = `¿Confirmar «${action}» para ${nombre}?`;
     }
 
-    if (!await uiConfirm(confirmMsg)) return;
+    if (!await uiConfirm(pregunta, { items, confirmText: boton, danger: peligro })) return;
 
     try {
         const response = await fetch(`/api/empleados/${currentEmpleadoVencimiento.id}/procesar-vencimiento/`, {

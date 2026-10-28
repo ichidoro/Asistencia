@@ -1,0 +1,212 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Etapa 6 «Ventanas» del orden visual común — solo presentación.
+   - Un mismo encabezado en todas: título, una línea con la persona y el día
+     cuando la ventana es de una persona, y la X a la derecha. Sin la franja de
+     color arriba.
+   - Opciones que se eligen como tarjetas (.vn-op, y las de Compensar .ci-op).
+   - Datos de solo lectura como datos, no como campos apagados.
+   - Pie claro con los botones a la derecha; «Cancelar» en blanco.
+   - En el celular se abren como hoja desde abajo.
+   Va al final de bundle-tema (después de avisos.css). No toca ids ni lógica.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --vn-navy: #1b2f8f;
+  --vn-navy-soft: #e9edfb;
+  --vn-sel: #f6f8ff;
+  --vn-ring: rgba(27, 47, 143, .14);
+  --vn-pink: #c0267a;
+  --vn-pink-soft: #fce7ef;
+  --vn-amber-soft: #fdf0e1;
+  --vn-amber: #9a4a08;
+  --vn-green-soft: #e5f3ea;
+  --vn-green: #16673b;
+}
+
+/* ── Marco: sin la franja de color de arriba ──────────────────────────────── */
+.modal:not(#modalScannerLibreta) .modal-content::before { display: none !important; }
+.modal:not(#modalScannerLibreta) .modal-content { border-radius: 18px !important; }
+
+/* ── Encabezado ───────────────────────────────────────────────────────────── */
+.modal:not(#modalScannerLibreta) .modal-header {
+  background: #fff !important;
+  border-bottom: 1px solid var(--ov-line-2) !important;
+  padding: 20px 22px 16px !important;
+  align-items: flex-start;
+}
+.modal:not(#modalScannerLibreta) .modal-header .modal-title,
+.modal:not(#modalScannerLibreta) .modal-header h3.modal-title,
+.modal:not(#modalScannerLibreta) .modal-header h4,
+.modal:not(#modalScannerLibreta) .modal-header h5,
+.modal:not(#modalScannerLibreta) .modal-header h6 {
+  font: 600 19px/1.25 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif !important;
+  color: var(--ov-ink) !important;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+.modal:not(#modalScannerLibreta) .modal-header .modal-title > i.bi:first-child { color: var(--vn-navy) !important; }
+.modal:not(#modalScannerLibreta) .modal-header .small,
+.modal:not(#modalScannerLibreta) .modal-header .vn-sub {
+  font-size: 13px !important;
+  line-height: 1.4;
+  color: var(--ov-ink-3) !important;
+  font-weight: 400;
+  margin-top: 3px;
+}
+/* El círculo del ícono pasa a una ficha suave de 40 px */
+.modal:not(#modalScannerLibreta) .modal-header .rounded-circle[style*="rgba(255,255,255"],
+.modal:not(#modalScannerLibreta) .modal-header .rounded-circle[style*="48px"] {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 12px !important;
+  background: var(--vn-navy-soft) !important;
+}
+.modal:not(#modalScannerLibreta) .modal-header .rounded-circle[style*="48px"] i { font-size: 1.15rem !important; color: var(--vn-navy) !important; }
+/* Iniciales de la persona en lugar del ícono */
+.vn-av {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; flex: none;
+  font: 600 14px/1 'Barlow', system-ui, sans-serif;
+  background: var(--vn-navy-soft); color: var(--vn-navy);
+}
+.vn-av.td-t1 { background: #e9edfb; color: #1b2f8f; } .vn-av.td-t2 { background: #e5f3ea; color: #16673b; } .vn-av.td-t3 { background: #fdf0e1; color: #9a4a08; }
+.vn-av.td-t4 { background: #efe9fb; color: #6a3eaf; } .vn-av.td-t5 { background: #e3eefc; color: #1d56a8; } .vn-av.td-t6 { background: #fce7ef; color: #a3215f; }
+.modal:not(#modalScannerLibreta) .modal-header .btn-close {
+  width: 32px; height: 32px; padding: 0 !important;
+  border-radius: 9px !important;
+  background-size: 12px !important;
+  background-color: transparent !important;
+  opacity: .55;
+}
+.modal:not(#modalScannerLibreta) .modal-header .btn-close:hover { opacity: 1; background-color: var(--ov-line-2) !important; }
+
+/* ── Cuerpo ──────────────────────────────────────────────────────────────── */
+.modal:not(#modalScannerLibreta) .modal-body { padding: 18px 22px !important; }
+/* Datos de solo lectura (persona, área, turno) como datos, no como campos apagados */
+.modal input.form-control[readonly][disabled],
+.modal input.form-control.bg-light[readonly] {
+  background: var(--ov-sunk) !important;
+  border-color: var(--ov-line-2) !important;
+  color: var(--ov-ink) !important;
+  font-weight: 600;
+  opacity: 1;
+}
+/* Pares dato–valor */
+.vn-kvs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 18px;
+  padding: 12px 14px;
+  background: var(--ov-sunk);
+  border: 1px solid var(--ov-line-2);
+  border-radius: 12px;
+}
+.vn-kvs > div { min-width: 0; }
+.vn-kvs span { display: block; font-size: 12px; color: var(--ov-ink-3); }
+.vn-kvs b { display: block; font-weight: 600; color: var(--ov-ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vn-pregunta { font-weight: 600; font-size: 14.5px; color: var(--ov-ink); margin: 16px 0 10px; }
+
+/* ── Opciones que se eligen (tarjetas) ───────────────────────────────────── */
+.vn-ops { display: flex; flex-direction: column; gap: 10px; }
+.vn-op, .ci-op {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px !important;
+  border: 1px solid var(--ov-line) !important;
+  border-radius: 12px !important;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+.vn-op:hover, .ci-op:hover { border-color: #c5cdea !important; }
+.vn-op:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--vn-ring); }
+.vn-op[aria-checked="true"], .ci-op:has(input:checked) {
+  border-color: var(--vn-navy) !important;
+  box-shadow: 0 0 0 3px var(--vn-ring);
+  background: var(--vn-sel);
+}
+.vn-op .vn-rd {
+  width: 18px; height: 18px; margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--ov-line-strong);
+  background: #fff;
+}
+.vn-op[aria-checked="true"] .vn-rd { border-color: var(--vn-navy); box-shadow: inset 0 0 0 3px #fff; background: var(--vn-navy); }
+.vn-op b { display: block; font-weight: 600; font-size: 14.5px; color: var(--ov-ink); }
+.vn-op .vn-t { display: block; margin-top: 2px; font-size: 13px; line-height: 1.45; color: var(--ov-ink-3); }
+.vn-op.vn-borra[aria-checked="true"] { border-color: var(--vn-pink) !important; box-shadow: 0 0 0 3px rgba(192, 38, 122, .14); background: #fff8fb; }
+.vn-op.vn-borra[aria-checked="true"] .vn-rd { border-color: var(--vn-pink); background: var(--vn-pink); }
+.vn-pill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: var(--ov-line-2); color: var(--ov-ink-2); }
+.vn-pill.a { background: var(--vn-amber-soft); color: var(--vn-amber); }
+.vn-pill.g { background: var(--vn-green-soft); color: var(--vn-green); }
+
+/* ── Pie ─────────────────────────────────────────────────────────────────── */
+.modal:not(#modalScannerLibreta) .modal-footer {
+  background: var(--ov-sunk) !important;
+  border-top: 1px solid var(--ov-line-2) !important;
+  padding: 14px 22px !important;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.modal:not(#modalScannerLibreta) .modal-footer > * { margin: 0; }
+.modal:not(#modalScannerLibreta) .modal-footer > .me-auto { margin-right: auto !important; }
+.modal:not(#modalScannerLibreta) .modal-footer .btn-secondary,
+.modal:not(#modalScannerLibreta) .modal-footer .btn-light {
+  background: #fff !important;
+  color: var(--ov-ink-2) !important;
+  border: 1px solid var(--ov-line-strong) !important;
+  box-shadow: none !important;
+}
+.modal:not(#modalScannerLibreta) .modal-footer .btn-secondary:hover,
+.modal:not(#modalScannerLibreta) .modal-footer .btn-light:hover { background: var(--ov-line-2) !important; }
+.modal-footer .vn-btn-borra {
+  background: var(--vn-pink) !important; border-color: var(--vn-pink) !important; color: #fff !important;
+}
+.modal-footer .vn-btn-borra:hover { background: #a51f68 !important; border-color: #a51f68 !important; }
+.modal-footer .btn[disabled] { opacity: .45; }
+
+/* ── Celular: la ventana sube desde abajo ────────────────────────────────── */
+@media (max-width: 768px) {
+  .modal.fade:not(#modalScannerLibreta) .modal-dialog:not(.modal-fullscreen) {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    margin: 0 !important;
+    width: 100%;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    display: block;
+  }
+  .modal.fade:not(#modalScannerLibreta) .modal-dialog:not(.modal-fullscreen) .modal-content {
+    border-radius: 24px 24px 0 0 !important;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .modal.fade:not(#modalScannerLibreta) .modal-dialog:not(.modal-fullscreen) .modal-content::before {
+    display: block !important;
+    content: "";
+    position: absolute;
+    top: 8px; left: 50%; right: auto; bottom: auto;
+    width: 40px; height: 4px;
+    border-radius: 4px;
+    transform: translateX(-50%);
+    background: var(--ov-line-strong) !important;
+    z-index: 3;
+  }
+  .modal.fade:not(#modalScannerLibreta) .modal-header { padding-top: 24px !important; }
+  .modal.fade .modal-dialog { transform: translateY(32px); transition: transform 260ms cubic-bezier(.23, 1, .32, 1); }
+  .modal.fade.show .modal-dialog { transform: none; }
+  .modal:not(#modalScannerLibreta) .modal-footer { flex-wrap: wrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) !important; }
+  .modal:not(#modalScannerLibreta) .modal-footer .btn { flex: 1 1 140px; min-height: 46px; }
+  .modal:not(#modalScannerLibreta) .modal-footer > .me-auto { flex-basis: 100%; order: 9; margin-right: 0 !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal.fade .modal-dialog { transition: none !important; transform: none !important; }
+  .vn-op, .ci-op { transition: none; }
+}

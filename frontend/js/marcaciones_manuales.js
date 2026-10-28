@@ -744,8 +744,9 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
     // Set Title
     const titleEl = marcacionesManualesState.manualModal.querySelector('.modal-title');
     if (titleEl) {
-        titleEl.innerText = customTitle || "Corregir Anomalía de Asistencia";
+        titleEl.innerText = customTitle || "Corregir marcas del día";
     }
+    if (window.cabeceraPersona) window.cabeceraPersona(marcacionesManualesState.manualModal, { nombre: empNombre, empId: empId, fecha: dateStr });
 
     // Reset Form
     const lblFecha = document.getElementById('manual-fecha-display');
@@ -755,7 +756,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
 
     const lblEmp = document.getElementById('manual-empleado-display');
     if (lblEmp) {
-        lblEmp.value = empNombre;
+        lblEmp.value = window.nombreTitulo(empNombre);
     }
 
     // Manejo de Inputs de Hora
@@ -1348,7 +1349,7 @@ function openValidationModal(empId, dateStr, empNombre) {
     marcacionesManualesState.currentDate = dateStr;
 
     document.getElementById('val-fecha-display').innerText = window.formatFechaDDMMYYYY(dateStr);
-    document.getElementById('val-empleado-display').innerText = empNombre;
+    document.getElementById('val-empleado-display').innerText = window.nombreTitulo(empNombre);
 
     // Detectar si es cobertura (+2) en día hábil o jornada libre pura
     const empMatrix = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
@@ -1363,80 +1364,88 @@ function openValidationModal(empId, dateStr, empNombre) {
     const permiteHE = Boolean(!isBolsa && (ja || (asist && asist.estado === 'JORNADA_ESPECIAL')));
     const horasJa = ja && ja.minutos_trabajados ? (Math.round(ja.minutos_trabajados / 60.0 * 10) / 10)
         : (asist && asist.horas_trabajadas ? Math.round(asist.horas_trabajadas * 10) / 10 : 0);
-    const notaOpciones = '<div class="small text-muted mt-2 border-top pt-2">'
-        + '<div>• <strong>Validar Jornada (EXTRA):</strong> se paga con el monto fijo y no genera horas extra al 50 %. Una jornada EXTRA puede compensar una inasistencia completa.</div>'
-        + (permiteHE ? '<div>• <strong>Validar como Horas Extras:</strong> pasa al acumulador de horas extra al 50 %. Compensan una inasistencia minuto a minuto.</div>' : '')
-        + '</div>';
-    const subtituloModal = marcacionesManualesState.validationModal.querySelector('.modal-header .small');
-    if (subtituloModal) subtituloModal.textContent = esMasDos ? 'Segunda jornada del mismo día (+2)' : 'Día libre o feriado trabajado';
+    const horasTxt = String(horasJa).replace('.', ',') + ' h';
+    const kv = (et, val) => `<div><span>${et}</span><b>${val}</b></div>`;
 
     const alertBox = document.getElementById('val-alert-box');
     const promptText = document.getElementById('val-prompt-text');
     const extraInfo = document.getElementById('val-extra-info');
     const footerNote = document.getElementById('val-footer-note');
+    if (footerNote) { footerNote.innerHTML = ''; footerNote.classList.add('d-none'); }
 
     if (esMasDos && asist && (asist.horas_teoricas > 0 || asist.hora_entrada_real)) {
+        if (window.cabeceraPersona) window.cabeceraPersona(marcacionesManualesState.validationModal, { nombre: empNombre, empId: empId, fecha: dateStr, detalle: 'segunda jornada del mismo día (+2)' });
         if (alertBox) {
             alertBox.className = "alert alert-warning py-2 mb-3";
-            alertBox.innerHTML = '<i class="bi bi-lightning-fill me-2 text-warning"></i> <strong>Cobertura de Turno (+2) Detectada</strong><br><small class="text-muted">El trabajador hizo una segunda jornada el mismo día.</small>';
+            alertBox.innerHTML = '<i class="bi bi-lightning-fill me-2 text-warning"></i><strong>Cobertura de turno (+2) detectada.</strong> El trabajador hizo una segunda jornada el mismo día; el turno base se conserva intacto.';
         }
-        if (promptText) {
-            promptText.innerHTML = `¿Cómo desea validar la <strong>segunda jornada (${horasJa}h)</strong>?`;
-        }
+        if (promptText) promptText.textContent = `¿Cómo se valida la segunda jornada (${horasTxt})?`;
         if (extraInfo) {
-            extraInfo.innerHTML = `
-                <div class="mt-2 pt-2 border-top small">
-                    <div><strong>Turno Base:</strong> <span class="badge bg-success-subtle text-success">${asist.estado || 'OK'}</span> (${asist.hora_entrada_real || '--:--'} - ${asist.hora_salida_real || '--:--'}) <span class="text-muted">(Se conserva intacto)</span></div>
-                    <div><strong>Bloque Cobertura (+2):</strong> ${ja.hora_entrada || '--:--'} a ${ja.hora_salida || '--:--'} (${horasJa} hrs netas)</div>
-                </div>
-            `;
-            extraInfo.classList.remove('d-none');
+            extraInfo.className = 'vn-kvs mt-2';
+            extraInfo.innerHTML = kv('Turno base', `${window.textoEstado(asist.estado || 'OK')} · ${asist.hora_entrada_real || '--:--'} – ${asist.hora_salida_real || '--:--'}`)
+                + kv('Bloque +2', `${ja.hora_entrada || '--:--'} a ${ja.hora_salida || '--:--'}`)
+                + kv('Horas netas', horasTxt);
         }
-        if (footerNote) footerNote.innerHTML = notaOpciones;
     } else {
         const tipoDia = (ja && ja.origen === 'FERIADO') || (asist && asist.estado === 'FERIADO') ? 'feriado' : 'día libre';
+        if (window.cabeceraPersona) window.cabeceraPersona(marcacionesManualesState.validationModal, { nombre: empNombre, empId: empId, fecha: dateStr, detalle: 'trabajo en ' + tipoDia });
         if (alertBox) {
             alertBox.className = "alert alert-info py-2 mb-3";
-            alertBox.innerHTML = '<i class="bi bi-star-fill me-2"></i> <strong>Jornada especial</strong> · trabajo en ' + tipoDia + ' (no es un +2)';
+            alertBox.innerHTML = '<i class="bi bi-star-fill me-2"></i><strong>Jornada especial.</strong> Trabajo en ' + tipoDia + ' (no es un +2).';
         }
-        if (promptText) {
-            promptText.innerHTML = '¿Cómo desea validar la <strong>jornada especial (' + horasJa + 'h)</strong>?';
-        }
+        if (promptText) promptText.textContent = `¿Cómo se valida la jornada especial (${horasTxt})?`;
         if (extraInfo) {
             if (ja) {
-                extraInfo.innerHTML = '<div class="mt-2 pt-2 border-top small"><div><strong>Trabajó:</strong> '
-                    + (ja.hora_entrada || '--:--') + ' a ' + (ja.hora_salida || '--:--') + ' (' + horasJa + ' h)</div></div>';
-                extraInfo.classList.remove('d-none');
+                extraInfo.className = 'vn-kvs mt-2';
+                extraInfo.innerHTML = kv('Trabajó', `${ja.hora_entrada || '--:--'} a ${ja.hora_salida || '--:--'}`) + kv('Horas', horasTxt);
             } else {
                 extraInfo.innerHTML = '';
-                extraInfo.classList.add('d-none');
+                extraInfo.className = 'd-none';
             }
         }
-        if (footerNote) footerNote.innerHTML = notaOpciones;
     }
 
+    // Las mismas tres acciones de antes (EXTRA, horas extra y rechazar), como opciones; un solo botón confirma la elegida
+    const opciones = [{ accion: 'APROBAR', titulo: 'Jornada EXTRA', texto: 'Se paga con el monto fijo y no genera horas extra al 50 %. Puede compensar una inasistencia completa.', pill: '<span class="vn-pill">Monto fijo</span>', boton: 'Validar como jornada EXTRA' }];
+    if (permiteHE) opciones.push({ accion: 'APROBAR_COMO_HE', titulo: 'Horas extra', texto: 'Pasa al acumulador de horas extra al 50 %. Compensa una inasistencia minuto a minuto.', pill: '<span class="vn-pill a">Al 50 %</span>', boton: 'Validar como horas extra' });
+    opciones.push({ accion: 'RECHAZAR', titulo: 'Rechazar la jornada', texto: 'No se paga ni compensa.', pill: '', boton: 'Rechazar la jornada', borra: true });
+
+    const caja = document.getElementById('val-ops');
     const footer = marcacionesManualesState.validationModal.querySelector('.modal-footer');
-    if (footer) {
-        let btnHeHtml = '';
-        if (permiteHE) {
-            btnHeHtml = `
-            <button type="button" class="btn btn-warning text-dark fw-bold px-3" onclick="validateJornada('APROBAR_COMO_HE')" title="Aprobar la jornada como horas extra al 50 %">
-                ⏱️ Validar como Horas Extras
-            </button>`;
-        }
+    if (caja && footer) {
+        caja.innerHTML = opciones.map(o => `
+            <button type="button" class="vn-op${o.borra ? ' vn-borra' : ''}" role="radio" aria-checked="false" data-accion="${o.accion}">
+                <i class="vn-rd" aria-hidden="true"></i>
+                <span><b>${o.titulo}</b><span class="vn-t">${o.texto}</span></span>
+                ${o.pill}
+            </button>`).join('');
         footer.innerHTML = `
             <button type="button" class="btn btn-outline-danger me-auto" onclick="deleteManualJornada('${empId}', '${dateStr}')" title="Elimina las marcaciones manuales creadas en este día">
-                <i class="bi bi-trash"></i> Eliminar Ingreso Manual
+                <i class="bi bi-trash"></i> Eliminar ingreso manual
             </button>
             <button type="button" class="btn btn-secondary" onclick="closeValidationModal()">Cancelar</button>
-            <button type="button" class="btn btn-danger" onclick="validateJornada('RECHAZAR')">
-                ❌ Rechazar Jornada
-            </button>
-            ${btnHeHtml}
-            <button type="button" class="btn btn-success" onclick="validateJornada('APROBAR')">
-                ✅ Validar Jornada (EXTRA)
-            </button>
-        `;
+            <button type="button" class="btn btn-primary fw-bold px-4" id="val-confirmar" disabled>Elija una opción</button>`;
+        const confirmar = footer.querySelector('#val-confirmar');
+        let elegida = null;
+        const elegir = (btn) => {
+            elegida = opciones.find(o => o.accion === btn.dataset.accion);
+            caja.querySelectorAll('.vn-op').forEach(b => { b.setAttribute('aria-checked', b === btn ? 'true' : 'false'); b.tabIndex = b === btn ? 0 : -1; });
+            confirmar.disabled = false;
+            confirmar.textContent = elegida.boton;
+            confirmar.classList.toggle('vn-btn-borra', Boolean(elegida.borra));
+        };
+        caja.querySelectorAll('.vn-op').forEach((b, i) => {
+            b.tabIndex = i === 0 ? 0 : -1;
+            b.addEventListener('click', () => elegir(b));
+            b.addEventListener('keydown', (ev) => {
+                if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(ev.key)) return;
+                ev.preventDefault();
+                const todos = [...caja.querySelectorAll('.vn-op')];
+                const sig = todos[(todos.indexOf(b) + (ev.key === 'ArrowDown' || ev.key === 'ArrowRight' ? 1 : todos.length - 1)) % todos.length];
+                sig.focus(); elegir(sig);
+            });
+        });
+        confirmar.addEventListener('click', () => { if (elegida) validateJornada(elegida.accion); });
     }
 
     if (marcacionesManualesState.validationInstance) {

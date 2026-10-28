@@ -57,6 +57,7 @@
             return SIN_CONEXION;
         }
         t = t.replace(/^(⚠️|❌|✅)?\s*error:\s*/i, '');
+        if (window.fechasLegibles) t = window.fechasLegibles(t);
         if (/^error interno( del servidor)?\.?$/i.test(t)) return 'El servidor tuvo un problema y no terminó la operación. Vuelva a intentarlo.';
         if (/^(error desconocido|unknown error)\.?$/i.test(t)) return 'No se pudo completar. El servidor no dio el motivo.';
         return t;
@@ -177,6 +178,34 @@
     }
 
     const SIN_CONEXION = 'No hay conexión con el servidor. El cambio no se guardó; revise internet y vuelva a intentarlo.';
+    // Encabezado de una ventana de una persona (etapa 6): las iniciales en lugar del ícono y, bajo el título,
+    // «Nombre · día dd-mm-aaaa · detalle».
+    window.cabeceraPersona = function (modal, o) {
+        const cab = modal && modal.querySelector('.modal-header');
+        if (!cab) return;
+        o = o || {};
+        const nombre = window.nombreTitulo ? window.nombreTitulo(o.nombre) : String(o.nombre || '');
+        const p = String(o.nombre || '').trim().split(/\s+/).filter(t => t && t !== '.');
+        const ini = p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2);
+        let av = cab.querySelector('.vn-av');
+        if (!av) {
+            av = document.createElement('span');
+            const icono = cab.querySelector('.rounded-circle');
+            if (icono) icono.replaceWith(av);
+            else { const t = cab.querySelector('.modal-title'); (t && t.parentElement !== cab ? t.parentElement : t || cab).before(av); }
+        }
+        av.className = 'vn-av td-t' + ((Math.abs(parseInt(o.empId, 10) || 0) % 6) + 1);
+        av.setAttribute('aria-hidden', 'true');
+        av.textContent = ini.toUpperCase();
+        let dia = '';
+        if (o.fecha) {
+            try { dia = new Date(String(o.fecha).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long' }) + ' '; } catch (e) { dia = ''; }
+            dia += window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(o.fecha) : o.fecha;
+        }
+        const sub = cab.querySelector('.vn-sub') || cab.querySelector('.small');
+        if (sub) sub.textContent = [nombre, dia, o.detalle].filter(Boolean).join(' · ');
+    };
+
     window.Avisos = {
         sinConexion: () => avisar(SIN_CONEXION, 'error'),
         listo: (t, d) => avisoBreve(t, 'listo', d),

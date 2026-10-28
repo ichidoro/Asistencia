@@ -217,8 +217,8 @@ window.refreshEstadosAvisos = function() {
         const dupCol = esAct && (col[cl] || []).length > 1 ? (col[cl] || []).filter(c => c !== e.codigo) : [];
         inp.classList.toggle('is-invalid', dupSig.length > 0 || !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(inp.value.trim() || 'X'));
         let h = '';
-        if (dupSig.length) h += `<div class="text-danger small fw-semibold"><i class="bi bi-x-octagon-fill"></i> Etiqueta repetida con ${dupSig.map(_escAttr).join(', ')}</div>`;
-        if (dupCol.length) h += `<div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Mismo color que ${dupCol.map(_escAttr).join(', ')}</div>`;
+        if (dupSig.length) h += `<div class="text-danger small fw-semibold"><i class="bi bi-x-octagon-fill"></i> Etiqueta repetida con ${dupSig.map(c => (_estadosConfigList.find(x => x.codigo === c) || {}).nombre_display || c).map(_escAttr).join(', ')}</div>`;
+        if (dupCol.length) h += `<div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Mismo color que ${dupCol.map(c => (_estadosConfigList.find(x => x.codigo === c) || {}).nombre_display || c).map(_escAttr).join(', ')}</div>`;
         if (_COLORES_ESPECIALES.test(cl)) h += `<div class="text-muted small"><i class="bi bi-info-circle"></i> En la grilla se ve como su color base</div>`;
         aviso.innerHTML = h;
     });
