@@ -137,10 +137,10 @@ function showMandatoryLock(urgentAlerts, processedAlerts = []) {
     if (processedAlerts.length > 0) {
         html += `
             <tr class="bg-light">
-                <td colspan="7" class="py-2">
+                <td colspan="6" class="py-2">
                     <div class="d-flex align-items-center text-muted small fw-bold text-uppercase">
                         <hr class="flex-grow-1 me-2"> 
-                        <i class="bi bi-check-circle-fill me-1"></i> Ya decididos
+                        Ya decididos
                         <hr class="flex-grow-1 ms-2">
                     </div>
                 </td>
@@ -243,40 +243,29 @@ function updateAlertBadges(count) {
  */
 function renderVencimientoRow(emp, isProcessed) {
     const empData = btoa(unescape(encodeURIComponent(JSON.stringify(emp))));
-    const opacityClass = isProcessed ? 'opacity-75' : '';
-    const badgeClass = isProcessed ? 'bg-success' : (emp.estado_vencimiento === 'VENCIDO' ? 'bg-danger' : 'bg-warning text-dark');
-    const estadoText = isProcessed ? (emp.decision_actual || 'PROCESADO') : emp.estado_vencimiento;
+    const frase = (t) => { const s = String(t || '').replace(/_/g, ' ').trim().toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
+    const est = String(emp.estado_vencimiento || '').toUpperCase();
+    const tono = isProcessed ? 'ok' : (est === 'VENCIDO' || est === 'CRÍTICO') ? 'mal' : (est === 'ALERTA LEGAL') ? 'atn' : (est === 'PRÓXIMO') ? 'prox' : 'neu';
+    const estadoText = isProcessed ? frase(emp.decision_actual || 'Decidido') : (est === 'INFO. PENDIENTE' ? 'Falta información' : frase(emp.estado_vencimiento));
+    const d = emp.dias_restantes;
+    const quedan = d === undefined || d === null ? '—' : d < 0 ? `Vencido hace ${Math.abs(d)} ${Math.abs(d) === 1 ? 'día' : 'días'}` : d === 0 ? 'Vence hoy' : `${d} ${d === 1 ? 'día' : 'días'}`;
+    const lugar = [emp.area, emp.cargo].filter(Boolean).join(' · ') || '—';
 
     return `
-        <tr class="${opacityClass}">
-            <td style="white-space: nowrap;">
-                <div class="fw-bold ${isProcessed ? 'text-muted' : ''}" style="white-space: nowrap;">${window.nombreTitulo(emp.nombre_completo)}</div>
-                <div class="small text-muted" style="white-space: nowrap;">${emp.area || '-'} - ${emp.cargo || '-'}</div>
-            </td>
-            <td class="text-center">
-                <span class="badge bg-secondary">N° ${emp.cant_contratos || 1}</span>
-            </td>
-            <td><span class="badge bg-light text-dark border">${emp.tipo_contrato}</span></td>
-            <td class="${isProcessed ? 'text-muted' : 'text-danger'} fw-bold" style="white-space: nowrap;">${window.formatFechaDDMMYYYY(emp.fecha_salida) || 'Sin definir'}</td>
-            <td class="text-center" style="white-space: nowrap;">
-                <span class="badge bg-light text-dark border">
-                    ${emp.dias_restantes !== undefined ? (emp.dias_restantes < 0 ? 'Vencido (' + emp.dias_restantes + ')' : emp.dias_restantes + ' días') : '-'}
-                </span>
-            </td>
+        <tr class="${isProcessed ? 'ct-hecho' : ''}">
             <td>
-                <span class="badge ${badgeClass}" style="white-space: nowrap;">
-                    ${estadoText}
-                </span>
+                <div class="ct-nombre">${window.nombreTitulo(emp.nombre_completo)}</div>
+                <div class="ct-lugar">${lugar}</div>
             </td>
-            <td class="text-end" style="white-space: nowrap;">
+            <td class="ct-contrato">N° ${emp.cant_contratos || 1}<span> · ${frase(emp.tipo_contrato) || '—'}</span></td>
+            <td class="ct-fecha">${window.formatFechaDDMMYYYY(emp.fecha_salida) || 'Sin definir'}</td>
+            <td class="ct-quedan${!isProcessed && d !== undefined && d !== null && d <= 5 ? ' ct-pronto' : ''}">${quedan}</td>
+            <td><span class="ct-chip ct-${tono}">${estadoText}</span></td>
+            <td class="text-end">
                 ${isProcessed ? `
-                    <button class="btn btn-outline-secondary btn-sm btn-procesar-venc" data-emp="${empData}">
-                        <i class="bi bi-eye"></i> Ver
-                    </button>
+                    <button class="btn btn-light btn-sm btn-procesar-venc" data-emp="${empData}">Ver</button>
                 ` : `
-                    <button class="btn btn-primary btn-sm btn-procesar-venc" data-emp="${empData}">
-                        <i class="bi bi-pencil-square"></i> Procesar
-                    </button>
+                    <button class="btn btn-primary btn-sm btn-procesar-venc" data-emp="${empData}">Procesar</button>
                 `}
             </td>
         </tr>

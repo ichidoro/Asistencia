@@ -12,6 +12,14 @@ const StartupUI = {
         if (this.isFinished) return; // Ya terminó, no re-iniciar
         console.log("🚀 Iniciando Startup UI Manager...");
         this.startTime = Date.now();
+        const splash = document.getElementById('splash-screen');
+        if (splash && splash.classList.contains('play') && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            this.minDisplayTime = 1800;
+            splash.addEventListener('click', () => {
+                this.minDisplayTime = 0;
+                if (this._listo) this.finishStartup();
+            }, { once: true });
+        }
         this.startStatusCheck();
     },
 
@@ -35,6 +43,7 @@ const StartupUI = {
             this.updateSplash(data);
 
             if (data.ready) {
+                this._listo = true;
                 const elapsed = Date.now() - this.startTime;
                 const remaining = Math.max(0, this.minDisplayTime - elapsed);
 
@@ -58,7 +67,7 @@ const StartupUI = {
             console.warn("⚠️ Esperando servicios...", error.message);
             const message = document.getElementById('splash-message');
             if (message && !message.innerText.includes("Error")) {
-                message.innerText = "Conectando con el servidor...";
+                message.innerText = "Conectando con el servidor…";
             }
             // Reintentar tras error de red
             setTimeout(() => this.pollStatus(), 1000);
@@ -189,7 +198,7 @@ const StartupUI = {
     handleError(errorMsg) {
         const message = document.getElementById('splash-message');
         if (message) {
-            message.innerHTML = `<span style="color: #ef4444; font-weight: bold;">⚠️ ERROR CRÍTICO: ${errorMsg}</span><br><small>Reintente en unos momentos...</small>`;
+            message.innerHTML = `<span style="color: #ffb4cf; font-weight: 600;">El servidor no terminó de arrancar: ${errorMsg}</span><br><small>Se vuelve a intentar solo en unos segundos.</small>`;
         }
         // Permitir reintento automático tras 5s (solo si no ha terminado ya)
         if (!this.isFinished) {

@@ -52,71 +52,53 @@
 
     <!-- Critical Splash CSS (Prevents Initial Flash) -->
     <style>
+        /* Pantalla de carga con la intro de Aguacol (diseño HD). La barra muestra el avance real del servidor. */
         .splash-screen {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            inset: 0;
             z-index: 99999;
-            /* Máxima prioridad */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s;
-        }
-
-        .splash-screen.fade-out {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-        }
-
-        .splash-glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 32px;
-            padding: 60px;
-            width: 90%;
-            max-width: 500px;
-            text-align: center;
-        }
-
-        .premium-spinner {
-            width: 60px;
-            height: 60px;
-            border: 3px solid rgba(59, 130, 246, 0.1);
-            border-radius: 50%;
-            border-top-color: #3b82f6;
-            animation: premium-spin 1s linear infinite;
-            margin: 0 auto 40px;
-        }
-
-        @keyframes premium-spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .splash-loader-bar {
-            width: 100%;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 20px;
+            background: radial-gradient(1100px 680px at 50% 42%, #21379a 0%, #15246a 42%, #0b1442 100%);
+            color: #fff;
+            font-family: 'Barlow', system-ui, sans-serif;
+            transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.35s;
         }
-
-        .splash-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #3b82f6, #60a5fa);
-            width: 0%;
-            transition: width 0.4s ease;
+        .splash-screen.fade-out { opacity: 0; visibility: hidden; pointer-events: none; }
+        .splash-screen .in-c { position: absolute; left: 50%; top: 44%; width: 0; height: 0; }
+        .splash-screen .in-drop { position: absolute; width: 56px; height: 74px; left: -28px; top: -37px; opacity: 0; transform-origin: 50% 100%; }
+        .splash-screen .in-ring { position: absolute; left: -40px; top: -40px; width: 80px; height: 80px; border-radius: 50%; border: 1.5px solid rgba(122, 196, 72, .7); opacity: 0; }
+        .splash-screen .in-logo { position: absolute; width: min(460px, 76vw); left: calc(min(460px, 76vw) / -2); top: -64px; border-radius: 18px; overflow: hidden; }
+        .splash-screen .in-logo img { display: block; width: 100%; height: auto; }
+        .splash-screen .in-shine { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .45) 50%, transparent 65%); transform: translateX(-120%); }
+        .splash-screen .in-cap { position: absolute; left: -200px; width: 400px; top: 96px; margin: 0; text-align: center; color: rgba(222, 229, 255, .78); font: 500 15px 'Barlow', system-ui, sans-serif; letter-spacing: .02em; }
+        .splash-screen .in-bar { position: absolute; left: -120px; width: 240px; top: 132px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+        .splash-screen .splash-progress-fill { height: 100%; width: 0%; border-radius: 2px; background: linear-gradient(90deg, #4a8f24, #8cc63f); transition: width 0.4s ease; }
+        @media (max-width: 600px) {
+            .splash-screen .in-logo { top: -35px; border-radius: 10px; }
+            .splash-screen .in-drop { width: 38px; height: 50px; left: -19px; top: -25px; }
+            .splash-screen .in-cap { top: 56px; font-size: 13px; }
+            .splash-screen .in-bar { left: -80px; width: 160px; top: 86px; }
+        }
+        /* Primera vez del día: la gota cae, abre las ondas y aparece el logo */
+        .splash-screen.play .in-logo, .splash-screen.play .in-cap, .splash-screen.play .in-bar { opacity: 0; }
+        .splash-screen.play .in-drop { animation: in-fall .5s cubic-bezier(.55, 0, .8, .3) forwards, in-squash .2s .5s ease-out forwards, in-out .26s .66s ease-in forwards; }
+        .splash-screen.play .in-ring { animation: in-ring 1.15s cubic-bezier(.15, .7, .25, 1) forwards; }
+        .splash-screen.play .r1 { animation-delay: .5s; }
+        .splash-screen.play .r2 { animation-delay: .62s; }
+        .splash-screen.play .r3 { animation-delay: .76s; }
+        .splash-screen.play .in-logo { animation: in-logo .7s .64s cubic-bezier(.2, .8, .2, 1) forwards; }
+        .splash-screen.play .in-shine { animation: in-shine .9s .86s cubic-bezier(.4, 0, .2, 1) forwards; }
+        .splash-screen.play .in-cap, .splash-screen.play .in-bar { animation: in-up .45s 1s cubic-bezier(.2, .8, .2, 1) forwards; }
+        @keyframes in-fall { 0% { opacity: 0; transform: translateY(-300px) scaleY(1.3); } 18% { opacity: 1; } 100% { opacity: 1; transform: translateY(0) scaleY(1.12); } }
+        @keyframes in-squash { 0% { transform: scale(1, 1.12); } 45% { transform: scale(1.22, .76); } 100% { transform: scale(1, 1); } }
+        @keyframes in-out { to { opacity: 0; transform: scale(.5); } }
+        @keyframes in-ring { 0% { opacity: .85; transform: scale(.15); } 100% { opacity: 0; transform: scale(6.5); } }
+        @keyframes in-logo { 0% { opacity: 0; transform: scale(.94); filter: blur(8px); } 100% { opacity: 1; transform: scale(1); filter: blur(0); } }
+        @keyframes in-shine { to { transform: translateX(120%); } }
+        @keyframes in-up { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+            .splash-screen.play * { animation: none !important; opacity: 1 !important; }
+            .splash-screen.play .in-drop, .splash-screen.play .in-ring { opacity: 0 !important; }
         }
 
         /* Popover rico para celdas de asistencia */
@@ -155,23 +137,28 @@
 </head>
 
 <body>
-    <!-- Splash Screen Premium -->
-    <div id="splash-screen" class="splash-screen">
-        <div class="splash-glass">
-            <div class="splash-spinner-container">
-                <div class="premium-spinner"></div>
-            </div>
-            <div class="splash-content">
-                <h2 class="splash-title">Iniciando Sistema</h2>
-                <div class="splash-loader-container">
-                    <div class="splash-loader-bar">
-                        <div id="splash-progress" class="splash-progress-fill" style="width: 0%"></div>
-                    </div>
-                </div>
-                <p id="splash-message" class="splash-message">Iniciando servicios...</p>
-            </div>
+    <!-- Pantalla de carga con la intro de Aguacol: la barra muestra el avance real (startup_ui.js) -->
+    <div id="splash-screen" class="splash-screen" role="status" aria-live="polite">
+        <div class="in-c">
+            <svg class="in-drop" viewBox="0 0 56 74" aria-hidden="true"><defs><linearGradient id="intro-gota" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#9ccf4c"/><stop offset=".5" stop-color="#72b33c"/><stop offset=".5" stop-color="#4f9a2c"/><stop offset="1" stop-color="#3c8424"/></linearGradient></defs><path d="M28 0C28 0 0 34 0 47a28 27 0 0 0 56 0C56 34 28 0 28 0z" fill="url(#intro-gota)"/><path d="M15 46c0 7 5 12 11 13" stroke="rgba(255,255,255,.55)" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>
+            <i class="in-ring r1"></i><i class="in-ring r2"></i><i class="in-ring r3"></i>
+            <div class="in-logo"><img src="/static/assets/img/logo-aguacol.png" width="1001" height="278" alt="Aguacol, calidad y servicio"><i class="in-shine"></i></div>
+            <p id="splash-message" class="in-cap">Cargando…</p>
+            <div class="in-bar"><div id="splash-progress" class="splash-progress-fill" style="width: 0%"></div></div>
         </div>
     </div>
+    <script>
+        // La animación de la gota sale solo la primera vez del día en este equipo
+        (function () {
+            try {
+                var hoy = new Date().toISOString().slice(0, 10);
+                if (localStorage.getItem('intro-dia') !== hoy) {
+                    document.getElementById('splash-screen').classList.add('play');
+                    localStorage.setItem('intro-dia', hoy);
+                }
+            } catch (e) { /* sin almacenamiento: sin animación */ }
+        })();
+    </script>
 
     <div class="app-container">
         <!-- Sidebar -->
@@ -3307,16 +3294,15 @@
                             </div>
 
                             <div class="table-responsive rounded-3 border mb-4">
-                                <table class="table table-hover align-middle mb-0">
+                                <table class="table table-hover align-middle mb-0 ct-tabla">
                                     <thead class="table-light">
                                         <tr>
                                             <th style="white-space: nowrap;">Persona</th>
-                                            <th class="text-center" style="white-space: nowrap;">N° de contrato</th>
-                                            <th style="white-space: nowrap;">Tipo</th>
+                                            <th style="white-space: nowrap;">Contrato</th>
                                             <th style="white-space: nowrap;">Término</th>
-                                            <th class="text-center" style="white-space: nowrap;">Quedan</th>
+                                            <th style="white-space: nowrap;">Quedan</th>
                                             <th style="white-space: nowrap;">Estado</th>
-                                            <th class="text-end" style="white-space: nowrap;">Acción</th>
+                                            <th class="text-end" style="white-space: nowrap;"><span class="visually-hidden">Acción</span></th>
                                         </tr>
                                     </thead>
                                     <tbody id="bloqueo-vencimientos-body">
@@ -5059,7 +5045,7 @@
             <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v16" defer></script>
             <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v17" defer></script>
-            <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v16" defer></script>
+            <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v17" defer></script>
             <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/dashboard_react.js?v={{ startup_id }}" defer></script>
 

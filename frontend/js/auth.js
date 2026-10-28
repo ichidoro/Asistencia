@@ -5,7 +5,7 @@ window.fechasLegibles = function (texto) {
 // La base guarda los nombres en mayúsculas; se muestran con mayúscula inicial (partículas en minúscula)
 window.nombreTitulo = window.nombreTitulo || function (s) {
     const menores = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
-    return String(s || '').toLowerCase().split(/\s+/).filter(Boolean)
+    return String(s || '').toLowerCase().split(/\s+/).filter(p => p && p !== '.')
         .map((p, i) => (i > 0 && menores.has(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
 };
 // Nombre visible de un estado (Configuración › Estados) en minúsculas con mayúscula inicial; las siglas cortas quedan igual
@@ -73,7 +73,7 @@ const AuthService = {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || 'Error de autenticación');
+                throw new Error(errorData.detail || 'No se pudo entrar. Revise el usuario y la contraseña.');
             }
 
             const data = await response.json();

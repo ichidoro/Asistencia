@@ -169,6 +169,26 @@
 .modal-footer .vn-btn-borra:hover { background: #a51f68 !important; border-color: #a51f68 !important; }
 .modal-footer .btn[disabled] { opacity: .45; }
 
+/* ── Aviso de contratos al entrar ─────────────────────────────────────────── */
+#modal-bloqueo-mandatorio .stat-icon { display: none !important; }
+#modal-bloqueo-mandatorio .modal-body > .text-center { text-align: left !important; margin-bottom: 18px !important; }
+#modal-bloqueo-mandatorio .modal-body h3 { font: 600 22px/1.2 'Barlow Semi Condensed', 'Barlow', sans-serif; color: var(--ov-ink); margin-bottom: 6px; }
+#modal-bloqueo-mandatorio .table-responsive { border-color: var(--ov-line) !important; border-radius: 12px !important; }
+.ct-tabla thead th { background: var(--ov-sunk) !important; color: var(--ov-ink-3) !important; font-size: 12.5px !important; font-weight: 600 !important; text-transform: none !important; letter-spacing: 0 !important; border-bottom-color: var(--ov-line) !important; padding: 10px 14px !important; }
+.ct-tabla td { padding: 12px 14px !important; border-color: var(--ov-line-2) !important; vertical-align: middle; }
+.ct-nombre { font-weight: 600; color: var(--ov-ink); white-space: nowrap; }
+.ct-lugar { font-size: 12.5px; color: var(--ov-ink-3); white-space: nowrap; }
+.ct-contrato { white-space: nowrap; font-weight: 600; color: var(--ov-ink); }
+.ct-contrato span { font-weight: 400; color: var(--ov-ink-3); }
+.ct-fecha, .ct-quedan { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ov-ink-2); }
+.ct-pronto { color: #a3215f; font-weight: 600; }
+.ct-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; background: var(--ov-line-2); color: var(--ov-ink-2); }
+.ct-chip.ct-mal { background: #fce7ef; color: #a3215f; }
+.ct-chip.ct-atn { background: #fdf0e1; color: #9a4a08; }
+.ct-chip.ct-prox { background: #e9edfb; color: #1b2f8f; }
+.ct-chip.ct-ok { background: #e5f3ea; color: #16673b; }
+.ct-hecho td { opacity: .78; }
+
 /* ── Celular: la ventana sube desde abajo ────────────────────────────────── */
 @media (max-width: 768px) {
   .modal.fade:not(#modalScannerLibreta) .modal-dialog:not(.modal-fullscreen) {

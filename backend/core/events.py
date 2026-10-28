@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
     # ============================================
     # STARTUP
     # ============================================
-    startup_manager.update(5, "Iniciando servicios base...")
+    startup_manager.update(5, "Preparando la aplicación…")
     logger.info("=" * 60)
     logger.info(f"🚀 Iniciando {settings.APP_NAME}")
     logger.info("=" * 60)
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
         ensure_single_instance()
 
         # 1. Conectar a Database PostgreSQL
-        startup_manager.update(10, "Conectando al motor de base de datos PostgreSQL...")
+        startup_manager.update(10, "Conectando con la base de datos…")
         await db.connect()
         logger.success("Database PostgreSQL conectada")
 
@@ -137,7 +137,7 @@ async def lifespan(app: FastAPI):
             _t_start = datetime.now()
             try:
                 # 2. Warmup
-                startup_manager.update(25, "Optimizando motor de datos (Warmup)...")
+                startup_manager.update(25, "Preparando los datos…")
                 _t = datetime.now()
                 try:
                     await db.fetch_all("SELECT COUNT(*) FROM empleados")
@@ -146,7 +146,7 @@ async def lifespan(app: FastAPI):
                     logger.warning(f"⚠️ [Startup] Warmup DB falló (no crítico): {warmup_err}")
 
                 # 3. Inicializar Esquemas
-                startup_manager.update(40, "Verificando estructura de Seguridad...")
+                startup_manager.update(40, "Revisando usuarios y permisos…")
                 _t = datetime.now()
                 from backend.repositories.turno import TurnoRepository
                 from backend.repositories.empleado import EmpleadoRepository
@@ -160,12 +160,12 @@ async def lifespan(app: FastAPI):
                 await seguridad_repo.init_tables()
                 logger.info(f"⏱️ seguridad init_tables: {(datetime.now()-_t).total_seconds():.2f}s")
 
-                startup_manager.update(60, "Configurando entorno de Empleados...")
+                startup_manager.update(60, "Cargando las personas…")
                 _t = datetime.now()
                 await emp_repo.create_table()
                 logger.info(f"⏱️ empleado create_table: {(datetime.now()-_t).total_seconds():.2f}s")
 
-                startup_manager.update(80, "Cargando parámetros del sistema y Feriados...")
+                startup_manager.update(80, "Cargando turnos, ajustes y feriados…")
                 _t = datetime.now()
                 from backend.services.calendario_service import CalendarioService
                 cal_service = CalendarioService()
@@ -226,7 +226,7 @@ async def lifespan(app: FastAPI):
 
                 logger.info("🐘 PostgreSQL listo.")
 
-                startup_manager.update(100, "Iniciando Dashboard...", ready=True)
+                startup_manager.update(100, "Abriendo el Inicio…", ready=True)
                 total = (datetime.now() - _t_start).total_seconds()
                 logger.success(f"✅ Servidor listo y optimizado (startup background: {total:.2f}s)")
 
@@ -327,7 +327,7 @@ async def lifespan(app: FastAPI):
 
             except Exception as bg_err:
                 logger.error(f"❌ Error en inicio background: {bg_err}")
-                startup_manager.update(100, "Inicio parcial", ready=True, error=str(bg_err))
+                startup_manager.update(100, "Se abrió con un aviso", ready=True, error=str(bg_err))
 
         # FIX-CORRUPCION: finish_startup es BLOQUEANTE — el servidor NO acepta
         # requests hasta que TODAS las tablas estén creadas y sincronizadas.
@@ -344,7 +344,7 @@ async def lifespan(app: FastAPI):
         
     except Exception as e:
         logger.error(f"❌ Error crítico en startup: {e}")
-        startup_manager.update(0, "Error crítico", ready=False, error=str(e))
+        startup_manager.update(0, "No se pudo arrancar", ready=False, error=str(e))
         raise
     
     # ============================================

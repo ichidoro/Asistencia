@@ -14,7 +14,7 @@ class StartupManager:
     def __init__(self):
         self._status = StartupStatus(
             progress=0,
-            message="Iniciando sistema...",
+            message="Cargando…",
             ready=False
         )
 
