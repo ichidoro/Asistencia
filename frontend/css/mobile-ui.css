@@ -63,7 +63,7 @@
     content: "Desliza hacia los lados para ver todos los días" !important;
     background: none !important;
     border: 0 !important;
-    color: var(--ag-muted, #5a6a6a) !important;
+    color: var(--ag-muted, var(--ag-muted)) !important;
     font-family: var(--font-sans);
     font-size: .8125rem !important;
     font-weight: 500 !important;
@@ -86,14 +86,14 @@
     white-space: normal !important;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
     font-size: .8125rem !important; font-weight: 600; line-height: 1.2;
-    color: var(--ag-ink, #1a2326);
+    color: var(--ag-ink, var(--ag-ink));
   }
   .matrix-table-premium .sticky-col-analitica .emp-area-label {
     display: block !important;
     max-width: none !important;
     font-size: .75rem !important;
     margin-top: 2px;
-    color: var(--ag-muted, #5a6a6a);
+    color: var(--ag-muted, var(--ag-muted));
   }
 
   /* Columnas de día: ancho que sí contiene la ficha (52px) y alto táctil. */
@@ -186,7 +186,7 @@
     font-family: var(--font-sans);
     font-size: .8125rem;
     font-weight: 500;
-    color: var(--ag-muted, #5a6a6a);
+    color: var(--ag-muted, var(--ag-muted));
     padding: 0 4px 8px;
   }
   .mx-act-export .btn { flex: 1 1 auto; }

@@ -50,7 +50,7 @@ body:not(.estados-chip) .matrix-table-premium td.col-day .badge-status > span{
     line-height: 1;
     letter-spacing: 0.3px;
     text-transform: uppercase;
-    color: var(--ui-ink-deep, #1a2326);
+    color: var(--ui-ink-deep, var(--ag-ink));
     text-shadow: none;
 }
 
@@ -142,6 +142,6 @@ body:not(.estados-chip) .va-legend-bar .badge-status > span{
     font-weight: 800;
     line-height: 1;
     letter-spacing: 0.3px;
-    color: var(--ui-ink-deep, #1a2326);
+    color: var(--ui-ink-deep, var(--ag-ink));
 }
 body:not(.estados-chip) .va-legend-bar .badge-status > span i{ display: none; }

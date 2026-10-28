@@ -21,6 +21,7 @@ class CachedStaticFiles(StaticFiles):
             "css/fuentes.css", "css/aguacol-theme.css", "css/mobile-ui.css", "css/pages-refresh.css",
             "css/modales-modernos.css", "css/sidebar-riel.css", "css/tooltip-celda.css",
             "css/estados-grilla.css", "css/grilla-capas.css", "css/estados-chips.css",
+            "css/orden-visual.css",
         ],
     }
 

@@ -862,17 +862,18 @@ function getAreaBadgeClass(area) {
 }
 
 // --- V13: Avatar Color Palette ---
+// Orden visual común (27-10-2026): solo colores de la paleta Aguacol, sin violeta ni rojo (el rojo es de error)
 const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #3f6fd6, #8b5cf6)',
-  'linear-gradient(135deg, #3b82f6, #06b6d4)',
-  'linear-gradient(135deg, #10b981, #059669)',
-  'linear-gradient(135deg, #f59e0b, #d97706)',
-  'linear-gradient(135deg, #ef4444, #dc2626)',
-  'linear-gradient(135deg, #ec4899, #be185d)',
-  'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-  'linear-gradient(135deg, #14b8a6, #0d9488)',
-  'linear-gradient(135deg, #f97316, #ea580c)',
   'linear-gradient(135deg, #3f6fd6, #1b2f8f)',
+  'linear-gradient(135deg, #1b2f8f, #14235c)',
+  'linear-gradient(135deg, #5aad2e, #3c7d1c)',
+  'linear-gradient(135deg, #4a8f24, #2f6d1c)',
+  'linear-gradient(135deg, #0f7c86, #0b5b62)',
+  'linear-gradient(135deg, #e08a12, #b0500b)',
+  'linear-gradient(135deg, #3f6fd6, #16267a)',
+  'linear-gradient(135deg, #69738f, #3c4767)',
+  'linear-gradient(135deg, #2b8a9a, #0f5e6b)',
+  'linear-gradient(135deg, #22389e, #0d1a52)',
 ];
 
 function getAvatarGradient(name) {

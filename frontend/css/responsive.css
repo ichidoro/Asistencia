@@ -1568,7 +1568,7 @@
     /* Force explicit backgrounds to prevent Chrome Android auto-dark inversion */
     html, body {
         background-color: #f0f2f5 !important;
-        color: #1e293b !important;
+        color: var(--ui-ink) !important;
     }
 
     .main-content {
@@ -1580,7 +1580,7 @@
     }
 
     .header {
-        background-color: #1e293b !important;
+        background-color: var(--ui-ink) !important;
         color: #ffffff !important;
     }
 
@@ -1612,7 +1612,7 @@
     /* Form elements */
     .form-control, .form-select {
         background-color: #ffffff !important;
-        color: #1e293b !important;
+        color: var(--ui-ink) !important;
     }
 
     /* Modals */
@@ -1631,7 +1631,7 @@
     }
 
     .nav-link {
-        color: #475569 !important;
+        color: var(--ui-text-body) !important;
     }
 
     .nav-link.active {
@@ -1641,7 +1641,7 @@
 
     .nav-tabs .nav-link.active {
         background-color: #ffffff !important;
-        color: #1e293b !important;
+        color: var(--ui-ink) !important;
         border-bottom-color: #ffffff !important;
     }
 
@@ -2046,7 +2046,7 @@
         align-items: flex-start !important;
         padding: 14px 16px !important;
         gap: 10px !important;
-        border-bottom: 1px solid #e2e8f0 !important;
+        border-bottom: 1px solid var(--ui-line) !important;
     }
 
     /* Name/location section: full width */
@@ -2581,7 +2581,7 @@
     .mobile-nav-item {
         background: transparent !important;
         border: none !important;
-        color: #94a3b8 !important;
+        color: var(--ui-text-soft) !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
@@ -2860,8 +2860,8 @@
     flex-direction: column;
     border-radius: 18px;
     overflow: hidden;
-    background: #0f172a;
-    color: #f8fafc;
+    background: var(--ui-ink-deep);
+    color: var(--ui-surface);
 }
 
 #modalScannerLibreta .scanner-modal-header {

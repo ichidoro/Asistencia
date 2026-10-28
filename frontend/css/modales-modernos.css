@@ -14,8 +14,8 @@
   --m-blue: #3f6fd6;
   --m-green: #4a8f24;
   --m-red: #d9463a;
-  --m-ink: #1a2326;
-  --m-muted: #5a6a6a;
+  --m-ink: var(--ag-ink);
+  --m-muted: var(--ag-muted);
   --m-line: #e3e9e9;
   --m-soft: #f4f7f7;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -139,7 +139,7 @@
 .modal .form-control,
 .modal .form-select {
   border-radius: 10px !important;
-  border: 1px solid #d5dede !important;
+  border: 1px solid var(--ag-line) !important;
   transition: border-color .15s, box-shadow .15s;
 }
 .modal .form-control:focus,

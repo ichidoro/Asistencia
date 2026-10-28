@@ -7209,7 +7209,7 @@ function renderVistaAnalitica(respData, container) {
                 <i class="bi ${pinBtnIcon} me-1"></i> <span class="d-none d-sm-inline">${pinBtnText} Nombres</span>
             </button>
             <div class="btn-group shadow-sm" style="border-radius:8px;overflow:hidden">
-                <button class="btn btn-sm ${isClosed ? 'btn-secondary disabled' : 'btn-warning'} fw-bold" ${isClosed ? 'disabled' : ''} onclick="openCierrePeriodoModal()" title="${isClosed ? 'El periodo ya está cerrado' : 'Cerrar este periodo definitivamente'}">
+                <button class="btn btn-sm ${isClosed ? 'btn-secondary disabled' : 'btn-primary'} fw-bold" ${isClosed ? 'disabled' : ''} onclick="openCierrePeriodoModal()" title="${isClosed ? 'El periodo ya está cerrado' : 'Cerrar este periodo definitivamente'}">
                     <i class="bi bi-shield-lock-fill me-1"></i> <span class="d-none d-md-inline">Cerrar Periodo</span>
                 </button>
                 <button class="btn btn-sm btn-outline-secondary bg-white" onclick="openHistorialCierresModal()" title="Ver historial de cierres">

@@ -114,7 +114,7 @@
     font-size: .72rem;
 }
 .gc-tab[aria-selected="true"] {
-    color: #1a2326;
+    color: var(--ag-ink);
     background: #f8f9fa;
     border-color: #dee2e6;
     box-shadow: inset 0 3px 0 #3f6fd6;
@@ -198,5 +198,5 @@
     text-align: center;
     color: #5b6776;
 }
-.gc-vacio > .bi { font-size: 2rem; color: #94a3b8; display: block; margin-bottom: 8px; }
+.gc-vacio > .bi { font-size: 2rem; color: var(--ui-text-soft); display: block; margin-bottom: 8px; }
 .gc-vacio-t { font-size: .9rem; font-weight: 600; }
