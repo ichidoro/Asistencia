@@ -2602,7 +2602,7 @@ async def opciones_compensar_inasistencia(
     empleado_id: int = Query(...),
     fecha: str = Query(..., description="Día de la inasistencia AAAA-MM-DD"),
     service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.compensar", "marcaciones.intercambio"]))
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
 ):
     """Con qué se puede compensar una inasistencia: una jornada EXTRA del tramo (día completo) o horas extra (minuto a minuto)."""
     await _empleado_visible(service, current_user, empleado_id)
@@ -2614,7 +2614,7 @@ async def opciones_compensar_inasistencia(
 async def compensar_inasistencia(
     req: CompensarInasistenciaRequest,
     service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.compensar", "marcaciones.intercambio"]))
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
 ):
     """Compensa una inasistencia con una jornada EXTRA (que se gasta) o con horas extra que cubran todo el turno."""
     await _empleado_visible(service, current_user, req.empleado_id)
@@ -2631,7 +2631,7 @@ async def quitar_compensacion_inasistencia(
     empleado_id: int = Query(...),
     fecha: str = Query(..., description="Día de la inasistencia AAAA-MM-DD"),
     service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequireAnyPermission(["marcaciones.compensar", "marcaciones.intercambio"]))
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.compensar"))
 ):
     """Quita la compensación del día: la jornada usada vuelve a ser EXTRA y las horas extra quedan libres."""
     await _empleado_visible(service, current_user, empleado_id)

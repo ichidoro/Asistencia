@@ -99,6 +99,18 @@ def test_queda_una_sola_accion_para_compensar():
     assert "<span class=\"fw-bold\">Días Compensatorios</span>" not in grilla
 
 
+def test_compensar_se_asigna_por_rol_con_un_solo_permiso():
+    # Orden del dueño (27-10-2026): la acción se asigna según el perfil, desde Seguridad → Roles
+    roles = (RAIZ / "frontend" / "js" / "seguridad_ui.js").read_text(encoding="utf-8")
+    assert "'marcaciones.compensar':     { module: 'MARCACIONES', action: 'Compensar Inasistencias'" in roles
+    assert "action: 'Días Compensatorios'" not in roles
+    router = (RAIZ / "backend" / "routers" / "asistencia.py").read_text(encoding="utf-8")
+    for ruta in ('@router.get("/compensar-inasistencia/opciones/")', '@router.post("/compensar-inasistencia/")',
+                 '@router.delete("/compensar-inasistencia/")'):
+        bloque = router[router.index(ruta):router.index(ruta) + 700]
+        assert 'RequirePermission("marcaciones.compensar")' in bloque, ruta
+
+
 def test_los_textos_de_la_ventana_sobreviven_al_minificador():
     import rjsmin
     for archivo, texto in (("compensar_inasistencia.js", "Esa jornada deja de pagarse con el monto fijo y queda como jornada compensatoria."),

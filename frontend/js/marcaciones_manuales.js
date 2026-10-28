@@ -223,8 +223,8 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
     if (btnCompensarHE) {
         const empMatrixJ = stateMarcacionesApp.data && stateMarcacionesApp.data.matrix ? stateMarcacionesApp.data.matrix[empId] : null;
         const asistJ = empMatrixJ ? empMatrixJ[dateStr] : null;
-        const hasPerm = typeof AuthService !== 'undefined'
-            ? (AuthService.hasPermission("marcaciones.compensar") || AuthService.hasPermission("marcaciones.intercambio")) : true;
+        // Un solo permiso, asignable por rol en Seguridad → Roles: «Compensar Inasistencias»
+        const hasPerm = typeof AuthService !== 'undefined' ? AuthService.hasPermission("marcaciones.compensar") : true;
         if (asistJ && (asistJ.estado === 'INASISTENCIA' || asistJ.estado === 'FALTA') && hasPerm) {
             btnCompensarHE.classList.remove('d-none');
         } else {

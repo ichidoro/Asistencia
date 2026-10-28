@@ -54,8 +54,8 @@ const MAPA_UI_PERMISOS = {
     'marcaciones.cierre_periodo':{ module: 'MARCACIONES', action: 'Cierre',        description: 'Cerrar y sellar período ⚠️ Contable',           permissions: ['marcaciones.cierre_periodo'] },
     'marcaciones.bypass_cierre': { module: 'MARCACIONES', action: 'Bypass Cierre', description: 'Editar meses ya cerrados ⚠️ Alto Riesgo',       permissions: ['marcaciones.bypass_cierre'] },
     'marcaciones.sincronizar':   { module: 'MARCACIONES', action: 'Sincronizar',   description: 'Sincronizar y reprocesar desde toolbar',        permissions: ['marcaciones.sincronizar'] },
-    'marcaciones.intercambio':   { module: 'MARCACIONES', action: 'Días Compensatorios', description: 'Registrar y revertir intercambios de días (1x1)', permissions: ['marcaciones.intercambio'] },
-    'marcaciones.compensar':     { module: 'MARCACIONES', action: 'Compensar Inasistencias', description: 'Compensar inasistencias usando horas extras aprobadas', permissions: ['marcaciones.compensar'] },
+    // «Días Compensatorios» (marcaciones.intercambio) ya no tiene botón: compensar se hace con este único permiso (27-10-2026)
+    'marcaciones.compensar':     { module: 'MARCACIONES', action: 'Compensar Inasistencias', description: 'Compensar una inasistencia con una jornada EXTRA o con horas extra, y quitar la compensación', permissions: ['marcaciones.compensar'] },
 
 
     // ── MÓDULO REPORTES (4) ──
@@ -546,8 +546,7 @@ function getPermissionDetails(permId) {
         'marcaciones.cierre_periodo':{ alert: 'Cierre Contable',          flow: 'Congela datos de asistencia para liquidación' },
         'marcaciones.horas_extras':  { alert: 'Autorización Financiera',  flow: 'Aprobar que las horas extras se paguen en sueldo' },
         'marcaciones.sincronizar':   { alert: 'Integración BioAlba',     flow: 'Descarga marcaciones y reprocesar asistencia masivamente' },
-        'marcaciones.intercambio':   { alert: 'Operativo',                flow: 'Intercambiar un día de descanso trabajado por un día laboral libre (1x1)' },
-        'marcaciones.compensar':     { alert: 'Operativo',                flow: 'Compensar inasistencias con saldos de horas extras aprobadas' },
+        'marcaciones.compensar':     { alert: 'Ubicación: Acciones de asistencia (día de la inasistencia)', flow: 'Con una jornada EXTRA del tramo (cubre el día completo) o con horas extra que cubran todo el turno; también quitar la compensación' },
 
         // Reportes
         'reportes.reprocesar':  { alert: 'Cálculo Masivo',        flow: 'Dispara recálculo de asistencia desde Reportes' },

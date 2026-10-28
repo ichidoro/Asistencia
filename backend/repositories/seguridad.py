@@ -206,7 +206,7 @@ class SeguridadRepository:
                 ('marcaciones.bypass_cierre',    'Marcaciones',    'Desbloquear edición de meses ya cerrados (alto riesgo)'),
                 ('marcaciones.sincronizar',      'Marcaciones',    'Botón "Sincronizar" en toolbar -> descargar marcaciones y reprocesar'),
                 ('marcaciones.intercambio',      'Marcaciones',    'Registrar y revertir intercambios de días (Días Compensatorios)'),
-                ('marcaciones.compensar',        'Marcaciones',    'Compensar inasistencias usando horas extras aprobadas'),
+                ('marcaciones.compensar',        'Marcaciones',    'Compensar una inasistencia con una jornada EXTRA o con horas extra, y quitar la compensación'),
                 ('marcaciones.eliminar_manual',  'Marcaciones',    'Quitar una marcación manual (nunca las del reloj) desde "Marcaciones del día"; queda registro de quién, cuándo y por qué'),
 
 
