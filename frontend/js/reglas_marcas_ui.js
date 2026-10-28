@@ -19,6 +19,7 @@ const ReglasMarcasModule = (() => {
         ['RECLASIFICAR', 'Cambiar si una marca es ENTRADA o SALIDA'],
         ['CONFIRMAR', 'Confirmar que está bien'],
     ];
+    window.REGLAS_OPCIONES_REVISION = OPCIONES;   // la tarjeta del día muestra las mismas salidas de un día por revisar
     const CAMPOS_TXT = {
         estado: 'Estado', hora_entrada_real: 'ENTRADA', hora_salida_real: 'SALIDA', horas_trabajadas: 'Horas',
         minutos_atraso: 'Atraso (min)', minutos_salida_adelantada: 'Salida adelantada (min)', minutos_deuda: 'Tiempo que faltó (min)',

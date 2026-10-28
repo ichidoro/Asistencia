@@ -8,6 +8,7 @@
    - Columnas de resumen sin franjas de color; nombre completo en dos líneas con el cargo.
    - Solo el modo normal de la grilla: con el botón «Estados» en rectángulos o círculos
      (body.estados-chip) se mantiene el aspecto anterior.
+   - Las mismas pastillas se usan en la semana del celular y en la tarjeta del día (tarjeta-dia.css).
    ════════════════════════════════════════════════════════════════════ */
 
 /* Pares de color (fondo suave / sigla) por cada color configurable de Estados */
@@ -47,7 +48,9 @@
 
 /* La pastilla (grilla y leyenda) */
 body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status,
-body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status {
+body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status,
+body:not(.estados-chip) .sem-cel td.col-day .badge-status,
+.tdia .td-pill .badge-status {
   position: relative !important;
   display: inline-flex !important;
   align-items: center; justify-content: center;
@@ -60,7 +63,9 @@ body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status
   vertical-align: middle;
 }
 body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status > span,
-body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status > span {
+body:not(.estados-chip) #marcaciones-view-container .va-legend-bar .badge-status > span,
+body:not(.estados-chip) .sem-cel td.col-day .badge-status > span,
+.tdia .td-pill .badge-status > span {
   position: static !important; transform: none !important;
   font: 600 11px/1 'Barlow', 'Segoe UI', system-ui, sans-serif !important;
   letter-spacing: 0.04em; color: var(--st-fg) !important; white-space: nowrap;
@@ -69,13 +74,17 @@ body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col
 body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .color-gris > span { font-weight: 500 !important; }
 
 /* Varios estados en una celda: el primero y un «+N» */
-body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi {
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi,
+body:not(.estados-chip) .sem-cel td.col-day .st-multi {
   display: inline-flex !important; width: auto; max-width: none;
   margin: 0 auto !important; gap: 0; position: relative; line-height: 1; vertical-align: middle;
 }
-body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi > .badge-status { flex: none; margin: 0 !important; }
-body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi > .badge-status:not(:first-child) { display: none !important; }
-body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi::after {
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi > .badge-status,
+body:not(.estados-chip) .sem-cel td.col-day .st-multi > .badge-status { flex: none; margin: 0 !important; }
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi > .badge-status:not(:first-child),
+body:not(.estados-chip) .sem-cel td.col-day .st-multi > .badge-status:not(:first-child) { display: none !important; }
+body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .st-multi::after,
+body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
   bottom: auto; top: -5px; left: auto; right: -10px; margin: 0 !important; transform: none;
   font: 700 9px/1 'Barlow', sans-serif; color: #1f5fd1; background: #fff;
   border-radius: 6px; padding: 1px 3px; box-shadow: 0 0 0 1px #dde3f7;

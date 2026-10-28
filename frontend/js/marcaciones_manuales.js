@@ -323,6 +323,9 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         }
     }
 
+    // Etapa 3 del orden visual (28-10-2026): las reglas de arriba siguen decidiendo qué botones van, sobre esta
+    // ventana, pero se muestran en la tarjeta del día (tarjeta_dia.js). Sin la tarjeta, se abre la ventana de siempre.
+    if (window.TarjetaDia && window.TarjetaDia.abrir(empId, dateStr, empNombre)) return;
     if (marcacionesManualesState.decisionInstance) {
         marcacionesManualesState.decisionInstance.show();
     }
@@ -330,6 +333,7 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
 
 
 function closeAsistenciaActionModal() {
+    if (window.TarjetaDia) window.TarjetaDia.cerrar();
     if (marcacionesManualesState.decisionInstance) {
         marcacionesManualesState.decisionInstance.hide();
     }
