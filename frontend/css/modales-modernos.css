@@ -222,3 +222,27 @@
   .modal.fade .modal-dialog { transition: none; transform: none; }
   .btn:active:not(:disabled):not(.disabled), .nav-pills .nav-link:active, .btn-close:active { scale: 1; }
 }
+
+
+/* ── Áreas permitidas del modal de usuario: pastillas con tick propio ────────────
+   No usan el estilo nativo de .form-check-input (en algunos equipos el tick no se pintaba al marcar). */
+.area-pill { position: relative; display: inline-block; margin: 0; cursor: pointer; }
+.area-pill > input.area-check { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.area-pill-box {
+  display: inline-flex; align-items: center; gap: .5rem; padding: .38rem .8rem .38rem .45rem;
+  border: 1.5px solid #cfd6e6; border-radius: 999px; background: #fff; color: #3c4767;
+  font-size: .76rem; font-weight: 700; letter-spacing: .02em; user-select: none;
+  transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.area-pill:hover .area-pill-box { border-color: #1b2f8f; }
+.area-pill-tick {
+  width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #b8c1d6; background: #fff;
+  display: inline-flex; align-items: center; justify-content: center; color: transparent; font-size: .68rem;
+  transition: background-color .15s, border-color .15s, color .15s, transform .2s;
+}
+.area-pill > input.area-check:checked + .area-pill-box { background: #1b2f8f; border-color: #1b2f8f; color: #fff; box-shadow: 0 4px 12px rgba(27, 47, 143, .25); }
+.area-pill > input.area-check:checked + .area-pill-box .area-pill-tick { background: #fff; border-color: #fff; color: #1b2f8f; transform: scale(1.08); }
+.area-pill > input.area-check:focus-visible + .area-pill-box { outline: 2px solid #3f6fd6; outline-offset: 2px; }
+.area-pill-extra { font-style: normal; font-weight: 600; color: #b45309; }
+.area-pill > input.area-check:checked + .area-pill-box .area-pill-extra { color: #fde68a; }
+@media (prefers-reduced-motion: reduce) { .area-pill-box, .area-pill-tick { transition: none; } }

@@ -321,11 +321,12 @@ function poblarModalUsuario(areasUsuario) {
         const catalogo = new Set(cacheSeguridad.areas);
         const extras = (areasUsuario || []).filter(a => !catalogo.has(a));
         const todas = [...cacheSeguridad.areas, ...extras];
+        // Cada área es una pastilla con estilo propio (clases area-pill*): el tick ya no depende del estilo nativo del checkbox, que en algunos equipos no se pintaba.
         chips.innerHTML = todas.map(a => `
-            <div class="form-check form-check-inline">
-                <input class="form-check-input area-check" type="checkbox" value="${escHtml(a)}" id="area-${escHtml(a.replace(/\s+/g, '-'))}">
-                <label class="form-check-label small" for="area-${escHtml(a.replace(/\s+/g, '-'))}">${escHtml(a)}${extras.includes(a) ? ' <span class="text-warning">(fuera del catálogo)</span>' : ''}</label>
-            </div>
+            <label class="area-pill">
+                <input class="area-check" type="checkbox" value="${escHtml(a)}" id="area-${escHtml(a.replace(/\s+/g, '-'))}">
+                <span class="area-pill-box"><span class="area-pill-tick" aria-hidden="true"><i class="bi bi-check-lg"></i></span><span>${escHtml(a)}${extras.includes(a) ? ' <em class="area-pill-extra">(fuera del catálogo)</em>' : ''}</span></span>
+            </label>
         `).join('');
     }
 }
