@@ -423,7 +423,7 @@
                             <ul class="nav nav-pills emp-nav-pills gap-2 flex-wrap" id="empleadosTabs" role="tablist">
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link active" id="lista-tab" data-bs-toggle="tab"
-                                        data-bs-target="#tab-lista-empleados" type="button" role="tab"><i class="bi bi-people-fill me-1"></i>Lista General</button>
+                                        data-bs-target="#tab-lista-empleados" type="button" role="tab"><i class="bi bi-people-fill me-1"></i>Lista general</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link" id="contratos-tab" data-bs-toggle="tab"
@@ -435,12 +435,12 @@
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link" id="asignaciones-tab-emp" data-bs-toggle="tab"
-                                        data-bs-target="#tab-asignaciones-emp" type="button" role="tab"><i class="bi bi-calendar2-week me-1"></i>Turnos Asignados</button>
+                                        data-bs-target="#tab-asignaciones-emp" type="button" role="tab"><i class="bi bi-calendar2-week me-1"></i>Turnos asignados</button>
                                 </li>
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link" id="asignacion-masiva-tab-emp" data-bs-toggle="tab"
                                         data-bs-target="#tab-asignacion-masiva-emp" type="button" role="tab"
-                                        onclick="loadBulkData()"><i class="bi bi-arrow-repeat me-1"></i>Asignación Masiva</button>
+                                        onclick="loadBulkData()"><i class="bi bi-arrow-repeat me-1"></i>Asignación masiva</button>
                                 </li>
                             </ul>
                         </div>
@@ -479,19 +479,19 @@
                                         </div>
 
                                         <button class="btn btn-primary" id="btn-nuevo-empleado" data-permiso="empleados.crear">
-                                            <i class="bi bi-person-plus-fill me-1"></i>Nuevo Empleado
+                                            <i class="bi bi-person-plus-fill me-1"></i>Nuevo empleado
                                         </button>
                                     </div>
 
                                     <div class="emp-inner-tabs">
                                         <button class="emp-inner-tab active" data-tab="lista"
                                             onclick="switchEmpleadoTab('lista')">
-                                            <i class="bi bi-list-ul me-1"></i>Lista Empleados
+                                            <i class="bi bi-list-ul me-1"></i>Personas
                                         </button>
                                         <button class="emp-inner-tab" data-tab="matrix"
                                             onclick="switchEmpleadoTab('matrix')"
                                             data-permiso="empleados.bonos">
-                                            <i class="bi bi-grid-3x3 me-1"></i>Bonos Asignados
+                                            <i class="bi bi-grid-3x3 me-1"></i>Bonos asignados
                                         </button>
                                     </div>
 
@@ -502,14 +502,9 @@
                                             <table class="data-table">
                                                 <thead>
                                                     <tr>
-                                                        <th class="sortable-header" onclick="sortEmpleados('rut')"
-                                                            title="Ordenar por RUT">
-                                                            RUT <i id="sort-icon-empleados-rut"
-                                                                class="bi bi-arrow-down-up sort-icon text-muted"></i>
-                                                        </th>
                                                         <th class="sortable-header" onclick="sortEmpleados('nombre')"
-                                                            title="Ordenar por Nombre">
-                                                            Nombre Completo <i id="sort-icon-empleados-nombre"
+                                                            title="Ordenar por nombre">
+                                                            Persona <i id="sort-icon-empleados-nombre"
                                                                 class="bi bi-arrow-down-up sort-icon text-muted"></i>
                                                         </th>
                                                         <th class="sortable-header" onclick="sortEmpleados('cargo')"
@@ -531,19 +526,19 @@
                                                         <th class="sortable-header"
                                                             onclick="sortEmpleados('fecha_nacimiento')"
                                                             title="Ordenar por Fecha Nacimiento">
-                                                            F. Nacimiento <i id="sort-icon-empleados-fecha_nacimiento"
+                                                            Nacimiento <i id="sort-icon-empleados-fecha_nacimiento"
                                                                 class="bi bi-arrow-down-up sort-icon text-muted"></i>
                                                         </th>
                                                         <th class="sortable-header"
                                                             onclick="sortEmpleados('fecha_ingreso')"
                                                             title="Ordenar por Fecha Ingreso">
-                                                            F. Ingreso <i id="sort-icon-empleados-fecha_ingreso"
+                                                            Ingreso <i id="sort-icon-empleados-fecha_ingreso"
                                                                 class="bi bi-arrow-down-up sort-icon text-muted"></i>
                                                         </th>
                                                         <th class="sortable-header"
                                                             onclick="sortEmpleados('fecha_asignacion_turno')"
                                                             title="Ordenar por Fecha Asignación">
-                                                            F. Asignación <i id="sort-icon-empleados-fecha_asignacion_turno"
+                                                            Asignación <i id="sort-icon-empleados-fecha_asignacion_turno"
                                                                 class="bi bi-arrow-down-up sort-icon text-muted"></i>
                                                         </th>
                                                         <th class="sortable-header" onclick="sortEmpleados('activo')"
@@ -5060,6 +5055,8 @@
             <script src="/static/js/main.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/sidebar_riel.js?v={{ startup_id }}" defer></script>
             <script src="/static/js/buscador.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/personas_hd.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/ficha_persona.js?v={{ startup_id }}" defer></script>
 
     <!-- Carga diferida de pantallas secundarias (rendimiento): se descargan de a una, con el navegador
          libre, DESPUÉS de pintar el dashboard. switchPage() espera a __lazyPromise si alguien navega antes. -->

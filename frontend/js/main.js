@@ -1088,7 +1088,7 @@ function renderEmpleados(empleados) {
   if (empleados.length === 0) {
     tbody.innerHTML = `
             <tr>
-                <td colspan="10">
+                <td colspan="9">
                     <div class="emp-empty-state">
                         <i class="bi bi-person-x empty-icon"></i>
                         <h6>No se encontraron empleados</h6>
@@ -1118,13 +1118,12 @@ function renderEmpleados(empleados) {
 
     return `
             <tr class="fade-in-row" style="${animDelay}">
-                <td>${empleado.rut || sinAsignar}</td>
                 <td>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="emp-persona">
                         <div class="avatar-initials" style="background: ${avatarBg};">${initials}</div>
-                        <div>
-                            <div class="fw-bold" style="font-size: 0.85rem;">${fullName}</div>
-                            <div class="text-muted" style="font-size: 0.75rem;">${empleado.email || ''}</div>
+                        <div style="min-width:0">
+                            <button type="button" class="emp-nombre" onclick="window.FichaPersona && FichaPersona.abrir(${empleado.id})" title="Ver su tramo">${window.nombreTitulo(fullName)}</button>
+                            <div class="emp-rut">${empleado.rut_formateado || empleado.rut || 'Sin RUT'}</div>
                         </div>
                     </div>
                 </td>
@@ -1142,6 +1141,11 @@ function renderEmpleados(empleados) {
                 <td><span class="status-pill ${empleado.activo ? 'status-pill-success' : 'status-pill-danger'}"><span class="pill-dot" style="background: ${empleado.activo ? '#10b981' : '#f43f5e'};"></span>${estadoText}</span></td>
                 <td>
                     <div class="action-buttons-container">
+                        ${AuthService.hasPermission('marcaciones.ver') ? `
+                        <button class="btn btn-premium-action" onclick="window.FichaPersona && FichaPersona.abrir(${empleado.id})" data-bs-toggle="tooltip" data-bs-title="Ver su tramo" aria-label="Ver su tramo">
+                            <i class="bi bi-calendar3"></i>
+                        </button>
+                        ` : ''}
                         ${AuthService.hasPermission('empleados.editar') ? `
                         <button class="btn btn-premium-action btn-edit-premium" onclick="editEmpleado(${empleado.id})" data-bs-toggle="tooltip" data-bs-title="Editar ficha">
                             <i class="bi bi-pencil-square"></i>
@@ -1827,7 +1831,7 @@ window.editEmpleado = (id) => {
 
 window.deleteEmpleado = async (id) => {
   const filaEmp = document.querySelector(`.btn-delete-premium[onclick="deleteEmpleado(${id})"]`);
-  const nombreEmp = filaEmp && filaEmp.closest('tr') ? (filaEmp.closest('tr').querySelector('.fw-bold') || {}).textContent : '';
+  const nombreEmp = filaEmp && filaEmp.closest('tr') ? (filaEmp.closest('tr').querySelector('.emp-nombre') || {}).textContent : '';
   if (!await uiConfirm(nombreEmp ? `¿Eliminar a ${nombreEmp.trim()} para siempre?` : '¿Eliminar a esta persona para siempre?', {
     items: ['Se borran sus asistencias, turnos, bonos y todo su historial.', 'No se puede deshacer.'],
     confirmText: 'Eliminar para siempre', danger: true

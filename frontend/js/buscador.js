@@ -96,7 +96,7 @@
     }
     if (personas.length) {
       html += '<div class="bq-grupo">Personas</div>';
-      html += personas.map((p, k) => `<button type="button" class="bq-it" role="option" id="bq-op-${pant.length + k}" data-i="${pant.length + k}"><span class="bq-ic vn-av td-t${(Math.abs(parseInt(p.id, 10) || 0) % 6) + 1}" aria-hidden="true">${esc(iniciales(p.nombre))}</span><span><b>${esc(p.titulo)}</b><small>${esc(p.sub)}</small></span><span class="bq-ir">Ver en Empleados</span></button>`).join('');
+      html += personas.map((p, k) => `<button type="button" class="bq-it" role="option" id="bq-op-${pant.length + k}" data-i="${pant.length + k}"><span class="bq-ic vn-av td-t${(Math.abs(parseInt(p.id, 10) || 0) % 6) + 1}" aria-hidden="true">${esc(iniciales(p.nombre))}</span><span><b>${esc(p.titulo)}</b><small>${esc(p.sub)}</small></span><span class="bq-ir">${puede('marcaciones.ver') ? 'Ver su tramo' : 'Ver en Empleados'}</span></button>`).join('');
     }
     if (!items.length) {
       html = `<div class="bq-vacio">${q.length >= 2 ? 'No hay pantallas ni personas con «' + esc(input.value.trim()) + '».' : 'Escriba al menos dos letras para buscar personas.'}</div>`;
@@ -128,7 +128,8 @@
     if (!it) return;
     cerrar();
     if (it.tipo === 'pantalla') { it.el.click(); return; }
-    // Persona: Empleados con su nombre en el buscador de la lista
+    if (puede('marcaciones.ver') && window.FichaPersona) { window.FichaPersona.abrir(it.id); return; }
+    // Persona sin permiso de asistencia: Empleados con su nombre en el buscador de la lista
     const ir = document.querySelector('.sidebar-nav .sidebar-item[data-page="empleados"]');
     if (ir) ir.click();
     setTimeout(() => {
