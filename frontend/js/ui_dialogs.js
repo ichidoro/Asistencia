@@ -373,6 +373,34 @@
         }
     };
 
+    // ── Guardar: el botón que se tocó muestra que está trabajando y confirma con un visto (diseño HD) ──
+    // Solo mira: une el último clic en un botón principal de ventana con la escritura que sale enseguida.
+    let ultimoBoton = null, ultimoClic = 0;
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('.modal-footer .btn-primary, .modal-footer .btn-success, .modal-footer .vn-btn-borra');
+        if (b && !b.disabled) { ultimoBoton = b; ultimoClic = Date.now(); }
+    }, true);
+    const fetchAgrupado = window.fetch;
+    window.fetch = function (input, init) {
+        const p = fetchAgrupado(input, init);
+        try {
+            const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+            if (method !== 'GET' && ultimoBoton && Date.now() - ultimoClic < 800 && ultimoBoton.isConnected) {
+                const b = ultimoBoton;
+                ultimoBoton = null;
+                b.classList.add('vn-trabajando');
+                b.setAttribute('aria-busy', 'true');
+                const fin = (ok) => {
+                    b.classList.remove('vn-trabajando');
+                    b.removeAttribute('aria-busy');
+                    if (ok && b.isConnected) { b.classList.add('vn-listo'); setTimeout(() => b.classList.remove('vn-listo'), 900); }
+                };
+                p.then((r) => fin(r && r.ok), () => fin(false));
+            }
+        } catch (_) { /* solo es la vista: nunca afecta la petición */ }
+        return p;
+    };
+
     // ── Carga diferida de librerías pesadas (se descargan al primer uso) ────
     const LIBS = {
         jspdf: ['/static/js/jspdf.umd.min.js', '/static/js/jspdf.plugin.autotable.min.js'],

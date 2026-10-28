@@ -1,0 +1,62 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Animaciones intermedias del diseño HD — movimientos cortos (150–400 ms) que
+   muestran qué cambió. Con «menos movimiento» todo queda fijo.
+   - Guardar: el botón tocado muestra que está trabajando y confirma con un
+     visto (ui_dialogs.js le pone .vn-trabajando / .vn-listo).
+   - Tarjeta del día: crece un poco desde arriba al abrirse.
+   - En línea: el punto verde late suave; sin conexión deja de latir.
+   Las demás (hoja del celular, semana, carga de la grilla, deslizar para
+   marcar) ya están en tarjeta-dia.css, ventanas.css y sus módulos.
+   Va al final de bundle-tema.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Guardar */
+.vn-trabajando {
+  position: relative !important;
+  color: transparent !important;
+  pointer-events: none;
+}
+.vn-trabajando > * { visibility: hidden; }
+.vn-trabajando::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 16px; height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .45);
+  border-top-color: #fff;
+  animation: vn-gira .7s linear infinite;
+}
+.btn-light.vn-trabajando::after, .btn-secondary.vn-trabajando::after, .btn-outline-primary.vn-trabajando::after {
+  border-color: rgba(27, 47, 143, .25);
+  border-top-color: #1b2f8f;
+}
+@keyframes vn-gira { to { transform: rotate(360deg); } }
+.vn-listo { box-shadow: 0 0 0 3px rgba(22, 103, 59, .22) !important; transition: box-shadow .2s; }
+.vn-listo::before {
+  content: "✓";
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: 700;
+  animation: vn-visto .25s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes vn-visto { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+
+/* Tarjeta del día: crece desde arriba */
+.tdia:not(.td-hoja):not(.td-centro) { transform-origin: top center; }
+@keyframes td-nace { from { opacity: 0; translate: 0 6px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
+
+/* En línea: el punto late */
+.sidebar-footer .status-dot:not(.status-offline),
+#porteria-sync-indicator { animation: vn-latido 2.4s ease-in-out infinite; }
+@keyframes vn-latido {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(47, 158, 91, .45); }
+  50% { box-shadow: 0 0 0 5px rgba(47, 158, 91, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vn-trabajando::after { animation-duration: 1.6s; }
+  .vn-listo::before { animation: none; }
+  .sidebar-footer .status-dot, #porteria-sync-indicator { animation: none !important; }
+}

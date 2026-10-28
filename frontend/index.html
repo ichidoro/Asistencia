@@ -1193,7 +1193,7 @@
                         <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
                                 <h2 class="fw-bold mb-1 pg-dup-title"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Portería y Control de Ronda</h2>
-                                <p class="text-muted mb-0">Módulo de control de rondas nocturnas perimetrales en planta.</p>
+                                <p class="text-muted mb-0">Rondas, llaves, Artículo 22, flota, proveedores y visitas.</p>
                             </div>
                             <!-- Indicador Offline/Sincronización -->
                             <div id="porteria-sync-badge" class="d-flex align-items-center gap-2 px-3 py-2 rounded shadow-sm bg-success text-white">
@@ -1211,18 +1211,18 @@
                             <ul class="nav nav-pills emp-nav-pills gap-2 flex-wrap" id="porteriaTabs" role="tablist">
                                 <li class="nav-item" role="presentation" data-permiso="porteria.rondas">
                                     <button class="nav-link active" id="rondas-tab" data-bs-toggle="tab" data-bs-target="#tab-rondas-nocturnas" type="button" role="tab">
-                                        <i class="bi bi-shield-shaded me-1"></i>Rondas Nocturnas
+                                        <i class="bi bi-shield-shaded me-1"></i>Rondas nocturnas
                                     </button>
                                 </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.llaves">
                                     <button class="nav-link" id="llaves-tab" data-bs-toggle="tab" data-bs-target="#tab-entrega-llaves" type="button" role="tab" onclick="if(typeof LlavesModule !== 'undefined') LlavesModule.initTab()">
-                                        <i class="bi bi-key-fill me-1"></i>Entrega de Llaves
+                                        <i class="bi bi-key-fill me-1"></i>Entrega de llaves
                                     </button>
                                 </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.art22">
                                     <button class="nav-link" id="art22-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-art22" type="button" role="tab"
                                         onclick="if(typeof Articulo22Module !== 'undefined') Articulo22Module.initTab()">
-                                        <i class="bi bi-file-earmark-text-fill me-1"></i>Ingreso Artículo 22
+                                        <i class="bi bi-file-earmark-text-fill me-1"></i>Artículo 22
                                     </button>
                                 </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.flota">
@@ -1233,13 +1233,13 @@
                                 </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.proveedores">
                                     <button class="nav-link" id="proveedores-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-proveedores" type="button" role="tab">
-                                        <i class="bi bi-truck me-1"></i>Ingreso Proveedores
+                                        <i class="bi bi-truck me-1"></i>Proveedores
                                     </button>
                                 </li>
                                 <li class="nav-item" role="presentation" data-permiso="porteria.visitas">
                                     <button class="nav-link" id="visitas-tab" data-bs-toggle="tab" data-bs-target="#tab-control-visitas" type="button" role="tab"
                                         onclick="if(typeof VisitasModule !== 'undefined') VisitasModule.initTab()">
-                                        <i class="bi bi-person-badge-fill me-1"></i>Control de Visitas
+                                        <i class="bi bi-person-badge-fill me-1"></i>Visitas
                                     </button>
                                 </li>
 
@@ -1413,7 +1413,7 @@
                                         <div class="mb-4">
                                             <span style="font-size: 4rem;"><i class="bi bi-truck" aria-hidden="true"></i></span>
                                         </div>
-                                        <h3 class="fw-bold text-dark mb-2">Ingreso Proveedores</h3>
+                                        <h3 class="fw-bold text-dark mb-2">Ingreso de proveedores</h3>
                                         <p class="text-muted mb-4" style="max-width: 480px; margin: 0 auto;">Control de ingreso y salida de proveedores con registro de vehículos, carga y documentación.</p>
                                         <span class="badge bg-warning text-dark px-3 py-2 fs-6">
                                             <i class="bi bi-cone-striped me-1"></i>En Desarrollo
@@ -1446,7 +1446,7 @@
                                 <div class="cfg-group" role="presentation">
                                     <div class="cfg-group-title" aria-hidden="true">Asistencia</div>
                                     <button class="nav-link cfg-item active" id="horarios-tab" data-bs-toggle="tab" data-bs-target="#tab-horarios" type="button" role="tab"><i class="bi bi-clock" aria-hidden="true"></i> Turnos</button>
-                                    <button class="nav-link cfg-item" id="periodos-tab" data-bs-toggle="tab" data-bs-target="#tab-periodos" type="button" role="tab" onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()"><i class="bi bi-calendar-range" aria-hidden="true"></i> Tramos de Cierre</button>
+                                    <button class="nav-link cfg-item" id="periodos-tab" data-bs-toggle="tab" data-bs-target="#tab-periodos" type="button" role="tab" onclick="if(typeof loadPeriodosRRHH === 'function') loadPeriodosRRHH()"><i class="bi bi-calendar-range" aria-hidden="true"></i> Tramos de cierre</button>
                                     <button class="nav-link cfg-item" id="justificaciones-tab" data-bs-toggle="tab" data-bs-target="#tab-justificaciones" type="button" role="tab"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Justificaciones</button>
                                     <button class="nav-link cfg-item" id="calendario-tab" data-bs-toggle="tab" data-bs-target="#tab-calendario" type="button" role="tab"><i class="bi bi-calendar3" aria-hidden="true"></i> Calendario</button>
                                     <button class="nav-link cfg-item" id="estados-tab" data-bs-toggle="tab" data-bs-target="#tab-estados" type="button" role="tab" onclick="if(typeof loadEstadosConfig==='function') loadEstadosConfig()"><i class="bi bi-palette" aria-hidden="true"></i> Estados</button>
@@ -1470,13 +1470,13 @@
                                 </div>
                                 <div class="cfg-group" role="presentation">
                                     <div class="cfg-group-title" aria-hidden="true">Portería y flota</div>
-                                    <button class="nav-link cfg-item" id="catalogo-hallazgos-config-tab" data-bs-toggle="tab" data-bs-target="#tab-catalogo-hallazgos-config" type="button" role="tab" data-permiso="porteria.editar" onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Catálogo Hallazgos</button>
-                                    <button class="nav-link cfg-item" id="porteria-ubicaciones-config-tab" data-bs-toggle="tab" data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar" onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()"><i class="bi bi-geo-alt" aria-hidden="true"></i> Ubicación</button>
+                                    <button class="nav-link cfg-item" id="catalogo-hallazgos-config-tab" data-bs-toggle="tab" data-bs-target="#tab-catalogo-hallazgos-config" type="button" role="tab" data-permiso="porteria.editar" onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initAdminTab()"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Catálogo de hallazgos</button>
+                                    <button class="nav-link cfg-item" id="porteria-ubicaciones-config-tab" data-bs-toggle="tab" data-bs-target="#tab-porteria-ubicaciones" type="button" role="tab" data-permiso="porteria.editar" onclick="if(typeof PorteriaModule !== 'undefined') PorteriaModule.initUbicacionesTab()"><i class="bi bi-geo-alt" aria-hidden="true"></i> Ubicaciones de ronda</button>
                                     <button class="nav-link cfg-item" id="flota-config-tab" data-bs-toggle="tab" data-bs-target="#tab-flota-config" type="button" role="tab" data-permiso="configuracion.flota" onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initAdminTab()"><i class="bi bi-truck" aria-hidden="true"></i> Flota Aguacol</button>
                                 </div>
                                 <div class="cfg-group" role="presentation">
                                     <div class="cfg-group-title" aria-hidden="true">Entregas</div>
-                                    <button class="nav-link cfg-item" id="productos-propios-tab" data-bs-toggle="tab" data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo" onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()"><i class="bi bi-gift" aria-hidden="true"></i> Productos Propios</button>
+                                    <button class="nav-link cfg-item" id="productos-propios-tab" data-bs-toggle="tab" data-bs-target="#tab-productos-propios" type="button" role="tab" data-permiso="productos_4.catalogo" onclick="if(typeof Productos4Module !== 'undefined') Productos4Module.renderizarConfiguracionCatalogo()"><i class="bi bi-gift" aria-hidden="true"></i> Productos propios</button>
                                 </div>
                                 <div class="cfg-group" role="presentation">
                                     <div class="cfg-group-title" aria-hidden="true">Administración</div>
@@ -1565,7 +1565,7 @@
                                         <div class="col-md-8 mx-auto">
                                             <div class="card border-0 bg-light">
                                                 <div class="card-body p-4">
-                                                    <h5 class="fw-bold mb-4"><i class="bi bi-bank" aria-hidden="true"></i> Gestión de Pagadores</h5>
+                                                    <h5 class="fw-bold mb-4"><i class="bi bi-bank" aria-hidden="true"></i> Pagadores</h5>
                                                     <p class="text-muted small mb-4">Defina las entidades responsables del pago de los beneficios o permisos.</p>
                                                     <div class="mb-3">
                                                         <label for="config-new-pagador-nombre" class="form-label small fw-bold text-muted">Nombre del Nuevo Pagador</label>
@@ -3782,7 +3782,7 @@
                 <div class="modal-dialog modal-md modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header bg-danger text-white" id="modal-vencimiento-header">
-                            <h3 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> Gestión de Vencimiento de Contrato</h3>
+                            <h3 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> Contrato por vencer</h3>
                             <button aria-label="Cerrar" class="btn-close btn-close-white" onclick="closeVencimientoModal()"></button>
                         </div>
                         <div class="modal-body">
@@ -5210,7 +5210,7 @@
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content border-0 shadow-lg">
                         <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title fw-bold" id="modalUsuarioTitle"><i class="bi bi-person" aria-hidden="true"></i> Gestión de Usuario</h5>
+                            <h5 class="modal-title fw-bold" id="modalUsuarioTitle"><i class="bi bi-person" aria-hidden="true"></i> Usuario</h5>
                             <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body p-4">

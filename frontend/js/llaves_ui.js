@@ -33,7 +33,7 @@ const LlavesModule = (() => {
             <div class="llaves-kpi" id="llaves-kpis">
                 <div class="llaves-kpi-item" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9)">
                     <div class="kpi-value" id="kpi-total">-</div>
-                    <div class="kpi-label">Total Llaves</div>
+                    <div class="kpi-label">Llaves</div>
                 </div>
                 <div class="llaves-kpi-item" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb)">
                     <div class="kpi-value" id="kpi-disponibles">-</div>
@@ -46,9 +46,9 @@ const LlavesModule = (() => {
             </div>
 
             <div class="llaves-tabs">
-                <button class="llaves-tab-btn active" onclick="LlavesModule.showSection('estado')">📊 Estado Actual</button>
-                <button class="llaves-tab-btn" onclick="LlavesModule.showSection('catalogo')">🗝️ Catálogo</button>
-                <button class="llaves-tab-btn" onclick="LlavesModule.showSection('historial')">📋 Historial</button>
+                <button class="llaves-tab-btn active" onclick="LlavesModule.showSection('estado')">Estado actual</button>
+                <button class="llaves-tab-btn" onclick="LlavesModule.showSection('catalogo')">Catálogo</button>
+                <button class="llaves-tab-btn" onclick="LlavesModule.showSection('historial')">Historial</button>
             </div>
 
             <div id="seccion-estado" class="llaves-section active">

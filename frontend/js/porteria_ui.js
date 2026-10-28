@@ -955,7 +955,7 @@ const PorteriaModule = (function () {
                 <div class="col-lg-8">
                     <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                         <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center pt-3 pb-2 px-3">
-                            <h6 class="fw-bold mb-0 text-dark">Catálogo de Anomalías de Portería</h6>
+                            <h6 class="fw-bold mb-0 text-dark">Catálogo de hallazgos</h6>
                             <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1" onclick="PorteriaModule.cargarCatálogoHallazgos()"><i class="bi bi-arrow-clockwise"></i></button>
                         </div>
                         <div class="card-body p-3">

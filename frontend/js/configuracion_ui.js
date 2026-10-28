@@ -188,7 +188,7 @@ function _escAttr(v) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function _estadoSiglaDefecto(codigo) { return codigo === 'JORNADA_ESPECIAL' ? 'ESP' : String(codigo).substring(0, 3); }
-// Vista previa idéntica a la grilla: sigla sobre línea de color, dentro de una celda de día real
+// Vista previa idéntica a la grilla HD: la sigla en una pastilla de su color, dentro de una celda de día real (css/configuracion.css)
 function _estadoPreviewHtml(color, icono, sigla) {
     return `<table class="matrix-table-premium mb-0 mx-auto" style="width:84px;border:0;background:transparent" aria-hidden="true"><tbody><tr>
         <td class="col-day text-center p-0" style="height:38px;min-width:0;width:84px;border:1px solid #e2e8f0;background:#fff;position:relative;overflow:visible">
@@ -235,7 +235,7 @@ function renderEstadosConfig() {
     let html = `
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h5 class="fw-bold mb-1"><i class="bi bi-palette" aria-hidden="true"></i> Tabla Maestra de Estados</h5>
+            <h5 class="fw-bold mb-1"><i class="bi bi-palette" aria-hidden="true"></i> Estados</h5>
             <p class="small text-muted mb-0">Define cómo se visualiza cada estado en la grilla y tooltips.
             El <strong>código</strong> es inmutable — lo usa el motor de asistencia.</p>
         </div>
@@ -246,7 +246,7 @@ function renderEstadosConfig() {
     <div class="alert alert-info py-2 small mb-3">
         <i class="bi bi-info-circle me-1"></i>
         Los cambios se aplican en tiempo real; recarga la grilla de marcaciones para ver el efecto.
-        La vista previa muestra cómo se ve en la grilla: la <strong>etiqueta</strong> sobre una línea del <strong>color</strong> elegido.
+        La vista previa muestra la <strong>etiqueta</strong> en una pastilla del <strong>color</strong> elegido, tal como se ve en la grilla.
         Las etiquetas no pueden repetirse entre estados activos; si dos estados comparten color solo se avisa.
         Los colores Flúor, Pulso y Glitter se ven como su color base en la grilla.
     </div>
@@ -255,12 +255,12 @@ function renderEstadosConfig() {
         <thead class="table-light">
             <tr>
                 <th style="width:190px">Código</th>
-                <th style="width:130px">Nombre Display</th>
-                <th style="width:80px" class="text-center">Etiqueta (Max 5)</th>
+                <th style="width:150px">Nombre visible</th>
+                <th style="width:100px" class="text-center">Etiqueta (hasta 5)</th>
                 <th>Descripción</th>
                 <th style="width:175px">Color</th>
-                <th style="width:165px">Icono (Bootstrap)</th>
-                <th style="width:80px" class="text-center">Preview</th>
+                <th style="width:165px">Ícono</th>
+                <th style="width:90px" class="text-center">Vista previa</th>
                 <th style="width:80px" class="text-center">Activo</th>
                 <th style="width:80px" class="text-center">Guardar</th>
             </tr>
@@ -2220,7 +2220,7 @@ window.renderPeriodosRRHH = function(periodos) {
     let html = `
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h5 class="fw-bold mb-1"><i class="bi bi-calendar3" aria-hidden="true"></i> Tramos de Cierre Mensual</h5>
+            <h5 class="fw-bold mb-1"><i class="bi bi-calendar3" aria-hidden="true"></i> Tramos de cierre</h5>
             <p class="small text-muted mb-0">Defina los rangos de fechas de inicio y fin para el cierre de mes de Recursos Humanos.</p>
         </div>
         ${canEdit ? `

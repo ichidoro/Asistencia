@@ -435,7 +435,7 @@ const Productos4Module = {
         if (activeProds.length === 0) {
             Swal.fire({
                 title: "Catálogo Vacío",
-                text: "No existen productos activos en el catálogo para asignar. Diríjase a Configuración -> Productos Propios para agregar productos.",
+                text: "No hay productos activos para asignar. Agréguelos en Configuración, «Productos propios».",
                 icon: "warning"
             });
             return;

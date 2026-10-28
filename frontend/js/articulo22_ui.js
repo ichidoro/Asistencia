@@ -493,17 +493,17 @@ const Articulo22Module = (() => {
                 <div class="col-md-4">
                     <div class="art22-kpi" style="background: var(--primary-color)">
                         <i class="bi bi-people-fill kpi-icon"></i>
-                        <div class="kpi-label">Total Art. 22</div>
+                        <div class="kpi-label">Personas exentas</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="art22-stat-total">—</span>
-                            <span class="kpi-sub">empleados</span>
+                            <span class="kpi-sub">en total</span>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="art22-kpi" style="background: var(--success-color)">
                         <i class="bi bi-building-fill kpi-icon"></i>
-                        <div class="kpi-label">En Planta</div>
+                        <div class="kpi-label">En planta</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="art22-stat-presentes">—</span>
                             <span class="kpi-sub">activos ahora</span>
@@ -513,7 +513,7 @@ const Articulo22Module = (() => {
                 <div class="col-md-4">
                     <div class="art22-kpi" style="background: var(--warning-color)">
                         <i class="bi bi-clock-history kpi-icon"></i>
-                        <div class="kpi-label">Sin Registro</div>
+                        <div class="kpi-label">Sin registro</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="art22-stat-sin">—</span>
                             <span class="kpi-sub">pendientes hoy</span>
@@ -526,7 +526,7 @@ const Articulo22Module = (() => {
             <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
                 <div class="art22-section-header">
                     <span class="art22-section-title">
-                        <i class="bi bi-list-check" style="color:var(--primary-color)"></i>Estado del Día
+                        <i class="bi bi-list-check" style="color:var(--primary-color)"></i>Estado del día
                     </span>
                     <button class="btn btn-sm text-primary fw-semibold" style="font-size:0.8rem" onclick="Articulo22Module.cargarEstadoDia()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
@@ -918,7 +918,7 @@ const Articulo22Module = (() => {
         const proximaTipo = (!emp.marcas || emp.marcas.length === 0 || emp.marcas[emp.marcas.length - 1].tipo === 'S') ? 'Entrada' : 'Salida';
         const sliderClass = proximaTipo === 'Entrada' ? 'slider-e' : 'slider-s';
         const handleClass = proximaTipo === 'Entrada' ? 'handle-e' : 'handle-s';
-        const sliderText = proximaTipo === 'Entrada' ? 'Deslizar Entrada' : 'Deslizar Salida';
+        const sliderText = proximaTipo === 'Entrada' ? 'Deslizar ENTRADA' : 'Deslizar SALIDA';
         const handleIcon = proximaTipo === 'Entrada' ? 'bi-chevron-right' : 'bi-chevron-left';
 
         const sliderHtml = `
@@ -940,7 +940,7 @@ const Articulo22Module = (() => {
                                 <div class="art22-avatar-badge ${badgeClass}"></div>
                             </div>
                             <div class="art22-card-info">
-                                <div class="art22-card-name">${emp.nombre}</div>
+                                <div class="art22-card-name">${window.nombreTitulo(String(emp.nombre || '').replace(/\s*\.\s*,/, ','))}</div>
                                 <div class="art22-card-cargo">${emp.cargo || ''}</div>
                             </div>
                         </div>
@@ -954,7 +954,7 @@ const Articulo22Module = (() => {
                         </div>
                         <div class="art22-status-widget ${badgeClass}">
                             <span class="radar-dot"></span>
-                            <span>${emp.estado === 'en_planta' ? 'En Planta' : (emp.estado === 'fuera' ? 'Fuera' : 'Sin Registro')}</span>
+                            <span>${emp.estado === 'en_planta' ? 'En planta' : (emp.estado === 'fuera' ? 'Fuera' : 'Sin registro')}</span>
                         </div>
                     </div>
                 </div>

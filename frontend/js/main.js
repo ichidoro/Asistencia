@@ -1891,13 +1891,13 @@ async function updateSystemStatus() {
       return true;  // ← OK: el intervalo puede crecer
     } else {
       dot.style.backgroundColor = '#f59e0b'; // Amber
-      text.textContent = 'Conexión Degradada';
+      text.textContent = 'Conexión lenta';
       dot.classList.add('status-offline');
       return false; // ← Degradado: mantener chequeo frecuente
     }
   } catch (e) {
     dot.style.backgroundColor = '#ef4444'; // Red
-    text.textContent = 'Fuera de línea (Servidor)';
+    text.textContent = 'Sin conexión con el servidor';
     dot.classList.add('status-offline');
     return false;   // ← Error: volver a 30s
   }

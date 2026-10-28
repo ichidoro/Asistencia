@@ -1,0 +1,51 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Configuración con el diseño HD — solo presentación.
+   - Encabezados de tabla en palabras normales; las tablas anchas se
+     desplazan de lado en vez de cortar columnas o campos.
+   - La vista previa de Estados es la misma pastilla de la grilla HD.
+   - Avisos informativos en el azul suave de la aplicación.
+   Va al final de bundle-tema (después de porteria.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#page-configuracion .table thead th {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--ov-ink-3) !important;
+  white-space: nowrap;
+}
+#page-configuracion .table-responsive { overflow-x: auto !important; }
+#page-configuracion .alert-info {
+  background: #eef2fd !important;
+  border: 1px solid #d8e0fa !important;
+  color: var(--ov-ink-2) !important;
+  border-radius: 12px !important;
+}
+
+/* Estados: espacio para leer cada campo */
+#tabla-estados-config { min-width: 1420px; }
+#tabla-estados-config td input.form-control,
+#tabla-estados-config td select.form-select { min-width: 0; font-size: 13.5px; }
+
+/* Vista previa = la pastilla de la grilla HD */
+#tabla-estados-config td.col-day .badge-status {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center; justify-content: center;
+  width: auto !important; min-width: 36px; max-width: 56px;
+  height: 22px !important; min-height: 22px !important;
+  margin: 0 auto !important; padding: 0 6px !important;
+  border: 0 !important; border-radius: 6px !important;
+  background: var(--st-bg) !important; color: var(--st-fg) !important;
+  box-shadow: none !important; font-size: 0 !important; line-height: 1 !important;
+  vertical-align: middle;
+}
+#tabla-estados-config td.col-day .badge-status::before,
+#tabla-estados-config td.col-day .badge-status::after { display: none !important; }
+#tabla-estados-config td.col-day .badge-status > span {
+  position: static !important; transform: none !important;
+  font: 600 11px/1 'Barlow', 'Segoe UI', system-ui, sans-serif !important;
+  letter-spacing: .04em; color: var(--st-fg) !important; white-space: nowrap;
+}
+#tabla-estados-config td.col-day .badge-status i { display: none !important; }

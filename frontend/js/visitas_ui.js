@@ -87,7 +87,7 @@ const VisitasModule = (() => {
                         <i class="bi bi-person-badge-fill" style="font-size:1.3rem"></i>
                     </div>
                     <div>
-                        <h4 class="fw-bold mb-0" style="color:#1e293b; letter-spacing:-0.02em">Control de Visitas</h4>
+                        <h4 class="fw-bold mb-0" style="color:#1e293b; letter-spacing:-0.02em">Control de visitas</h4>
                         <p class="mb-0" style="font-size:0.82rem; color:#64748b; font-weight:500">Registro de ingreso y salida de visitantes</p>
                     </div>
                 </div>
@@ -101,7 +101,7 @@ const VisitasModule = (() => {
                 <div class="col-md-4">
                     <div class="vis-kpi" style="background:var(--primary-color)">
                         <i class="bi bi-people-fill kpi-icon"></i>
-                        <div class="kpi-label">Visitas Hoy</div>
+                        <div class="kpi-label">Visitas de hoy</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="vis-stat-total">—</span>
                             <span class="kpi-sub">registradas</span>
@@ -111,7 +111,7 @@ const VisitasModule = (() => {
                 <div class="col-md-4">
                     <div class="vis-kpi" style="background:var(--success-color)">
                         <i class="bi bi-building-fill-check kpi-icon"></i>
-                        <div class="kpi-label">En Planta</div>
+                        <div class="kpi-label">En planta</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="vis-stat-enplanta">—</span>
                             <span class="kpi-sub">ahora mismo</span>
@@ -134,14 +134,14 @@ const VisitasModule = (() => {
             <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
                 <div class="vis-section-header">
                     <span class="vis-section-title">
-                        <i class="bi bi-upc-scan" style="color:var(--primary-color)"></i>Escanear Cédula
+                        <i class="bi bi-upc-scan" style="color:var(--primary-color)"></i>Escanear cédula
                     </span>
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-primary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.iniciarCamara()">
-                            <i class="bi bi-camera-fill me-1"></i>Escanear con Cámara
+                            <i class="bi bi-camera-fill me-1"></i>Escanear con cámara
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.toggleManual()">
-                            <i class="bi bi-keyboard me-1"></i>Ingreso Manual
+                            <i class="bi bi-keyboard me-1"></i>Ingreso manual
                         </button>
                     </div>
                 </div>
@@ -247,7 +247,7 @@ const VisitasModule = (() => {
             <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
                 <div class="vis-section-header">
                     <span class="vis-section-title">
-                        <i class="bi bi-people" style="color:var(--primary-color)"></i>Visitantes del Día
+                        <i class="bi bi-people" style="color:var(--primary-color)"></i>Visitantes del día
                     </span>
                     <button class="btn btn-sm text-primary fw-semibold" style="font-size:0.8rem" onclick="VisitasModule.cargarEstadoDia()">
                         <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
@@ -824,7 +824,7 @@ const VisitasModule = (() => {
             body.innerHTML = data.visitantes.map(v => {
                 const initials = (v.nombre || v.rut || '??').substring(0,2).toUpperCase();
                 const statusClass = `vis-status-${v.estado}`;
-                const statusLabel = v.estado === 'en_planta' ? 'En Planta' : 'Salió';
+                const statusLabel = v.estado === 'en_planta' ? 'En planta' : 'Salió';
                 const marcasHtml = v.marcas.map(m => {
                     const isE = m.tipo === 'E';
                     const cls = isE ? 'art22-mark-e' : 'art22-mark-s';

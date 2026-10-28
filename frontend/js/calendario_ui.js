@@ -45,7 +45,7 @@ function renderCalendario() {
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h5 class="mb-0 fw-bold">Calendario Laboral ${currentYear}</h5>
-                <p class="small text-muted mb-0">Gestión de días no laborables y feriados legales de Chile.</p>
+                <p class="small text-muted mb-0">Días no laborables y feriados legales de Chile.</p>
             </div>
             <div class="d-flex gap-2">
                 <div class="btn-group btn-group-sm">

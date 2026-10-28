@@ -1,0 +1,66 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Portería con el diseño HD — solo presentación.
+   - Las cifras de cada pestaña (llaves, Artículo 22, flota, visitas) pasan de
+     tarjetas de colores fuertes a fichas claras con la cifra en color.
+   - El estado de sincronización es una pastilla suave.
+   - El botón deslizable de Artículo 22 ya no tapa su texto.
+   Los módulos agregan sus estilos después de este archivo: cada regla parte
+   de #page-porteria. Va al final de bundle-tema (después de personas.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#page-porteria #porteria-sync-badge {
+  background: #e5f3ea !important;
+  color: #16673b !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  padding: 6px 14px !important;
+}
+#page-porteria #porteria-sync-badge .status-dot { background: #2f9e5b !important; }
+#page-porteria #porteria-sync-badge #porteria-sync-text { font-weight: 600; font-size: 13px; }
+
+/* Cifras de cada pestaña */
+#page-porteria :is(.art22-kpi, .flota-kpi, .vis-kpi, .llaves-kpi-item) {
+  background: #fff !important;
+  color: var(--ov-ink) !important;
+  border: 1px solid var(--ov-line) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  padding: 14px 18px !important;
+  transform: none !important;
+  text-align: left !important;
+}
+#page-porteria :is(.art22-kpi, .flota-kpi, .vis-kpi) .kpi-icon { display: none !important; }
+#page-porteria :is(.art22-kpi, .flota-kpi, .vis-kpi, .llaves-kpi-item) .kpi-label {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--ov-ink-3) !important;
+  opacity: 1 !important;
+}
+#page-porteria :is(.art22-kpi, .flota-kpi, .vis-kpi) .kpi-number,
+#page-porteria .llaves-kpi-item .kpi-value {
+  font: 600 28px/1.1 'Barlow Semi Condensed', 'Barlow', sans-serif !important;
+  color: var(--ov-ink) !important;
+  font-variant-numeric: tabular-nums;
+}
+#page-porteria :is(.art22-kpi, .flota-kpi, .vis-kpi) .kpi-sub { color: var(--ov-ink-3) !important; opacity: 1 !important; font-size: 13px !important; font-weight: 400 !important; }
+#page-porteria .row > :nth-child(2) > :is(.art22-kpi, .flota-kpi, .vis-kpi) .kpi-number,
+#page-porteria .llaves-kpi-item:nth-child(2) .kpi-value { color: #16673b !important; }
+#page-porteria .row > :nth-child(3) > .art22-kpi .kpi-number { color: #9a4a08 !important; }
+#page-porteria .row > :nth-child(3) > .flota-kpi .kpi-number,
+#page-porteria .llaves-kpi-item:nth-child(3) .kpi-value { color: #1b2f8f !important; }
+#page-porteria .row > :nth-child(3) > .vis-kpi .kpi-number { color: var(--ov-ink-2) !important; }
+
+/* Pestañas internas de Llaves */
+#page-porteria .llaves-tab-btn.active { color: #1b2f8f !important; border-bottom-color: #1b2f8f !important; }
+#page-porteria .llaves-tab-btn:hover { color: #1b2f8f !important; }
+
+/* Botón principal de cada fila: el azul de la aplicación */
+#page-porteria .llaves-card .btn-success { background: #1b2f8f !important; border-color: #1b2f8f !important; color: #fff !important; }
+#page-porteria .llaves-card .btn-success:hover { background: #22389e !important; border-color: #22389e !important; }
+
+/* Artículo 22: el texto del botón deslizable queda a la derecha del tirador */
+#page-porteria .art22-slider-container { width: 196px !important; }
+#page-porteria .art22-slider-text { padding-left: 38px; font-size: .74rem !important; letter-spacing: .01em !important; text-transform: none !important; }
+#page-porteria .art22-card-name { text-transform: none !important; }

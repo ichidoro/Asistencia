@@ -735,7 +735,7 @@ const FlotaModule = (() => {
                 <div class="col-md-4">
                     <div class="flota-kpi" style="background: linear-gradient(135deg, #1e293b, #334155)">
                         <i class="bi bi-truck kpi-icon"></i>
-                        <div class="kpi-label">Total Flota</div>
+                        <div class="kpi-label">Flota</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="flota-stat-total">—</span>
                             <span class="kpi-sub">vehículos activos</span>
@@ -745,7 +745,7 @@ const FlotaModule = (() => {
                 <div class="col-md-4">
                     <div class="flota-kpi" style="background: linear-gradient(135deg, #10b981, #059669)">
                         <i class="bi bi-geo-alt-fill kpi-icon"></i>
-                        <div class="kpi-label">En Planta</div>
+                        <div class="kpi-label">En planta</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="flota-stat-planta">—</span>
                             <span class="kpi-sub">cargando/descargando</span>
@@ -755,7 +755,7 @@ const FlotaModule = (() => {
                 <div class="col-md-4">
                     <div class="flota-kpi" style="background: linear-gradient(135deg, #f43f5e, #be123c)">
                         <i class="bi bi-compass-fill kpi-icon"></i>
-                        <div class="kpi-label">En Despacho</div>
+                        <div class="kpi-label">En despacho</div>
                         <div class="d-flex align-items-baseline gap-2 mt-2">
                             <span class="kpi-number" id="flota-stat-viaje">—</span>
                             <span class="kpi-sub">fuera de planta</span>
