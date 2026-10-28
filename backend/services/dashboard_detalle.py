@@ -41,10 +41,15 @@ _SQL_JE = f"""
       FROM jornadas_especiales je JOIN empleados e ON e.id = je.empleado_id
      WHERE je.fecha BETWEEN ? AND ?
 """
+# Si el día de la marca es jornada especial, libre o feriado (no cuenta como corrección).
+_ESPECIAL_L = "CASE WHEN EXISTS (SELECT 1 FROM jornadas_especiales je WHERE je.empleado_id = l.empleado_id AND je.fecha = LEFT(CAST(l.fecha_hora AS TEXT), 10)) OR EXISTS (SELECT 1 FROM asistencias a2 WHERE a2.empleado_id = l.empleado_id AND a2.fecha = LEFT(CAST(l.fecha_hora AS TEXT), 10) AND a2.estado IN ('EXTRA', 'JORNADA_ESPECIAL', 'LIBRE', 'FERIADO')) THEN 1 ELSE 0 END"
 _SQL_MARCAS = f"""
     SELECT l.empleado_id, {_PERSONA} AS persona, {_area_de('l.empleado_id', 'LEFT(CAST(l.fecha_hora AS TEXT), 10)')} AS area,
            LEFT(CAST(l.fecha_hora AS TEXT), 10) AS fecha, SUBSTR(CAST(l.fecha_hora AS TEXT), 12, 5) AS hora, l.tipo,
            COALESCE(u.username, '') AS usuario, COALESCE(l.observaciones, '') AS observacion
+           , {_ESPECIAL_L} AS especial,
+           CASE WHEN EXISTS (SELECT 1 FROM logs_raw r WHERE r.empleado_id = l.empleado_id AND COALESCE(r.manual, 0) = 0
+                              AND LEFT(CAST(r.fecha_hora AS TEXT), 10) = LEFT(CAST(l.fecha_hora AS TEXT), 10)) THEN 1 ELSE 0 END AS con_reloj
       FROM logs_raw l JOIN empleados e ON e.id = l.empleado_id LEFT JOIN usuarios u ON u.id = l.usuario_id
      WHERE COALESCE(l.manual, 0) = 1 AND LEFT(CAST(l.fecha_hora AS TEXT), 10) BETWEEN ? AND ?
 """
@@ -234,22 +239,31 @@ class DashboardDetalle:
                                         {"id": "salida", "titulo": "Salida"}, {"id": "horas", "titulo": "Horas"},
                                         {"id": "estado", "titulo": "Estado"}]
 
-        elif k == "marcas_manuales":
-            m = await self._filas(_SQL_MARCAS, (fi, ff), filtro, areas_permitidas)
-            por_dia = defaultdict(int)
+        elif k == "correcciones_manuales":
+            todas = await self._filas(_SQL_MARCAS, (fi, ff), filtro, areas_permitidas)
+            m = [r for r in todas if r["especial"] == 0 and r["con_reloj"] == 1]
+            fuera_je = sum(1 for r in todas if r["especial"] == 1)
+            completos = [r for r in todas if r["especial"] == 0 and r["con_reloj"] == 0]
             por_usuario = defaultdict(int)
             for r in m:
-                por_dia[_DIAS_SEMANA[datetime.strptime(r["fecha"], "%Y-%m-%d").isoweekday() % 7]] += 1
                 por_usuario[r["usuario"] or "Sin usuario registrado"] += 1
-            out["resumen"] = ([{"etiqueta": "Marcas a mano", "valor": len(m)}]
-                              + [{"etiqueta": d, "valor": n} for d, n in sorted(por_dia.items(), key=lambda x: -x[1])])
-            out["resumen_extra"] = {"titulo": "Ingresadas por",
-                                    "items": [{"etiqueta": u, "valor": n} for u, n in sorted(por_usuario.items(), key=lambda x: -x[1])]}
+            out["resumen"] = [{"etiqueta": "Correcciones a mano", "valor": len(m)},
+                              {"etiqueta": "Días corregidos", "valor": len({(r["empleado_id"], r["fecha"]) for r in m})},
+                              {"etiqueta": "Personas", "valor": len({r["empleado_id"] for r in m})}]
+            out["resumen_extra"] = [
+                {"titulo": "Ingresadas por",
+                 "items": [{"etiqueta": u, "valor": n} for u, n in sorted(por_usuario.items(), key=lambda x: -x[1])]},
+                {"titulo": "No cuentan como corrección",
+                 "items": [{"etiqueta": "marcas de jornadas especiales, días libres o feriados", "valor": fuera_je},
+                           {"etiqueta": "marcas de días hechos completos a mano"
+                                        + (f" ({', '.join(sorted({r['persona'] for r in completos}))})" if completos else ""),
+                            "valor": len(completos)}]},
+            ]
             out["personas"] = agrupar(m, lambda fs: {"marcas": len(fs), "dias": len({x["fecha"] for x in fs})},
                                       lambda r: {"fecha": r["fecha"], "hora": r["hora"], "tipo": r["tipo"] or "",
                                                  "usuario": r["usuario"] or "Sin usuario registrado",
                                                  "observacion": r["observacion"]}, "marcas")
-            out["columnas"] = [{"id": "marcas", "titulo": "Marcas a mano"}, {"id": "dias", "titulo": "Días"}]
+            out["columnas"] = [{"id": "marcas", "titulo": "Correcciones"}, {"id": "dias", "titulo": "Días"}]
             out["columnas_registro"] = [{"id": "fecha", "titulo": "Fecha"}, {"id": "hora", "titulo": "Hora"},
                                         {"id": "tipo", "titulo": "Tipo"}, {"id": "usuario", "titulo": "Ingresada por"},
                                         {"id": "observacion", "titulo": "Observación"}]

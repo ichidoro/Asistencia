@@ -157,7 +157,7 @@ Definiciones comunes (`backend/services/dashboard_pendientes.py`):
 - Minutos por atraso = minutos de atraso / días con atraso.
 - Sobretiempo = horas extra aprobadas (minutos autorizados) / horas programadas.
 - Horas extra aprobadas, jornadas especiales (minutos trabajados en días libres o feriados) y deuda horaria = sumas del tramo.
-- Marcas a mano = marcas con `manual = 1` / todas las marcas.
+- Correcciones a mano = marcas a mano en días de trabajo normal en que el reloj también marcó (completan o corrigen el día) / todas las marcas de los días de trabajo normal. No cuentan las de jornadas especiales (trabajo en la parte externa de la planta), días libres ni feriados, ni las de días hechos completos a mano (decisión del dueño, 27-10-2026).
 - Rotación = bajas (inactivos que salieron en el tramo) / dotación al cierre del tramo.
 «Dónde»: en una tasa, las áreas que empeoraron contra su propio promedio; en un total, las que más suman. Un tramo cerrado guarda el cálculo de su época: una comparación entre tramos lo advierte, y el ausentismo avisa si tramos anteriores no tienen licencias registradas.
 La pantalla usa lenguaje neutro (pedido del dueño): «Para mejorar» y «En buen camino», nunca «empeoró».

@@ -22,7 +22,8 @@ export function topeEscala(i) {
   return 10 * p;
 }
 
-const decimales = (i) => (i.id === 'faltas' ? 0 : 1);
+// Un porcentaje bajo 1 % se muestra con dos decimales para que se note la diferencia (0,15 % contra 0,80 %).
+const decimales = (i) => (i.id === 'faltas' ? 0 : i.unidad === '%' && Math.max(Math.abs(num(i.valor)), Math.abs(num(i.promedio))) < 1 ? 2 : 1);
 const unidad = (i) => (!i.unidad ? '' : i.unidad === '%' ? ' %' : ` ${i.unidad}`);
 export const valorTexto = (i, v, dec) => (v === null || v === undefined ? '–' : `${fmt(v, dec === undefined ? decimales(i) : dec)}${unidad(i)}`);
 const mesCorto = (mes) => String(mes || '').split(' ')[0].toLowerCase();
@@ -89,7 +90,7 @@ function Fila({ i, onDetalle }) {
       </div>
       <div>
         <div className="dp-ind-val dp-num">{valorTexto(i, i.valor)}</div>
-        <div className="dp-ind-prom">promedio {valorTexto(i, i.promedio, 1)}</div>
+        <div className="dp-ind-prom">promedio {valorTexto(i, i.promedio, i.id === 'faltas' ? 1 : undefined)}</div>
       </div>
       <div className="dp-ind-est" data-tone={tono}>
         <i className={`bi ${tono === 'bad' ? 'bi-bullseye' : tono === 'good' ? 'bi-check-circle' : 'bi-dash-circle'}`} aria-hidden="true" /> {textoCambio(i)}
@@ -183,7 +184,7 @@ export function PanelDetalle({ i, tramo, area, pedir, onClose, onGrilla }) {
           <div style={{ minWidth: 0 }}>
             <h2 id="dp-det-titulo">{i.nombre}</h2>
             <div className="dp-det-sub">
-              {tramo ? tramo.mes : ''} · {area && area !== 'Todas' ? area : 'todas las áreas'} · {valorTexto(i, i.valor)} (promedio {valorTexto(i, i.promedio, 1)})
+              {tramo ? tramo.mes : ''} · {area && area !== 'Todas' ? area : 'todas las áreas'} · {valorTexto(i, i.valor)} (promedio {valorTexto(i, i.promedio, i.id === 'faltas' ? 1 : undefined)})
             </div>
             <div className="dp-det-def">{i.definicion}</div>
           </div>
@@ -196,11 +197,11 @@ export function PanelDetalle({ i, tramo, area, pedir, onClose, onGrilla }) {
             <div className="dp-det-res">
               {data.resumen.map((r) => <div key={r.etiqueta}><span>{r.etiqueta}</span><b className="dp-num">{celda('', r.valor)}</b></div>)}
             </div>
-            {data.resumen_extra ? (
-              <div className="dp-det-extra">
-                <span>{data.resumen_extra.titulo}:</span> {data.resumen_extra.items.map((x) => `${x.etiqueta} ${fmt(x.valor)}`).join(' · ')}
+            {[].concat(data.resumen_extra || []).map((ex) => (
+              <div className="dp-det-extra" key={ex.titulo}>
+                <span>{ex.titulo}:</span> {ex.items.map((x) => `${x.etiqueta} ${fmt(x.valor)}`).join(' · ')}
               </div>
-            ) : null}
+            ))}
             <div className="dp-det-tools">
               <input className="dp-select" type="search" placeholder="Buscar persona" value={buscar}
                 onChange={(e) => { setBuscar(e.target.value); setLimite(PAGINA); }} aria-label="Buscar persona" />

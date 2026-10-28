@@ -61,15 +61,23 @@ _SQL_JE = f"""
      GROUP BY 1, 2
 """
 
-# Marcas por persona y día primero (menos filas) y después el área de ese día.
+# Correcciones a mano (decisión del dueño, 27-10-2026): marcas a mano en días de trabajo normal en que el
+# reloj también marcó; las de jornadas especiales (trabajo fuera de la planta), días libres y feriados, y los
+# días hechos completos a mano no cuentan. Se cuentan marcas por persona y día y después el área de ese día.
+_ESPECIAL = ("CASE WHEN EXISTS (SELECT 1 FROM jornadas_especiales je WHERE je.empleado_id = g.empleado_id AND je.fecha = g.dia) "
+             "OR EXISTS (SELECT 1 FROM asistencias a2 WHERE a2.empleado_id = g.empleado_id AND a2.fecha = g.dia "
+             "AND a2.estado IN ('EXTRA', 'JORNADA_ESPECIAL', 'LIBRE', 'FERIADO')) THEN 1 ELSE 0 END")
 _SQL_MARCAS = f"""
     SELECT p.id AS tramo, {_area_de('m.empleado_id', 'm.dia')} AS area,
-           SUM(m.total) AS marcas, SUM(m.manuales) AS manuales
-      FROM (SELECT l.empleado_id, LEFT(CAST(l.fecha_hora AS TEXT), 10) AS dia, COUNT(*) AS total,
-                   SUM(CASE WHEN COALESCE(l.manual, 0) = 1 THEN 1 ELSE 0 END) AS manuales
-              FROM logs_raw l
-             WHERE LEFT(CAST(l.fecha_hora AS TEXT), 10) BETWEEN ? AND ?
-             GROUP BY 1, 2) m
+           SUM(CASE WHEN m.especial = 0 THEN m.total ELSE 0 END) AS marcas,
+           SUM(CASE WHEN m.especial = 0 AND m.reloj > 0 THEN m.manuales ELSE 0 END) AS manuales
+      FROM (SELECT g.*, {_ESPECIAL} AS especial
+              FROM (SELECT l.empleado_id, LEFT(CAST(l.fecha_hora AS TEXT), 10) AS dia, COUNT(*) AS total,
+                           SUM(CASE WHEN COALESCE(l.manual, 0) = 1 THEN 1 ELSE 0 END) AS manuales,
+                           SUM(CASE WHEN COALESCE(l.manual, 0) = 0 THEN 1 ELSE 0 END) AS reloj
+                      FROM logs_raw l
+                     WHERE LEFT(CAST(l.fecha_hora AS TEXT), 10) BETWEEN ? AND ?
+                     GROUP BY 1, 2) g) m
       JOIN periodos_rrhh p ON m.dia BETWEEN p.fecha_inicio AND p.fecha_fin
      GROUP BY 1, 2
 """
@@ -105,8 +113,9 @@ INDICADORES = [
      "definicion": "Horas trabajadas en días libres o feriados", "accion": "grilla"},
     {"id": "deuda", "nombre": "Deuda horaria", "unidad": "h", "mejor": "bajo", "tipo": "total",
      "definicion": "Horas que faltaron para cumplir el horario", "accion": "grilla"},
-    {"id": "marcas_manuales", "nombre": "Marcas a mano", "unidad": "%", "mejor": "bajo", "tipo": "tasa",
-     "definicion": "Marcas ingresadas a mano sobre el total de marcas", "accion": "grilla"},
+    {"id": "correcciones_manuales", "nombre": "Correcciones a mano", "unidad": "%", "mejor": "bajo", "tipo": "tasa",
+     "definicion": "Marcas a mano que completan o corrigen un día de trabajo en que el reloj también marcó, sobre las marcas de esos días",
+     "accion": "grilla"},
     {"id": "rotacion", "nombre": "Rotación", "unidad": "%", "mejor": "bajo", "tipo": "rotacion",
      "definicion": "Bajas sobre la dotación al cierre del tramo", "accion": "empleados"},
 ]
@@ -132,7 +141,7 @@ def calcular(s: Dict[str, float]) -> Dict[str, Optional[float]]:
         "horas_extra": s["minutos_he"] / 60.0,
         "jornadas_especiales": s["minutos_je"] / 60.0,
         "deuda": s["minutos_deuda"] / 60.0,
-        "marcas_manuales": _div(s["manuales"], s["marcas"], 100.0),
+        "correcciones_manuales": _div(s["manuales"], s["marcas"], 100.0),
         "rotacion": _div(s["bajas"], s["dotacion"], 100.0),
     }
 

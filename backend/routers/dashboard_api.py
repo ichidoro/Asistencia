@@ -54,7 +54,7 @@ async def get_dashboard_indicadores(
 
 @router.get("/indicadores/detalle/")
 async def get_dashboard_indicador_detalle(
-    indicador: str = Query(..., description="id del indicador (puntualidad, faltas, marcas_manuales, ...)"),
+    indicador: str = Query(..., description="id del indicador (puntualidad, faltas, correcciones_manuales, ...)"),
     area: Optional[str] = Query("Todas"),
     tramo: Optional[int] = Query(None),
     current_user: SecurityContext = Depends(RequirePermission("dashboard.ver"))

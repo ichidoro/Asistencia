@@ -35,13 +35,13 @@ def test_calculo_de_cada_indicador():
     assert v["minutos_atraso"] == 20.0
     assert v["sobretiempo"] == 2.5                     # 20 h / 800 h
     assert v["horas_extra"] == 20.0 and v["jornadas_especiales"] == 8.0 and v["deuda"] == 10.0
-    assert v["marcas_manuales"] == 2.0 and v["rotacion"] == 4.0
+    assert v["correcciones_manuales"] == 2.0 and v["rotacion"] == 4.0
 
 
 def test_sin_datos_no_inventa_valores():
     v = calcular(_sumas())
     assert v["puntualidad"] is None and v["ausentismo"] is None and v["minutos_atraso"] is None
-    assert v["sobretiempo"] is None and v["marcas_manuales"] is None and v["rotacion"] is None
+    assert v["sobretiempo"] is None and v["correcciones_manuales"] is None and v["rotacion"] is None
     # Si trabajaron y nadie llegó tarde, los minutos por atraso son 0 (no «sin dato»)
     assert calcular(_sumas(programados=10, asistidos=10))["minutos_atraso"] == 0.0
 
@@ -93,3 +93,14 @@ def test_la_pantalla_tiene_las_dos_pestanas_y_usa_la_lectura_nueva():
     assert '@router.get("/indicadores/")' in api and '@router.get("/pendientes/")' in api
     ind = (RAIZ / "backend/services/dashboard_indicadores.py").read_text(encoding="utf-8")
     assert "from backend.services.dashboard_pendientes import" in ind, "los indicadores dejaron de usar las mismas definiciones"
+
+
+def test_correcciones_a_mano_sin_jornadas_especiales_ni_dias_completos():
+    # Decisión del dueño (27-10-2026): las marcas a mano de jornadas especiales (trabajo fuera de la planta),
+    # días libres o feriados y los días hechos completos a mano no son correcciones.
+    from backend.services import dashboard_indicadores as di
+    assert "correcciones_manuales" in [i["id"] for i in di.INDICADORES]
+    assert "marcas_manuales" not in [i["id"] for i in di.INDICADORES]
+    sql = di._SQL_MARCAS
+    assert "jornadas_especiales" in sql and "'JORNADA_ESPECIAL'" in sql and "'FERIADO'" in sql
+    assert "m.especial = 0 AND m.reloj > 0 THEN m.manuales" in sql
