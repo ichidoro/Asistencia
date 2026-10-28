@@ -4760,6 +4760,35 @@ window.cierreFiltrarGrillaYIniciarCierre = async function(fIni, fFin) {
     }, 600);
 };
 
+// Desde el Dashboard («Lo que falta hacer»): va a Marcaciones, espera la grilla, la filtra por
+// el área y el tramo pedidos y, según la acción, abre el asistente de cierre, los días por
+// revisar o la columna de horas extra. El Dashboard no cambia nada: solo lleva aquí.
+window.abrirMarcacionesDesde = async function({ area = '', desde = '', hasta = '', accion = 'grilla' } = {}) {
+    if (typeof switchPage === 'function') switchPage('marcaciones');
+    for (let i = 0; i < 40 && !(stateMarcacionesApp.data && stateMarcacionesApp.data.matrix); i++) {
+        await new Promise(r => setTimeout(r, 350));
+    }
+    if (desde && hasta) {
+        stateMarcacionesApp.fechaInicioRRHH = desde;
+        stateMarcacionesApp.fechaFinRRHH = hasta;
+        const inputIni = document.getElementById('rrhh-fecha-inicio');
+        const inputFin = document.getElementById('rrhh-fecha-fin');
+        if (inputIni) inputIni.value = desde;
+        if (inputFin) inputFin.value = hasta;
+    }
+    stateMarcacionesApp.area = area || 'Todas';
+    const selectArea = document.getElementById('marcacion-area');
+    if (selectArea) selectArea.value = stateMarcacionesApp.area;
+    if (accion === 'he' && window.vistaAnaliticaState) window.vistaAnaliticaState.showHE = true;
+    await loadMarcacionesData();
+    if (accion === 'cierre') {
+        setTimeout(() => openCierrePeriodoModal(), 600);
+    } else if (accion === 'revisar') {
+        await window.actualizarPorRevisar();
+        window.abrirPanelPorRevisar();
+    }
+};
+
 window.cierreActualizarSeleccionDeArea = function(areaVal) {
     // Actualizar state principal
     stateMarcacionesApp.area = areaVal;

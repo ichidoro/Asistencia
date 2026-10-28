@@ -529,7 +529,7 @@ function setupEventListeners() {
 }
 
 // ── Guardia del Dashboard ────────────────────────────────────────────────
-// El dashboard (React) vive en dashboard_react.js, un bundle de ~590 KB con `defer`. Si en el celular
+// El dashboard (React) vive en dashboard_react.js, un bundle de ~170 KB con `defer`. Si en el celular
 // no alcanzó a cargar (red intermitente, service worker viejo) `initDashboard` no existe y la pantalla
 // quedaba en blanco para siempre sin ningún aviso. Ahora se reintenta unos segundos y, si sigue sin
 // montar, se muestra el motivo (último error de JS) y un botón que limpia caché + service worker.
@@ -680,7 +680,7 @@ function _executeSwitchPage(pageName) {
 
   // Update title
   const titles = {
-    'dashboard': 'Dashboard Analítico',
+    'dashboard': 'Dashboard',
     'empleados': 'Gestión de Empleados',
     'marcaciones': 'Marcaciones de Asistencia',
     'calendario': 'Calendario Mensual',

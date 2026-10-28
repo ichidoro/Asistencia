@@ -1,245 +1,395 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import TabHoy from './TabHoy';
-import TabPeriodo from './TabPeriodo';
-import { DX_CSS } from './styles';
-import { ErrorBoundary, Seg, horaActual } from './ui';
+import { DP_CSS } from './styles';
+import { ErrorBoundary, Skeleton, num, fmt, pct, plural, fechaCorta, diasHasta } from './ui';
 
 const API_BASE_URL = '/api';
 
 // Inyecta los estilos una sola vez (el bundle es un único .js, no hay hoja aparte)
 function useDashboardStyles() {
   useEffect(() => {
-    if (document.getElementById('dx-styles')) return;
+    if (document.getElementById('dp-styles')) return;
     const el = document.createElement('style');
-    el.id = 'dx-styles';
-    el.textContent = DX_CSS;
+    el.id = 'dp-styles';
+    el.textContent = DP_CSS;
     document.head.appendChild(el);
   }, []);
 }
 
+const TONO = { cerrado: 'ok', listo: 'ready', pendiente: 'warn' };
+const COLOR_TONO = { ok: 'var(--dp-ok)', ready: 'var(--dp-blue)', warn: 'var(--dp-warn)' };
+const ORDEN = { listo: 0, pendiente: 1, cerrado: 2 };
+
+const ddmm = (iso) => { const s = String(iso || ''); return s.length >= 10 ? `${s.slice(8, 10)}-${s.slice(5, 7)}` : s; };
+const mesCorto = (mes) => String(mes || '').split(' ')[0].toLowerCase();
+const hhmm = (s) => String(s || '').slice(11, 16);
+
+// Las acciones llevan a la pantalla donde se hace el trabajo (Marcaciones o Empleados): el Dashboard no cambia nada.
+function irAMarcaciones(opts) {
+  if (typeof window.abrirMarcacionesDesde === 'function') window.abrirMarcacionesDesde(opts);
+  else if (typeof window.switchPage === 'function') window.switchPage('marcaciones');
+}
+function verContratos() {
+  if (typeof window.switchPage === 'function') window.switchPage('empleados');
+  setTimeout(() => { const t = document.getElementById('contratos-tab'); if (t) t.click(); }, 300);
+}
+
+// Qué le falta a un área para cerrar el tramo y qué botón la resuelve
+function lecturaArea(a, tramo, hoy) {
+  if (a.estado === 'cerrado') {
+    const c = a.cerrado || {};
+    const dia = String(c.fecha || '').slice(0, 10);
+    const cuando = dia === hoy ? `Hoy a las ${hhmm(c.fecha)}` : `El ${ddmm(dia)} a las ${hhmm(c.fecha)}`;
+    return { chip: 'Cerrado', por: `${cuando}${c.por ? `, por ${c.por}` : ''}`, accion: null };
+  }
+  const aceptar = a.inasistencias ? `${plural(a.inasistencias, 'falta sin aviso', 'faltas sin aviso')} por aceptar al cerrar` : '';
+  if (a.estado === 'listo') {
+    return {
+      chip: 'Lista para cerrar',
+      por: aceptar || 'Sin horas extra por decidir ni días por revisar',
+      accion: { label: `Cerrar ${mesCorto(tramo.mes)}`, op: 'cierre', pr: true },
+    };
+  }
+  const partes = [];
+  if (a.libreta_dias) partes.push(`${plural(a.libreta_dias, 'día', 'días')} de libreta sin registrar (${plural(a.libreta_personas, 'chofer', 'choferes')})`);
+  if (a.por_revisar) partes.push(`${plural(a.por_revisar, 'día', 'días')} por revisar (${a.fechas_por_revisar.map(ddmm).join(', ')})`);
+  if (a.he_pendientes) partes.push(`${plural(a.he_pendientes, 'solicitud', 'solicitudes')} de horas extra por decidir (${fmt(a.he_horas, 1)} h)`);
+  if (a.anomalias) partes.push(`${plural(a.anomalias, 'día', 'días')} con anomalía`);
+  if (a.otros_pendientes) partes.push(`${plural(a.otros_pendientes, 'día', 'días')} sin calcular`);
+  if (a.en_curso) partes.push(`${plural(a.en_curso, 'jornada', 'jornadas')} en curso`);
+  if (aceptar) partes.push(aceptar);
+  let chip = 'Con pendientes';
+  let accion = { label: 'Ver en la grilla', op: 'grilla' };
+  if (a.libreta_dias) { chip = `Faltan ${plural(a.libreta_dias, 'día', 'días')} de libreta`; accion = { label: 'Ir a libretas', op: 'libreta' }; }
+  else if (a.por_revisar) { chip = `Falta revisar ${plural(a.por_revisar, 'día', 'días')}`; accion = { label: 'Revisar días', op: 'revisar' }; }
+  else if (a.he_pendientes) { chip = 'Faltan horas extra por decidir'; accion = { label: 'Decidir horas extra', op: 'he' }; }
+  else if (a.anomalias) { chip = `${plural(a.anomalias, 'día', 'días')} con anomalía`; }
+  return { chip, por: partes.join(' · '), accion };
+}
+
+function Card({ title, sub, children, className = '' }) {
+  return (
+    <section className={`dp-card ${className}`}>
+      <div className="dp-card-head">
+        <h2>{title}</h2>
+        {sub ? <span className="dp-card-sub">{sub}</span> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function CierreTramo({ tramo, hoy }) {
+  const areas = [...tramo.areas].sort((x, y) => ORDEN[x.estado] - ORDEN[y.estado] || x.area.localeCompare(y.area, 'es'));
+  const n = (e) => areas.filter((a) => a.estado === e).length;
+  const resumen = [
+    n('cerrado') ? plural(n('cerrado'), 'cerrada', 'cerradas') : null,
+    n('listo') ? plural(n('listo'), 'lista', 'listas') : null,
+    n('pendiente') ? `${fmt(n('pendiente'))} con pendientes` : null,
+  ].filter(Boolean).join(' · ');
+  const SEG = { cerrado: 0, listo: 1, pendiente: 2 };
+  const segs = [...tramo.areas].sort((x, y) => SEG[x.estado] - SEG[y.estado]);
+  return (
+    <Card title={`Cierre de ${tramo.mes}`} sub={`El tramo terminó el ${ddmm(tramo.fecha_fin)}`}>
+      <div className="dp-segs" aria-hidden="true">
+        {segs.map((a) => <span key={a.area} style={{ background: COLOR_TONO[TONO[a.estado]] }} />)}
+      </div>
+      <div className="dp-legend-line">{resumen}</div>
+      <div className="dp-close-list">
+        {areas.map((a) => {
+          const l = lecturaArea(a, tramo, hoy);
+          return (
+            <div className="dp-close-row" key={a.area}>
+              <div className="dp-close-area">{a.area}</div>
+              <span className="dp-chip" data-tone={TONO[a.estado]}>{l.chip}</span>
+              <div className="dp-close-why">{l.por}</div>
+              {l.accion ? (
+                <button
+                  type="button"
+                  className={`dp-btn ${l.accion.pr ? 'dp-pr' : ''}`}
+                  onClick={() => irAMarcaciones({ area: a.area, desde: tramo.fecha_inicio, hasta: tramo.fecha_fin, accion: l.accion.op })}
+                >
+                  {l.accion.label}
+                </button>
+              ) : <span />}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function HorasExtra({ he, tramo }) {
+  const max = Math.max(0.0001, ...he.por_area.map((x) => num(x.horas)));
+  const meses = he.por_tramo.map((t) => mesCorto(t.mes)).map((m) => m.charAt(0).toUpperCase() + m.slice(1)).join(' y ');
+  const sub = he.solicitudes ? `${meses} · ${plural(he.solicitudes, 'solicitud', 'solicitudes')} · ${fmt(he.horas, 1)} h` : '';
+  return (
+    <Card title="Horas extra por decidir" sub={sub}>
+      {he.solicitudes === 0 ? (
+        <div className="dp-empty">No hay horas extra por decidir.</div>
+      ) : (
+        <>
+          <div style={{ marginTop: 8 }}>
+            {he.por_area.map((x) => (
+              <div className="dp-bar-row" key={x.area}>
+                <span>{x.area}</span>
+                <div className="dp-track"><span style={{ width: `${(num(x.horas) / max) * 100}%` }} /></div>
+                <span className="dp-num" style={{ fontSize: 14 }}>{fmt(x.solicitudes)} · {fmt(x.horas, 1)} h</span>
+              </div>
+            ))}
+          </div>
+          {tramo ? (
+            <div className="dp-foot">
+              <button type="button" className="dp-btn" onClick={() => irAMarcaciones({ area: '', desde: tramo.fecha_inicio, hasta: tramo.fecha_fin, accion: 'he' })}>
+                Decidir horas extra
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function Contratos({ c, hoy }) {
+  const conDecision = c.total + c.vencidos - c.sin_decision;
+  const sub = c.total + c.vencidos === 0 ? '' : `${fmt(c.total)} en ${fmt(c.dias)} días · ${conDecision === 0 ? 'ninguno con decisión' : `${plural(c.sin_decision, 'sin decisión', 'sin decisión')}`}`;
+  return (
+    <Card title="Contratos por vencer" sub={sub}>
+      {c.total + c.vencidos === 0 ? (
+        <div className="dp-empty">Ningún contrato vence en los próximos {fmt(c.dias)} días.</div>
+      ) : (
+        <>
+          <div className="dp-list">
+            {c.vencidos ? (
+              <div className="dp-list-row">
+                <span className="dp-grow dp-soon">Ya vencieron y siguen activos</span>
+                <span className="dp-num dp-soon">{fmt(c.vencidos)}</span>
+              </div>
+            ) : null}
+            {c.por_fecha.map((f) => {
+              const d = diasHasta(f.fecha, hoy);
+              return (
+                <div className="dp-list-row" key={f.fecha}>
+                  <span className="dp-num" style={{ width: 96, fontWeight: 500 }}>{fechaCorta(f.fecha)}</span>
+                  <span className="dp-grow">{plural(f.total, 'contrato', 'contratos')}</span>
+                  <span className={`dp-when ${d !== null && d <= 7 ? 'dp-soon' : ''}`}>{d === 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${fmt(d)} días`}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="dp-foot"><button type="button" className="dp-btn" onClick={verContratos}>Ver contratos</button></div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function Hoy({ filas, total, fecha, tramo }) {
+  const [abierto, setAbierto] = useState(false);
+  const largo = (() => {
+    const [y, m, d] = String(fecha || '').split('-').map(Number);
+    if (!y) return '';
+    return new Date(y, m - 1, d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: '2-digit' }).replace(/\//g, '-');
+  })();
+  const resto = [
+    total.aun_no_marcan ? `${fmt(total.aun_no_marcan)} aún no marcan` : null,
+    total.libreta_por_registrar ? `${plural(total.libreta_por_registrar, 'chofer', 'choferes')} con libreta por registrar` : null,
+    total.justificados ? `${fmt(total.justificados)} con licencia, vacaciones o permiso` : null,
+    total.en_dia_libre ? `${fmt(total.en_dia_libre)} trabajando en día libre` : null,
+  ].filter(Boolean).join(' · ');
+  return (
+    <Card title="Hoy" sub={largo} className="dp-a-hoy">
+      <div className="dp-today-total" style={{ marginTop: 8 }}>
+        <b className="dp-num">{fmt(total.llegaron)}</b> de <span className="dp-num">{fmt(total.con_reloj)}</span> marcaron
+        {total.con_atraso ? <> · <span style={{ color: '#a35f00' }}>{plural(total.con_atraso, 'con atraso', 'con atraso')}</span></> : null}
+        {total.faltan ? <> · <b style={{ color: '#b3352b' }}>{plural(total.faltan, 'faltó sin aviso', 'faltaron sin aviso')}</b></> : null}
+      </div>
+      {resto ? <div className="dp-today-note" style={{ fontSize: 13 }}>{resto}</div> : null}
+      <div className="dp-stack dp-solo-movil" aria-hidden="true">
+        {total.llegaron - total.con_atraso > 0 ? <span style={{ width: `${((total.llegaron - total.con_atraso) / Math.max(1, total.con_reloj)) * 100}%`, background: 'var(--dp-ok)' }} /> : null}
+        {total.con_atraso ? <span style={{ width: `${(total.con_atraso / Math.max(1, total.con_reloj)) * 100}%`, background: 'var(--dp-warn)' }} /> : null}
+        {total.faltan ? <span style={{ width: `${(total.faltan / Math.max(1, total.con_reloj)) * 100}%`, background: 'var(--dp-bad)' }} /> : null}
+      </div>
+      <button type="button" className="dp-btn dp-solo-movil" style={{ marginTop: 10 }} aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}>
+        {abierto ? 'Ocultar áreas' : 'Ver por área'} <i className={`bi bi-chevron-${abierto ? 'up' : 'down'}`} aria-hidden="true" />
+      </button>
+      <div className={`dp-hoy-areas ${abierto ? 'dp-open' : ''}`} style={{ marginTop: 10 }}>
+        {filas.length === 0 ? <div className="dp-empty">Hoy no hay personas con horario en estas áreas.</div> : filas.map((r) => {
+          const aTiempo = Math.max(0, r.llegaron - r.con_atraso);
+          const base = Math.max(1, r.con_reloj);
+          const nota = [
+            r.libreta_por_registrar ? `${fmt(r.libreta_por_registrar)} libreta` : null,
+            r.justificados ? `${fmt(r.justificados)} licencia o permiso` : null,
+            r.aun_no_marcan ? `${fmt(r.aun_no_marcan)} aún no marca${r.aun_no_marcan === 1 ? '' : 'n'}` : null,
+            r.en_turno ? `${fmt(r.en_turno)} en turno` : null,
+          ].filter(Boolean).join(' · ');
+          return (
+            <button
+              type="button"
+              className="dp-today-row"
+              key={r.area}
+              onClick={() => tramo && irAMarcaciones({ area: r.area, desde: tramo.fecha_inicio, hasta: tramo.fecha_fin, accion: 'grilla' })}
+              aria-label={`${r.area}: ${r.llegaron} de ${r.con_reloj} marcaron, ${r.con_atraso} con atraso, ${r.faltan} faltan. Abrir en Marcaciones`}
+            >
+              <div className="dp-today-top"><span>{r.area}</span><span className="dp-num" style={{ fontSize: 14 }}>{fmt(r.llegaron)} de {fmt(r.con_reloj)}</span></div>
+              <div className="dp-stack" aria-hidden="true">
+                {aTiempo ? <span style={{ width: `${(aTiempo / base) * 100}%`, background: 'var(--dp-ok)' }} /> : null}
+                {r.con_atraso ? <span style={{ width: `${(r.con_atraso / base) * 100}%`, background: 'var(--dp-warn)' }} /> : null}
+                {r.faltan ? <span style={{ width: `${(r.faltan / base) * 100}%`, background: 'var(--dp-bad)' }} /> : null}
+              </div>
+              {nota ? <div className="dp-today-note">{nota}</div> : null}
+            </button>
+          );
+        })}
+      </div>
+      <div className="dp-keys" aria-hidden="true">
+        <span><i style={{ background: 'var(--dp-ok)' }} />a la hora</span>
+        <span><i style={{ background: 'var(--dp-warn)' }} />con atraso</span>
+        <span><i style={{ background: 'var(--dp-bad)' }} />faltó sin aviso</span>
+      </div>
+    </Card>
+  );
+}
+
+function TramoPorArea({ t }) {
+  if (!t || !t.mes || !t.areas.length) return null;
+  return (
+    <Card title={`${t.mes} por área`} sub="asistencia · días con atraso" className="dp-a-tramo">
+      <table className="dp-table">
+        <thead><tr><th>Área</th><th>Asistencia</th><th>Días con atraso</th></tr></thead>
+        <tbody>
+          {t.areas.map((a) => (
+            <tr key={a.area}>
+              <td>{a.area}</td>
+              <td className="dp-num">{pct(a.asistencia_pct)}</td>
+              <td className="dp-num dp-high">{pct(a.dias_con_atraso_pct)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+function Cargando() {
+  return (
+    <div className="dp-layout" aria-busy="true" aria-label="Cargando el dashboard">
+      <div className="dp-a-main" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div className="dp-card"><Skeleton h={22} w="40%" /><Skeleton h={8} style={{ marginTop: 14 }} />{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={34} style={{ marginTop: 12 }} />)}</div>
+      </div>
+      <div className="dp-a-hoy dp-card"><Skeleton h={22} w="30%" />{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} h={28} style={{ marginTop: 12 }} />)}</div>
+    </div>
+  );
+}
+
 function Dashboard() {
   useDashboardStyles();
-
-  const [activeTab, setActiveTab] = useState('hoy');
-  const [selectedArea, setSelectedArea] = useState('Todas');
-  const [selectedHorario, setSelectedHorario] = useState('Todos');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
-
-  const [areasList, setAreasList] = useState([]);
-  const [horariosList, setHorariosList] = useState([]);
-
-  const [todayPulse, setTodayPulse] = useState(null);
-  const [todayDetail, setTodayDetail] = useState([]);
-  const [todayLoading, setTodayLoading] = useState(false);
-
-  const [periodData, setPeriodData] = useState(null);
-  const [periodLoading, setPeriodLoading] = useState(false);
+  const [area, setArea] = useState('Todas');
+  const [areas, setAreas] = useState([]);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [updatedAt, setUpdatedAt] = useState(null);
-
-  // Evita que una respuesta lenta pise a una más nueva (cambios rápidos de filtro)
   const reqId = useRef(0);
 
-  const getHeaders = useCallback(() => {
+  const headers = useCallback(() => {
     const token = localStorage.getItem('access_token');
-    return {
-      'Content-Type': 'application/json',
-      Authorization: token ? `Bearer ${token}` : '',
-    };
+    return { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' };
   }, []);
 
-  // Áreas del filtro
   useEffect(() => {
-    async function fetchAreas() {
+    (async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        if (!token) return;
-        const res = await fetch(`${API_BASE_URL}/empleados/stats/`, { headers: getHeaders() });
+        if (!localStorage.getItem('access_token')) return;
+        const res = await fetch(`${API_BASE_URL}/empleados/stats/`, { headers: headers() });
         if (res.ok) {
           const stats = await res.json();
-          setAreasList(Array.isArray(stats && stats.areas) ? stats.areas : []);
+          setAreas(Array.isArray(stats && stats.areas) ? stats.areas.map((a) => a.area).filter(Boolean) : []);
         }
       } catch (err) {
-        console.error('Error fetching areas filter:', err);
+        console.error('Dashboard: no se pudieron leer las áreas:', err);
       }
-    }
-    fetchAreas();
-  }, [getHeaders]);
+    })();
+  }, [headers]);
 
-  // Turnos según el área elegida
-  useEffect(() => {
-    async function fetchTurnos() {
-      try {
-        const token = localStorage.getItem('access_token');
-        if (!token) return;
-        const areaParam = selectedArea === 'Todas' ? '' : `?area=${encodeURIComponent(selectedArea)}`;
-        const res = await fetch(`${API_BASE_URL}/turnos/${areaParam}`, { headers: getHeaders() });
-        if (res.ok) {
-          const turnos = await res.json();
-          setHorariosList(Array.isArray(turnos) ? turnos : []);
-          setSelectedHorario('Todos');
-        }
-      } catch (err) {
-        console.error('Error fetching turnos filter:', err);
-      }
-    }
-    fetchTurnos();
-  }, [selectedArea, getHeaders]);
-
-  // Fechas del período activo del área
-  useEffect(() => {
-    async function loadActivePeriod() {
-      if (activeTab === 'hoy') return;
-      try {
-        const areaName = selectedArea || 'Todas';
-        const res = await fetch(`${API_BASE_URL}/configuracion/periodos/activo/${encodeURIComponent(areaName)}/`, { headers: getHeaders() });
-        if (res.ok) {
-          const period = await res.json();
-          if (period && period.fecha_inicio && period.fecha_fin) {
-            setFechaInicio(period.fecha_inicio);
-            setFechaFin(period.fecha_fin);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching active period:', err);
-      }
-    }
-    loadActivePeriod();
-  }, [selectedArea, activeTab, getHeaders]);
-
-  const loadTodayData = useCallback(async () => {
+  const cargar = useCallback(async () => {
     const mine = ++reqId.current;
-    setTodayLoading(true);
+    setLoading(true);
     setError(null);
     try {
-      const areaParam = selectedArea !== 'Todas' ? `?area=${encodeURIComponent(selectedArea)}` : '';
-      const [pulseRes, detailRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/dashboard/pulse/${areaParam}`, { headers: getHeaders() }),
-        fetch(`${API_BASE_URL}/dashboard/pulse/detail/${areaParam}`, { headers: getHeaders() }),
-      ]);
-      if (!(pulseRes.ok && detailRes.ok)) throw new Error('No se pudieron cargar los datos en vivo de hoy.');
-      const pulseJson = await pulseRes.json();
-      const detailJson = await detailRes.json();
-      if (mine !== reqId.current) return;
-      setTodayPulse((pulseJson && pulseJson.data) || null);
-      setTodayDetail(Array.isArray(detailJson && detailJson.data) ? detailJson.data : []);
-      setUpdatedAt(new Date());
-    } catch (err) {
-      if (mine === reqId.current) setError(err.message);
-    } finally {
-      if (mine === reqId.current) setTodayLoading(false);
-    }
-  }, [selectedArea, getHeaders]);
-
-  const loadPeriodData = useCallback(async () => {
-    if (!fechaInicio || !fechaFin) return;
-    const mine = ++reqId.current;
-    setPeriodLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ fecha_inicio: fechaInicio, fecha_fin: fechaFin, area: selectedArea, horario: selectedHorario });
-      const res = await fetch(`${API_BASE_URL}/dashboard/analytics/?${params.toString()}`, { headers: getHeaders() });
-      if (!res.ok) throw new Error('No se pudieron cargar las métricas del período.');
+      const q = area !== 'Todas' ? `?area=${encodeURIComponent(area)}` : '';
+      const res = await fetch(`${API_BASE_URL}/dashboard/pendientes/${q}`, { headers: headers() });
+      if (!res.ok) throw new Error('No se pudo leer lo pendiente. Reintente en un momento.');
       const json = await res.json();
       if (mine !== reqId.current) return;
-      setPeriodData((json && json.data) || null);
-      setUpdatedAt(new Date());
+      setData((json && json.data) || null);
     } catch (err) {
       if (mine === reqId.current) setError(err.message);
     } finally {
-      if (mine === reqId.current) setPeriodLoading(false);
+      if (mine === reqId.current) setLoading(false);
     }
-  }, [fechaInicio, fechaFin, selectedArea, selectedHorario, getHeaders]);
+  }, [area, headers]);
 
-  useEffect(() => {
-    if (activeTab === 'hoy') loadTodayData();
-    else loadPeriodData();
-  }, [activeTab, selectedArea, selectedHorario, fechaInicio, fechaFin, loadTodayData, loadPeriodData]);
+  useEffect(() => { cargar(); }, [cargar]);
 
-  const busy = todayLoading || periodLoading;
-  const refresh = activeTab === 'hoy' ? loadTodayData : loadPeriodData;
+  const d = data;
+  const tramoActual = d && d.tramo_en_curso;
+  const tramoHE = d && (tramoActual || (d.tramos_por_cerrar && d.tramos_por_cerrar[0]));
+  const je = d ? d.jornadas_por_validar : null;
 
   return (
-    <div className="dx">
-      <div className="dx-bar">
-        <Seg
-          value={activeTab}
-          onChange={setActiveTab}
-          label="Vista del dashboard"
-          options={[{ value: 'hoy', label: 'Hoy' }, { value: 'periodo', label: 'Análisis del período' }]}
-        />
-
-        <div className="dx-filters">
-          <label className="dx-field">
-            <span>Área</span>
-            <select
-              id="dash-global-area-select"
-              className="dx-input"
-              aria-label="Área"
-              value={selectedArea}
-              onChange={(e) => setSelectedArea(e.target.value)}
-            >
-              <option value="Todas">Todas las áreas</option>
-              {areasList.map((a, i) => (
-                <option key={i} value={a.area}>{a.area}</option>
-              ))}
-            </select>
-          </label>
-
-          {activeTab === 'periodo' && (
-            <>
-              <label className="dx-field">
-                <span>Turno</span>
-                <select
-                  id="dash-global-turno-select"
-                  className="dx-input"
-                  aria-label="Turno"
-                  value={selectedHorario}
-                  onChange={(e) => setSelectedHorario(e.target.value)}
-                >
-                  <option value="Todos">Todos los turnos</option>
-                  {horariosList.map((t) => (
-                    <option key={t.id} value={t.id}>{t.nombre}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="dx-field">
-                <span>Desde</span>
-                <input id="dash-fecha-inicio-input" className="dx-input" type="date" aria-label="Fecha desde" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
-              </label>
-              <label className="dx-field">
-                <span>Hasta</span>
-                <input id="dash-fecha-fin-input" className="dx-input" type="date" aria-label="Fecha hasta" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
-              </label>
-            </>
-          )}
-
-          <div className={`dx-field ${activeTab === 'periodo' ? 'dx-wide' : ''}`}>
-            <span className="dx-stamp" style={{ minHeight: 16 }}>{updatedAt ? `Actualizado ${horaActual(updatedAt)}` : ' '}</span>
-            <button type="button" className="dx-iconbtn" onClick={refresh} aria-label="Actualizar datos del dashboard" title="Actualizar datos">
-              <i className={`bi bi-arrow-clockwise ${busy ? 'dx-spin' : ''}`} aria-hidden="true" />
-              Actualizar
-            </button>
-          </div>
+    <div className="dp">
+      <div className="dp-top">
+        <h1>Lo que falta hacer</h1>
+        <div className="dp-tools">
+          <select className="dp-select" aria-label="Área" value={area} onChange={(e) => setArea(e.target.value)}>
+            <option value="Todas">Todas las áreas</option>
+            {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          {d ? <span className="dp-stamp dp-num">{fechaCorta(d.hoy)} · {String(d.generado || '').slice(11, 16)}</span> : null}
+          <button type="button" className="dp-btn" onClick={cargar} aria-label="Actualizar el dashboard">
+            <i className={`bi bi-arrow-clockwise ${loading ? 'dp-spin' : ''}`} aria-hidden="true" /> Actualizar
+          </button>
         </div>
       </div>
 
-      {error && (
-        <div className="dx-alert" role="alert">
+      {error ? (
+        <div className="dp-alert" role="alert">
           <i className="bi bi-exclamation-triangle-fill" aria-hidden="true" />
-          <div><b>No se pudo actualizar</b>{error}</div>
-          <button type="button" className="dx-iconbtn" onClick={refresh}>Reintentar</button>
+          <div style={{ flex: 1 }}><b>No se pudo actualizar.</b> {error}</div>
+          <button type="button" className="dp-btn" onClick={cargar}>Reintentar</button>
+        </div>
+      ) : null}
+
+      {!d ? (loading || !error ? <Cargando /> : null) : (
+        <div className="dp-layout">
+          <div className="dp-a-main">
+            {d.tramos_por_cerrar.length === 0 ? (
+              <Card title="Cierres al día" sub={tramoActual ? `Tramo en curso: ${tramoActual.mes}, día ${fmt(tramoActual.dia)} de ${fmt(tramoActual.dias)}` : ''}>
+                <div className="dp-empty">No quedan tramos anteriores por cerrar en estas áreas.</div>
+              </Card>
+            ) : d.tramos_por_cerrar.map((t) => <CierreTramo key={t.id} tramo={t} hoy={d.hoy} />)}
+            <div className="dp-pair">
+              <HorasExtra he={d.horas_extra_por_decidir} tramo={tramoHE} />
+              <Contratos c={d.contratos} hoy={d.hoy} />
+            </div>
+            {je && je.total === 0 ? (
+              <div className="dp-quiet"><i className="bi bi-check-circle" aria-hidden="true" /> Sin jornadas especiales ni coberturas (+2) por validar.</div>
+            ) : je ? (
+              <Card title="Jornadas especiales por validar" sub={plural(je.total, 'jornada', 'jornadas')}>
+                <div className="dp-list">
+                  {je.por_area.map((x) => (
+                    <div className="dp-list-row" key={x.area}><span className="dp-grow">{x.area}</span><span className="dp-num">{fmt(x.jornadas)}</span></div>
+                  ))}
+                </div>
+                {tramoHE ? <div className="dp-foot"><button type="button" className="dp-btn" onClick={() => irAMarcaciones({ area: '', desde: tramoHE.fecha_inicio, hasta: tramoHE.fecha_fin, accion: 'grilla' })}>Validar en la grilla</button></div> : null}
+              </Card>
+            ) : null}
+          </div>
+          <Hoy filas={d.hoy_por_area} total={d.hoy_total} fecha={d.hoy} tramo={tramoActual} />
+          <TramoPorArea t={d.tramo_por_area} />
         </div>
       )}
-
-      <ErrorBoundary key={activeTab}>
-        {activeTab === 'hoy' ? (
-          <TabHoy pulse={todayPulse} detail={todayDetail} loading={todayLoading} />
-        ) : (
-          <TabPeriodo data={periodData} loading={periodLoading} />
-        )}
-      </ErrorBoundary>
     </div>
   );
 }

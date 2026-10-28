@@ -324,27 +324,9 @@ class CierreService:
         salida['deuda_neta_horas'] = deuda_total_hrs
         return salida
 
-    async def evaluar_cierre(self, fecha_inicio: str, fecha_fin: str, area: str):
-        """
-        Evaluación pre-cierre con 4 niveles de semáforo (tela de araña):
-        1. HE PENDIENTES       → Hard Stop 1
-        2. ANOMALÍAS           → Hard Stop 2
-        3. EN_CURSO            → Hard Stop 3
-        4. INASISTENCIAS       → Soft Stop (aceptar con checkbox)
-        """
-        # Validar que no exista solapamiento de periodos cerrados para esta área
-        overlap_query = """
-            SELECT id, fecha_inicio, fecha_fin FROM cierres_periodos 
-            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
-            LIMIT 1
-        """
-        solapamiento = await self.db.fetch_one(overlap_query, (area, fecha_fin, fecha_inicio))
-        if solapamiento:
-            raise ValueError(
-                f"El período seleccionado ya se encuentra cerrado para el área '{area}' "
-                f"({solapamiento['fecha_inicio']} al {solapamiento['fecha_fin']})."
-            )
-
+    async def bloqueos_cierre(self, fecha_inicio: str, fecha_fin: str, area: str) -> Dict[str, Any]:
+        """Lo que impide (o advierte) cerrar un tramo para un área. Lo usan el
+        asistente de cierre (evaluar_cierre) y el Dashboard, para que digan lo mismo."""
         params_area = []
         filtro_area = ""
         if area and area != 'Todas':
@@ -458,6 +440,51 @@ class CierreService:
             query_ina, tuple([fecha_inicio, fecha_fin] + params_area)
         )
 
+        # ── HARD STOP 4: Días por revisar (Reglas de marcaciones) ─────────────
+        # Días del rango cuya regla los dejó en revisión y nadie corrigió ni
+        # confirmó: el cierre se bloquea hasta resolverlos (decisión del dueño).
+        try:
+            from backend.repositories.reglas_marcas import ReglasMarcasRepository
+            por_revisar = await ReglasMarcasRepository(self.db).pendientes_para_cierre(
+                fecha_inicio, fecha_fin, area)
+        except Exception as e_rev:
+            logger.warning(f"Pre-evaluación: no se pudieron leer los días por revisar: {e_rev}")
+            por_revisar = []
+
+        return {
+            "params_area": params_area, "filtro_area": filtro_area,
+            "he_pendientes": he_pendientes, "anomalias": anomalias, "en_curso": en_curso,
+            "inasistencias": inasistencias, "por_revisar": por_revisar,
+            "ultimo_fin_estimado": ultimo_fin_estimado,
+        }
+
+    async def evaluar_cierre(self, fecha_inicio: str, fecha_fin: str, area: str):
+        """
+        Evaluación pre-cierre con 4 niveles de semáforo (tela de araña):
+        1. HE PENDIENTES       → Hard Stop 1
+        2. ANOMALÍAS           → Hard Stop 2
+        3. EN_CURSO            → Hard Stop 3
+        4. INASISTENCIAS       → Soft Stop (aceptar con checkbox)
+        """
+        # Validar que no exista solapamiento de periodos cerrados para esta área
+        overlap_query = """
+            SELECT id, fecha_inicio, fecha_fin FROM cierres_periodos 
+            WHERE area = ? AND fecha_inicio <= ? AND fecha_fin >= ?
+            LIMIT 1
+        """
+        solapamiento = await self.db.fetch_one(overlap_query, (area, fecha_fin, fecha_inicio))
+        if solapamiento:
+            raise ValueError(
+                f"El período seleccionado ya se encuentra cerrado para el área '{area}' "
+                f"({solapamiento['fecha_inicio']} al {solapamiento['fecha_fin']})."
+            )
+
+        b = await self.bloqueos_cierre(fecha_inicio, fecha_fin, area)
+        params_area, filtro_area = b['params_area'], b['filtro_area']
+        he_pendientes, anomalias, en_curso = b['he_pendientes'], b['anomalias'], b['en_curso']
+        inasistencias, por_revisar = b['inasistencias'], b['por_revisar']
+        ultimo_fin_estimado = b['ultimo_fin_estimado']
+
         # ── Resumen ejecutivo siempre visible ─────────────────────────────────
         query_resumen = f"""
             SELECT
@@ -516,17 +543,6 @@ class CierreService:
             ORDER BY fecha
         """
         feriados_periodo = await self.db.fetch_all(query_feriados, (fecha_inicio, fecha_fin))
-
-        # ── HARD STOP 4: Días por revisar (Reglas de marcaciones) ─────────────
-        # Días del rango cuya regla los dejó en revisión y nadie corrigió ni
-        # confirmó: el cierre se bloquea hasta resolverlos (decisión del dueño).
-        try:
-            from backend.repositories.reglas_marcas import ReglasMarcasRepository
-            por_revisar = await ReglasMarcasRepository(self.db).pendientes_para_cierre(
-                fecha_inicio, fecha_fin, area)
-        except Exception as e_rev:
-            logger.warning(f"Pre-evaluación: no se pudieron leer los días por revisar: {e_rev}")
-            por_revisar = []
 
         # Determinar si puede cerrar
         puede_cerrar = (

@@ -7,10 +7,23 @@ export const num = (v) => {
 };
 export const fmt = (v, digits = 0) =>
   num(v).toLocaleString('es-CL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-export const hrs = (v) => `${fmt(v, Math.abs(num(v)) < 10 && num(v) % 1 !== 0 ? 1 : 0)} h`;
-export const hhmm = (v) => (typeof v === 'string' && v.length >= 5 ? v.substring(0, 5) : '–');
-export const horaActual = (d) =>
-  d ? d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '';
+export const pct = (v) => (v === null || v === undefined ? '–' : `${fmt(v, num(v) % 1 ? 1 : 0)} %`);
+export const plural = (n, uno, varios) => `${fmt(n)} ${num(n) === 1 ? uno : varios}`;
+
+const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+// '2026-10-30' → 'Vie 30-10' (la fecha se lee como día local, sin zona horaria)
+export const fechaCorta = (iso) => {
+  const [y, m, d] = String(iso || '').slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return '–';
+  const f = new Date(y, m - 1, d);
+  return `${DIAS[f.getDay()]} ${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}`;
+};
+export const diasHasta = (iso, hoyIso) => {
+  const a = String(hoyIso || '').slice(0, 10).split('-').map(Number);
+  const b = String(iso || '').slice(0, 10).split('-').map(Number);
+  if (a.length < 3 || b.length < 3) return null;
+  return Math.round((new Date(b[0], b[1] - 1, b[2]) - new Date(a[0], a[1] - 1, a[2])) / 86400000);
+};
 
 // ── Barrera de errores: si algo falla al dibujar, se muestra el motivo y se puede reintentar ──
 export class ErrorBoundary extends React.Component {
@@ -29,59 +42,14 @@ export class ErrorBoundary extends React.Component {
     if (!this.state.error) return this.props.children;
     const msg = String((this.state.error && this.state.error.message) || this.state.error);
     return (
-      <div className="dx-panel dx-fail" role="alert">
-        <h3>No se pudo mostrar esta vista</h3>
-        <p>Detalle técnico: {msg}</p>
-        <button type="button" className="dx-btn" onClick={() => this.setState({ error: null })}>
-          Reintentar
-        </button>
+      <div className="dp-alert" role="alert">
+        <div><b>No se pudo mostrar el dashboard.</b> Detalle técnico: {msg}</div>
+        <button type="button" className="dp-btn" onClick={() => this.setState({ error: null })}>Reintentar</button>
       </div>
     );
   }
 }
 
-// ── Piezas visuales ───────────────────────────────────────────────────────────
-export function Seg({ value, onChange, options, label }) {
-  return (
-    <div className="dx-seg" data-active={value} role="tablist" aria-label={label}>
-      <span className="dx-seg-thumb" aria-hidden="true" />
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="tab"
-          aria-selected={value === o.value}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function Skeleton({ h = 16, w = '100%', r = 10, style }) {
-  return <div className="dx-skel" style={{ height: h, width: w, borderRadius: r, ...style }} aria-hidden="true" />;
-}
-
-export function Tag({ tone = 'mute', children }) {
-  return <span className="dx-tag" data-tone={tone}>{children}</span>;
-}
-
-export function Meter({ value, tone }) {
-  const pct = Math.max(0, Math.min(100, num(value)));
-  return (
-    <div className="dx-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-      <span style={{ transform: `scaleX(${pct / 100})`, background: tone || undefined }} />
-    </div>
-  );
-}
-
-// Entrada escalonada: <In i={2}>…</In>
-export function In({ i = 0, className = '', children, as: Tagname = 'div', ...rest }) {
-  return (
-    <Tagname className={`dx-in ${className}`} style={{ '--i': i }} {...rest}>
-      {children}
-    </Tagname>
-  );
+export function Skeleton({ h = 16, w = '100%', style }) {
+  return <div className="dp-skel" style={{ height: h, width: w, ...style }} aria-hidden="true" />;
 }
