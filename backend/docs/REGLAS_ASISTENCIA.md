@@ -160,7 +160,9 @@ Definiciones comunes (`backend/services/dashboard_pendientes.py`):
 - Marcas a mano = marcas con `manual = 1` / todas las marcas.
 - Rotación = bajas (inactivos que salieron en el tramo) / dotación al cierre del tramo.
 «Dónde»: en una tasa, las áreas que empeoraron contra su propio promedio; en un total, las que más suman. Un tramo cerrado guarda el cálculo de su época: una comparación entre tramos lo advierte, y el ausentismo avisa si tramos anteriores no tienen licencias registradas.
-Pruebas: `test_dashboard_pendientes.py` y `test_dashboard_indicadores.py`.
+La pantalla usa lenguaje neutro (pedido del dueño): «Para mejorar» y «En buen camino», nunca «empeoró».
+**«Ver detalle»** (`backend/services/dashboard_detalle.py`) abre un panel con los registros que forman el número, por persona (quién, qué día, horas, quién ingresó la marca, causa del día no trabajado…), con las mismas definiciones del indicador: el detalle suma lo mismo que el tacómetro. Solo lee; la grilla queda como botón dentro del panel para corregir.
+Pruebas: `test_dashboard_pendientes.py`, `test_dashboard_indicadores.py` y `test_dashboard_detalle.py`.
 
 ## Cómo se prueba
 

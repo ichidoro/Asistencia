@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DP_CSS } from './styles';
 import { ErrorBoundary, Skeleton, num, fmt, pct, plural, fechaCorta, diasHasta } from './ui';
-import Indicadores from './Indicadores';
+import Indicadores, { PanelDetalle } from './Indicadores';
 
 const API_BASE_URL = '/api';
 
@@ -301,6 +301,7 @@ function Dashboard() {
   const [indLoading, setIndLoading] = useState(false);
   const [indError, setIndError] = useState(null);
   const indReq = useRef(0);
+  const [detalleDe, setDetalleDe] = useState(null);
   const elegirVista = (v) => {
     setVista(v);
     try { localStorage.setItem('dashboard_vista', v); } catch (e) { /* sin almacenamiento: solo esta vez */ }
@@ -367,7 +368,20 @@ function Dashboard() {
   useEffect(() => { if (vista === 'pendientes') cargar(); }, [cargar, vista]);
   useEffect(() => { if (vista === 'indicadores') cargarIndicadores(); }, [cargarIndicadores, vista]);
 
-  const verDetalle = (i) => {
+  const pedirDetalle = useCallback(async (id, tramo) => {
+    const q = new URLSearchParams({ indicador: id });
+    if (area !== 'Todas') q.set('area', area);
+    if (tramo) q.set('tramo', tramo);
+    const res = await fetch(`${API_BASE_URL}/dashboard/indicadores/detalle/?${q}`, { headers: headers() });
+    if (!res.ok) throw new Error('No se pudo armar el detalle. Reintente en un momento.');
+    const json = await res.json();
+    return json && json.data;
+  }, [area, headers]);
+
+  const verDetalle = (i) => setDetalleDe(i);
+  const cerrarDetalle = useCallback(() => setDetalleDe(null), []);
+  const irAGrilla = (i) => {
+    setDetalleDe(null);
     const t = ind && ind.tramo;
     if (i.accion === 'empleados') { if (typeof window.switchPage === 'function') window.switchPage('empleados'); return; }
     const zona = (i.donde && i.donde[0] && i.donde[0].area) || (area !== 'Todas' ? area : '');
@@ -416,6 +430,10 @@ function Dashboard() {
             </div>
           ) : null}
           {ind ? <Indicadores data={ind} onDetalle={verDetalle} /> : (indLoading || !indError ? <Cargando /> : null)}
+          {detalleDe && ind ? (
+            <PanelDetalle i={detalleDe} tramo={ind.tramo} area={area} pedir={pedirDetalle}
+              onClose={cerrarDetalle} onGrilla={() => irAGrilla(detalleDe)} />
+          ) : null}
         </>
       ) : null}
 
