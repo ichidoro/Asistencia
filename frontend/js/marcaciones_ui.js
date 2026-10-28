@@ -723,7 +723,7 @@ async function loadMarcacionesFilters() {
 
     } catch (e) {
         console.error("Error cargando filtros:", e);
-        showToast("Error cargando filtros", "error");
+        showToast("No se pudieron cargar los filtros. Recargue la página.", "error");
     }
 }
 
@@ -1361,9 +1361,9 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         Swal.close();
         console.error('[Sync BioAlba] Error:', e);
         if (e.name === 'AbortError') {
-            showToast('Timeout: La sincronización tardó más de 6 minutos.', 'error');
+            showToast('La sincronización tardó más de 6 minutos y se detuvo. Vuelva a intentarlo con menos días o menos áreas.', 'error');
         } else {
-            showToast('Error de sincronización: ' + e.message, 'error');
+            showToast('No se pudo sincronizar con BioAlba. ' + e.message, 'error');
         }
         try { await window.loadMarcacionesData({ silent: true }); } catch (_) {}
     } finally {
@@ -1501,11 +1501,11 @@ async function confirmSyncMarcaciones() {
     const fFin    = document.getElementById('sync-areas-fecha-fin')?.value    || '';
 
     if (!fInicio || !fFin) {
-        alert('Debes indicar el rango de fechas (Desde / Hasta).');
+        Avisos.falta('Faltan las fechas. Elija desde y hasta.');
         return;
     }
     if (fFin < fInicio) {
-        alert('La fecha "Hasta" no puede ser anterior a "Desde".');
+        Avisos.falta('La fecha «hasta» no puede ser anterior a «desde».');
         return;
     }
 
@@ -1513,7 +1513,7 @@ async function confirmSyncMarcaciones() {
     const selectedAreas = Array.from(checkboxes).map(cb => cb.value);
 
     if (selectedAreas.length === 0) {
-        alert('Selecciona al menos un área para sincronizar.');
+        Avisos.falta('Falta el área. Elija al menos una para sincronizar.');
         return;
     }
 
@@ -1771,7 +1771,7 @@ window.updateVisorPDF = async function(isDownload = false) {
         if (typeof Swal !== 'undefined') {
             Swal.fire('Periodo demasiado largo', 'Para prevenir colapsos de memoria, el reporte PDF está limitado a un máximo de 3 meses. Por favor, ajuste el filtro de fechas.', 'warning');
         } else {
-            alert('El periodo es demasiado largo para este formato. Seleccione máximo 3 meses.');
+            Avisos.falta('El período es muy largo para este informe. Elija como máximo 3 meses.');
         }
         return;
     }
@@ -2210,7 +2210,7 @@ function openHoraExtraModal(empleadoId, fecha, nombreEmpleado) {
     const asist = empData ? empData[fecha] : null;
 
     if (!asist || !asist.minutos_extra_bruto) {
-        showToast("No existen horas extra para gestionar en este día.", "info");
+        showToast("Este día no tiene horas extra para revisar.", "info");
         return;
     }
 
@@ -2344,18 +2344,18 @@ async function confirmAprobacionHE(empleadoId, fecha, estado, lastUpdatedAt) {
         } else {
             if (resp.status === 409) {
                 // Conflicto de concurrencia
-                showToast("Conflicto: " + result.detail, "error");
+                showToast(result.detail, "error");
                 // Forzar recarga inmediata para ver cambios externos
                 if (typeof window.loadMarcacionesData === 'function') {
                     window.loadMarcacionesData();
                 }
             } else {
-                showToast("Error: " + result.detail, "error");
+                showToast(result.detail || "No se pudo guardar.", "error");
             }
         }
     } catch (e) {
         console.error("Error sincronizando BioAlba:", e);
-        showToast("Error de conexión", "error");
+        Avisos.sinConexion();
     }
 }
 
@@ -2390,7 +2390,7 @@ function toggleAutoRefresh(enabled, silent = false) {
     if (enabled) {
         console.log("🔄 Auto-detección activada (30s polling ligero)");
         if (!silent) {
-            showToast("Auto-detección de marcaciones activada", "info");
+            showToast("Detección automática de marcas encendida.", "info");
         }
 
         // Capturar el estado actual como baseline
@@ -2405,7 +2405,7 @@ function toggleAutoRefresh(enabled, silent = false) {
         _checkForChanges(true);
     } else {
         console.log("🛑 Auto-detección desactivada");
-        showToast("Auto-detección desactivada", "info");
+        showToast("Detección automática de marcas apagada.", "info");
         cd.lastUpdate = null;
         cd.lastCount = null;
     }
@@ -2484,7 +2484,7 @@ async function _checkForChanges(isBaseline = false) {
  */
 window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     if (!stateMarcacionesApp.data || !stateMarcacionesApp.data.matrix || !stateMarcacionesApp.data.matrix[empleadoId]) {
-        showToast("No se encontraron datos del empleado.", "error");
+        showToast("No se encontraron los datos de esta persona.", "error");
         return;
     }
     const empData = stateMarcacionesApp.data.matrix[empleadoId];
@@ -2503,7 +2503,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     }
 
     if (empData && empData.info && (empData.info.tipo_programacion === 'BOLSA_FLEXIBLE' || empData.info.tipo_programacion === 'FLEXIBLE_BOLSA')) {
-        showToast(`${empNombre} tiene Turno Bolsa Flexible. Su balance se gestiona en la columna Bolsa Flexible al cierre mensual.`, 'info');
+        showToast(`${empNombre} tiene turno de bolsa flexible: su saldo se revisa en la columna «Bolsa flexible» al cerrar el mes.`, 'info');
         return;
     }
 
@@ -2585,7 +2585,7 @@ window.openBatchApprovalModal = function (empleadoId, empNombreArg) {
     const totalRechazado = diasHE.filter(d => d.estado === 'RECHAZADO').reduce((s, d) => s + d.bruto, 0);
 
     if (diasHE.length === 0) {
-        showToast(`${empNombre} no tiene horas extra detectadas en el periodo.`, 'info');
+        showToast(`${empNombre} no tiene horas extra en este período.`, 'info');
         return;
     }
 
@@ -3056,15 +3056,15 @@ window.submitSingleHE = async function(empId, fecha, estado, minutos) {
         });
         const data = await res.json();
         if (data.success) {
-            showToast(estado === 'APROBADO' ? 'HE Aprobada' : 'HE Rechazada', 'success');
+            showToast(estado === 'APROBADO' ? 'Listo. Horas extra aprobadas.' : 'Listo. Horas extra rechazadas.', 'success');
             await loadMarcacionesData();
             const mEl = document.getElementById('modalBatchHE');
             if (mEl) bootstrap.Modal.getInstance(mEl)?.hide();
         } else {
-            showToast('Error: ' + (data.detail || 'Error procesando'), 'danger');
+            showToast(data.detail || 'No se pudieron guardar las horas extra.', 'danger');
         }
     } catch (e) {
-        showToast('Error de conexión: ' + e.message, 'danger');
+        Avisos.sinConexion();
     }
 };
 
@@ -3089,7 +3089,7 @@ window.bypassSecurityWall = function() {
         if (modal) modal.hide();
     }
     
-    showToast("Acceso desbloqueado mediante Bypass de Administrador", "warning");
+    showToast("Se abrió con el permiso de administrador.", "warning");
     
     // REANUDAR CARGA: Con un pequeño delay para asegurar limpieza visual del modal
     console.log("🔄 Reanudando carga de datos tras bypass (con delay)...");
@@ -3223,11 +3223,11 @@ window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
     });
 
     if (selected.length === 0) {
-        alert("Por favor seleccione al menos un día.");
+        Avisos.falta('Falta elegir los días. Marque al menos uno.');
         return;
     }
 
-    if (!await uiConfirm(`¿Está seguro de marcar ${selected.length} registros como ${nuevoEstado}?`)) return;
+    if (!await uiConfirm(`¿Marcar ${selected.length === 1 ? '1 día' : selected.length + ' días'} como ${String(nuevoEstado).toLowerCase()}?`, { confirmText: 'Marcar ' + (selected.length === 1 ? 'día' : 'días') })) return;
 
     try {
         const btn = event.target;
@@ -3259,7 +3259,7 @@ window.submitBatchHE = async function (event, empleadoId, nuevoEstado) {
         }
     } catch (error) {
         console.error("Error en submitBatchHE:", error);
-        alert("Error al procesar la aprobación masiva: " + error.message);
+        Avisos.error("No se pudo aprobar todo junto. " + error.message);
     } finally {
         // En caso de error, restaurar botón
         const btn = event.target;
@@ -3517,7 +3517,7 @@ window.copiarAcumuladoAMeta = function() {
         }
         inp.classList.add('bg-warning-subtle');
         setTimeout(() => inp.classList.remove('bg-warning-subtle'), 1000);
-        showToast(`Valor copiado a Opciones Avanzadas: +${txt}`, 'info');
+        showToast(`Se copió +${txt} a «Opciones avanzadas».`, 'info');
     }
 };
 
@@ -3645,7 +3645,7 @@ window.ejecutarCuadreRapido = function(empleadoId, accion) {
         const saldoPotencial = totalBrutoElegible - deudaExacta;
 
         if (saldoPotencial <= 0.0083) {
-            showToast("El colaborador no tiene saldo positivo de horas extras para redondear.", "warning");
+            showToast("Esta persona no tiene saldo de horas extra a favor para redondear.", "warning");
             const fb = document.getElementById('asistente-feedback');
             if (fb) fb.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0 small border-0 shadow-sm"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> El sobretiempo disponible no supera la deuda total. Usa <strong>"1. Compensar Deuda (Saldo Cero)"</strong> para absorber la deuda.</div>`;
             return;
@@ -3829,7 +3829,7 @@ window.simularCuadreHE = function(empleadoId) {
 window.aplicarCuadreHE = async function(empleadoId) {
     const checkedRows = Array.from(document.querySelectorAll('.check-item-he:checked'));
     if (checkedRows.length === 0) {
-        showToast("No hay jornadas seleccionadas para guardar.", "warning");
+        showToast("Falta elegir las jornadas. Marque al menos una para guardar.", "warning");
         return;
     }
     
@@ -3866,7 +3866,7 @@ window.aplicarCuadreHE = async function(empleadoId) {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(`Cuadre registrado exitosamente (${items.length} jornadas guardadas en BD)`, 'success');
+            showToast(`Listo. Cuadre guardado: ${items.length === 1 ? '1 jornada' : items.length + ' jornadas'}.`, 'success');
             const mEl = document.getElementById('modalBatchHE');
             if (mEl) {
                 const modal = bootstrap.Modal.getInstance(mEl);
@@ -3876,14 +3876,14 @@ window.aplicarCuadreHE = async function(empleadoId) {
                 await window.loadMarcacionesData();
             }
         } else {
-            showToast('Error al guardar: ' + (data.detail || 'Error desconocido'), 'danger');
+            showToast(data.detail || 'No se guardó el cuadre. El servidor no dio el motivo.', 'danger');
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = origHtml || '<i class="bi bi-floppy-fill me-1"></i>Confirmar y Guardar en BD';
             }
         }
     } catch(err) {
-        showToast('Error de conexión: ' + err.message, 'danger');
+        Avisos.sinConexion();
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = origHtml || '<i class="bi bi-floppy-fill me-1"></i>Confirmar y Guardar en BD';
@@ -4157,8 +4157,8 @@ async function saveAsignacionIndividual() {
         ? false
         : (document.getElementById('asig-chk-bioalba-sync')?.checked ?? true);
 
-    if (!fecha) return showToast("Debe seleccionar una fecha de inicio", "warning");
-    if (!turnoId) return showToast("Debe seleccionar un turno", "warning");
+    if (!fecha) return showToast("Falta la fecha de inicio.", "warning");
+    if (!turnoId) return showToast("Falta elegir el turno.", "warning");
 
     // ── Spinner en botón ────────────────────────────────────────────────────
     const btn = document.getElementById('btn-confirmar-asignacion-individual');
@@ -4185,7 +4185,7 @@ async function saveAsignacionIndividual() {
             const data = await resp.json();
             const jobId = data.job_id || null;
 
-            showToast("Turno asignado. Iniciando proceso...", "success");
+            showToast("Listo. Turno asignado; se están calculando los días.", "success");
 
             // Cerrar modal de asignación
             const modalAsig = bootstrap.Modal.getInstance(document.getElementById('modal-asignar-turno-individual'));
@@ -4234,7 +4234,7 @@ async function saveAsignacionIndividual() {
                     if (!isBlocked) {
                         const modalReg = bootstrap.Modal.getInstance(document.getElementById('modal-regularizacion-asistencia'));
                         if (modalReg) modalReg.hide();
-                        showToast("Regularización completada.", "success");
+                        showToast("Listo. Los días quedaron calculados con el turno nuevo.", "success");
                         if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
                     }
                 } else {
@@ -4247,11 +4247,11 @@ async function saveAsignacionIndividual() {
 
         } else {
             const err = await resp.json();
-            showToast("" + (err.detail || "No se pudo asignar el turno"), "danger");
+            showToast(err.detail || "No se pudo asignar el turno.", "danger");
         }
     } catch (e) {
         console.error(e);
-        showToast("Error de conexión al asignar turno", "danger");
+        Avisos.sinConexion();
     } finally {
         // Restaurar botón siempre
         if (btn) {
@@ -4302,7 +4302,7 @@ function openCalibracionHistorica({ empleadoId, nombre, fecha, turnoNombre }) {
 window.omitirCalibracion = function() {
     const modalEl = document.getElementById('modal-calibracion-historica');
     if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
-    showToast("Turno asignado. Sin reproceso retroactivo.", "info");
+    showToast("Listo. Turno asignado; los días anteriores no se recalcularon.", "info");
     // Continuar con el siguiente en la cola de onboarding (si existe)
     if (typeof procesarColaOnboarding === 'function' && typeof onboardingQueue !== 'undefined' && onboardingQueue.length > 0) {
         setTimeout(procesarColaOnboarding, 500);
@@ -4312,7 +4312,7 @@ window.omitirCalibracion = function() {
 // Confirmar: cierra la modal Y lanza polling de progreso en background
 window.confirmarCalibracion = async function() {
     const fechaInicio = document.getElementById('calib-fecha-inicio').value;
-    if (!fechaInicio) return showToast("Seleccione una fecha de inicio", "warning");
+    if (!fechaInicio) return showToast("Falta la fecha de inicio.", "warning");
 
     const empleadoId = document.getElementById('calib-empleado-id')?.value;
     const syncBioAlba = document.getElementById('calib-chk-bioalba')?.checked ?? true;
@@ -4323,14 +4323,14 @@ window.confirmarCalibracion = async function() {
 
     // 2. Si el checkbox está marcado, disparar sync individual de BioAlba (fire-and-forget)
     if (syncBioAlba && empleadoId) {
-        showToast("Descargando marcaciones desde BioAlba...", "info");
+        showToast("Trayendo las marcas desde BioAlba…", "info");
         // Fire-and-forget — el reproceso en background leerá las marcas cuando terminen de llegar
         fetch(`/api/sync/asistencia/empleado/${empleadoId}/?fecha_inicio=${fechaInicio}`, {
             method: 'POST'
         }).then(r => r.ok
-            ? showToast("Marcaciones BioAlba descargadas. El reproceso se actualizará.", "success")
-            : showToast("No se pudieron descargar marcaciones de BioAlba.", "warning")
-        ).catch(() => showToast("Error conectando a BioAlba.", "warning"));
+            ? showToast("Listo. Llegaron las marcas de BioAlba; los días se vuelven a calcular.", "success")
+            : showToast("No se pudieron traer las marcas de BioAlba.", "warning")
+        ).catch(() => showToast("No hay conexión con BioAlba. Vuelva a intentarlo más tarde.", "warning"));
     }
 
     // 3. Iniciar polling de progreso (el reproceso ya está corriendo en background)
@@ -4605,7 +4605,7 @@ window.cerrarModalReproceso = function() {
 function iniciarPollingReproceso(empleadoId, nombre, fechaDesde) {
     // En el flujo de Calibración, el reproceso ya corrió desde saveAsignacionIndividual.
     // Solo mostramos un banner informativo liviano sin polling.
-    showToast(`Reprocesando asistencia de ${nombre} desde ${fechaDesde}. La grilla se actualizará al finalizar.`, 'info');
+    showToast(`Reprocesando a ${nombre} desde el ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaDesde) : fechaDesde)}. La grilla se actualiza al terminar.`, 'info');
 }
 
 
@@ -4627,7 +4627,7 @@ async function mostrarSelectorPeriodosParaCierre() {
         }
     } catch (e) {
         console.error("Error al obtener periodos:", e);
-        return showToast("Error al obtener la lista de períodos", "error");
+        return showToast("No se pudo cargar la lista de períodos.", "error");
     }
 
     // Filtrar los que están abiertos
@@ -4728,7 +4728,7 @@ async function mostrarSelectorPeriodosParaCierre() {
 window.cierreFiltrarGrillaYIniciarCierre = async function(fIni, fFin) {
     const areaVal = document.getElementById('cierre-area-select')?.value;
     if (!areaVal) {
-        return showToast("Debe seleccionar un área específica.", "error");
+        return showToast("Falta elegir un área.", "warning");
     }
 
     // 1. Cerrar modal selector
@@ -4751,7 +4751,7 @@ window.cierreFiltrarGrillaYIniciarCierre = async function(fIni, fFin) {
     if (selectArea) selectArea.value = areaVal;
 
     // 3. Forzar el recargado de la grilla de asistencia
-    showToast(`Filtrando grilla para área '${areaVal}' y período seleccionado...`, "info");
+    showToast(`Mostrando el área ${areaVal} en el período elegido…`, "info");
     await loadMarcacionesData();
 
     // 4. Lanzar asistente de cierre tras cargar la grilla
@@ -5067,20 +5067,20 @@ window.cierreWizardConfirmarParametros = async function() {
     const fFin = s.fFin;
 
     if (!area) {
-        return showToast("Debe seleccionar un área específica.", "warning");
+        return showToast("Falta elegir un área.", "warning");
     }
     if (!fIni || !fFin) {
-        return showToast("Debe ingresar las fechas de inicio y fin.", "warning");
+        return showToast("Faltan las fechas de inicio y fin.", "warning");
     }
 
     if (fIni > fFin) {
-        return showToast("La fecha de inicio no puede ser posterior a la fecha de fin.", "warning");
+        return showToast("La fecha de inicio no puede ser después de la fecha de fin.", "warning");
     }
 
     // Validar bloqueo hoy
     const today = new Date().toISOString().split('T')[0];
     if (today >= fIni && today <= fFin) {
-        return showToast("Bloqueo de Seguridad: No se pueden cerrar periodos que incluyan el día de hoy.", "error");
+        return showToast("No se puede cerrar un período que incluye el día de hoy.", "warning");
     }
 
     // Validar límite de 35 días
@@ -5089,7 +5089,7 @@ window.cierreWizardConfirmarParametros = async function() {
     const diffTime = Math.abs(dFin - dIni);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     if (diffDays > 35) {
-        return showToast(`Límite Estricto: El rango seleccionado (${diffDays} días) supera el máximo permitido (35 días).`, "error");
+        return showToast(`El rango elegido tiene ${diffDays} días; el máximo para cerrar es 35.`, "warning");
     }
 
     // 1. Sincronizar el estado global de la aplicación
@@ -5108,7 +5108,7 @@ window.cierreWizardConfirmarParametros = async function() {
     if (mainFFin) mainFFin.value = fFin;
 
     // 3. Forzar el recargado de la grilla de asistencia en segundo plano
-    showToast(`Filtrando grilla para área '${area}' y rango seleccionado...`, "info");
+    showToast(`Mostrando el área ${area} en las fechas elegidas…`, "info");
     if (typeof loadMarcacionesData === 'function') {
         loadMarcacionesData(); // se ejecuta en background
     }
@@ -5659,7 +5659,7 @@ function renderWizardStep(step) {
 window.cierreWizardDownloadExcel = function() {
     const s = window.cierreWizardState;
     if (!s || !s.fIni || !s.fFin) {
-        showToast("Rango de fechas no válido para exportar.", "error");
+        showToast("Las fechas no sirven para exportar: revise desde y hasta.", "warning");
         return;
     }
     const token = typeof AuthService !== 'undefined' ? AuthService.getToken() : localStorage.getItem('access_token');
@@ -5688,7 +5688,7 @@ async function recargarPreEvaluacionCierre() {
             loadMarcacionesData();
         }
     } catch (e) {
-        showToast("Error al actualizar estado: " + e.message, "error");
+        showToast("No se pudo cambiar el estado. " + e.message, "error");
     }
 }
 
@@ -5712,13 +5712,13 @@ window.cierreResolverHE = async function(empId, fecha, minutos, estado) {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(estado === 'APROBADO' ? 'Hora Extra aprobada' : 'Hora Extra rechazada', 'success');
+            showToast(estado === 'APROBADO' ? 'Listo. Hora extra aprobada.' : 'Listo. Hora extra rechazada.', 'success');
             await recargarPreEvaluacionCierre();
         } else {
-            showToast('Error: ' + (data.detail || 'Error al procesar'), 'danger');
+            showToast(data.detail || 'No se pudo guardar la hora extra.', 'danger');
         }
     } catch (e) {
-        showToast('Error de conexión: ' + e.message, 'danger');
+        Avisos.sinConexion();
     } finally {
         if (typeof hideBatchLoadingOverlay === 'function') {
             hideBatchLoadingOverlay();
@@ -5730,7 +5730,7 @@ window.cierreResolverTodasHE = async function() {
     const s = window.cierreWizardState;
     if (!s.evaluacion || !s.evaluacion.detalle_he || s.evaluacion.detalle_he.length === 0) return;
     
-    if (!await uiConfirm(`¿Está seguro que desea APROBAR todas las horas extras pendientes (${s.evaluacion.detalle_he.length}) de este período?`)) {
+    if (!await uiConfirm(`¿Aprobar las ${s.evaluacion.detalle_he.length} horas extra pendientes de este período?`, { items: ['Quedan aprobadas todas juntas.', 'Cada una se puede revertir después desde su día.'], confirmText: 'Aprobar todas' })) {
         return;
     }
 
@@ -5756,13 +5756,13 @@ window.cierreResolverTodasHE = async function() {
         });
         const data = await res.json();
         if (data.success || res.ok) {
-            showToast(`Aprobadas ${items.length} horas extras exitosamente.`, 'success');
+            showToast(`Listo. Se aprobaron ${items.length === 1 ? '1 hora extra' : items.length + ' horas extra'}.`, 'success');
             await recargarPreEvaluacionCierre();
         } else {
-            showToast('Error: ' + (data.detail || 'Error al procesar lote'), 'danger');
+            showToast(data.detail || 'No se pudieron aprobar las horas extra.', 'danger');
         }
     } catch (e) {
-        showToast('Error de conexión: ' + e.message, 'danger');
+        Avisos.sinConexion();
     } finally {
         if (typeof hideBatchLoadingOverlay === 'function') {
             hideBatchLoadingOverlay();
@@ -5781,7 +5781,7 @@ window.cierreCorregirAnomalia = function(empId, fecha, nombreCompleto, horaEntra
             horaSalida || null
         );
     } else {
-        showToast("Error: Modal de ingreso manual no disponible.", "danger");
+        showToast("La ventana de ingreso manual no terminó de cargar. Recargue la página.", "danger");
     }
 };
 
@@ -5793,7 +5793,7 @@ window.cierreGestionarInasistencia = function(empId, fecha, nombreCompleto) {
             nombreCompleto
         );
     } else {
-        showToast("Error: Modal de acciones de asistencia no disponible.", "danger");
+        showToast("Las acciones del día no terminaron de cargar. Recargue la página.", "danger");
     }
 };
 
@@ -5832,13 +5832,13 @@ async function confirmarCierreRRHH() {
                 cancelButtonText: 'Cerrar'
             }).then(r2 => { if (r2.isConfirmed) window.descargarActaCierre(s.fIni, s.fFin, s.area); });
         } else {
-            showToast("Error: " + (res.detail || "No se pudo cerrar el periodo"), "error");
+            showToast(res.detail || "No se pudo cerrar el período.", "error");
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
         }
     } catch (e) {
         console.error(e);
-        showToast("Error de conexión al cerrar periodo", "error");
+        Avisos.sinConexion();
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-lock-fill"></i> Sellar Periodo Definitivamente';
     }
@@ -5851,7 +5851,7 @@ async function confirmarCierreRRHH() {
 // Configuración → Tramos de Cierre. Textos con comillas (minificador).
 window.descargarActaCierre = async function (fIni, fFin, area) {
     try {
-        showToast('Generando el acta de cierre de ' + area + '...', 'info');
+        showToast('Preparando el acta de cierre de ' + area + '…', 'info');
         const resp = await fetch('/api/cierre/acta-resumen?fecha_inicio=' + fIni + '&fecha_fin=' + fFin + '&area=' + encodeURIComponent(area), {
             headers: { 'Authorization': 'Bearer ' + AuthService.getToken() }
         });
@@ -5948,10 +5948,10 @@ window.descargarActaCierre = async function (fIni, fFin, area) {
         doc.line(W - 240, yF, W - 60, yF); doc.text('RR.HH.', W - 150, yF + 12, { align: 'center' });
 
         doc.save('ACTA_' + area.replace(/\s+/g, '_') + '_' + fIni + '_' + fFin + '.pdf');
-        showToast('Acta descargada', 'success');
+        showToast('Listo. Acta descargada.', 'success');
     } catch (e) {
         console.error(e);
-        showToast('Error al generar el acta: ' + e.message, 'error');
+        showToast('No se pudo preparar el acta. ' + e.message, 'error');
     }
 };
 
@@ -6030,12 +6030,12 @@ async function openHistorialCierresModal() {
 
     } catch (e) {
         console.error(e);
-        showToast("Error al cargar historial", "error");
+        showToast("No se pudo cargar el historial de cierres.", "error");
     }
 }
 
 window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
-    if (!await uiConfirm(`¿Está seguro que desea reabrir el período cerrado del ${fechaInicio} al ${fechaFin} para el área "${area}"?\n\nEsta acción eliminará el bloqueo y permitirá modificaciones/recálculos.`)) {
+    if (!await uiConfirm(`¿Reabrir el período del ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaInicio) : fechaInicio)} al ${(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaFin) : fechaFin)}?`, { quien: area, items: ['Se quita el cierre: los días se pueden cambiar y recalcular.', 'Queda registrado quién lo reabrió.'], confirmText: 'Reabrir período', danger: true })) {
         return;
     }
     
@@ -6049,16 +6049,16 @@ window.reabrirPeriodo = async function(id, fechaInicio, fechaFin, area) {
         
         const res = await resp.json();
         if (resp.ok) {
-            showToast("Periodo reabierto con éxito", "success");
+            showToast("Listo. Período reabierto.", "success");
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-historial-cierres'));
             if (m) m.hide();
             loadMarcacionesData();
         } else {
-            showToast("Error: " + (res.detail || "No se pudo reabrir el periodo"), "error");
+            showToast(res.detail || "No se pudo reabrir el período.", "error");
         }
     } catch (e) {
         console.error(e);
-        showToast("Error de conexión al reabrir periodo", "error");
+        Avisos.sinConexion();
     }
 };
 
@@ -6847,9 +6847,6 @@ window.reloadSingleEmployeeRow = async function(empId) {
 
         window.recalculateTotalsRow(dates, feriadosArray, getFeriadoDesc);
         
-        if (typeof showToast === 'function') {
-            showToast("Fila actualizada en tiempo real", "success");
-        }
 
     } catch (err) {
         console.error("reloadSingleEmployeeRow failed:", err);
@@ -6943,7 +6940,7 @@ window.toggleEstadosChip = function() {
         btn.title = b.title;
         btn.setAttribute('aria-pressed', String(b.on));
     }
-    if (typeof showToast === 'function') showToast(`Estados: ${b.nombre}`, 'info');
+    if (typeof showToast === 'function') showToast(`Estados: ${b.nombre}.`, 'info');
 };
 window.aplicarEstadosChip();
 
@@ -6966,7 +6963,7 @@ window.toggleGridTooltip = function() {
         btn.title = b.title;
         btn.setAttribute('aria-pressed', String(b.on));
     }
-    if (typeof showToast === 'function') showToast(window._gridTooltipEnabled ? 'Vista previa activada' : 'Vista previa desactivada', 'info');
+    if (typeof showToast === 'function') showToast(window._gridTooltipEnabled ? 'Vista previa encendida: al pasar sobre un día se ven sus marcas.' : 'Vista previa apagada.', 'info');
 };
 
 window.toggleStickyEmpleado = function() {

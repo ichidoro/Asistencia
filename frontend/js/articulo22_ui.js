@@ -1040,7 +1040,7 @@ const Articulo22Module = (() => {
 
     async function descargarExcel() {
         const { desde, hasta, emp } = _historialParams();
-        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Seleccione rango de fechas', 'warning'); return; }
+        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Faltan las fechas. Elija desde y hasta.', 'warning'); return; }
         try {
             const res = await fetch(`/api/articulo22/exportar-excel/?desde=${desde}&hasta=${hasta}${emp ? '&empleado_id=' + emp : ''}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
@@ -1057,7 +1057,7 @@ const Articulo22Module = (() => {
             a.download = `articulo22_${desde}_a_${hasta}${emp ? '_emp' + emp : ''}.xlsx`;
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-        } catch (e) { console.error(e); if (typeof showToast === 'function') showToast('Error al descargar el Excel', 'danger'); }
+        } catch (e) { console.error(e); if (typeof showToast === 'function') showToast('No se pudo descargar el Excel. Vuelva a intentarlo.', 'danger'); }
     }
 
     function _renderResumen(r) {
@@ -1081,7 +1081,7 @@ const Articulo22Module = (() => {
         const { desde, hasta, emp } = _historialParams();
         const tbody = document.getElementById('art22-historial-tbody');
         const pagDiv = document.getElementById('art22-historial-pagination');
-        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Seleccione rango de fechas', 'warning'); return; }
+        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Faltan las fechas. Elija desde y hasta.', 'warning'); return; }
         tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
 
         try {

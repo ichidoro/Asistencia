@@ -1827,7 +1827,7 @@ window.confirmWizardSync = async function() {
     // MEGA-COMMIT DE WIZARD ANTES DE INICIAR SINCRONIZACIÓN
     Swal.fire({
         title: 'Guardando configuración...',
-        html: 'Por favor espere mientras se aplican las configuraciones (Áreas, Cargos, Turnos).',
+        html: 'Espere mientras se guardan las áreas, los cargos y los turnos.',
         allowOutsideClick: false,
         didOpen: () => {
             Swal.showLoading();
@@ -2852,7 +2852,7 @@ window.saveWizardEmpleadoFicha = async function() {
         
         saveWizardStateToLocalStorage();
         renderWizardStep9();
-        showToast('Ficha guardada con éxito', 'success');
+        showToast('Listo. Ficha guardada.', 'success');
     } catch (e) {
         console.error('[Wizard Onboarding] Error guardando empleado:', e);
         Swal.fire('Error', 'No se pudo guardar la ficha: ' + e.message, 'error');
@@ -3110,7 +3110,7 @@ window.finishWizardOnboarding = async function() {
 
     Swal.fire({
         title: 'Aplicando asignaciones...',
-        html: 'Por favor espere mientras se configuran los turnos individuales.',
+        html: 'Espere mientras se asigna el turno de cada persona.',
         allowOutsideClick: false,
         didOpen: () => { Swal.showLoading(); }
     });

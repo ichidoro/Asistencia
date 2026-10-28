@@ -290,7 +290,7 @@ async function confirmProcesarVencimiento() {
     const nuevaFecha = document.getElementById('venc-nueva-fecha').value;
 
     if (action === 'renovar' && !nuevaFecha) {
-        alert("Para renovar debe ingresar la nueva fecha de término.");
+        Avisos.falta('Falta la nueva fecha de término para renovar.');
         return;
     }
 
@@ -347,9 +347,9 @@ async function confirmProcesarVencimiento() {
         setTimeout(async () => {
             // 3. Notificación (Toast)
             if (typeof showNotification === 'function') {
-                showNotification("Operación completada con éxito", "success");
+                showNotification("Listo. Contrato actualizado.", "success");
             } else if (typeof showToast === 'function') {
-                showToast("Operación completada con éxito");
+                showToast("Listo. Contrato actualizado.", "success");
             }
 
             // 4. Refrescar datos en segundo plano
@@ -364,7 +364,7 @@ async function confirmProcesarVencimiento() {
 
     } catch (error) {
         console.error("Error:", error);
-        alert("ERROR: " + error.message);
+        Avisos.error("No se pudo actualizar el contrato. " + error.message);
     }
 }
 // ==========================================

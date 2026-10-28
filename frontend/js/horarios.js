@@ -40,7 +40,7 @@ async function loadTurnos() {
         renderTurnosTable();
     } catch (error) {
         console.error(error);
-        alert("Error al cargar listado de turnos");
+        Avisos.error("No se pudo cargar la lista de turnos.");
     }
 }
 
@@ -55,24 +55,24 @@ async function saveTurno() {
 
     // La colación del horario es obligatoria: el cálculo la descuenta y la usa para reconocer la pausa de colación.
     if (!document.getElementById('chkColacion').checked || !(parseInt(document.getElementById('numColacion').value, 10) > 0)) {
-        alert("La colación del horario es obligatoria: marque «Descontar» e indique los minutos de colación.");
+        Avisos.falta('Falta la colación. Marque «Descontar» y escriba los minutos de colación.');
         return;
     }
 
     if (formData.get('tipo_programacion') === 'BOLSA_FLEXIBLE' || formData.get('tipo_programacion') === 'FLEXIBLE_BOLSA') {
         const metaInputObj = document.getElementById('input-meta-bolsa');
         if (!metaInputObj || !metaInputObj.value) {
-            alert("Debe ingresar la meta mensual (Hrs Totales) para la bolsa flexible.");
+            Avisos.falta('Falta la meta del mes (horas totales) de la bolsa flexible.');
             return;
         }
         if (!formData.get('hora_limite_ficticia')) {
-            alert("Debe ingresar la Hora Límite Ficticia para Bolsa Flexible.");
+            Avisos.falta('Falta la hora límite de la bolsa flexible.');
             return;
         }
     } else {
         const metaInputObj = document.getElementById('input-meta-jornada');
         if (!metaInputObj || !metaInputObj.value) {
-            alert("Debe ingresar la jornada semanal (Hrs).");
+            Avisos.falta('Faltan las horas de la jornada semanal.');
             return;
         }
     }
@@ -111,7 +111,7 @@ async function saveTurno() {
     };
 
     if (turno.areas.length === 0) {
-        alert("Debe seleccionar al menos un área para el turno.");
+        Avisos.falta('Falta el área. Elija al menos una para el turno.');
         return;
     }
 
@@ -219,7 +219,7 @@ async function saveTurno() {
         const avisoRecalculo = (rec && rec.personas > 0)
             ? ` Se está recalculando el tramo abierto de ${rec.personas} persona${rec.personas === 1 ? '' : 's'}; la grilla se actualiza en unos segundos.`
             : '';
-        showNotification((currentTurnoId ? "Turno actualizado." : "Turno creado.") + avisoRecalculo, "success");
+        showNotification((currentTurnoId ? "Listo. Turno guardado." : "Listo. Turno creado.") + avisoRecalculo, "success");
 
         if (window.isWizardFlow && window.wizardCurrentStep === 'turnos') {
             Swal.fire({
@@ -243,22 +243,22 @@ async function saveTurno() {
 
     } catch (error) {
         console.error(error);
-        alert("Error al guardar: " + error.message);
+        Avisos.error("No se guardó el turno. " + error.message);
     }
 }
 
 async function deleteTurno(id) {
-    if (!await uiConfirm("¿Estás seguro de eliminar este turno? Esta acción no se puede deshacer.")) return;
+    if (!await uiConfirm('¿Eliminar este turno?', { items: ['Ya no se podrá asignar a nadie.', 'No se puede deshacer.'], confirmText: 'Eliminar turno', danger: true })) return;
 
     try {
         const response = await fetch(`${API_TURNOS}${id}/`, { method: 'DELETE' });
         if (!response.ok) throw new Error("Error al eliminar");
 
         await loadTurnos();
-        showNotification("Turno eliminado", "success");
+        showNotification("Listo. Turno eliminado.", "success");
     } catch (error) {
         console.error(error);
-        alert("Error eliminando turno: " + error.message);
+        Avisos.error("No se pudo eliminar el turno. " + error.message);
     }
 }
 
@@ -1043,9 +1043,9 @@ async function submitBulkAsignacion() {
     const fechaFin = document.getElementById('bulk-fecha-fin').value;
     const reemplazar = document.getElementById('bulk-reemplazar')?.checked || false;
 
-    if (selectedIds.length === 0) return alert("Seleccione al menos un empleado");
-    if (!turnoId) return alert("Seleccione un turno");
-    if (!fecha) return alert("Seleccione una fecha de inicio");
+    if (selectedIds.length === 0) return Avisos.falta('Falta elegir a las personas. Marque al menos una.');
+    if (!turnoId) return Avisos.falta('Falta elegir el turno.');
+    if (!fecha) return Avisos.falta('Falta la fecha de inicio.');
 
     const accion = reemplazar ? 'reemplazar el horario existente' : 'asignar un turno nuevo';
     const confirmMsg = fechaFin
@@ -1137,7 +1137,7 @@ async function submitBulkAsignacion() {
 
     } catch (error) {
         console.error(error);
-        alert("Error: " + error.message);
+        Avisos.error("No se pudo asignar el turno. " + error.message);
     } finally {
         // Restaurar botón
         if (btn) {

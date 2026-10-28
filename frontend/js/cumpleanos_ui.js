@@ -120,7 +120,7 @@ async function loadAllBirthdays() {
         }
     } catch (error) {
         console.error(error);
-        if (typeof showToast === 'function') showToast("Error al cargar cumpleaños", "error");
+        if (typeof showToast === 'function') showToast("No se pudieron cargar los cumpleaños.", "error");
     }
 }
 

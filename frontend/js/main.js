@@ -119,7 +119,7 @@ window.iniciarEdicionFecha = function(id, originalValue, element) {
     const handleUpdate = async () => {
         const newDate = input.value;
         if (newDate && newDate !== cleanValue) {
-            if (await uiConfirm(`¿Desea cambiar la fecha de inicio a ${window.formatFechaDDMMYYYY(newDate)}?\n\n¡ATENCION!:\nEsta acción eliminará registros de asistencia 'basura' anteriores a esta fecha y reprocesará al empleado.`)) {
+            if (await uiConfirm(`¿Cambiar la fecha de inicio al ${window.formatFechaDDMMYYYY(newDate)}?`, { items: ['Se borran los registros de asistencia anteriores a esa fecha.', 'Los días de la persona se vuelven a calcular.'], confirmText: 'Cambiar fecha', danger: true })) {
                 try {
                     // Feedback visual: deshabilitar y mostrar carga
                     element.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
@@ -132,16 +132,16 @@ window.iniciarEdicionFecha = function(id, originalValue, element) {
                     
                     if (response.ok) {
                         const res = await response.json();
-                        if (window.showToast) window.showToast(res.message || 'Magia aplicada correctamente', 'success');
+                        if (window.showToast) window.showToast(res.message || 'Listo. Se cambió la fecha de inicio.', 'success');
                         setTimeout(() => window.location.reload(), 1000); // Dar tiempo al toast
                     } else {
                         const err = await response.json();
-                        alert('Error: ' + (err.detail || 'Error desconocido'));
+                        Avisos.error(err.detail || 'No se pudo cambiar la fecha de inicio. El servidor no dio el motivo.');
                         element.textContent = originalValue || '-';
                     }
                 } catch (error) {
                     console.error("Error en Magia:", error);
-                    alert('Error de conexión o proceso');
+                    Avisos.sinConexion();
                     element.textContent = originalValue || '-';
                 }
             } else {
@@ -422,12 +422,12 @@ function setupEventListeners() {
       if (typeof startSyncWizard === 'function') {
           startSyncWizard(data);
       } else {
-          alert('El Wizard Universal no está cargado. Verifique los scripts.');
+          Avisos.error('La sincronización no terminó de cargar. Recargue la página.');
       }
     } catch (error) {
       hideBatchLoadingOverlay();
       console.error("Error validando guardián:", error);
-      alert("Error al verificar la integridad con BioAlba: " + error.message);
+      Avisos.error("No se pudo revisar BioAlba. " + error.message);
     } finally {
       btnSync.innerHTML = originalHTML;
       btnSync.disabled = false;
@@ -463,7 +463,7 @@ function setupEventListeners() {
         // El usuario cerró SIN confirmar: registrar como omisión y avanzar
         console.warn('[Onboarding] Modal de turno cerrado sin confirmar — avanzando al siguiente empleado');
         if (window.showToast) {
-          showToast('Asignación omitida. El empleado no tendrá turno asignado hasta regularizar.', 'warning');
+          showToast('Se dejó sin turno. La persona no tendrá turno hasta que se le asigne uno.', 'warning');
         }
         // Avanzar la cola (procesar el siguiente o cerrar el batch si era el último)
         if (typeof procesarColaOnboarding === 'function') {
@@ -617,7 +617,7 @@ function switchPage(pageName) {
   // Onboarding Guard: Prevent access to empleados if no turnos exist
   if (pageName === 'empleados') {
     if (window._hasTurnos === false) {
-      alert("Debes configurar al menos un turno en el sistema antes de gestionar empleados.");
+      Avisos.falta("Primero cree al menos un turno en Horarios; después podrá gestionar personas.");
       switchPage('configuracion');
       setTimeout(() => {
         const tabHorarios = document.getElementById('horarios-tab');
@@ -627,7 +627,7 @@ function switchPage(pageName) {
     } else if (window._hasTurnos === null) {
       checkTurnosExist().then(hasTurnos => {
         if (!hasTurnos) {
-          alert("Debes configurar al menos un turno en el sistema antes de gestionar empleados.");
+          Avisos.falta("Primero cree al menos un turno en Horarios; después podrá gestionar personas.");
           switchPage('configuracion');
           setTimeout(() => {
             const tabHorarios = document.getElementById('horarios-tab');
@@ -936,7 +936,7 @@ async function loadEmpleados() {
     updatePagination(data.total);
   } catch (error) {
     console.error('Error loading empleados:', error);
-    showError('Error al cargar empleados: ' + error.message);
+    showError('No se pudieron cargar las personas. ' + error.message);
   }
 }
 
@@ -968,7 +968,7 @@ async function loadBonosMatrix() {
 
   } catch (error) {
     console.error("Error matriz:", error);
-    showError("Error al cargar matriz de bonos");
+    showError("No se pudo cargar la tabla de bonos.");
   }
 }
 
@@ -1436,7 +1436,7 @@ async function loadEmpleadoData(id) {
     
     if (!response.ok) {
       console.error(`Error cargando empleado ${id}: HTTP ${response.status}`);
-      showError(`Error al cargar empleado (HTTP ${response.status}). Puede que haya sido eliminado.`);
+      showError('No se pudo abrir la ficha de esta persona. Puede que haya sido eliminada.');
       closeModal();
       return;
     }
@@ -1528,7 +1528,7 @@ async function loadEmpleadoData(id) {
     if (tooltipGenero) tooltipGenero.style.display = isManual ? 'none' : 'inline-block';
   } catch (error) {
     console.error('Error loading empleado:', error);
-    showError('Error al cargar datos del empleado');
+    showError('No se pudo abrir la ficha de esta persona.');
   }
 }
 
@@ -1545,11 +1545,11 @@ async function saveEmpleado() {
     // 🛡️ VALIDACIÓN ESTRICTA (Anti-Dirty Data)
     if (activo) {
         if (!generoIdVal) {
-            showError("El GÉNERO es obligatorio para empleados activos.");
+            Avisos.falta('Falta el género. Es obligatorio para una persona activa.', { campos: ['input-genero'] });
             return;
         }
         if (tipoContrato === 'Temporal' && !fechaSalida) {
-            showError("La FECHA DE TÉRMINO es obligatoria para contratos Temporales.");
+            Avisos.falta('Falta la fecha de término. Es obligatoria en un contrato temporal.', { campos: ['input-fecha-salida'] });
             return;
         }
     }
@@ -1665,7 +1665,7 @@ async function saveEmpleado() {
               `[Batch] Emp INACTIVO omitido de cola de turnos: ${savedEmpleado.nombre}`
             );
             if (window.showToast) {
-              showToast(`${savedEmpleado.nombre} marcado como inactivo — omitido de asignación de turno`, 'warning');
+              showToast(`${savedEmpleado.nombre} quedó inactivo; no se le asigna turno.`, 'warning');
             }
           }
           // Avanzar al siguiente empleado en la cola de edición
@@ -1691,7 +1691,7 @@ async function saveEmpleado() {
             if (typeof openAsignarTurnoForzado === 'function') {
               openAsignarTurnoForzado(savedEmpleado.id, hoy, area, nombre, savedEmpleado.cargo || '');
             } else {
-              showToast(`Asigne un turno a ${nombre} en Horarios → Asignación Masiva`, 'warning');
+              showToast(`Falta el turno de ${nombre}. Asígnelo en Horarios, «Asignación masiva».`, 'warning');
             }
           };
 
@@ -1723,11 +1723,11 @@ async function saveEmpleado() {
 
     } else {
       const error = await response.json();
-      showError(error.detail || 'Error al guardar empleado');
+      showError(error.detail || 'No se guardó la ficha de la persona.');
     }
   } catch (error) {
     console.error('Error saving empleado:', error);
-    showError('Error al guardar empleado');
+    showError('No se guardó la ficha de la persona.');
   } finally {
     // Siempre re-habilitar el botón al terminar (éxito o error)
     _isSaving = false;
@@ -1826,7 +1826,12 @@ window.editEmpleado = (id) => {
 };
 
 window.deleteEmpleado = async (id) => {
-  if (!await uiConfirm('¡ADVERTENCIA CRÍTICA!\n\nEstás a punto de ELIMINAR PERMANENTEMENTE a este empleado y TODO su historial (asistencias, turnos, bonos, etc.) de la aplicación.\n\nEsta acción NO SE PUEDE DESHACER. ¿Estás absolutamente seguro de continuar?')) {
+  const filaEmp = document.querySelector(`.btn-delete-premium[onclick="deleteEmpleado(${id})"]`);
+  const nombreEmp = filaEmp && filaEmp.closest('tr') ? (filaEmp.closest('tr').querySelector('.fw-bold') || {}).textContent : '';
+  if (!await uiConfirm(nombreEmp ? `¿Eliminar a ${nombreEmp.trim()} para siempre?` : '¿Eliminar a esta persona para siempre?', {
+    items: ['Se borran sus asistencias, turnos, bonos y todo su historial.', 'No se puede deshacer.'],
+    confirmText: 'Eliminar para siempre', danger: true
+  })) {
     return;
   }
 
@@ -1838,57 +1843,22 @@ window.deleteEmpleado = async (id) => {
     if (response.ok) {
       await loadStats();
       await loadEmpleados();
-      showNotification('Empleado eliminado permanentemente del sistema', 'success');
+      showNotification('Listo. La persona y su historial se eliminaron.', 'success');
     } else {
-      showError('Error al eliminar empleado de forma permanente');
+      showError('No se pudo eliminar a la persona.');
     }
   } catch (error) {
     console.error('Error deleting empleado:', error);
-    showError('Error al eliminar empleado');
+    showError('No se pudo eliminar a la persona.');
   }
 };
 
 // Notification Functions
-window.showToast = function (message, type = 'info') {
-  let toastEl = document.getElementById('liveToast');
-  let toastMessage = document.getElementById('toast-message');
-  
-  if (!toastEl) {
-    const container = document.createElement('div');
-    container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-    container.style.zIndex = '9999';
-    container.innerHTML = `
-      <div id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="d-flex">
-          <div id="toast-message" class="toast-body fw-semibold"></div>
-          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(container);
-    toastEl = document.getElementById('liveToast');
-    toastMessage = document.getElementById('toast-message');
-  }
-
-  if (!toastEl || !toastMessage) return;
-
-  const iconoToast = { success: 'check-circle-fill', error: 'x-circle-fill', danger: 'x-circle-fill', warning: 'exclamation-triangle-fill', info: 'info-circle-fill' }[type] || 'info-circle-fill';
-  toastMessage.textContent = '';
-  const iEl = document.createElement('i');
-  iEl.className = 'bi bi-' + iconoToast + ' me-2';
-  iEl.setAttribute('aria-hidden', 'true');
-  toastMessage.append(iEl, String(message).replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, ''));
-
-  // Set color based on type
-  toastEl.classList.remove('bg-primary', 'bg-success', 'bg-danger', 'bg-warning', 'bg-info', 'text-white');
-  if (type === 'success') toastEl.classList.add('bg-success', 'text-white');
-  else if (type === 'error' || type === 'danger') toastEl.classList.add('bg-danger', 'text-white');
-  else if (type === 'warning') toastEl.classList.add('bg-warning', 'text-dark');
-  else if (type === 'info') toastEl.classList.add('bg-info', 'text-white');
-  else toastEl.classList.add('bg-primary', 'text-white');
-
-  const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
-  toast.show();
+// Etapa 4 (avisos): «listo» e información van al aviso breve; lo que falta o falló, a la ventana abierta o a una
+// ventana de aviso (ui_dialogs.js → window.Avisos).
+window.showToast = function (message, type = 'info', duracion) {
+  if (window.Avisos) return window.Avisos.avisar(message, type, duracion);
+  alert(message);
 }
 
 window.showNotification = function (message, type = 'info') {
@@ -2137,7 +2107,7 @@ async function _execBatchSync() {
   const payload = _batch.syncPayload;
 
   if (payload.length === 0) {
-    showToast('No hay datos para sincronizar.', 'warning');
+    showToast('No hay nada que sincronizar.', 'warning');
     _resetBatchState();
     return;
   }
@@ -2156,7 +2126,7 @@ async function _execBatchSync() {
 
     if (!resp.ok) {
       const err = await resp.json();
-      showToast('Error en batch-sync: ' + (err.detail || 'Error desconocido'), 'danger');
+      showToast(err.detail || 'No se pudo sincronizar a las personas elegidas. El servidor no dio el motivo.', 'danger');
       _resetBatchState();
       return;
     }
@@ -2198,7 +2168,7 @@ async function _execBatchSync() {
 
   } catch (e) {
     console.error('[Batch] Error en batch-sync:', e);
-    showToast('Error de conexión en batch-sync', 'danger');
+    Avisos.sinConexion();
   } finally {
     _resetBatchState();
   }
@@ -2397,14 +2367,13 @@ window.confirmSync = async function () {
   const allBoxes     = document.querySelectorAll('.sync-emp-item:not(.d-none) .sync-emp-checkbox');
 
   if (checkedBoxes.length === 0) {
-    alert('Seleccione al menos un empleado para sincronizar.');
+    Avisos.falta('Falta elegir a quién sincronizar. Marque al menos una persona.');
     return;
   }
 
   // ── LÍMITE MÁXIMO DE 10 EMPLEADOS ─────────────────────────────────────────
   if (checkedBoxes.length > MAX_BATCH_SYNC) {
-    alert(`Límite de sincronización: máximo ${MAX_BATCH_SYNC} empleados por batch.\n` +
-          `Has seleccionado ${checkedBoxes.length}. Desmarca algunos e intenta de nuevo.`);
+    Avisos.falta(`Se pueden sincronizar hasta ${MAX_BATCH_SYNC} personas a la vez. Hay ${checkedBoxes.length} marcadas: desmarque algunas y vuelva a intentarlo.`);
     return;
   }
 
@@ -2414,10 +2383,10 @@ window.confirmSync = async function () {
     : null;
 
   const filterMsg = selectedRuts 
-    ? `${selectedRuts.length} empleado(s) seleccionado(s)` 
-    : `Todos los ${allBoxes.length} empleado(s)`;
+    ? (selectedRuts.length === 1 ? 'Se sincroniza 1 persona marcada.' : `Se sincronizan ${selectedRuts.length} personas marcadas.`)
+    : `Se sincronizan las ${allBoxes.length} personas de la lista.`;
 
-  if (!await uiConfirm(`¿Iniciar sincronización?\n(${filterMsg})`)) return;
+  if (!await uiConfirm('¿Sincronizar con BioAlba?', { items: [filterMsg], confirmText: 'Sincronizar' })) return;
 
   closeModalSync();
 
@@ -2446,7 +2415,7 @@ window.confirmSync = async function () {
     if (!response.ok) {
       hideBatchLoadingOverlay();
       const errData = await response.json().catch(() => ({}));
-      alert(`Error: ${errData.detail || 'Error desconocido'}`);
+      Avisos.error(errData.detail || 'No se pudo empezar la sincronización. El servidor no dio el motivo.');
       return;
     }
 
@@ -2487,14 +2456,14 @@ window.confirmSync = async function () {
             if (typeof startSyncWizard === 'function') {
                 startSyncWizard(eventData);
             } else {
-                alert('El Wizard Universal no está cargado. Verifique los scripts.');
+                Avisos.error('La sincronización no terminó de cargar. Recargue la página.');
             }
             finalStats = null;
           } else if (eventType === 'done') {
             finalStats = eventData;
           } else if (eventType === 'error') {
             hideBatchLoadingOverlay();
-            alert(`Error durante sincronización: ${eventData.message || 'Error desconocido'}`);
+            Avisos.error(eventData.message ? `La sincronización se detuvo. ${eventData.message}` : 'La sincronización se detuvo. El servidor no dio el motivo.');
           }
           // Reset para el próximo evento
           eventType = null;
@@ -2521,7 +2490,7 @@ window.confirmSync = async function () {
           _batch.phase = 'edit';
           _batch.editedEmployees = [];
           _batch.syncPayload = [];
-          showToast(`Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
+          showToast(`Se revisarán ${onboardingQueue.length} personas: primero sus bonos, después sus turnos y al final la sincronización.`, 'info');
         } else {
           _batch.active = false;
         }
@@ -2552,7 +2521,7 @@ window.confirmSync = async function () {
   } catch (error) {
     hideBatchLoadingOverlay();
     console.error('Error en sync stream:', error);
-    alert('Error de conexión al iniciar sincronización');
+    Avisos.sinConexion();
   } finally {
     btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizar</span>';
     btnSync.disabled = false;
@@ -2583,7 +2552,7 @@ window._executeSyncFromWizard = async function(payload) {
     if (!response.ok) {
       hideBatchLoadingOverlay();
       const errData = await response.json().catch(() => ({}));
-      alert(`Error: ${errData.detail || 'Error desconocido'}`);
+      Avisos.error(errData.detail || 'No se pudo empezar la sincronización. El servidor no dio el motivo.');
       return;
     }
 
@@ -2616,7 +2585,7 @@ window._executeSyncFromWizard = async function(payload) {
             finalStats = eventData;
           } else if (eventType === 'error') {
             hideBatchLoadingOverlay();
-            alert(`Error: ${eventData.message || 'Error desconocido'}`);
+            Avisos.error(eventData.message ? `La sincronización se detuvo. ${eventData.message}` : 'La sincronización se detuvo. El servidor no dio el motivo.');
           }
           eventType = null;
           eventData = null;
@@ -2639,7 +2608,7 @@ window._executeSyncFromWizard = async function(payload) {
           _batch.phase = 'edit';
           _batch.editedEmployees = [];
           _batch.syncPayload = [];
-          showToast(`Batch: editarás ${onboardingQueue.length} empleados → bonos → turnos → sync`, 'info');
+          showToast(`Se revisarán ${onboardingQueue.length} personas: primero sus bonos, después sus turnos y al final la sincronización.`, 'info');
         } else {
           _batch.active = false;
         }
@@ -2651,11 +2620,11 @@ window._executeSyncFromWizard = async function(payload) {
         setTimeout(() => { procesarColaOnboarding(); }, 1500);
       } else {
         hideBatchLoadingOverlay();
-        alert(`Sincronización completada:\n` +
-          `- Nuevos: ${stats.empleados_nuevos}\n` +
-          `- Actualizados: ${stats.empleados_actualizados}\n` +
+        Avisos.ventana(`Sincronización terminada\n` +
+          `- Nuevas: ${stats.empleados_nuevos}\n` +
+          `- Actualizadas: ${stats.empleados_actualizados}\n` +
           `- Sin cambios: ${stats.empleados_sin_cambios || 0}\n` +
-          `- Errores: ${stats.errores}`);
+          `- Con error: ${stats.errores}`, stats.errores ? 'falta' : 'info');
       }
     } else {
       hideBatchLoadingOverlay();
@@ -2664,7 +2633,7 @@ window._executeSyncFromWizard = async function(payload) {
   } catch (error) {
     hideBatchLoadingOverlay();
     console.error('[Wizard→SSE] Error:', error);
-    alert('Error de conexión al iniciar sincronización');
+    Avisos.sinConexion();
   } finally {
     if (btnSync) {
       btnSync.innerHTML = '<span><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><span>Sincronizar</span>';
@@ -2708,9 +2677,9 @@ window.confirmarBaja = async function () {
   const fecha = document.getElementById('baja-fecha').value;
   const motivo = document.getElementById('baja-motivo').value;
 
-  if (!fecha) return alert("Debe seleccionar una fecha de salida.");
+  if (!fecha) return Avisos.falta('Falta la fecha de salida.', { campos: ['baja-fecha'] });
 
-  if (!await uiConfirm("¿Está seguro de registrar la baja? Esta acción puede desactivar al empleado.")) return;
+  if (!await uiConfirm('¿Registrar la baja?', { items: ['La persona puede quedar inactiva desde la fecha de salida.'], confirmText: 'Registrar baja', danger: true })) return;
 
   try {
     const response = await fetch(`${API_BASE_URL}/empleados/${empId}/baja/`, {
@@ -2725,17 +2694,17 @@ window.confirmarBaja = async function () {
     });
 
     if (response.ok) {
-      alert("Baja registrada exitosamente.");
+      Avisos.listo("Listo. Baja registrada.");
       closeBajaConfirmation();
       closeModal(); // Cerrar modal de empleado
       loadEmpleados(); // Recargar lista
     } else {
       const err = await response.json();
-      alert("Error: " + (err.detail || "No se pudo registrar la baja"));
+      Avisos.error(err.detail || "No se pudo registrar la baja.");
     }
   } catch (e) {
     console.error(e);
-    alert("Error de conexión al registrar baja.");
+    Avisos.sinConexion();
   }
 }
 // --- DIAGNÓSTICO (deshabilitado) ---
@@ -2903,12 +2872,12 @@ window.executeConfirmarCambioArea = async function () {
   const turnoId = document.getElementById('area-pending-turno').value;
 
   if (!fecha) {
-    alert("Debe seleccionar una fecha de cambio.");
+    Avisos.falta('Falta la fecha del cambio de área.', { campos: ['area-pending-fecha'] });
     return;
   }
 
   if (!turnoId) {
-    alert("Debe seleccionar un turno de la nueva área para completar la transición.");
+    Avisos.falta('Falta el turno en la nueva área. Elíjalo para terminar el cambio.', { campos: ['area-pending-turno'] });
     return;
   }
 
@@ -2924,7 +2893,7 @@ window.executeConfirmarCambioArea = async function () {
     });
 
     if (response.ok) {
-      showNotification("Área validada correctamente. La visibilidad ha sido actualizada.", "success");
+      showNotification("Listo. Cambio de área confirmado.", "success");
       closeConfirmarAreaModal();
       // Si el modal de empleado está abierto y es el mismo empleado, recargar historial y area
       if (modal.classList.contains('active') && currentEmpleadoId) {
@@ -2940,11 +2909,11 @@ window.executeConfirmarCambioArea = async function () {
       loadEmpleados();
     } else {
       const err = await response.json();
-      alert("Error: " + (err.detail || "No se pudo validar el área"));
+      Avisos.error(err.detail || "No se pudo confirmar el cambio de área.");
     }
   } catch (e) {
     console.error(e);
-    alert("Error de conexión al validar área.");
+    Avisos.sinConexion();
   }
 }
 
@@ -2955,14 +2924,14 @@ async function setSyncSpeed(speed) {
   try {
     const resp = await fetch("/api/sync/speed/" + speed + "/");
     if (resp.ok) {
-      alert("Velocidad de sincronización cambiada a: " + speed);
+      Avisos.listo("Listo. Velocidad de sincronización: " + speed + ".");
     } else {
       const err = await resp.json();
-      alert("Error: " + (err.message || "No se pudo cambiar la velocidad"));
+      Avisos.error(err.message || "No se pudo cambiar la velocidad de sincronización.");
     }
   } catch (e) {
     console.error("Error cambiando velocidad sync", e);
-    alert("Error al cambiar velocidad de sincronización");
+    Avisos.error("No se pudo cambiar la velocidad de sincronización.");
   }
 }
 

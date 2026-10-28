@@ -381,7 +381,7 @@ const VisitasModule = (() => {
             zone?.classList.add(data.parse_ok ? 'success' : 'error');
 
             if (data.parse_ok && typeof showToast === 'function') {
-                showToast(`✅ RUT detectado: ${data.rut} (${data.tipo_documento})`, 'info');
+                showToast(`RUT leído: ${data.rut} (${data.tipo_documento}).`, 'info');
             }
 
             // SIEMPRE mostrar formulario para que el portero complete nombre/empresa
@@ -465,10 +465,10 @@ const VisitasModule = (() => {
             });
             video.srcObject = _cameraStream;
             container.classList.add('active');
-            if (typeof showToast === 'function') showToast('📷 Cámara lista — posicione la cédula con las 3 líneas visibles', 'info');
+            if (typeof showToast === 'function') showToast('Cámara lista. Ponga la cédula con sus 3 líneas a la vista.', 'info');
         } catch (err) {
             console.error('Error accediendo a la cámara:', err);
-            if (typeof showToast === 'function') showToast('❌ No se pudo acceder a la cámara: ' + err.message, 'danger');
+            if (typeof showToast === 'function') showToast('No se pudo abrir la cámara. ' + err.message, 'danger');
         }
     }
 
@@ -558,19 +558,19 @@ const VisitasModule = (() => {
                         persona_contacto: ''
                     }, `MRZ:${textoOCR}`);
                     if (typeof showToast === 'function') {
-                        showToast(`✅ RUT: ${mrzData.rut} — ${mrzData.nombre}`, 'success');
+                        showToast(`Listo. RUT ${mrzData.rut}, ${mrzData.nombre}.`, 'success');
                     }
                 }, 600);
             } else {
                 statusText.textContent = '⚠️ No se detectó MRZ — intente de nuevo';
-                if (typeof showToast === 'function') showToast('⚠️ No se pudo leer la cédula. Reposicione e intente de nuevo.', 'warning');
+                if (typeof showToast === 'function') showToast('No se pudo leer la cédula. Acomódela y vuelva a intentarlo.', 'warning');
                 _ocrProcessing = false;
                 setTimeout(() => status?.classList.remove('show'), 2500);
             }
         } catch (err) {
             console.error('Error OCR:', err);
             statusText.textContent = '❌ Error: ' + err.message;
-            if (typeof showToast === 'function') showToast('❌ Error procesando imagen: ' + err.message, 'danger');
+            if (typeof showToast === 'function') showToast('No se pudo leer la imagen. ' + err.message, 'danger');
             _ocrProcessing = false;
             setTimeout(() => status?.classList.remove('show'), 3000);
         }
@@ -764,7 +764,7 @@ const VisitasModule = (() => {
         const rawScan = document.getElementById('vis-scan-input')?.dataset.rawScan || '';
 
         if (!rut) {
-            if (typeof showToast === 'function') showToast('Ingrese el RUT del visitante', 'warning');
+            if (typeof showToast === 'function') showToast('Falta el RUT de la visita.', 'warning');
             document.getElementById('vis-rut')?.focus();
             return;
         }

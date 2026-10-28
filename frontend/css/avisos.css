@@ -1,0 +1,217 @@
+/* ════════════════════════════════════════════════════════════════════
+   Avisos · etapa 4 del orden visual común (boceto aprobado el 28-10-2026)
+   1 «Listo»: aviso breve abajo a la derecha (en el celular, sobre la barra de abajo).
+   2 «Falta un dato»: banda dentro de la ventana abierta; el campo que falta queda marcado.
+   3 «No se pudo» y 4 «¿Seguro?»: ventanas de SweetAlert vestidas con .av-dlg (ui_dialogs.js);
+     en el celular suben desde abajo.
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  --av-ink: var(--ov-ink, #101a3d); --av-ink2: var(--ov-ink-2, #3c4767); --av-ink3: var(--ov-ink-3, #69738f); --av-ink4: var(--ov-ink-4, #9ca4ba);
+  --av-ln: var(--ov-line, #e6e9f1); --av-ln2: var(--ov-line-2, #eff1f6); --av-sk: var(--ov-sunk, #f9fafc);
+  --av-nv: #1b2f8f; --av-nv50: #eef1fb;
+  --av-in: #c0267a; --av-inb: #fde7f1; --av-in-ln: #f3c3d9; --av-in-tx: #8f1b5a;
+  --av-at: #b0500b; --av-atb: #fff3e4; --av-at-ln: #f3d3ad; --av-at-tx: #7a3906; --av-at-campo: #c9711f;
+  --av-ok: #4f9f2c; --av-inf: #3d63d8; --av-toast: #141d42;
+}
+
+/* ── 1 · Aviso breve ─────────────────────────────────────────────────── */
+.av-pila {
+  position: fixed; right: 24px; bottom: 24px; z-index: 3100;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+  pointer-events: none; max-width: calc(100vw - 32px);
+}
+.av-toast {
+  pointer-events: auto; position: relative; overflow: hidden;
+  width: 420px; max-width: 100%;
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) 26px; gap: 12px; align-items: start;
+  padding: 14px 12px 16px 14px; border-radius: 14px;
+  background: var(--av-toast); color: rgba(255, 255, 255, .8);
+  font: 400 13.5px/1.45 'Barlow', system-ui, sans-serif; text-align: left;
+  box-shadow: 0 18px 40px -14px rgba(8, 14, 40, .6), 0 2px 6px rgba(8, 14, 40, .18);
+  animation: av-sube .18s ease-out both;
+}
+.av-toast b { color: #fff; font-weight: 600; }
+.av-toast .av-t-ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--av-ok); }
+.av-toast.inf .av-t-ic { background: var(--av-inf); }
+.av-toast .av-t-ic svg { width: 15px; height: 15px; color: #fff; stroke-width: 2.4; }
+.av-toast .av-t-tx { padding-top: 2px; white-space: pre-line; overflow-wrap: anywhere; }
+.av-toast .av-t-x {
+  width: 26px; height: 26px; border: 0; padding: 0; border-radius: 8px; background: transparent;
+  display: grid; place-items: center; color: rgba(255, 255, 255, .45); cursor: pointer;
+}
+.av-toast .av-t-x:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+.av-toast .av-t-x:focus-visible { outline: 2px solid #8fb4ff; outline-offset: 1px; }
+.av-toast .av-t-x svg { width: 15px; height: 15px; }
+.av-toast .av-t-barra {
+  position: absolute; left: 0; bottom: 0; height: 3px; width: 100%;
+  background: rgba(255, 255, 255, .26); border-radius: 0 3px 3px 0; transform-origin: left center;
+  animation: av-queda linear forwards;
+}
+.av-toast:hover .av-t-barra, .av-toast:focus-within .av-t-barra { animation-play-state: paused; }
+.av-toast.sale { animation: av-baja .16s ease-in forwards; }
+@keyframes av-sube { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes av-baja { to { opacity: 0; transform: translateY(6px); } }
+@keyframes av-queda { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ── 2 · Banda dentro de la ventana ──────────────────────────────────── */
+.av-banda {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px;
+  padding: 12px 14px; margin: 0 0 14px; border-radius: 12px;
+  font: 400 13.5px/1.45 'Barlow', system-ui, sans-serif; color: var(--av-ink2); text-align: left;
+  white-space: pre-line; overflow-wrap: anywhere;
+  animation: av-abre .16s ease-out both;
+}
+.av-banda svg { width: 18px; height: 18px; margin-top: 1px; }
+.av-banda.fal { background: var(--av-atb); box-shadow: inset 0 0 0 1px var(--av-at-ln); }
+.av-banda.fal svg { color: var(--av-at); }
+.av-banda.fal b { color: var(--av-at-tx); font-weight: 600; }
+.av-banda.err { background: var(--av-inb); box-shadow: inset 0 0 0 1px var(--av-in-ln); }
+.av-banda.err svg { color: var(--av-in); }
+.av-banda.err b { color: var(--av-in-tx); font-weight: 600; }
+@keyframes av-abre { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.av-falta, .form-control.av-falta, .form-select.av-falta,
+.modal .form-control.av-falta:focus, .modal .form-select.av-falta:focus {
+  border-color: var(--av-at-campo) !important;
+  box-shadow: 0 0 0 1px var(--av-at-campo), 0 0 0 4px rgba(201, 113, 31, .13) !important;
+}
+/* Mientras la banda dice lo que falta, el aviso fijo del Ingreso manual sobra */
+.modal-body:has(> .av-banda) #manual-alert-faltante { display: none !important; }
+
+/* ── 3 y 4 · Ventanas de aviso y de confirmación (SweetAlert vestido) ── */
+.swal2-container { padding: 16px; }
+.swal2-popup.av-dlg {
+  width: 440px; max-width: 100%;
+  display: grid !important; grid-template-columns: 42px minmax(0, 1fr); column-gap: 14px; align-items: start;
+  padding: 22px 0 0 22px !important; border-radius: 18px !important; overflow: hidden;
+  background: #fff !important; background-image: none !important; color: var(--av-ink2) !important; text-align: left;
+  font-family: 'Barlow', system-ui, sans-serif !important;
+  box-shadow: 0 0 0 1px rgba(16, 26, 61, .08), 0 30px 70px -20px rgba(8, 14, 40, .55);
+}
+.swal2-popup.av-dlg.av-ancha { width: auto; min-width: min(440px, 100%); }
+.swal2-popup.av-dlg > * { grid-column: 2; margin-left: 0 !important; margin-right: 22px !important; }
+@media (max-width: 768px) { .swal2-popup.av-dlg > * { margin-right: 20px !important; } }
+.swal2-popup.av-dlg .swal2-close { grid-column: 1 / -1; grid-row: 1; justify-self: end; align-self: start; margin: -10px 12px 0 0 !important; color: var(--av-ink4); }
+.swal2-popup.av-dlg .swal2-icon.av-ic {
+  grid-column: 1; grid-row: 1 / span 2; justify-self: end;
+  width: 42px; height: 42px; margin: 0 !important; border: 0 !important; border-radius: 12px;
+  display: grid !important; place-items: center; font-size: 0;
+}
+.swal2-popup.av-dlg .swal2-icon.av-ic .swal2-icon-content { display: grid; place-items: center; font-size: 0; }
+.swal2-popup.av-dlg .swal2-icon.av-ic svg { width: 20px; height: 20px; }
+.swal2-popup.av-dlg .av-ic-error, .swal2-popup.av-dlg .av-ic-peligro { background: var(--av-inb); color: var(--av-in); }
+.swal2-popup.av-dlg .av-ic-warning { background: var(--av-atb); color: var(--av-at); }
+.swal2-popup.av-dlg .av-ic-success { background: #e6f5ec; color: #167a46; }
+.swal2-popup.av-dlg .av-ic-info, .swal2-popup.av-dlg .av-ic-question, .swal2-popup.av-dlg .av-ic-pregunta { background: var(--av-nv50); color: var(--av-nv); }
+.swal2-popup.av-dlg .swal2-title {
+  grid-row: 1; padding: 0 !important; margin-top: 0 !important; margin-bottom: 0 !important;
+  font: 600 19px/1.22 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif !important;
+  color: var(--av-ink) !important; text-align: left; text-wrap: balance;
+}
+.swal2-popup.av-dlg .swal2-html-container {
+  grid-row: 2; margin-top: 6px !important; margin-bottom: 0 !important; padding: 0 !important;
+  font: 400 13.5px/1.5 'Barlow', system-ui, sans-serif !important; color: var(--av-ink2) !important;
+  text-align: left !important; overflow-wrap: anywhere;
+}
+.swal2-popup.av-dlg .swal2-html-container:empty { display: none !important; }
+.swal2-popup.av-dlg .av-quien { font: 600 10.5px 'Barlow', system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--av-ink4); margin-bottom: 8px; }
+.swal2-popup.av-dlg .av-tx { white-space: pre-line; }
+.swal2-popup.av-dlg .av-tx b, .swal2-popup.av-dlg .av-tx strong { color: var(--av-ink); font-weight: 600; }
+.swal2-popup.av-dlg ul.av-cs { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.swal2-popup.av-dlg ul.av-cs li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; line-height: 1.45; }
+.swal2-popup.av-dlg ul.av-cs li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--av-ink4); margin-top: 7px; justify-self: center; }
+.swal2-popup.av-dlg .av-campos { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.swal2-popup.av-dlg .av-campos label { display: flex; flex-direction: column; gap: 6px; font: 600 11px 'Barlow', system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--av-ink3); }
+.swal2-popup.av-dlg .av-campos input, .swal2-popup.av-dlg .av-campos textarea {
+  height: 40px; border-radius: 10px; border: 0; box-shadow: inset 0 0 0 1px var(--av-ln); padding: 0 12px;
+  font: 400 14px 'Barlow', system-ui, sans-serif; color: var(--av-ink); letter-spacing: 0; text-transform: none; background: #fff;
+}
+.swal2-popup.av-dlg .av-campos textarea { height: 76px; padding: 10px 12px; resize: vertical; }
+.swal2-popup.av-dlg .av-campos input:focus, .swal2-popup.av-dlg .av-campos textarea:focus { outline: 0; box-shadow: inset 0 0 0 1.5px var(--av-nv), 0 0 0 4px rgba(27, 47, 143, .12); }
+.swal2-popup.av-dlg .swal2-input, .swal2-popup.av-dlg .swal2-textarea, .swal2-popup.av-dlg .swal2-select,
+.swal2-popup.av-dlg .swal2-file, .swal2-popup.av-dlg .swal2-range, .swal2-popup.av-dlg .swal2-radio,
+.swal2-popup.av-dlg .swal2-checkbox, .swal2-popup.av-dlg .swal2-input-label {
+  margin-top: 12px !important; margin-bottom: 0 !important; width: auto !important; max-width: none !important;
+}
+.swal2-popup.av-dlg .swal2-input, .swal2-popup.av-dlg .swal2-textarea, .swal2-popup.av-dlg .swal2-select {
+  border-radius: 10px !important; border: 0 !important; box-shadow: inset 0 0 0 1px var(--av-ln) !important; font-size: 14px !important; color: var(--av-ink) !important;
+}
+.swal2-popup.av-dlg .swal2-input:focus, .swal2-popup.av-dlg .swal2-textarea:focus, .swal2-popup.av-dlg .swal2-select:focus {
+  box-shadow: inset 0 0 0 1.5px var(--av-nv), 0 0 0 4px rgba(27, 47, 143, .12) !important;
+}
+.swal2-popup.av-dlg .swal2-input-label { justify-content: flex-start !important; font: 500 13px 'Barlow', system-ui, sans-serif; color: var(--av-ink2); }
+.swal2-popup.av-dlg .swal2-validation-message {
+  margin: 12px 22px 0 0 !important; padding: 10px 12px !important; border-radius: 10px;
+  background: var(--av-atb) !important; color: var(--av-at-tx) !important; justify-content: flex-start !important;
+  font: 400 13px/1.4 'Barlow', system-ui, sans-serif !important; box-shadow: inset 0 0 0 1px var(--av-at-ln);
+}
+.swal2-popup.av-dlg .swal2-validation-message::before { background-color: var(--av-at) !important; width: 1.2em; height: 1.2em; min-width: 1.2em; font-size: .85em; margin: 0 .6em 0 0; }
+.swal2-popup.av-dlg .swal2-actions {
+  grid-column: 1 / -1 !important; margin: 20px 0 0 -22px !important; padding: 16px 22px !important; width: calc(100% + 22px);
+  display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+  border-top: 1px solid var(--av-ln2); background: var(--av-sk); box-sizing: border-box;
+}
+.swal2-popup.av-dlg .swal2-loader { margin: 0 !important; }
+.swal2-popup.av-dlg .swal2-footer { grid-column: 1 / -1 !important; margin: 0 0 0 -22px !important; padding: 12px 22px !important; border-top: 1px solid var(--av-ln2); font-size: 12.5px; color: var(--av-ink3); }
+.swal2-popup.av-dlg .swal2-timer-progress-bar-container { grid-column: 1 / -1 !important; margin: 0 0 0 -22px !important; }
+.swal2-popup.av-dlg.av-sin-icono { grid-template-columns: minmax(0, 1fr); }
+.swal2-popup.av-dlg.av-sin-icono > * { grid-column: 1; }
+.swal2-popup.av-dlg.av-sin-icono .swal2-actions, .swal2-popup.av-dlg.av-sin-icono .swal2-footer { grid-column: 1 !important; }
+.swal2-popup.av-dlg.av-sin-icono .swal2-close { grid-column: 1; }
+.swal2-popup.av-dlg .swal2-styled { margin: 0 !important; }
+
+/* Botones */
+.av-btn {
+  height: 38px; padding: 0 16px; border-radius: 10px; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: 600 13.5px 'Barlow', system-ui, sans-serif; white-space: nowrap;
+  background: #fff; color: var(--av-ink); box-shadow: inset 0 0 0 1px var(--av-ln), 0 1px 2px rgba(16, 26, 61, .06);
+}
+.av-btn:hover { background: var(--av-sk); }
+.av-btn:focus-visible, .av-btn:focus { outline: 0; box-shadow: inset 0 0 0 1.5px var(--av-nv), 0 0 0 4px rgba(27, 47, 143, .14); }
+.av-btn.av-btn-pri { background: var(--av-nv); color: #fff; box-shadow: 0 1px 2px rgba(27, 47, 143, .35), inset 0 1px 0 rgba(255, 255, 255, .14); }
+.av-btn.av-btn-pri:hover { background: #172a80; }
+.av-btn.av-btn-pri:focus-visible, .av-btn.av-btn-pri:focus { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(27, 47, 143, .55); }
+.av-btn.av-btn-borra { background: var(--av-in); color: #fff; box-shadow: 0 1px 2px rgba(192, 38, 122, .35), inset 0 1px 0 rgba(255, 255, 255, .14); }
+.av-btn.av-btn-borra:hover { background: #a81f69; }
+.av-btn.av-btn-borra:focus-visible, .av-btn.av-btn-borra:focus { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(192, 38, 122, .5); }
+.av-btn svg { width: 16px; height: 16px; }
+
+/* Aparecer y salir */
+.swal2-popup.av-entra { animation: av-crece .16s ease-out both; }
+.swal2-popup.av-sale { animation: av-encoge .12s ease-in both; }
+@keyframes av-crece { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes av-encoge { to { opacity: 0; transform: scale(.97); } }
+
+/* ── Celular: las ventanas suben desde abajo y el aviso breve queda sobre la barra ── */
+@media (max-width: 768px) {
+  .av-pila { left: 12px; right: 12px; bottom: calc(74px + env(safe-area-inset-bottom, 0px)); max-width: none; align-items: stretch; }
+  .av-toast { width: auto; }
+  body:not(:has(.mobile-bottom-nav)) .av-pila { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .swal2-container:has(.av-dlg) { padding: 0 !important; display: flex !important; flex-direction: column; justify-content: flex-end; align-items: stretch; }
+  .swal2-container .swal2-popup.av-dlg {
+    width: 100% !important; max-width: 100% !important; font-size: inherit !important;
+    padding: 30px 0 0 20px !important; border-radius: 26px 26px 0 0 !important; margin: 0 !important; align-self: stretch;
+    box-shadow: 0 -10px 40px rgba(12, 20, 52, .25) !important;
+  }
+  .swal2-container .swal2-popup.av-dlg::before {
+    content: ""; position: absolute; top: 10px; left: 50%; width: 40px; height: 5px; margin-left: -20px;
+    border-radius: 3px; background: #d4d8e4;
+  }
+  .swal2-container .swal2-popup.av-dlg .swal2-title { font-size: 19px !important; }
+  .swal2-container .swal2-popup.av-dlg .swal2-html-container { font-size: 14px !important; }
+  .swal2-container .swal2-popup.av-dlg .swal2-actions {
+    flex-direction: column-reverse; align-items: stretch; flex-wrap: nowrap; gap: 8px;
+    margin-left: -20px !important; width: calc(100% + 20px); background: #fff;
+    padding: 16px 20px calc(22px + env(safe-area-inset-bottom, 0px)) !important; border-top: 0;
+  }
+  .swal2-container .swal2-popup.av-dlg .swal2-actions .av-btn { height: 48px; font-size: 14.5px; border-radius: 13px; min-width: 0; width: 100%; }
+  .swal2-popup.av-entra { animation: av-hoja-sube .22s cubic-bezier(.2, .8, .2, 1) both; }
+  .swal2-popup.av-sale { animation: av-hoja-baja .18s ease-in both; }
+}
+@keyframes av-hoja-sube { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes av-hoja-baja { to { transform: translateY(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .av-toast, .av-toast.sale, .av-banda, .swal2-popup.av-entra, .swal2-popup.av-sale { animation: none !important; }
+  .av-toast.sale { opacity: 0; }
+}

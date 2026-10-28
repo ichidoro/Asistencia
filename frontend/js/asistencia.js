@@ -189,7 +189,7 @@ async function downloadExcelReport() {
     }
 
     if (!inicio || !fin) {
-        return alert('Seleccione un rango de fechas o un mes/año válido para exportar.');
+        return Avisos.falta('Faltan las fechas. Elija desde y hasta, o un mes y año, para exportar.');
     }
 
     // Disparar descarga al endpoint adecuado según el módulo que lo invocó
@@ -356,7 +356,7 @@ async function triggerEngine() {
     const area = document.getElementById('rep-area')?.value || '';
     const turnoId = document.getElementById('rep-turno')?.value || '';
 
-    if (!inicio || !fin) return alert("Seleccione un rango de fechas");
+    if (!inicio || !fin) return Avisos.falta('Faltan las fechas. Elija desde y hasta.');
 
     // Armar descripción del filtro para el confirm
     let filtroDesc = `Del ${inicio} al ${fin}`;
@@ -366,7 +366,7 @@ async function triggerEngine() {
         filtroDesc += ` · Horario: ${turnoText}`;
     }
 
-    if (!await uiConfirm(`¿Reprocesar asistencia?\n\n${filtroDesc}\n\nEsta operación recalculará los datos del período con los filtros activos.`)) return;
+    if (!await uiConfirm('¿Volver a calcular la asistencia?', { items: [filtroDesc, 'Se recalculan los días del período con los filtros elegidos.'], confirmText: 'Volver a calcular' })) return;
 
     // Loader visual en el botón
     const btn = document.querySelector('button[onclick="triggerEngine()"]');
@@ -385,7 +385,7 @@ async function triggerEngine() {
 
         if (response.status === 423) {
             const err = await response.json();
-            alert(`Ya hay un reprocesamiento en curso:\n${err.detail?.message || ''}`);
+            Avisos.falta(`Ya hay un cálculo en curso. Espere a que termine.${err.detail?.message ? '\n' + err.detail.message : ''}`);
             return;
         }
         if (!response.ok) throw new Error(`Error ${response.status} al iniciar reprocesamiento`);
@@ -401,7 +401,7 @@ async function triggerEngine() {
 
     } catch (error) {
         console.error(error);
-        alert("Error: " + error.message);
+        Avisos.error("No se pudo volver a calcular. " + error.message);
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }

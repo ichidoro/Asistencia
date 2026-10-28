@@ -15,7 +15,7 @@
 
     if (!isAuthorized) {
         console.error("🚫 Acceso denegado al módulo de Seguridad: permiso 'configuracion.seguridad' requerido.");
-        alert("Acceso Restringido: Se requiere permiso de Seguridad.");
+        Avisos.falta("Su usuario no tiene el permiso de Seguridad para entrar aquí.");
         window.location.href = '/';
         return;
     }

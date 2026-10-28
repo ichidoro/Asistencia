@@ -1384,7 +1384,7 @@ const FlotaModule = (() => {
         const tbody = document.getElementById('flota-historial-tbody');
         const pagDiv = document.getElementById('flota-historial-pagination');
         if (!desde || !hasta) {
-            if (typeof showToast === 'function') showToast('Seleccione rango de fechas', 'warning');
+            if (typeof showToast === 'function') showToast('Faltan las fechas. Elija desde y hasta.', 'warning');
             return;
         }
         tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
@@ -1675,7 +1675,7 @@ const FlotaModule = (() => {
                     }
                     
                     if(typeof showToast === 'function') {
-                        showToast(id ? "Vehículo actualizado exitosamente." : "Vehículo registrado en la flota.", "success");
+                        showToast(id ? "Listo. Vehículo guardado." : "Listo. Vehículo agregado a la flota.", "success");
                     }
                     await cargarVehiculosAdmin();
                 } catch (error) {
@@ -1710,7 +1710,7 @@ const FlotaModule = (() => {
                     }
                     
                     if(typeof showToast === 'function') {
-                        showToast("Vehículo eliminado del catálogo.", "success");
+                        showToast("Listo. Vehículo quitado de la flota.", "success");
                     }
                     await cargarVehiculosAdmin();
                 } catch (error) {

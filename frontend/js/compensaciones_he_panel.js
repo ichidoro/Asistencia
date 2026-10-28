@@ -332,11 +332,11 @@ window.registrarCompensacionHE = async function() {
                 window.loadMarcacionesData();
             }
         } else {
-            Swal.fire({ icon: 'error', title: 'Error', text: data.detail || 'No se pudo guardar la compensación.' });
+            Swal.fire({ icon: 'error', title: 'No se pudo guardar la compensación', text: data.detail || '' });
         }
     } catch (e) {
         console.error(e);
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Imposible conectar con el servidor.' });
+        Avisos.sinConexion();
     } finally {
         btn.innerHTML = ogHtml;
         btn.disabled = false;
@@ -435,10 +435,10 @@ window.eliminarCompensacionHE = async function(id) {
             }
         } else {
             const data = await resp.json();
-            Swal.fire({ icon: 'error', title: 'Error', text: data.detail || 'No se pudo eliminar.' });
+            Swal.fire({ icon: 'error', title: 'No se pudo deshacer la compensación', text: data.detail || '' });
         }
     } catch (e) {
         console.error(e);
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Imposible conectar con el servidor.' });
+        Avisos.sinConexion();
     }
 };

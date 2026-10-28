@@ -33,7 +33,7 @@ async function loadFeriados() {
         renderCalendario();
     } catch (error) {
         console.error(error);
-        showToast("Error al cargar feriados", "error");
+        showToast("No se pudieron cargar los feriados.", "error");
     }
 }
 
@@ -137,18 +137,18 @@ async function syncChileHolidays() {
         btn.disabled = true;
     }
 
-    showToast("Conectando con el servicio de feriados de Chile...", "info");
+    showToast("Trayendo los feriados de Chile…", "info");
 
     try {
         const response = await fetch(`${API_CALENDARIO}sync/${currentYear}/`, { method: 'POST' });
         if (!response.ok) throw new Error("Error en sincronización");
 
         const data = await response.json();
-        showToast(`${data.count} feriados sincronizados correctamente`, "success");
+        showToast(`Listo. Se trajeron ${data.count} feriados.`, "success");
         loadFeriados();
     } catch (error) {
         console.error(error);
-        showToast("No se pudo sincronizar los feriados. Verifique su conexión.", "error");
+        showToast("No se pudieron traer los feriados. Revise internet y vuelva a intentarlo.", "error");
     } finally {
         // Restaurar botón
         if (btn) {
@@ -159,17 +159,17 @@ async function syncChileHolidays() {
 }
 
 async function deleteFeriado(id) {
-    if (!await uiConfirm("¿Eliminar este feriado?")) return;
+    if (!await uiConfirm('¿Eliminar este feriado?', { items: ['Los días de ese feriado se vuelven a calcular como día normal.'], confirmText: 'Eliminar feriado', danger: true })) return;
 
     try {
         const response = await fetch(`${API_CALENDARIO}${id}/`, { method: 'DELETE' });
         if (!response.ok) throw new Error("Error al eliminar");
 
-        showToast("Feriado eliminado", "success");
+        showToast("Listo. Feriado eliminado.", "success");
         loadFeriados();
     } catch (error) {
         console.error(error);
-        showToast("Error al eliminar feriado", "error");
+        showToast("No se pudo eliminar el feriado.", "error");
     }
 }
 
@@ -178,13 +178,18 @@ document.addEventListener('DOMContentLoaded', () => {
     initCalendarioUI();
 });
 
-// Función básica para Feriado Manual (Simple prompt por ahora)
+// Feriado manual: una ventana con la fecha (selector de fecha) y la descripción
 async function openModalFeriado() {
-    const fecha = prompt("Ingrese la fecha (YYYY-MM-DD):", `${currentYear}-01-01`);
-    if (!fecha) return;
-
-    const descripcion = prompt("Descripción del feriado:");
-    if (!descripcion) return;
+    const datos = await uiPedir({
+        titulo: 'Nuevo feriado',
+        confirmText: 'Guardar feriado',
+        campos: [
+            { nombre: 'fecha', etiqueta: 'Fecha', tipo: 'date', valor: `${currentYear}-01-01`, requerido: true },
+            { nombre: 'descripcion', etiqueta: 'Descripción', tipo: 'text', ayuda: 'Ej: Día de la Independencia', requerido: true }
+        ]
+    });
+    if (!datos) return;
+    const { fecha, descripcion } = datos;
 
     try {
         const response = await fetch(API_CALENDARIO, {
@@ -195,10 +200,10 @@ async function openModalFeriado() {
 
         if (!response.ok) throw new Error("Error al guardar");
 
-        showToast("Feriado guardado", "success");
+        showToast("Listo. Feriado guardado.", "success");
         loadFeriados();
     } catch (error) {
         console.error(error);
-        showToast("Error al guardar feriado", "error");
+        showToast("No se guardó el feriado.", "error");
     }
 }

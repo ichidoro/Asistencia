@@ -355,12 +355,12 @@ window.saveEstado = async function(codigo) {
     const activo = document.getElementById(`estado-activo-${codigo}`)?.checked ? 1 : 0;
 
     // Validación previa (el servidor vuelve a validar)
-    if (!nombre) { showToast('El nombre visible no puede quedar vacío', 'error'); return; }
-    if (shortLabel && !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(shortLabel)) { showToast('La etiqueta admite 1 a 5 letras, números, punto, + o guion', 'error'); return; }
-    if (icono && !/^bi-[a-z0-9-]+$/.test(icono)) { showToast("El icono debe tener el formato 'bi-nombre'", 'error'); return; }
-    if (/[<>]/.test(`${nombre}${desc}${shortLabel}`)) { showToast('No uses los caracteres < o > en los textos', 'error'); return; }
+    if (!nombre) { showToast('Falta el nombre visible.', 'warning'); return; }
+    if (shortLabel && !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(shortLabel)) { showToast('La etiqueta debe tener de 1 a 5 letras o números (también punto, + o guion).', 'warning'); return; }
+    if (icono && !/^bi-[a-z0-9-]+$/.test(icono)) { showToast('El ícono debe escribirse como bi-nombre (por ejemplo, bi-clock).', 'warning'); return; }
+    if (/[<>]/.test(`${nombre}${desc}${shortLabel}`)) { showToast('Los textos no pueden llevar los signos < ni >.', 'warning'); return; }
     refreshEstadosAvisos();
-    if (document.getElementById(`estado-short-${codigo}`)?.classList.contains('is-invalid')) { showToast('Corrige la etiqueta antes de guardar (repetida o con formato no válido)', 'error'); return; }
+    if (document.getElementById(`estado-short-${codigo}`)?.classList.contains('is-invalid')) { showToast('Corrija la etiqueta antes de guardar: está repetida o no tiene el formato correcto.', 'warning'); return; }
 
     try {
         const res = await fetch(`/api/configuracion/estados/${codigo}/`, {
@@ -385,7 +385,7 @@ window.saveEstado = async function(codigo) {
             window._estadosAsistencia[codigo].activo = activo;
         }
 
-        showToast(`Estado '${codigo}' guardado correctamente`, 'success');
+        showToast(`Listo. Se guardó el estado ${codigo}.`, 'success');
         previewEstadoBadge(codigo);
     } catch(e) {
         showToast('No se guardó: ' + e.message, 'error');
@@ -572,7 +572,7 @@ async function loadBonos() {
         renderBonos();
     } catch (error) {
         console.error(error);
-        showToast("Error al cargar bonos", "error");
+        showToast("No se pudieron cargar los bonos.", "error");
     }
 }
 
@@ -953,7 +953,7 @@ async function saveBono() {
             throw new Error(errData.detail || "Error al guardar bono");
         }
 
-        showToast(`Bono ${id ? 'actualizado' : 'creado'} correctamente`, "success");
+        showToast(`Listo. Bono ${id ? 'guardado' : 'creado'}.`, "success");
         closeModalBono(true);
         loadBonos();
 
@@ -979,7 +979,7 @@ async function saveBono() {
 
     } catch (error) {
         console.error(error);
-        alert("Error al guardar bono: " + error.message);
+        Avisos.error("No se guardó el bono. " + error.message);
     } finally {
         btnGuardar.disabled = false;
         btnGuardar.textContent = 'Guardar Bono';
@@ -992,7 +992,7 @@ function editBono(id) {
 }
 
 async function confirmDeleteBono(id) {
-    if (await uiConfirm("¿Está seguro de eliminar este bono? Esta acción no se puede deshacer.")) {
+    if (await uiConfirm('¿Eliminar este bono?', { items: ['Deja de calcularse para todas las personas.', 'No se puede deshacer.'], confirmText: 'Eliminar bono', danger: true })) {
         deleteBono(id);
     }
 }
@@ -1001,7 +1001,7 @@ async function deleteBono(id) {
     try {
         const response = await fetch(`${API_CONFIG}bonos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },  method: 'DELETE' });
         if (!response.ok) throw new Error("Error al eliminar");
-        showToast("Bono eliminado", "success");
+        showToast("Listo. Bono eliminado.", "success");
         loadBonos();
     } catch (error) {
         alert(error.message);
@@ -1191,8 +1191,8 @@ function closeModalTipoJ(fromSave = false) {
                 window.isWizardFlow = false;
                 window.wizardCurrentStep = null;
                 Swal.fire({
-                    title: "¡Configuración Lista!",
-                    text: "Ahora puedes proceder a sincronizar los empleados.",
+                    title: "Configuración lista",
+                    text: "Ahora puede sincronizar a las personas.",
                     icon: "success",
                     confirmButtonText: "Ir a Sincronización"
                 }).then(() => {
@@ -1258,7 +1258,7 @@ async function saveTipoJustificacion() {
 
         if (!response.ok) throw new Error("Error al guardar");
 
-        showToast("Configuración guardada", "success");
+        showToast("Listo. Cambios guardados.", "success");
         closeModalTipoJ(true);
         loadTiposJustificacion();
 
@@ -1293,7 +1293,7 @@ function editTipoJ(id) {
 }
 
 async function confirmDeleteTipoJ(id) {
-    if (await uiConfirm("¿Eliminar este tipo de justificación?")) {
+    if (await uiConfirm('¿Eliminar este tipo de justificación?', { items: ['Ya no se podrá elegir al justificar un día.'], confirmText: 'Eliminar tipo', danger: true })) {
         deleteTipoJ(id);
     }
 }
@@ -1302,7 +1302,7 @@ async function deleteTipoJ(id) {
     try {
         const response = await fetch(`${API_CONFIG}justificaciones/tipos/${id}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },  method: 'DELETE' });
         if (!response.ok) throw new Error("No se puede eliminar (posiblemente en uso)");
-        showToast("Tipo eliminado", "success");
+        showToast("Listo. Tipo de justificación eliminado.", "success");
         loadTiposJustificacion();
     } catch (error) {
         alert(error.message);
@@ -1399,7 +1399,7 @@ window.addPagadorFromConfig = async function () {
         if (!response.ok) throw new Error("Error al añadir");
 
         input.value = '';
-        showToast("Pagador añadido", "success");
+        showToast("Listo. Pagador agregado.", "success");
         await loadPagadores();
         renderPagadoresList();
     } catch (error) {
@@ -1421,7 +1421,7 @@ window.addPagador = async function () {
         if (!response.ok) throw new Error("Error al añadir");
 
         input.value = '';
-        showToast("Pagador añadido", "success");
+        showToast("Listo. Pagador agregado.", "success");
         await loadPagadores();
         renderPagadoresList();
     } catch (error) {
@@ -1505,9 +1505,9 @@ window.saveGlobalAjustes = async function () {
             if (!responseCierre.ok) throw new Error("Error al guardar correos exclusivos de cierre");
         }
 
-        showToast("Ajustes globales de correo guardados exitosamente", "success");
+        showToast("Listo. Ajustes de correo guardados.", "success");
     } catch (e) {
-        alert("Error: " + e.message);
+        Avisos.error("No se guardaron los ajustes de correo. " + e.message);
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -1559,7 +1559,7 @@ window.saveAreaNotificaciones = async function () {
     const emails = emailsInput.value.trim();
     
     if (!area || !emails) {
-        showToast("Debes ingresar el área y los correos.", "error");
+        showToast("Faltan datos. Escriba el área y los correos.", "warning");
         return;
     }
     
@@ -1572,13 +1572,13 @@ window.saveAreaNotificaciones = async function () {
         
         if (!res.ok) throw new Error("Error al guardar configuración de área.");
         
-        showToast(`Notificaciones para área ${area} guardadas.`, "success");
+        showToast(`Listo. Se guardaron los correos de aviso del área ${area}.`, "success");
         areaInput.value = '';
         emailsInput.value = '';
         loadAreaNotificaciones();
         
     } catch (e) {
-        alert("Error: " + e.message);
+        Avisos.error("No se guardaron los correos de aviso del área. " + e.message);
     }
 }
 
@@ -1593,7 +1593,7 @@ window.editAreaNotificaciones = function(area, emails) {
 }
 
 window.deleteAreaNotificaciones = async function (area) {
-    if (!await uiConfirm(`¿Eliminar notificaciones para el área ${area}?`)) return;
+    if (!await uiConfirm(`¿Quitar los correos de aviso del área ${area}?`, { items: ['El área deja de recibir los avisos por correo.'], confirmText: 'Quitar correos', danger: true })) return;
     
     try {
         const res = await fetch(`${API_CONFIG}notificaciones_areas/${encodeURIComponent(area)}/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }, 
@@ -1602,22 +1602,17 @@ window.deleteAreaNotificaciones = async function (area) {
         
         if (!res.ok) throw new Error("Error al eliminar");
         
-        showToast("Configuración eliminada.", "success");
+        showToast("Listo. El área ya no recibe avisos por correo.", "success");
         loadAreaNotificaciones();
     } catch (e) {
-        alert("Error: " + e.message);
+        Avisos.error("No se quitaron los correos de aviso del área. " + e.message);
     }
 }
 
 // Helper para Notificaciones
 function showToast(msg, type = "success") {
-    if (type === "error") {
-        if (typeof window.showError === 'function') window.showError(msg);
-        else alert("" + msg);
-    } else {
-        if (typeof window.showNotification === 'function') window.showNotification(msg, type);
-        else alert(msg);
-    }
+    if (window.Avisos) window.Avisos.avisar(msg, type);
+    else alert(msg);
 }
 
 
@@ -1725,7 +1720,7 @@ window.loadAjustesSistema = async function() {
 
     } catch (e) {
         console.error("Error cargando ajustes del sistema", e);
-        showToast("Error al cargar ajustes numéricos", "error");
+        showToast("No se pudieron cargar los ajustes.", "error");
     }
 };
 
@@ -1735,7 +1730,7 @@ window.saveAjusteSistema = async function(clave, inputId) {
 
     const valor = input.value.trim();
     if (!valor) {
-        showToast("El valor no puede estar vacío", "error");
+        showToast("Falta el valor.", "warning");
         return;
     }
 
@@ -1743,7 +1738,7 @@ window.saveAjusteSistema = async function(clave, inputId) {
     if (clave === 'asistencia_max_extras_ordinarias_dia_habil') {
         const hrs = parseFloat(valor);
         if (isNaN(hrs) || hrs < 0) {
-            showToast("Ingrese un número de horas válido mayor o igual a 0", "error");
+            showToast("Las horas deben ser un número igual o mayor que cero.", "warning");
             return;
         }
         // Convertir horas a minutos para almacenar en la DB
@@ -1767,7 +1762,7 @@ window.saveAjusteSistema = async function(clave, inputId) {
         const aviso = (respuesta && respuesta.recalculo)
             ? ' Se está recalculando el tramo abierto; la grilla se actualiza en unos segundos.'
             : '';
-        showToast(`Ajuste actualizado correctamente.${aviso}`, "success");
+        showToast(`Listo. Ajuste guardado.${aviso}`, "success");
     } catch (e) {
         console.error("Error guardando ajuste:", e);
         showToast(e.message, "error");
@@ -1865,13 +1860,13 @@ window.toggleAreaAplicaFlota = async function(areaId, checked) {
         }
         
         if(typeof showToast === 'function') {
-            showToast("Habilitación de flota actualizada para el área.", "success");
+            showToast("Listo. Se cambió el uso de flota del área.", "success");
         } else if(typeof window.showNotification === 'function') {
             window.showNotification("Habilitación de flota actualizada para el área.", "success");
         }
     } catch(error) {
         console.error(error);
-        alert("Error: " + error.message);
+        Avisos.error("No se cambió el uso de flota del área. " + error.message);
         // Revertir switch
         const el = document.getElementById(`switch-flota-${areaId}`);
         if (el) el.checked = !checked;
@@ -1916,7 +1911,7 @@ window.deleteArea = async function(areaId) {
         cargarCatalogoAreas();
         
         if(typeof showToast === 'function') {
-            showToast("Área eliminada exitosamente.", "success");
+            showToast("Listo. Área eliminada.", "success");
         } else if(typeof Swal !== 'undefined') {
             Swal.fire('Eliminada!', 'El área ha sido eliminada.', 'success');
         }
@@ -1975,7 +1970,7 @@ window.deleteAlias = async function(aliasId) {
         }
         
         if(typeof showToast === 'function') {
-            showToast("Alias desvinculado exitosamente.", "success");
+            showToast("Listo. Se quitó el texto equivocado del reloj.", "success");
         } else if(typeof Swal !== 'undefined') {
             Swal.fire('Desvinculado!', 'El alias ha sido eliminado.', 'success');
         }
@@ -2071,7 +2066,7 @@ window.toggleCargoExclusion = async function(cargoId, value) {
             throw new Error(data.detail || 'Error al actualizar exclusión del cargo');
         }
         if (typeof showToast === 'function') {
-            showToast("Configuración del cargo y empleados actualizada.", "success");
+            showToast("Listo. Se guardó el cargo y sus personas.", "success");
         } else if (typeof Swal !== 'undefined') {
             Swal.fire('Guardado', 'Configuración de cargo actualizada.', 'success');
         }
@@ -2131,7 +2126,7 @@ window.deleteCargoAlias = async function(aliasId) {
         }
         
         if(typeof showToast === 'function') {
-            showToast("Alias de cargo desvinculado exitosamente.", "success");
+            showToast("Listo. Se quitó el texto equivocado del cargo.", "success");
         } else if(typeof Swal !== 'undefined') {
             Swal.fire('Desvinculado!', 'El alias ha sido eliminado.', 'success');
         }
@@ -2478,18 +2473,18 @@ window.savePeriodoRRHH = async function() {
     const days = calculateDaysBetween(fecha_inicio, fecha_fin);
     if (days <= 0) {
         if (typeof showToast === 'function') {
-            showToast("La fecha inicial debe ser menor o igual a la fecha final", "error");
+            showToast("La fecha de inicio no puede ser después de la fecha de fin.", "warning");
         } else {
-            alert("La fecha inicial debe ser menor o igual a la fecha final");
+            Avisos.falta("La fecha de inicio no puede ser después de la fecha de fin.");
         }
         return;
     }
 
     if (days > 35) {
         if (typeof showToast === 'function') {
-            showToast("El rango seleccionado no puede superar los 35 días.", "error");
+            showToast("El tramo no puede tener más de 35 días.", "warning");
         } else {
-            alert("El rango seleccionado no puede superar los 35 días.");
+            Avisos.falta("El tramo no puede tener más de 35 días.");
         }
         return;
     }
@@ -2522,7 +2517,7 @@ window.savePeriodoRRHH = async function() {
 
         closeModalPeriodo();
         if (typeof showToast === 'function') {
-            showToast("Tramo de cierre guardado exitosamente.", "success");
+            showToast("Listo. Tramo de cierre guardado.", "success");
         } else if (typeof Swal !== 'undefined') {
             Swal.fire("Éxito", "Tramo de cierre guardado exitosamente.", "success");
         }
@@ -2551,7 +2546,7 @@ window.deletePeriodoRRHH = async function(id) {
             }
 
             if (typeof showToast === 'function') {
-                showToast("Tramo de cierre eliminado exitosamente.", "success");
+                showToast("Listo. Tramo de cierre eliminado.", "success");
             } else if (typeof Swal !== 'undefined') {
                 Swal.fire("Eliminado", "Tramo de cierre eliminado exitosamente.", "success");
             }
@@ -2601,7 +2596,7 @@ window.activarPeriodoRRHH = async function(id) {
         }
 
         if (typeof showToast === 'function') {
-            showToast("Tramo de cierre activado exitosamente.", "success");
+            showToast("Listo. Tramo de cierre activado.", "success");
         } else if (typeof Swal !== 'undefined') {
             Swal.fire("Activado", "El tramo de cierre ahora está vigente.", "success");
         }
@@ -2657,7 +2652,7 @@ window.abrirModalCrearArea = async function() {
         }
     }).then((result) => {
         if (result.isConfirmed) {
-            showToast("Área creada exitosamente.", "success");
+            showToast("Listo. Área creada.", "success");
             cargarCatalogoAreas();
         }
     });
@@ -2704,7 +2699,7 @@ window.abrirModalCrearCargo = async function() {
         }
     }).then((result) => {
         if (result.isConfirmed) {
-            showToast("Cargo creado exitosamente.", "success");
+            showToast("Listo. Cargo creado.", "success");
             cargarCatalogoCargos();
         }
     });

@@ -370,7 +370,7 @@ const PorteriaModule = (function () {
 
     function cambiarCamara() {
         if (cameraDevices.length <= 1) {
-            showToast("Solo hay una cámara disponible.", "error");
+            showToast("Este equipo tiene una sola cámara.", "info");
             return;
         }
         currentCameraIndex = (currentCameraIndex + 1) % cameraDevices.length;
@@ -658,7 +658,7 @@ const PorteriaModule = (function () {
 
         const locales = await getRondasLocales();
         if (locales.length === 0) {
-            if (!silencioso) showToast("No hay registros pendientes de sincronizar.", "success");
+            if (!silencioso) showToast("No hay registros pendientes de enviar.", "info");
             return;
         }
 
@@ -1081,7 +1081,7 @@ const PorteriaModule = (function () {
         const activo = activoInput.checked;
 
         if (!nombre) {
-            showToast("Debe ingresar la descripción de la anomalía.", "error");
+            showToast("Falta describir el hallazgo.", "warning");
             return;
         }
 
@@ -1114,7 +1114,7 @@ const PorteriaModule = (function () {
                 throw new Error(err.detail || "Error en la operación del catálogo.");
             }
 
-            showToast("Hallazgo guardado correctamente.", "success");
+            showToast("Listo. Hallazgo guardado.", "success");
             cancelarEdicionCatalogo();
             await cargarCatálogoHallazgos();
             await cargarCatálogoHallazgosSelect();
@@ -1169,7 +1169,7 @@ const PorteriaModule = (function () {
                 throw new Error("No se pudo eliminar el hallazgo del catálogo.");
             }
 
-            showToast("Operación completada exitosamente.", "success");
+            showToast("Listo. Cambios guardados.", "success");
             await cargarCatálogoHallazgos();
             await cargarCatálogoHallazgosSelect();
 
@@ -1349,7 +1349,7 @@ const PorteriaModule = (function () {
         const activo = activoInput.checked;
 
         if (!nombre || !codigo) {
-            showToast("Debe ingresar nombre y código para la ubicación.", "error");
+            showToast("Faltan datos. Escriba el nombre y el código de la ubicación.", "warning");
             return;
         }
 
@@ -1382,7 +1382,7 @@ const PorteriaModule = (function () {
                 throw new Error(err.detail || "Error en la operación de ubicaciones.");
             }
 
-            showToast("Ubicación guardada correctamente.", "success");
+            showToast("Listo. Ubicación guardada.", "success");
             cancelarEdicionUbicacion();
             await cargarUbicaciones();
             await cargarUbicacionesCache(); // Refrescar cache de rondas del escáner
@@ -1439,7 +1439,7 @@ const PorteriaModule = (function () {
                 throw new Error("No se pudo eliminar la ubicación.");
             }
 
-            showToast("Operación completada exitosamente.", "success");
+            showToast("Listo. Cambios guardados.", "success");
             await cargarUbicaciones();
             await cargarUbicacionesCache();
 

@@ -155,7 +155,7 @@ async function loadJustifyTypes(force = false) {
         justIndividualState.tipos = tipos;
     } catch (e) {
         console.error("Error cargando tipos de justificación:", e);
-        showToast("No se pudieron cargar los motivos", "error");
+        showToast("No se pudieron cargar los motivos.", "error");
     }
 }
 
@@ -190,7 +190,7 @@ async function saveJustificacionIndividual() {
     const obs = document.getElementById('just-observaciones').value;
 
     if (!tipoId) {
-        showToast("Debe seleccionar un motivo", "warning");
+        showToast("Falta elegir el motivo.", "warning");
         return;
     }
 
@@ -199,12 +199,12 @@ async function saveJustificacionIndividual() {
     const fechaFin = document.getElementById('just-fecha-fin-input').value;
 
     if (!fechaInicio || !fechaFin) {
-        showToast("Fechas inválidas", "warning");
+        showToast("Revise las fechas: alguna no es válida.", "warning");
         return;
     }
 
     if (fechaFin < fechaInicio) {
-        showToast("La fecha de término no puede ser anterior al inicio", "warning");
+        showToast("La fecha de término no puede ser anterior a la de inicio.", "warning");
         return;
     }
 
@@ -254,13 +254,13 @@ async function saveJustificacionIndividual() {
             _pollJustificacionJob(data.job_id, empId);
         } else {
             const error = await resp.json();
-            showToast(`Error: ${error.detail || 'No se pudo guardar'}`, "error");
+            showToast(error.detail || 'No se guardó la justificación.', "error");
             // Restaurar botón en caso de error
             if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.innerHTML = btnTextoOriginal; }
         }
     } catch (e) {
         console.error("Error guardando justificación:", e);
-        showToast("Error de conexión", "error");
+        Avisos.sinConexion();
         // Restaurar botón en caso de error de conexión
         if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.innerHTML = btnTextoOriginal; }
     }
@@ -310,9 +310,9 @@ function _pollJustificacionJob(jobId, empId = null) {
                         recargarPreEvaluacionCierre();
                     }
                     if (job.status === 'error') {
-                        showToast("⚠️ Error en recálculo de asistencia", "warning");
+                        showToast("La justificación se guardó, pero no se pudo volver a calcular el día. Recargue la grilla.", "warning");
                     } else if (job.status === 'not_found') {
-                        showToast("⚠️ El servidor se reinició. Recargando datos...", "warning");
+                        showToast("El servidor se reinició. Se están recargando los datos…", "warning");
                     }
                     return;
                 }
@@ -336,7 +336,7 @@ function _pollJustificacionJob(jobId, empId = null) {
 async function deleteJustificacionFromModal() {
     if (!justIndividualState.editJustificacionId) return;
 
-    const confirmDelete = await uiConfirm("¿Está seguro que desea ELIMINAR esta justificación?\n\nLa asistencia se recalculará automáticamente.");
+    const confirmDelete = await uiConfirm('¿Eliminar esta justificación?', { items: ['El día se vuelve a calcular con sus marcas.'], confirmText: 'Eliminar justificación', danger: true });
     if (!confirmDelete) return;
 
     try {
@@ -346,17 +346,17 @@ async function deleteJustificacionFromModal() {
 
         if (resp.ok) {
             const data = await resp.json();
-            showToast("Justificación eliminada correctamente", "success");
+            showToast("Listo. Justificación eliminada.", "success");
             closeModalJustify();
             // Polling basado en job_id: espera al recálculo completo
             const empId = document.getElementById('just-id-empleado').value;
             _pollJustificacionJob(data.job_id, empId);
         } else {
             const error = await resp.json();
-            showToast(`Error: ${error.detail || 'No se pudo eliminar'}`, "error");
+            showToast(error.detail || 'No se pudo eliminar la justificación.', "error");
         }
     } catch (e) {
         console.error("Error eliminando justificación:", e);
-        showToast("Error de conexión", "error");
+        Avisos.sinConexion();
     }
 }

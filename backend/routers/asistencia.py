@@ -8,7 +8,7 @@ from backend.core.fast_json import fast_json
 from fastapi import APIRouter, Depends, Query, HTTPException, Body, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Set
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 
 from backend.services.gemini_vision_service import gemini_vision_service
@@ -60,6 +60,19 @@ async def get_empleado_service(db: Database = Depends(get_db)) -> EmpleadoServic
 async def get_turno_service(db: Database = Depends(get_db)) -> TurnoService:
     repository = TurnoRepository(db)
     return TurnoService(repository)
+
+
+def _cuando_cambio(updated_at) -> str:
+    """«hoy a las 12:14» o «el 27-10 a las 18:05» para el aviso de cambio simultáneo. updated_at se guarda en UTC."""
+    try:
+        momento = updated_at if isinstance(updated_at, datetime) else datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return ""
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=timezone.utc)
+    local = momento.astimezone(_motor._CHILE_TZ).replace(tzinfo=None)
+    hora = local.strftime("%H:%M")
+    return f"hoy a las {hora}" if local.date() == _motor._get_now_local().date() else f"el {local.strftime('%d-%m')} a las {hora}"
 
 @router.get("/auditoria-bloqueo/")
 async def get_auditoria_bloqueo(
@@ -1391,9 +1404,10 @@ async def validar_jornada_endpoint(
         if last_updated_at:
             actual = await service.repository.get_asistencia(empleado_id, fecha)
             if actual and actual.get('updated_at') and actual.get('updated_at') != last_updated_at:
+                cuando = _cuando_cambio(actual.get('updated_at'))
                 raise HTTPException(
-                    status_code=409, 
-                    detail=f"Conflicto de Concurrencia: El registro fue modificado por otro usuario ({actual.get('updated_at')}). Por favor, refresque los datos."
+                    status_code=409,
+                    detail=f"Otra persona cambió este día{' ' + cuando if cuando else ''}. Su cambio no se guardó. Cierre y vuelva a abrir el día para ver lo último."
                 )
 
         resultado = await service.validar_jornada(

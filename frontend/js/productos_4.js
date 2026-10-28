@@ -173,7 +173,7 @@ const Productos4Module = {
             this.productos = await response.json();
         } catch (error) {
             console.error(error);
-            showToast("No se pudo cargar el catálogo de productos propios.", "error");
+            showToast("No se pudo cargar el catálogo de productos.", "error");
         }
     },
 
@@ -582,7 +582,7 @@ const Productos4Module = {
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                showToast("Asignación guardada con éxito.", "success");
+                showToast("Listo. Asignación guardada.", "success");
                 this.cargarEvaluaciones();
             }
         });
@@ -1259,12 +1259,12 @@ const Productos4Module = {
             const res = await response.json();
             if (!response.ok) throw new Error(res.detail || "Error al actualizar la entrega.");
 
-            showToast("Entrega de beneficio actualizada con éxito.", "success");
+            showToast("Listo. Entrega guardada.", "success");
             this.cargarEntrega();
         } catch (error) {
             console.error(error);
             Swal.fire({
-                title: "Error",
+                title: "No se guardó la entrega",
                 text: error.message,
                 icon: "error"
             });
@@ -1453,7 +1453,7 @@ const Productos4Module = {
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                showToast("Producto agregado al catálogo.", "success");
+                showToast("Listo. Producto agregado al catálogo.", "success");
                 this.renderizarConfiguracionCatalogo();
             }
         });
@@ -1549,7 +1549,7 @@ const Productos4Module = {
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                showToast("Producto actualizado con éxito.", "success");
+                showToast("Listo. Producto guardado.", "success");
                 this.renderizarConfiguracionCatalogo();
             }
         });
@@ -1710,13 +1710,13 @@ const Productos4Module = {
                 const res = await response.json();
                 if (!response.ok) throw new Error(res.detail || "Error al cerrar el período.");
 
-                showToast("El período ha sido cerrado exitosamente.", "success");
+                showToast("Listo. Período cerrado.", "success");
                 await this.verificarEstadoPeriodo();
                 this.refrescarVistaActiva();
             } catch (error) {
                 console.error(error);
                 Swal.fire({
-                    title: 'Error',
+                    title: 'No se pudo cerrar el período',
                     text: error.message,
                     icon: 'error'
                 });
@@ -1758,13 +1758,13 @@ const Productos4Module = {
                 const res = await response.json();
                 if (!response.ok) throw new Error(res.detail || "Error al reabrir el período.");
 
-                showToast("El período ha sido reabierto exitosamente.", "success");
+                showToast("Listo. Período reabierto.", "success");
                 await this.verificarEstadoPeriodo();
                 this.refrescarVistaActiva();
             } catch (error) {
                 console.error(error);
                 Swal.fire({
-                    title: 'Error',
+                    title: 'No se pudo reabrir el período',
                     text: error.message,
                     icon: 'error'
                 });
@@ -1776,13 +1776,13 @@ const Productos4Module = {
         try { await window.ensureLib('jspdf'); } catch (_) { /* se informa abajo */ }
         const { jsPDF } = window.jspdf || {};
         if (!jsPDF) {
-            showToast("No se pudo cargar la librería de PDF.", "error");
+            showToast("No se pudo preparar el PDF. Recargue la página y vuelva a intentarlo.", "error");
             return;
         }
 
         const data = this.ultimoConsolidadoData;
         if (!data) {
-            showToast("No hay datos de consolidado cargados para exportar.", "warning");
+            showToast("No hay un consolidado cargado para exportar.", "warning");
             return;
         }
 

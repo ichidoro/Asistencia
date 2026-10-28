@@ -183,17 +183,17 @@ document.getElementById('btn-reinc-next').addEventListener('click', async () => 
         const fFin = document.getElementById('reinc-fecha-fin').value;
 
         if (!fInicio) {
-            alert("Debe indicar la fecha de re-ingreso");
+            Avisos.falta('Falta la fecha de reingreso.');
             return;
         }
         if (tContrato === 'Temporal' && !fFin) {
-            alert("Debe indicar la fecha de término para contrato temporal");
+            Avisos.falta('Falta la fecha de término. Es obligatoria en un contrato temporal.');
             return;
         }
 
         // [VALIDACIÓN V2] Coherencia cronológica: fecha_fin no puede ser anterior a fecha_inicio
         if (fFin && fInicio && fFin < fInicio) {
-            alert("La fecha de término no puede ser anterior a la fecha de re-ingreso.");
+            Avisos.falta('La fecha de término no puede ser anterior a la de reingreso.');
             return;
         }
 
@@ -252,7 +252,7 @@ window.finishReincorporacion = async function() {
     const turnoId = document.getElementById('reinc-turno-id').value;
     
     if (!turnoId) {
-        alert("Debe seleccionar un horario para continuar");
+        Avisos.falta('Falta elegir el horario para seguir.');
         return;
     }
 
@@ -288,7 +288,7 @@ window.finishReincorporacion = async function() {
         if (window.showToast) {
             window.showToast("Empleado reincorporado con éxito. Asistencia recalculada.", "success");
         } else {
-            alert("¡Éxito! Empleado reincorporado. La lista se actualizará.");
+            Avisos.listo("Listo. Persona reincorporada.");
         }
         
         // Recargar lista de empleados
@@ -296,7 +296,7 @@ window.finishReincorporacion = async function() {
         if (window.loadStats) window.loadStats();
 
     } catch (error) {
-        alert("Error: " + error.message);
+        Avisos.error("No se pudo reincorporar a la persona. " + error.message);
     } finally {
         btnFinish.disabled = false;
         btnFinish.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Finalizar y Activar';

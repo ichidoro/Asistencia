@@ -213,11 +213,11 @@ window.registrarIntercambio = async function() {
                 window.loadMarcacionesData();
             }
         } else {
-            Swal.fire({ icon: 'error', title: 'Error', text: data.detail || 'No se pudo registrar.' });
+            Swal.fire({ icon: 'error', title: 'No se pudo registrar el día compensatorio', text: data.detail || '' });
         }
     } catch (e) {
         console.error(e);
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Imposible conectar con el servidor.' });
+        Avisos.sinConexion();
     } finally {
         btn.innerHTML = ogHtml;
         btn.disabled = false;
@@ -311,10 +311,10 @@ window.eliminarIntercambio = async function(id) {
             }
         } else {
             const data = await resp.json();
-            Swal.fire({ icon: 'error', title: 'Error', text: data.detail || 'No se pudo eliminar.' });
+            Swal.fire({ icon: 'error', title: 'No se pudo deshacer el día compensatorio', text: data.detail || '' });
         }
     } catch (e) {
         console.error(e);
-        Swal.fire({ icon: 'error', title: 'Error de Red', text: 'Imposible conectar con el servidor.' });
+        Avisos.sinConexion();
     }
 };
