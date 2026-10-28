@@ -92,6 +92,17 @@ def _complete_job(job_id: str, procesados: int, errores: int, elapsed_ms: int) -
         })
 
 
+def fechas_abiertas(start: datetime, end: datetime, cerradas) -> List[str]:
+    """Días entre start y end (incluidos) que no están cerrados: los únicos cuyo cuadre se puede volver a repartir."""
+    dias, d = [], start
+    while d <= end:
+        f = d.strftime("%Y-%m-%d")
+        if f not in cerradas:
+            dias.append(f)
+        d += timedelta(days=1)
+    return dias
+
+
 class AsistenciaService:
 
     def __init__(self, repository: AsistenciaRepository):
@@ -599,6 +610,16 @@ class AsistenciaService:
         except Exception as e:
             logger.warning(f"[Cuadre] No se pudo reaplicar la política ({fecha}): {e}")
 
+    async def _reaplicar_cuadre_en_fechas(self, empleado_id: int, fechas: List[str]) -> None:
+        """Tras recalcular varios días de una persona, reparte de nuevo su política una vez por tramo."""
+        if not fechas:
+            return
+        try:
+            from backend.services.cuadre_service import CuadreService
+            await CuadreService(self).reaplicar_en_fechas(empleado_id, fechas)
+        except Exception as e:
+            logger.warning(f"[Cuadre] No se pudo reaplicar la política de {empleado_id}: {e}")
+
     # ─────────────────────────────────────────────────────────────────────────
     # REPROCESO PERÍODO EMPLEADO
     # ─────────────────────────────────────────────────────────────────────────
@@ -792,26 +813,27 @@ class AsistenciaService:
         """, (fecha_fin, fecha_inicio))
         closures = [dict(r) for r in closures_rows]
 
-        closed_dates = set()
-        if not ignore_closures:
-            curr_d = start
-            while curr_d <= end:
-                curr_str = curr_d.strftime("%Y-%m-%d")
-                emp_area = None
-                for ha in emp_areas_history:
-                    desde = ha['fecha_desde']
-                    hasta = ha['fecha_hasta']
-                    if desde <= curr_str and (not hasta or curr_str <= hasta):
-                        emp_area = ha['area_nombre']
+        # Los días cerrados se calculan siempre: con ignore_closures se recalculan igual, pero su cuadre nunca se toca
+        fechas_cerradas = set()
+        curr_d = start
+        while curr_d <= end:
+            curr_str = curr_d.strftime("%Y-%m-%d")
+            emp_area = None
+            for ha in emp_areas_history:
+                desde = ha['fecha_desde']
+                hasta = ha['fecha_hasta']
+                if desde <= curr_str and (not hasta or curr_str <= hasta):
+                    emp_area = ha['area_nombre']
+                    break
+            if not emp_area:
+                emp_area = emp_area_actual
+            if emp_area:
+                for cl in closures:
+                    if cl['area'] == emp_area and cl['fecha_inicio'] <= curr_str <= cl['fecha_fin']:
+                        fechas_cerradas.add(curr_str)
                         break
-                if not emp_area:
-                    emp_area = emp_area_actual
-                if emp_area:
-                    for cl in closures:
-                        if cl['area'] == emp_area and cl['fecha_inicio'] <= curr_str <= cl['fecha_fin']:
-                            closed_dates.add(curr_str)
-                            break
-                curr_d += timedelta(days=1)
+            curr_d += timedelta(days=1)
+        closed_dates = set() if ignore_closures else set(fechas_cerradas)
 
         q_asig = """
             SELECT t.*, a.empleado_id, a.fecha_inicio as asignacion_desde, a.fecha_fin as asig_fecha_fin, a.semana_inicio
@@ -1321,6 +1343,11 @@ class AsistenciaService:
                             await self.repository.delete_asistencia(eid_del, f_str)
                         except Exception as e3:
                             logger.error(f"Error eliminando {f_str}: {e3}")
+
+        # Los hechos cambiaron: la política del cuadre de la persona se vuelve a repartir sola, como en procesar_dia.
+        # Va aunque la asistencia no cambie: validar un +2 como horas extra solo cambia su fila de horas extra
+        # (27-10-2026: el cuadre de Badilla y González quedó desfasado hasta el siguiente arranque).
+        await self._reaplicar_cuadre_en_fechas(empleado_id, fechas_abiertas(start, end, fechas_cerradas))
 
         t_total = int((_time() - t0) * 1000)
         t_loop = t_total - t_precarga

@@ -736,6 +736,19 @@ class CuadreService:
                 _REAPLICANDO.discard(eid)
         return n
 
+    async def reaplicar_en_fechas(self, empleado_id: int, fechas: List[str]) -> int:
+        """Tras recalcular varios días de una persona, reparte de nuevo su política una sola vez por tramo."""
+        dias = sorted(set(fechas))
+        if not dias:
+            return 0
+        n = 0
+        for p in await self.repo.politicas_en_rango(int(empleado_id), dias[0], dias[-1]):
+            ini, fin = str(p['fecha_inicio'])[:10], str(p['fecha_fin'])[:10]
+            dia = next((f for f in dias if ini <= f <= fin), None)
+            if dia:
+                n += await self.reaplicar_para([int(empleado_id)], dia)
+        return n
+
     async def _auditar(self, usuario_id: Optional[int], usuario: str, accion: str, detalle: Dict[str, Any]) -> None:
         try:
             from backend.repositories.seguridad import SeguridadRepository

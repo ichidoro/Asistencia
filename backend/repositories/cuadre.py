@@ -102,6 +102,12 @@ class CuadreRepository:
             tuple([fecha, fecha] + list(empleado_ids)))
         return [dict(r) for r in rows]
 
+    async def politicas_en_rango(self, empleado_id: int, desde: str, hasta: str) -> List[Dict[str, Any]]:
+        rows = await self.db.fetch_all(
+            "SELECT * FROM cuadre_politicas WHERE activa = 1 AND empleado_id = ? AND fecha_inicio <= ? AND fecha_fin >= ?",
+            (empleado_id, hasta, desde))
+        return [dict(r) for r in rows]
+
     async def politicas_del_tramo(self, fecha_inicio: str, fecha_fin: str) -> List[Dict[str, Any]]:
         rows = await self.db.fetch_all(
             "SELECT * FROM cuadre_politicas WHERE activa = 1 AND fecha_inicio = ? AND fecha_fin = ?", (fecha_inicio, fecha_fin))
