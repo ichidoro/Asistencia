@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Path, status, HTTPException
 from typing import Optional, List
 
 from backend.core.database import Database, get_db
-from backend.repositories.empleado import EmpleadoRepository
+from backend.repositories.empleado import EmpleadoRepository, BorradoPermanenteBloqueado
 from backend.services.empleado_service import EmpleadoService
 from backend.schemas.empleado import (
     EmpleadoCreate,
@@ -624,7 +624,25 @@ async def eliminar_empleado(
     if not current_user.alcance_global and emp.area not in (current_user.areas or []):
          raise HTTPException(status_code=403, detail="No tiene permisos para desactivar este empleado")
 
-    await service.delete_empleado(empleado_id, hard=hard)
+    try:
+        await service.delete_empleado(empleado_id, hard=hard, usuario_id=current_user.user_id, username=current_user.username)
+    except BorradoPermanenteBloqueado as b:
+        # Orden del dueño (28-10-2026): con días en un tramo cerrado no se borra para siempre; se le registra la baja
+        tramos = [f"{t['fecha_inicio'][8:10]}-{t['fecha_inicio'][5:7]}-{t['fecha_inicio'][:4]} al "
+                  f"{t['fecha_fin'][8:10]}-{t['fecha_fin'][5:7]}-{t['fecha_fin'][:4]}" + (f" ({t['area']})" if t.get('area') else "")
+                  for t in b.tramos[:3]]
+        dias = sum(int(t.get("dias") or 0) for t in b.tramos)
+        mas = f" y {len(b.tramos) - 3} más" if len(b.tramos) > 3 else ""
+        raise HTTPException(status_code=409, detail=(
+            f"No se puede eliminar para siempre: tiene {dias} días en tramos ya cerrados ({'; '.join(tramos)}{mas}). "
+            "Si ya no trabaja, regístrele la baja: queda inactiva y su historial se conserva."))
+    except HTTPException:
+        raise
+    except Exception as e:
+        if not hard:
+            raise
+        logger.error(f"Borrado permanente del empleado {empleado_id} no se completó (se deshizo entero): {e}")
+        raise HTTPException(status_code=500, detail="No se pudo eliminar a la persona. No se borró nada: el borrado es todo o nada.")
     return None
 
 

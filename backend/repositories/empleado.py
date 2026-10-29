@@ -3,12 +3,22 @@ Repository - Empleado
 Capa de acceso a datos para Empleados
 """
 
+import json
+import re
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 from loguru import logger
 
 from backend.core.database import Database
 from backend.models.empleado import Empleado
+
+
+class BorradoPermanenteBloqueado(Exception):
+    """La persona tiene días en un tramo cerrado: se le registra la baja, no se borra (orden del dueño, 28-10-2026)."""
+
+    def __init__(self, tramos: List[dict]):
+        self.tramos = tramos
+        super().__init__(f"{sum(int(t.get('dias') or 0) for t in tramos)} días en tramos cerrados")
 
 
 class EmpleadoRepository:
@@ -864,42 +874,85 @@ class EmpleadoRepository:
         
         return True
     
-    async def hard_delete(self, empleado_id: int) -> bool:
-        """Eliminar empleado permanentemente y todo su rastro en el sistema (Efecto Dominó)"""
-        try:
-            # Iniciar borrado en cascada
-            logger.warning(f"⚠️ Iniciando Hard Delete (Efecto Dominó) para el empleado ID: {empleado_id}")
-            
-            # Borrar de tablas hijas
-            await self.db.execute("DELETE FROM asignacion_turnos WHERE empleado_id = ?", (empleado_id,))
-            # [ELIMINADO] DELETE FROM bolsa_horas_resumen — tabla eliminada (fantasma, causa corrupción)
-            await self.db.execute("DELETE FROM asistencias WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM logs_raw WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM bono_asignaciones WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM justificaciones WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM historial_areas WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM periodos_empleo WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM horas_extras WHERE empleado_id = ?", (empleado_id,))
-            await self.db.execute("DELETE FROM jornadas_especiales WHERE empleado_id = ?", (empleado_id,))
-            
-            # Deshabilitar claves foráneas temporalmente para evitar que la tabla corrupta (asistencias_corrupt)
-            # aborte la eliminación del empleado.
-            await self.db.execute("PRAGMA foreign_keys = OFF;")
-            
-            try:
-                # Finalmente, borrar al empleado
-                query = "DELETE FROM empleados WHERE id = ?"
-                await self.db.execute(query, (empleado_id,))
-            finally:
-                # Volver a habilitar las claves foráneas
-                await self.db.execute("PRAGMA foreign_keys = ON;")
-            
-            logger.warning(f"✅ Empleado eliminado permanentemente junto a todo su historial: ID {empleado_id}")
-            return True
-        except Exception as e:
-            logger.error(f"❌ Error en Hard Delete para empleado {empleado_id}: {e}")
-            raise
-    
+    async def dias_en_tramos_cerrados(self, empleado_id: int) -> List[dict]:
+        """Tramos cerrados en que la persona tiene días. Mismo criterio que check_fecha_cerrada: un cierre de toda la
+        planta o de su área en esa fecha."""
+        query = """
+            SELECT cp.fecha_inicio, cp.fecha_fin, cp.area, COUNT(*) AS dias
+            FROM asistencias a
+            JOIN cierres_periodos cp ON a.fecha BETWEEN cp.fecha_inicio AND cp.fecha_fin
+            WHERE a.empleado_id = ?
+              AND (cp.area IS NULL OR cp.area = (
+                    SELECT ar.nombre FROM historial_areas h
+                    LEFT JOIN areas ar ON h.area_id = ar.id
+                    WHERE h.empleado_id = a.empleado_id
+                      AND a.fecha BETWEEN h.fecha_desde AND COALESCE(h.fecha_hasta, '2099-12-31')
+                    LIMIT 1))
+            GROUP BY cp.fecha_inicio, cp.fecha_fin, cp.area
+            ORDER BY cp.fecha_fin DESC
+        """
+        return await self.db.fetch_all(query, (empleado_id,))
+
+    async def _tablas_de_la_persona(self) -> List[tuple]:
+        """Todas las tablas que guardan el id de una persona (empleado_id, empleado_receptor_id…). Se leen de la base:
+        una tabla nueva queda incluida sin tocar este código."""
+        bases = {r["table_name"] for r in await self.db.fetch_all(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'")}
+        cols = await self.db.fetch_all(
+            "SELECT table_name, column_name FROM information_schema.columns "
+            "WHERE table_schema = current_schema() ORDER BY table_name, column_name")
+        nombre = re.compile(r"^[a-z_][a-z0-9_]*$")
+        return [(c["table_name"], c["column_name"]) for c in cols
+                if c["table_name"] in bases and c["table_name"] != "empleados"
+                and re.match(r"^empleado(_[a-z]+)?_id$", c["column_name"])
+                and nombre.match(c["table_name"]) and nombre.match(c["column_name"])]
+
+    async def hard_delete(self, empleado_id: int, usuario_id: Optional[int] = None, username: Optional[str] = None) -> Dict[str, int]:
+        """Elimina a la persona y todo su historial, TODO O NADA (orden del dueño, 28-10-2026).
+
+        Antes borraba 9 tablas una por una, sin transacción, y al final la ficha no se podía borrar por las tablas que
+        no limpiaba (26-10-2026, Osvaldo Reyes: quedó sin días ni marcas y con la ficha vacía). Ahora:
+        - se niega si la persona tiene días en un tramo cerrado (BorradoPermanenteBloqueado);
+        - limpia todas las tablas con su id, en el orden que permitan las llaves entre ellas;
+        - todo va en una transacción: si algo falla no se borra nada;
+        - deja el registro en logs_auditoria dentro de la misma transacción.
+        Devuelve cuántas filas se borraron de cada tabla."""
+        cerrados = await self.dias_en_tramos_cerrados(empleado_id)
+        if cerrados:
+            raise BorradoPermanenteBloqueado(cerrados)
+        emp = await self.db.fetch_one(
+            "SELECT id, rut, nombre, apellido_paterno, apellido_materno FROM empleados WHERE id = ?", (empleado_id,))
+        tablas = await self._tablas_de_la_persona()
+        borradas: Dict[str, int] = {}
+        logger.warning(f"⚠️ Borrado permanente del empleado ID {empleado_id}: {len(tablas)} tablas, todo o nada")
+        async with self.db.transaction():
+            pendientes = list(tablas)
+            while pendientes:
+                # Una tabla puede depender de otra (viajes_largos → logs_raw): las que fallan se reintentan después
+                fallidas, ultimo_error = [], None
+                for tabla, columna in pendientes:
+                    try:
+                        res = await self.db.execute(f"DELETE FROM {tabla} WHERE {columna} = ?", (empleado_id,))
+                        n = int(getattr(res, "rowcount", 0) or 0)
+                        if n:
+                            borradas[tabla] = borradas.get(tabla, 0) + n
+                    except Exception as e:
+                        fallidas.append((tabla, columna))
+                        ultimo_error = e
+                if len(fallidas) == len(pendientes):
+                    raise ultimo_error  # sin avance posible: la transacción se deshace entera
+                pendientes = fallidas
+            await self.db.execute("DELETE FROM empleados WHERE id = ?", (empleado_id,))
+            nombre = " ".join(str((emp or {}).get(k) or "") for k in ("apellido_paterno", "apellido_materno", "nombre")).split()
+            await self.db.execute(
+                "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+                (usuario_id, username or "sistema", "ELIMINAR_EMPLEADO_PERMANENTE", "EMPLEADOS",
+                 json.dumps({"empleado_id": empleado_id, "nombre": " ".join(nombre), "rut": (emp or {}).get("rut"),
+                             "filas_borradas": borradas}, ensure_ascii=False)))
+        logger.warning(f"✅ Empleado {empleado_id} eliminado para siempre: {borradas}")
+        return borradas
+
     async def get_stats_by_area(self, areas: Optional[List[str]] = None) -> List[dict]:
         """Obtener conteo de empleados por área con RLS.
         Incluye áreas con 0 empleados para que aparezcan en los selectores de la interfaz.

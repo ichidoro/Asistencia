@@ -199,7 +199,7 @@ const _ACCIONES_AUDITORIA = {
     REVOCAR_CONDONACION: 'Quitó un perdonazo', CONDONAR_DEUDA: 'Perdonó una deuda', REVOCAR_PERDONAZOS_GUIADOS: 'Quitó perdonazos del cuadre',
     CORREGIR_HE_COBERTURA: 'Corrigió horas extra de una cobertura', CREATE_COMPENSACION: 'Registró una compensación', COMPENSAR_INASISTENCIA: 'Compensó una inasistencia',
     APROBAR_JORNADAS_ESPECIALES: 'Aprobó jornadas especiales', ACTUALIZAR_TURNO: 'Modificó un turno', REASIGNAR_TURNO: 'Cambió el turno de una persona',
-    RESTAURAR_EMPLEADO: 'Restauró a una persona', DEVOLVER_DIAS_CERRADOS: 'Devolvió días cerrados al respaldo'
+    RESTAURAR_EMPLEADO: 'Restauró a una persona', ELIMINAR_EMPLEADO_PERMANENTE: 'Eliminó a una persona para siempre', DEVOLVER_DIAS_CERRADOS: 'Devolvió días cerrados al respaldo'
 };
 const _MODULOS_AUDITORIA = { PORTERIA: 'Portería', CONFIGURACION: 'Configuración', REGLAS_MARCAS: 'Reglas de marcas', EMPLEADOS: 'Empleados', MARCACIONES: 'Asistencia' };
 function _escAud(v) {

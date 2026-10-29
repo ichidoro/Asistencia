@@ -160,7 +160,8 @@
             icon: tipo === 'falta' ? 'warning' : tipo === 'info' ? 'info' : 'error',
             iconHtml: icono ? svg(icono) : undefined,
             title: opts.titulo || titulo,
-            html: (opts.quien ? '<div class="av-quien">' + esc(opts.quien) + '</div>' : '') + (cuerpo ? cuerpoHtml(cuerpo) : ''),
+            // Con un título propio, el texto completo va en el cuerpo (si no, la primera frase se perdía)
+            html: (opts.quien ? '<div class="av-quien">' + esc(opts.quien) + '</div>' : '') + (opts.titulo ? cuerpoHtml(enPalabras(texto)) : (cuerpo ? cuerpoHtml(cuerpo) : '')),
             confirmButtonText: 'Entendido'
         })).catch(() => { /* un fallo de render no debe cortar la cola */ });
         return cola;

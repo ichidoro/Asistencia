@@ -1849,11 +1849,17 @@ window.deleteEmpleado = async (id) => {
       await loadEmpleados();
       showNotification('Listo. La persona y su historial se eliminaron.', 'success');
     } else {
-      showError('No se pudo eliminar a la persona.');
+      // 409: tiene días en un tramo cerrado (no se borra para siempre). Si falla otra cosa, no se borró nada.
+      const err = await response.json().catch(() => ({}));
+      if (response.status === 409 && window.Avisos) {
+        Avisos.ventana(err.detail || 'No se puede eliminar para siempre.', 'falta', { titulo: 'No se eliminó', quien: nombreEmp ? nombreEmp.trim() : undefined });
+      } else {
+        showError(err.detail || 'No se pudo eliminar a la persona. No se borró nada.');
+      }
     }
   } catch (error) {
     console.error('Error deleting empleado:', error);
-    showError('No se pudo eliminar a la persona.');
+    showError('No se pudo eliminar a la persona. No se borró nada.');
   }
 };
 

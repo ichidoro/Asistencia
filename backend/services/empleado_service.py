@@ -443,7 +443,7 @@ class EmpleadoService:
         return empleado_updated
 
     
-    async def delete_empleado(self, empleado_id: int, hard: bool = False) -> bool:
+    async def delete_empleado(self, empleado_id: int, hard: bool = False, usuario_id: Optional[int] = None, username: Optional[str] = None) -> bool:
         """
         Eliminar un empleado.
         
@@ -455,7 +455,8 @@ class EmpleadoService:
         await self.get_empleado(empleado_id)
         
         if hard:
-            return await self.repository.hard_delete(empleado_id)
+            await self.repository.hard_delete(empleado_id, usuario_id=usuario_id, username=username)
+            return True
         else:
             # Capturar empleado para tener su fecha_salida antes de la baja (si existiera)
             emp = await self.get_empleado(empleado_id)
