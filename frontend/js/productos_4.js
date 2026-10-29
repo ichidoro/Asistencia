@@ -458,6 +458,12 @@ const Productos4Module = {
                     <p class="small text-muted mb-4">Seleccione hasta 4 productos propios. La interfaz validará en tiempo real que no exceda las cantidades máximas definidas por producto.</p>
                     
                     <div class="mb-3">
+                        <label for="asig-buscar" class="form-label small fw-bold text-primary"><i class="bi bi-search me-1"></i>Buscar producto por nombre o código</label>
+                        <input type="search" id="asig-buscar" class="form-control form-control-sm bg-light-subtle" placeholder="Ej. detergente o 1052" autocomplete="off">
+                        <div id="asig-buscar-info" class="form-text small"></div>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="asig-filtro-tipo" class="form-label small fw-bold text-primary"><i class="bi bi-funnel-fill me-1"></i>Filtrar por Tipo de Producto</label>
                         <select id="asig-filtro-tipo" class="form-select form-select-sm bg-light-subtle">
                             <option value="">-- Todos los Tipos --</option>
@@ -520,6 +526,11 @@ const Productos4Module = {
                 selectTipo.addEventListener('change', (e) => {
                     this.filtrarOpcionesPorTipo(e.target.value);
                 });
+
+                // Buscador por nombre o código: filtra las 4 listas a la vez. Enter no debe confirmar el modal.
+                const buscar = document.getElementById('asig-buscar');
+                buscar.addEventListener('input', () => this.filtrarOpcionesPorTipo(selectTipo.value));
+                buscar.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
 
                 // Bind listener to reactively update select availability
                 const selects = document.querySelectorAll('.asig-prod-select');
@@ -588,8 +599,28 @@ const Productos4Module = {
         });
     },
 
+    etiquetaProducto(p) {
+        return `${p.codigo} · [${p.tipo}] ${p.descripcion} (${p.unidad}) [Máx: ${p.max_cantidad}]`;
+    },
+
+    // Minúsculas y sin tildes, para que "limpiador" encuentre "Limpiadór" y "peso" encuentre "PESO".
+    _normalizarBusqueda(t) {
+        return String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    },
+
     filtrarOpcionesPorTipo(selectedTipo) {
         const activeProds = this.productos.filter(p => p.activo);
+        const textoBuscado = this._normalizarBusqueda(document.getElementById('asig-buscar')?.value);
+        // Cada palabra escrita debe estar en el nombre o en el código (así "deterg 10" afina por nombre y litros).
+        const palabras = textoBuscado.split(/\s+/).filter(Boolean);
+        const coincide = (p) => {
+            if (palabras.length === 0) return true;
+            const hay = this._normalizarBusqueda(`${p.codigo} ${p.descripcion}`);
+            return palabras.every(w => hay.includes(w));
+        };
+        const encontrados = activeProds.filter(p => coincide(p) && (!selectedTipo || p.tipo === selectedTipo)).length;
+        const info = document.getElementById('asig-buscar-info');
+        if (info) info.textContent = (textoBuscado || selectedTipo) ? (encontrados === 0 ? 'Ningún producto coincide.' : `${encontrados} producto${encontrados === 1 ? '' : 's'} encontrado${encontrados === 1 ? '' : 's'}`) : '';
 
         for (let i = 1; i <= 4; i++) {
             const select = document.getElementById(`asig-select-${i}`);
@@ -597,9 +628,9 @@ const Productos4Module = {
             const currentValue = select.value;
 
             // Filtrar productos
-            let filteredProds = activeProds;
+            let filteredProds = activeProds.filter(coincide);
             if (selectedTipo) {
-                filteredProds = activeProds.filter(p => p.tipo === selectedTipo);
+                filteredProds = filteredProds.filter(p => p.tipo === selectedTipo);
             }
 
             // Asegurarse de mantener la selección actual en la lista, incluso si no coincide con el tipo, para no borrarla
@@ -614,7 +645,7 @@ const Productos4Module = {
 
             select.innerHTML = `
                 <option value="">-- Sin Seleccionar --</option>
-                ${filteredProds.map(p => `<option value="${p.codigo}">[${p.tipo}] ${p.descripcion} (${p.unidad}) [Máx: ${p.max_cantidad}]</option>`).join('')}
+                ${filteredProds.map(p => `<option value="${p.codigo}">${this.etiquetaProducto(p)}</option>`).join('')}
             `;
 
             select.value = currentValue;
@@ -653,11 +684,11 @@ const Productos4Module = {
                 if (currentCount >= prod.max_cantidad && code !== currentValue) {
                     opt.disabled = true;
                     if (!opt.innerText.startsWith("🔒")) {
-                        opt.innerText = `🔒 [${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Límite Máx alcanzado]`;
+                        opt.innerText = `🔒 ${prod.codigo} · [${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Límite Máx alcanzado]`;
                     }
                 } else {
                     opt.disabled = false;
-                    opt.innerText = `[${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Máx: ${prod.max_cantidad}]`;
+                    opt.innerText = this.etiquetaProducto(prod);
                 }
             });
         }
