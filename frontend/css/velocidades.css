@@ -23,6 +23,12 @@
 td.col-day:hover .vel-p { transform: translateY(-1px); }
 td.col-day:hover .vel-p.vel-x { box-shadow: 0 2px 4px rgba(145, 28, 20, .38), 0 6px 12px -4px rgba(217, 45, 32, .6); }
 
+/* La grilla pone su propio color de texto a lo que va dentro de las celdas: acá se fuerza (número y flecha en blanco sobre el rojo; verde oscuro sobre el verde) */
+#marcaciones-view-container .matrix-table-premium td.col-day .vel-p.vel-x,
+#marcaciones-view-container .matrix-table-premium td.col-day .vel-p.vel-x svg,
+#marcaciones-view-container .matrix-table-premium td.col-day .vel-p.vel-x svg * { color: #fff !important; stroke: #fff !important; }
+#marcaciones-view-container .matrix-table-premium td.col-day .vel-p.vel-ok { color: #12703f !important; }
+
 /* Chofer sin dato ese día: apagado, como lo libre en la grilla */
 .vel-v { color: #b6bdcf; font-weight: 500; font-size: .78rem; }
 
