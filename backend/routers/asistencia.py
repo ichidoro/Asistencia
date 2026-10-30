@@ -3840,7 +3840,8 @@ async def velocidades_choferes(
     db: Database = Depends(get_db),
 ):
     """Velocidad máxima del GPS de cada chofer por día, según el chofer que Despacho Diario planificó en cada camión (Nexacol). Para la grilla de Marcaciones.
-    Solo los choferes de Bolsa Flexible (con un horario de ese tipo vigente en el rango): pedido del dueño, 30-10-2026."""
+    Solo los choferes de Bolsa (pedido del dueño, 30-10-2026), con la misma regla de la grilla (calcularStatsEmpleado): horario de tipo Bolsa Flexible
+    o cuyo nombre contiene TRANSPORTE, vigente en el rango. Con solo el tipo quedaban fuera los de TRANSPORTE, que la grilla sí muestra en Bolsa."""
     import time
     from backend.services.velocidades_choferes import calzar_choferes
     ahora = time.time()
@@ -3861,7 +3862,8 @@ async def velocidades_choferes(
            FROM empleados e
            WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'
              AND EXISTS (SELECT 1 FROM asignacion_turnos ast JOIN turnos t ON t.id = ast.turno_id
-                         WHERE ast.empleado_id = e.id AND UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
+                         WHERE ast.empleado_id = e.id
+                           AND (UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA') OR UPPER(COALESCE(t.nombre, '')) LIKE '%TRANSPORTE%')
                            AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))""", (hasta, desde))
     choferes = [dict(r) for r in filas]
     por_emp, sin_calzar = calzar_choferes(dias, choferes)
