@@ -3841,7 +3841,8 @@ async def velocidades_choferes(
 ):
     """Velocidad máxima del GPS de cada chofer por día, según el chofer que Despacho Diario planificó en cada camión (Nexacol). Para la grilla de Marcaciones.
     Solo los choferes de Bolsa (pedido del dueño, 30-10-2026), con la misma regla de la grilla (calcularStatsEmpleado): horario de tipo Bolsa Flexible
-    o cuyo nombre contiene TRANSPORTE, vigente en el rango. Con solo el tipo quedaban fuera los de TRANSPORTE, que la grilla sí muestra en Bolsa."""
+    o cuyo nombre contiene TRANSPORTE, vigente en el rango. Con solo el tipo quedaban fuera los de TRANSPORTE, que la grilla sí muestra en Bolsa.
+    Y solo del área LOGÍSTICA TRADICIONAL (pedido del dueño, 30-10-2026: por ahora se trabaja solo con ella)."""
     import time
     from backend.services.velocidades_choferes import calzar_choferes
     ahora = time.time()
@@ -3859,8 +3860,9 @@ async def velocidades_choferes(
     filas = await db.fetch_all(
         """SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.activo,
                   (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
-           FROM empleados e
+           FROM empleados e JOIN areas a ON a.id = e.area_id
            WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'
+             AND UPPER(TRIM(a.nombre)) LIKE 'LOG_STICA TRADICIONAL'
              AND EXISTS (SELECT 1 FROM asignacion_turnos ast JOIN turnos t ON t.id = ast.turno_id
                          WHERE ast.empleado_id = e.id
                            AND (UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA') OR UPPER(COALESCE(t.nombre, '')) LIKE '%TRANSPORTE%')
