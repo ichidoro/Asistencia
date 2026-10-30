@@ -101,7 +101,8 @@
             else {
                 const d = ST.diag;
                 estado += '<span class="vel-resumen">Ningún chofer con velocidad en este período</span>';
-                if (d) estado += `<span class="vel-aviso" tabindex="0" title="Dónde se corta: Nexacol planificó ${d.dias_plan} días con chofer; de esos, ${d.dias_con_gps} tienen velocidad del GPS; hay ${d.choferes} choferes de Logística Tradicional en Asistencia y ${d.con_velocidad} quedaron con velocidad."><i class="bi bi-info-circle-fill"></i>Plan: ${d.dias_plan} días · con GPS: ${d.dias_con_gps} · choferes: ${d.choferes} · con velocidad: ${d.con_velocidad}</span>`;
+                if (d && d.dias_plan === 0) estado += `<span class="vel-aviso" role="status"><i class="bi bi-info-circle-fill"></i>Despacho Diario no tiene choferes asignados a un camión en estas fechas. Prueba con el período actual.</span>`;
+                else if (d) estado += `<span class="vel-aviso" tabindex="0" title="Dónde se corta: Nexacol planificó ${d.dias_plan} días con chofer; de esos, ${d.dias_con_gps} tienen velocidad del GPS; hay ${d.choferes} choferes de Logística Tradicional en Asistencia y ${d.con_velocidad} quedaron con velocidad."><i class="bi bi-info-circle-fill"></i>Plan: ${d.dias_plan} días · con GPS: ${d.dias_con_gps} · choferes: ${d.choferes} · con velocidad: ${d.con_velocidad}</span>`;
             }
             if (sobre) estado += `<span class="vel-resumen vel-rojo"><b>${sobre}</b> ${sobre === 1 ? 'día' : 'días'} sobre ${LIMITE}</span>`;
             if (ST.sinCalzar.length) {
