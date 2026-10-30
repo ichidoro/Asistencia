@@ -11,7 +11,7 @@
     const LIMITE = 90;
     const MAX_DIAS = 62; // lo que acepta Nexacol en una consulta
 
-    const ST = { clave: '', estado: 'idle', datos: {}, sinCalzar: [], error: '', ticket: 0 };
+    const ST = { clave: '', estado: 'idle', datos: {}, sinCalzar: [], diag: null, error: '', ticket: 0 };
 
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const esChofer = emp => typeof window.categoriaCargo === 'function' && window.categoriaCargo(emp && emp.cargo) === 'chofer';
@@ -98,7 +98,11 @@
                 if (!max || i.vel > max.vel) max = { vel: i.vel, id, f };
             }));
             if (max) estado += `<span class="vel-resumen ${max.vel > LIMITE ? 'vel-rojo' : ''}" title="La velocidad más alta registrada en el período">Máxima del período <b>${esc(max.vel)} km/h</b>${nombreDe(max.id) ? ' · ' + esc(nombreDe(max.id)) : ''} · ${esc(ddmm(max.f))}</span>`;
-            else estado += '<span class="vel-resumen">Ningún chofer con velocidad en este período</span>';
+            else {
+                const d = ST.diag;
+                estado += '<span class="vel-resumen">Ningún chofer con velocidad en este período</span>';
+                if (d) estado += `<span class="vel-aviso" tabindex="0" title="Dónde se corta: Nexacol planificó ${d.dias_plan} días con chofer; de esos, ${d.dias_con_gps} tienen velocidad del GPS; hay ${d.choferes} choferes de Logística Tradicional en Asistencia y ${d.con_velocidad} quedaron con velocidad."><i class="bi bi-info-circle-fill"></i>Plan: ${d.dias_plan} días · con GPS: ${d.dias_con_gps} · choferes: ${d.choferes} · con velocidad: ${d.con_velocidad}</span>`;
+            }
             if (sobre) estado += `<span class="vel-resumen vel-rojo"><b>${sobre}</b> ${sobre === 1 ? 'día' : 'días'} sobre ${LIMITE}</span>`;
             if (ST.sinCalzar.length) {
                 const lista = ST.sinCalzar.map(x => `${x.nombre} (${x.dias.length} ${x.dias.length === 1 ? 'día' : 'días'})`).join(', ');
@@ -141,7 +145,7 @@
         ST.clave = clave; ST.estado = 'cargando'; ST.error = '';
         const ticket = ++ST.ticket;
         pedir(p.ini, p.fin)
-            .then(j => { if (ticket === ST.ticket) { ST.datos = j.velocidades || {}; ST.sinCalzar = j.sin_calzar || []; ST.estado = 'ok'; } })
+            .then(j => { if (ticket === ST.ticket) { ST.datos = j.velocidades || {}; ST.sinCalzar = j.sin_calzar || []; ST.diag = j.diagnostico || null; ST.estado = 'ok'; } })
             .catch(e => { if (ticket === ST.ticket) { ST.datos = {}; ST.sinCalzar = []; ST.estado = 'error'; ST.error = e.message || 'sin conexión'; } })
             .finally(() => { if (ticket === ST.ticket) pintar(document.getElementById('marcaciones-view-container')); });
     };

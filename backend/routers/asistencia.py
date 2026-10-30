@@ -3862,11 +3862,7 @@ async def velocidades_choferes(
                   (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
            FROM empleados e JOIN areas a ON a.id = e.area_id
            WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'
-             AND UPPER(TRIM(a.nombre)) LIKE 'LOG_STICA TRADICIONAL'
-             AND EXISTS (SELECT 1 FROM asignacion_turnos ast JOIN turnos t ON t.id = ast.turno_id
-                         WHERE ast.empleado_id = e.id
-                           AND (UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA') OR UPPER(COALESCE(t.nombre, '')) LIKE '%TRANSPORTE%')
-                           AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))""", (hasta, desde))
+             AND UPPER(TRIM(a.nombre)) LIKE 'LOG_STICA TRADICIONAL'""")
     choferes = [dict(r) for r in filas]
     por_emp, sin_calzar = calzar_choferes(dias, choferes)
     # Nombre y RUT de quienes tienen velocidades: el reporte semanal los imprime junto a la firma del chofer.
@@ -3874,7 +3870,9 @@ async def velocidades_choferes(
         str(c["id"]): {"nombre": " ".join(str(c.get(k) or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(c.get(k) or "").strip()), "rut": c.get("rut") or ""}
         for c in choferes if str(c["id"]) in por_emp
     }
-    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "personas": personas, "sin_calzar": sin_calzar}
+    # Cuántos días entregó Nexacol y cuántos llegan hasta una persona: la pantalla lo muestra cuando no hay velocidades, para ver dónde se corta
+    diagnostico = {"dias_plan": len(dias), "dias_con_gps": sum(1 for d in dias if d.get("velMax") is not None), "choferes": len(choferes), "con_velocidad": len(por_emp)}
+    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "personas": personas, "sin_calzar": sin_calzar, "diagnostico": diagnostico}
 
 
 _APRENDIDO_EN: Dict[str, float] = {}
