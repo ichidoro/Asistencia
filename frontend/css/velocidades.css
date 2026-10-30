@@ -1,62 +1,103 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    LÁMINA «VELOCIDAD» DE LA GRILLA — velocidad máxima del GPS de cada chofer, por día
-   - Mismo lenguaje que la grilla HD: lo normal va sin fondo y lo que pide atención resalta en pastilla suave.
-   - Tres lecturas, y ninguna depende solo del color: normal · alta (más de 90, flecha) · exceso (más de 100, flecha doble).
+   - Dos lecturas, las dos de un vistazo: verde suave = bien (hasta 90 km/h) · rojo sólido con flecha = sobre 90. La flecha evita depender solo del color.
    - Carga sin bloquear: las celdas de los choferes muestran un esqueleto y se rellenan en el sitio cuando llega el dato (sin repintar la grilla).
+   - Reporte semanal: diálogo para elegir semana y choferes, y descargar el PDF con la firma del chofer.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 #marcaciones-view-container .matrix-table-premium td.col-day .vel-slot {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 36px; min-height: 22px;
+  min-width: 40px; min-height: 24px;
 }
 
-/* Cifra: la pastilla mide lo mismo que las de estado (22 px), así la fila no cambia de alto al cambiar de lámina */
+/* La cifra: pastilla de 24 px, tabular, un poco más grande que las siglas de estado porque aquí la cifra ES el contenido */
 .vel-p {
-  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
-  min-width: 36px; height: 22px; padding: 0 6px; border-radius: 6px;
-  font: 600 .78rem/1 var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
-  color: #3c4767; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  min-width: 40px; height: 24px; padding: 0 8px; border-radius: 8px;
+  font: 700 .84rem/1 var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  transition: transform .14s cubic-bezier(.16, 1, .3, 1), box-shadow .14s ease;
 }
-.vel-p svg { width: 9px; height: 9px; flex: none; }
-.vel-p.vel-a { background: #fff3d9; color: #8f5200; }
-.vel-p.vel-x { background: #fdecea; color: #a82f26; font-weight: 700; }
+.vel-p svg { width: 10px; height: 10px; flex: none; }
+.vel-p.vel-ok { background: #e3f4ea; color: #12703f; }
+.vel-p.vel-x  { background: #d92d20; color: #fff; box-shadow: 0 1px 2px rgba(145, 28, 20, .38), 0 3px 8px -3px rgba(217, 45, 32, .55); }
+td.col-day:hover .vel-p { transform: translateY(-1px); }
+td.col-day:hover .vel-p.vel-x { box-shadow: 0 2px 4px rgba(145, 28, 20, .38), 0 6px 12px -4px rgba(217, 45, 32, .6); }
 
 /* Chofer sin dato ese día: apagado, como lo libre en la grilla */
-.vel-v { color: #b6bdcf; font-weight: 500; font-size: .75rem; }
+.vel-v { color: #b6bdcf; font-weight: 500; font-size: .78rem; }
 
-/* Esqueleto mientras llega el dato (solo transform/opacity/background-position: no pinta de nuevo la tabla) */
+/* Esqueleto mientras llega el dato (solo background-position: no repinta la tabla) */
 .vel-sk {
-  display: inline-block; width: 28px; height: 12px; border-radius: 5px;
+  display: inline-block; width: 30px; height: 14px; border-radius: 6px;
   background: linear-gradient(100deg, #eef1f7 30%, #f8f9fc 50%, #eef1f7 70%) 0 0 / 220% 100%;
   animation: velSk 1.15s linear infinite;
 }
 @keyframes velSk { to { background-position: -220% 0; } }
 
-/* Entrada de las cifras cuando llegan: sube 3 px y aparece, escalonado por columna (tope 240 ms) */
+/* Entrada de las cifras cuando llegan: suben 3 px y aparecen, escalonadas por columna (tope 240 ms) */
 .vel-in .vel-p, .vel-in .vel-v { animation: velIn .34s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--i, 0) * 8ms); }
 @keyframes velIn { from { opacity: 0; transform: translateY(3px) scale(.94); } to { opacity: 1; transform: none; } }
 
 /* Leyenda de la lámina (reemplaza a la de estados) */
-.vel-leyenda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; font-size: .75rem; color: #5b6878; }
-.vel-leyenda .vel-p { height: 20px; min-width: 30px; font-size: .72rem; cursor: default; }
+.vel-leyenda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; font-size: .75rem; color: #5b6878; width: 100%; }
+.vel-leyenda .vel-p { height: 20px; min-width: 32px; font-size: .74rem; cursor: default; transform: none !important; }
 .vel-leyenda .vel-ley { display: inline-flex; align-items: center; gap: 6px; }
 .vel-resumen { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #f1f4fa; color: #3c4767; font-weight: 600; font-variant-numeric: tabular-nums; }
 .vel-resumen b { font-weight: 700; color: #1a2326; }
+.vel-resumen.vel-rojo { background: #fdecea; color: #a82f26; }
+.vel-resumen.vel-rojo b { color: #a82f26; }
 .vel-aviso { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #fff3d9; color: #8f5200; font-weight: 600; border: 0; font-size: .75rem; }
 .vel-aviso.vel-err { background: #fdecea; color: #a82f26; }
 .vel-aviso button { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .vel-aviso button:focus-visible, .vel-aviso:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; border-radius: 6px; }
+.vel-enlace { all: unset; cursor: pointer; font-size: .75rem; font-weight: 700; color: #1e3a8a; text-decoration: underline; text-underline-offset: 3px; }
+.vel-enlace:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; border-radius: 4px; }
+.vel-btn {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border: 0; border-radius: 9px;
+  background: #1e3a8a; color: #fff; font: 700 .78rem/1 var(--font-sans); cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 30, 80, .3), 0 4px 10px -4px rgba(30, 58, 138, .55);
+  transition: transform .14s cubic-bezier(.16, 1, .3, 1), box-shadow .14s ease, background-color .14s ease;
+}
+.vel-btn:hover { background: #26479f; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(15, 30, 80, .3), 0 8px 14px -6px rgba(30, 58, 138, .6); }
+.vel-btn:active { transform: translateY(0); }
+.vel-btn:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
 
 /* Pie del tooltip de la celda: la cifra grande y de dónde sale */
 .tp-vel { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 12px; padding: 11px 16px 13px; border-top: 1px solid #e8ecf3; background: #fafbfe; }
-.tp-vel-n { grid-row: span 2; font: 800 1.5rem/1 var(--font-sans); font-variant-numeric: tabular-nums; color: #3c4767; }
+.tp-vel-n { grid-row: span 2; font: 800 1.5rem/1 var(--font-sans); font-variant-numeric: tabular-nums; color: #12703f; }
 .tp-vel-n small { font-size: .68rem; font-weight: 700; color: #7b86a3; margin-left: 3px; letter-spacing: .02em; }
-.tp-vel.vel-a .tp-vel-n { color: #8f5200; }
-.tp-vel.vel-x .tp-vel-n { color: #a82f26; }
+.tp-vel.vel-x .tp-vel-n { color: #c42419; }
 .tp-vel-t { font-size: .72rem; font-weight: 700; color: #3c4767; }
 .tp-vel-s { font-size: .7rem; color: #69738f; }
+
+/* ── Diálogo del reporte semanal ── */
+.vrep { width: 100%; text-align: left; font-family: var(--font-sans); color: #1a2326; }
+.vr-sem { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px; background: #f4f6fb; border-radius: 12px; margin-bottom: 14px; }
+.vr-sem button { width: 38px; height: 38px; border: 0; border-radius: 10px; background: #fff; color: #1e3a8a; font-size: 1.05rem; cursor: pointer; box-shadow: 0 1px 2px rgba(15, 30, 80, .12); transition: transform .14s cubic-bezier(.16, 1, .3, 1); }
+.vr-sem button:hover:not(:disabled) { transform: scale(1.06); }
+.vr-sem button:disabled { opacity: .35; cursor: default; }
+.vr-sem button:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 2px; }
+.vr-sem-t { flex: 1; min-width: 0; text-align: center; line-height: 1.25; }
+.vr-sem-t b { display: block; font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+.vr-sem-t span { font-size: .75rem; color: #69738f; }
+.vr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: .78rem; color: #5b6878; }
+.vr-top label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.vr-lista { max-height: 320px; overflow: auto; border: 1px solid #e4e8f1; border-radius: 12px; }
+.vr-fila { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 12px; padding: 10px 12px; border-bottom: 1px solid #eef1f7; cursor: pointer; transition: background-color .12s ease; }
+.vr-fila:last-child { border-bottom: 0; }
+.vr-fila:hover { background: #f7f9fd; }
+.vr-fila input { width: 17px; height: 17px; accent-color: #1e3a8a; grid-row: span 2; }
+.vr-fila:has(input:focus-visible) { outline: 2px solid #3f6fd6; outline-offset: -2px; }
+.vr-n { font-weight: 700; font-size: .88rem; }
+.vr-s { font-size: .74rem; color: #69738f; grid-column: 2; }
+.vr-fila .vel-p { grid-row: span 2; }
+.vr-vacio { padding: 26px 12px; text-align: center; color: #69738f; font-size: .85rem; }
+.vr-carga { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.vr-carga .vel-sk { width: 100%; height: 42px; border-radius: 10px; }
 
 @media (prefers-reduced-motion: reduce) {
   .vel-sk { animation: none; }
   .vel-in .vel-p, .vel-in .vel-v { animation: none; }
+  .vel-p, .vel-btn, .vr-sem button, .vr-fila { transition: none; }
+  td.col-day:hover .vel-p { transform: none; }
 }

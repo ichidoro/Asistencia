@@ -3839,7 +3839,8 @@ async def velocidades_choferes(
     current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
     db: Database = Depends(get_db),
 ):
-    """Velocidad máxima del GPS de cada chofer por día, según el chofer que Despacho Diario planificó en cada camión (Nexacol). Para la grilla de Marcaciones."""
+    """Velocidad máxima del GPS de cada chofer por día, según el chofer que Despacho Diario planificó en cada camión (Nexacol). Para la grilla de Marcaciones.
+    Solo los choferes de Bolsa Flexible (con un horario de ese tipo vigente en el rango): pedido del dueño, 30-10-2026."""
     import time
     from backend.services.velocidades_choferes import calzar_choferes
     ahora = time.time()
@@ -3855,10 +3856,21 @@ async def velocidades_choferes(
     except gps_nexacol.GpsNexacolError as e:
         raise HTTPException(status_code=e.status, detail=e.mensaje)
     filas = await db.fetch_all(
-        """SELECT e.id, (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo, e.activo
-           FROM empleados e WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'""")
-    por_emp, sin_calzar = calzar_choferes(dias, [dict(r) for r in filas])
-    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "sin_calzar": sin_calzar}
+        """SELECT e.id, e.rut, e.nombre, e.apellido_paterno, e.apellido_materno, e.activo,
+                  (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
+           FROM empleados e
+           WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'
+             AND EXISTS (SELECT 1 FROM asignacion_turnos ast JOIN turnos t ON t.id = ast.turno_id
+                         WHERE ast.empleado_id = e.id AND UPPER(COALESCE(t.tipo_programacion, '')) IN ('BOLSA_FLEXIBLE', 'FLEXIBLE_BOLSA')
+                           AND ast.fecha_inicio <= ? AND (ast.fecha_fin IS NULL OR ast.fecha_fin >= ?))""", (hasta, desde))
+    choferes = [dict(r) for r in filas]
+    por_emp, sin_calzar = calzar_choferes(dias, choferes)
+    # Nombre y RUT de quienes tienen velocidades: el reporte semanal los imprime junto a la firma del chofer.
+    personas = {
+        str(c["id"]): {"nombre": " ".join(str(c.get(k) or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(c.get(k) or "").strip()), "rut": c.get("rut") or ""}
+        for c in choferes if str(c["id"]) in por_emp
+    }
+    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "personas": personas, "sin_calzar": sin_calzar}
 
 
 _APRENDIDO_EN: Dict[str, float] = {}
