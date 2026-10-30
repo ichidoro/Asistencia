@@ -57,7 +57,7 @@ window.vistaAnaliticaState = window.vistaAnaliticaState || {
 // Lo que la persona elige (período, área, horario, empleado, vista y columnas abiertas) se guarda en este navegador y vuelve al
 // recargar o regresar. La clave lleva el usuario: otra cuenta en el mismo navegador entra con los filtros limpios.
 const MX_FILTROS_VERSION = 1;
-const MX_VISTAS = ['conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos'];
+const MX_VISTAS = ['conceptos', 'horas', 'he', 'acumulado', 'colacion', 'permisos', 'velocidad'];
 const MX_VA_BOOL = ['showBonos', 'showHE', 'showDeudas', 'showIncidencias', 'showSaldoMeta', 'soloNegativo', 'soloConHE'];
 function mxClaveFiltros() {
     let u = 'anon';
@@ -7182,7 +7182,8 @@ function renderVistaAnalitica(respData, container) {
         {key:'colacion',  icon:'bi-cup-hot',          label:'Colación'},
         {key:'permisos',  icon:'bi-person-dash',      label:'Permisos'},
         {key:'he',        icon:'bi-arrow-up-circle',  label:'Horas Extras'},
-        {key:'acumulado', icon:'bi-graph-up',         label:'Acumulado'}
+        {key:'acumulado', icon:'bi-graph-up',         label:'Acumulado'},
+        {key:'velocidad', icon:'bi-speedometer2',     label:'Velocidad'}
     ].map(v => `<button class="btn segmented-btn ${activeVM===v.key ? 'active' : ''}" onclick="vaSetViewMode('${v.key}')" title="${v.label}"><i class="bi ${v.icon} me-1 d-none d-sm-inline"></i>${v.label}</button>`).join('');
 
     const isUnpinned = window._stickyUnpinned === true;
@@ -7304,7 +7305,7 @@ function renderVistaAnalitica(respData, container) {
     ${tabsHtml}
     ${sw}
     ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
-        ${_leyendaEstadosHtml()}
+        ${activeVM === 'velocidad' && window.mxVelLeyenda ? window.mxVelLeyenda() : _leyendaEstadosHtml()}
         ${(() => {
             const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
             if (!cs.length) return '';
@@ -8022,6 +8023,10 @@ window.vaSetViewMode = function(mode) {
 
 // ─── CONTENIDO DE CELDA SEGÚN VIEWMODE ──────────────────────────────────────
 function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
+    // Lámina Velocidad (velocidades_ui.js): solo los choferes llevan algo; '—' únicamente en los días que trabajó
+    if (viewMode === 'velocidad') {
+        return window.mxVelCelda ? window.mxVelCelda(emp, dateStr, !!(di && ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO','VIAJE_LARGO'].includes(di.estado))) : '';
+    }
     // Proyección visual de LIBRE o FERIADO para fechas sin datos o guardadas sin marcas
     const est = di ? di.estado : null;
     let esFeriadoPuro = isFer || est === 'FERIADO';
@@ -9292,6 +9297,7 @@ function _getCellTipHtml(td) {
     const escaped = _buildRichTooltipData(reg.di, reg.d, reg.dt, reg.feriadoDesc, reg.isWE, reg.emp);
     // _buildRichTooltipData devuelve el HTML escapado para atributo; aquí se necesita el HTML real
     td._tipHtml = escaped.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    if (window.mxVelTip) td._tipHtml = window.mxVelTip(td, td._tipHtml);   // pie con la velocidad (solo en la lámina Velocidad)
     return td._tipHtml;
 }
 
@@ -9455,7 +9461,7 @@ window.categoriaCargo = categoriaCargo;
     const original = renderVistaAnalitica;
     renderVistaAnalitica = function () {
         const r = original.apply(this, arguments);
-        try { mxGuardarFiltros(); mxPintarChips(); mxTrasPintar(arguments[1]); } catch (e) { console.warn('filtros/animación:', e); }
+        try { mxGuardarFiltros(); mxPintarChips(); mxTrasPintar(arguments[1]); if (window.mxVelAsegurar) window.mxVelAsegurar(arguments[1]); } catch (e) { console.warn('filtros/animación:', e); }
         return r;
     };
 })();

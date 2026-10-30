@@ -3829,6 +3829,38 @@ async def gps_dia_libreta(
         raise HTTPException(status_code=e.status, detail=e.mensaje)
 
 
+_VEL_CHOFERES: Dict[Any, Any] = {}   # (desde, hasta) -> (momento, filas de Nexacol): la grilla pide el mismo mes varias veces seguidas
+
+
+@router.get("/gps/velocidades-choferes/")
+async def velocidades_choferes(
+    desde: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    hasta: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+    db: Database = Depends(get_db),
+):
+    """Velocidad máxima del GPS de cada chofer por día, según el chofer que Despacho Diario planificó en cada camión (Nexacol). Para la grilla de Marcaciones."""
+    import time
+    from backend.services.velocidades_choferes import calzar_choferes
+    ahora = time.time()
+    previo = _VEL_CHOFERES.get((desde, hasta))
+    try:
+        if previo and ahora - previo[0] < 300:
+            dias = previo[1]
+        else:
+            dias = await gps_nexacol.velocidades(desde, hasta)
+            _VEL_CHOFERES[(desde, hasta)] = (ahora, dias)
+            if len(_VEL_CHOFERES) > 24:
+                _VEL_CHOFERES.pop(next(iter(_VEL_CHOFERES)))
+    except gps_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
+    filas = await db.fetch_all(
+        """SELECT e.id, (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo, e.activo
+           FROM empleados e WHERE UPPER(TRIM(e.cargo)) = 'CHOFER'""")
+    por_emp, sin_calzar = calzar_choferes(dias, [dict(r) for r in filas])
+    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "sin_calzar": sin_calzar}
+
+
 _APRENDIDO_EN: Dict[str, float] = {}
 
 

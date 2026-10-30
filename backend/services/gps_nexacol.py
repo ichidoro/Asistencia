@@ -149,6 +149,12 @@ async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
     }
 
 
+async def velocidades(desde: str, hasta: str) -> List[Dict[str, Any]]:
+    """Por día y camión: el chofer que Despacho Diario planificó y la velocidad máxima del GPS ({fecha, patente, choferes, velMax, hora}). Máximo 62 días."""
+    data = await _get("/api/reports/camiones-gps-velocidades", {"desde": desde, "hasta": hasta})
+    return data.get("dias") or []
+
+
 # ── Facturas del camión contra sus paradas ────────────────────────────────────────────────────────────
 # Nexacol calza las facturas con el camión SOLO por la patente (las emitidas el día hábil anterior a la salida) y las agrupa por entrega
 # (cliente + dirección de envío). Cada parada del GPS trae su dirección en texto ("Shell, Avenida X, Curicó, Región…"), así que la entrega se
