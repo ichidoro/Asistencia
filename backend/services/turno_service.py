@@ -150,6 +150,14 @@ class TurnoService:
                 # Rastrear máximo de semanas por turno
                 turno_weeks_count[tid] = max(turno_weeks_count.get(tid, 1), sem)
 
+        # 3.2 Horario que el cálculo eligió cada día ya calculado (en los turnos con varias opciones por día, como
+        # Planta Mantención 2, la opción sale de las marcas de ese día, no de la semana: no se adivina).
+        teoricos = {}
+        for r in await self.repository.db.fetch_all(
+                "SELECT empleado_id, fecha, hora_entrada_teorica, hora_salida_teorica, estado FROM asistencias "
+                "WHERE fecha BETWEEN ? AND ?", (start_period, end_period)):
+            teoricos[(r['empleado_id'], r['fecha'])] = r
+
         # Indexar asignaciones por empleado para O(1) access
         emp_map = {}
         for a in all_assignments:
@@ -203,12 +211,21 @@ class TurnoService:
                         # Obtener horario de este día y semana
                         horario_str = "SIN DEF"
                         t_conf = turno_details.get(tid, {}).get(num_sem_activa, {}).get(dia_sem)
-                        
-                        if t_conf:
+                        calculado = teoricos.get((eid, iso_date))
+
+                        if calculado and calculado['estado'] == 'LIBRE':
+                            horario_str = "LIBRE"
+                        elif calculado and calculado['hora_entrada_teorica'] and calculado['hora_salida_teorica']:
+                            horario_str = f"{str(calculado['hora_entrada_teorica'])[:5]}-{str(calculado['hora_salida_teorica'])[:5]}"
+                        elif total_sems > 1:
+                            horario_str = "ROTATIVO"
+                        elif t_conf:
+                            # Antes la hora quedaba dentro del «if es_libre» (los días de trabajo salían «SIN DEF»
+                            # y los libres «??-??»)
                             if t_conf['es_libre']:
                                 horario_str = "LIBRE"
-                                h1 = f"{t_conf['hora_entrada'] or '??'}-{t_conf['hora_salida'] or '??'}"
-                                horario_str = h1
+                            else:
+                                horario_str = f"{t_conf['hora_entrada'] or '??'}-{t_conf['hora_salida'] or '??'}"
                         
                         active_turno = {
                             "id": tid,

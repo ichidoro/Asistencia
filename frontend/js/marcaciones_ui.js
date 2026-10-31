@@ -7569,11 +7569,9 @@ function _fallbackEstadoColor(codigo) {
 
 // Leyenda de la grilla: siglas e íconos salen de la tabla maestra de estados (Configuración › Estados),
 // con respaldo local; así nunca contradice lo que muestran las celdas.
-// Grilla HD: la base guarda los nombres en mayúsculas; se muestran con mayúscula inicial (partículas en minúscula)
+// Respaldo si auth.js no cargó: el nombre completo en MAYÚSCULAS (orden del dueño, 31-10-2026)
 window.nombreTitulo = window.nombreTitulo || function (s) {
-    const menores = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
-    return String(s || '').toLowerCase().split(/\s+/).filter(Boolean)
-        .map((p, i) => (i > 0 && menores.has(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    return String(s || '').split(/\s+/).filter(p => p && p !== '.').join(' ').toLocaleUpperCase('es-CL');
 };
 
 function _leyendaEstadosHtml() {

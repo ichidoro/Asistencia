@@ -619,7 +619,7 @@
                                             <div class="emp-section-toolbar">
                                                 <h5 class="section-title mb-0">
                                                     <span class="section-icon" style="background: #eaf0fb; color: var(--primary-color);"><i class="bi bi-calendar2-event"></i></span>
-                                                    Próximos Vencimientos (45 días)
+                                                    Próximos vencimientos (45 días)
                                                 </h5>
                                                 <button class="btn-action-modern btn-action-outline"
                                                     onclick="loadContratosUI()">
@@ -628,15 +628,15 @@
                                             </div>
                                             <div class="emp-info-banner emp-info-banner-blue">
                                                 <i class="bi bi-info-circle"></i>
-                                                Se muestran empleados activos con fecha de término próxima.
+                                                Personas activas con término de contrato en los próximos 45 días.
                                             </div>
                                             <div id="contratos-list-container">
                                                 <div class="table-container">
                                                     <table class="data-table" id="tabla-vencimientos-table">
                                                         <thead>
                                                             <tr>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('nombre_completo')" title="Ordenar">Empleado <i id="sort-icon-venc-nombre_completo" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header text-center" onclick="sortContratosVenc('cant_contratos')" title="Ordenar">N° Contrato <i id="sort-icon-venc-cant_contratos" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
+                                                                <th class="sortable-header" onclick="sortContratosVenc('nombre_completo')" title="Ordenar">Persona <i id="sort-icon-venc-nombre_completo" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
+                                                                <th class="sortable-header text-center" onclick="sortContratosVenc('cant_contratos')" title="Ordenar">Contrato <i id="sort-icon-venc-cant_contratos" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
                                                                 <th class="sortable-header" onclick="sortContratosVenc('cargo')" title="Ordenar">Cargo <i id="sort-icon-venc-cargo" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
                                                                 <th class="sortable-header" onclick="sortContratosVenc('area')" title="Ordenar">Área <i id="sort-icon-venc-area" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
                                                                 <th class="sortable-header" onclick="sortContratosVenc('fecha_salida')" title="Ordenar">Fecha Término <i id="sort-icon-venc-fecha_salida" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
@@ -711,7 +711,7 @@
                                     <div class="emp-section-toolbar">
                                         <h5 class="section-title mb-0">
                                             <span class="section-icon" style="background: #fef3c7; color: #d97706;"><i class="bi bi-gift-fill"></i></span>
-                                            Plataforma de Celebraciones
+                                            Cumpleaños
                                         </h5>
                                         <div class="btn-group shadow-sm" role="group">
                                             <button type="button" class="btn btn-outline-primary btn-sm active"
@@ -727,7 +727,7 @@
                                     <div id="cumpleanos-list-container">
                                         <div class="text-center py-5 text-muted">
                                             <div class="spinner-border spinner-border-sm" role="status"></div>
-                                            Cargando plataforma de celebraciones...
+                                            Cargando cumpleaños…
                                         </div>
                                     </div>
                                 </div>
@@ -739,7 +739,7 @@
                                             <div class="row g-3 align-items-end mb-3">
                                                 <div class="col-md-3">
                                                     <h5 class="text-primary mb-0">
-                                                        <i class="bi bi-clipboard2-data me-2"></i>Visor de Asignaciones de Horarios
+                                                        <i class="bi bi-clipboard2-data me-2"></i>Turnos asignados
                                                     </h5>
                                                 </div>
                                                 <div class="col-md-2">
@@ -752,7 +752,7 @@
                                                 </div>
                                                 <div class="col-md-2">
                                                     <label for="asignaciones-turno"
-                                                        class="form-label small fw-bold text-muted mb-1">Turno / Horario</label>
+                                                        class="form-label small fw-bold text-muted mb-1">Turno</label>
                                                     <select id="asignaciones-turno" class="form-select"
                                                         onchange="loadAsignacionesMatrix()">
                                                         <option value="">Todos los Turnos</option>
@@ -827,14 +827,14 @@
                                                 <div class="card-header bg-white py-3">
                                                     <div class="d-flex flex-column gap-2">
                                                         <div class="d-flex justify-content-between align-items-center">
-                                                            <h6 class="mb-0">1. Seleccionar Empleados</h6>
+                                                            <h6 class="mb-0">1. Elegir personas</h6>
                                                             <div class="input-group input-group-sm w-50">
-                                                                <input type="text" id="search-emp-bulk" class="form-control" placeholder="Buscar por nombre o ID..." oninput="filterBulkEmployees()">
+                                                                <input type="text" id="search-emp-bulk" class="form-control" placeholder="Buscar persona" oninput="filterBulkEmployees()">
                                                                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                                                             </div>
                                                         </div>
                                                         <div class="d-flex align-items-center gap-2 mt-2">
-                                                            <label for="filter-area-bulk" class="small text-muted mb-0" style="min-width: 100px;">Filtrar por Área:</label>
+                                                            <label for="filter-area-bulk" class="small text-muted mb-0" style="min-width: 40px;">Área</label>
                                                             <select id="filter-area-bulk" class="form-select form-select-sm" onchange="filterBulkEmployees()">
                                                                 <option value="">Todas las Áreas</option>
                                                             </select>
@@ -873,23 +873,23 @@
                                         <div class="col-md-5">
                                             <div class="card shadow-sm h-100">
                                                 <div class="card-header bg-white py-3">
-                                                    <h6 class="mb-0">2. Configurar Asignación</h6>
+                                                    <h6 class="mb-0">2. Elegir turno y vigencia</h6>
                                                 </div>
                                                 <div class="card-body">
                                                     <div class="mb-4">
-                                                        <label for="bulk-turno-id" class="form-label small fw-bold">Turno a Asignar</label>
+                                                        <label for="bulk-turno-id" class="form-label small fw-bold">Turno</label>
                                                         <select class="form-select" id="bulk-turno-id">
                                                             <option value="">Seleccione empleados primero...</option>
                                                         </select>
                                                         <div id="bulk-turno-area-hint"></div>
                                                     </div>
                                                     <div class="mb-4">
-                                                        <label for="bulk-fecha-inicio" class="form-label small fw-bold">Vigencia Desde</label>
+                                                        <label for="bulk-fecha-inicio" class="form-label small fw-bold">Desde</label>
                                                         <input type="date" id="bulk-fecha-inicio" class="form-control">
                                                         <div class="form-text mt-2 small text-muted">A partir de esta fecha, el empleado tendrá el nuevo horario asignado.</div>
                                                     </div>
                                                      <div class="mb-4">
-                                                        <label for="bulk-fecha-fin" class="form-label small fw-bold">Vigencia Hasta (Opcional)</label>
+                                                        <label for="bulk-fecha-fin" class="form-label small fw-bold">Hasta (opcional)</label>
                                                         <input type="date" id="bulk-fecha-fin" class="form-control">
                                                         <div id="bulk-contrato-hint" class="mt-2"></div>
                                                         <div class="form-text mt-1 small text-muted" id="bulk-fecha-fin-hint">Solo para asignaciones históricas cerradas. Déjalo vacío si es el turno actual vigente.</div>
@@ -936,15 +936,15 @@
                         <div class="card-body">
                             <div class="row g-3">
                                 <div class="col-md-2">
-                                    <label for="rep-fecha-inicio" class="form-label small fw-bold">Fecha Inicio</label>
+                                    <label for="rep-fecha-inicio" class="form-label small fw-bold">Desde</label>
                                     <input type="date" id="rep-fecha-inicio" class="form-control">
                                 </div>
                                 <div class="col-md-2">
-                                    <label for="rep-fecha-fin" class="form-label small fw-bold">Fecha Fin</label>
+                                    <label for="rep-fecha-fin" class="form-label small fw-bold">Hasta</label>
                                     <input type="date" id="rep-fecha-fin" class="form-control">
                                 </div>
                                 <div class="col-md-2">
-                                    <label for="rep-anclaje" class="form-label small">Anclaje (min)</label>
+                                    <label for="rep-anclaje" class="form-label small fw-bold">Anclaje (min)</label>
                                     <input type="number" id="rep-anclaje" class="form-control"
                                         name="anclaje_entrada_minutos" value="0">
                                 </div>
@@ -986,16 +986,16 @@
                     <!-- Chart Section -->
                     <div class="card shadow-sm mb-4">
                         <div class="card-header bg-white py-3">
-                            <h6 class="mb-0"><i class="bi bi-graph-up"></i> Tendencias de Asistencia</h6>
+                            <h6 class="mb-0"><i class="bi bi-graph-up"></i> Asistencia por día</h6>
                         </div>
                         <div class="card-body">
-                            <canvas id="attendanceChart" height="80"></canvas> <!-- Height relativo -->
+                            <div style="position: relative; height: 240px;"><canvas id="attendanceChart"></canvas></div>
                         </div>
                     </div>
 
                     <div class="card shadow-sm">
                         <div class="card-header bg-white py-3">
-                            <h6 class="mb-0"><i class="bi bi-table"></i> Resultados de Asistencia</h6>
+                            <h6 class="mb-0"><i class="bi bi-table"></i> Detalle diario</h6>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
@@ -1008,8 +1008,8 @@
                                                     class="bi bi-arrow-down-up small text-muted"></i>
                                             </th>
                                             <th style="cursor: pointer;" onclick="sortReporte('empleado')"
-                                                title="Ordenar por Empleado">
-                                                Empleado <i id="sort-icon-reporte-empleado"
+                                                title="Ordenar por persona">
+                                                Persona <i id="sort-icon-reporte-empleado"
                                                     class="bi bi-arrow-down-up small text-muted"></i>
                                             </th>
                                             <th style="cursor: pointer;" onclick="sortReporte('turno_nombre')"
@@ -1017,8 +1017,8 @@
                                                 Turno <i id="sort-icon-reporte-turno_nombre"
                                                     class="bi bi-arrow-down-up small text-muted"></i>
                                             </th>
-                                            <th>Entrada Teor/Real</th>
-                                            <th>Salida Teor/Real</th>
+                                            <th>ENTRADA</th>
+                                            <th>SALIDA</th>
                                             <th style="cursor: pointer;" onclick="sortReporte('minutos_atraso')"
                                                 title="Ordenar por Atraso">
                                                 Retraso <i id="sort-icon-reporte-minutos_atraso"
@@ -1027,7 +1027,7 @@
                                             <th>Colación</th>
                                             <th style="cursor: pointer;" onclick="sortReporte('horas_trabajadas')"
                                                 title="Ordenar por Horas">
-                                                Hrs. Totales <i id="sort-icon-reporte-horas_trabajadas"
+                                                Horas totales <i id="sort-icon-reporte-horas_trabajadas"
                                                     class="bi bi-arrow-down-up small text-muted"></i>
                                             </th>
                                             <th style="cursor: pointer;" onclick="sortReporte('estado')"
@@ -1061,7 +1061,7 @@
                         <div class="d-flex align-items-center gap-2">
                             <div id="productos-4-period-actions" class="d-inline-flex gap-2"></div>
                             <button class="btn btn-light border shadow-sm btn-sm px-3" onclick="Productos4Module.refrescarVistaActiva()">
-                                <i class="bi bi-arrow-clockwise text-primary me-1"></i> Actualizar Vista
+                                <i class="bi bi-arrow-clockwise text-primary me-1"></i> Actualizar
                             </button>
                         </div>
                     </div>
@@ -1081,7 +1081,7 @@
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link fw-bold px-4 py-2 rounded-pill" id="tab-p4-entrega" data-bs-toggle="tab" data-bs-target="#view-p4-entrega" type="button" role="tab" data-permiso="productos_4.entregar" onclick="Productos4Module.cambiarTab('entrega')">
-                                    <i class="bi bi-truck me-1"></i> Entrega Beneficio
+                                    <i class="bi bi-truck me-1"></i> Entrega del beneficio
                                 </button>
                             </li>
                         </ul>
@@ -1092,7 +1092,7 @@
                         <div class="card-body p-3">
                             <div class="row g-3 align-items-end">
                                 <div class="col-lg-3 col-md-6" id="filtro-p4-container-buscar">
-                                    <label for="productos-4-search" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar Empleado</label>
+                                    <label for="productos-4-search" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-search me-1"></i>Buscar persona</label>
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text bg-light border-end-0"><i class="bi bi-funnel text-muted"></i></span>
                                         <input type="text" id="productos-4-search" class="form-control bg-light border-start-0" placeholder="Nombre, RUT o cargo..." oninput="Productos4Module.buscarConRetardo()" autocomplete="off">
@@ -1134,7 +1134,7 @@
                                 <div class="col-lg-2 col-md-4" id="filtro-p4-container-estado">
                                     <label for="productos-4-filtro-estado" class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-filter-circle me-1"></i>Filtrar Estado</label>
                                     <select id="productos-4-filtro-estado" class="form-select form-select-sm bg-light" onchange="Productos4Module.refrescarVistaActiva()">
-                                        <option value="todos">Todos los Empleados</option>
+                                        <option value="todos">Todas las personas</option>
                                         <option value="califica">Solo Habilitados / Califican</option>
                                         <option value="bloqueado">Solo Bloqueados</option>
                                         <option value="asignado">Con Productos Seleccionados</option>
@@ -2077,62 +2077,46 @@
                 </div>
             </div>
 
-            <!-- Modal Relleno Masivo (Magic Wand) -->
+            <!-- Modal Relleno masivo -->
             <div id="modal-relleno-masivo" class="modal fade" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-gradient-primary text-white"
-                            style="background: linear-gradient(135deg, #1b2f8f 0%, #14235c 100%);">
-                            <h5 class="modal-title"><i class="bi bi-magic me-2"></i>Relleno Masivo de Asistencia
-                            </h5>
-                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white"
-                                onclick="closeBulkFillModal()"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <div class="alert alert-info d-flex align-items-center mb-3">
-                                <i class="bi bi-info-circle-fill me-2 fs-4"></i>
-                                <small>Esta herramienta generará marcas de entrada y salida automáticas según el
-                                    horario del
-                                    turno asignado.</small>
+                        <div class="modal-header">
+                            <div class="flex-grow-1">
+                                <h5 class="modal-title fw-bold mb-0">Relleno masivo</h5>
+                                <div class="vn-sub">Genera ENTRADA y SALIDA según el horario del turno asignado.</div>
                             </div>
-
+                            <button aria-label="Cerrar" type="button" class="btn-close ms-auto mb-auto" onclick="closeBulkFillModal()"></button>
+                        </div>
+                        <div class="modal-body">
                             <form id="form-relleno-masivo" onsubmit="event.preventDefault(); executeBulkFill()">
                                 <div class="mb-3">
-                                    <label for="fill-empleado-nombre"
-                                        class="form-label fw-bold small text-muted">Empleado</label>
+                                    <label for="fill-empleado-nombre" class="form-label fw-bold small">Persona</label>
                                     <input type="text" id="fill-empleado-nombre" class="form-control" readonly disabled>
                                     <input type="hidden" id="fill-empleado-id">
                                 </div>
-
-                                <div class="row g-2 mb-3">
+                                <div class="row g-3 mb-3">
                                     <div class="col-6">
-                                        <label for="fill-fecha-inicio"
-                                            class="form-label fw-bold small text-muted">Desde</label>
+                                        <label for="fill-fecha-inicio" class="form-label fw-bold small">Desde</label>
                                         <input type="date" id="fill-fecha-inicio" class="form-control" required>
                                     </div>
                                     <div class="col-6">
-                                        <label for="fill-fecha-fin"
-                                            class="form-label fw-bold small text-muted">Hasta</label>
+                                        <label for="fill-fecha-fin" class="form-label fw-bold small">Hasta</label>
                                         <input type="date" id="fill-fecha-fin" class="form-control" required>
                                     </div>
                                 </div>
-
-                                <div class="form-check bg-light p-2 rounded border mb-3">
-                                    <input class="form-check-input ms-1" type="checkbox" id="fill-sobrescribir">
-                                    <label class="form-check-label w-100 ps-2" for="fill-sobrescribir">
+                                <div class="form-check vn-check">
+                                    <input class="form-check-input" type="checkbox" id="fill-sobrescribir">
+                                    <label class="form-check-label" for="fill-sobrescribir">
                                         <strong>Sobrescribir marcas existentes</strong>
-                                        <div class="text-muted small">Si se marca, reemplazará asistencia parcial o
-                                            incompleta.
-                                        </div>
+                                        <span class="d-block small">Reemplaza la asistencia parcial o incompleta.</span>
                                     </label>
                                 </div>
-
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary fw-bold py-2">
-                                        <i class="bi bi-gear-wide-connected me-2"></i> Ejecutar Proceso
-                                    </button>
-                                </div>
                             </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" onclick="closeBulkFillModal()">Cancelar</button>
+                            <button type="submit" form="form-relleno-masivo" class="btn btn-primary px-4">Ejecutar</button>
                         </div>
                     </div>
                 </div>
@@ -3212,61 +3196,50 @@
                     </div>
                 </div>
             </div>
-            <!-- MODAL REGISTRO DE PERMISO (RRHH MANUAL) [NEW] -->
-            <div id="modal-registro-permiso" class="modal">
-                <div class="modal-content" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3 class="fw-bold"><i class="bi bi-person-badge text-warning"></i> Registrar Permiso / Salida
-                        </h3>
-                        <button aria-label="Cerrar" class="btn-close" onclick="closePermissionModal()"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="form-registro-permiso">
-                            <div class="mb-3 bg-light p-2 rounded">
-                                <div class="small text-muted">Empleado: <span id="permiso-emp-nombre"
-                                        class="fw-bold text-dark"></span></div>
-                                <div class="small text-muted">Fecha: <span id="permiso-fecha"
-                                        class="fw-bold text-dark"></span>
+            <!-- MODAL REGISTRO DE PERMISO (RRHH MANUAL) -->
+            <div id="modal-registro-permiso" class="modal fade" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header">
+                            <div class="d-flex align-items-center gap-3 w-100">
+                                <div class="flex-grow-1">
+                                    <h5 class="modal-title fw-bold mb-0">Registrar permiso o salida</h5>
+                                    <div class="vn-sub small"></div>
                                 </div>
+                                <button aria-label="Cerrar" type="button" class="btn-close ms-auto mb-auto" onclick="closePermissionModal()"></button>
                             </div>
-
-                            <div class="mb-3">
-                                <label for="permiso-tipo-id" class="form-label fw-bold small">Tipo de Permiso</label>
-                                <select id="permiso-tipo-id" class="form-select border-warning" required
-                                    onchange="onPermissionTypeChange()">
-                                    <option value="">Seleccione tipo...</option>
-                                </select>
-                                <div id="permiso-info-deuda" class="small mt-1 d-none">
-                                    <span class="badge bg-warning text-dark"><i class="bi bi-info-circle"></i> Este
-                                        permiso
-                                        genera deuda horaria</span>
+                        </div>
+                        <div class="modal-body">
+                            <form id="form-registro-permiso">
+                                <div class="d-none"><span id="permiso-emp-nombre"></span><span id="permiso-fecha"></span></div>
+                                <div class="mb-3">
+                                    <label for="permiso-tipo-id" class="form-label fw-bold small">Tipo de permiso</label>
+                                    <select id="permiso-tipo-id" class="form-select" required onchange="onPermissionTypeChange()">
+                                        <option value="">Elegir</option>
+                                    </select>
+                                    <div id="permiso-sin-tipos" class="vn-nota mt-2 d-none">No hay tipos de permiso «por horas» configurados. Se crean en Configuración › Justificaciones.</div>
+                                    <div id="permiso-info-deuda" class="small mt-2 d-none"><span class="vn-pill">Este permiso genera deuda horaria</span></div>
                                 </div>
-                            </div>
-
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label for="permiso-hora-inicio" class="form-label small">Hora Salida
-                                        (Desde)</label>
-                                    <input type="time" id="permiso-hora-inicio" class="form-control" required>
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <label for="permiso-hora-inicio" class="form-label fw-bold small">Hora de salida</label>
+                                        <input type="time" id="permiso-hora-inicio" class="form-control" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="permiso-hora-fin" class="form-label fw-bold small">Hora de retorno</label>
+                                        <input type="time" id="permiso-hora-fin" class="form-control" required>
+                                    </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label for="permiso-hora-fin" class="form-label small">Hora Retorno (Hasta)</label>
-                                    <input type="time" id="permiso-hora-fin" class="form-control" required>
+                                <div class="mt-3">
+                                    <label for="permiso-observaciones" class="form-label fw-bold small">Observaciones</label>
+                                    <textarea id="permiso-observaciones" class="form-control" rows="2" placeholder="Ej.: motivos personales, trámite bancario…"></textarea>
                                 </div>
-                            </div>
-
-                            <div class="mt-3">
-                                <label for="permiso-observaciones" class="form-label small">Observaciones</label>
-                                <textarea id="permiso-observaciones" class="form-control" rows="2"
-                                    placeholder="Ej: Motivos personales, Trámite bancario..."></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-link text-muted text-decoration-none"
-                            onclick="closePermissionModal()">Cancelar</button>
-                        <button type="button" class="btn btn-warning px-4" onclick="savePermissionEntry()">Registrar
-                            Permiso</button>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" onclick="closePermissionModal()">Cancelar</button>
+                            <button type="button" id="btn-permiso-registrar" class="btn btn-primary px-4" onclick="savePermissionEntry()">Registrar</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4035,7 +4008,7 @@
                                             <i class="bi bi-clock-history" style="font-size:1rem;color:#f59e0b;"></i>
                                         </div>
                                         <div>
-                                            <div class="fw-semibold text-dark title-permiso" style="font-size:0.82rem;line-height:1.2;">Registrar Permiso / Salida</div>
+                                            <div class="fw-semibold text-dark title-permiso" style="font-size:0.82rem;line-height:1.2;">Registrar permiso o salida</div>
                                             <div class="text-muted sub-permiso" style="font-size: 0.75rem;line-height:1.3;">Trámites personales, retiro</div>
                                         </div>
                                         <i class="bi bi-chevron-right ms-auto text-muted" style="font-size: 0.75rem;opacity:0.5;"></i>
@@ -5012,10 +4985,10 @@
 
             <!-- Componentes de UI (Orden de dependencia) -->
             <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
-            <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v16" defer></script>
-            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v17" defer></script>
+            <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v18" defer></script>
+            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v19" defer></script>
             <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v17" defer></script>
-            <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v15" defer></script>
+            <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v16" defer></script>
             <script src="/static/js/dashboard_react.js?v={{ startup_id }}" defer></script>
 
 
@@ -5041,22 +5014,22 @@
         "/static/js/chart.js",
         "/static/js/chartjs-plugin-datalabels.min.js",
         "/static/js/horarios.js?v={{ startup_id }}_v25",
-        "/static/js/asistencia.js?v={{ startup_id }}_v18",
+        "/static/js/asistencia.js?v={{ startup_id }}_v20",
         "/static/js/configuracion_ui.js?v={{ startup_id }}_v19",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v10",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v16",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v16",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
-        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v26",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v29",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v27",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v30",
         "/static/js/velocidades_ui.js?v={{ startup_id }}_v2",
-        "/static/js/cuadre_ui.js?v={{ startup_id }}_v10",
+        "/static/js/cuadre_ui.js?v={{ startup_id }}_v12",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}",
         "/static/js/intercambios_panel.js?v={{ startup_id }}",
         "/static/js/compensaciones_he_panel.js?v={{ startup_id }}",
         "/static/js/compensar_inasistencia.js?v={{ startup_id }}_v1",
-        "/static/js/tarjeta_dia.js?v={{ startup_id }}_v1",
+        "/static/js/tarjeta_dia.js?v={{ startup_id }}_v2",
         "/static/js/seguridad_ui.js?v={{ startup_id }}",
         "/static/js/libs/qrcode.min.js",
         "/static/js/porteria_ui.js?v={{ startup_id }}_v5",

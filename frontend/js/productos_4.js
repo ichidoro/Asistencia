@@ -909,7 +909,7 @@ const Productos4Module = {
                     <div class="card-header bg-white pt-3.5 pb-2 border-bottom-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
                             <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-list-check text-success me-2"></i>Estado de Entrega de Beneficios por Empleado</h5>
-                            <p class="text-muted small mb-0 mt-0.5">Listado general de despacho del período actual sin restricción de área (se gestiona en la pestaña Entrega Beneficio).</p>
+                            <p class="text-muted small mb-0 mt-0.5">Listado general de despacho del período actual sin restricción de área (se gestiona en la pestaña Entrega del beneficio).</p>
                         </div>
                         <div class="d-flex gap-2">
                             <div class="input-group input-group-sm" style="max-width: 220px;">
@@ -1698,7 +1698,7 @@ const Productos4Module = {
                     <div class="alert alert-warning d-flex align-items-center border-0 shadow-sm p-3" style="border-radius: 12px; background-color: #fffdf5; border-left: 5px solid #dd6b20 !important;">
                         <i class="bi bi-exclamation-triangle-fill fs-4 text-warning me-3"></i>
                         <div>
-                            <strong class="text-warning">Período Bloqueado:</strong> No se pueden realizar asignaciones para este mes porque el período anterior (<strong>${this.periodoEstado.prev_anio}-${prevMesStr}</strong>) aún no se ha cerrado.
+                            <strong class="text-warning">Período bloqueado:</strong> no se pueden hacer asignaciones en este ciclo porque el período anterior (<strong>${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][parseInt(prevMesStr, 10) - 1] || prevMesStr} ${this.periodoEstado.prev_anio}</strong>) aún no se cierra.
                         </div>
                     </div>
                 </div>

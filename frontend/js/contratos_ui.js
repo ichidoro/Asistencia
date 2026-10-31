@@ -48,6 +48,9 @@ function initContratosUI() {
     }
 }
 
+// Ventana de vencimientos que se pide al servidor (la misma de la barra de días restantes)
+const DIAS_VENTANA_CONTRATOS = 45;
+
 async function loadContratosUI() {
     const tbody = document.getElementById('tabla-contratos');
     if (!tbody) return;
@@ -55,7 +58,7 @@ async function loadContratosUI() {
     tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> Buscando vencimientos...</td></tr>`;
 
     try {
-        const response = await fetch(`${API_CONTRATOS}?days=45`);
+        const response = await fetch(`${API_CONTRATOS}?days=${DIAS_VENTANA_CONTRATOS}`);
         if (!response.ok) throw new Error("Error al obtener contratos");
 
         const rawEmpleados = await response.json();
@@ -71,7 +74,7 @@ async function loadContratosUI() {
         }
 
         if (empleados.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-check-circle-fill text-success me-2"></i>Todo en orden. No hay contratos por vencer en los próximos 45 días.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-check-circle-fill text-success me-2"></i>Todo en orden. No hay contratos por vencer en los próximos ${DIAS_VENTANA_CONTRATOS} días.</td></tr>`;
             return;
         }
 
@@ -146,18 +149,27 @@ function renderContratosTable(empleados) {
 
         tr.innerHTML = `
             <td>
-                <div class="fw-bold" style="font-size: 0.85rem;">${emp.nombre_completo}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">${emp.rut_formateado}</div>
+                <div class="ct-persona">
+                    <span class="vn-av vn-av-sm td-t${(Math.abs(parseInt(emp.id, 10) || 0) % 6) + 1}" aria-hidden="true">${window.inicialesDe ? window.inicialesDe(emp.nombre_completo) : ''}</span>
+                    <div>
+                        <div class="fw-bold" style="font-size: 0.85rem;">${window.nombreTitulo ? window.nombreTitulo(emp.nombre_completo) : emp.nombre_completo}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">${emp.rut_formateado || ''}</div>
+                    </div>
+                </div>
             </td>
             <td class="text-center">
                 <span class="status-pill status-pill-muted">N° ${emp.cant_contratos || 1}</span>
                 ${legalAlertIcon}
+                ${emp.tipo_contrato ? '<div class="small text-muted mt-1">' + emp.tipo_contrato + '</div>' : ''}
             </td>
             <td><div class="small">${emp.cargo || '-'}</div></td>
             <td>${emp.area ? `<span class="area-badge ${typeof getAreaBadgeClass === 'function' ? getAreaBadgeClass(emp.area) : 'area-badge-default'}">${emp.area}</span>` : '<span class="text-muted small">Sin Área</span>'}</td>
             <td><div class="small">${fechaFmt}</div></td>
             <td class="fw-bold ${diffDaysNumeric <= 15 ? 'text-danger' : (diffDaysNumeric <= 30 ? 'text-warning' : 'text-success')}">
-                ${diffDaysText}
+                <div class="ct-dias">
+                    <span>${diffDaysText}</span>
+                    ${emp.fecha_salida ? `<span class="ct-barra" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, Math.round(diffDaysNumeric / DIAS_VENTANA_CONTRATOS * 100)))}%"></i></span>` : ''}
+                </div>
             </td>
             <td><span class="status-pill ${pillClass}"><span class="pill-dot" style="background:${pillDotColor};"></span>${badgeText}</span></td>
             <td>

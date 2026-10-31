@@ -185,7 +185,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
     const numDays = new Date(year, month, 0).getDate();
     let headerHtml = `<th class="sticky-col">Empleado</th>`;
 
-    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
     for (let d = 1; d <= numDays; d++) {
         const dateObj = new Date(year, month - 1, d);
@@ -197,9 +197,9 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
         const monthStr = String(month).padStart(2, '0');
         const dateStr = `${day}-${monthStr}-${year}`;
 
-        headerHtml += `<th style="background: ${isWeekend ? '#f8fafc' : ''}; text-align: center; font-size: 0.75rem;">
-            <div style="font-weight: 600;">${dateStr}</div>
+        headerHtml += `<th style="background: ${isWeekend ? '#f8fafc' : ''}; text-align: center; font-size: 0.75rem;" title="${dateStr}">
             <small style="color: #64748b;">${dayName}</small>
+            <div style="font-weight: 600;">${day}</div>
         </th>`;
     }
     headersRow.innerHTML = headerHtml;
@@ -222,7 +222,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
     data.forEach(emp => {
         bodyHtml += `<tr>`;
         bodyHtml += `<td class="sticky-col">
-            <div class="fw-bold text-uppercase" style="font-size: 11px;">${emp.nombre}</div>
+            <div class="fw-bold" style="font-size: 12.5px;">${window.nombreTitulo ? window.nombreTitulo(emp.nombre) : emp.nombre}</div>
             <div class="text-muted" style="font-size: 0.75rem;">${emp.area}</div>
         </td>`;
 
@@ -254,7 +254,7 @@ function renderAsignacionesMatrix(data, month, year, turnoFiltro = '') {
                     <div class="turno-badge-cell ${classColor} ${isLibre ? 'opacity-75' : ''}" 
                          title="${turno.nombre}" 
                          style="width: 100%; height: auto; padding: 4px 2px; font-size: 0.75rem; line-height: 1; ${highlightStyle} ${dimStyle}">
-                        ${displayLabel}
+                        ${({ LIBRE: 'Libre', ROTATIVO: 'Rotativo', 'SIN DEF': 'Sin definir' })[displayLabel] || String(displayLabel).replace(/\s*-\s*/, '–')}
                     </div>
                 `;
 

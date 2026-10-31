@@ -117,11 +117,18 @@ body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
   font-variant-numeric: tabular-nums;
 }
 
-/* Nombre completo en dos líneas y el cargo debajo */
+/* Nombre completo, sin cortar (en las líneas que necesite), y el cargo debajo */
 #marcaciones-view-container .matrix-table-premium td.emp-name-cell { white-space: normal !important; }
 #marcaciones-view-container .matrix-table-premium .emp-name-link {
-  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  white-space: normal; display: block;
   font-size: 0.8125rem; font-weight: 500; line-height: 1.25; max-width: none; color: var(--ov-ink, #101a3d);
+}
+/* Orden del dueño (31-10-2026): el nombre de la persona se ve completo en toda pantalla; sin límite de líneas ni «…»
+   (styles.css, responsive.css y mobile-ui.css lo cortaban en 1 o 2 líneas) */
+.matrix-table-premium .emp-name-link,
+.matrix-table-premium .sticky-col-analitica .emp-name-link {
+  display: block !important; -webkit-line-clamp: unset !important; overflow: visible !important;
+  text-overflow: clip !important; white-space: normal !important; max-width: none !important; overflow-wrap: anywhere;
 }
 #marcaciones-view-container .matrix-table-premium .emp-area-label {
   font-size: 0.66rem; font-weight: 600; letter-spacing: 0.06em; color: var(--ov-ink-4, #9ca4ba); margin-top: 2px;

@@ -218,7 +218,7 @@ function renderChart(stats) {
         attendanceChart.destroy();
     }
 
-    const labels = stats.map(s => s.fecha);
+    const labels = stats.map(s => { const p = String(s.fecha || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] : s.fecha; });
     const dataPresentes = stats.map(s => s.presentes);
     const dataAtrasos = stats.map(s => s.atrasos);
     const dataInasistencias = stats.map(s => s.inasistencias);
@@ -298,6 +298,12 @@ window.sortReporte = function (key) {
     renderReporte(currentReporteList);
 }
 
+// Día de la semana de una fecha aaaa-mm-dd («Jue»), para leer el detalle diario sin calendario al lado
+function diaSemana(f) {
+    const d = new Date(String(f || '').slice(0, 10) + 'T12:00:00');
+    return isNaN(d) ? '' : ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d.getDay()];
+}
+
 function renderReporte(list) {
     currentReporteList = list;
     const tbody = document.getElementById('reporte-body');
@@ -327,19 +333,18 @@ function renderReporte(list) {
 
         return `
             <tr>
-                <td class="small fw-bold">${window.formatFechaDDMMYYYY(row.fecha)}</td>
+                <td class="small fw-bold text-nowrap"><span class="text-muted fw-normal">${diaSemana(row.fecha)}</span> ${window.formatFechaDDMMYYYY(row.fecha)}</td>
                 <td>
-                    <div class="fw-bold">${row.apellido_paterno} ${row.apellido_materno || ''} ${row.nombre}</div>
-                    <div class="small text-muted">${row.rut}</div>
+                    <div class="fw-bold">${(window.nombreTitulo || String)(row.apellido_paterno + ' ' + (row.apellido_materno || '') + ' ' + row.nombre)}</div>
                 </td>
-                <td><small>${row.turno_nombre || 'Sin Turno'}</small></td>
+                <td><small>${row.turno_nombre || 'Sin turno'}</small></td>
                 <td>
-                    <div class="small text-muted">T: ${entTeor}</div>
-                    <div class="fw-bold">R: ${entReal}</div>
+                    <div class="fw-bold">${entReal}</div>
+                    <div class="small text-muted">turno ${entTeor}</div>
                 </td>
                 <td>
-                    <div class="small text-muted">T: ${salTeor}</div>
-                    <div class="fw-bold">R: ${salReal}</div>
+                    <div class="fw-bold">${salReal}</div>
+                    <div class="small text-muted">turno ${salTeor}</div>
                 </td>
                 <td>${formatExactMinutesToTime(row.minutos_atraso || 0)}</td>
                 <td>${formatExactMinutesToTime(row.minutos_colacion || 0)}</td>

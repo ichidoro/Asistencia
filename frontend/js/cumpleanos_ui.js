@@ -155,9 +155,9 @@ function renderBirthdaysTable() {
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
-                        <th style="width: 150px;">Fecha</th>
-                        <th>Empleado</th>
-                        <th>Área / Cargo</th>
+                        <th style="width: 110px;">Fecha</th>
+                        <th>Persona</th>
+                        <th>Área</th>
                         <th class="text-center">Edad</th>
                     </tr>
                 </thead>
@@ -165,23 +165,26 @@ function renderBirthdaysTable() {
     `;
 
     if (bdayList.length === 0) {
-        html += `<tr><td colspan="4" class="text-center py-5 text-muted">No se encontraron celebraciones.</td></tr>`;
+        html += `<tr><td colspan="4" class="text-center py-5 text-muted">No hay cumpleaños con este filtro.</td></tr>`;
     } else {
         bdayList.forEach(e => {
             const dateStr = e.fecha_nacimiento;
             const mIdx = parseInt(dateStr.substring(5, 7)) - 1;
             const day = dateStr.substring(8, 10);
             const isToday = (mIdx === new Date().getMonth() && parseInt(day) === new Date().getDate());
+            const nombreCu = e.nombre_completo || (e.apellido_paterno + ' ' + (e.apellido_materno || '') + ' ' + e.nombre);
 
             html += `
                 <tr class="${isToday ? 'table-warning' : ''}">
-                    <td><span class="fw-bold">${day} ${monthsNames[mIdx]}</span></td>
+                    <td><span class="cu-fecha"><b>${day}</b><small>${monthsNames[mIdx].slice(0, 3).toUpperCase()}</small></span></td>
                     <td>
-                        <div class="fw-bold">${e.nombre_completo || (e.apellido_paterno + ' ' + (e.apellido_materno || '') + ' ' + e.nombre)}</div>
-                        <small class="text-muted">${e.rut}</small>
+                        <div class="ct-persona">
+                            <span class="vn-av vn-av-sm td-t${(Math.abs(parseInt(e.id, 10) || 0) % 6) + 1}" aria-hidden="true">${window.inicialesDe ? window.inicialesDe(nombreCu) : ''}</span>
+                            <div class="fw-bold">${window.nombreTitulo ? window.nombreTitulo(nombreCu) : nombreCu}</div>
+                        </div>
                     </td>
                     <td><span class="badge bg-light text-dark border">${e.area || '-'}</span></td>
-                    <td class="text-center">${e.fecha_nacimiento ? (new Date().getFullYear() - parseInt(dateStr.substring(0, 4))) : '-'}</td>
+                    <td class="text-center">${e.fecha_nacimiento ? (new Date().getFullYear() - parseInt(dateStr.substring(0, 4))) + ' años' : '-'}</td>
                 </tr>
             `;
         });
@@ -239,8 +242,8 @@ function renderCelebrationUniverse() {
                     <div class="bday-card-icon">${icon}</div>
                     <div class="bday-card-info">
                         <div class="bday-card-date">${day} ${monthsNames[mIdx].substring(0, 3)}</div>
-                        <div class="bday-card-name text-truncate" title="${e.nombre_completo || (e.apellido_paterno + ' ' + (e.apellido_materno || '') + ' ' + e.nombre).trim()}">
-                            ${e.nombre.split(' ')[0]} ${e.apellido_paterno}
+                        <div class="bday-card-name">
+                            ${(window.nombreTitulo || String)(e.nombre_completo || (e.apellido_paterno + ' ' + (e.apellido_materno || '') + ' ' + e.nombre))}
                         </div>
                         <div class="bday-card-meta">
                             <i class="bi bi-briefcase-fill me-1"></i> ${e.cargo || 'Staff'}
@@ -266,20 +269,20 @@ function renderBdayFilters(monthsNames) {
                     <div class="col-md-5">
                         <label for="bday-month-filter" class="form-label small fw-bold text-muted">Mes</label>
                         <select class="form-select" id="bday-month-filter" onchange="filterBdaysByMonth(this.value)">
-                            <option value="todo">Vista General (Todos)</option>
+                            <option value="todo">Todo el año</option>
                             ${monthsNames.map((m, i) => `<option value="${i + 1}" ${currentBdayMonth == (i + 1) ? 'selected' : ''}>${m}</option>`).join('')}
                         </select>
                     </div>
                     <div class="col-md-5">
                         <label for="bday-area-filter" class="form-label small fw-bold text-muted">Área</label>
                         <select class="form-select" id="bday-area-filter" onchange="filterBdaysByArea(this.value)">
-                            <option value="">Todas las Áreas</option>
+                            <option value="">Todas las áreas</option>
                             ${getUniqueAreasFromList()}
                         </select>
                     </div>
                     <div class="col-md-2 text-end">
-                        <button class="btn btn-primary w-100" onclick="loadAllBirthdays()">
-                            <i class="bi bi-arrow-clockwise"></i>
+                        <button class="btn btn-light" onclick="loadAllBirthdays()">
+                            <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Actualizar
                         </button>
                     </div>
                 </div>

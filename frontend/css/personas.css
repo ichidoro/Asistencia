@@ -103,3 +103,14 @@
   .fp-tramo { flex-basis: 100%; }
   .fp-tramo select { flex: 1; min-width: 0; }
 }
+
+/* ── Etapa 16: Contratos, Cumpleaños y Turnos asignados ───────────────────── */
+.vn-av.vn-av-sm { width: 32px; height: 32px; font-size: 12px; }
+.ct-persona { display: flex; align-items: center; gap: 10px; min-width: 170px; }
+#tab-contratos .data-table th { white-space: normal; }
+.ct-dias { display: grid; gap: 5px; min-width: 84px; }
+.ct-barra { display: block; height: 4px; border-radius: 999px; background: var(--ov-line-2, #e8ebf2); overflow: hidden; }
+.ct-barra i { display: block; height: 100%; border-radius: inherit; background: currentColor; opacity: .75; }
+.cu-fecha { display: inline-grid; justify-items: center; min-width: 46px; padding: 5px 6px; border-radius: 10px; background: var(--ov-sunk, #f6f7fb); border: 1px solid var(--ov-line-2, #e8ebf2); line-height: 1.05; }
+.cu-fecha b { font-size: 17px; font-weight: 600; color: var(--ov-ink, #0f1a3a); font-variant-numeric: tabular-nums; }
+.cu-fecha small { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: var(--ov-ink-3, #5a6487); }

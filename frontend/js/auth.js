@@ -3,10 +3,17 @@ window.fechasLegibles = function (texto) {
     return String(texto == null ? '' : texto).replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3-$2-$1');
 };
 // La base guarda los nombres en mayúsculas; se muestran con mayúscula inicial (partículas en minúscula)
-window.nombreTitulo = window.nombreTitulo || function (s) {
-    const menores = new Set(['de', 'del', 'la', 'las', 'los', 'y']);
-    return String(s || '').toLowerCase().split(/\s+/).filter(p => p && p !== '.')
-        .map((p, i) => (i > 0 && menores.has(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+// Nombre de una persona tal como se muestra en toda la aplicación: completo y en MAYÚSCULAS (orden del dueño,
+// 31-10-2026); se quita el «.» suelto de quien no tiene segundo apellido. Se sigue llamando nombreTitulo porque así lo
+// usan todas las pantallas (antes lo dejaba con mayúscula inicial).
+window.nombrePersona = window.nombrePersona || function (s) {
+    return String(s || '').split(/\s+/).filter(p => p && p !== '.').join(' ').toLocaleUpperCase('es-CL');
+};
+window.nombreTitulo = window.nombrePersona;
+// Iniciales de una persona («APELLIDO APELLIDO NOMBRE …» → nombre + apellido), las mismas del encabezado de las ventanas
+window.inicialesDe = window.inicialesDe || function (s) {
+    const p = String(s || '').trim().split(/\s+/).filter(t => t && t !== '.');
+    return (p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2)).toUpperCase();
 };
 // Nombre visible de un estado (Configuración › Estados) en minúsculas con mayúscula inicial; las siglas cortas quedan igual
 window.textoEstado = function (codigo) {

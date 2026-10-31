@@ -166,14 +166,14 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         const asist = empMatrix ? empMatrix[dateStr] : null;
 
         if (asist && asist.permiso_activo) {
-            if (titleEl) titleEl.innerText = "Registrar Regreso";
-            if (subEl) subEl.innerText = "El empleado tiene una salida abierta";
+            if (titleEl) titleEl.innerText = "Registrar regreso";
+            if (subEl) subEl.innerText = "La persona tiene una salida abierta";
             if (iconEl) iconEl.className = "bi bi-door-open mb-1 fs-4";
             btnPermiso.classList.remove('btn-outline-warning');
             btnPermiso.classList.add('btn-warning');
         } else {
-            if (titleEl) titleEl.innerText = "Registrar Permiso / Salida";
-            if (subEl) subEl.innerText = "Trámites personales, Retiro temprano, Salidas parciales";
+            if (titleEl) titleEl.innerText = "Registrar permiso o salida";
+            if (subEl) subEl.innerText = "Trámites personales, retiro temprano, salidas parciales";
             if (iconEl) iconEl.className = "bi bi-clock-history mb-1 fs-4";
             btnPermiso.classList.add('btn-outline-warning');
             btnPermiso.classList.remove('btn-warning');
@@ -1628,7 +1628,7 @@ function openBulkFillModal(empId = null, empNombre = null, startDate = null) {
 
     // Set Employee Name and ID
     if (empId) document.getElementById('fill-empleado-id').value = empId;
-    if (empNombre) document.getElementById('fill-empleado-nombre').value = empNombre;
+    if (empNombre) document.getElementById('fill-empleado-nombre').value = window.nombreTitulo ? window.nombreTitulo(empNombre) : empNombre;
 
     // Pre-set Fechas
     if (startDate) {
@@ -1674,7 +1674,7 @@ async function executeBulkFill() {
     }
 
     // Loading State
-    const btn = document.querySelector('#form-relleno-masivo button[type="submit"]');
+    const btn = document.querySelector('#modal-relleno-masivo button[type="submit"]');
     const originalText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
@@ -1733,6 +1733,8 @@ async function openPermissionModal(empId, empNombre, dateStr) {
 
     document.getElementById('permiso-emp-nombre').innerText = empNombre;
     document.getElementById('permiso-fecha').innerText = window.formatFechaDDMMYYYY(dateStr);
+    if (window.cabeceraPersona) window.cabeceraPersona(modal, { nombre: empNombre, empId: empId, fecha: dateStr });
+    document.getElementById('permiso-sin-tipos').classList.add('d-none');
     document.getElementById('permiso-tipo-id').innerHTML = '<option value="">Cargando...</option>';
     document.getElementById('permiso-info-deuda').classList.add('d-none');
     document.getElementById('form-registro-permiso').reset();
@@ -1740,7 +1742,7 @@ async function openPermissionModal(empId, empNombre, dateStr) {
     const inputInicio = document.getElementById('permiso-hora-inicio');
     const inputFin = document.getElementById('permiso-hora-fin');
     const inputTipo = document.getElementById('permiso-tipo-id');
-    const btnSubmit = document.querySelector('#modal-registro-permiso .modal-footer .btn-warning');
+    const btnSubmit = document.getElementById('btn-permiso-registrar');
 
     // Resetear estados por defecto
     inputInicio.disabled = false;
@@ -1748,7 +1750,7 @@ async function openPermissionModal(empId, empNombre, dateStr) {
     inputTipo.disabled = false;
     if (btnSubmit) {
         btnSubmit.style.display = 'inline-block';
-        btnSubmit.innerText = "Registrar Salida / Permiso";
+        btnSubmit.innerText = "Registrar";
     }
 
     // 1. Verificar si ya hay un permiso en la MATRIZ (ya enriquecido por el backend)
@@ -1765,7 +1767,7 @@ async function openPermissionModal(empId, empNombre, dateStr) {
         inputInicio.value = asist.permiso_hora_inicio;
         inputInicio.disabled = true;
         inputFin.value = '';
-        if (btnSubmit) btnSubmit.innerText = "Registrar Regreso";
+        if (btnSubmit) btnSubmit.innerText = "Registrar regreso";
     } else if (asist && asist.tiene_permiso_hora && asist.permiso_hora_inicio && asist.permiso_hora_fin) {
         // PERMISO CERRADO (-PER): Bloquear AMBOS
         inputInicio.value = asist.permiso_hora_inicio;
@@ -1778,7 +1780,7 @@ async function openPermissionModal(empId, empNombre, dateStr) {
         // NUEVO PERMISO: Todo habilitado
         inputInicio.value = '';
         inputFin.value = '';
-        if (btnSubmit) btnSubmit.innerText = "Registrar Salida / Permiso";
+        if (btnSubmit) btnSubmit.innerText = "Registrar";
     }
 
     // 2. Cargar Tipos de Justificación que sean "Por Horas"
@@ -1788,9 +1790,10 @@ async function openPermissionModal(empId, empNombre, dateStr) {
         const tiposPorHora = tipos.filter(t => t.es_por_horas);
 
         if (tiposPorHora.length === 0) {
-            inputTipo.innerHTML = '<option value="">No hay tipos "Por Horas" configurados</option>';
+            inputTipo.innerHTML = '<option value="">Sin tipos por horas</option>';
+            document.getElementById('permiso-sin-tipos').classList.remove('d-none');
         } else {
-            inputTipo.innerHTML = '<option value="">Seleccione tipo...</option>' +
+            inputTipo.innerHTML = '<option value="">Elegir</option>' +
                 tiposPorHora.map(t => `<option value="${t.id}" data-deuda="${t.genera_deuda_horaria}">${t.nombre}</option>`).join('');
 
             if (marcacionesManualesState.permisoActivoActual) {
@@ -1805,12 +1808,12 @@ async function openPermissionModal(empId, empNombre, dateStr) {
         console.error("Error cargando tipos de permiso:", e);
     }
 
-    modal.style.display = 'block';
+    bootstrap.Modal.getOrCreateInstance(modal).show();
 }
 
 function closePermissionModal() {
     const modal = document.getElementById('modal-registro-permiso');
-    if (modal) modal.style.display = 'none';
+    if (modal) bootstrap.Modal.getOrCreateInstance(modal).hide();
 }
 
 window.onPermissionTypeChange = function () {

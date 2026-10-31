@@ -36,6 +36,8 @@
     function fechaLarga(f) { const d = fechaObj(f); return DIAS[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
     function fechaDMA(f) { const p = String(f || '').substring(0, 10).split('-'); return p.length === 3 ? (p[2] + '-' + p[1] + '-' + p[0]) : String(f || ''); }
     // Los nombres se guardan en mayúsculas; en la ventana se leen como nombre propio y la labor como frase
+    // El nombre de la persona va completo y en MAYÚSCULAS, como en toda la aplicación (orden del dueño, 31-10-2026)
+    function nombrePersona(s) { return window.nombrePersona ? window.nombrePersona(s) : String(s || '').toUpperCase(); }
     function titulo(s) { return String(s || '').toLowerCase().replace(/(^|[\s\-'])([a-záéíóúñü])/g, function (m, a, b) { return a + b.toUpperCase(); }); }
     function frase(s) { const t = String(s || '').trim().toLowerCase(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
     function marcas(x) {
@@ -514,6 +516,12 @@
         document.head.appendChild(s);
     }
 
+    // Iniciales como en las demás ventanas (cabeceraPersona): nombre de pila + apellido paterno
+    function iniciales(n) {
+        const p = String(n || '').trim().split(/\s+/).filter(t => t && t !== '.');
+        return (p.length >= 3 ? p[2][0] + p[0][0] : p.length === 2 ? p[1][0] + p[0][0] : (p[0] || '—').slice(0, 2)).toUpperCase();
+    }
+
     window.openCuadreModal = async function (empleadoId, nombre) {
         estilos();
         estado.empleadoId = Number(empleadoId); estado.nombre = nombre || ''; estado.eleccion = null; estado.minutos = null; estado.data = null; estado.diaSel = null; estado.motivo = '';
@@ -521,7 +529,8 @@
         if (existing) existing.remove();
         const icono = '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#5A6487" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="12" height="8.5" rx="1.5"></rect><path d="M6 5V3.8c0-.44.36-.8.8-.8h2.4c.44 0 .8.36.8.8V5M2 8.5h12"></path></svg>';
         const html = '<div class="modal fade" id="modalCuadre" tabindex="-1" aria-labelledby="modalCuadreLabel"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">'
-            + '<div class="modal-header"><div class="cq-cab"><h5 class="cq-nombre" id="modalCuadreLabel">' + esc(titulo(nombre)) + '</h5>'
+            + '<div class="modal-header"><span class="vn-av td-t' + ((Math.abs(Number(empleadoId) || 0) % 6) + 1) + '" aria-hidden="true">' + esc(iniciales(nombre)) + '</span>'
+            + '<div class="cq-cab"><h5 class="cq-nombre" id="modalCuadreLabel">' + esc(nombrePersona(nombre)) + '</h5>'
             + '<div class="cq-labor" id="cq-labor">' + icono + '<span class="cq-sec">Cargando…</span></div>'
             + '<div class="cq-tramo" id="cq-sub"></div></div>'
             + '<button type="button" class="cq-cerrar" data-bs-dismiss="modal" aria-label="Cerrar"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"></path></svg></button></div>'
@@ -543,7 +552,7 @@
             if (data.turno) partes.push('<span class="cq-sec">' + esc(data.turno) + '</span>');
             if (data.area) partes.push('<span class="cq-sec">' + esc(titulo(data.area)) + '</span>');
             document.getElementById('cq-labor').innerHTML = icono + (partes.length ? partes.join('<span class="cq-sec">·</span>') : '<span class="cq-sec">Sin labor registrada</span>');
-            if (data.nombre) document.getElementById('modalCuadreLabel').textContent = titulo(data.nombre);
+            if (data.nombre) document.getElementById('modalCuadreLabel').textContent = nombrePersona(data.nombre);
             if (data.es_bolsa) {
                 document.getElementById('cq-cuerpo').innerHTML = '<div class="alert alert-info mb-0">Esta persona tiene Bolsa Flexible: su balance se gestiona en la columna de la bolsa al cierre.</div>';
                 return;

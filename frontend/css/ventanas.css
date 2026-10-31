@@ -140,6 +140,13 @@
 .vn-op .vn-t { display: block; margin-top: 2px; font-size: 13px; line-height: 1.45; color: var(--ov-ink-3); }
 .vn-op.vn-borra[aria-checked="true"] { border-color: var(--vn-pink) !important; box-shadow: 0 0 0 3px rgba(192, 38, 122, .14); background: #fff8fb; }
 .vn-op.vn-borra[aria-checked="true"] .vn-rd { border-color: var(--vn-pink); background: var(--vn-pink); }
+/* Nota dentro de la ventana (p. ej. «no hay tipos de permiso por horas») */
+.vn-nota { font-size: 13px; line-height: 1.45; color: var(--ov-ink-2); background: var(--ov-sunk); border: 1px solid var(--ov-line-2); border-radius: 10px; padding: 9px 12px; }
+/* Casilla con su explicación debajo (Relleno masivo) */
+.vn-check { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px 12px 40px; background: var(--ov-sunk); border: 1px solid var(--ov-line-2); border-radius: 12px; }
+.vn-check .form-check-input { margin-left: -26px; margin-top: 3px; }
+.vn-check .form-check-label strong { font-weight: 600; color: var(--ov-ink); }
+.vn-check .form-check-label span { color: var(--ov-ink-3); }
 .vn-pill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: var(--ov-line-2); color: var(--ov-ink-2); }
 .vn-pill.a { background: var(--vn-amber-soft); color: var(--vn-amber); }
 .vn-pill.g { background: var(--vn-green-soft); color: var(--vn-green); }

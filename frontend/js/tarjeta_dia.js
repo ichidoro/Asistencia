@@ -482,11 +482,6 @@
         });
     }
 
-    function nombreCorto(n) {
-        const p = String(titulo(n)).split(/\s+/).filter(Boolean);
-        return p.length >= 3 ? p[0] + ' ' + p[1] + ', ' + p[2] : p.join(' ');
-    }
-
     function pintarSemana() {
         const cont = document.getElementById('marcaciones-view-container');
         if (!cont) return;
@@ -544,7 +539,7 @@
             const tt = document.createElement('tr');
             tt.className = 'sem-tt';
             tt.innerHTML = '<td colspan="7"><div class="sem-quien" title="Doble toque: Cuadre del tramo"><span class="sem-av ' + tono(id) + '" aria-hidden="true">' + esc(iniciales(nombre)) + '</span>'
-                + '<div class="sem-n">' + esc(nombreCorto(nombre)) + (info.cargo ? '<small>' + esc(info.cargo) + '</small>' : '') + '</div>'
+                + '<div class="sem-n">' + esc(titulo(nombre)) + (info.cargo ? '<small>' + esc(info.cargo) + '</small>' : '') + '</div>'
                 + (saldo ? '<span class="sem-v' + saldoCls + '">' + esc(saldo) + '</span>' : '') + '</div></td>';
             tt.querySelector('.sem-quien').addEventListener('dblclick', () => { if (typeof window.openCuadreModal === 'function') window.openCuadreModal(parseInt(id, 10), nombre); });
             const dias = document.createElement('tr');
