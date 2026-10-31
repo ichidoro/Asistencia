@@ -983,13 +983,15 @@ class ConfiguracionRepository:
             )
             active_areas = {r['nombre'] for r in active_res if r['nombre']}
             
-            # Áreas cerradas
+            # Áreas cerradas, con cuándo y quién cerró cada una (la pantalla de Tramos de cierre lo muestra)
             closed_res = await self.db.fetch_all(
-                "SELECT DISTINCT area FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL",
+                "SELECT area, created_at, username FROM cierres_periodos WHERE fecha_inicio = ? AND fecha_fin = ? AND area IS NOT NULL ORDER BY created_at",
                 (f_ini, f_fin)
             )
             closed_areas = {r['area'] for r in closed_res if r['area']}
-            
+            p_dict["cierres"] = {r['area']: {"fecha": str(r['created_at'] or '')[:10], "por": r['username'] or ''}
+                                 for r in closed_res if r['area']}
+
             p_dict["areas_cerradas"] = sorted(list(closed_areas))
             p_dict["areas_pendientes"] = sorted(list(active_areas - closed_areas))
             

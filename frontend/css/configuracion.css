@@ -49,3 +49,47 @@
   letter-spacing: .04em; color: var(--st-fg) !important; white-space: nowrap;
 }
 #tabla-estados-config td.col-day .badge-status i { display: none !important; }
+
+/* ── Tramos de cierre: diseño A (meses × áreas) con el botón «Acta», elegido por el dueño el 31-10-2026 ── */
+#periodos-config-container { --ta-ok: #16673b; --ta-ok-bg: #e7f4ec; --ta-wait: #8a4b06; --ta-wait-bg: #fdf1e2; --ta-navy: #1b2f8f; --ta-navy-bg: #eef1fb;
+  --ta-ink: #101a3d; --ta-ink2: #3c4766; --ta-ink3: #626d8a; --ta-line: #e4e8f0; --ta-sunk: #f7f8fb; color: var(--ta-ink); }
+.tA-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.tA-head h5 { font: 600 21px/1.2 'Barlow Semi Condensed', 'Barlow', sans-serif; margin: 0; color: var(--ta-ink); }
+.tA-head p { margin: 4px 0 0; font-size: 13.5px; color: var(--ta-ink3); max-width: 60ch; }
+.tA-head .btn { white-space: nowrap; }
+.tA-wrap { overflow-x: auto; border: 1px solid var(--ta-line); border-radius: 14px; background: #fff; }
+.tA { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.tA th { font: 600 11.5px/1.25 'Barlow', sans-serif; letter-spacing: .04em; color: var(--ta-ink3); text-align: center; padding: 11px 6px; background: var(--ta-sunk); border-bottom: 1px solid var(--ta-line); vertical-align: bottom; }
+.tA th:first-child { text-align: left; padding-left: 16px; }
+.tA td { padding: 12px 6px; border-bottom: 1px solid var(--ta-line); text-align: center; vertical-align: middle; background: #fff; }
+.tA tr:last-child td { border-bottom: 0; }
+.tA td:first-child { text-align: left; padding-left: 16px; min-width: 210px; }
+.tA tr.vig td { background: var(--ta-navy-bg); }
+.tA .mes { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tA .rango { font-size: 12.5px; color: var(--ta-ink3); margin-top: 2px; white-space: nowrap; }
+.tA-vig { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--ta-navy); color: #fff; font-size: 11.5px; font-weight: 600; }
+.tA .c-ok { display: inline-grid; justify-items: center; gap: 2px; color: var(--ta-ok); }
+.tA .c-ok i.bi-check-circle-fill { font-size: 16px; }
+.tA .c-ok b { font-size: 12px; font-weight: 600; }
+.tA .c-ok small { font-size: 11px; color: var(--ta-ink3); }
+.tA-acta { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-top: 4px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--ta-line); background: #fff; color: var(--ta-ink2); font: 600 12px 'Barlow', sans-serif; cursor: pointer; }
+.tA-acta:hover { border-color: var(--ta-ok); color: var(--ta-ok); background: var(--ta-ok-bg); }
+.tA-acta:focus-visible, .tA-ico:focus-visible { outline: 2px solid var(--ta-navy); outline-offset: 2px; }
+.tA .c-wait { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--ta-wait-bg); color: var(--ta-wait); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.tA .c-nc { color: #a3aabd; font-size: 13px; }
+.tA td.acc { white-space: nowrap; padding-right: 12px; }
+.tA-ico { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ta-ink3); cursor: pointer; font-size: 14px; }
+.tA-ico:hover:not(:disabled) { background: var(--ta-sunk); border-color: var(--ta-line); color: var(--ta-ink); }
+.tA-ico.del:hover { color: #b42318; }
+.tA-ico.on { color: var(--ta-navy); cursor: default; }
+.tA-leg { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 12.5px; color: var(--ta-ink3); }
+.tA-leg span { display: inline-flex; align-items: center; gap: 6px; }
+.tA-leg .ok { color: var(--ta-ok); } .tA-leg .wait { color: var(--ta-wait); }
+.tA-vacio { border: 1px dashed var(--ta-line); border-radius: 14px; padding: 36px 20px; text-align: center; color: var(--ta-ink3); }
+.tA-vacio i { font-size: 28px; display: block; margin-bottom: 8px; }
+@media (max-width: 767.98px) {
+  .tA-head { flex-direction: column; }
+  .tA td:first-child, .tA th:first-child { position: sticky; left: 0; z-index: 1; box-shadow: 8px 0 10px -8px rgba(13, 26, 82, .18); }
+  .tA td:first-child { min-width: 170px; }
+  .tA-ico, .tA-acta { min-height: 40px; min-width: 40px; }
+}

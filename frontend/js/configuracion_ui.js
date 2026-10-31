@@ -2216,113 +2216,65 @@ window.renderPeriodosRRHH = function(periodos) {
     if (!container) return;
 
     const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const corta = (f) => { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] : f; };
 
-    let html = `
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h5 class="fw-bold mb-1"><i class="bi bi-calendar3" aria-hidden="true"></i> Tramos de cierre</h5>
-            <p class="small text-muted mb-0">Defina los rangos de fechas de inicio y fin para el cierre de mes de Recursos Humanos.</p>
-        </div>
-        ${canEdit ? `
-        <button class="btn btn-primary btn-sm" onclick="openModalPeriodo()">
-            <i class="bi bi-plus-circle me-1"></i> Crear Periodo
-        </button>
-        ` : ''}
-    </div>
-    
-    <div class="alert alert-info py-2 small mb-3">
-        <i class="bi bi-info-circle me-1"></i>
-        El período marcado como <strong>Vigente (Activo)</strong> determinará automáticamente las fechas de búsqueda en el módulo de Marcaciones.
-    </div>
+    // Columnas: las áreas que aparecen en algún tramo (cerradas o por cerrar); salen de los datos, no del código
+    const areas = [...new Set(periodos.flatMap((p) => (p.areas_cerradas || []).concat(p.areas_pendientes || [])))].sort();
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Mes Cierre</th>
-                    <th>Año</th>
-                    <th>Fecha Inicial</th>
-                    <th>Fecha Final</th>
-                    <th class="text-center">Cantidad días</th>
-                    <th class="text-center">Estado Vigencia</th>
-                    <th class="text-center">Estado Cierre</th>
-                    <th>Áreas Cerradas</th>
-                    <th>Áreas Pendientes</th>
-                    <th class="text-center" style="width: 150px;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
+    let html = '<div class="tA-head"><div><h5>Tramos de cierre</h5>'
+        + '<p>El tramo vigente es el que usa Asistencia para sus fechas; cada área lo cierra cuando termina su revisión.</p></div>'
+        + (canEdit ? '<button type="button" class="btn btn-primary" onclick="openModalPeriodo()"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Crear tramo</button>' : '')
+        + '</div>';
 
     if (periodos.length === 0) {
-        html += `
-            <tr>
-                <td colspan="9" class="text-center text-muted py-4">
-                    <div class="mb-2" style="font-size: 2rem;"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
-                    No hay tramos de cierre configurados.
-                </td>
-            </tr>
-        `;
-    } else {
-        periodos.forEach(p => {
-            const diffDays = calculateDaysBetween(p.fecha_inicio, p.fecha_fin);
-            
-            const vigenciaBadge = p.activo 
-                ? '<span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Vigente</span>'
-                : '<span class="badge bg-secondary">Inactivo</span>';
-                
-            const estadoBadge = p.estado === 'cerrado'
-                ? '<span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i>Cerrado</span>'
-                : '<span class="badge bg-warning text-dark"><i class="bi bi-unlock-fill me-1"></i>Abierto</span>';
-
-            let actionButtons = '';
-            if (canEdit) {
-                const activateBtn = !p.activo
-                    ? `<button class="btn btn-sm btn-outline-success me-1" onclick="activarPeriodoRRHH(${p.id})" title="Marcar como Vigente"><i class="bi bi-star-fill"></i></button>`
-                    : `<button class="btn btn-sm btn-success me-1" disabled title="Periodo Vigente Activo"><i class="bi bi-star-fill"></i></button>`;
-                
-                const editBtn = `<button class="btn btn-sm btn-outline-primary me-1" onclick="editPeriodoRRHH(${p.id})" title="Editar"><i class="bi bi-pencil-fill"></i></button>`;
-                
-                const deleteBtn = `<button class="btn btn-sm btn-outline-danger" onclick="deletePeriodoRRHH(${p.id})" title="Eliminar"><i class="bi bi-trash-fill"></i></button>`;
-                
-                actionButtons = activateBtn + editBtn + deleteBtn;
-            } else {
-                actionButtons = '<span class="text-muted small">Sin permisos</span>';
-            }
-
-            const parts = (p.mes_cierre || '').split(' ');
-            const mes = parts[0] || '';
-            const anio = parts[1] || (p.fecha_fin ? p.fecha_fin.split('-')[0] : new Date().getFullYear());
-
-            // Cada chip de área cerrada descarga su acta de cierre (PDF) con un clic
-            const closedAreasHtml = (p.areas_cerradas || []).map(a => `<span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1" style="font-size:0.75rem;cursor:pointer" title="Descargar el acta de cierre de ${a} (PDF)" onclick="descargarActaCierre('${p.fecha_inicio}','${p.fecha_fin}','${a}')">${a} <i class="bi bi-file-earmark-pdf"></i></span>`).join('');
-            const pendingAreasHtml = (p.areas_pendientes || []).map(a => `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1 mb-1" style="font-size:0.75rem">${a}</span>`).join('');
-
-            const finalClosedHtml = closedAreasHtml || '<span class="text-muted small">-</span>';
-            const finalPendingHtml = pendingAreasHtml || '<span class="badge bg-light text-muted border" style="font-size:0.75rem"><i class="bi bi-check-all me-1"></i>Ninguna</span>';
-
-            html += `
-                <tr>
-                    <td class="fw-bold">${mes}</td>
-                    <td class="fw-bold text-secondary">${anio}</td>
-                    <td>${formatDateDMY(p.fecha_inicio)}</td>
-                    <td>${formatDateDMY(p.fecha_fin)}</td>
-                    <td class="text-center fw-bold">${diffDays} días</td>
-                    <td class="text-center">${vigenciaBadge}</td>
-                    <td class="text-center">${estadoBadge}</td>
-                    <td style="max-width: 200px;">${finalClosedHtml}</td>
-                    <td style="max-width: 200px;">${finalPendingHtml}</td>
-                    <td class="text-center">${actionButtons}</td>
-                </tr>
-            `;
-        });
+        container.innerHTML = html + '<div class="tA-vacio"><i class="bi bi-calendar3" aria-hidden="true"></i>'
+            + '<p>Todavía no hay tramos de cierre.' + (canEdit ? ' Cree el primero con «Crear tramo».' : '') + '</p></div>';
+        return;
     }
 
-    html += `
-            </tbody>
-        </table>
-    </div>
-    `;
+    html += '<div class="tA-wrap"><table class="tA"><thead><tr><th scope="col">Tramo</th>'
+        + areas.map((a) => '<th scope="col">' + esc(a) + '</th>').join('')
+        + '<th scope="col"><span class="visually-hidden">Acciones</span></th></tr></thead><tbody>';
+
+    periodos.forEach((p) => {
+        const dias = calculateDaysBetween(p.fecha_inicio, p.fecha_fin);
+        const cierres = p.cierres || {};
+        const cerradas = new Set(p.areas_cerradas || []);
+        const pendientes = new Set(p.areas_pendientes || []);
+        html += '<tr class="' + (p.activo ? 'vig' : '') + '"><td><div class="mes">' + esc(p.mes_cierre)
+            + (p.activo ? ' <span class="tA-vig"><i class="bi bi-star-fill" aria-hidden="true"></i>Vigente</span>' : '') + '</div>'
+            + '<div class="rango">' + formatDateDMY(p.fecha_inicio) + ' al ' + formatDateDMY(p.fecha_fin) + ' · ' + dias + ' días</div></td>';
+        areas.forEach((a) => {
+            if (cerradas.has(a)) {
+                const c = cierres[a] || {};
+                const acta = "descargarActaCierre('" + p.fecha_inicio + "','" + p.fecha_fin + "','" + esc(a) + "')";
+                html += '<td><div class="c-ok" title="' + esc(a) + ': cerrada' + (c.fecha ? ' el ' + formatDateDMY(c.fecha) : '') + (c.por ? ' por ' + esc(c.por) : '') + '">'
+                    + '<i class="bi bi-check-circle-fill" aria-hidden="true"></i>'
+                    + (c.fecha ? '<b>' + corta(c.fecha) + '</b>' : '<b>Cerrada</b>')
+                    + (c.por ? '<small>' + esc(c.por) + '</small>' : '')
+                    + '<button type="button" class="tA-acta" onclick="' + acta + '" aria-label="Descargar el acta de cierre de ' + esc(a) + ' (PDF)"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>Acta</button>'
+                    + '</div></td>';
+            } else if (pendientes.has(a)) {
+                html += '<td><span class="c-wait"><i class="bi bi-clock" aria-hidden="true"></i>Falta</span></td>';
+            } else {
+                html += '<td><span class="c-nc" title="Sin cierre en este tramo">—</span></td>';
+            }
+        });
+        let acc = '';
+        if (canEdit) {
+            acc = (p.activo
+                ? '<button type="button" class="tA-ico on" disabled title="Es el tramo vigente" aria-label="Es el tramo vigente"><i class="bi bi-star-fill"></i></button>'
+                : '<button type="button" class="tA-ico" onclick="activarPeriodoRRHH(' + p.id + ')" title="Marcar como vigente" aria-label="Marcar como vigente"><i class="bi bi-star"></i></button>')
+                + '<button type="button" class="tA-ico" onclick="editPeriodoRRHH(' + p.id + ')" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></button>'
+                + '<button type="button" class="tA-ico del" onclick="deletePeriodoRRHH(' + p.id + ')" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash3"></i></button>';
+        }
+        html += '<td class="acc">' + acc + '</td></tr>';
+    });
+
+    html += '</tbody></table></div>'
+        + '<div class="tA-leg"><span class="ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Cerrada: fecha y quién cerró; «Acta» descarga el PDF</span>'
+        + '<span class="wait"><i class="bi bi-clock" aria-hidden="true"></i>Falta cerrar</span><span>— Sin cierre en ese tramo</span></div>';
     container.innerHTML = html;
 };
 

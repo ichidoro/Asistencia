@@ -17,6 +17,8 @@ class PeriodoRRHHResponse(PeriodoRRHHBase):
     created_at: datetime
     areas_cerradas: Optional[list[str]] = []
     areas_pendientes: Optional[list[str]] = []
+    # Cada área cerrada: {"fecha": "AAAA-MM-DD", "por": usuario} (pantalla Tramos de cierre)
+    cierres: Optional[dict[str, dict[str, str]]] = {}
 
     class Config:
         from_attributes = True
