@@ -207,6 +207,38 @@
         if (sub) sub.textContent = [nombre, dia, o.detalle].filter(Boolean).join(' · ');
     };
 
+    // Opciones de una lista <select> como fichas que se eligen (diseño HD). La lista queda oculta y sigue siendo la que
+    // manda: validación, valor y eventos de siempre. Se vuelve a pintar si cambian las opciones o al abrir la ventana.
+    window.chipsDesdeSelect = function (sel) {
+        if (!sel) return;
+        let caja = sel.nextElementSibling && sel.nextElementSibling.classList.contains('vn-chips') ? sel.nextElementSibling : null;
+        if (!caja) {
+            caja = document.createElement('div');
+            caja.className = 'vn-chips';
+            caja.setAttribute('role', 'radiogroup');
+            const lab = sel.id && document.querySelector(`label[for="${sel.id}"]`);
+            if (lab) { if (!lab.id) lab.id = sel.id + '-etiqueta'; caja.setAttribute('aria-labelledby', lab.id); }
+            sel.after(caja);
+            sel.classList.add('vn-select-oculto');
+            caja.addEventListener('click', (e) => {
+                const b = e.target.closest('.vn-chip');
+                if (!b || sel.disabled) return;
+                sel.value = b.dataset.v;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                pintar();
+            });
+            new MutationObserver(() => pintar()).observe(sel, { childList: true });
+            sel.addEventListener('change', () => pintar());
+            const modal = sel.closest('.modal');
+            if (modal) modal.addEventListener('shown.bs.modal', () => pintar());
+        }
+        function pintar() {
+            const ops = [...sel.options].filter((o) => o.value !== '');
+            caja.innerHTML = ops.map((o) => `<button type="button" class="vn-chip" role="radio" aria-checked="${o.value === sel.value}" data-v="${esc(o.value)}">${esc(o.textContent.trim())}</button>`).join('');
+        }
+        pintar();
+    };
+
     window.Avisos = {
         sinConexion: () => avisar(SIN_CONEXION, 'error'),
         listo: (t, d) => avisoBreve(t, 'listo', d),

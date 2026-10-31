@@ -189,6 +189,60 @@
 .ct-chip.ct-ok { background: #e5f3ea; color: #16673b; }
 .ct-hecho td { opacity: .78; }
 
+/* ── Fichas que se eligen (motivos de Justificar y otras listas cortas) ──── */
+.vn-select-oculto { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0 !important; pointer-events: none !important; }
+.vn-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.vn-chip {
+  padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--ov-line-strong); background: #fff;
+  color: var(--ov-ink-2); font: 500 13.5px/1.2 'Barlow', system-ui, sans-serif;
+  cursor: pointer; transition: border-color .15s, background-color .15s, box-shadow .15s;
+}
+.vn-chip:hover { border-color: #c5cdea; }
+.vn-chip:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--vn-ring); }
+.vn-chip[aria-checked="true"] { background: var(--vn-navy); border-color: var(--vn-navy); color: #fff; }
+
+/* ── Corregir marcas del día ─────────────────────────────────────────────── */
+#modal-marcacion-manual .mm-datos label { display: block; font-size: 12px; font-weight: 500; color: var(--ov-ink-3); margin: 0 0 2px; text-transform: none; letter-spacing: 0; }
+#modal-marcacion-manual .mm-datos input.form-control {
+  border: 0 !important; background: transparent !important; box-shadow: none !important;
+  padding: 0 !important; height: auto !important; min-height: 0 !important;
+  font-weight: 600; color: var(--ov-ink) !important; opacity: 1;
+}
+.mm-seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--ov-line-2); box-shadow: inset 0 0 0 1px var(--ov-line); }
+.mm-seg-b {
+  border: 0; background: transparent; padding: 5px 10px; border-radius: 7px;
+  font: 600 11.5px/1 'Barlow', system-ui, sans-serif; letter-spacing: .04em; color: var(--ov-ink-3); cursor: pointer;
+  min-height: 30px;
+}
+.mm-seg-b[aria-checked="true"] { background: #fff; color: var(--vn-navy); box-shadow: 0 1px 2px rgba(16, 26, 61, .12); }
+.mm-seg-b:focus-visible { outline: 2px solid var(--vn-navy); outline-offset: 1px; }
+.mm-seg-b[disabled] { cursor: not-allowed; opacity: .6; }
+
+/* ── Cierre del período: los pasos arriba, el contenido debajo ───────────── */
+#modal-cierre-wizard .modal-body > .row { flex-direction: column; }
+#modal-cierre-wizard .modal-body > .row > [class*="col-md-3"],
+#modal-cierre-wizard .modal-body > .row > [class*="col-md-9"] { width: 100%; max-width: 100%; flex: 0 0 auto; }
+#modal-cierre-wizard .modal-body > .row > [class*="col-md-3"] { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: stretch; margin-bottom: 14px; }
+#modal-cierre-wizard .list-group {
+  flex-direction: row; flex-wrap: wrap; gap: 6px;
+  box-shadow: none !important; margin: 0 !important; background: transparent;
+}
+#modal-cierre-wizard .list-group-item {
+  width: auto; border: 1px solid var(--ov-line) !important; border-radius: 999px !important;
+  padding: 7px 14px !important; font-size: 13.5px !important; font-weight: 600;
+  background: #fff; color: var(--ov-ink-2); margin: 0 !important;
+}
+#modal-cierre-wizard .list-group-item.active { background: var(--vn-navy) !important; border-color: var(--vn-navy) !important; color: #fff !important; }
+#modal-cierre-wizard .list-group-item.active i { color: #fff !important; }
+#modal-cierre-wizard .list-group-item:disabled:not(.active) { opacity: .85; }
+#modal-cierre-wizard .modal-body > .row > [class*="col-md-3"] > .card {
+  flex: 1 1 260px; margin: 0 !important; padding: 10px 14px !important;
+  border: 1px solid var(--ov-line) !important; border-radius: 12px !important; box-shadow: none !important;
+}
+#modal-cierre-wizard .modal-body > .row > [class*="col-md-3"] > .card h6 { font-size: 12.5px !important; color: var(--ov-ink-3) !important; margin-bottom: 4px !important; }
+#modal-cierre-wizard #wizard-content { border-radius: 14px !important; border-color: var(--ov-line) !important; box-shadow: none !important; }
+
 /* ── Celular: la ventana sube desde abajo ────────────────────────────────── */
 @media (max-width: 768px) {
   .modal.fade:not(#modalScannerLibreta) .modal-dialog:not(.modal-fullscreen) {
@@ -228,6 +282,11 @@
   .modal:not(#modalScannerLibreta) .modal-footer { flex-wrap: wrap; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) !important; }
   .modal:not(#modalScannerLibreta) .modal-footer .btn { flex: 1 1 140px; min-height: 46px; }
   .modal:not(#modalScannerLibreta) .modal-footer > .me-auto { flex-basis: 100%; order: 9; margin-right: 0 !important; }
+  /* Botones de al menos 44 px para el dedo */
+  .mm-seg-b { min-height: 44px; padding: 8px 12px; }
+  .vn-chip { min-height: 44px; }
+  #modal-cierre-wizard .list-group { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  #modal-cierre-wizard .list-group-item { white-space: nowrap; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .modal.fade .modal-dialog { transition: none !important; transform: none !important; }

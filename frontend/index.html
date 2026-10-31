@@ -3724,7 +3724,7 @@
                                     <i class="bi bi-file-earmark-check fs-4"></i>
                                 </div>
                                 <div>
-                                    <h5 class="modal-title fw-bold mb-0">Justificar Inasistencia</h5>
+                                    <h5 class="modal-title fw-bold mb-0">Justificar inasistencia</h5>
                                     <div class="small opacity-75">Ingrese los detalles de la justificación</div>
                                 </div>
                                 <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto mb-auto" onclick="closeModalJustify()"></button>
@@ -3737,7 +3737,7 @@
                                 <input type="hidden" id="just-fecha-inicio">
 
                                 <div class="mb-3">
-                                    <label for="just-nombre-empleado" class="form-label fw-bold">Empleado</label>
+                                    <label for="just-nombre-empleado" class="form-label fw-bold">Persona</label>
                                     <input type="text" id="just-nombre-empleado"
                                         class="form-control-plaintext fw-bold text-primary" readonly>
                                 </div>
@@ -3756,7 +3756,7 @@
                                 <div class="mb-3">
                                     <label for="just-tipo-id" class="form-label">Motivo *</label>
                                     <select id="just-tipo-id" class="form-select" required>
-                                        <option value="">-- Seleccionar --</option>
+                                        <option value="">Elegir</option>
                                     </select>
                                 </div>
 
@@ -3895,51 +3895,24 @@
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>Ingrese la marcación faltante para
                                 corregir el registro.
                             </div>
-                            <div class="mb-3">
-                                <label for="manual-empleado-display"
-                                    class="form-label text-muted small fw-bold">Persona</label>
-                                <input type="text" class="form-control bg-light" id="manual-empleado-display" readonly
-                                    disabled>
-                            </div>
-                            <div class="row g-3 mb-3">
-                                <div class="col-6">
-                                    <label for="manual-area-display"
-                                        class="form-label text-muted small fw-bold">Área</label>
-                                    <input type="text" class="form-control bg-light" id="manual-area-display" readonly
-                                        disabled>
-                                </div>
-                                <div class="col-6">
-                                    <label for="manual-cargo-display"
-                                        class="form-label text-muted small fw-bold">Cargo / Labor</label>
-                                    <input type="text" class="form-control bg-light" id="manual-cargo-display" readonly
-                                        disabled>
-                                </div>
-                            </div>
-                            <div class="row g-3 mb-3">
-                                <div class="col-6">
-                                    <label for="manual-turno-display"
-                                        class="form-label text-muted small fw-bold">Turno asignado</label>
-                                    <input type="text" class="form-control bg-light" id="manual-turno-display" readonly
-                                        disabled>
-                                </div>
-                                <div class="col-6">
-                                    <label for="manual-fecha-display"
-                                        class="form-label text-muted small fw-bold">Fecha</label>
-                                    <input type="text" class="form-control bg-light" id="manual-fecha-display" readonly
-                                        disabled>
-                                </div>
+                            <div class="vn-kvs mm-datos mb-3">
+                                <div><label for="manual-empleado-display">Persona</label><input type="text" class="form-control" id="manual-empleado-display" readonly disabled></div>
+                                <div><label for="manual-area-display">Área</label><input type="text" class="form-control" id="manual-area-display" readonly disabled></div>
+                                <div><label for="manual-cargo-display">Cargo</label><input type="text" class="form-control" id="manual-cargo-display" readonly disabled></div>
+                                <div><label for="manual-turno-display">Turno asignado</label><input type="text" class="form-control" id="manual-turno-display" readonly disabled></div>
+                                <div><label for="manual-fecha-display">Fecha</label><input type="text" class="form-control" id="manual-fecha-display" readonly disabled></div>
                             </div>
 
                             <div class="row g-3 mb-3">
                                 <div class="col-6">
-                                    <label for="manual-hora-entrada" class="form-label fw-bold text-success small">
-                                        <i class="bi bi-box-arrow-in-right"></i> Entrada
+                                    <label for="manual-hora-entrada" class="form-label fw-bold small">
+                                        <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> ENTRADA
                                     </label>
                                     <input type="time" class="form-control" id="manual-hora-entrada" step="1">
                                 </div>
                                 <div class="col-6">
-                                    <label for="manual-hora-salida" class="form-label fw-bold text-danger small">
-                                        <i class="bi bi-box-arrow-left"></i> Salida
+                                    <label for="manual-hora-salida" class="form-label fw-bold small">
+                                        <i class="bi bi-box-arrow-left" aria-hidden="true"></i> SALIDA
                                     </label>
                                     <input type="time" class="form-control" id="manual-hora-salida" step="1">
                                 </div>
@@ -3948,8 +3921,8 @@
                             <div class="row g-3 mb-3 bg-light p-2 rounded border" id="divTramosBolsa"
                                 style="display:none;">
                                 <div class="col-12 mb-1">
-                                    <h6 class="text-primary fw-bold mb-0 small"><i class="bi bi-bus-front"></i> Tramos
-                                        de Conducción (Bolsa)</h6>
+                                    <h6 class="text-primary fw-bold mb-0 small"><i class="bi bi-bus-front" aria-hidden="true"></i> Tramos
+                                        de conducción (bolsa flexible)</h6>
                                     <small class="text-muted" style="font-size: 0.75rem;">Desglose de jornada (Art. 25
                                         Bis)</small>
                                 </div>
@@ -3977,8 +3950,8 @@
                                 class="btn btn-sm btn-outline-warning me-auto d-flex align-items-center gap-2 fw-bold"
                                 onclick="unlockManualMarks()" id="btn-unlock-manual"
                                 title="Sobreescribir marcas de reloj">
-                                <i class="bi bi-unlock-fill"></i>
-                                <span>Habilitar Edición</span>
+                                <i class="bi bi-unlock-fill" aria-hidden="true"></i>
+                                <span>Habilitar edición</span>
                             </button>
                             <button class="btn btn-secondary px-4" onclick="closeManualEntryModal()">Cancelar</button>
                             <button class="btn btn-primary px-4" onclick="saveManualEntry()">Guardar</button>
@@ -5073,9 +5046,9 @@
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v16",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v16",
-        "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v16",
-        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v25",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v28",
+        "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v26",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v29",
         "/static/js/velocidades_ui.js?v={{ startup_id }}_v2",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v10",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}",

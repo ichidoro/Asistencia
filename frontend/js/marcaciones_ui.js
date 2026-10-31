@@ -4861,13 +4861,13 @@ async function openCierrePeriodoModal() {
                                 <div class="list-group list-group-flush mb-4 rounded shadow-sm">
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-0" disabled><i class="bi bi-gear-fill text-secondary me-2"></i> Parámetros</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-1" disabled><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> 1. Anomalías</button>
-                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-2" disabled><i class="bi bi-clock-fill text-warning me-2"></i> 2. En Curso</button>
-                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-3" disabled><i class="bi bi-calendar-plus text-primary me-2"></i> 3. Horas Extras</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-2" disabled><i class="bi bi-clock-fill text-warning me-2"></i> 2. En curso</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-3" disabled><i class="bi bi-calendar-plus text-primary me-2"></i> 3. Horas extra</button>
                                     <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-4" disabled><i class="bi bi-person-dash text-info me-2"></i> 4. Inasistencias</button>
-                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-5" disabled><i class="bi bi-file-earmark-pdf text-success me-2"></i> 5. Reporte Final</button>
+                                    <button class="list-group-item list-group-item-action fw-bold" id="wiz-tab-5" disabled><i class="bi bi-file-earmark-pdf text-success me-2"></i> 5. Reporte final</button>
                                 </div>
                                 <div class="card border-0 bg-white shadow-sm p-3 mb-3">
-                                    <h6 class="fw-bold mb-2 small" style="color: #475569"><i class="bi bi-calendar-check text-primary me-1"></i> Período a Cerrar</h6>
+                                    <h6 class="fw-bold mb-2 small" style="color: #475569"><i class="bi bi-calendar-check text-primary me-1"></i> Período a cerrar</h6>
                                     
                                     <div id="cierre-periodo-badge-container" class="mb-2"></div>
                                     
@@ -5227,7 +5227,7 @@ function renderWizardStep(step) {
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-success-subtle" style="border-left: 4px solid #10b981 !important;">
                     <div class="fw-bold text-success small mb-2">
-                        <i class="bi bi-calendar-check-fill me-1"></i> Período a Cerrar:
+                        <i class="bi bi-calendar-check-fill me-1"></i> Período a cerrar
                     </div>
                     <div class="fw-bold text-dark fs-5 mb-1">${vigente.mes_cierre}</div>
                     <div class="small text-muted mb-2">
@@ -5260,7 +5260,7 @@ function renderWizardStep(step) {
             periodInfoHtml = `
                 <div class="card border-0 shadow-sm p-3 h-100 bg-white border border-danger-subtle" style="border-left: 4px solid #ef4444 !important;">
                     <div class="fw-bold text-danger small mb-2">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Período a Cerrar:
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Período a cerrar
                     </div>
                     <div class="text-danger fw-bold mb-2">Período No Definido</div>
                     <p class="small text-muted mb-0">
@@ -5272,7 +5272,7 @@ function renderWizardStep(step) {
 
         content.innerHTML = `
             <div class="py-2">
-                <h4 class="fw-bold text-dark mb-3"><i class="bi bi-gear-fill text-secondary me-2"></i> Configuración de Cierre de Período</h4>
+                <h4 class="fw-bold text-dark mb-3"><i class="bi bi-gear-fill text-secondary me-2"></i> Elegir área y período</h4>
                 <p class="text-muted small">
                     Seleccione el área y el período o rango de fechas que desea evaluar para el cierre. Al continuar, se pre-evaluarán las anomalías y el estado del período.
                 </p>
@@ -5282,7 +5282,7 @@ function renderWizardStep(step) {
                     <div class="col-md-6">
                         <div class="card border-0 shadow-sm p-3 bg-light mb-3">
                             <label for="cierre-wizard-area-select" class="form-label fw-bold text-secondary small mb-2">
-                                <i class="bi bi-geo-alt-fill text-danger me-1"></i> 1. Área a Cerrar:
+                                <i class="bi bi-geo-alt-fill text-danger me-1"></i> 1. Área
                             </label>
                             <select class="form-select border-primary-subtle" id="cierre-wizard-area-select" onchange="cierreWizardCambiarArea(this.value)">
                                 <option value="">-- Seleccione un Área --</option>
@@ -5292,7 +5292,7 @@ function renderWizardStep(step) {
 
                         <div class="card border-0 shadow-sm p-3 bg-light">
                             <label for="cierre-wizard-periodo-select" class="form-label fw-bold text-secondary small mb-2">
-                                <i class="bi bi-calendar-check text-primary me-1"></i> 2. Seleccionar Período:
+                                <i class="bi bi-calendar-check text-primary me-1"></i> 2. Período
                             </label>
                             <select class="form-select border-primary-subtle mb-3" id="cierre-wizard-periodo-select" onchange="cierreWizardSeleccionarPeriodo(this.value)">
                                 ${periodosOptions}
@@ -5301,11 +5301,11 @@ function renderWizardStep(step) {
 
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <label for="cierre-wizard-fini" class="form-label small fw-semibold text-muted mb-1">Fecha Inicio</label>
+                                    <label for="cierre-wizard-fini" class="form-label small fw-semibold text-muted mb-1">Desde</label>
                                     <input type="date" class="form-control form-control-sm" id="cierre-wizard-fini" value="${s.fIni || ''}" ${!isCustom ? 'readonly' : ''} onchange="cierreWizardCambiarFechasManual()">
                                 </div>
                                 <div class="col-6">
-                                    <label for="cierre-wizard-ffin" class="form-label small fw-semibold text-muted mb-1">Fecha Fin</label>
+                                    <label for="cierre-wizard-ffin" class="form-label small fw-semibold text-muted mb-1">Hasta</label>
                                     <input type="date" class="form-control form-control-sm" id="cierre-wizard-ffin" value="${s.fFin || ''}" ${!isCustom ? 'readonly' : ''} onchange="cierreWizardCambiarFechasManual()">
                                 </div>
                             </div>
@@ -5320,11 +5320,11 @@ function renderWizardStep(step) {
 
                 <!-- Botón de Envío -->
                 <div class="mt-4 text-end">
-                    <button class="btn btn-warning fw-bold px-4 py-2 shadow-sm" 
+                    <button class="btn btn-primary fw-bold px-4 py-2 shadow-sm" 
                             id="btn-cierre-wizard-iniciar" 
                             ${(!s.fIni || !s.fFin) ? 'disabled' : ''} 
                             onclick="cierreWizardConfirmarParametros()">
-                        <i class="bi bi-funnel-fill me-1"></i> Filtrar e Iniciar Pre-evaluación
+                        <i class="bi bi-search me-1"></i> Revisar el período
                     </button>
                 </div>
             </div>

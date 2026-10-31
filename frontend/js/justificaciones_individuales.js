@@ -41,7 +41,7 @@ async function openJustifyModal(empId, empNombre, fecha, existingJust = null) {
     document.getElementById('just-id-empleado').value = empId;
 
     // Labels visuales
-    document.getElementById('just-nombre-empleado').value = empNombre;
+    document.getElementById('just-nombre-empleado').value = window.nombreTitulo ? window.nombreTitulo(empNombre) : empNombre;
 
     // Mostrar modal usando Bootstrap inmediatamente
     if (justIndividualState.modalInstance) {
@@ -86,9 +86,12 @@ async function openJustifyModal(empId, empNombre, fecha, existingJust = null) {
     document.getElementById('just-observaciones').disabled = !canJustify;
 
     // Actualizar título y footer según modo
-    const titleEl = document.querySelector('#modal-justificacion-individual .modal-header h3');
+    const titleEl = document.querySelector('#modal-justificacion-individual .modal-header .modal-title');
     if (titleEl) {
-        titleEl.textContent = existingJust ? 'Editar Justificación' : 'Justificar Inasistencia';
+        titleEl.textContent = existingJust ? 'Editar justificación' : 'Justificar inasistencia';
+    }
+    if (window.cabeceraPersona) {
+        window.cabeceraPersona(document.getElementById('modal-justificacion-individual'), { nombre: empNombre, empId: empId, fecha: fecha });
     }
 
     // Actualizar footer: agregar botón Eliminar en modo edición
@@ -140,11 +143,13 @@ async function loadJustifyTypes(force = false) {
 
         const select = document.getElementById('just-tipo-id');
         if (select) {
-            select.innerHTML = '<option value="">-- Seleccionar Motivo --</option>' +
+            select.innerHTML = '<option value="">Elegir</option>' +
                 tiposDiaCompleto.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
 
             // Agregar evento para auto-calcular fecha_fin
             select.onchange = autoCalcularFechaFin;
+            // Diseño HD: los motivos se eligen a la vista (la lista queda oculta y sigue mandando)
+            if (window.chipsDesdeSelect) window.chipsDesdeSelect(select);
         }
         
         const fechaInicioInput = document.getElementById('just-fecha-inicio-input');

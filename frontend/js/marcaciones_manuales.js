@@ -862,7 +862,7 @@ function openManualEntryModal(empId, dateStr, empNombre, customTitle = null, hor
         div.className = 'alert alert-warning py-2 mb-3 mt-2';
         div.style.fontSize = '0.85rem';
         // Insertar después del input de fecha
-        const containerInfo = lblFecha ? lblFecha.closest('.row') : null;
+        const containerInfo = lblFecha ? lblFecha.closest('.mm-datos, .row') : null;
         if (containerInfo) {
             containerInfo.insertAdjacentElement('afterend', div);
         }
@@ -1056,7 +1056,7 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
                 <strong><i class="bi bi-list-check"></i> Marcaciones del día (${marcas.length})</strong>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcas-sugerir"${cerrada ? ' disabled' : ''}>Usar sugerencia</button>
             </div>
-            <div class="small text-muted mb-2">Elija cuál marca es Entrada y cuál es Salida. La colación se detecta sola cuando una Salida y la Entrada siguiente quedan a mitad del día, entre ${MARCAS_COLACION_MIN} y ${MARCAS_COLACION_MAX} minutos.</div>
+            <div class="small text-muted mb-2">Elija cuál marca es ENTRADA y cuál es SALIDA. La colación se detecta sola cuando una SALIDA y la ENTRADA siguiente quedan a mitad del día, entre ${MARCAS_COLACION_MIN} y ${MARCAS_COLACION_MAX} minutos.</div>
             <div id="marcas-regla-info" class="small mb-2"></div>
             <table class="table table-sm align-middle mb-1" style="font-size:.9rem;">
                 <thead><tr><th>Hora</th><th>El reloj dijo</th><th>Es</th><th></th>${puedeQuitar ? '<th></th>' : ''}</tr></thead>
@@ -1078,8 +1078,11 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
     body.innerHTML = marcas.map((m, i) => `
         <tr data-i="${i}">
             <td class="fw-semibold">${m.hora}${etiquetaOtroDia(m)}</td>
-            <td>${m.tipo_reloj || '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
-            <td><select class="form-select form-select-sm marca-tipo" style="width:110px;"${cerrada ? ' disabled' : ''}>
+            <td>${m.tipo_reloj ? String(m.tipo_reloj).toUpperCase() : '—'}${m.manual ? ' <span class="badge bg-secondary">manual</span>' : ''}${m.corregida ? ' <span class="badge bg-warning text-dark">corregida</span>' : ''}</td>
+            <td><div class="mm-seg" role="radiogroup" aria-label="Tipo de la marca de las ${m.hora}">
+                <button type="button" class="mm-seg-b" role="radio" data-v="Entrada"${cerrada ? ' disabled' : ''}>ENTRADA</button>
+                <button type="button" class="mm-seg-b" role="radio" data-v="Salida"${cerrada ? ' disabled' : ''}>SALIDA</button>
+            </div><select class="form-select form-select-sm marca-tipo visually-hidden" tabindex="-1" aria-hidden="true"${cerrada ? ' disabled' : ''}>
                 <option value="Entrada"${m.tipo_actual === 'Entrada' ? ' selected' : ''}>Entrada</option>
                 <option value="Salida"${m.tipo_actual === 'Salida' ? ' selected' : ''}>Salida</option>
             </select></td>
@@ -1097,17 +1100,24 @@ function renderPanelMarcasDia(host, empId, dateStr, data) {
         const col = _marcasColacion(marcas, ts);
         body.querySelectorAll('tr').forEach((tr, i) => {
             tr.querySelector('.marca-etiqueta').innerHTML = col[i] !== undefined
-                ? `<span class="badge bg-info text-dark">Colación · ${col[i]} min</span>` : '';
+                ? `<span class="vn-pill">Colación · ${col[i]} min</span>` : '';
+            tr.querySelectorAll('.mm-seg-b').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === ts[i] ? 'true' : 'false'));
         });
         const avisos = [];
-        if (ts[0] === 'Salida') avisos.push('La primera marca del día está como Salida.');
-        if (ts.length > 1 && ts[ts.length - 1] === 'Entrada') avisos.push('La última marca del día está como Entrada.');
-        for (let i = 1; i < ts.length; i++) if (ts[i] === ts[i - 1]) { avisos.push('Hay dos marcas seguidas del mismo tipo: revise que alternen Entrada y Salida.'); break; }
+        if (ts[0] === 'Salida') avisos.push('La primera marca del día está como SALIDA.');
+        if (ts.length > 1 && ts[ts.length - 1] === 'Entrada') avisos.push('La última marca del día está como ENTRADA.');
+        for (let i = 1; i < ts.length; i++) if (ts[i] === ts[i - 1]) { avisos.push('Hay dos marcas seguidas del mismo tipo: revise que alternen ENTRADA y SALIDA.'); break; }
         if (dudoso) avisos.push('La cantidad de marcas es impar o hay una sola: confirme cuál falta.');
         host.querySelector('#marcas-dia-aviso').innerHTML = avisos.length
             ? `<span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> ${avisos.join(' ')}</span>` : '';
     };
     selects().forEach(sel => sel.addEventListener('change', refrescar));
+    body.addEventListener('click', (e) => {
+        const b = e.target.closest('.mm-seg-b');
+        if (!b || b.disabled) return;
+        const sel = b.closest('td').querySelector('select.marca-tipo');
+        if (sel && sel.value !== b.dataset.v) { sel.value = b.dataset.v; refrescar(); }
+    });
     host.querySelector('#btn-marcas-sugerir').addEventListener('click', () => {
         selects().forEach((sel, i) => { sel.value = marcas[i].sugerido; });
         refrescar();
