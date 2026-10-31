@@ -1984,6 +1984,23 @@ class AsistenciaService:
             await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
             return None
 
+        # Sin ningún horario asignado todavía y sin marcas ese día no hay jornada que anotar: ni feriado, ni día libre, ni
+        # inasistencia. 31-10-2026: al guardar el contrato de una persona recién creada (ingresa el 02-11) se recalculó «hoy»
+        # antes de que tuviera horario y quedó con un FERIADO del 31-10. Una fila escrita a mano o con justificación se respeta.
+        if not f_primer_turno and not marcas_disponibles:
+            if bulk_ctx and 'asistencias_hoy' in bulk_ctx:
+                asist_sin_turno = bulk_ctx['asistencias_hoy'].get(empleado_id)
+            else:
+                asist_sin_turno = await self.repository.get_asistencia(empleado_id, fecha)
+            if not (asist_sin_turno and (asist_sin_turno.get('origen') == 'MANUAL' or asist_sin_turno.get('justificacion_id'))):
+                if not save:
+                    return None
+                if asist_sin_turno:
+                    logger.info(f"🧹 Limpiando registro sin horario asignado: Emp {empleado_id} en {fecha}")
+                    await self.repository.delete_asistencia(empleado_id, fecha)
+                await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
+                return None
+
         # 2. Obtener Turno Asignado Vigente para el día
         if bulk_ctx:
             asignacion = bulk_ctx['asignaciones'].get(empleado_id)
