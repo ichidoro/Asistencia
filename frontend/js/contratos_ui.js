@@ -18,8 +18,8 @@ function initContratosUI() {
     const tabBtn = document.getElementById('contratos-tab');
     if (tabBtn) {
         tabBtn.addEventListener('shown.bs.tab', () => {
-            const tbody = document.getElementById('tabla-contratos');
-            if (tbody && (tbody.children.length === 0 || tbody.querySelector('.spinner-border'))) {
+            const cont = document.getElementById('contratos-list-container');
+            if (cont && (cont.children.length === 0 || cont.querySelector('.spinner-border'))) {
                 loadContratosUI();
             }
         });
@@ -52,10 +52,10 @@ function initContratosUI() {
 const DIAS_VENTANA_CONTRATOS = 45;
 
 async function loadContratosUI() {
-    const tbody = document.getElementById('tabla-contratos');
-    if (!tbody) return;
+    const cont = document.getElementById('contratos-list-container');
+    if (!cont) return;
 
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> Buscando vencimientos...</td></tr>`;
+    cont.innerHTML = '<div class="cf-msg"><span class="spinner-border spinner-border-sm"></span> Buscando vencimientos…</div>';
 
     try {
         const response = await fetch(`${API_CONTRATOS}?days=${DIAS_VENTANA_CONTRATOS}`);
@@ -74,7 +74,8 @@ async function loadContratosUI() {
         }
 
         if (empleados.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-check-circle-fill text-success me-2"></i>Todo en orden. No hay contratos por vencer en los próximos ${DIAS_VENTANA_CONTRATOS} días.</td></tr>`;
+            const cnt = document.getElementById('contratos-count'); if (cnt) cnt.textContent = '0';
+            cont.innerHTML = '<div class="cf-msg"><i class="bi bi-check-circle-fill text-success me-2"></i>Todo en orden. No hay contratos por vencer en los próximos ' + DIAS_VENTANA_CONTRATOS + ' días.</div>';
             return;
         }
 
@@ -84,109 +85,87 @@ async function loadContratosUI() {
 
     } catch (error) {
         console.error("Error cargando contratos:", error);
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Error al cargar datos: ${error.message}</td></tr>`;
+        cont.innerHTML = '<div class="cf-msg text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>No se pudieron cargar los contratos: ' + error.message + '</div>';
     }
 }
 
 function renderContratosTable(empleados) {
-    const tbody = document.getElementById('tabla-contratos');
-    tbody.innerHTML = '';
+    const cont = document.getElementById('contratos-list-container');
+    if (!cont) return;
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const nombre = (e) => window.nombreTitulo ? window.nombreTitulo(e.nombre_completo) : e.nombre_completo;
+    const dos = (n) => String(n).padStart(2, '0');
+    const corta = (f) => { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '-' + p[1] : f; };
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const max = DIAS_VENTANA_CONTRATOS, min = -5;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const sub = document.getElementById('contratos-sub');
+    if (sub) sub.textContent = 'Personas activas con fecha de término en los próximos ' + max + ' días. «Gestionar» permite renovar, pasar a indefinido o no renovar.';
+    const cnt = document.getElementById('contratos-count');
+    if (cnt) cnt.textContent = empleados.length;
 
-    empleados.forEach((emp, idx) => {
-        let pillClass = 'status-pill-success';
-        let pillDotColor = '#10b981';
-        let badgeText = 'Vigente';
-        let rowClass = 'fade-in-row';
-        let diffDaysText = '-';
-        let fechaFmt = 'Sin fecha';
-        let diffDaysNumeric = 999;
+    // Grupos por urgencia, con los mismos cortes de siempre: vencido, 15 días o menos, 30 días o menos
+    const filas = empleados.map((emp) => {
+        const dias = emp.fecha_salida ? Math.ceil((new Date(emp.fecha_salida + 'T00:00:00') - hoy) / 86400000) : null;
+        const grupo = dias === null ? 's' : dias < 0 ? 'v' : dias <= 15 ? 'c' : dias <= 30 ? 'p' : 'o';
+        return { emp: emp, dias: dias, grupo: grupo };
+    }).sort((x, y) => (x.dias === null ? 1e9 : x.dias) - (y.dias === null ? 1e9 : y.dias));
+    const diasTxt = (d) => d === null ? 'Sin fecha de término' : d < 0 ? 'Venció hace ' + (-d) + (d === -1 ? ' día' : ' días') : d === 0 ? 'Vence hoy' : 'En ' + d + (d === 1 ? ' día' : ' días');
+    const COL = { v: '#a3261c', c: '#d9534f', p: '#d48a1f', o: '#16673b', s: '#626d8a' };
 
-        if (emp.fecha_salida) {
-            const fechaFin = new Date(emp.fecha_salida + 'T00:00:00');
-            diffDaysNumeric = Math.ceil((fechaFin - today) / (1000 * 60 * 60 * 24));
-
-            fechaFmt = window.formatFechaDDMMYYYY(emp.fecha_salida);
-            diffDaysText = `${diffDaysNumeric} días`;
-
-            if (diffDaysNumeric < 0) {
-                pillClass = 'status-pill-muted';
-                pillDotColor = '#94a3b8';
-                badgeText = 'Vencido';
-                rowClass += ' row-urgency-expired';
-            } else if (diffDaysNumeric <= 15) {
-                pillClass = 'status-pill-critical';
-                pillDotColor = '#ef4444';
-                badgeText = 'Crítico';
-                rowClass += ' row-urgency-critical';
-            } else if (diffDaysNumeric <= 30) {
-                pillClass = 'status-pill-warning';
-                pillDotColor = '#f59e0b';
-                badgeText = 'Próximo';
-                rowClass += ' row-urgency-warning';
-            }
-        } else if (emp.tipo_contrato === 'Temporal') {
-            pillClass = 'status-pill-info';
-            pillDotColor = '#0ea5e9';
-            badgeText = 'Sin Fecha';
-            rowClass += ' row-urgency-info';
-            fechaFmt = '<span class="text-danger fw-bold" style="font-size:0.8rem;">Dato Faltante</span>';
-            diffDaysText = 'N/A';
-        }
-
-        // Detectar alerta legal (segundo contrato)
-        const isSecondContract = emp.tipo_contrato === 'Temporal' && emp.cant_contratos >= 2;
-        const legalAlertIcon = isSecondContract ? `<span class="text-danger ms-1" title="Alerta Legal: 2° Contrato"><i class="bi bi-exclamation-triangle-fill"></i></span>` : '';
-
-        let tr = document.createElement('tr');
-        tr.className = rowClass;
-        tr.style.animationDelay = `${idx * 0.03}s`;
-
-        // Data Base64 para evitar errores de escape
-        const empData = btoa(unescape(encodeURIComponent(JSON.stringify(emp))));
-
-        tr.innerHTML = `
-            <td>
-                <div class="ct-persona">
-                    <span class="vn-av vn-av-sm td-t${(Math.abs(parseInt(emp.id, 10) || 0) % 6) + 1}" aria-hidden="true">${window.inicialesDe ? window.inicialesDe(emp.nombre_completo) : ''}</span>
-                    <div>
-                        <div class="fw-bold" style="font-size: 0.85rem;">${window.nombreTitulo ? window.nombreTitulo(emp.nombre_completo) : emp.nombre_completo}</div>
-                        <div class="text-muted" style="font-size: 0.75rem;">${emp.rut_formateado || ''}</div>
-                    </div>
-                </div>
-            </td>
-            <td class="text-center">
-                <span class="status-pill status-pill-muted">N° ${emp.cant_contratos || 1}</span>
-                ${legalAlertIcon}
-                ${emp.tipo_contrato ? '<div class="small text-muted mt-1">' + emp.tipo_contrato + '</div>' : ''}
-            </td>
-            <td><div class="small">${emp.cargo || '-'}</div></td>
-            <td>${emp.area ? `<span class="area-badge ${typeof getAreaBadgeClass === 'function' ? getAreaBadgeClass(emp.area) : 'area-badge-default'}">${emp.area}</span>` : '<span class="text-muted small">Sin Área</span>'}</td>
-            <td><div class="small">${fechaFmt}</div></td>
-            <td class="fw-bold ${diffDaysNumeric <= 15 ? 'text-danger' : (diffDaysNumeric <= 30 ? 'text-warning' : 'text-success')}">
-                <div class="ct-dias">
-                    <span>${diffDaysText}</span>
-                    ${emp.fecha_salida ? `<span class="ct-barra" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, Math.round(diffDaysNumeric / DIAS_VENTANA_CONTRATOS * 100)))}%"></i></span>` : ''}
-                </div>
-            </td>
-            <td><span class="status-pill ${pillClass}"><span class="pill-dot" style="background:${pillDotColor};"></span>${badgeText}</span></td>
-            <td>
-                <button class="btn-action-modern btn-action-primary btn-gestionar-venc" data-emp="${empData}">
-                    <i class="bi bi-gear-fill"></i> Gestionar
-                </button>
-            </td>
-        `;
-
-        tr.querySelector('.btn-gestionar-venc').addEventListener('click', (e) => {
-            const dataBase64 = e.currentTarget.getAttribute('data-emp');
-            const empObj = JSON.parse(decodeURIComponent(escape(atob(dataBase64))));
-            openVencimientoModal(empObj);
-        });
-
-        tbody.appendChild(tr);
+    // Línea de los próximos días: cuántos contratos vencen cada día (los vencidos hace más de 5 días quedan al borde)
+    const pos = (d) => ((Math.max(min, Math.min(max, d)) - min) / (max - min) * 100).toFixed(2) + '%';
+    const zona = (a, b, color) => '<div class="cf-zona" style="left:' + pos(a) + ';width:calc(' + pos(b) + ' - ' + pos(a) + ');background:' + color + '"></div>';
+    const porDia = {};
+    filas.filter((f) => f.dias !== null).forEach((f) => { const k = Math.max(min, f.dias); (porDia[k] = porDia[k] || []).push(f); });
+    const nomDia = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][hoy.getDay()];
+    let html = '<section class="cf-linea"><div class="cf-lt">Cuándo vence cada contrato</div>'
+        + '<div class="cf-ls">Desde hoy, ' + nomDia + ' ' + dos(hoy.getDate()) + '-' + dos(hoy.getMonth() + 1) + ', hasta ' + max + ' días más</div><div class="cf-eje">'
+        + zona(min, 0, '#fdecea') + zona(0, 15, '#fbe3e1') + zona(15, 30, '#fdf1e2') + zona(30, max, '#e7f4ec')
+        + '<div class="cf-hoy" style="left:' + pos(0) + '"><span>Hoy</span></div>';
+    // En pantallas angostas los días muy cercanos se juntan en una sola marca para que no se monten
+    const juntar = cont.clientWidth < 600 ? 4 : 0;
+    const grupos = [];
+    Object.keys(porDia).map(Number).sort((x, y) => x - y).forEach((k) => {
+        const ult = grupos[grupos.length - 1];
+        if (ult && k - ult.desde <= juntar) ult.fs = ult.fs.concat(porDia[k]);
+        else grupos.push({ desde: k, fs: porDia[k] });
     });
+    grupos.forEach((gr) => {
+        const fs = gr.fs;
+        html += '<div class="cf-marca" style="left:' + pos(gr.desde) + '" title="' + esc(fs.map((f) => nombre(f.emp)).join(', ')) + '">'
+            + '<b style="background:' + COL[fs[0].grupo] + '">' + fs.length + '</b><small>' + corta(fs[0].emp.fecha_salida) + '</small></div>';
+    });
+    html += '<div class="cf-reglas"><span style="left:' + pos(7.5) + '">15 días o menos</span><span style="left:' + pos(22.5) + '">16 a 30 días</span>'
+        + '<span style="left:' + pos((30 + max) / 2) + '">31 a ' + max + ' días</span></div></div></section>';
+
+    const G = [['v', 'Vencidos'], ['c', 'Vencen en 15 días o menos'], ['p', 'Vencen en 16 a 30 días'], ['o', 'Vencen en 31 a ' + max + ' días'], ['s', 'Temporales sin fecha de término']];
+    G.forEach((g) => {
+        const k = g[0];
+        const fs = filas.filter((f) => f.grupo === k);
+        if (!fs.length) return;
+        html += '<div class="cf-gh"><i style="background:' + COL[k] + '"></i>' + g[1] + ' <span>· ' + fs.length + '</span></div><div class="cf-lista">';
+        fs.forEach((f) => {
+            const e = f.emp;
+            const legal = e.tipo_contrato === 'Temporal' && e.cant_contratos >= 2;
+            const datos = btoa(unescape(encodeURIComponent(JSON.stringify(e))));
+            html += '<div class="cf-fila">'
+                + '<div class="cf-fecha"><b>' + (e.fecha_salida ? window.formatFechaDDMMYYYY(e.fecha_salida) : 'Sin fecha') + '</b><small class="g-' + k + '">' + diasTxt(f.dias) + '</small></div>'
+                + '<div class="cf-quien"><span class="vn-av vn-av-sm td-t' + ((Math.abs(parseInt(e.id, 10) || 0) % 6) + 1) + '" aria-hidden="true">' + esc(window.inicialesDe ? window.inicialesDe(e.nombre_completo) : '') + '</span>'
+                + '<div><div class="cf-n">' + esc(nombre(e)) + '</div><div class="cf-s">' + esc(e.rut_formateado || '') + '</div></div></div>'
+                + '<div class="cf-puesto"><div>' + esc(e.cargo || 'Sin cargo') + '</div><div class="cf-s">' + esc(e.area || 'Sin área') + '</div></div>'
+                + '<div class="cf-contrato"><div>Contrato N° ' + (e.cant_contratos || 1) + (e.tipo_contrato ? ' · ' + esc(e.tipo_contrato) : '') + '</div>'
+                + (legal ? '<span class="cf-legal"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>2.º contrato a plazo</span>' : '') + '</div>'
+                + '<button type="button" class="cf-ges btn-gestionar-venc" data-emp="' + datos + '"><i class="bi bi-sliders" aria-hidden="true"></i>Gestionar</button>'
+                + '</div>';
+        });
+        html += '</div>';
+    });
+    cont.innerHTML = html;
+    cont.querySelectorAll('.btn-gestionar-venc').forEach((btn) => btn.addEventListener('click', (ev) => {
+        const empObj = JSON.parse(decodeURIComponent(escape(atob(ev.currentTarget.getAttribute('data-emp')))));
+        openVencimientoModal(empObj);
+    }));
 }
 
 // --- Vencimientos Sorting ---

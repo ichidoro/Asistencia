@@ -600,14 +600,14 @@
                                             <button class="nav-link active" id="pills-vencimientos-tab"
                                                 data-bs-toggle="pill" data-bs-target="#pills-vencimientos" type="button"
                                                 role="tab">
-                                                <i class="bi bi-bell me-1"></i>Próximos Vencimientos
+                                                <i class="bi bi-bell me-1"></i>Próximos vencimientos <span class="cf-k" id="contratos-count"></span>
                                             </button>
                                         </li>
                                         <li class="nav-item" role="presentation">
                                             <button class="nav-link" id="pills-historial-tab" data-bs-toggle="pill"
                                                 data-bs-target="#pills-historial" type="button" role="tab"
                                                 onclick="loadHistorialBajas()">
-                                                <i class="bi bi-clock-history me-1"></i>Historial de Bajas
+                                                <i class="bi bi-clock-history me-1"></i>Historial de bajas
                                             </button>
                                         </li>
                                     </ul>
@@ -616,47 +616,14 @@
 
                                         <!-- Vista 1: Próximos Vencimientos -->
                                         <div class="tab-pane fade show active" id="pills-vencimientos" role="tabpanel">
-                                            <div class="emp-section-toolbar">
-                                                <h5 class="section-title mb-0">
-                                                    <span class="section-icon" style="background: #eaf0fb; color: var(--primary-color);"><i class="bi bi-calendar2-event"></i></span>
-                                                    Próximos vencimientos (45 días)
-                                                </h5>
-                                                <button class="btn-action-modern btn-action-outline"
-                                                    onclick="loadContratosUI()">
-                                                    <i class="bi bi-arrow-clockwise"></i> Actualizar
-                                                </button>
-                                            </div>
-                                            <div class="emp-info-banner emp-info-banner-blue">
-                                                <i class="bi bi-info-circle"></i>
-                                                Personas activas con término de contrato en los próximos 45 días.
-                                            </div>
-                                            <div id="contratos-list-container">
-                                                <div class="table-container">
-                                                    <table class="data-table" id="tabla-vencimientos-table">
-                                                        <thead>
-                                                            <tr>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('nombre_completo')" title="Ordenar">Persona <i id="sort-icon-venc-nombre_completo" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header text-center" onclick="sortContratosVenc('cant_contratos')" title="Ordenar">Contrato <i id="sort-icon-venc-cant_contratos" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('cargo')" title="Ordenar">Cargo <i id="sort-icon-venc-cargo" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('area')" title="Ordenar">Área <i id="sort-icon-venc-area" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('fecha_salida')" title="Ordenar">Fecha Término <i id="sort-icon-venc-fecha_salida" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('dias_restantes')" title="Ordenar">Días Restantes <i id="sort-icon-venc-dias_restantes" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th class="sortable-header" onclick="sortContratosVenc('estado')" title="Ordenar">Estado <i id="sort-icon-venc-estado" class="bi bi-arrow-down-up sort-icon text-muted"></i></th>
-                                                                <th>Acciones</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody id="tabla-contratos">
-                                                            <tr>
-                                                                <td colspan="8" class="text-center py-4">
-                                                                    <span
-                                                                        class="spinner-border spinner-border-sm"></span>
-                                                                    Cargando contratos...
-                                                                </td>
-                                                            </tr>
-                                                        </tbody>
-                                                    </table>
+                                            <div class="cf-head">
+                                                <div>
+                                                    <h5>Contratos por vencer</h5>
+                                                    <p id="contratos-sub">Personas activas con fecha de término. «Gestionar» permite renovar, pasar a indefinido o no renovar.</p>
                                                 </div>
+                                                <button type="button" class="btn btn-light" onclick="loadContratosUI()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Actualizar</button>
                                             </div>
+                                            <div id="contratos-list-container"><div class="cf-msg"><span class="spinner-border spinner-border-sm"></span> Cargando contratos…</div></div>
                                         </div>
 
                                         <!-- Vista 2: Historial de Bajas (Nueva) -->
@@ -4986,7 +4953,7 @@
             <!-- Componentes de UI (Orden de dependencia) -->
             <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v18" defer></script>
-            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v19" defer></script>
+            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v21" defer></script>
             <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v17" defer></script>
             <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v16" defer></script>
             <script src="/static/js/dashboard_react.js?v={{ startup_id }}" defer></script>

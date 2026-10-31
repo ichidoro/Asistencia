@@ -114,3 +114,55 @@
 .cu-fecha { display: inline-grid; justify-items: center; min-width: 46px; padding: 5px 6px; border-radius: 10px; background: var(--ov-sunk, #f6f7fb); border: 1px solid var(--ov-line-2, #e8ebf2); line-height: 1.05; }
 .cu-fecha b { font-size: 17px; font-weight: 600; color: var(--ov-ink, #0f1a3a); font-variant-numeric: tabular-nums; }
 .cu-fecha small { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: var(--ov-ink-3, #5a6487); }
+
+/* ── Contratos por vencer: fusión A+B elegida por el dueño el 31-10-2026 (línea de días + grupos por urgencia) ── */
+#pills-vencimientos { --cf-ink: #101a3d; --cf-ink2: #3c4766; --cf-ink3: #626d8a; --cf-line: #e4e8f0; --cf-sunk: #f7f8fb; --cf-navy: #1b2f8f; color: var(--cf-ink); }
+.cf-k { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .22); font-size: 12px; font-weight: 600; }
+.nav-link:not(.active) .cf-k { background: var(--ov-sunk, #f7f8fb); color: var(--ov-ink-3, #626d8a); }
+.nav-link .cf-k:empty { display: none; }
+.cf-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 14px; }
+.cf-head h5 { margin: 0; font: 600 20px/1.2 'Barlow Semi Condensed', 'Barlow', sans-serif; color: var(--cf-ink); }
+.cf-head p { margin: 4px 0 0; font-size: 13.5px; color: var(--cf-ink3); }
+.cf-msg { padding: 28px 16px; text-align: center; color: var(--cf-ink3); border: 1px solid var(--cf-line); border-radius: 14px; background: #fff; }
+.cf-linea { border: 1px solid var(--cf-line); border-radius: 16px; background: #fff; padding: 14px 20px 10px; margin-bottom: 4px; }
+.cf-lt { font-weight: 600; font-size: 14.5px; }
+.cf-ls { font-size: 12.5px; color: var(--cf-ink3); margin-top: 1px; }
+.cf-eje { position: relative; height: 100px; margin: 6px 6px 0; }
+.cf-eje::before { content: ''; position: absolute; left: 0; right: 0; top: 64px; height: 2px; background: var(--cf-line); }
+.cf-zona { position: absolute; top: 60px; height: 10px; border-radius: 5px; }
+.cf-hoy { position: absolute; top: 18px; bottom: 18px; width: 2px; background: var(--cf-navy); }
+.cf-hoy span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 600 11.5px 'Barlow', sans-serif; color: var(--cf-navy); white-space: nowrap; }
+.cf-marca { position: absolute; top: 34px; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; }
+.cf-marca b { min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; display: grid; place-items: center; color: #fff; font: 600 12.5px 'Barlow', sans-serif; }
+.cf-marca small { font-size: 11.5px; color: var(--cf-ink3); white-space: nowrap; margin-top: 18px; font-variant-numeric: tabular-nums; }
+.cf-reglas { position: absolute; left: 0; right: 0; top: 0; height: 16px; font-size: 11.5px; color: var(--cf-ink3); }
+.cf-reglas span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.cf-gh { display: flex; align-items: center; gap: 8px; font: 600 13.5px 'Barlow', sans-serif; color: var(--cf-ink2); margin: 18px 0 8px 2px; }
+.cf-gh i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.cf-gh span { color: var(--cf-ink3); font-weight: 500; }
+.cf-lista { border: 1px solid var(--cf-line); border-radius: 14px; background: #fff; overflow: hidden; }
+.cf-fila { display: grid; grid-template-columns: 116px minmax(0, 1.6fr) minmax(0, 1fr) 190px auto; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--cf-line); }
+.cf-fila:last-child { border-bottom: 0; }
+.cf-fecha { display: grid; justify-items: start; }
+.cf-fecha b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cf-fecha small { font-size: 12.5px; font-weight: 600; }
+.cf-fecha .g-v, .cf-fecha .g-c { color: #a3261c; } .cf-fecha .g-p { color: #8a4b06; } .cf-fecha .g-o { color: #16673b; } .cf-fecha .g-s { color: var(--cf-ink3); }
+.cf-quien { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cf-n { font-weight: 600; font-size: 14px; letter-spacing: .01em; }
+.cf-s { font-size: 12.5px; color: var(--cf-ink3); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.cf-puesto, .cf-contrato { font-size: 13.5px; min-width: 0; }
+.cf-legal { display: inline-flex; align-items: center; gap: 5px; height: 22px; margin-top: 4px; padding: 0 8px; border-radius: 999px; background: #fdecea; color: #a3261c; font-size: 11.5px; font-weight: 600; }
+.cf-ges { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid #c9d1e6; background: #fff; color: var(--cf-navy); font: 600 13.5px 'Barlow', sans-serif; white-space: nowrap; cursor: pointer; }
+.cf-ges:hover { background: #eef1fb; border-color: var(--cf-navy); }
+.cf-ges:focus-visible { outline: 2px solid var(--cf-navy); outline-offset: 2px; }
+@media (max-width: 991.98px) {
+  .cf-fila { grid-template-columns: 110px minmax(0, 1fr) auto; grid-template-areas: "fecha quien ges" "fecha puesto ges" "fecha contrato ges"; row-gap: 6px; }
+  .cf-fecha { grid-area: fecha; align-self: start; } .cf-quien { grid-area: quien; } .cf-puesto { grid-area: puesto; } .cf-contrato { grid-area: contrato; } .cf-ges { grid-area: ges; }
+}
+@media (max-width: 575.98px) {
+  .cf-head { flex-direction: column; align-items: stretch; }
+  .cf-fila { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "fecha ges" "quien quien" "puesto puesto" "contrato contrato"; padding: 12px 14px; }
+  .cf-ges { min-height: 44px; }
+  .cf-reglas { display: none; }
+  .cf-linea { padding: 12px 12px 8px; }
+}
