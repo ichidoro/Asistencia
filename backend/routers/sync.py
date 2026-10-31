@@ -500,10 +500,17 @@ async def system_health() -> Dict[str, Any]:
     except Exception:
         marcaciones = None
 
+    try:
+        from backend.services import relojes_monitor
+        relojes = await relojes_monitor.estado_para_pantalla()
+    except Exception:
+        relojes = None
+
     result = {
         "status": "ok" if local_ok else "degraded",
         "local_db": "online" if local_ok else "offline",
-        "marcaciones": marcaciones
+        "marcaciones": marcaciones,
+        "relojes": relojes
     }
 
     _health_cache["data"] = result
@@ -724,12 +731,13 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
             force_recalculate=True # Asegura que se recalculen las horas del día de ayer/hoy
         )
         error_sync = stats.get('error_global') if isinstance(stats, dict) else None
-        from backend.services import sync_monitor
+        from backend.services import sync_monitor, relojes_monitor
         await sync_monitor.registrar_ciclo(
             ok=not error_sync,
             nuevas=int(stats.get('marcaciones_nuevas', 0)) if isinstance(stats, dict) else 0,
             error=error_sync,
         )
+        await relojes_monitor.actualizar()
         if error_sync:
             logger.error(f"❌ [Cron Sync] La sincronización terminó con error: {error_sync}")
             return {"status": "error", "message": f"La sincronización falló: {error_sync}", "stats": stats}
@@ -741,8 +749,9 @@ async def ejecutar_cron_sync(request: SyncCronRequest):
         }
     except Exception as e:
         logger.error(f"❌ [Cron Sync] Error en ejecución automática: {e}")
-        from backend.services import sync_monitor
+        from backend.services import sync_monitor, relojes_monitor
         await sync_monitor.registrar_ciclo(ok=False, error=str(e))
+        await relojes_monitor.actualizar()
         raise HTTPException(
             status_code=500,
             detail=f"Error en sincronización automática: {str(e)}"

@@ -109,6 +109,21 @@ class EasyTimeClient:
         for f in filas:
             acum[f.get("id")] = f
 
+    async def fetch_terminales(self) -> List[Dict[str, Any]]:
+        """Relojes registrados en EasyTime con su estado (código de EasyTime) y su última actividad."""
+        timeout = aiohttp.ClientTimeout(total=30)
+        conector = aiohttp.TCPConnector(ssl=False) if not settings.EASYTIME_VERIFY_SSL else None
+        async with aiohttp.ClientSession(timeout=timeout, cookie_jar=aiohttp.CookieJar(unsafe=True), connector=conector) as session:
+            await self._login(session)
+            async with session.get(f"{self.base_url}/iclock/api/terminals/", params={"page_size": 100}) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"EasyTime: la lista de relojes respondió HTTP {resp.status}")
+                body = await resp.json(content_type=None)
+        return [{"alias": str(t.get("alias") or t.get("sn") or "").strip(),
+                 "estado": t.get("state"),
+                 "ultima_actividad": t.get("last_activity")}
+                for t in (body.get("data") or [])]
+
     async def fetch_marcaciones(self, anio: int, mes: int,
                                 ruts_set: Optional[set] = None,
                                 rut_filter: Optional[str] = None,

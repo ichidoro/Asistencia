@@ -1889,10 +1889,11 @@ async function updateSystemStatus() {
     const res = await fetch(`${API_BASE_URL}/sync/health/`);
     if (!res.ok) throw new Error();
     const health = await res.json();
+    pintarRelojes(health.relojes);
 
     if (health.status === 'ok') {
-      dot.style.backgroundColor = '#10b981'; // Green
-      text.textContent = 'En línea';
+      dot.style.backgroundColor = ''; // verde del tema, el mismo de los relojes
+      text.textContent = 'Servidor en línea';
       dot.classList.remove('status-offline');
       return true;  // ← OK: el intervalo puede crecer
     } else {
@@ -1905,8 +1906,43 @@ async function updateSystemStatus() {
     dot.style.backgroundColor = '#ef4444'; // Red
     text.textContent = 'Sin conexión con el servidor';
     dot.classList.add('status-offline');
+    pintarRelojes(null); // sin servidor no se sabe nada de los relojes
     return false;   // ← Error: volver a 30s
   }
+}
+
+// Relojes de marcación bajo «Servidor en línea» (estado leído de EasyTime en cada ciclo del cron; /sync/health/).
+function pintarRelojes(r) {
+  const caja = document.getElementById('relojes-estado');
+  if (!caja) return;
+  if (!r || !Array.isArray(r.relojes) || !r.relojes.length) { caja.hidden = true; caja.replaceChildren(); return; }
+  const d = new Date();
+  const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const cuando = (ts) => {
+    if (!ts) return '';
+    const [f, h] = String(ts).split(' ');
+    const hm = (h || '').slice(0, 5);
+    if (f === hoy) return hm;
+    const [, m, dia] = f.split('-');
+    return `${dia}-${m} ${hm}`;
+  };
+  const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt) n.textContent = txt; return n; };
+  const titulo = el('div', 'relojes-titulo', 'Relojes de marcación');
+  const filas = r.relojes.map((x) => {
+    const g = x.grupo;
+    const derecha = { conectado: 'Conectado', sin_conexion: 'Sin conexión', aviso: x.texto, sin_dato: 'Sin dato' }[g] || x.texto;
+    const fila = el('div', 'reloj' + ({ sin_conexion: ' off', aviso: ' aviso', sin_dato: ' nd' }[g] || ''));
+    fila.append(el('span', 'rd'), el('span', '', x.alias), el('span', 'rh', derecha));
+    const visto = cuando(x.ultima_actividad);
+    if (g === 'sin_conexion' && visto) fila.append(el('span', 'rs', `Última actividad ${visto}`));
+    fila.title = g === 'sin_dato'
+      ? `${x.alias} · sin dato: no se pudo consultar los relojes${r.ultimo_ok ? ' desde las ' + cuando(r.ultimo_ok) : ''}`
+      : `${x.alias} · ${derecha.toLowerCase()}${visto ? ' · última actividad ' + visto : ''} · EasyTime: ${x.texto}`;
+    return fila;
+  });
+  const nota = (!r.vigente && r.ultimo_ok) ? [el('div', 'relojes-nota', `No se pudo consultar los relojes desde las ${cuando(r.ultimo_ok)}`)] : [];
+  caja.replaceChildren(titulo, ...filas, ...nota);
+  caja.hidden = false;
 }
 
 // --- Sync Modal Logic ---
