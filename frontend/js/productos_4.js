@@ -1307,94 +1307,38 @@ const Productos4Module = {
     // ==========================================
 
     renderizarConfiguracionCatalogo() {
-        const container = document.getElementById('tab-productos-propios');
-        if (!container) return;
-
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.catalogo') : true;
-
-        container.innerHTML = `
-            <div class="p-3">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <h5 class="fw-bold mb-1"><i class="bi bi-gift-fill text-primary me-2"></i>Catálogo de Productos Propios</h5>
-                        <p class="text-muted small mb-0">Gestione los productos fabricados por la empresa disponibles para el beneficio mensual por 100% de asistencia.</p>
-                    </div>
-                    ${canEdit ? `
-                    <button class="btn btn-primary btn-sm px-3" onclick="Productos4Module.abrirModalCrearProducto()">
-                        <i class="bi bi-plus-circle me-1"></i> Agregar Producto
-                    </button>
-                    ` : ''}
-                </div>
- 
-                <div class="table-responsive shadow-sm rounded-3">
-                    <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 80px;">Código</th>
-                                <th>Descripción</th>
-                                <th>Tipo</th>
-                                <th>Marca</th>
-                                <th>Formato / Unidad</th>
-                                <th class="text-center" style="width: 100px;">Límite Máx.</th>
-                                <th class="text-center" style="width: 100px;">Estado</th>
-                                ${canEdit ? `<th class="text-center" style="width: 100px;">Acciones</th>` : ''}
-                            </tr>
-                        </thead>
-                        <tbody id="catalogo-productos-tbody">
-                            <tr>
-                                <td colspan="${canEdit ? 8 : 7}" class="text-center py-4 text-muted">
-                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div> Cargando catálogo de productos...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-
+        // Configuración › Productos propios con el diseño B (01-11-2026): lista y ficha; se crea y edita con la ventana de siempre.
         this.cargarTablaProductos();
     },
 
     async cargarTablaProductos() {
         await this.cargarProductos();
-        const tbody = document.getElementById('catalogo-productos-tbody');
-        if (!tbody) return;
-
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('productos_4.catalogo') : true;
-
-        if (this.productos.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="${canEdit ? 8 : 7}" class="text-center py-4 text-muted">
-                        No hay productos registrados en el catálogo.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = this.productos.map(p => {
-            const statusBadge = p.activo 
-                ? `<span class="badge bg-success-subtle text-success px-2 py-0.8 rounded-pill small">Activo</span>`
-                : `<span class="badge bg-secondary-subtle text-secondary px-2 py-0.8 rounded-pill small">Inactivo</span>`;
-
-            const actionBtn = canEdit 
-                ? `<button class="btn btn-sm btn-outline-secondary px-2.5" onclick="Productos4Module.abrirModalEditarProducto(${p.codigo})"><i class="bi bi-pencil"></i></button>`
-                : '';
-
-            return `
-                <tr class="${!p.activo ? 'opacity-60 bg-light' : ''}">
-                    <td class="font-monospace fw-bold text-secondary">${p.codigo}</td>
-                    <td class="fw-semibold">${p.descripcion}</td>
-                    <td>${p.tipo}</td>
-                    <td>${p.marca}</td>
-                    <td>${p.unidad}</td>
-                    <td class="text-center fw-bold">${p.max_cantidad} uds</td>
-                    <td class="text-center">${statusBadge}</td>
-                    ${canEdit ? `<td class="text-center">${actionBtn}</td>` : ''}
-                </tr>
-            `;
-        }).join('');
+        const container = document.getElementById('tab-productos-propios');
+        if (!container || !window.FichaCfg) return;
+        const F = window.FichaCfg;
+        const canEdit = F.puede('productos_4.catalogo');
+        F.montar(container, {
+            clave: 'productos',
+            titulo: 'Productos propios',
+            descripcion: 'Productos de la empresa que se entregan como beneficio mensual a quien tiene el 100 % de asistencia.',
+            acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="Productos4Module.abrirModalCrearProducto()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Agregar producto</button>' : '',
+            items: this.productos.slice().sort(function (a, b) { return String(a.descripcion).localeCompare(String(b.descripcion), 'es'); }),
+            id: function (p) { return p.codigo; },
+            etiqueta: function (p) { return p.descripcion; },
+            sub: function (p) { return p.unidad || ''; },
+            apagado: function (p) { return !p.activo; },
+            vacio: 'No hay productos en el catálogo.',
+            ficha: function (p, panel) {
+                const dato = function (v) { return v === null || v === undefined || v === '' ? 'Sin dato' : String(v); };
+                panel.innerHTML = F.cabeza(p.descripcion, 'Código ' + p.codigo)
+                    + F.campo('Tipo', '<span>' + F.esc(dato(p.tipo)) + '</span>')
+                    + F.campo('Marca', '<span>' + F.esc(dato(p.marca)) + '</span>')
+                    + F.campo('Formato', '<span>' + F.esc(dato(p.unidad)) + '</span>')
+                    + F.campo('Entrega máxima por persona', '<span class="num">' + F.esc(dato(p.max_cantidad)) + (p.max_cantidad ? ' unidades' : '') + '</span>')
+                    + F.campo('En uso', '<span>' + (p.activo ? 'Se puede entregar' : 'No se entrega') + '</span>')
+                    + (canEdit ? F.pie('', '<button type="button" class="fcB-btn pri" onclick="Productos4Module.abrirModalEditarProducto(' + Number(p.codigo) + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar producto</button>') : '');
+            }
+        });
     },
 
     // --- Modal Crear Producto ---
