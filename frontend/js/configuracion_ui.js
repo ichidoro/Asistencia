@@ -198,139 +198,90 @@ function _estadoPreviewHtml(color, icono, sigla) {
 const _COLORES_ESPECIALES = /^color-(fluor|pulso|glitter)-/;
 // Marca siglas repetidas (bloquea al guardar) y colores repetidos (solo avisa)
 window.refreshEstadosAvisos = function() {
-    const activos = _estadosConfigList.filter(e => document.getElementById(`estado-activo-${e.codigo}`)?.checked);
+    // Lee de la pantalla el estado que se está editando y de los datos los demás (diseño B: una ficha a la vez)
+    const val = function (e, campo, porDefecto) {
+        const el = document.getElementById(`estado-${campo}-${e.codigo}`);
+        if (!el) return porDefecto;
+        return el.type === 'checkbox' ? el.checked : el.value;
+    };
+    const filas = _estadosConfigList.map(e => ({
+        e: e,
+        activo: !!val(e, 'activo', !!e.activo),
+        sigla: String(val(e, 'short', e.short_label || '') || _estadoSiglaDefecto(e.codigo)).trim().toUpperCase(),
+        color: val(e, 'color', e.color_clase || '')
+    }));
     const sig = {}, col = {};
-    activos.forEach(e => {
-        const sg = (document.getElementById(`estado-short-${e.codigo}`)?.value || _estadoSiglaDefecto(e.codigo)).trim().toUpperCase();
-        const cl = document.getElementById(`estado-color-${e.codigo}`)?.value || '';
-        (sig[sg] = sig[sg] || []).push(e.codigo);
-        (col[cl] = col[cl] || []).push(e.codigo);
-    });
-    _estadosConfigList.forEach(e => {
-        const inp = document.getElementById(`estado-short-${e.codigo}`);
-        const aviso = document.getElementById(`estado-aviso-${e.codigo}`);
+    filas.filter(x => x.activo).forEach(x => { (sig[x.sigla] = sig[x.sigla] || []).push(x.e.codigo); (col[x.color] = col[x.color] || []).push(x.e.codigo); });
+    const nombreDe = c => (_estadosConfigList.find(x => x.codigo === c) || {}).nombre_display || c;
+    filas.forEach(x => {
+        const inp = document.getElementById(`estado-short-${x.e.codigo}`);
+        const aviso = document.getElementById(`estado-aviso-${x.e.codigo}`);
         if (!inp || !aviso) return;
-        const esAct = activos.some(a => a.codigo === e.codigo);
-        const sg = (inp.value || _estadoSiglaDefecto(e.codigo)).trim().toUpperCase();
-        const cl = document.getElementById(`estado-color-${e.codigo}`)?.value || '';
-        const dupSig = esAct && (sig[sg] || []).length > 1 ? (sig[sg] || []).filter(c => c !== e.codigo) : [];
-        const dupCol = esAct && (col[cl] || []).length > 1 ? (col[cl] || []).filter(c => c !== e.codigo) : [];
+        const dupSig = x.activo && (sig[x.sigla] || []).length > 1 ? sig[x.sigla].filter(c => c !== x.e.codigo) : [];
+        const dupCol = x.activo && (col[x.color] || []).length > 1 ? col[x.color].filter(c => c !== x.e.codigo) : [];
         inp.classList.toggle('is-invalid', dupSig.length > 0 || !/^[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ.+\-]{1,5}$/.test(inp.value.trim() || 'X'));
         let h = '';
-        if (dupSig.length) h += `<div class="text-danger small fw-semibold"><i class="bi bi-x-octagon-fill"></i> Etiqueta repetida con ${dupSig.map(c => (_estadosConfigList.find(x => x.codigo === c) || {}).nombre_display || c).map(_escAttr).join(', ')}</div>`;
-        if (dupCol.length) h += `<div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Mismo color que ${dupCol.map(c => (_estadosConfigList.find(x => x.codigo === c) || {}).nombre_display || c).map(_escAttr).join(', ')}</div>`;
-        if (_COLORES_ESPECIALES.test(cl)) h += `<div class="text-muted small"><i class="bi bi-info-circle"></i> En la grilla se ve como su color base</div>`;
+        if (dupSig.length) h += '<p class="fcB-nota" style="color:#a3261c"><i class="bi bi-x-octagon-fill" aria-hidden="true"></i> Etiqueta repetida con ' + dupSig.map(nombreDe).map(_escAttr).join(', ') + '. Cámbiela antes de guardar.</p>';
+        if (dupCol.length) h += '<p class="fcB-nota"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Mismo color que ' + dupCol.map(nombreDe).map(_escAttr).join(', ') + '.</p>';
+        if (_COLORES_ESPECIALES.test(x.color)) h += '<p class="fcB-nota"><i class="bi bi-info-circle" aria-hidden="true"></i> En la grilla se ve como su color base.</p>';
         aviso.innerHTML = h;
     });
 };
 
 function renderEstadosConfig() {
+    // Diseño B (01-11-2026): lista de estados a la izquierda y su ficha con la vista previa a la derecha.
     const container = document.getElementById('estados-config-container');
-    if (!container) return;
-
-    const colorSelect = COLOR_OPTIONS.map(c =>
-        `<option value="${c.value}">${c.label}</option>`
-    ).join('');
-
-    let html = `
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h5 class="fw-bold mb-1"><i class="bi bi-palette" aria-hidden="true"></i> Estados</h5>
-            <p class="small text-muted mb-0">Define cómo se visualiza cada estado en la grilla y tooltips.
-            El <strong>código</strong> es inmutable — lo usa el motor de asistencia.</p>
-        </div>
-        <button class="btn btn-sm btn-outline-secondary" onclick="loadEstadosConfig()">
-            <i class="bi bi-arrow-clockwise"></i> Recargar
-        </button>
-    </div>
-    <div class="alert alert-info py-2 small mb-3">
-        <i class="bi bi-info-circle me-1"></i>
-        Los cambios se aplican en tiempo real; recarga la grilla de marcaciones para ver el efecto.
-        La vista previa muestra la <strong>etiqueta</strong> en una pastilla del <strong>color</strong> elegido, tal como se ve en la grilla.
-        Las etiquetas no pueden repetirse entre estados activos; si dos estados comparten color solo se avisa.
-        Los colores Flúor, Pulso y Glitter se ven como su color base en la grilla.
-    </div>
-    <div class="table-responsive">
-    <table class="table table-hover align-middle" id="tabla-estados-config">
-        <thead class="table-light">
-            <tr>
-                <th style="width:190px">Código</th>
-                <th style="width:150px">Nombre visible</th>
-                <th style="width:100px" class="text-center">Etiqueta (hasta 5)</th>
-                <th>Descripción</th>
-                <th style="width:175px">Color</th>
-                <th style="width:165px">Ícono</th>
-                <th style="width:90px" class="text-center">Vista previa</th>
-                <th style="width:80px" class="text-center">Activo</th>
-                <th style="width:80px" class="text-center">Guardar</th>
-            </tr>
-        </thead>
-        <tbody>
-    `;
-
-    _estadosConfigList.forEach(e => {
-        const colorOpts = COLOR_OPTIONS.map(c =>
-            `<option value="${c.value}" ${c.value === e.color_clase ? 'selected' : ''}>${c.label}</option>`
-        ).join('');
-
-        html += `
-        <tr id="estado-row-${e.codigo}">
-            <td>
-                <span class="badge bg-light text-dark border fw-bold font-monospace">${e.codigo}</span>
-                ${e.es_sistema ? '<div class="small text-muted" style="font-size: 0.75rem">Sistema</div>' : ''}
-                <div id="estado-aviso-${e.codigo}"></div>
-            </td>
-            <td>
-                <input type="text" class="form-control form-control-sm"
-                    id="estado-nombre-${e.codigo}" maxlength="40" value="${_escAttr(e.nombre_display || '')}"
-                    placeholder="Nombre visible">
-            </td>
-            <td>
-                <input type="text" class="form-control form-control-sm text-center font-monospace"
-                    id="estado-short-${e.codigo}" value="${_escAttr(e.short_label || _estadoSiglaDefecto(e.codigo))}"
-                    placeholder="Etiq" maxlength="5"
-                    oninput="previewEstadoBadge('${e.codigo}')">
-            </td>
-            <td>
-                <input type="text" class="form-control form-control-sm"
-                    id="estado-desc-${e.codigo}" maxlength="240" value="${_escAttr(e.descripcion || '')}"
-                    placeholder="Descripción del estado">
-            </td>
-            <td>
-                <select class="form-select form-select-sm" id="estado-color-${e.codigo}"
-                    onchange="previewEstadoBadge('${e.codigo}')">
-                    ${colorOpts}
-                </select>
-            </td>
-            <td>
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text p-1"><i id="estado-icon-preview-${e.codigo}" class="bi ${_escAttr(e.icono_bi || 'bi-circle')}"></i></span>
-                    <input type="text" class="form-control form-control-sm font-monospace"
-                        id="estado-icono-${e.codigo}" value="${_escAttr(e.icono_bi || '')}"
-                        placeholder="bi-circle-fill"
-                        oninput="previewEstadoBadge('${e.codigo}')">
-                </div>
-            </td>
-            <td class="text-center" id="preview-${e.codigo}">
-                ${_estadoPreviewHtml(e.color_clase, e.icono_bi, e.short_label || _estadoSiglaDefecto(e.codigo))}
-            </td>
-            <td class="text-center">
-                <div class="form-check form-switch d-flex justify-content-center">
-                    <input class="form-check-input" type="checkbox" role="switch"
-                        id="estado-activo-${e.codigo}" ${e.activo ? 'checked' : ''} onchange="refreshEstadosAvisos()">
-                </div>
-            </td>
-            <td class="text-center">
-                <button class="btn btn-sm btn-primary" onclick="saveEstado('${e.codigo}')" title="Guardar">
-                    <i class="bi bi-floppy"></i>
-                </button>
-            </td>
-        </tr>`;
+    if (!container || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const canEdit = F.puede('configuracion.editar');
+    const sinDibujo = l => String(l).replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/, '');
+    F.montar(container, {
+        clave: 'estados',
+        titulo: 'Estados',
+        descripcion: 'Cómo se ve cada estado en la grilla: su nombre, su etiqueta corta y su color. El código no cambia: lo usa el cálculo.',
+        acciones: '<button type="button" class="fcB-btn" onclick="loadEstadosConfig()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button>',
+        items: _estadosConfigList,
+        id: e => e.codigo,
+        etiqueta: e => e.nombre_display || e.codigo,
+        sub: e => e.short_label || _estadoSiglaDefecto(e.codigo),
+        apagado: e => !e.activo,
+        vacio: 'No hay estados.',
+        ficha: function (e, panel) {
+            const c = e.codigo;
+            panel.innerHTML = F.cabeza(e.nombre_display || c, 'Código ' + c + (e.es_sistema ? ' · estado del sistema' : ''))
+                + '<div id="estado-aviso-' + _escAttr(c) + '"></div>'
+                + F.campo('Vista previa', '<div id="preview-' + _escAttr(c) + '">' + _estadoPreviewHtml(e.color_clase, e.icono_bi, e.short_label || _estadoSiglaDefecto(c)) + '</div>', 'Así se ve en la grilla.')
+                + F.campo('Nombre visible', '<input type="text" class="fcB-inp" id="estado-nombre-' + _escAttr(c) + '" maxlength="40" value="' + _escAttr(e.nombre_display || '') + '">', '', 'estado-nombre-' + c)
+                + F.campo('Etiqueta', '<input type="text" class="fcB-inp" style="max-width:120px;text-transform:uppercase" id="estado-short-' + _escAttr(c) + '" maxlength="5" value="' + _escAttr(e.short_label || _estadoSiglaDefecto(c)) + '" oninput="previewEstadoBadge(\'' + _escAttr(c) + '\')">', 'Hasta 5 letras o números. No puede repetirse entre estados activos.', 'estado-short-' + c)
+                + F.campo('Color', '<select class="fcB-inp" id="estado-color-' + _escAttr(c) + '" onchange="previewEstadoBadge(\'' + _escAttr(c) + '\')">'
+                    + COLOR_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === e.color_clase ? ' selected' : '') + '>' + _escAttr(sinDibujo(o.label)) + '</option>').join('') + '</select>', '', 'estado-color-' + c)
+                + F.campo('Ícono', '<span style="display:inline-grid;place-items:center;width:38px;height:38px;border:1px solid #e6e9f1;border-radius:9px"><i id="estado-icon-preview-' + _escAttr(c) + '" class="bi ' + _escAttr(e.icono_bi || 'bi-circle') + '" aria-hidden="true"></i></span>'
+                    + '<input type="text" class="fcB-inp" style="max-width:220px" id="estado-icono-' + _escAttr(c) + '" value="' + _escAttr(e.icono_bi || '') + '" placeholder="bi-circle-fill" oninput="previewEstadoBadge(\'' + _escAttr(c) + '\')">', 'Nombre de un ícono de Bootstrap, por ejemplo bi-clock.', 'estado-icono-' + c)
+                + F.campo('Descripción', '<input type="text" class="fcB-inp" id="estado-desc-' + _escAttr(c) + '" maxlength="240" value="' + _escAttr(e.descripcion || '') + '">', 'Se lee al pasar el puntero sobre el estado.', 'estado-desc-' + c)
+                + F.campo('En uso', '<label class="fcB-sw"><input type="checkbox" id="estado-activo-' + _escAttr(c) + '"' + (e.activo ? ' checked' : '') + ' onchange="refreshEstadosAvisos()"><span aria-hidden="true"></span>Se muestra en la grilla</label>')
+                + (canEdit ? F.pie('', '<button type="button" class="fcB-btn" id="fes-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fes-guardar">Guardar cambios</button>') : '');
+            refreshEstadosAvisos();
+            if (!canEdit) { panel.querySelectorAll('input, select').forEach(x => { x.disabled = true; }); return; }
+            panel.querySelector('#fes-descartar').onclick = () => F.pintarFicha('estados');
+            panel.querySelector('#fes-guardar').onclick = ev => F.trabajando(ev.currentTarget, async () => {
+                await saveEstado(c);
+                // La lista refleja lo guardado (el servidor deja la etiqueta en mayúsculas)
+                const v = id => (document.getElementById(id) || {});
+                e.nombre_display = v('estado-nombre-' + c).value || e.nombre_display;
+                e.short_label = v('estado-short-' + c).value || e.short_label;
+                e.descripcion = v('estado-desc-' + c).value;
+                e.color_clase = v('estado-color-' + c).value || e.color_clase;
+                e.icono_bi = v('estado-icono-' + c).value;
+                e.activo = v('estado-activo-' + c).checked ? 1 : 0;
+                container.querySelectorAll('.fcB-it').forEach(b => {
+                    if (b.dataset.id !== c) return;
+                    b.querySelector('.n').textContent = e.nombre_display || c;
+                    const sm = b.querySelector('small'); if (sm) sm.textContent = e.short_label || '';
+                    b.classList.toggle('apagado', !e.activo);
+                });
+            });
+        }
     });
-
-    html += `</tbody></table></div>`;
-    container.innerHTML = html;
-    refreshEstadosAvisos();
 }
 
 window.previewEstadoBadge = function(codigo) {
