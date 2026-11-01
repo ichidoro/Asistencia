@@ -577,82 +577,38 @@ async function loadBonos() {
 }
 
 function renderBonos() {
+    // Diseño B (01-11-2026): lista de bonos y su ficha con las reglas. Las reglas tienen filas que se agregan y quitan:
+    // se cambian en el editor de siempre («Editar bono»).
     const container = document.getElementById('tab-bonos');
-    if (!container) return;
-
-    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.bonos') : true;
-    let h5Title = `
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h5 class="mb-0 fw-bold">Listado de Bonos e Incentivos</h5>
-            ${canEdit ? `
-            <button class="btn btn-primary btn-sm" onclick="openModalBono()">
-                <i class="bi bi-plus-circle"></i> Nuevo Bono
-            </button>
-            ` : ''}
-        </div>
-    `;
-
-    if (bonosList.length === 0) {
-        container.innerHTML = h5Title + `
-            <div class="empty-state py-5 card border-0 shadow-sm">
-                <div class="stat-icon mb-3" style="font-size: 3rem;"><i class="bi bi-cash-coin" aria-hidden="true"></i></div>
-                <h3>Sin Bonos Configurados</h3>
-                <p class="text-muted">Presione el botón para crear su primer bono genérico.</p>
-            </div>
-        `;
-        return;
-    }
-
-    let html = h5Title + `<div class="row g-4">`;
-
-    bonosList.forEach(bono => {
-        html += `
-            <div class="col-md-6">
-                <div class="card h-100 border-0 shadow-sm hover-up">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title fw-bold mb-0">${bono.nombre}</h6>
-                            <span class="badge ${bono.activo ? 'bg-success' : 'bg-secondary'}">
-                                ${bono.activo ? 'Activo' : 'Inactivo'}
-                            </span>
-                        </div>
-                        <p class="small text-muted mb-3" style="min-height: 40px;">${bono.descripcion || 'Sin descripción'}</p>
-                        
-                        <div class="rules-preview mb-3">
-                            <p class="small fw-bold mb-1">Reglas de Aplicación:</p>
-                            ${bono.reglas && bono.reglas.length > 0 ? bono.reglas.map(r => `
-                                <div class="rule-item-mini small p-2 bg-light rounded mb-1">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="fw-bold text-primary">$${r.monto.toLocaleString('es-CL')}</span>
-                                        <span class="badge bg-white text-dark border">${r.tipo_contrato || 'Todo Contrato'}</span>
-                                    </div>
-                                    <div class="d-flex flex-wrap gap-2 text-muted" style="font-size: 0.75rem;">
-                                        ${r.asistencia_minima < 100 ? `<span class="text-danger"><i class="bi bi-graph-down"></i> >${r.asistencia_minima}% Asist.</span>` : '<span><i class="bi bi-check-all"></i> 100% Asist.</span>'}
-                                        ${r.cargo_requerido ? `<span><i class="bi bi-person-badge"></i> ${r.cargo_requerido}</span>` : ''}
-                                        ${r.es_proporcional ? '<span class="text-info" title="Monto proporcional a días trabajados"><i class="bi bi-pie-chart"></i> Prop.</span>' : ''}
-                                    </div>
-                                </div>
-                            `).join('') : '<p class="text-muted small italic">Sin reglas definidas</p>'}
-                        </div>
-
-                        ${canEdit ? `
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-outline-primary btn-sm flex-grow-1" onclick="editBono(${bono.id})">
-                                <i class="bi bi-pencil"></i> Editar
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="confirmDeleteBono(${bono.id})">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
+    if (!container || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const canEdit = F.puede('configuracion.bonos');
+    const pesos = function (n) { return '$' + Number(n || 0).toLocaleString('es-CL'); };
+    F.montar(container, {
+        clave: 'bonos',
+        titulo: 'Bonos',
+        descripcion: 'Bonos e incentivos que se pagan según asistencia, contrato o cargo.',
+        acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="openModalBono()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo bono</button>' : '',
+        items: bonosList.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
+        id: function (b) { return b.id; },
+        etiqueta: function (b) { return b.nombre; },
+        sub: function (b) { const n = (b.reglas || []).length; return n ? n + (n === 1 ? ' regla' : ' reglas') : 'Sin reglas'; },
+        apagado: function (b) { return !b.activo; },
+        vacio: 'No hay bonos. Cree el primero con «Nuevo bono».',
+        ficha: function (b, panel) {
+            const reglas = (b.reglas || []).map(function (r) {
+                const cond = [r.tipo_contrato || 'Todo contrato', r.asistencia_minima < 100 ? 'asistencia sobre ' + r.asistencia_minima + ' %' : 'asistencia completa',
+                              r.cargo_requerido ? 'cargo ' + r.cargo_requerido : '', r.es_proporcional ? 'proporcional a los días trabajados' : ''].filter(Boolean).join(' · ');
+                return '<div class="fcB-campo"><div class="fcB-et"><span class="num">' + F.esc(pesos(r.monto)) + '</span></div><div class="fcB-ctl"><span>' + F.esc(cond) + '</span></div></div>';
+            }).join('');
+            panel.innerHTML = F.cabeza(b.nombre, b.descripcion || '')
+                + F.campo('En uso', '<span class="fcB-sw" aria-disabled="true"><input type="checkbox" disabled' + (b.activo ? ' checked' : '') + '><span aria-hidden="true"></span>' + (b.activo ? 'Se calcula' : 'No se calcula') + '</span>')
+                + F.seccion('Reglas de aplicación')
+                + (reglas || '<p class="fcB-nota">Este bono no tiene reglas: no se paga a nadie.</p>')
+                + (canEdit ? F.pie('<button type="button" class="fcB-btn borra" onclick="confirmDeleteBono(' + b.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar bono</button>',
+                    '<button type="button" class="fcB-btn pri" onclick="editBono(' + b.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar bono</button>') : '');
+        }
     });
-
-    html += `</div>`;
-    container.innerHTML = html;
 }
 
 // ==========================================
@@ -1374,6 +1330,7 @@ window.closeModalGestionPagadores = async function () {
 }
 
 function renderPagadoresList() {
+    // La ventana «Gestionar pagadores» (desde una justificación) sigue con su tabla; la pestaña usa el diseño B.
     const html = pagadoresList.map(p => `
         <tr>
             <td class="small fw-bold">${p.nombre}</td>
@@ -1388,35 +1345,56 @@ function renderPagadoresList() {
 
     const bodyModal = document.getElementById('pagadores-list-body');
     if (bodyModal) bodyModal.innerHTML = html;
+    pagadoresFichaB();
+}
 
-    const bodyConfig = document.getElementById('config-pagadores-list-body');
-    if (bodyConfig) bodyConfig.innerHTML = html;
+function pagadoresFichaB() {
+    const cont = document.getElementById('pagadores-fcb');
+    if (!cont || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const canEdit = F.puede('configuracion.editar');
+    F.montar(cont, {
+        clave: 'pagadores',
+        titulo: 'Pagadores',
+        descripcion: 'Quién paga cada justificación o beneficio: el empleador, Fonasa, la mutual u otra entidad.',
+        acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="FichaCfg.nuevo(\'pagadores\')"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo pagador</button>' : '',
+        items: pagadoresList.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
+        id: function (p) { return p.id; },
+        etiqueta: function (p) { return p.nombre; },
+        apagado: function (p) { return !p.activo; },
+        vacio: 'No hay pagadores.',
+        ficha: function (p, panel) {
+            const nuevo = !p;
+            p = p || { nombre: '', activo: true };
+            panel.innerHTML = F.cabeza(nuevo ? 'Nuevo pagador' : p.nombre, canEdit ? 'Se cambia aquí mismo.' : 'Solo lectura.')
+                + F.campo('Nombre', F.texto('fpag-nombre', p.nombre), '', 'fpag-nombre')
+                + F.campo('En uso', F.interruptor('fpag-activo', p.activo, 'Se puede elegir en una justificación'))
+                + (canEdit ? F.pie('', '<button type="button" class="fcB-btn" id="fpag-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fpag-guardar">' + (nuevo ? 'Crear pagador' : 'Guardar cambios') + '</button>') : '');
+            if (!canEdit) { panel.querySelectorAll('input').forEach(function (e) { e.disabled = true; }); return; }
+            panel.querySelector('#fpag-descartar').onclick = function () { F.pintarFicha('pagadores'); };
+            panel.querySelector('#fpag-guardar').onclick = function (ev) {
+                const nombre = panel.querySelector('#fpag-nombre').value.trim();
+                if (!nombre) { showToast('Falta el nombre del pagador.', 'warning'); return; }
+                F.trabajando(ev.currentTarget, async function () {
+                    const r = await fetch(API_CONFIG + 'pagadores/' + (p.id ? p.id + '/' : ''), {
+                        method: p.id ? 'PUT' : 'POST',
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nombre: nombre, activo: panel.querySelector('#fpag-activo').checked })
+                    });
+                    const d = await r.json().catch(function () { return {}; });
+                    if (!r.ok) { showToast(d.detail || 'No se pudo guardar el pagador.', 'danger'); return; }
+                    showToast(p.id ? 'Listo. Cambios guardados.' : 'Listo. Pagador agregado.', 'success');
+                    if (d && d.id) F.recordar('pagadores', d.id);
+                    await loadPagadores();
+                    renderPagadoresList();
+                });
+            };
+        }
+    });
 }
 
 window.openTabPagadores = function () {
     renderPagadoresList();
-}
-
-window.addPagadorFromConfig = async function () {
-    const input = document.getElementById('config-new-pagador-nombre');
-    const nombre = input.value.trim();
-    if (!nombre) return;
-
-    try {
-        const response = await fetch(`${API_CONFIG}pagadores/`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre, activo: true })
-        });
-        if (!response.ok) throw new Error("Error al añadir");
-
-        input.value = '';
-        showToast("Listo. Pagador agregado.", "success");
-        await loadPagadores();
-        renderPagadoresList();
-    } catch (error) {
-        alert(error.message);
-    }
 }
 
 window.addPagador = async function () {
@@ -1526,82 +1504,69 @@ window.saveGlobalAjustes = async function () {
 }
 
 window.loadAreaNotificaciones = async function () {
-    const tbody = document.getElementById('tabla-notificaciones-areas');
-    if (!tbody) return;
+    // Diseño B (01-11-2026): la pestaña Correo es una lista («Avisos generales» y cada área) con su ficha
+    if (document.getElementById('correo-fcb')) return correoFichaB();
+};
 
-    try {
-        const res = await fetch(`${API_CONFIG}notificaciones_areas/`);
-        if (!res.ok) throw new Error("Error cargando configuración por área");
-        
-        const areas = await res.json();
-        
-        if (areas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">No hay configuraciones por área. Se usará el correo global para todas las áreas.</td></tr>';
-            return;
+async function correoFichaB() {
+    const cont = document.getElementById('correo-fcb');
+    if (!cont || !window.FichaCfg) return;
+    const F = window.FichaCfg, canEdit = F.puede('configuracion.editar');
+    const leer = async function (url, porDefecto) {
+        try { const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } }); return r.ok ? await r.json() : porDefecto; }
+        catch (e) { return porDefecto; }
+    };
+    const res = await Promise.all([leer(API_CONFIG + 'ajustes/email_notificaciones_rrhh/', ''), leer(API_CONFIG + 'ajustes/email_notificaciones_cierre_rrhh/', ''),
+                                   leer(API_CONFIG + 'notificaciones_areas/', []), leer('/api/configuracion/areas/', [])]);
+    const porArea = {};
+    (res[2] || []).forEach(function (a) { porArea[String(a.area).toUpperCase()] = a.emails; });
+    const nombres = (res[3] || []).map(function (a) { return String(a.nombre).toUpperCase(); });
+    Object.keys(porArea).forEach(function (a) { if (nombres.indexOf(a) < 0) nombres.push(a); });
+    nombres.sort(function (a, b) { return a.localeCompare(b, 'es'); });
+    const items = [{ id: 'general', nombre: 'Avisos generales', emails: null }].concat(nombres.map(function (n) { return { id: n, nombre: n, emails: porArea[n] || '' }; }));
+    F.montar(cont, {
+        clave: 'correo',
+        titulo: 'Correo',
+        descripcion: 'A quién le llegan los avisos por correo. Un área sin correos propios usa los de «Avisos generales».',
+        items: items,
+        id: function (x) { return x.id; },
+        etiqueta: function (x) { return x.nombre; },
+        sub: function (x) { if (x.id === 'general') return ''; const n = x.emails ? x.emails.split(',').filter(function (e) { return e.trim(); }).length : 0; return n ? n + (n === 1 ? ' correo' : ' correos') : 'Usa los generales'; },
+        ficha: function (x, panel) {
+            if (x.id === 'general') {
+                panel.innerHTML = F.cabeza('Avisos generales', 'Para todas las áreas que no tienen correos propios.')
+                    + F.campo('Avisos de RRHH', '<input type="text" class="fcB-inp" id="email-notificaciones-rrhh" value="' + F.esc(res[0] || '') + '" placeholder="rrhh@empresa.cl">', 'Separe varios correos con coma.', 'email-notificaciones-rrhh')
+                    + F.campo('Avisos de cierre del período', '<input type="text" class="fcB-inp" id="email-notificaciones-cierre-rrhh" value="' + F.esc(res[1] || '') + '" placeholder="gerencia@empresa.cl">', 'Reciben el acta cuando se cierra un tramo.', 'email-notificaciones-cierre-rrhh')
+                    + (canEdit ? F.pie('', '<button type="button" class="fcB-btn" id="fco-descartar">Descartar</button><button type="button" class="fcB-btn pri btn-primary" id="fco-guardar">Guardar cambios</button>') : '');
+                if (!canEdit) { panel.querySelectorAll('input').forEach(function (e) { e.disabled = true; }); return; }
+                panel.querySelector('#fco-descartar').onclick = function () { F.pintarFicha('correo'); };
+                panel.querySelector('#fco-guardar').onclick = async function () { await saveGlobalAjustes(); res[0] = panel.querySelector('#email-notificaciones-rrhh').value.trim(); res[1] = panel.querySelector('#email-notificaciones-cierre-rrhh').value.trim(); };
+                return;
+            }
+            panel.innerHTML = F.cabeza(x.nombre, x.emails ? 'Los avisos de las personas de esta área llegan a estos correos.' : 'Esta área todavía usa los correos de «Avisos generales».')
+                + F.campo('Correos del área', '<input type="text" class="fcB-inp" id="fco-emails" value="' + F.esc(x.emails || '') + '" placeholder="jefe.area@empresa.cl">', 'Separe varios correos con coma.', 'fco-emails')
+                + (canEdit ? F.pie(x.emails ? '<button type="button" class="fcB-btn borra" id="fco-quitar"><i class="bi bi-trash3" aria-hidden="true"></i>Quitar correos del área</button>' : '',
+                    '<button type="button" class="fcB-btn" id="fco-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fco-guardar">Guardar cambios</button>') : '');
+            if (!canEdit) { panel.querySelectorAll('input').forEach(function (e) { e.disabled = true; }); return; }
+            panel.querySelector('#fco-descartar').onclick = function () { F.pintarFicha('correo'); };
+            const quitar = panel.querySelector('#fco-quitar');
+            if (quitar) quitar.onclick = function () { deleteAreaNotificaciones(x.nombre); };
+            panel.querySelector('#fco-guardar').onclick = function (ev) {
+                const emails = panel.querySelector('#fco-emails').value.trim();
+                if (!emails) { showToast('Escriba al menos un correo, o use «Quitar correos del área».', 'warning'); return; }
+                F.trabajando(ev.currentTarget, async function () {
+                    const r = await fetch(API_CONFIG + 'notificaciones_areas/', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ area: x.nombre, emails: emails })
+                    });
+                    if (!r.ok) { showToast('No se guardaron los correos del área.', 'danger'); return; }
+                    showToast('Listo. Se guardaron los correos de aviso del área ' + x.nombre + '.', 'success');
+                    await correoFichaB();
+                });
+            };
         }
-
-        tbody.innerHTML = areas.map(a => `
-            <tr>
-                <td class="fw-bold">${a.area}</td>
-                <td><i class="bi bi-envelope-at small text-muted me-2"></i> ${a.emails}</td>
-                <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editAreaNotificaciones('${a.area}', '${a.emails}')" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAreaNotificaciones('${a.area}')" title="Eliminar">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-
-    } catch (e) {
-        console.error("Error al cargar configuraciones de áreas", e);
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Error al cargar configuraciones.</td></tr>';
-    }
-}
-
-window.saveAreaNotificaciones = async function () {
-    const areaInput = document.getElementById('notif-area-nombre');
-    const emailsInput = document.getElementById('notif-area-emails');
-    
-    if (!areaInput || !emailsInput) return;
-    
-    const area = areaInput.value.trim().toUpperCase();
-    const emails = emailsInput.value.trim();
-    
-    if (!area || !emails) {
-        showToast("Faltan datos. Escriba el área y los correos.", "warning");
-        return;
-    }
-    
-    try {
-        const res = await fetch(`${API_CONFIG}notificaciones_areas/`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ area, emails })
-        });
-        
-        if (!res.ok) throw new Error("Error al guardar configuración de área.");
-        
-        showToast(`Listo. Se guardaron los correos de aviso del área ${area}.`, "success");
-        areaInput.value = '';
-        emailsInput.value = '';
-        loadAreaNotificaciones();
-        
-    } catch (e) {
-        Avisos.error("No se guardaron los correos de aviso del área. " + e.message);
-    }
-}
-
-window.editAreaNotificaciones = function(area, emails) {
-    const areaInput = document.getElementById('notif-area-nombre');
-    const emailsInput = document.getElementById('notif-area-emails');
-    if (areaInput && emailsInput) {
-        areaInput.value = area;
-        emailsInput.value = emails;
-        emailsInput.focus();
-    }
+    });
 }
 
 window.deleteAreaNotificaciones = async function (area) {
