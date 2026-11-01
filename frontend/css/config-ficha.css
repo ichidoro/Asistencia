@@ -1,0 +1,90 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Configuración con el diseño B elegido por el dueño (01-11-2026): lista a la
+   izquierda y ficha a la derecha; se cambia ahí mismo y se guarda una vez.
+   Lo arma js/config_ficha.js (FichaCfg). Va al final de bundle-tema.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fcB {
+  --fc-ink: var(--ov-ink, #101a3d); --fc-ink-2: var(--ov-ink-2, #3c4767); --fc-ink-3: #5d6886;
+  --fc-line: var(--ov-line, #e6e9f1); --fc-line-2: var(--ov-line-2, #eff1f6); --fc-sunk: #f6f7fb;
+  --fc-navy: #1b2f8f; --fc-navy-bg: #eef1fb; --fc-ok: #1f9d55; --fc-red: #a3261c; --fc-red-bg: #fdecea;
+  --fc-shadow: 0 1px 2px rgba(16,26,61,.05), 0 6px 18px -10px rgba(16,26,61,.10);
+  font-family: 'Barlow', system-ui, sans-serif; color: var(--fc-ink);
+}
+.fcB * { box-sizing: border-box; }
+.fcB-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin: 0 0 16px; }
+.fcB-h h2 { margin: 0; font: 600 20px/1.2 'Barlow', sans-serif; color: var(--fc-ink); }
+.fcB-h p { margin: 3px 0 0; font-size: 14px; color: var(--fc-ink-3); max-width: 64ch; }
+.fcB-acc { display: flex; gap: 8px; flex-wrap: wrap; }
+.fcB-md { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.fcB-md.solo { grid-template-columns: minmax(0, 1fr); }
+.fcB-lista { background: #fff; border: 1px solid var(--fc-line); border-radius: 16px; box-shadow: var(--fc-shadow); overflow: hidden; display: flex; flex-direction: column; max-height: 70vh; overflow-y: auto; }
+.fcB-it { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 11px 14px; border: 0; border-bottom: 1px solid var(--fc-line-2); background: transparent; text-align: left; font: 500 14px 'Barlow', sans-serif; color: var(--fc-ink); cursor: pointer; transition: background .15s ease; }
+.fcB-it:last-child { border-bottom: 0; }
+.fcB-it:hover { background: #f8f9fd; }
+.fcB-it:focus-visible { outline: 2px solid var(--fc-navy); outline-offset: -2px; }
+.fcB-it .n { min-width: 0; overflow-wrap: anywhere; }
+.fcB-it small { flex: none; font-size: 12.5px; color: var(--fc-ink-3); font-weight: 500; }
+.fcB-it.sel { background: var(--fc-navy-bg); color: var(--fc-navy); font-weight: 600; box-shadow: inset 0 0 0 1px rgba(27,47,143,.15); }
+.fcB-it.apagado .n { color: var(--fc-ink-3); }
+.fcB-it.apagado .n::after { content: ' · sin uso'; font-weight: 500; font-size: 12.5px; }
+.fcB-ficha { background: #fff; border: 1px solid var(--fc-line); border-radius: 16px; box-shadow: var(--fc-shadow); padding: 20px 22px; min-width: 0; }
+.fcB-fh h3 { margin: 0 0 4px; font: 600 18px/1.25 'Barlow', sans-serif; color: var(--fc-ink); }
+.fcB-fh p { margin: 0 0 12px; color: var(--fc-ink-3); font-size: 13.5px; }
+.fcB-sec { margin: 18px 0 2px; font-size: 13px; font-weight: 600; color: var(--fc-ink-3); }
+.fcB-campo { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--fc-line-2); }
+.fcB-et label, .fcB-et span { font-size: 14px; font-weight: 600; color: var(--fc-ink-2); }
+.fcB-et p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--fc-ink-3); }
+.fcB-ctl { min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fcB-inp { height: 38px; border: 1px solid var(--fc-line); border-radius: 9px; padding: 0 12px; font: 500 14px 'Barlow', sans-serif; color: var(--fc-ink); background: #fff; width: 100%; max-width: 380px; }
+textarea.fcB-inp { height: auto; padding: 8px 12px; resize: vertical; }
+.fcB-inp.num { max-width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+.fcB-inp:focus { outline: 0; border-color: var(--fc-navy); box-shadow: 0 0 0 3px rgba(27,47,143,.12); }
+.fcB-seg { display: inline-flex; flex-wrap: wrap; padding: 3px; background: var(--fc-sunk); border-radius: 10px; }
+.fcB-seg button { height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; font: 500 13.5px 'Barlow', sans-serif; color: var(--fc-ink-2); cursor: pointer; }
+.fcB-seg button:hover:not(:disabled) { color: var(--fc-ink); }
+.fcB-seg button.on { background: #fff; color: var(--fc-ink); font-weight: 600; box-shadow: 0 1px 2px rgba(16,26,61,.12); }
+.fcB-seg button:focus-visible { outline: 2px solid var(--fc-navy); outline-offset: 1px; }
+.fcB-seg button:disabled { cursor: default; }
+.fcB-sw { display: inline-flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; color: var(--fc-ink-2); cursor: pointer; }
+.fcB-sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fcB-sw span { width: 40px; height: 24px; border-radius: 12px; background: #c9d0df; position: relative; transition: background .15s ease; flex: none; }
+.fcB-sw span::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s ease; box-shadow: 0 1px 2px rgba(16,26,61,.2); }
+.fcB-sw input:checked + span { background: var(--fc-ok); }
+.fcB-sw input:checked + span::after { transform: translateX(16px); }
+.fcB-sw input:focus-visible + span { outline: 2px solid var(--fc-navy); outline-offset: 2px; }
+.fcB-mas { margin-top: 10px; border-top: 1px solid var(--fc-line-2); }
+.fcB-mas summary { padding: 12px 0 4px; font-size: 14px; font-weight: 600; color: var(--fc-navy); cursor: pointer; list-style: none; }
+.fcB-mas summary::-webkit-details-marker { display: none; }
+.fcB-mas summary::before { content: '\203A'; display: inline-block; margin-right: 8px; transition: transform .15s ease; }
+.fcB-mas[open] summary::before { transform: rotate(90deg); }
+.fcB-pie { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--fc-line); }
+.fcB-pie-d { display: flex; gap: 8px; flex-wrap: wrap; }
+.fcB-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 15px; border-radius: 9px; border: 1px solid var(--fc-line); background: #fff; color: var(--fc-ink-2); font: 600 14px 'Barlow', sans-serif; white-space: nowrap; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.fcB-btn:hover { border-color: #c9d1e6; color: var(--fc-ink); }
+.fcB-btn.pri { background: var(--fc-navy); border-color: var(--fc-navy); color: #fff; }
+.fcB-btn.pri:hover { background: #22389e; }
+.fcB-btn.ent { background: var(--fc-navy-bg); border-color: transparent; color: var(--fc-navy); }
+.fcB-btn.borra { color: var(--fc-red); }
+.fcB-btn.borra:hover { background: var(--fc-red-bg); border-color: #f3c7c2; }
+.fcB-btn:focus-visible { outline: 2px solid var(--fc-navy); outline-offset: 2px; }
+.fcB-btn:disabled { opacity: .7; cursor: progress; }
+.fcB-btn .spinner-border { width: 14px; height: 14px; border-width: 2px; }
+.fcB-vacio { margin: 0; padding: 16px; font-size: 14px; color: var(--fc-ink-3); }
+.fcB-nota { margin: 6px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--fc-sunk); font-size: 13px; color: var(--fc-ink-2); }
+.fcB-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fcB-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 11px; border-radius: 8px; background: var(--fc-sunk); border: 1px solid var(--fc-line); font-size: 13px; color: var(--fc-ink-2); }
+.fcB-chip button { width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--fc-ink-3); display: inline-grid; place-items: center; cursor: pointer; }
+.fcB-chip button:hover { background: var(--fc-red-bg); color: var(--fc-red); }
+
+@media (max-width: 991px) {
+  .fcB-md { grid-template-columns: minmax(0, 1fr); }
+  .fcB-lista { max-height: 320px; }
+}
+@media (max-width: 600px) {
+  .fcB-ficha { padding: 16px; }
+  .fcB-campo { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .fcB-inp { max-width: none; height: 44px; }
+  .fcB-btn { height: 44px; }
+  .fcB-pie, .fcB-pie-d { width: 100%; }
+  .fcB-pie-d .fcB-btn { flex: 1; }
+}

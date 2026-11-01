@@ -1029,87 +1029,99 @@ window.sortJustificaciones = function (key) {
 };
 
 window.renderTiposJustificacion = function () {
+    // Diseño B (01-11-2026): lista de tipos a la izquierda y su ficha a la derecha; se cambia ahí mismo, sin ventana.
+    // La ventana «modal-tipo-justificacion» sigue existiendo para el asistente de configuración inicial (sync_wizard).
     const container = document.getElementById('tab-justificaciones');
-    if (!container) return;
-
-    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.justificaciones') : true;
-    let h5Title = `
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h5 class="mb-0 fw-bold">Configuración de Justificaciones e Inasistencias</h5>
-            ${canEdit ? `
-            <button class="btn btn-primary btn-sm" onclick="openModalTipoJ()">
-                <i class="bi bi-plus-circle"></i> Nuevo Tipo
-            </button>
-            ` : ''}
-        </div>
-    `;
-
-    let html = h5Title + `
-        <div class="table-responsive card border-0 shadow-sm p-3">
-            <table class="table table-hover align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th style="cursor: pointer;" onclick="sortJustificaciones('nombre')" title="Ordenar por Nombre">
-                            Nombre y Descripción <i id="sort-icon-justificaciones-nombre" class="bi bi-arrow-down-up small text-muted"></i>
-                        </th>
-                        <th style="cursor: pointer;" onclick="sortJustificaciones('dias_habiles')" title="Ordenar por Cálculo">
-                            Cálculo <i id="sort-icon-justificaciones-dias_habiles" class="bi bi-arrow-down-up small text-muted"></i>
-                        </th>
-                        <th style="cursor: pointer;" onclick="sortJustificaciones('con_goce_sueldo')" title="Ordenar por Goce">
-                            Goce Sueldo <i id="sort-icon-justificaciones-con_goce_sueldo" class="bi bi-arrow-down-up small text-muted"></i>
-                        </th>
-                        <th style="cursor: pointer;" onclick="sortJustificaciones('activo')" title="Ordenar por Estado">
-                            Estado <i id="sort-icon-justificaciones-activo" class="bi bi-arrow-down-up small text-muted"></i>
-                        </th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="justificaciones-table-body">
-    `;
-
-    tiposJustificacionList.forEach(tipo => {
-        html += `
-            <tr>
-                <td>
-                    <div class="fw-bold text-primary">${tipo.nombre}</div>
-                    <div class="small text-muted" style="font-size: 0.75rem;">${tipo.descripcion || 'Sin descripción'}</div>
-                </td>
-                <td>
-                    <span class="badge ${!tipo.dias_corridos ? 'bg-outline-primary bordered' : 'bg-outline-info bordered'}" 
-                          style="color: #666; border: 1px solid #ddd;">
-                        ${!tipo.dias_corridos ? 'Hábiles' : 'Corridos'}
-                    </span>
-                </td>
-                <td>
-                    <span class="badge ${tipo.con_goce_sueldo ? 'bg-success' : 'bg-danger'}">
-                        ${tipo.con_goce_sueldo ? 'Sí' : 'No'}
-                    </span>
-                    <div class="small text-muted" style="font-size: 0.75rem;">Pagador: ${tipo.pagador}</div>
-                </td>
-                <td>
-                    <span class="badge ${tipo.activo ? 'bg-light text-success' : 'bg-light text-muted'}">
-                        ${tipo.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                </td>
-                <td>
-                    ${canEdit ? `
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-light" onclick="editTipoJ(${tipo.id})"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-sm btn-light text-danger" onclick="confirmDeleteTipoJ(${tipo.id})"><i class="bi bi-trash"></i></button>
-                    </div>
-                    ` : '<span class="text-muted small">Sólo Lectura</span>'}
-                </td>
-            </tr>
-        `;
+    if (!container || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const canEdit = F.puede('configuracion.justificaciones');
+    const items = tiposJustificacionList.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+    F.montar(container, {
+        clave: 'just',
+        titulo: 'Justificaciones',
+        descripcion: 'Tipos de permiso y licencia que se pueden registrar a una persona. Definen si el día se paga y quién lo paga.',
+        acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="FichaCfg.nuevo(\'just\')"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo tipo</button>' : '',
+        items: items,
+        id: function (t) { return t.id; },
+        etiqueta: function (t) { return t.nombre; },
+        sub: function (t) { return t.con_goce_sueldo ? 'Con goce' : 'Sin goce'; },
+        apagado: function (t) { return !t.activo; },
+        vacio: 'No hay tipos de justificación. Cree el primero con «Nuevo tipo».',
+        ficha: function (t, panel) { fichaTipoJ(t, panel, canEdit); }
     });
+};
 
-    html += `</tbody></table></div>`;
-    container.innerHTML = html;
+async function pagadoresParaFicha() {
+    if (typeof pagadoresList !== 'undefined' && pagadoresList && pagadoresList.length) return pagadoresList;
+    try {
+        const r = await fetch(API_CONFIG + 'pagadores/', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } });
+        return r.ok ? await r.json() : [];
+    } catch (e) { return []; }
+}
 
-    // Update icons AFTER render
-    if (window.TableSorter) {
-        TableSorter.updateIcons('justificaciones', ['nombre', 'dias_habiles', 'con_goce_sueldo', 'activo']);
-    }
+async function fichaTipoJ(t, panel, canEdit) {
+    const F = window.FichaCfg, esNuevo = !t;
+    t = t || { nombre: '', nomenclatura: '', descripcion: '', con_goce_sueldo: true, dias_corridos: false, pagador: 'Empleador', dias_defecto: null,
+               activo: true, min_dias: 1, max_dias: null, frecuencia_anual: null, sobreescribe_feriados: false, es_horas_sindicales: false,
+               es_por_horas: false, genera_deuda_horaria: false };
+    const pag = await pagadoresParaFicha();
+    const opsPag = pag.map(function (p) { return [p.nombre, p.nombre]; });
+    if (t.pagador && !opsPag.some(function (o) { return o[0] === t.pagador; })) opsPag.unshift([t.pagador, t.pagador]);
+    const ro = !canEdit;
+    panel.innerHTML = F.cabeza(esNuevo ? 'Nuevo tipo de justificación' : t.nombre,
+            canEdit ? 'Se cambia aquí mismo. Los cambios valen desde que se guardan.' : 'Solo lectura: su usuario no puede cambiar las justificaciones.')
+        + F.campo('Nombre', F.texto('fj-nombre', t.nombre), '', 'fj-nombre')
+        + F.campo('Sigla', F.texto('fj-sigla', t.nomenclatura || '', ' maxlength="8"'), 'La que se ve en la grilla, por ejemplo LM o VAC.', 'fj-sigla')
+        + F.campo('Cómo se cuentan los días', F.seg('fj-periodo', [['true', 'Días hábiles'], ['false', 'Días corridos']], t.dias_corridos ? 'false' : 'true', ro),
+            'Hábiles: de lunes a viernes. Corridos: todos los días.')
+        + F.campo('Goce de sueldo', F.seg('fj-goce', [['true', 'Sí, se paga'], ['false', 'No se paga']], t.con_goce_sueldo ? 'true' : 'false', ro))
+        + F.campo('Quién paga', F.lista('fj-pagador', opsPag, t.pagador || 'Empleador'), '', 'fj-pagador')
+        + F.campo('Días por defecto', F.numero('fj-dias', t.dias_defecto, ' min="0"'), 'Los que se proponen al registrarla. Vacío: se eligen a mano.', 'fj-dias')
+        + F.campo('En uso', F.interruptor('fj-activo', t.activo, 'Se puede elegir al justificar un día'))
+        + F.mas('Más opciones',
+            F.campo('Mínimo de días', F.numero('fj-min', t.min_dias || 1, ' min="1"'), '', 'fj-min')
+            + F.campo('Máximo de días', F.numero('fj-max', t.max_dias, ' min="1"'), 'Vacío: sin máximo.', 'fj-max')
+            + F.campo('Veces al año', F.numero('fj-frec', t.frecuencia_anual, ' min="1"'), 'Vacío: sin límite.', 'fj-frec')
+            + F.campo('Si cae en un feriado', F.seg('fj-feriados', [['false', 'Respeta el feriado'], ['true', 'Reemplaza al feriado']], t.sobreescribe_feriados ? 'true' : 'false', ro))
+            + F.campo('Horas sindicales', F.seg('fj-sindical', [['false', 'No'], ['true', 'Sí']], t.es_horas_sindicales ? 'true' : 'false', ro))
+            + F.campo('Duración', F.seg('fj-parcial', [['false', 'Día completo'], ['true', 'Por horas']], t.es_por_horas ? 'true' : 'false', ro), 'Por horas: un permiso de parte del día.')
+            + F.campo('Genera deuda de horas', F.seg('fj-deuda', [['false', 'No'], ['true', 'Sí, se recuperan']], t.genera_deuda_horaria ? 'true' : 'false', ro))
+            + F.campo('Descripción', F.area('fj-desc', t.descripcion || ''), '', 'fj-desc'))
+        + (canEdit ? F.pie(esNuevo ? '' : '<button type="button" class="fcB-btn borra" id="fj-borrar"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar tipo</button>',
+            '<button type="button" class="fcB-btn" id="fj-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fj-guardar">' + (esNuevo ? 'Crear tipo' : 'Guardar cambios') + '</button>') : '');
+    if (ro) { panel.querySelectorAll('select, input, textarea').forEach(function (e) { e.disabled = true; }); return; }
+    panel.querySelector('#fj-descartar').onclick = function () { F.pintarFicha('just'); };
+    const borrar = panel.querySelector('#fj-borrar');
+    if (borrar) borrar.onclick = function () { confirmDeleteTipoJ(t.id); };
+    panel.querySelector('#fj-guardar').onclick = function (ev) { guardarFichaTipoJ(t, panel, ev.currentTarget); };
+}
+
+async function guardarFichaTipoJ(t, panel, btn) {
+    const F = window.FichaCfg;
+    const v = function (id) { return panel.querySelector('#' + id).value.trim(); };
+    const num = function (id) { const x = v(id); return x ? parseInt(x, 10) : null; };
+    const nombre = v('fj-nombre');
+    if (!nombre) { showToast('Falta el nombre del tipo.', 'warning'); panel.querySelector('#fj-nombre').focus(); return; }
+    const goce = F.leerSeg(panel, 'fj-goce') === 'true', habiles = F.leerSeg(panel, 'fj-periodo') === 'true';
+    const body = {
+        nombre: nombre, nomenclatura: v('fj-sigla'), descripcion: v('fj-desc'), con_goce_sueldo: goce,
+        dias_habiles: habiles, dias_corridos: !habiles, pagador: panel.querySelector('#fj-pagador').value, dias_defecto: num('fj-dias'),
+        activo: panel.querySelector('#fj-activo').checked, min_dias: num('fj-min') || 1, max_dias: num('fj-max'), frecuencia_anual: num('fj-frec'),
+        sobreescribe_feriados: F.leerSeg(panel, 'fj-feriados') === 'true', es_horas_sindicales: F.leerSeg(panel, 'fj-sindical') === 'true',
+        descuenta_remuneracion: !goce, es_por_horas: F.leerSeg(panel, 'fj-parcial') === 'true', genera_deuda_horaria: F.leerSeg(panel, 'fj-deuda') === 'true'
+    };
+    await F.trabajando(btn, async function () {
+        const r = await fetch(API_CONFIG + 'justificaciones/tipos/' + (t.id ? t.id + '/' : ''), {
+            method: t.id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('access_token') },
+            body: JSON.stringify(body)
+        });
+        const d = await r.json().catch(function () { return {}; });
+        if (!r.ok) { showToast(d.detail || 'No se pudo guardar el tipo.', 'danger'); return; }
+        showToast(t.id ? 'Listo. Cambios guardados.' : 'Listo. Tipo creado.', 'success');
+        if (d && d.id) F.recordar('just', d.id);
+        await loadTiposJustificacion();
+    });
 }
 
 // ==========================================
@@ -1718,6 +1730,7 @@ window.loadAjustesSistema = async function() {
             }
         });
 
+        if (window.FichaCfg && FichaCfg.sistemaOriginales) FichaCfg.sistemaOriginales();
     } catch (e) {
         console.error("Error cargando ajustes del sistema", e);
         showToast("No se pudieron cargar los ajustes.", "error");
@@ -1763,6 +1776,7 @@ window.saveAjusteSistema = async function(clave, inputId) {
             ? ' Se está recalculando el tramo abierto; la grilla se actualiza en unos segundos.'
             : '';
         showToast(`Listo. Ajuste guardado.${aviso}`, "success");
+        input.dataset.original = valor;
     } catch (e) {
         console.error("Error guardando ajuste:", e);
         showToast(e.message, "error");
@@ -1772,75 +1786,60 @@ window.saveAjusteSistema = async function(clave, inputId) {
 // ==========================================
 // CATÁLOGO DE ÁREAS Y ALIAS (AUDITORÍA)
 // ==========================================
-window.cargarCatalogoAreas = async function() {
-    const container = document.getElementById('areas-catalogo-container');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <div class="text-muted mt-2">Cargando catálogo...</div>
-        </div>
-    `;
-
+// Áreas, Cargos y Géneros con el diseño B (01-11-2026): lista a la izquierda y ficha a la derecha. Se monta dentro del
+// contenedor de siempre (…-catalogo-container) para que las funciones que lo buscan sigan funcionando; el encabezado viejo
+// de la pestaña se oculta porque la ficha trae el suyo.
+function montarCatalogoB(containerId, o) {
+    const container = document.getElementById(containerId);
+    if (!container || !window.FichaCfg) return null;
+    container.className = '';
+    const pane = container.closest('.tab-pane');
+    if (pane) Array.prototype.forEach.call(pane.children, function (el) { if (el !== container) el.classList.add('d-none'); });
+    window.FichaCfg.montar(container, o);
+    return container;
+}
+async function leerCatalogo(url, containerId, nombre) {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
     try {
-        const response = await fetch('/api/configuracion/areas/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
-        if (!response.ok) throw new Error("Error obteniendo catálogo de áreas");
-        const areas = await response.json();
-
-        if (!areas || areas.length === 0) {
-            container.innerHTML = '<div class="col-12"><div class="alert alert-info border-0 shadow-sm"><i class="bi bi-info-circle me-2"></i> No hay áreas registradas.</div></div>';
-            return;
-        }
-
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
-
-        container.innerHTML = areas.map(area => {
-            const aliasHtml = area.alias.length > 0 
-                ? area.alias.map(al => `
-                    <div class="d-flex justify-content-between align-items-center bg-white p-2 mb-2 rounded border border-light shadow-sm" id="alias-row-${al.id}">
-                        <div class="text-danger fw-bold small"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> ${al.alias}</div>
-                        <button class="btn btn-sm btn-outline-danger border-0" onclick="confirmDeleteAlias(${al.id}, '${al.alias}')" title="Desvincular Error">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                  `).join('')
-                : `<div class="text-muted small text-center font-monospace py-2 bg-light rounded"><i class="bi bi-check-circle text-success me-1"></i> Área Limpia. Sin errores redirigidos.</div>`;
-
-            const badgeCls = area.alias.length > 0 ? "bg-danger" : "bg-success";
-            
-            return `
-                <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center py-3">
-                            <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-building me-2 text-primary"></i>${area.nombre}</h6>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge ${badgeCls} rounded-pill">${area.alias.length} errores</span>
-                                ${canEdit ? `
-                                    <button class="btn btn-sm btn-outline-danger border-0 p-1 lh-1" onclick="window.confirmDeleteArea(${area.id}, '${area.nombre.replace(/'/g, "\\'")}')" title="Eliminar Área">
-                                        <i class="bi bi-trash fs-6"></i>
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </div>
-                        <div class="card-body p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
-                            ${aliasHtml}
-                        </div>
-                        <div class="card-footer bg-white border-top border-light py-2 d-flex justify-content-between align-items-center">
-                            <span class="small text-muted fw-bold"><i class="bi bi-truck me-1"></i>Aplica Flota</span>
-                            <div class="form-check form-switch mb-0">
-                                <input class="form-check-input" type="checkbox" role="switch" id="switch-flota-${area.id}" ${area.aplica_flota ? 'checked' : ''} ${canEdit ? '' : 'disabled'} onchange="window.toggleAreaAplicaFlota(${area.id}, this.checked)">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-    } catch (error) {
-        console.error(error);
-        container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
+        const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } });
+        if (!r.ok) throw new Error('No se pudo leer ' + nombre + '.');
+        return await r.json();
+    } catch (e) {
+        container.innerHTML = '<p class="fcB-vacio">' + window.FichaCfg.esc(e.message) + ' <button type="button" class="fcB-btn" onclick="' + (containerId.indexOf('areas') === 0 ? 'cargarCatalogoAreas' : containerId.indexOf('cargos') === 0 ? 'cargarCatalogoCargos' : 'cargarCatalogoGeneros') + '()">Reintentar</button></p>';
+        return null;
     }
+}
+function erroresBioAlba(lista, borrar) {
+    const F = window.FichaCfg;
+    if (!lista.length) return '<p class="fcB-nota">BioAlba no ha enviado nombres distintos para esta. Todo calza.</p>';
+    return '<div class="fcB-chips">' + lista.map(function (al) {
+        return '<span class="fcB-chip">' + F.esc(al.alias) + (borrar ? '<button type="button" title="Desvincular «' + F.esc(al.alias) + '»" aria-label="Desvincular ' + F.esc(al.alias) + '" onclick="' + borrar + '(' + al.id + ', \'' + String(al.alias).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\')"><i class="bi bi-x-lg" aria-hidden="true"></i></button>' : '') + '</span>';
+    }).join('') + '</div>';
+}
+
+window.cargarCatalogoAreas = async function() {
+    const areas = await leerCatalogo('/api/configuracion/areas/', 'areas-catalogo-container', 'las áreas');
+    if (!areas) return;
+    const F = window.FichaCfg, canEdit = F.puede('configuracion.editar');
+    montarCatalogoB('areas-catalogo-container', {
+        clave: 'areas',
+        titulo: 'Áreas',
+        descripcion: 'Áreas de la empresa. Si el reloj o BioAlba traen otro nombre para un área, aquí se ve y se puede desvincular.',
+        acciones: (canEdit ? '<button type="button" class="fcB-btn pri" onclick="abrirModalCrearArea()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Crear área</button>' : '')
+            + '<button type="button" class="fcB-btn" onclick="cargarCatalogoAreas()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button>',
+        items: areas.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
+        id: function (a) { return a.id; },
+        etiqueta: function (a) { return a.nombre; },
+        sub: function (a) { return a.alias.length ? a.alias.length + (a.alias.length === 1 ? ' nombre distinto' : ' nombres distintos') : ''; },
+        vacio: 'No hay áreas registradas.',
+        ficha: function (a, panel) {
+            panel.innerHTML = F.cabeza(a.nombre, canEdit ? 'Los cambios de esta ficha se guardan al tocarlos.' : 'Solo lectura.')
+                + F.campo('Control de flota', '<label class="fcB-sw"><input type="checkbox" ' + (a.aplica_flota ? 'checked ' : '') + (canEdit ? '' : 'disabled ') + 'onchange="window.toggleAreaAplicaFlota(' + a.id + ', this.checked)"><span aria-hidden="true"></span>Sus vehículos aparecen en Portería › Flota</label>')
+                + F.campo('Nombres distintos que trae BioAlba', erroresBioAlba(a.alias, canEdit ? 'confirmDeleteAlias' : ''), 'Al desvincular uno, las marcas con ese nombre dejan de asignarse a esta área.')
+                + (canEdit ? F.pie('<button type="button" class="fcB-btn borra" onclick="window.confirmDeleteArea(' + a.id + ', \'' + String(a.nombre).replace(/'/g, "\\'") + '\')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar área</button>', '') : '');
+        }
+    });
 };
 
 window.toggleAreaAplicaFlota = async function(areaId, checked) {
@@ -1989,67 +1988,26 @@ window.deleteAlias = async function(aliasId) {
 // CATÁLOGO DE CARGOS Y ALIAS (AUDITORÍA)
 // ==========================================
 window.cargarCatalogoCargos = async function() {
-    const container = document.getElementById('cargos-catalogo-container');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <div class="text-muted mt-2">Cargando catálogo...</div>
-        </div>
-    `;
-
-    try {
-        const response = await fetch('/api/configuracion/cargos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
-        if (!response.ok) throw new Error("Error obteniendo catálogo de cargos");
-        const cargos = await response.json();
-
-        if (!cargos || cargos.length === 0) {
-            container.innerHTML = '<div class="col-12"><div class="alert alert-info border-0 shadow-sm"><i class="bi bi-info-circle me-2"></i> No hay cargos registrados.</div></div>';
-            return;
+    const cargos = await leerCatalogo('/api/configuracion/cargos/', 'cargos-catalogo-container', 'los cargos');
+    if (!cargos) return;
+    const F = window.FichaCfg, canEdit = F.puede('configuracion.editar');
+    montarCatalogoB('cargos-catalogo-container', {
+        clave: 'cargos',
+        titulo: 'Cargos',
+        descripcion: 'Cargos de la empresa. Un cargo «excluido de asistencia» es del Artículo 22: no se le calculan atrasos ni horas extra.',
+        acciones: (canEdit ? '<button type="button" class="fcB-btn pri" onclick="abrirModalCrearCargo()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Crear cargo</button>' : '')
+            + '<button type="button" class="fcB-btn" onclick="cargarCatalogoCargos()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button>',
+        items: cargos.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
+        id: function (c) { return c.id; },
+        etiqueta: function (c) { return c.nombre; },
+        sub: function (c) { return c.excluido_asistencia ? 'Artículo 22' : (c.alias.length ? c.alias.length + (c.alias.length === 1 ? ' nombre distinto' : ' nombres distintos') : ''); },
+        vacio: 'No hay cargos registrados.',
+        ficha: function (c, panel) {
+            panel.innerHTML = F.cabeza(c.nombre, canEdit ? 'Los cambios de esta ficha se guardan al tocarlos.' : 'Solo lectura.')
+                + F.campo('Excluido de asistencia', '<label class="fcB-sw"><input type="checkbox" id="cargo-excluir-' + c.id + '" ' + (c.excluido_asistencia ? 'checked ' : '') + (canEdit ? '' : 'disabled ') + 'onchange="toggleCargoExclusion(' + c.id + ', this.checked)"><span aria-hidden="true"></span>Artículo 22 (sin atrasos ni horas extra)</label>')
+                + F.campo('Nombres distintos que trae BioAlba', erroresBioAlba(c.alias, canEdit ? 'confirmDeleteCargoAlias' : ''), 'Al desvincular uno, las personas con ese cargo en BioAlba dejan de asignarse a este.');
         }
-
-        const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.editar') : true;
-
-        container.innerHTML = cargos.map(cargo => {
-            const aliasHtml = cargo.alias.length > 0 
-                ? cargo.alias.map(al => `
-                    <div class="d-flex justify-content-between align-items-center bg-white p-2 mb-2 rounded border border-light shadow-sm" id="cargo-alias-row-${al.id}">
-                        <div class="text-danger fw-bold small"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> ${al.alias}</div>
-                        ${canEdit ? `
-                        <button class="btn btn-sm btn-outline-danger border-0" onclick="confirmDeleteCargoAlias(${al.id}, '${al.alias}')" title="Desvincular Error">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                        ` : ''}
-                    </div>
-                  `).join('')
-                : `<div class="text-muted small text-center font-monospace py-2 bg-light rounded"><i class="bi bi-check-circle text-success me-1"></i> Cargo Limpio. Sin errores redirigidos.</div>`;
-
-            const badgeCls = cargo.alias.length > 0 ? "bg-danger" : "bg-success";
-            
-            return `
-                <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center py-3">
-                            <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-briefcase me-2 text-primary"></i>${cargo.nombre}</h6>
-                            <span class="badge ${badgeCls} rounded-pill">${cargo.alias.length} errores</span>
-                        </div>
-                        <div class="card-body p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
-                            <div class="form-check form-switch mb-3">
-                                <input class="form-check-input" type="checkbox" role="switch" id="cargo-excluir-${cargo.id}" ${cargo.excluido_asistencia ? 'checked' : ''} ${canEdit ? '' : 'disabled'} onchange="toggleCargoExclusion(${cargo.id}, this.checked)">
-                                <label class="form-check-label small fw-bold" for="cargo-excluir-${cargo.id}">Excluido de asistencia (Art. 22)</label>
-                            </div>
-                            ${aliasHtml}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-    } catch (error) {
-        console.error(error);
-        container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
-    }
+    });
 };
 
 window.toggleCargoExclusion = async function(cargoId, value) {
@@ -2144,43 +2102,18 @@ window.deleteCargoAlias = async function(aliasId) {
 // CATÁLOGO DE GÉNEROS
 // ==========================================
 window.cargarCatalogoGeneros = async function() {
-    const container = document.getElementById('generos-catalogo-container');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <div class="text-muted mt-2">Cargando catálogo...</div>
-        </div>
-    `;
-
-    try {
-        const response = await fetch('/api/configuracion/generos/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
-        if (!response.ok) throw new Error("Error obteniendo catálogo de géneros");
-        const generos = await response.json();
-
-        if (!generos || generos.length === 0) {
-            container.innerHTML = '<div class="col-12"><div class="alert alert-info border-0 shadow-sm"><i class="bi bi-info-circle me-2"></i> No hay géneros registrados.</div></div>';
-            return;
-        }
-
-        container.innerHTML = generos.map(genero => {
-            return `
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center py-3">
-                            <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-person-badge me-2 text-primary"></i>${genero.nombre}</h6>
-                            <span class="badge bg-secondary rounded-pill">ID: ${genero.id}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-    } catch (error) {
-        console.error(error);
-        container.innerHTML = `<div class="col-12"><div class="alert alert-danger"><i class="bi bi-exclamation-octagon me-2"></i> ${error.message}</div></div>`;
-    }
+    const generos = await leerCatalogo('/api/configuracion/generos/', 'generos-catalogo-container', 'los géneros');
+    if (!generos) return;
+    montarCatalogoB('generos-catalogo-container', {
+        clave: 'generos',
+        titulo: 'Géneros',
+        descripcion: 'Géneros que se pueden elegir en la ficha de una persona. Esta lista no se cambia desde aquí.',
+        items: generos,
+        id: function (g) { return g.id; },
+        etiqueta: function (g) { return g.nombre; },
+        soloLista: true,
+        vacio: 'No hay géneros registrados.'
+    });
 };
 
 // ==========================================

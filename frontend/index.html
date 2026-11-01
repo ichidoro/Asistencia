@@ -1828,144 +1828,53 @@
 
                                 <!-- Tab Ajustes del Sistema -->
                                 <div class="tab-pane fade" id="tab-sistema" role="tabpanel">
-                                    <div class="d-flex justify-content-between align-items-center mb-4">
-                                        <h4 class="fw-bold mb-0"><i class="bi bi-gear-fill text-secondary me-2"></i>Ajustes del Sistema</h4>
-                                    </div>
-                                    <div class="alert alert-warning py-2 small mb-4">
-                                        <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Precaución:</strong> Modificar estos valores numéricos afecta el comportamiento global de alertas y cierres. Sólo ingresar valores numéricos enteros.
-                                    </div>
-
-                                    <div class="row g-4">
-                                        <!-- Tarjeta Contratos -->
-                                        <div class="col-md-6">
-                                            <div class="card h-100 border-0 shadow-sm">
-                                                <div class="card-header bg-white fw-bold py-3">
-                                                    <i class="bi bi-file-earmark-text text-primary me-2"></i>Contratos y Vencimientos
+                                    <!-- Diseño B (01-11-2026): grupos a la izquierda y sus números a la derecha; se guarda una vez por grupo.
+                                         Los campos conservan sus ids (loadAjustesSistema los llena) y data-clave (saveAjusteSistema los guarda). -->
+                                    <div class="fcB" id="sistema-fcb">
+                                        <div class="fcB-h"><div><h2>Sistema</h2><p>Números que usa toda la aplicación para alertas, cierres y cálculo. Cambiarlos afecta a todas las personas.</p></div></div>
+                                        <div class="fcB-md">
+                                            <nav class="fcB-lista" aria-label="Grupos de ajustes del sistema">
+                                                <button type="button" class="fcB-it sel" data-grupo-sis="contratos" aria-pressed="true"><span class="n">Contratos y vencimientos</span></button>
+                                                <button type="button" class="fcB-it" data-grupo-sis="cierre" aria-pressed="false"><span class="n">Cierre del período</span></button>
+                                                <button type="button" class="fcB-it" data-grupo-sis="bioalba" aria-pressed="false"><span class="n">Sincronización con BioAlba</span></button>
+                                                <button type="button" class="fcB-it" data-grupo-sis="extras" aria-pressed="false"><span class="n">Horas extra y emergencias</span></button>
+                                            </nav>
+                                            <section class="fcB-ficha">
+                                                <div data-grupo-sis-panel="contratos">
+                                                    <div class="fcB-fh"><h3>Contratos y vencimientos</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-limite-contratos">Límite de contratos a plazo</label><p>Cantidad máxima de contratos a plazo antes de pasar a indefinido.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" class="fcB-inp num" id="ajuste-limite-contratos" data-clave="limite_contratos_temporales" min="1" max="10"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-dias-alerta">Aviso de vencimiento (días)</label><p>Con cuántos días de anticipación se avisa que un contrato vence.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" class="fcB-inp num" id="ajuste-dias-alerta" data-clave="vencimiento_dias_alerta" min="1" max="60"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-dias-bloqueante">Aviso urgente (días)</label><p>Con cuántos días de anticipación el aviso pasa a urgente y pide decidir.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" class="fcB-inp num" id="ajuste-dias-bloqueante" data-clave="dias_alerta_bloqueante" min="1" max="30"></div></div>
                                                 </div>
-                                                <div class="card-body">
-                                                    <div class="mb-3">
-                                                        <label for="ajuste-limite-contratos" class="form-label fw-bold small text-muted">Límite de Contratos Temporales</label>
-                                                        <div class="input-group">
-                                                            <input type="number" class="form-control" id="ajuste-limite-contratos" min="1" max="10" placeholder="Ej: 3">
-                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('limite_contratos_temporales', 'ajuste-limite-contratos')" title="Guardar"><i class="bi bi-save"></i></button>
-                                                        </div>
-                                                        <div class="form-text">Cantidad máxima de contratos temporales antes de ser indefinido.</div>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label for="ajuste-dias-alerta" class="form-label fw-bold small text-muted">Días Alerta Vencimiento (Normal)</label>
-                                                        <div class="input-group">
-                                                            <input type="number" class="form-control" id="ajuste-dias-alerta" min="1" max="60" placeholder="Ej: 45">
-                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('vencimiento_dias_alerta', 'ajuste-dias-alerta')" title="Guardar"><i class="bi bi-save"></i></button>
-                                                        </div>
-                                                        <div class="form-text">Días de anticipación para alerta amarilla.</div>
-                                                    </div>
-                                                    <div class="mb-0">
-                                                        <label for="ajuste-dias-bloqueante" class="form-label fw-bold small text-muted">Días Alerta Bloqueante (Crítica)</label>
-                                                        <div class="input-group">
-                                                            <input type="number" class="form-control" id="ajuste-dias-bloqueante" min="1" max="30" placeholder="Ej: 15">
-                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('dias_alerta_bloqueante', 'ajuste-dias-bloqueante')" title="Guardar"><i class="bi bi-save"></i></button>
-                                                        </div>
-                                                        <div class="form-text">Días de anticipación para alerta roja/bloqueante.</div>
-                                                    </div>
+                                                <div data-grupo-sis-panel="cierre" class="d-none">
+                                                    <div class="fcB-fh"><h3>Cierre del período</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-dia-cierre">Día de cierre de RRHH</label><p>Día del mes en que termina cada tramo y se procesan los cierres.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" class="fcB-inp num" id="ajuste-dia-cierre" data-clave="dia_cierre_rrhh" min="1" max="31"></div></div>
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Tarjeta Operaciones HR -->
-                                        <div class="col-md-6">
-                                            <div class="card h-100 border-0 shadow-sm">
-                                                <div class="card-header bg-white fw-bold py-3">
-                                                    <i class="bi bi-calendar-check text-success me-2"></i>Operaciones de Cierre
+                                                <div data-grupo-sis-panel="bioalba" class="d-none">
+                                                    <div class="fcB-fh"><h3>Sincronización con BioAlba</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-dias-volatilidad">Días para volver a descargar</label><p>Días después del fin de un mes en que todavía se descargan sus marcas. Con 0 no se vuelven a descargar.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" class="fcB-inp num" id="ajuste-dias-volatilidad" data-clave="bioalba_dias_volatilidad" min="0" max="60"></div></div>
                                                 </div>
-                                                <div class="card-body">
-                                                    <div class="mb-3">
-                                                        <label for="ajuste-dia-cierre" class="form-label fw-bold small text-muted">Día de Cierre de RRHH</label>
-                                                        <div class="input-group">
-                                                            <input type="number" class="form-control" id="ajuste-dia-cierre" min="1" max="31" placeholder="Ej: 20">
-                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('dia_cierre_rrhh', 'ajuste-dia-cierre')" title="Guardar"><i class="bi bi-save"></i></button>
-                                                        </div>
-                                                        <div class="form-text">Día del mes en que se procesan los cierres.</div>
-                                                    </div>
+                                                <div data-grupo-sis-panel="extras" class="d-none">
+                                                    <div class="fcB-fh"><h3>Horas extra y emergencias</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-max-extras-dia-habil">Límite de horas extra en un día hábil (horas)</label><p>Si las horas extra de un día superan este límite, lo de más pasa a cobertura de turno y se aprueba aparte. Con 0 no hay límite: todo es hora extra.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-max-extras-dia-habil" data-clave="asistencia_max_extras_ordinarias_dia_habil" min="0" max="12"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-minimo-extras">Mínimo para contar hora extra (minutos)</label><p>El tiempo trabajado de más por debajo de estos minutos no se cuenta como hora extra. Con 0 cuenta todo. Al guardar se recalcula el tramo abierto.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="1" class="fcB-inp num" id="ajuste-minimo-extras" data-clave="asistencia_minimo_horas_extra_minutos" min="0"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-emergencia-gap">Separación de otra jornada (horas)</label><p>Si una persona vuelve a marcar ENTRADA esta cantidad de horas o más después de su SALIDA, es otra jornada del mismo día.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-emergencia-gap" data-clave="asistencia_emergencia_gap_horas" min="0" max="24"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-emergencia-limite">Duración máxima de un llamado de emergencia (horas)</label><p>Si esa otra jornada dura menos que esto, es un llamado de emergencia y sus minutos se suman a las horas extra. Si dura esto o más, es una jornada adicional (+2) que se aprueba aparte.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-emergencia-limite" data-clave="asistencia_emergencia_jornada_limite_horas" min="0" max="12"></div></div>
                                                 </div>
-                                            </div>
-                                        </div>
-
-
-                                        <!-- Tarjeta Sincronización BioAlba -->
-                                        <div class="col-md-6">
-                                            <div class="card h-100 border-0 shadow-sm">
-                                                <div class="card-header bg-white fw-bold py-3">
-                                                    <i class="bi bi-arrow-repeat text-primary me-2"></i>Sincronización BioAlba
+                                                <div class="fcB-pie" data-permiso="configuracion.editar">
+                                                    <div><span class="fcB-et"><p id="sistema-cambios">Sin cambios.</p></span></div>
+                                                    <div class="fcB-pie-d"><button type="button" class="fcB-btn" id="sistema-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="sistema-guardar">Guardar cambios</button></div>
                                                 </div>
-                                                <div class="card-body">
-                                                    <div class="mb-3">
-                                                        <label for="ajuste-dias-volatilidad" class="form-label fw-bold small text-muted">Días de Volatilidad (Sincronización)</label>
-                                                        <div class="input-group">
-                                                            <input type="number" class="form-control" id="ajuste-dias-volatilidad" min="0" max="60" placeholder="Ej: 7">
-                                                            <button class="btn btn-primary" onclick="saveAjusteSistema('bioalba_dias_volatilidad', 'ajuste-dias-volatilidad')" title="Guardar"><i class="bi bi-save"></i></button>
-                                                        </div>
-                                                        <div class="form-text">Días desde el fin de meses anteriores para permitir descargas. Usa 0 para desactivar.</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Tarjeta Jornadas Especiales y Emergencias -->
-                                        <div class="col-md-6">
-                                            <div class="card h-100 border-0 shadow-sm">
-                                                <div class="card-header bg-white fw-bold py-3">
-                                                    <i class="bi bi-clock-fill text-danger me-2"></i>Jornadas Especiales y Emergencias
-                                                </div>
-                                                <div class="card-body">
-                                                    <!-- 1. Límite de Horas Extras Diarias en Día Hábil -->
-                                                    <div class="mb-3">
-                                                         <label for="ajuste-max-extras-dia-habil" class="form-label fw-bold small text-muted">Límite HE Diaria en Día Hábil (Horas)</label>
-                                                         <div class="input-group">
-                                                             <input type="number" step="0.5" class="form-control" id="ajuste-max-extras-dia-habil" min="0" max="12" placeholder="Ej: 4.0">
-                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_max_extras_ordinarias_dia_habil', 'ajuste-max-extras-dia-habil')" title="Guardar">
-                                                                 <i class="bi bi-save"></i>
-                                                             </button>
-                                                         </div>
-                                                         <div class="form-text">Si las horas extra de un día superan este límite, todo lo de más pasa a cobertura de turno y se aprueba aparte. Con 0 no hay límite: todo es hora extra.</div>
-                                                    </div>
-
-                                                    <!-- 1b. Mínimo para contar hora extra -->
-                                                    <div class="mb-3">
-                                                         <label for="ajuste-minimo-extras" class="form-label fw-bold small text-muted">Mínimo para contar hora extra (Minutos)</label>
-                                                         <div class="input-group">
-                                                             <input type="number" step="1" class="form-control" id="ajuste-minimo-extras" min="0" placeholder="Ej: 0">
-                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_minimo_horas_extra_minutos', 'ajuste-minimo-extras')" title="Guardar">
-                                                                 <i class="bi bi-save"></i>
-                                                             </button>
-                                                         </div>
-                                                         <div class="form-text">El tiempo trabajado de más por debajo de estos minutos no se cuenta como hora extra. Con 0 cuenta todo, aunque sean segundos. Al guardar se recalcula solo el tramo abierto.</div>
-                                                    </div>
-
-                                                    <!-- 2. Gap de Emergencia -->
-                                                    <div class="mb-3">
-                                                         <label for="ajuste-emergencia-gap" class="form-label fw-bold small text-muted">Gap de Emergencia (Horas)</label>
-                                                         <div class="input-group">
-                                                             <input type="number" step="0.5" class="form-control" id="ajuste-emergencia-gap" min="0" max="24" placeholder="Ej: 4.0">
-                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_emergencia_gap_horas', 'ajuste-emergencia-gap')" title="Guardar">
-                                                                 <i class="bi bi-save"></i>
-                                                             </button>
-                                                         </div>
-                                                         <div class="form-text">Horas mínimas de separación para la segmentación por marcas.</div>
-                                                    </div>
-
-                                                    <!-- 3. Límite de Duración para Llamado de Emergencia -->
-                                                    <div class="mb-0">
-                                                         <label for="ajuste-emergencia-limite" class="form-label fw-bold small text-muted">Duración Máx. Emergencia Corta</label>
-                                                         <div class="input-group">
-                                                             <input type="number" step="0.5" class="form-control" id="ajuste-emergencia-limite" min="0" max="12" placeholder="Ej: 3.0">
-                                                             <button class="btn btn-primary" onclick="saveAjusteSistema('asistencia_emergencia_jornada_limite_horas', 'ajuste-emergencia-limite')" title="Guardar">
-                                                                 <i class="bi bi-save"></i>
-                                                             </button>
-                                                         </div>
-                                                         <div class="form-text">Si la emergencia dura más de esto, se evalúa como Jornada Especial Pendiente.</div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            </section>
                                         </div>
                                     </div>
                                 </div>
@@ -4981,7 +4890,8 @@
         "/static/js/chartjs-plugin-datalabels.min.js",
         "/static/js/horarios.js?v={{ startup_id }}_v25",
         "/static/js/asistencia.js?v={{ startup_id }}_v20",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v20",
+        "/static/js/config_ficha.js?v={{ startup_id }}_v1",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v21",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v10",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v16",
