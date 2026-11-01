@@ -716,6 +716,7 @@ function _executeSwitchPage(pageName) {
     if (typeof Productos4Module !== 'undefined') Productos4Module.init();
   } else if (pageName === 'porteria') {
     console.log('🛡️ Inicializando Portería...');
+    if (typeof PorteriaPanel !== 'undefined') PorteriaPanel.init();
     if (typeof PorteriaModule !== 'undefined') {
       PorteriaModule.actualizarInfoGuardia();
       PorteriaModule.sincronizarLoteLocal(true);

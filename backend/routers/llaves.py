@@ -174,7 +174,7 @@ async def estado_llaves(db: Database = Depends(get_db)):
     for ll in llaves:
         # Buscar último registro para esta llave
         ultimo = await db.fetch_one("""
-            SELECT lr.*, e.nombre || ' ' || e.apellido_paterno as empleado_nombre, e.rut as empleado_rut
+            SELECT lr.*, TRIM(e.apellido_paterno || ' ' || COALESCE(e.apellido_materno, '') || ' ' || e.nombre) as empleado_nombre, e.rut as empleado_rut
             FROM llaves_registros lr
             JOIN empleados e ON lr.empleado_id = e.id
             WHERE lr.llave_id = ?
@@ -294,7 +294,7 @@ async def historial_llaves(
     offset = (page - 1) * page_size
     rows = await db.fetch_all(f"""
         SELECT lr.*, lm.nombre as llave_nombre, lm.ubicacion,
-               e.nombre || ' ' || e.apellido_paterno as empleado_nombre, e.rut as empleado_rut
+               TRIM(e.apellido_paterno || ' ' || COALESCE(e.apellido_materno, '') || ' ' || e.nombre) as empleado_nombre, e.rut as empleado_rut
         FROM llaves_registros lr
         JOIN llaves_maestro lm ON lr.llave_id = lm.id
         JOIN empleados e ON lr.empleado_id = e.id

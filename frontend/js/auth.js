@@ -5,9 +5,9 @@ window.fechasLegibles = function (texto) {
 // La base guarda los nombres en mayúsculas; se muestran con mayúscula inicial (partículas en minúscula)
 // Nombre de una persona tal como se muestra en toda la aplicación: completo y en MAYÚSCULAS (orden del dueño,
 // 31-10-2026); se quita el «.» suelto de quien no tiene segundo apellido. Se sigue llamando nombreTitulo porque así lo
-// usan todas las pantallas (antes lo dejaba con mayúscula inicial).
+// usan todas las pantallas (antes lo dejaba con mayúscula inicial). «APELLIDO ., NOMBRE» (Artículo 22) queda «APELLIDO, NOMBRE».
 window.nombrePersona = window.nombrePersona || function (s) {
-    return String(s || '').split(/\s+/).filter(p => p && p !== '.').join(' ').toLocaleUpperCase('es-CL');
+    return String(s || '').replace(/\s+\.,/g, ',').split(/\s+/).filter(p => p && p !== '.').join(' ').toLocaleUpperCase('es-CL');
 };
 window.nombreTitulo = window.nombrePersona;
 // Iniciales de una persona («APELLIDO APELLIDO NOMBRE …» → nombre + apellido), las mismas del encabezado de las ventanas

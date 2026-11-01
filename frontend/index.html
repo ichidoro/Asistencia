@@ -1157,66 +1157,64 @@
                 
                 <!-- PÁGINA: PORTERÍA -->
                 <div id="page-porteria" class="page">
-                    <div class="row mb-4">
-                        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <h2 class="fw-bold mb-1 pg-dup-title"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Portería y Control de Ronda</h2>
-                                <p class="text-muted mb-0">Rondas, llaves, Artículo 22, flota, proveedores y visitas.</p>
-                            </div>
-                            <!-- Indicador Offline/Sincronización -->
-                            <div id="porteria-sync-badge" class="d-flex align-items-center gap-2 px-3 py-2 rounded shadow-sm bg-success text-white">
-                                <span id="porteria-sync-indicator" class="status-dot bg-white"></span>
-                                <span id="porteria-sync-text" class="fw-bold small">En línea - Sin datos locales</span>
-                                <button id="porteria-btn-sync" class="btn btn-sm btn-light text-primary fw-bold ms-2 d-none" onclick="PorteriaModule.sincronizarLoteLocal()">
-                                    <i class="bi bi-cloud-arrow-up-fill me-1"></i>Sincronizar
-                                </button>
-                            </div>
-                        </div> <!-- Close col-12 d-flex -->
-                    </div> <!-- Close row mb-4 -->
-                    
-                    <div class="card shadow-sm border-0">
-                        <div class="card-header bg-white border-bottom-0 pt-3 pb-0">
-                            <ul class="nav nav-pills emp-nav-pills gap-2 flex-wrap" id="porteriaTabs" role="tablist">
-                                <li class="nav-item" role="presentation" data-permiso="porteria.rondas">
-                                    <button class="nav-link active" id="rondas-tab" data-bs-toggle="tab" data-bs-target="#tab-rondas-nocturnas" type="button" role="tab">
-                                        <i class="bi bi-shield-shaded me-1"></i>Rondas nocturnas
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation" data-permiso="porteria.llaves">
-                                    <button class="nav-link" id="llaves-tab" data-bs-toggle="tab" data-bs-target="#tab-entrega-llaves" type="button" role="tab" onclick="if(typeof LlavesModule !== 'undefined') LlavesModule.initTab()">
-                                        <i class="bi bi-key-fill me-1"></i>Entrega de llaves
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation" data-permiso="porteria.art22">
-                                    <button class="nav-link" id="art22-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-art22" type="button" role="tab"
-                                        onclick="if(typeof Articulo22Module !== 'undefined') Articulo22Module.initTab()">
-                                        <i class="bi bi-file-earmark-text-fill me-1"></i>Artículo 22
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation" data-permiso="porteria.flota">
-                                    <button class="nav-link" id="flota-tab" data-bs-toggle="tab" data-bs-target="#tab-flota-aguacol" type="button" role="tab"
-                                        onclick="if(typeof FlotaModule !== 'undefined') FlotaModule.initTab()">
-                                        <i class="bi bi-truck me-1"></i>Flota Aguacol
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation" data-permiso="porteria.proveedores">
-                                    <button class="nav-link" id="proveedores-tab" data-bs-toggle="tab" data-bs-target="#tab-ingreso-proveedores" type="button" role="tab">
-                                        <i class="bi bi-truck me-1"></i>Proveedores
-                                    </button>
-                                </li>
-                                <li class="nav-item" role="presentation" data-permiso="porteria.visitas">
-                                    <button class="nav-link" id="visitas-tab" data-bs-toggle="tab" data-bs-target="#tab-control-visitas" type="button" role="tab"
-                                        onclick="if(typeof VisitasModule !== 'undefined') VisitasModule.initTab()">
-                                        <i class="bi bi-person-badge-fill me-1"></i>Visitas
-                                    </button>
-                                </li>
-
-                            </ul>
+                    <!-- Fecha y hora de hoy + estado de sincronización (lo actualiza PorteriaModule) -->
+                    <div class="ptG-top">
+                        <div class="ptG-fecha"><b id="ptg-fecha">Hoy</b><span id="ptg-hora" class="pt-num"></span></div>
+                        <div id="porteria-sync-badge" class="ptG-sync" role="status">
+                            <span id="porteria-sync-indicator" class="ptG-sync-dot" aria-hidden="true"></span>
+                            <span id="porteria-sync-text">En línea · todo sincronizado</span>
+                            <button id="porteria-btn-sync" class="ptG-btn ent d-none" type="button" onclick="PorteriaModule.sincronizarLoteLocal()">
+                                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>Subir ahora
+                            </button>
                         </div>
+                    </div>
+
+                    <!-- Resumen: cada cifra abre su sección (PorteriaPanel) -->
+                    <nav class="ptG-resumen" id="porteria-resumen" aria-label="Secciones de portería">
+                        <button class="ptG-cel" type="button" data-pt-vista="art22" data-permiso="porteria.art22" aria-pressed="false">
+                            <span class="lb"><i class="bi bi-file-earmark-text" aria-hidden="true"></i>Artículo 22</span>
+                            <span class="v"><b class="pt-num" id="ptg-n-art22">—</b><span id="ptg-u-art22">en planta</span></span>
+                            <span class="s" id="ptg-s-art22">&nbsp;</span>
+                        </button>
+                        <button class="ptG-cel" type="button" data-pt-vista="llaves" data-permiso="porteria.llaves" aria-pressed="false">
+                            <span class="lb"><i class="bi bi-key" aria-hidden="true"></i>Llaves</span>
+                            <span class="v"><b class="pt-num" id="ptg-n-llaves">—</b><span id="ptg-u-llaves">entregadas</span></span>
+                            <span class="s" id="ptg-s-llaves">&nbsp;</span>
+                        </button>
+                        <button class="ptG-cel" type="button" data-pt-vista="visitas" data-permiso="porteria.visitas" aria-pressed="false">
+                            <span class="lb"><i class="bi bi-person-badge" aria-hidden="true"></i>Visitas</span>
+                            <span class="v"><b class="pt-num" id="ptg-n-visitas">—</b><span id="ptg-u-visitas">en planta</span></span>
+                            <span class="s" id="ptg-s-visitas">&nbsp;</span>
+                        </button>
+                        <button class="ptG-cel" type="button" data-pt-vista="flota" data-permiso="porteria.flota" aria-pressed="false">
+                            <span class="lb"><i class="bi bi-truck" aria-hidden="true"></i>Flota</span>
+                            <span class="v"><b class="pt-num" id="ptg-n-flota">—</b><span id="ptg-u-flota">en viaje</span></span>
+                            <span class="s" id="ptg-s-flota">&nbsp;</span>
+                        </button>
+                        <button class="ptG-cel" type="button" data-pt-vista="rondas" data-permiso="porteria.rondas" aria-pressed="false">
+                            <span class="lb"><i class="bi bi-shield-shaded" aria-hidden="true"></i>Rondas</span>
+                            <span class="v"><b class="pt-num" id="ptg-n-rondas">—</b><span id="ptg-u-rondas"></span></span>
+                            <span class="s" id="ptg-s-rondas">&nbsp;</span>
+                        </button>
+                        <button class="ptG-cel off" type="button" data-pt-vista="proveedores" data-permiso="porteria.proveedores" aria-pressed="false">
+                            <span class="lb"><i class="bi bi-box-seam" aria-hidden="true"></i>Proveedores</span>
+                            <span class="s">Próximamente</span>
+                        </button>
+                    </nav>
+
+                    <!-- Panel general: Artículo 22, llaves y visitas de hoy (lo arma PorteriaPanel) -->
+                    <div id="porteria-panel" class="ptG" aria-live="polite"></div>
+
+                    <!-- Detalle de una sección (lo que antes eran pestañas) -->
+                    <div id="porteria-detalle" class="d-none">
+                        <div class="ptG-volver">
+                            <button type="button" class="ptG-link" onclick="PorteriaPanel.mostrar('panel')"><i class="bi bi-arrow-left" aria-hidden="true"></i>Volver al panel</button>
+                        </div>
+                    <div class="card shadow-sm border-0 ptG-modulo">
                         <div class="card-body p-4">
                             <div class="tab-content" id="porteriaTabsContent">
                                 <!-- TAB 1: RONDAS NOCTURNAS CONSOLIDADO -->
-                                <div class="tab-pane fade show active" id="tab-rondas-nocturnas" role="tabpanel">
+                                <div class="tab-pane fade" id="tab-rondas-nocturnas" role="tabpanel">
                                     <div class="row g-4">
                                         <!-- COLUMNA IZQUIERDA: REGISTRO (Lector QR + Formulario) -->
                                         <div class="col-lg-6" data-permiso="porteria.registrar" id="porteria-registrar-col">
@@ -1400,6 +1398,7 @@
                             </div>
                         </div>
                     </div>
+                    </div> <!-- /porteria-detalle -->
                 </div>
 
                 <div id="page-configuracion" class="page">
@@ -4999,7 +4998,8 @@
         "/static/js/tarjeta_dia.js?v={{ startup_id }}_v2",
         "/static/js/seguridad_ui.js?v={{ startup_id }}",
         "/static/js/libs/qrcode.min.js",
-        "/static/js/porteria_ui.js?v={{ startup_id }}_v5",
+        "/static/js/porteria_panel.js?v={{ startup_id }}_v1",
+        "/static/js/porteria_ui.js?v={{ startup_id }}_v6",
         "/static/js/articulo22_ui.js?v={{ startup_id }}_v11",
         "/static/js/visitas_ui.js?v={{ startup_id }}_v3",
         "/static/js/llaves_ui.js?v={{ startup_id }}_v1",

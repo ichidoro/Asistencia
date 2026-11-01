@@ -252,30 +252,22 @@ const PorteriaModule = (function () {
         const locales = await getRondasLocales();
         const cantLocales = locales.length;
 
-        // Reset classes
-        badge.className = "d-flex align-items-center gap-2 px-3 py-2 rounded shadow-sm";
-        dot.className = "status-dot bg-white";
+        // Estado en la línea de la fecha (porteria.css: ptG-sync ok / pendiente / sin-red)
+        const registros = cantLocales === 1 ? '1 registro' : cantLocales + ' registros';
+        badge.className = 'ptG-sync ' + (isOnline ? (cantLocales > 0 ? 'pendiente' : 'ok') : 'sin-red');
+        if (dot) dot.className = 'ptG-sync-dot';
 
         if (isOnline) {
             if (cantLocales > 0) {
-                badge.classList.add('bg-warning', 'text-dark');
-                text.innerText = `En línea - ${cantLocales} registros pendientes`;
+                text.innerText = 'En línea · ' + registros + ' por subir';
                 btn.classList.remove('d-none');
             } else {
-                badge.classList.add('bg-success', 'text-white');
-                text.innerText = "En línea - Sin datos locales";
+                text.innerText = 'En línea · todo sincronizado';
                 btn.classList.add('d-none');
             }
         } else {
-            if (cantLocales > 0) {
-                badge.classList.add('bg-danger', 'text-white');
-                text.innerText = `Desconectado - ${cantLocales} pendientes`;
-                btn.classList.add('d-none');
-            } else {
-                badge.classList.add('bg-secondary', 'text-white');
-                text.innerText = "Desconectado - Trabajando local";
-                btn.classList.add('d-none');
-            }
+            text.innerText = cantLocales > 0 ? 'Sin conexión · ' + registros + ' guardados en este equipo' : 'Sin conexión · se guarda en este equipo';
+            btn.classList.add('d-none');
         }
     }
 
