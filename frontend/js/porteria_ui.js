@@ -906,72 +906,8 @@ const PorteriaModule = (function () {
         }
     }
 
+    // Configuración › Catálogo de hallazgos con el diseño B (01-11-2026): lista a la izquierda y ficha a la derecha.
     async function initAdminTab() {
-        const container = document.getElementById('catalogo-hallazgos-container');
-        if (!container) return;
-        
-        container.innerHTML = `
-            <div class="row g-4">
-                <!-- Formulario de Configuración -->
-                <div class="col-lg-4">
-                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
-                        <div class="card-header bg-white border-bottom border-light pt-3 pb-2 px-3">
-                            <h6 class="fw-bold mb-0 text-primary" id="porteria-catalogo-form-title">Agregar Nuevo Hallazgo al Catálogo</h6>
-                        </div>
-                        <div class="card-body p-3">
-                            <form id="form-catalogo-hallazgo" onsubmit="event.preventDefault(); PorteriaModule.guardarHallazgoCatalogo();">
-                                <input type="hidden" id="porteria-catalogo-id" value="">
-                                
-                                <div class="mb-3">
-                                    <label for="porteria-catalogo-nombre" class="form-label small fw-bold text-muted mb-1">Descripción de la Anomalía / Hallazgo</label>
-                                    <input type="text" class="form-control form-control-sm" id="porteria-catalogo-nombre" placeholder="Ej: Fuga de agua en portería" required>
-                                </div>
-                                
-                                <div class="mb-3 d-none" id="porteria-catalogo-activo-container">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" role="switch" id="porteria-catalogo-activo" checked>
-                                        <label class="form-check-label small fw-bold" for="porteria-catalogo-activo">Hallazgo Activo</label>
-                                    </div>
-                                </div>
-                                
-                                <div class="d-flex gap-2">
-                                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1 fw-bold">Guardar Hallazgo</button>
-                                    <button type="button" class="btn btn-sm btn-light d-none" id="porteria-catalogo-btn-cancel" onclick="PorteriaModule.cancelarEdicionCatalogo()">Cancelar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Tabla de Hallazgos -->
-                <div class="col-lg-8">
-                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
-                        <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center pt-3 pb-2 px-3">
-                            <h6 class="fw-bold mb-0 text-dark">Catálogo de hallazgos</h6>
-                            <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1" onclick="PorteriaModule.cargarCatálogoHallazgos()"><i class="bi bi-arrow-clockwise"></i></button>
-                        </div>
-                        <div class="card-body p-3">
-                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Descripción</th>
-                                            <th>Estado</th>
-                                            <th class="text-end" style="width: 100px;">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="porteria-catalogo-tbody">
-                                        <!-- Cargado dinámicamente -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
         await cargarCatálogoHallazgos();
     }
 
@@ -1017,125 +953,66 @@ const PorteriaModule = (function () {
     }
 
     async function cargarCatálogoHallazgos() {
-        const tbody = document.getElementById('porteria-catalogo-tbody');
-        if (!tbody) return;
-
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando catálogo de hallazgos...</td></tr>';
-
+        const container = document.getElementById('catalogo-hallazgos-container');
+        if (!container || !window.FichaCfg) return;
+        const F = window.FichaCfg, canEdit = F.puede('porteria.editar');
+        let list = [];
         try {
-            const res = await fetch('/api/porteria/catalogo-hallazgos/?all=true', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error de API");
-            
-            const list = await res.json();
-            
-            if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">El catálogo de hallazgos está vacío.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = list.map(c => {
-                const badge = c.activo 
-                    ? '<span class="badge bg-success">Activo</span>' 
-                    : '<span class="badge bg-secondary">Inactivo</span>';
-
-                return `
-                    <tr>
-                        <td class="fw-bold text-muted" style="width: 60px;">#${c.id}</td>
-                        <td class="fw-bold text-dark">${c.nombre}</td>
-                        <td>${badge}</td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-outline-primary me-1" onclick="PorteriaModule.editarHallazgoCatalogo(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', ${c.activo})">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="PorteriaModule.eliminarHallazgoCatalogo(${c.id})">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-
+            const res = await fetch('/api/porteria/catalogo-hallazgos/?all=true', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+            if (!res.ok) throw new Error('No se pudo leer el catálogo de hallazgos.');
+            list = await res.json();
         } catch (e) {
-            console.error(e);
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-danger fw-bold">Error al cargar anomalías del catálogo.</td></tr>';
-        }
-    }
-
-    async function guardarHallazgoCatalogo() {
-        const idInput = document.getElementById('porteria-catalogo-id');
-        const nombreInput = document.getElementById('porteria-catalogo-nombre');
-        const activoInput = document.getElementById('porteria-catalogo-activo');
-
-        const id = idInput.value;
-        const nombre = nombreInput.value.trim();
-        const activo = activoInput.checked;
-
-        if (!nombre) {
-            showToast("Falta describir el hallazgo.", "warning");
+            container.innerHTML = '<p class="fcB-vacio">' + F.esc(e.message) + ' <button type="button" class="fcB-btn" onclick="PorteriaModule.cargarCatálogoHallazgos()">Reintentar</button></p>';
             return;
         }
-
-        try {
-            let res;
-            if (id === "") {
-                // Crear
-                res = await fetch('/api/porteria/catalogo-hallazgos/', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ nombre })
-                });
-            } else {
-                // Editar
-                res = await fetch(`/api/porteria/catalogo-hallazgos/${id}/`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ nombre, activo })
-                });
+        F.montar(container, {
+            clave: 'hallazgos',
+            titulo: 'Catálogo de hallazgos',
+            descripcion: 'Lo que el guardia puede reportar en una ronda, por ejemplo una puerta abierta o una fuga de agua.',
+            acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="FichaCfg.nuevo(\'hallazgos\')"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo hallazgo</button>' : '',
+            items: list.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
+            id: function (c) { return c.id; },
+            etiqueta: function (c) { return c.nombre; },
+            apagado: function (c) { return !c.activo; },
+            vacio: 'El catálogo está vacío. Agregue el primer hallazgo.',
+            ficha: function (c, panel) {
+                const nuevo = !c;
+                c = c || { nombre: '', activo: true };
+                panel.innerHTML = F.cabeza(nuevo ? 'Nuevo hallazgo' : c.nombre, canEdit ? 'Se cambia aquí mismo.' : 'Solo lectura.')
+                    + F.campo('Descripción', F.texto('fha-nombre', c.nombre, ' placeholder="Ej: Fuga de agua en portería"'), '', 'fha-nombre')
+                    + (nuevo ? '' : F.campo('En uso', F.interruptor('fha-activo', c.activo, 'El guardia lo puede elegir en una ronda')))
+                    + (canEdit ? F.pie(nuevo ? '' : '<button type="button" class="fcB-btn borra" id="fha-borrar"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar hallazgo</button>',
+                        '<button type="button" class="fcB-btn" id="fha-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fha-guardar">' + (nuevo ? 'Agregar hallazgo' : 'Guardar cambios') + '</button>') : '');
+                if (!canEdit) { panel.querySelectorAll('input').forEach(function (e) { e.disabled = true; }); return; }
+                panel.querySelector('#fha-descartar').onclick = function () { F.pintarFicha('hallazgos'); };
+                const borrar = panel.querySelector('#fha-borrar');
+                if (borrar) borrar.onclick = function () { eliminarHallazgoCatalogo(c.id); };
+                panel.querySelector('#fha-guardar').onclick = function (ev) {
+                    const nombre = panel.querySelector('#fha-nombre').value.trim();
+                    if (!nombre) { showToast('Falta describir el hallazgo.', 'warning'); return; }
+                    const activo = nuevo ? true : panel.querySelector('#fha-activo').checked;
+                    F.trabajando(ev.currentTarget, async function () {
+                        const res = await fetch('/api/porteria/catalogo-hallazgos/' + (nuevo ? '' : c.id + '/'), {
+                            method: nuevo ? 'POST' : 'PUT',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify(nuevo ? { nombre: nombre } : { nombre: nombre, activo: activo })
+                        });
+                        const d = await res.json().catch(function () { return {}; });
+                        if (!res.ok) { showToast(d.detail || 'No se pudo guardar el hallazgo.', 'danger'); return; }
+                        showToast('Listo. Hallazgo guardado.', 'success');
+                        if (d && d.id) F.recordar('hallazgos', d.id);
+                        await cargarCatálogoHallazgos();
+                        await cargarCatálogoHallazgosSelect();
+                    });
+                };
             }
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || "Error en la operación del catálogo.");
-            }
-
-            showToast("Listo. Hallazgo guardado.", "success");
-            cancelarEdicionCatalogo();
-            await cargarCatálogoHallazgos();
-            await cargarCatálogoHallazgosSelect();
-
-        } catch (e) {
-            console.error(e);
-            Swal.fire("Error", e.message, "error");
-        }
+        });
     }
 
-    function editarHallazgoCatalogo(id, nombre, activo) {
-        document.getElementById('porteria-catalogo-form-title').innerText = "Editar Hallazgo del Catálogo";
-        document.getElementById('porteria-catalogo-id').value = id;
-        document.getElementById('porteria-catalogo-nombre').value = nombre;
-        document.getElementById('porteria-catalogo-activo').checked = activo;
-
-        document.getElementById('porteria-catalogo-activo-container').classList.remove('d-none');
-        document.getElementById('porteria-catalogo-btn-cancel').classList.remove('d-none');
-    }
-
-    function cancelarEdicionCatalogo() {
-        document.getElementById('porteria-catalogo-form-title').innerText = "Agregar Nuevo Hallazgo al Catálogo";
-        document.getElementById('porteria-catalogo-id').value = "";
-        document.getElementById('porteria-catalogo-nombre').value = "";
-        document.getElementById('porteria-catalogo-activo').checked = true;
-
-        document.getElementById('porteria-catalogo-activo-container').classList.add('d-none');
-        document.getElementById('porteria-catalogo-btn-cancel').classList.add('d-none');
-    }
+    // La ficha guarda sola; estas tres quedan por compatibilidad con PorteriaModule
+    async function guardarHallazgoCatalogo() { await cargarCatálogoHallazgos(); }
+    function editarHallazgoCatalogo(id) { if (window.FichaCfg) FichaCfg.elegir('hallazgos', String(id)); }
+    function cancelarEdicionCatalogo() { if (window.FichaCfg) FichaCfg.pintarFicha('hallazgos'); }
 
     async function eliminarHallazgoCatalogo(id) {
         const result = await Swal.fire({
@@ -1175,237 +1052,84 @@ const PorteriaModule = (function () {
         window.print();
     }
 
+    // Configuración › Ubicaciones de ronda con el diseño B (01-11-2026): lista a la izquierda y ficha con su QR a la derecha.
     async function initUbicacionesTab() {
-        const container = document.getElementById('porteria-ubicaciones-container');
-        if (!container) return;
-
-        container.innerHTML = `
-            <style>
-                .qr-mini-box img, .qr-mini-box canvas {
-                    width: 100% !important;
-                    height: 100% !important;
-                    object-fit: contain;
-                }
-            </style>
-            <div class="row g-4">
-                <!-- Formulario de Configuración -->
-                <div class="col-lg-4">
-                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
-                        <div class="card-header bg-white border-bottom border-light pt-3 pb-2 px-3">
-                            <h6 class="fw-bold mb-0 text-primary" id="porteria-ubicacion-form-title">Agregar Nueva Ubicación</h6>
-                        </div>
-                        <div class="card-body p-3">
-                            <form id="form-config-ubicacion" onsubmit="event.preventDefault(); PorteriaModule.guardarUbicacion();">
-                                <input type="hidden" id="porteria-ubicacion-id" value="">
-                                
-                                <div class="mb-3">
-                                    <label for="porteria-ubicacion-nombre" class="form-label small fw-bold text-muted mb-1">Nombre de la Ubicación</label>
-                                    <input type="text" class="form-control form-control-sm" id="porteria-ubicacion-nombre" placeholder="Ej: Control Perimetral Sur" required>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="porteria-ubicacion-codigo" class="form-label small fw-bold text-muted mb-1">Código Único (para el QR)</label>
-                                    <input type="text" class="form-control form-control-sm" id="porteria-ubicacion-codigo" placeholder="Ej: LOC006" required>
-                                </div>
-                                
-                                <div class="mb-3 d-none" id="porteria-ubicacion-activo-container">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" role="switch" id="porteria-ubicacion-activo" checked>
-                                        <label class="form-check-label small fw-bold" for="porteria-ubicacion-activo">Ubicación Activa</label>
-                                    </div>
-                                </div>
-                                
-                                <div class="d-flex gap-2">
-                                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1 fw-bold">Guardar Ubicación</button>
-                                    <button type="button" class="btn btn-sm btn-light d-none" id="porteria-ubicacion-btn-cancel" onclick="PorteriaModule.cancelarEdicionUbicacion()">Cancelar</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Tabla de Ubicaciones -->
-                <div class="col-lg-8">
-                    <div class="card border-0 shadow-sm" style="border-radius: 12px;">
-                        <div class="card-header bg-white border-bottom border-light d-flex justify-content-between align-items-center pt-3 pb-2 px-3">
-                            <h6 class="fw-bold mb-0 text-dark">Ubicaciones de Control Perimetral</h6>
-                            <button class="btn btn-sm btn-outline-primary fw-bold px-2 py-1" onclick="PorteriaModule.cargarUbicaciones()"><i class="bi bi-arrow-clockwise"></i></button>
-                        </div>
-                        <div class="card-body p-3">
-                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Código</th>
-                                            <th>Nombre</th>
-                                            <th class="text-center" style="width: 80px;">QR Mini</th>
-                                            <th>Estado</th>
-                                            <th class="text-end" style="width: 160px;">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="porteria-ubicaciones-tbody">
-                                        <!-- Cargado dinámicamente -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
         await cargarUbicaciones();
     }
 
     async function cargarUbicaciones() {
-        const tbody = document.getElementById('porteria-ubicaciones-tbody');
-        if (!tbody) return;
-
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando ubicaciones...</td></tr>';
-
+        const container = document.getElementById('porteria-ubicaciones-container');
+        if (!container || !window.FichaCfg) return;
+        const F = window.FichaCfg, canEdit = F.puede('porteria.editar');
+        let list = [];
         try {
-            const res = await fetch('/api/porteria/ubicaciones/?all=true', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error de API");
-            
-            const list = await res.json();
-            
-            if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">No hay ubicaciones configuradas.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = list.map(c => {
-                const badge = c.activo 
-                    ? '<span class="badge bg-success">Activo</span>' 
-                    : '<span class="badge bg-secondary">Inactivo</span>';
-
-                return `
-                    <tr>
-                        <td class="fw-bold text-muted" style="width: 50px;">#${c.id}</td>
-                        <td class="fw-bold text-secondary font-monospace" style="width: 80px;">${c.codigo}</td>
-                        <td class="fw-bold text-dark">${c.nombre}</td>
-                        <td class="text-center py-1">
-                            <div id="qr-mini-${c.id}" class="qr-mini-box d-inline-flex bg-white p-1 border rounded shadow-sm" style="width: 32px; height: 32px;"></div>
-                        </td>
-                        <td>${badge}</td>
-                        <td class="text-end">
-                            <button class="btn btn-xs btn-outline-primary me-1" onclick="PorteriaModule.abrirModalQRUbicacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.codigo}')" title="Ver/Imprimir QR">
-                                <i class="bi bi-qr-code"></i> QR
-                            </button>
-                            <button class="btn btn-xs btn-outline-info me-1" onclick="PorteriaModule.editarUbicacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.codigo}', ${c.activo})" title="Editar">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-xs btn-outline-danger" onclick="PorteriaModule.eliminarUbicacion(${c.id})" title="Eliminar">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-
-            // Generar los QR minis en diferido
-            list.forEach(c => {
-                const text = `${c.nombre.toUpperCase()} CODIGO ${c.codigo.toUpperCase()}`;
-                const cleanText = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ñ/gi, "n");
-                const container = document.getElementById(`qr-mini-${c.id}`);
-                if (container) {
-                    new QRCode(container, {
-                        text: cleanText,
-                        width: 128,
-                        height: 128,
-                        colorDark: "#000000",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.M
-                    });
-                }
-            });
-
+            const res = await fetch('/api/porteria/ubicaciones/?all=true', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+            if (!res.ok) throw new Error('No se pudieron leer las ubicaciones.');
+            list = await res.json();
         } catch (e) {
-            console.error(e);
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger fw-bold">Error al cargar ubicaciones.</td></tr>';
-        }
-    }
-
-    async function guardarUbicacion() {
-        const idInput = document.getElementById('porteria-ubicacion-id');
-        const nombreInput = document.getElementById('porteria-ubicacion-nombre');
-        const codigoInput = document.getElementById('porteria-ubicacion-codigo');
-        const activoInput = document.getElementById('porteria-ubicacion-activo');
-
-        const id = idInput.value;
-        const nombre = nombreInput.value.trim();
-        const codigo = codigoInput.value.trim().toUpperCase();
-        const activo = activoInput.checked;
-
-        if (!nombre || !codigo) {
-            showToast("Faltan datos. Escriba el nombre y el código de la ubicación.", "warning");
+            container.innerHTML = '<p class="fcB-vacio">' + F.esc(e.message) + ' <button type="button" class="fcB-btn" onclick="PorteriaModule.cargarUbicaciones()">Reintentar</button></p>';
             return;
         }
-
-        try {
-            let res;
-            if (id === "") {
-                // Crear
-                res = await fetch('/api/porteria/ubicaciones/', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ nombre, codigo })
-                });
-            } else {
-                // Editar
-                res = await fetch(`/api/porteria/ubicaciones/${id}/`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ nombre, codigo, activo })
-                });
+        F.montar(container, {
+            clave: 'ubicaciones',
+            titulo: 'Ubicaciones de ronda',
+            descripcion: 'Puntos que el guardia recorre en la ronda. Cada uno tiene un código QR que se imprime y se pega en el lugar.',
+            acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="FichaCfg.nuevo(\'ubicaciones\')"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva ubicación</button>' : '',
+            items: list.slice().sort(function (a, b) { return String(a.codigo).localeCompare(String(b.codigo), 'es'); }),
+            id: function (c) { return c.id; },
+            etiqueta: function (c) { return c.nombre; },
+            sub: function (c) { return c.codigo; },
+            apagado: function (c) { return !c.activo; },
+            vacio: 'No hay ubicaciones. Agregue la primera.',
+            ficha: function (c, panel) {
+                const nuevo = !c;
+                c = c || { nombre: '', codigo: '', activo: true };
+                panel.innerHTML = F.cabeza(nuevo ? 'Nueva ubicación' : c.nombre, canEdit ? 'Se cambia aquí mismo.' : 'Solo lectura.')
+                    + F.campo('Nombre', F.texto('fub-nombre', c.nombre, ' placeholder="Ej: Bodega de químicos"'), '', 'fub-nombre')
+                    + F.campo('Código', F.texto('fub-codigo', c.codigo, ' placeholder="Ej: LOC013" style="max-width:180px;text-transform:uppercase"'), 'Va impreso en el QR.', 'fub-codigo')
+                    + (nuevo ? '' : F.campo('En uso', F.interruptor('fub-activo', c.activo, 'Se pide en la ronda')))
+                    + (nuevo ? '' : F.campo('Código QR', '<div id="fub-qr" style="width:96px;height:96px;padding:6px;background:#fff;border:1px solid #e6e9f1;border-radius:10px"></div>'
+                        + '<button type="button" class="fcB-btn" id="fub-imprimir"><i class="bi bi-printer" aria-hidden="true"></i>Ver e imprimir</button>'))
+                    + (canEdit ? F.pie(nuevo ? '' : '<button type="button" class="fcB-btn borra" id="fub-borrar"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar ubicación</button>',
+                        '<button type="button" class="fcB-btn" id="fub-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fub-guardar">' + (nuevo ? 'Agregar ubicación' : 'Guardar cambios') + '</button>') : '');
+                if (!nuevo) {
+                    const qr = panel.querySelector('#fub-qr');
+                    if (qr && typeof QRCode !== 'undefined') {
+                        const texto = (String(c.nombre).toUpperCase() + ' CODIGO ' + String(c.codigo).toUpperCase()).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/gi, 'n');
+                        new QRCode(qr, { text: texto, width: 84, height: 84, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+                    }
+                    panel.querySelector('#fub-imprimir').onclick = function () { abrirModalQRUbicacion(c.id, c.nombre, c.codigo); };
+                }
+                if (!canEdit) { panel.querySelectorAll('input').forEach(function (e) { e.disabled = true; }); return; }
+                panel.querySelector('#fub-descartar').onclick = function () { F.pintarFicha('ubicaciones'); };
+                const borrar = panel.querySelector('#fub-borrar');
+                if (borrar) borrar.onclick = function () { eliminarUbicacion(c.id); };
+                panel.querySelector('#fub-guardar').onclick = function (ev) {
+                    const nombre = panel.querySelector('#fub-nombre').value.trim(), codigo = panel.querySelector('#fub-codigo').value.trim().toUpperCase();
+                    if (!nombre || !codigo) { showToast('Faltan datos. Escriba el nombre y el código de la ubicación.', 'warning'); return; }
+                    const activo = nuevo ? true : panel.querySelector('#fub-activo').checked;
+                    F.trabajando(ev.currentTarget, async function () {
+                        const res = await fetch('/api/porteria/ubicaciones/' + (nuevo ? '' : c.id + '/'), {
+                            method: nuevo ? 'POST' : 'PUT',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify(nuevo ? { nombre: nombre, codigo: codigo } : { nombre: nombre, codigo: codigo, activo: activo })
+                        });
+                        const d = await res.json().catch(function () { return {}; });
+                        if (!res.ok) { showToast(d.detail || 'No se pudo guardar la ubicación.', 'danger'); return; }
+                        showToast('Listo. Ubicación guardada.', 'success');
+                        if (d && d.id) F.recordar('ubicaciones', d.id);
+                        await cargarUbicaciones();
+                        await cargarUbicacionesCache();   // el escáner de rondas usa esta lista
+                    });
+                };
             }
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || "Error en la operación de ubicaciones.");
-            }
-
-            showToast("Listo. Ubicación guardada.", "success");
-            cancelarEdicionUbicacion();
-            await cargarUbicaciones();
-            await cargarUbicacionesCache(); // Refrescar cache de rondas del escáner
-
-        } catch (e) {
-            console.error(e);
-            Swal.fire("Error", e.message, "error");
-        }
+        });
     }
 
-    function editarUbicacion(id, nombre, codigo, activo) {
-        document.getElementById('porteria-ubicacion-form-title').innerText = "Editar Ubicación";
-        document.getElementById('porteria-ubicacion-id').value = id;
-        document.getElementById('porteria-ubicacion-nombre').value = nombre;
-        document.getElementById('porteria-ubicacion-codigo').value = codigo;
-        document.getElementById('porteria-ubicacion-activo').checked = activo;
-
-        document.getElementById('porteria-ubicacion-activo-container').classList.remove('d-none');
-        document.getElementById('porteria-ubicacion-btn-cancel').classList.remove('d-none');
-    }
-
-    function cancelarEdicionUbicacion() {
-        document.getElementById('porteria-ubicacion-form-title').innerText = "Agregar Nueva Ubicación";
-        document.getElementById('porteria-ubicacion-id').value = "";
-        document.getElementById('porteria-ubicacion-nombre').value = "";
-        document.getElementById('porteria-ubicacion-codigo').value = "";
-        document.getElementById('porteria-ubicacion-activo').checked = true;
-
-        document.getElementById('porteria-ubicacion-activo-container').classList.add('d-none');
-        document.getElementById('porteria-ubicacion-btn-cancel').classList.add('d-none');
-    }
+    // La ficha guarda sola; estas tres quedan por compatibilidad con PorteriaModule
+    async function guardarUbicacion() { await cargarUbicaciones(); }
+    function editarUbicacion(id) { if (window.FichaCfg) FichaCfg.elegir('ubicaciones', String(id)); }
+    function cancelarEdicionUbicacion() { if (window.FichaCfg) FichaCfg.pintarFicha('ubicaciones'); }
 
     async function eliminarUbicacion(id) {
         const result = await Swal.fire({

@@ -1442,93 +1442,76 @@ const FlotaModule = (() => {
     // ════════════════════════════════════════════════
     // CONFIG TAB (ADMIN CRUD DE CAMIONES)
     // ════════════════════════════════════════════════
+    // Configuración › Flota Aguacol con el diseño B (01-11-2026): patentes a la izquierda y la ficha del vehículo a la derecha.
     async function initAdminTab() {
         injectStyles();
-        const container = document.getElementById('flota-config-container');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h4 class="mb-1 fw-bold text-dark"><i class="bi bi-truck text-secondary me-2"></i>Catálogo de Flota Aguacol</h4>
-                    <p class="text-muted mb-0 small">Gestione los vehículos oficiales autorizados de la empresa y asócielos a sus áreas respectivas.</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary shadow-sm fw-bold" onclick="FlotaModule.abrirModalVehiculo()">
-                        <i class="bi bi-plus-circle me-1"></i> Registrar Vehículo
-                    </button>
-                    <button class="btn btn-light shadow-sm" onclick="FlotaModule.cargarVehiculosAdmin()">
-                        <i class="bi bi-arrow-clockwise text-primary"></i> Actualizar
-                    </button>
-                </div>
-            </div>
-            <div class="table-responsive shadow-sm border rounded" style="background:#fff;">
-                <table class="table mb-0 align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-4 py-3">Patente</th>
-                            <th class="py-3">Área Asignada</th>
-                            <th class="py-3">Fecha Registro</th>
-                            <th class="py-3">Estado</th>
-                            <th class="pe-4 py-3 text-end">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="flota-admin-tbody">
-                        <tr><td colspan="5" class="text-center py-5 text-muted"><div class="spinner-border text-primary spinner-border-sm"></div> Cargando vehículos...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-
         await cargarVehiculosAdmin();
     }
 
     async function cargarVehiculosAdmin() {
-        const tbody = document.getElementById('flota-admin-tbody');
-        if (!tbody) return;
-
+        const container = document.getElementById('flota-config-container');
+        if (!container || !window.FichaCfg) return;
+        const F = window.FichaCfg, canEdit = F.puede('configuracion.flota');
+        let data = [], areas = [];
         try {
-            const res = await fetch('/api/flota/maestro/', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error al obtener catálogo");
-            const data = await res.json();
-
-            if (!data.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-5 text-muted">No hay vehículos registrados en el catálogo de flota.</td></tr>';
-                return;
-            }
-
-            const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.flota') : true;
-
-            tbody.innerHTML = data.map(v => {
-                const f = v.created_at ? v.created_at.split(' ')[0].split('-') : null;
-                const fechaFmt = f ? `${f[2]}-${f[1]}-${f[0]}` : '—';
-                const statusBadge = v.activo ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>' : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>';
-
-                return `
-                    <tr>
-                        <td class="ps-4">${renderPlacaPatente(v.patente)}</td>
-                        <td class="text-secondary fw-semibold">${v.area_nombre}</td>
-                        <td class="text-muted small">${fechaFmt}</td>
-                        <td>${statusBadge}</td>
-                        <td class="pe-4 text-end">
-                            ${canEdit ? `
-                                <button class="btn btn-sm btn-outline-primary border-0 me-1" onclick="FlotaModule.abrirModalVehiculo(${v.id}, '${v.patente}', ${v.area_id})" title="Editar">
-                                    <i class="bi bi-pencil-square"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger border-0" onclick="FlotaModule.eliminarVehiculo(${v.id}, '${v.patente}')" title="Eliminar">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            ` : '—'}
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+            const auth = { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } };
+            const r = await Promise.all([fetch('/api/flota/maestro/', auth), fetch('/api/configuracion/areas/', auth)]);
+            if (!r[0].ok) throw new Error('No se pudo leer la flota.');
+            data = await r[0].json();
+            areas = r[1].ok ? await r[1].json() : [];
+            _catalogoAreasCached = areas;
         } catch (e) {
-            console.error(e);
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-5 text-danger fw-bold">Error al cargar vehículos desde la base de datos central.</td></tr>';
+            container.innerHTML = '<p class="fcB-vacio">' + F.esc(e.message) + ' <button type="button" class="fcB-btn" onclick="FlotaModule.cargarVehiculosAdmin()">Reintentar</button></p>';
+            return;
         }
+        const areasFlota = areas.filter(function (a) { return a.aplica_flota === 1 || a.aplica_flota === true; });
+        F.montar(container, {
+            clave: 'flota',
+            titulo: 'Flota Aguacol',
+            descripcion: 'Vehículos de la empresa que Portería registra al salir y al volver. Solo se asignan a áreas con control de flota.',
+            acciones: canEdit ? '<button type="button" class="fcB-btn pri" onclick="FichaCfg.nuevo(\'flota\')"><i class="bi bi-plus-lg" aria-hidden="true"></i>Registrar vehículo</button>' : '',
+            items: data.slice().sort(function (a, b) { return String(a.patente).localeCompare(String(b.patente), 'es'); }),
+            id: function (v) { return v.id; },
+            etiqueta: function (v) { return v.patente; },
+            sub: function (v) { return v.area_nombre || ''; },
+            apagado: function (v) { return v.activo === 0 || v.activo === false; },
+            vacio: 'No hay vehículos registrados.',
+            ficha: function (v, panel) {
+                const nuevo = !v;
+                v = v || { patente: '', area_id: areasFlota.length ? areasFlota[0].id : '' };
+                const f = v.created_at ? String(v.created_at).split(' ')[0].split('-') : null;
+                const ops = areasFlota.map(function (a) { return [a.id, a.nombre]; });
+                if (!nuevo && v.area_id && !ops.some(function (o) { return String(o[0]) === String(v.area_id); })) ops.unshift([v.area_id, v.area_nombre || 'Área sin control de flota']);
+                panel.innerHTML = F.cabeza(nuevo ? 'Registrar vehículo' : v.patente, nuevo ? 'Escriba la patente y elija su área.' : (f ? 'Registrado el ' + f[2] + '-' + f[1] + '-' + f[0] + '.' : ''))
+                    + F.campo('Patente', F.texto('ffl-patente', v.patente, ' placeholder="Ej: ABCD12" style="max-width:200px;text-transform:uppercase;font-variant-numeric:tabular-nums"'), 'Sin guiones ni espacios.', 'ffl-patente')
+                    + F.campo('Área', ops.length ? F.lista('ffl-area', ops, v.area_id) : '<p class="fcB-nota">Ninguna área tiene control de flota. Actívelo en Configuración › Áreas.</p>', '', 'ffl-area')
+                    + (canEdit ? F.pie(nuevo ? '' : '<button type="button" class="fcB-btn borra" id="ffl-borrar"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar vehículo</button>',
+                        '<button type="button" class="fcB-btn" id="ffl-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="ffl-guardar"' + (ops.length ? '' : ' disabled') + '>' + (nuevo ? 'Registrar vehículo' : 'Guardar cambios') + '</button>') : '');
+                if (!canEdit) { panel.querySelectorAll('input, select').forEach(function (e) { e.disabled = true; }); return; }
+                panel.querySelector('#ffl-descartar').onclick = function () { F.pintarFicha('flota'); };
+                const borrar = panel.querySelector('#ffl-borrar');
+                if (borrar) borrar.onclick = function () { eliminarVehiculo(v.id, v.patente); };
+                panel.querySelector('#ffl-guardar').onclick = function (ev) {
+                    const patente = panel.querySelector('#ffl-patente').value.toUpperCase().replace(/[\s.-]+/g, '');
+                    const sel = panel.querySelector('#ffl-area');
+                    if (!patente) { showToast('Falta la patente.', 'warning'); return; }
+                    const dup = data.find(function (x) { return x.patente === patente && x.id !== v.id; });
+                    if (dup) { showToast('La patente ' + patente + ' ya está registrada en ' + (dup.area_nombre || 'otra área') + '.', 'warning'); return; }
+                    F.trabajando(ev.currentTarget, async function () {
+                        const r = await fetch(nuevo ? '/api/flota/maestro/' : '/api/flota/maestro/' + v.id + '/', {
+                            method: nuevo ? 'POST' : 'PUT',
+                            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ patente: patente, area_id: parseInt(sel.value, 10) })
+                        });
+                        const d = await r.json().catch(function () { return {}; });
+                        if (!r.ok) { showToast(d.detail || 'No se pudo guardar el vehículo.', 'danger'); return; }
+                        showToast(nuevo ? 'Listo. Vehículo registrado.' : 'Listo. Cambios guardados.', 'success');
+                        if (d && d.id) F.recordar('flota', d.id);
+                        await cargarVehiculosAdmin();
+                    });
+                };
+            }
+        });
     }
 
     async function abrirModalVehiculo(id = null, patente = '', areaId = null) {
