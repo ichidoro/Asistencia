@@ -468,7 +468,7 @@ const Articulo22Module = (() => {
             </style>
 
             <!-- ENCABEZADO -->
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 pt-repetido">
                 <div class="d-flex align-items-center gap-3">
                     <div style="background:#fff; padding:8px; border-radius:10px; box-shadow: var(--shadow-sm); border:1px solid #e2e8f0; color:var(--primary-color); display:flex; align-items:center; justify-content:center;">
                         <i class="bi bi-clipboard-check-fill" style="font-size:1.3rem"></i>
@@ -489,7 +489,7 @@ const Articulo22Module = (() => {
             </div>
 
             <!-- KPI STATS -->
-            <div class="row g-3 mb-4">
+            <div class="row g-3 mb-4 pt-repetido">
                 <div class="col-md-4">
                     <div class="art22-kpi" style="background: var(--primary-color)">
                         <i class="bi bi-people-fill kpi-icon"></i>
@@ -523,7 +523,7 @@ const Articulo22Module = (() => {
             </div>
 
             <!-- ESTADO DEL DÍA -->
-            <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
+            <div class="card border-0 shadow-sm mb-4 pt-repetido" style="border-radius:12px; overflow:hidden">
                 <div class="art22-section-header">
                     <span class="art22-section-title">
                         <i class="bi bi-list-check" style="color:var(--primary-color)"></i>Estado del día
@@ -1027,7 +1027,7 @@ const Articulo22Module = (() => {
             const lista = await res.json();
             const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
             sel.innerHTML = '<option value="">Todos</option>' + lista.map(e =>
-                `<option value="${e.id}">${esc((e.apellido_paterno || '') + ' ' + (e.apellido_materno || ''))}, ${esc(e.nombre)}</option>`).join('');
+                '<option value="' + e.id + '">' + esc((window.nombrePersona || String)(((e.apellido_paterno || '') + ' ' + (e.apellido_materno || '')).trim() + ', ' + (e.nombre || ''))) + '</option>').join('');
         } catch (e) { console.error(e); }
     }
 
@@ -1104,7 +1104,7 @@ const Articulo22Module = (() => {
                 const fechaFmt = `${parseInt(f[2])} ${meses[parseInt(f[1])]} ${f[0]}`;
                 return `<tr>
                     <td style="font-weight:500; color:#475569; white-space:nowrap">${fechaFmt}</td>
-                    <td style="font-weight:600; color:#1e293b">${r.nombre}</td>
+                    <td style="font-weight:600; color:#1e293b">${(window.nombrePersona || String)(r.nombre)}</td>
                     <td style="color:#475569">${r.cargo || ''}<br><span style="font-size: 0.75rem; color:#94a3b8">${r.area || ''}</span></td>
                     <td style="color:#065f46; font-weight:500">${r.primera_entrada ? r.primera_entrada.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
                     <td style="color:#9f1239; font-weight:500">${r.ultima_salida ? r.ultima_salida.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>

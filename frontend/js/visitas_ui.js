@@ -97,7 +97,7 @@ const VisitasModule = (() => {
             </div>
 
             <!-- KPI STATS -->
-            <div class="row g-3 mb-4">
+            <div class="row g-3 mb-4 pt-repetido">
                 <div class="col-md-4">
                     <div class="vis-kpi" style="background:var(--primary-color)">
                         <i class="bi bi-people-fill kpi-icon"></i>
@@ -244,7 +244,7 @@ const VisitasModule = (() => {
             </div>
 
             <!-- VISITANTES DEL DÍA -->
-            <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
+            <div class="card border-0 shadow-sm mb-4 pt-repetido" style="border-radius:12px; overflow:hidden">
                 <div class="vis-section-header">
                     <span class="vis-section-title">
                         <i class="bi bi-people" style="color:var(--primary-color)"></i>Visitantes del día

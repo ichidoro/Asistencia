@@ -208,7 +208,7 @@ const PorteriaPanel = (function () {
         const hoy = hoyISO(), ahora = new Date();
         let h = '<section class="ptG-card" aria-labelledby="ptg-llaves-t"><header class="ptG-h sm"><div class="tt"><span class="ptG-ic" aria-hidden="true"><i class="bi bi-key"></i></span>'
             + '<div><h2 id="ptg-llaves-t">Llaves</h2><p>' + d.fuera + (d.fuera === 1 ? ' entregada' : ' entregadas') + ' · ' + d.disponibles + ' en el tablero</p></div></div>'
-            + '<button type="button" class="ptG-btn ent" data-ir="llaves"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Entregar llave</button></header>';
+            + '<button type="button" class="ptG-btn sal" data-ir="llaves"><i class="bi bi-journal-text" aria-hidden="true"></i>Catálogo e historial</button></header>';
         h += '<div class="ptG-grupo">Entregadas <span>' + fuera.length + '</span></div>';
         if (!fuera.length) h += '<p class="ptG-vacio">Todas las llaves están en el tablero.</p>';
         fuera.forEach(function (l) {
@@ -227,8 +227,8 @@ const PorteriaPanel = (function () {
                 + (l.entregada_a ? '<button type="button" class="ptG-btn ent" data-llave="' + l.id + '"><i class="bi bi-box-arrow-in-left" aria-hidden="true"></i>Recibir</button>' : '')
                 + '</div>';
         });
-        if (tablero.length) h += '<div class="ptG-grupo">En el tablero <span>' + tablero.length + '</span></div><ul class="ptG-tablero">'
-            + tablero.map(function (l) { return '<li>' + esc(l.nombre) + '</li>'; }).join('') + '</ul>';
+        if (tablero.length) h += '<div class="ptG-grupo">En el tablero <span>' + tablero.length + '</span><em>Toque una llave para entregarla</em></div><ul class="ptG-tablero">'
+            + tablero.map(function (l) { return '<li><button type="button" data-entregar="' + l.id + '" aria-label="Entregar la llave ' + esc(l.nombre) + '">' + esc(l.nombre) + '<i class="bi bi-box-arrow-right" aria-hidden="true"></i></button></li>'; }).join('') + '</ul>';
         return h + '</section>';
     }
 
@@ -349,6 +349,13 @@ const PorteriaPanel = (function () {
                 const d = await enviar('/api/visitas/registrar/', { rut: b.dataset.visita });
                 return (d.tipo_label || 'Salida') + ' registrada: ' + quien + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
             });
+            return;
+        }
+        if (b.dataset.entregar) {
+            const l = ((datos.llaves && datos.llaves.llaves) || []).find(function (x) { return String(x.id) === b.dataset.entregar; });
+            if (!l || typeof LlavesModule === 'undefined') return;
+            // La entrega usa la misma ventana de la sección Llaves (elegir a quién y observaciones)
+            Promise.resolve(LlavesModule.abrirEntrega(l.id, l.nombre)).then(recargar);
             return;
         }
         if (b.dataset.llave) {

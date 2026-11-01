@@ -219,3 +219,12 @@
   .ptG-item:not(.compacto) .t { flex: 1 1 calc(100% - 60px); }
   .ptG-item:not(.compacto) .ptG-btn { margin-left: 48px; min-width: 132px; }
 }
+
+/* Secciones antiguas abiertas desde el panel: se oculta lo que el panel ya muestra (orden del dueño, 01-11-2026) */
+#porteria-detalle .pt-repetido { display: none !important; }
+.ptG-grupo em { font-style: normal; font-weight: 500; color: var(--ptg-ink-3); margin-left: 4px; }
+.ptG-tablero li button { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 6px; margin: -2px -6px; border: 0; border-radius: 6px; background: transparent; font: 500 13.5px 'Barlow', sans-serif; color: var(--ptg-ink-2); text-align: left; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.ptG-tablero li button i { color: var(--ptg-navy); opacity: 0; transition: opacity .15s ease; }
+.ptG-tablero li button:hover, .ptG-tablero li button:focus-visible { background: var(--ptg-navy-bg); color: var(--ptg-navy); outline: 0; }
+.ptG-tablero li button:hover i, .ptG-tablero li button:focus-visible i { opacity: 1; }
+@media (hover: none) { .ptG-tablero li button i { opacity: .7; } }

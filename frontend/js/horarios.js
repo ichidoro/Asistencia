@@ -574,85 +574,9 @@ function renderHorariosUI() {
     // Solo inyectar HTML si no existe la sección (evita destruir el modal abierto)
     if (!document.getElementById('horarios-view')) {
         const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
-        const html = `
-            <div id="horarios-view" class="fade-in">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-                    <h2><i class="bi bi-calendar3" aria-hidden="true"></i> Configuración de Turnos</h2>
-                    ${canEdit ? `
-                    <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-outline-secondary" id="btn-exportar-turnos" type="button" onclick="exportarTurnosJson(this)"
-                            title="Descarga todos los turnos de Ciclo Inteligente con sus opciones, días y parámetros (solo lectura, sin datos personales)">
-                            <i class="bi bi-download" aria-hidden="true"></i> Exportar turnos
-                        </button>
-                        <button class="btn btn-primary" onclick="openModalHorario()">
-                            <i class="bi bi-plus-lg"></i> Nuevo Turno
-                        </button>
-                    </div>
-                    ` : ''}
-                </div>
-
-                <!-- Tabs Navigation -->
-                <ul class="nav nav-tabs mb-3" id="horariosTabs" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active" id="catalogo-tab" data-bs-toggle="tab" data-bs-target="#catalogo" type="button">Catálogo de Turnos</button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="asignacion-tab" data-bs-toggle="tab" data-bs-target="#asignacion" type="button">Asignación Masiva</button>
-                    </li>
-                </ul>
-
-                <div class="tab-content" id="horariosTabsContent">
-                    <!-- Tab Catálogo -->
-                    <div class="tab-pane fade show active" id="catalogo" role="tabpanel">
-                        <div class="card shadow-sm">
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th style="cursor: pointer;" onclick="sortTurnos('nombre')" title="Ordenar por Nombre">
-                                                    Nombre <i id="sort-icon-turnos-nombre" class="bi bi-arrow-down-up small text-muted"></i>
-                                                </th>
-                                                <th style="cursor: pointer;" onclick="sortTurnos('tipo_programacion')" title="Ordenar por Tipo">
-                                                    Tipo <i id="sort-icon-turnos-tipo_programacion" class="bi bi-arrow-down-up small text-muted"></i>
-                                                </th>
-                                                <th style="cursor: pointer;" onclick="sortTurnos('meta_horas_semanales')" title="Ordenar por Horas">
-                                                    Horas Semanales <i id="sort-icon-turnos-meta_horas_semanales" class="bi bi-arrow-down-up small text-muted"></i>
-                                                </th>
-                                                <th>Tolerancias (Alerta/Atraso/Salida)</th>
-                                                <th>Áreas</th>
-                                                <th style="cursor: pointer;" onclick="sortTurnos('activo')" title="Ordenar por Estado">
-                                                    Estado <i id="sort-icon-turnos-activo" class="bi bi-arrow-down-up small text-muted"></i>
-                                                </th>
-                                                <th>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="turnos-table-body">
-                                            <!-- JS Render -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tab Asignación: Redirige al Módulo Empleados -->
-                    <div class="tab-pane fade" id="asignacion" role="tabpanel">
-                        <div class="d-flex flex-column align-items-center justify-content-center py-5 text-center">
-                            <div class="mb-4" style="font-size: 4rem;"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></div>
-                            <h4 class="fw-bold mb-2">Asignación Masiva de Horarios</h4>
-                            <p class="text-muted mb-4" style="max-width: 480px;">
-                                Esta funcionalidad fue movida al módulo <strong>Empleados</strong> para una mejor experiencia.
-                                Encontrarás la pestaña <strong>"Asignación Masiva"</strong> directamente junto a los turnos asignados.
-                            </p>
-                            <button class="btn btn-primary btn-lg px-5" onclick="switchPage('empleados'); setTimeout(() => document.getElementById('asignacion-masiva-tab-emp')?.click(), 300);">
-                                <i class="bi bi-people-fill me-2"></i> Ir a Módulo Empleados
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        // Diseño B (01-11-2026): lista de turnos y su ficha; el encabezado y las acciones los pone FichaCfg (renderTurnosTable).
+        // «Asignación masiva» vive en Empleados: la ficha deja el enlace en la descripción.
+        const html = '<div id="horarios-view" class="fade-in"><div id="turnos-fcb"></div></div>';
         container.innerHTML = html;
 
         // [FIX] Asegurar que el modal viva fuera de main-content para no ser destruido en re-renders
@@ -1149,56 +1073,45 @@ async function submitBulkAsignacion() {
 
 
 function renderTurnosTable() {
-    const tbody = document.getElementById('turnos-table-body');
-    if (!tbody) return;
-
-    if (turnosList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted p-4">No hay turnos creados</td></tr>`;
-        return;
-    }
-
-    const canEdit = typeof AuthService !== 'undefined' ? AuthService.hasPermission('configuracion.horarios') : true;
-
-    tbody.innerHTML = turnosList.map(t => {
+    const cont = document.getElementById('turnos-fcb');
+    if (!cont || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const canEdit = F.puede('configuracion.horarios');
+    const tipoDe = function (t) {
         const isBolsa = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA');
         const isLibreta = isBolsa && (t.modalidad_control === 'LIBRETA_180H' || !t.modalidad_control);
-        const tipoBadge = isBolsa
-            ? (isLibreta
-                ? (t.permite_viajes_largos ? '180h Art. 25 bis (Viajes)' : '180h Art. 25 bis')
-                : (t.permite_viajes_largos ? 'Bolsa Flexible (Viajes Largos)' : 'Bolsa Flexible'))
-            : (t.rotacion_dinamica_diaria ? 'Ciclo Inteligente (Dinámico)' : 'Ciclo Inteligente');
-
-        const badgeClass = isLibreta ? 'bg-primary' : 'bg-secondary';
-        const horasDisplay = isBolsa
-            ? `${t.meta_horas_semanales} hrs <small class="text-muted d-block">Esp: ${t.meta_horas_espera || 88}h</small>`
-            : `${t.meta_horas_semanales} hrs`;
-
-        const estadoBadge = t.activo !== false
-            ? '<span class="badge bg-success">Activo</span>'
-            : '<span class="badge bg-secondary">Inactivo</span>';
-
-        return `
-        <tr>
-            <td class="fw-bold">${t.nombre}</td>
-            <td><span class="badge ${badgeClass}">${tipoBadge}</span></td>
-            <td>${horasDisplay}</td>
-            <td>${t.tolerancia_retraso_alerta} / ${t.tolerancia_retraso_descuento} / ${t.tolerancia_salida_adelantada || 0} min</td>
-            <td>${(t.areas && t.areas.length > 0) ? t.areas.map(a => `<span class="badge bg-info bg-opacity-75 me-1 mb-1" style="font-size:.7em">${a}</span>`).join('') : '<span class="badge bg-warning text-dark" style="font-size:.7em"><i class="bi bi-exclamation-triangle me-1"></i>Sin Área</span>'}</td>
-            <td>${estadoBadge}</td>
-            <td>
-                ${canEdit ? `
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="openModalHorario(${t.id})" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-outline-danger" onclick="deleteTurno(${t.id})" title="Eliminar">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-                ` : '<span class="text-muted small">Sólo Lectura</span>'}
-            </td>
-        </tr>
-    `}).join('');
+        if (isBolsa) return isLibreta ? (t.permite_viajes_largos ? 'Libreta 180 h, Art. 25 bis (viajes)' : 'Libreta 180 h, Art. 25 bis') : (t.permite_viajes_largos ? 'Bolsa flexible (viajes largos)' : 'Bolsa flexible');
+        return t.rotacion_dinamica_diaria ? 'Ciclo inteligente, elige la opción cada día' : 'Ciclo inteligente';
+    };
+    const min = function (n) { n = Number(n || 0); return n + (n === 1 ? ' minuto' : ' minutos'); };
+    F.montar(cont, {
+        clave: 'turnos',
+        titulo: 'Turnos',
+        descripcion: 'Horarios de trabajo: días, horas, colación y tolerancias. Para asignar un turno a varias personas a la vez use Empleados › Asignación masiva.',
+        acciones: canEdit ? '<button type="button" class="fcB-btn" id="btn-exportar-turnos" onclick="exportarTurnosJson(this)" title="Descarga los turnos de Ciclo inteligente con sus opciones y días (sin datos personales)"><i class="bi bi-download" aria-hidden="true"></i>Exportar turnos</button>'
+            + '<button type="button" class="fcB-btn pri" onclick="openModalHorario()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo turno</button>' : '',
+        items: turnosList.slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); }),
+        id: function (t) { return t.id; },
+        etiqueta: function (t) { return t.nombre; },
+        sub: function (t) { return (t.meta_horas_semanales || 0) + ' h'; },
+        apagado: function (t) { return t.activo === false; },
+        vacio: 'No hay turnos. Cree el primero con «Nuevo turno».',
+        ficha: function (t, panel) {
+            const isBolsa = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA');
+            const areas = (t.areas && t.areas.length) ? t.areas.join(', ') : 'Sin áreas asignadas';
+            const colacion = t.descuento_colacion_auto ? (t.minutos_colacion_auto || 0) + ' min' + (t.umbral_horas_colacion ? ', si trabaja ' + t.umbral_horas_colacion + ' h o más' : '') : 'No descuenta';
+            const dato = function (txt) { return '<span>' + F.esc(txt) + '</span>'; };
+            panel.innerHTML = F.cabeza(t.nombre, tipoDe(t))
+                + F.campo('Jornada semanal', dato((t.meta_horas_semanales || 0) + ' horas' + (isBolsa ? ' · espera ' + (t.meta_horas_espera || 88) + ' h' : '')))
+                + F.campo('Colación', dato(colacion))
+                + F.campo('Tolerancia de atraso', dato('Aviso ' + min(t.tolerancia_retraso_alerta) + ' · descuento ' + min(t.tolerancia_retraso_descuento)))
+                + F.campo('Tolerancia de salida adelantada', dato(min(t.tolerancia_salida_adelantada)))
+                + F.campo('Áreas', dato(areas))
+                + F.campo('En uso', dato(t.activo !== false ? 'Sí' : 'No'))
+                + (canEdit ? F.pie('<button type="button" class="fcB-btn borra" onclick="deleteTurno(' + t.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar turno</button>',
+                    '<button type="button" class="fcB-btn pri" onclick="openModalHorario(' + t.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar días y horarios</button>') : '');
+        }
+    });
 }
 
 function renderModalHtml() {

@@ -30,7 +30,7 @@ const LlavesModule = (() => {
                 .llaves-section.active { display: block; }
             </style>
             
-            <div class="llaves-kpi" id="llaves-kpis">
+            <div class="llaves-kpi pt-repetido" id="llaves-kpis">
                 <div class="llaves-kpi-item" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9)">
                     <div class="kpi-value" id="kpi-total">-</div>
                     <div class="kpi-label">Llaves</div>
@@ -46,18 +46,18 @@ const LlavesModule = (() => {
             </div>
 
             <div class="llaves-tabs">
-                <button class="llaves-tab-btn active" onclick="LlavesModule.showSection('estado')">Estado actual</button>
-                <button class="llaves-tab-btn" onclick="LlavesModule.showSection('catalogo')">Catálogo</button>
+                <button class="llaves-tab-btn pt-repetido" onclick="LlavesModule.showSection('estado')">Estado actual</button>
+                <button class="llaves-tab-btn active" onclick="LlavesModule.showSection('catalogo')">Catálogo</button>
                 <button class="llaves-tab-btn" onclick="LlavesModule.showSection('historial')">Historial</button>
             </div>
 
-            <div id="seccion-estado" class="llaves-section active">
+            <div id="seccion-estado" class="llaves-section pt-repetido">
                 <div class="llaves-card">
                     <div id="llaves-estado-lista">Cargando...</div>
                 </div>
             </div>
 
-            <div id="seccion-catalogo" class="llaves-section">
+            <div id="seccion-catalogo" class="llaves-section active">
                 <div class="llaves-card">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
                         <div class="llaves-section-title">🗝️ Catálogo de Llaves</div>
@@ -100,6 +100,7 @@ const LlavesModule = (() => {
         document.getElementById('hist-fecha-hasta').value = hoy;
 
         await cargarEstado();
+        await cargarCatalogo();     // Catálogo es la primera pestaña: «Estado actual» ya está en el panel
         _initialized = true;
     }
 
