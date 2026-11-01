@@ -164,7 +164,6 @@
 .ptG-btn.ent:hover { background: #e2e7f8; }
 .ptG-btn.pri { background: var(--ptg-navy); color: #fff; box-shadow: 0 1px 2px rgba(27,47,143,.25); }
 .ptG-btn.pri:hover { background: #22389e; }
-.ptG-btn.confirmar, .ptG-btn.confirmar:hover { background: var(--ptg-navy); border-color: var(--ptg-navy); color: #fff; }
 .ptG-btn:focus-visible { outline: 2px solid var(--ptg-navy); outline-offset: 2px; }
 .ptG-btn:disabled { opacity: .7; cursor: progress; }
 .ptG-btn .spinner-border { width: 14px; height: 14px; border-width: 2px; }

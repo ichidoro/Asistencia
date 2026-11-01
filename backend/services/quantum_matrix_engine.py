@@ -652,6 +652,7 @@ class MultiBlockTensorSolver:
             'jornada_adicional_minutos': 0,
             'jornada_adicional_obs': '',
             'emergencia_detectada': None,
+            'emergencias': [],
             'marcas_consumidas_ids': [],
             'descartadas_estructura': [],
             'manuales_cubiertas': [],
@@ -737,10 +738,15 @@ class MultiBlockTensorSolver:
                         sal_str = sal_dt.strftime("%H:%M")
 
                         if dur_hours < limite_jornada_emergencia_horas:
-                            result['emergencia_detectada'] = {
+                            emergencia = {
                                 'minutos': dur_min,
+                                'hora_entrada': ent_str,
+                                'hora_salida': sal_str,
+                                'logs': extra_blk,
                                 'texto': f"[Llamado de Emergencia: {dur_min} min de {ent_str} a {sal_str}]"
                             }
+                            result['emergencia_detectada'] = emergencia
+                            result['emergencias'].append(emergencia)
                         else:
                             result['jornada_adicional_minutos'] += dur_min
                             result['jornada_adicional_obs'] += f"[Jornada Adicional (+2): {ent_str} - {sal_str}] "
@@ -1744,6 +1750,7 @@ class QuantumMatrixEngine:
                 todos_ciclos_dia_siguiente=todos_ciclos_dia_siguiente,
             )
             if not is_bolsa:
+                cls._registrar_emergencias(res)
                 cls._registrar_jornada_adicional(res, empleado_id, fecha)
 
         # ── Capa 1.5: Cobertura de Viaje Largo activo (cualquier tipo de turno) ──
@@ -1783,6 +1790,26 @@ class QuantumMatrixEngine:
         # ── Capa 4: Decisiones humanas previas ──
         res = HumanDecisionMerger.apply(res, fecha, he_previo, je_previo)
         return res
+
+    @staticmethod
+    def _registrar_emergencias(res: Optional[Dict[str, Any]]) -> None:
+        """Un llamado de emergencia (otra jornada del día, más corta que «Horas límite para calificar bloque como jornada
+        especial en vez de horas extras directas», 3 h) se suma a las horas extra del día, como dice ese ajuste. Antes solo
+        quedaba anotado y sus minutos no contaban en ningún lado (01-11-2026; caso Wladimir Becerra 24-10-2026, 137 min). En
+        un día libre, feriado o con cobertura se suma a la jornada especial que el día ya tiene. Se llama antes de registrar
+        la jornada adicional (+2), que crea su propia jornada especial por aprobar."""
+        ems = [e for e in ((res or {}).get('_emergencias') or []) if e.get('minutos_netos')]
+        if not ems:
+            return
+        minutos = sum(e['minutos_netos'] for e in ems)
+        je = res.get('_jornada_especial')
+        if je:
+            je['minutos_trabajados'] = int(je.get('minutos_trabajados') or 0) + minutos
+            notas = ' '.join(f"[Llamado de Emergencia: {e['hora_entrada']} - {e['hora_salida']} ({e['minutos_netos']} min)]" for e in ems)
+            je['observaciones'] = f"{(je.get('observaciones') or '').strip()} {notas}".strip()
+            return
+        res['minutos_extra_bruto'] = round(float(res.get('minutos_extra_bruto') or 0.0) + minutos, 2)
+        res['observaciones'] = (res.get('observaciones') or '') + f"Llamado de emergencia: {minutos} min sumados a las horas extra. "
 
     @staticmethod
     def _registrar_jornada_adicional(res: Optional[Dict[str, Any]], empleado_id: int, fecha: str) -> None:
@@ -2361,8 +2388,12 @@ class QuantumMatrixEngine:
                 'bloques': segment_res['bloques_extras'],
                 'minutos_netos': sum(_minutos_netos_jornada_aparte(b['logs'], t_cfg, tipo_prog) for b in segment_res['bloques_extras']),
             }
-        if segment_res['emergencia_detectada']:
-            res['observaciones'] += segment_res['emergencia_detectada']['texto'] + " "
+        for emergencia in segment_res['emergencias']:
+            res['observaciones'] += emergencia['texto'] + " "
+        if segment_res['emergencias']:
+            res['_emergencias'] = [{'hora_entrada': em['hora_entrada'], 'hora_salida': em['hora_salida'],
+                                    'minutos_netos': _minutos_netos_jornada_aparte(em['logs'], t_cfg, tipo_prog)}
+                                   for em in segment_res['emergencias']]
         if segment_res['descartadas_estructura']:
             horas_desc = [MultiBlockTensorSolver.parse_dt(l).strftime("%H:%M:%S") for l in segment_res['descartadas_estructura']
                           if MultiBlockTensorSolver.parse_dt(l)]
@@ -2413,6 +2444,8 @@ class QuantumMatrixEngine:
         today_str = now_local.strftime("%Y-%m-%d")
 
         if not bloque_p:
+            # Sin marcas no hubo jornada ni colación (antes quedaba la del horario: 30 min en una licencia o una inasistencia)
+            res['minutos_colacion_auto'] = 0
             if is_holiday:
                 res['estado'] = 'FERIADO'
                 res['observaciones'] = holiday_desc or 'Feriado Nacional'

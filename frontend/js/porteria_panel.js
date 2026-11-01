@@ -17,7 +17,6 @@ const PorteriaPanel = (function () {
         proveedores: { pane: 'tab-ingreso-proveedores', permiso: 'porteria.proveedores', init: function () {} }
     };
     const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    const CONFIRMAR_MS = 4000;
     const REFRESCO_MS = 60000;
 
     let datos = { a22: null, llaves: null, visitas: null, flota: null, rondas: null, ubicaciones: null };
@@ -301,27 +300,18 @@ const PorteriaPanel = (function () {
     }
 
     // ── acciones ───────────────────────────────────────────────
-    // Primer toque: el botón pide confirmar; segundo toque (antes de 4 s): se registra. Evita marcas por un roce.
-    function armar(btn, texto, ayuda) {
-        btn.dataset.armado = '1';
-        btn.dataset.original = btn.innerHTML;
-        btn.dataset.etiqueta = btn.getAttribute('aria-label') || '';
-        btn.classList.add('confirmar');
-        btn.innerHTML = '<i class="bi bi-check2" aria-hidden="true"></i>' + texto;
-        btn.setAttribute('title', ayuda); btn.setAttribute('aria-label', ayuda);
-        btn._t = setTimeout(function () { desarmar(btn); }, CONFIRMAR_MS);
+    // Antes de registrar se abre la ventana de siempre «¿Registrar la salida?» con el nombre y la hora (el dueño
+    // descartó el doble toque en el mismo botón: confunde). Mientras está abierta no se refresca el panel.
+    let preguntando = false;
+    async function preguntar(titulo, quien, items, boton) {
+        if (typeof uiConfirm !== 'function') return true;
+        preguntando = true;
+        try { return await uiConfirm(titulo, { quien: quien, items: items, confirmText: boton }); }
+        finally { preguntando = false; }
     }
-    function desarmar(btn) {
-        clearTimeout(btn._t);
-        if (btn.dataset.original) btn.innerHTML = btn.dataset.original;
-        if (btn.dataset.etiqueta) btn.setAttribute('aria-label', btn.dataset.etiqueta);
-        btn.removeAttribute('title');
-        btn.dataset.armado = ''; btn.disabled = false; btn.classList.remove('confirmar');
-    }
-    function hayArmados() { return !!document.querySelector('#porteria-panel [data-armado="1"]'); }
 
     async function ejecutar(btn, accion) {
-        clearTimeout(btn._t);
+        const original = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Guardando';
         try {
@@ -330,30 +320,34 @@ const PorteriaPanel = (function () {
             await recargar();
         } catch (e) {
             aviso(e.message || 'No se pudo registrar', 'danger');
-            desarmar(btn);
+            btn.innerHTML = original; btn.disabled = false;
         }
     }
+    function horaAhora() { return hhmm(ahoraMin()); }
 
-    function alHacerClic(ev) {
+    async function alHacerClic(ev) {
         const b = ev.target.closest('button');
         if (!b || !b.closest('#porteria-panel')) return;
         if (b.dataset.f) { filtro = b.dataset.f; repintarFilas(); return; }
         if (b.dataset.ir) { mostrar(b.dataset.ir); return; }
         if (b.dataset.recargar) { recargar(); return; }
         if (b.dataset.a22) {
-            const tipo = b.dataset.tipo;
-            if (b.dataset.armado !== '1') { armar(b, 'Confirmar', 'Toque de nuevo para confirmar la ' + tipo.toLowerCase()); return; }
+            const tipo = b.dataset.tipo, p = personas().find(function (x) { return String(x.id) === b.dataset.a22; });
+            const quien = p ? p.n : '';
+            if (!await preguntar('¿Registrar la ' + tipo.toLowerCase() + '?', quien, ['Artículo 22 · hora ' + horaAhora()], 'Registrar ' + tipo.toLowerCase())) return;
             ejecutar(b, async function () {
                 const d = await enviar('/api/articulo22/marcar/', { empleado_id: parseInt(b.dataset.a22, 10) });
-                return (d.tipo_label || tipo) + ': ' + nombre(d.nombre || '') + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
+                return (d.tipo_label || tipo) + ' registrada: ' + nombre(d.nombre || quien) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
             });
             return;
         }
         if (b.dataset.visita) {
-            if (b.dataset.armado !== '1') { armar(b, 'Confirmar', 'Toque de nuevo para confirmar la salida'); return; }
+            const v = ((datos.visitas && datos.visitas.visitantes) || []).find(function (x) { return x.rut === b.dataset.visita; });
+            const quien = v && v.nombre ? nombre(v.nombre) : 'RUT ' + rutVisible(b.dataset.visita);
+            if (!await preguntar('¿Registrar la salida?', quien, ['Visita · hora ' + horaAhora()], 'Registrar salida')) return;
             ejecutar(b, async function () {
                 const d = await enviar('/api/visitas/registrar/', { rut: b.dataset.visita });
-                return (d.tipo_label || 'Salida') + ': RUT ' + rutVisible(d.rut || b.dataset.visita) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
+                return (d.tipo_label || 'Salida') + ' registrada: ' + quien + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
             });
             return;
         }
@@ -409,7 +403,7 @@ const PorteriaPanel = (function () {
             temporizador = setInterval(function () {
                 if (!document.querySelector('#page-porteria.active') || document.visibilityState !== 'visible') return;
                 pintarFecha();
-                if (vista === 'panel' && !hayArmados()) recargar();
+                if (vista === 'panel' && !preguntando) recargar();
             }, REFRESCO_MS);
         }
         mostrar(vista === 'panel' ? vistaInicial() : vista);
