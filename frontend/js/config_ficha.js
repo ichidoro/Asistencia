@@ -24,9 +24,11 @@ window.FichaCfg = (function () {
                 + '<span class="n">' + esc(o.etiqueta(x)) + '</span>' + (o.sub ? '<small>' + esc(o.sub(x)) + '</small>' : '') + '</button>';
         }).join('');
         if (!items.length) lista = '<p class="fcB-vacio">' + esc(o.vacio || 'Todavía no hay nada aquí.') + '</p>';
-        cont.innerHTML = '<div class="fcB">'
-            + '<div class="fcB-h"><div><h2>' + esc(o.titulo) + '</h2>' + (o.descripcion ? '<p>' + esc(o.descripcion) + '</p>' : '') + '</div>'
-            + (o.acciones ? '<div class="fcB-acc">' + o.acciones + '</div>' : '') + '</div>'
+        const cabecera = (o.titulo || o.acciones)
+            ? '<div class="fcB-h"><div>' + (o.titulo ? '<h2>' + esc(o.titulo) + '</h2>' : '') + (o.descripcion ? '<p>' + esc(o.descripcion) + '</p>' : '') + '</div>'
+              + (o.acciones ? '<div class="fcB-acc">' + o.acciones + '</div>' : '') + '</div>'
+            : '';
+        cont.innerHTML = '<div class="fcB">' + cabecera
             + (o.antes || '')
             + '<div class="fcB-md' + (o.soloLista ? ' solo' : '') + '"><nav class="fcB-lista" aria-label="' + esc(o.titulo) + '">' + lista + '</nav>'
             + (o.soloLista ? '' : '<section class="fcB-ficha" aria-live="polite"></section>') + '</div></div>';

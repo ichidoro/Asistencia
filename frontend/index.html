@@ -1579,23 +1579,14 @@
                                 </div>
                                 <!-- Tab Seguridad (Audit, Usuarios, Roles) -->
                                 <div class="tab-pane fade" id="tab-seguridad" role="tabpanel">
-                                    <div class="d-flex justify-content-between align-items-center mb-4">
-                                        <h4 class="fw-bold mb-0"><i
-                                                class="bi bi-shield-lock-fill text-primary me-2"></i>Consola de
-                                            Seguridad</h4>
-                                        <div class="btn-group shadow-sm">
-                                            <button class="btn btn-outline-primary active tab-btn" data-tab="auditoria"
-                                                onclick="if(typeof switchSeguridadTab==='function') switchSeguridadTab('auditoria')">
-                                                <i class="bi bi-journal-code me-1"></i> Auditoría
-                                            </button>
-                                            <button class="btn btn-outline-primary tab-btn" data-tab="usuarios"
-                                                onclick="if(typeof switchSeguridadTab==='function') switchSeguridadTab('usuarios')">
-                                                <i class="bi bi-people-fill me-1"></i> Usuarios
-                                            </button>
-                                            <button class="btn btn-outline-primary tab-btn" data-tab="roles"
-                                                onclick="if(typeof switchSeguridadTab==='function') switchSeguridadTab('roles')">
-                                                <i class="bi bi-key-fill me-1"></i> Roles
-                                            </button>
+                                    <!-- Diseño B (02-11-2026): selector de vistas; Usuarios y Roles con lista y ficha (seguridad_ui.js) -->
+                                    <div class="fcB" style="margin-bottom:14px">
+                                        <div class="fcB-h"><div><h2>Seguridad</h2><p>Quién entra a la aplicación, con qué rol, y qué puede ver y hacer cada rol. El registro de cambios guarda quién cambió qué y cuándo.</p></div>
+                                            <div class="fcB-acc"><div class="fcB-seg" role="group" aria-label="Vista de seguridad">
+                                                <button type="button" class="tab-btn" data-tab="usuarios" onclick="if(typeof switchSeguridadTab==='function') switchSeguridadTab('usuarios')">Usuarios</button>
+                                                <button type="button" class="tab-btn" data-tab="roles" onclick="if(typeof switchSeguridadTab==='function') switchSeguridadTab('roles')">Roles</button>
+                                                <button type="button" class="tab-btn" data-tab="auditoria" onclick="if(typeof switchSeguridadTab==='function') switchSeguridadTab('auditoria')">Registro de cambios</button>
+                                            </div></div>
                                         </div>
                                     </div>
 
@@ -1634,86 +1625,20 @@
 
                                     <!-- Vista Usuarios -->
                                     <div id="vista-seguridad-usuarios" class="seguridad-view" style="display: none;">
-                                        <div class="card shadow-sm border-0">
-                                            <div
-                                                class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                                                <h5 class="mb-0 fw-bold">Credenciales y Colaboradores</h5>
-                                                <button class="btn btn-primary"
-                                                    onclick="if(typeof openUserModal==='function')openUserModal()"><i
-                                                        class="bi bi-person-plus-fill me-2"></i>Nuevo Usuario</button>
-                                            </div>
-                                            <div class="card-body p-0">
-                                                <div class="table-responsive">
-                                                    <table class="table table-hover align-middle mb-0">
-                                                        <thead class="bg-light">
-                                                            <tr>
-                                                                <th>ID / Username</th>
-                                                                <th>Datos Personales</th>
-                                                                <th>Rol Asignado</th>
-                                                                <th>Alcance y Scope (RLS)</th>
-                                                                <th>Acceso</th>
-                                                                <th class="text-end">Operaciones</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody id="table-usuarios">
-                                                            <tr>
-                                                                <td colspan="6" class="text-center py-4">Cargando matriz
-                                                                    de usuarios...
-                                                                </td>
-                                                            </tr>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <div id="usuarios-fcb"></div>
                                     </div>
 
                                     <!-- Vista Roles -->
-                                    <div id="vista-seguridad-roles" class="seguridad-view rl" style="display: none;">
-                                        <div class="rl-hero">
-                                            <div>
-                                                <h2>Roles y permisos</h2>
-                                                <p id="rl-hero-sub">Define qué puede ver y hacer cada tipo de usuario en el sistema.</p>
-                                            </div>
-                                            <button type="button" class="rl-btn rl-btn-brand"
-                                                onclick="if(typeof openRolModal==='function')openRolModal()"><i
-                                                    class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo rol</button>
-                                        </div>
-                                        <div class="rl-grid" id="roles-grid">
-                                            <div class="rl-empty-state">Cargando roles…</div>
-                                        </div>
+                                    <div id="vista-seguridad-roles" class="seguridad-view" style="display: none;">
+                                        <div id="roles-fcb"></div>
                                     </div>
                                 </div>
                                  <!-- Tab Robot BioAlba -->
                                 <div class="tab-pane fade" id="tab-robot-bioalba" role="tabpanel">
-                                    <div class="d-flex justify-content-between align-items-center mb-4">
-                                        <h4 class="fw-bold mb-0"><i class="bi bi-robot text-primary me-2"></i>Estado del Robot BioAlba</h4>
-                                        <button class="btn btn-sm btn-outline-primary" onclick="if(typeof loadRobotSyncLogs==='function') loadRobotSyncLogs()"><i class="bi bi-arrow-clockwise"></i> Recargar</button>
-                                    </div>
-                                    <div class="alert alert-info py-2 small mb-3">
-                                        Aquí puedes ver el historial de las últimas ejecuciones (automáticas o manuales) del robot de sincronización con los relojes BioAlba.
-                                    </div>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover align-middle mb-0">
-                                            <thead class="bg-light">
-                                                <tr>
-                                                    <th>ID</th>
-                                                    <th>Fecha Ejecución</th>
-                                                    <th>Tipo</th>
-                                                    <th class="text-center">Éxitos</th>
-                                                    <th class="text-center">Errores</th>
-                                                    <th>Duración</th>
-                                                    <th>Detalle Operativo</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="table-robot-logs">
-                                                <tr>
-                                                    <td colspan="7" class="text-center py-4">Cargando logs del robot...</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <!-- Diseño B (02-11-2026): lo arma loadRobotSyncLogs() en configuracion_ui.js -->
+                                    <div id="robot-fcb"></div>
                                 </div>
+
 
                                 <!-- Tab Ajustes del Sistema -->
                                 <div class="tab-pane fade" id="tab-sistema" role="tabpanel">
@@ -4776,11 +4701,11 @@
         "/static/js/chartjs-plugin-datalabels.min.js",
         "/static/js/horarios.js?v={{ startup_id }}_v26",
         "/static/js/asistencia.js?v={{ startup_id }}_v20",
-        "/static/js/config_ficha.js?v={{ startup_id }}_v1",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v22",
+        "/static/js/config_ficha.js?v={{ startup_id }}_v2",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v23",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v10",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
-        "/static/js/calendario_ui.js?v={{ startup_id }}_v16",
+        "/static/js/calendario_ui.js?v={{ startup_id }}_v17",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v16",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
         "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v27",
@@ -4792,7 +4717,7 @@
         "/static/js/compensaciones_he_panel.js?v={{ startup_id }}",
         "/static/js/compensar_inasistencia.js?v={{ startup_id }}_v1",
         "/static/js/tarjeta_dia.js?v={{ startup_id }}_v2",
-        "/static/js/seguridad_ui.js?v={{ startup_id }}",
+        "/static/js/seguridad_ui.js?v={{ startup_id }}_v2",
         "/static/js/libs/qrcode.min.js",
         "/static/js/porteria_panel.js?v={{ startup_id }}_v3",
         "/static/js/porteria_ui.js?v={{ startup_id }}_v7",

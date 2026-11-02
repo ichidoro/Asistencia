@@ -106,7 +106,7 @@ function initSeguridadUI() {
     // Inicializar instancias si es posible
     ensureModalInstances();
 
-    switchSeguridadTab('auditoria'); // Tab por defecto
+    switchSeguridadTab('usuarios'); // Diseño B: Usuarios primero (02-11-2026)
     loadPermisosMaestros(); // Cargar catálogo base de permisos (fondo)
     loadAreasParaSeguridad(); // Cargar áreas para RLS
     loadRoles(); // CRÍTICO: Cargar roles para que estén disponibles en el modal de usuario
@@ -280,56 +280,41 @@ async function loadAuditoria() {
 
 // ================== USUARIOS ==================
 async function loadUsuarios() {
-    const tbody = document.getElementById('table-usuarios');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><span class="spinner-border spinner-border-sm"></span> Cargando Fuerza Laboral...</td></tr>';
-
+    // Diseño B (02-11-2026): usuarios a la izquierda y su ficha a la derecha; se cambian en la ventana de siempre.
+    const cont = document.getElementById('usuarios-fcb');
+    if (!cont || !window.FichaCfg) return;
+    const F = window.FichaCfg;
     try {
         const response = await fetch('/api/seguridad/usuarios/');
-        if (!response.ok) throw new Error('Error Cargando Usuarios');
-
+        if (!response.ok) throw new Error('No se pudo leer la lista de usuarios.');
         cacheSeguridad.usuarios = await response.json();
-
-        tbody.innerHTML = cacheSeguridad.usuarios.map(user => {
-            const badgeAcceso = user.activo
-                ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Activo</span>'
-                : '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Bloqueado</span>';
-            const badgeDios = user.is_superuser
-                ? '<span class="badge bg-dark mt-1"><i class="fa-solid fa-crown text-warning me-1"></i>Súper Admin / God Mode</span>'
-                : '';
-
-            let areasHtml = user.alcance_global || user.is_superuser
-                ? '<span class="badge bg-primary">Global (Ve Todo)</span>'
-                : user.areas?.map(a => `<span class="badge bg-info text-dark me-1">${a}</span>`).join('') || '<span class="badge bg-secondary">Sin Áreas Acceso</span>';
-
-            const selfAdminBlock = (user.id === 9) ? `disabled title="El usuario raíz es inmutable"` : '';
-
-            return `
-                <tr>
-                    <td>
-                        <div class="fw-bold">${user.username}</div>
-                        <div class="small text-muted">ID: ${user.id}</div>
-                    </td>
-                    <td>
-                        <div>${user.nombre_completo}</div>
-                        <div class="small text-muted">${user.email || 'Sin correo'}</div>
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary">${user.rol_nombre.toUpperCase()}</span>
-                        <div>${badgeDios}</div>
-                    </td>
-                    <td>${areasHtml}</td>
-                    <td>${badgeAcceso}<br><div class="small text-muted mt-1">Acceso: ${user.ultimo_acceso ? window.formatFechaDDMMYYYY(user.ultimo_acceso) : 'Nunca'}</div></td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-primary" ${selfAdminBlock} onclick="editUsuario(${user.id})"><i class="bi bi-pencil"></i></button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
     } catch (error) {
-        console.error(error);
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">🔒 Error de Acceso.</td></tr>`;
+        cont.innerHTML = '<p class="fcB-vacio">' + F.esc(error.message) + ' <button type="button" class="fcB-btn" onclick="loadUsuarios()">Reintentar</button></p>';
+        return;
     }
+    const nombre = n => (window.nombrePersona ? window.nombrePersona(n) : String(n || '').toUpperCase());
+    F.montar(cont, {
+        clave: 'usuarios',
+        acciones: '<button type="button" class="fcB-btn pri" onclick="if(typeof openUserModal===\'function\')openUserModal()"><i class="bi bi-person-plus" aria-hidden="true"></i>Nuevo usuario</button>',
+        items: cacheSeguridad.usuarios.slice().sort((a, b) => String(a.username).localeCompare(String(b.username), 'es')),
+        id: u => u.id,
+        etiqueta: u => u.username,
+        sub: u => String(u.rol_nombre || '').toUpperCase(),
+        apagado: u => !u.activo,
+        vacio: 'No hay usuarios.',
+        ficha: function (u, panel) {
+            const areas = (u.alcance_global || u.is_superuser) ? 'Todas las áreas' : ((u.areas && u.areas.length) ? u.areas.join(', ') : 'Ninguna: no ve a nadie');
+            const raizInmutable = u.id === 9;
+            panel.innerHTML = F.cabeza(u.username, nombre(u.nombre_completo))
+                + F.campo('Correo', '<span>' + F.esc(u.email || 'Sin correo') + '</span>')
+                + F.campo('Rol', '<span>' + F.esc(String(u.rol_nombre || '').toUpperCase()) + (u.is_superuser ? ' · administrador total' : '') + '</span>')
+                + F.campo('Áreas que ve', '<span>' + F.esc(areas) + '</span>')
+                + F.campo('Acceso', '<span>' + (u.activo ? 'Puede entrar' : 'Bloqueado') + '</span>')
+                + F.campo('Último ingreso', '<span class="num">' + F.esc(u.ultimo_acceso ? window.formatFechaDDMMYYYY(u.ultimo_acceso) : 'Nunca') + '</span>')
+                + F.pie(raizInmutable ? '<span class="fcB-et"><p>El usuario principal no se puede cambiar.</p></span>' : '',
+                    '<button type="button" class="fcB-btn pri" ' + (raizInmutable ? 'disabled ' : '') + 'onclick="editUsuario(' + u.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar usuario</button>');
+        }
+    });
 }
 
 // Modales Usuarios
@@ -526,61 +511,52 @@ function rlPorModulo() {
 }
 
 async function loadRoles() {
-    const grid = document.getElementById('roles-grid');
-    if (!grid) return;
-    grid.innerHTML = '<div class="rl-empty-state"><span class="spinner-border spinner-border-sm me-2"></span>Cargando roles…</div>';
-
+    // Diseño B (02-11-2026): roles a la izquierda y su ficha con los permisos en palabras; se cambian en la ventana de siempre.
+    // Se llama al abrir Seguridad aunque la vista no esté a la vista: la ventana de usuario necesita la lista de roles.
     try {
         const response = await fetch('/api/seguridad/roles/');
-        if (!response.ok) throw new Error('Error al cargar roles');
+        if (!response.ok) throw new Error('No se pudieron leer los roles.');
         cacheSeguridad.roles = await response.json();
-
-        const mods = rlPorModulo();
-        const totalPerms = Object.keys(MAPA_UI_PERMISOS).length;
-        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        const totalPermsTxt = document.getElementById('rl-hero-sub');
-        if (totalPermsTxt) totalPermsTxt.textContent = `${cacheSeguridad.roles.length} ${cacheSeguridad.roles.length === 1 ? 'rol' : 'roles'} · ${totalPerms} permisos disponibles en ${Object.keys(mods).length} módulos`;
-
-        grid.innerHTML = cacheSeguridad.roles.map((rol, i) => {
-            const set = new Set(rol.permisos || []);
-            const granted = Object.keys(MAPA_UI_PERMISOS).filter(k => set.has(k)).length;
-            const crit = RL_CRITICOS.filter(k => set.has(k)).length;
-            const bloqueado = rol.id === 1 && !currentUser.is_superuser;
-            const entries = Object.entries(mods);
-            const spectrum = entries.map(([m, keys]) => {
-                const n = keys.filter(k => set.has(k)).length;
-                return `<i style="--h:${RL_MODULOS[m]?.hue ?? 215};--w:${keys.length};--p:${Math.round(n / keys.length * 100)}%"></i>`;
-            }).join('');
-            const lis = entries.map(([m, keys]) => {
-                const n = keys.filter(k => set.has(k)).length;
-                const meta = RL_MODULOS[m] || { label: m, icon: 'bi-shield', hue: 215 };
-                return `<li class="${n === 0 ? 'is-empty' : ''}" style="--h:${meta.hue}"><i class="bi ${meta.icon}" aria-hidden="true"></i><span class="nm">${rlEsc(meta.label)}</span><span class="n">${n}/${keys.length}</span></li>`;
-            }).join('');
-            const inicial = rlEsc((rol.nombre || '?').trim().charAt(0).toUpperCase());
-            return `
-                <article class="rl-card ${rol.alcance_global ? 'is-global' : ''}" style="--i:${i}">
-                    <header class="rl-card-head">
-                        <span class="rl-avatar" aria-hidden="true">${inicial}</span>
-                        <div class="rl-card-title">
-                            <h3>${rlEsc(rol.nombre)}</h3>
-                            <span class="rl-scope ${rol.alcance_global ? 'is-global' : ''}"><i class="bi ${rol.alcance_global ? 'bi-globe2' : 'bi-diagram-3'}" aria-hidden="true"></i>${rol.alcance_global ? 'Alcance global' : 'Filtrado por áreas'}</span>
-                        </div>
-                        <div class="rl-count" title="${granted} de ${totalPerms} permisos"><b>${granted}</b><span>/${totalPerms}</span></div>
-                    </header>
-                    <p class="rl-desc">${rlEsc(rol.descripcion) || 'Sin descripción'}</p>
-                    <div class="rl-spectrum" role="img" aria-label="Cobertura de permisos por módulo">${spectrum}</div>
-                    <ul class="rl-mods">${lis}</ul>
-                    ${crit ? `<div class="rl-flag"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>${crit} permiso${crit > 1 ? 's' : ''} crítico${crit > 1 ? 's' : ''}</div>` : ''}
-                    <footer class="rl-card-foot">
-                        <button type="button" class="rl-btn rl-btn-primary" ${bloqueado ? 'disabled title="Solo el Súper Admin puede modificar este rol"' : ''} onclick="editRol(${rol.id})"><i class="bi bi-sliders2" aria-hidden="true"></i>Editar permisos</button>
-                        <button type="button" class="rl-btn rl-btn-icon rl-btn-danger" aria-label="Eliminar rol" ${rol.id === 1 ? 'disabled title="El rol maestro es inmutable"' : 'title="Eliminar rol"'} onclick="deleteRol(${rol.id})"><i class="bi bi-trash3" aria-hidden="true"></i></button>
-                    </footer>
-                </article>`;
-        }).join('') || '<div class="rl-empty-state">Aún no hay roles. Crea el primero con «Nuevo rol».</div>';
     } catch (error) {
-        console.error(error);
-        grid.innerHTML = '<div class="rl-empty-state text-danger"><i class="bi bi-lock me-2"></i>No se pudieron cargar los roles (acceso o conexión).</div>';
+        const c = document.getElementById('roles-fcb');
+        if (c && window.FichaCfg) c.innerHTML = '<p class="fcB-vacio">' + FichaCfg.esc(error.message) + ' <button type="button" class="fcB-btn" onclick="loadRoles()">Reintentar</button></p>';
+        return;
     }
+    const cont = document.getElementById('roles-fcb');
+    if (!cont || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const mods = rlPorModulo();
+    const totalPerms = Object.keys(MAPA_UI_PERMISOS).length;
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    F.montar(cont, {
+        clave: 'roles',
+        acciones: '<button type="button" class="fcB-btn pri" onclick="if(typeof openRolModal===\'function\')openRolModal()"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo rol</button>',
+        items: cacheSeguridad.roles,
+        id: r => r.id,
+        etiqueta: r => r.nombre,
+        sub: r => { const set = new Set(r.permisos || []); return Object.keys(MAPA_UI_PERMISOS).filter(k => set.has(k)).length + ' de ' + totalPerms; },
+        vacio: 'Aún no hay roles. Cree el primero con «Nuevo rol».',
+        ficha: function (r, panel) {
+            const set = new Set(r.permisos || []);
+            const bloqueado = r.id === 1 && !currentUser.is_superuser;
+            const crit = RL_CRITICOS.filter(k => set.has(k));
+            const porModulo = Object.entries(mods).map(([m, keys]) => {
+                const si = keys.filter(k => set.has(k));
+                if (!si.length) return '';
+                const meta = RL_MODULOS[m] || { label: m };
+                const acciones = si.map(k => (MAPA_UI_PERMISOS[k] && MAPA_UI_PERMISOS[k].action) || k).join(', ');
+                return F.campo(meta.label + ' (' + si.length + ' de ' + keys.length + ')', '<span>' + F.esc(acciones) + '</span>');
+            }).join('');
+            panel.innerHTML = F.cabeza(r.nombre, r.descripcion || '')
+                + F.campo('Alcance', '<span>' + (r.alcance_global ? 'Ve todas las áreas' : 'Ve solo las áreas asignadas a cada usuario') + '</span>')
+                + (crit.length ? '<p class="fcB-nota" style="margin:8px 0"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Tiene ' + crit.length + (crit.length === 1 ? ' permiso delicado: ' : ' permisos delicados: ')
+                    + F.esc(crit.map(k => String((MAPA_UI_PERMISOS[k] && MAPA_UI_PERMISOS[k].description) || k).replace(/[\u2600-\u27BF\uFE0F]/g, '').replace(/\s{2,}/g, ' ').trim()).join('; ')) + '.</p>' : '')
+                + F.seccion('Lo que puede hacer')
+                + (porModulo || '<p class="fcB-nota">Este rol no tiene permisos: quien lo tenga no ve nada.</p>')
+                + F.pie(r.id === 1 ? '<span class="fcB-et"><p>El rol maestro no se puede eliminar.</p></span>' : '<button type="button" class="fcB-btn borra" onclick="deleteRol(' + r.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar rol</button>',
+                    '<button type="button" class="fcB-btn pri" ' + (bloqueado ? 'disabled title="Solo el administrador total puede cambiar este rol" ' : '') + 'onclick="editRol(' + r.id + ')"><i class="bi bi-pencil" aria-hidden="true"></i>Editar permisos</button>');
+        }
+    });
 }
 
 function getPermissionDetails(permId) {

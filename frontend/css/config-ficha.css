@@ -42,7 +42,7 @@ textarea.fcB-inp { height: auto; padding: 8px 12px; resize: vertical; }
 .fcB-seg { display: inline-flex; flex-wrap: wrap; padding: 3px; background: var(--fc-sunk); border-radius: 10px; }
 .fcB-seg button { height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; font: 500 13.5px 'Barlow', sans-serif; color: var(--fc-ink-2); cursor: pointer; }
 .fcB-seg button:hover:not(:disabled) { color: var(--fc-ink); }
-.fcB-seg button.on { background: #fff; color: var(--fc-ink); font-weight: 600; box-shadow: 0 1px 2px rgba(16,26,61,.12); }
+.fcB-seg button.on, .fcB-seg button.active { background: #fff; color: var(--fc-ink); font-weight: 600; box-shadow: 0 1px 2px rgba(16,26,61,.12); }
 .fcB-seg button:focus-visible { outline: 2px solid var(--fc-navy); outline-offset: 1px; }
 .fcB-seg button:disabled { cursor: default; }
 .fcB-sw { display: inline-flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; color: var(--fc-ink-2); cursor: pointer; }

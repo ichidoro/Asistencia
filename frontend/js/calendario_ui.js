@@ -38,87 +38,59 @@ async function loadFeriados() {
 }
 
 function renderCalendario() {
+    // Diseño B (02-11-2026): feriados del año a la izquierda y su ficha a la derecha; uno nuevo se crea en la ficha.
     const container = document.getElementById('calendario-container');
-    if (!container) return;
-
-    let html = `
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h5 class="mb-0 fw-bold">Calendario Laboral ${currentYear}</h5>
-                <p class="small text-muted mb-0">Días no laborables y feriados legales de Chile.</p>
-            </div>
-            <div class="d-flex gap-2">
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" onclick="changeCalendarYear(-1)">◀</button>
-                    <button class="btn btn-outline-secondary disabled fw-bold">${currentYear}</button>
-                    <button class="btn btn-outline-secondary" onclick="changeCalendarYear(1)">▶</button>
-                </div>
-                <button class="btn btn-info btn-sm text-white" onclick="syncChileHolidays()">
-                    <i class="bi bi-arrow-repeat"></i> Sincronizar Chile
-                </button>
-                <button class="btn btn-primary btn-sm" onclick="openModalFeriado()">
-                    <i class="bi bi-plus-circle"></i> Nuevo Feriado
-                </button>
-            </div>
-        </div>
-
-        <div class="table-responsive card border-0 shadow-sm">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 150px;">Fecha</th>
-                        <th>Descripción</th>
-                        <th style="width: 120px;">Tipo</th>
-                        <th style="width: 100px;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    if (feriadosList.length === 0) {
-        html += `
-            <tr>
-                <td colspan="4" class="text-center py-5 text-muted">
-                    <div class="opacity-50 mb-2" style="font-size: 2rem;">🗓️</div>
-                    No hay feriados registrados para este año.<br>
-                    <button class="btn btn-link btn-sm" onclick="syncChileHolidays()">Sincronizar feriados oficiales de Chile</button>
-                </td>
-            </tr>
-        `;
-    } else {
-        feriadosList.forEach(f => {
-            const dateObj = new Date(f.fecha + 'T00:00:00');
-            const dateStr = dateObj.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', weekday: 'long' });
-
-            html += `
-                <tr>
-                    <td class="fw-bold text-primary">${window.formatFechaDDMMYYYY(f.fecha)}</td>
-                    <td>
-                        <div class="fw-bold">${f.descripcion}</div>
-                        <div class="small text-muted">${dateStr}</div>
-                    </td>
-                    <td>
-                        <span class="badge ${f.es_nacional ? 'bg-info text-white' : 'bg-warning text-dark'}">
-                            ${f.es_nacional ? 'Nacional' : 'Manual'}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteFeriado(${f.id})">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        });
-    }
-
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
-
-    container.innerHTML = html;
+    if (!container || !window.FichaCfg) return;
+    const F = window.FichaCfg;
+    const canEdit = F.puede('configuracion.editar');
+    const ddmm = function (iso) { return String(iso || '').slice(8, 10) + '-' + String(iso || '').slice(5, 7); };
+    const largo = function (iso) {
+        const d = new Date(iso + 'T00:00:00');
+        const t = d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        return t.charAt(0).toUpperCase() + t.slice(1);
+    };
+    F.montar(container, {
+        clave: 'calendario',
+        titulo: 'Calendario ' + currentYear,
+        descripcion: 'Feriados del año. Un día feriado no se cuenta como inasistencia y lo trabajado ese día es jornada especial.',
+        acciones: '<span class="fcB-seg" role="group" aria-label="Año"><button type="button" onclick="changeCalendarYear(-1)" aria-label="Año anterior"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
+            + '<button type="button" class="on" aria-pressed="true" disabled>' + currentYear + '</button>'
+            + '<button type="button" onclick="changeCalendarYear(1)" aria-label="Año siguiente"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></span>'
+            + (canEdit ? '<button type="button" class="fcB-btn" onclick="syncChileHolidays()"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Traer feriados de Chile</button>'
+                + '<button type="button" class="fcB-btn pri" onclick="FichaCfg.nuevo(\'calendario\')"><i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo feriado</button>' : ''),
+        items: feriadosList.slice().sort(function (a, b) { return String(a.fecha).localeCompare(String(b.fecha)); }),
+        id: function (x) { return x.id; },
+        etiqueta: function (x) { return x.descripcion; },
+        sub: function (x) { return ddmm(x.fecha); },
+        vacio: 'No hay feriados para ' + currentYear + '. Use «Traer feriados de Chile» para cargar los oficiales.',
+        ficha: function (x, panel) {
+            if (!x) {
+                panel.innerHTML = F.cabeza('Nuevo feriado', 'Para un feriado que no está en la lista oficial, por ejemplo uno regional.')
+                    + F.campo('Fecha', '<input type="date" class="fcB-inp" style="max-width:200px" id="fcal-fecha" value="' + currentYear + '-01-01">', '', 'fcal-fecha')
+                    + F.campo('Descripción', F.texto('fcal-desc', '', ' placeholder="Ej: Día de la Región"'), '', 'fcal-desc')
+                    + F.pie('', '<button type="button" class="fcB-btn" id="fcal-descartar">Descartar</button><button type="button" class="fcB-btn pri" id="fcal-guardar">Guardar feriado</button>');
+                panel.querySelector('#fcal-descartar').onclick = function () { const p = feriadosList[0]; F.elegir('calendario', p ? String(p.id) : null); };
+                panel.querySelector('#fcal-guardar').onclick = function (ev) {
+                    const fecha = panel.querySelector('#fcal-fecha').value, descripcion = panel.querySelector('#fcal-desc').value.trim();
+                    if (!fecha || !descripcion) { showToast('Faltan datos. Escriba la fecha y la descripción.', 'warning'); return; }
+                    F.trabajando(ev.currentTarget, async function () {
+                        const r = await fetch(API_CALENDARIO, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: fecha, descripcion: descripcion }) });
+                        if (!r.ok) { showToast('No se guardó el feriado.', 'danger'); return; }
+                        showToast('Listo. Feriado guardado.', 'success');
+                        const d = await r.json().catch(function () { return {}; });
+                        if (d && d.id) F.recordar('calendario', d.id);
+                        if (Number(fecha.slice(0, 4)) !== currentYear) currentYear = Number(fecha.slice(0, 4));
+                        await loadFeriados();
+                    });
+                };
+                return;
+            }
+            panel.innerHTML = F.cabeza(x.descripcion, largo(x.fecha))
+                + F.campo('Fecha', '<span class="num">' + F.esc(window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(x.fecha) : x.fecha) + '</span>')
+                + F.campo('Origen', '<span>' + (x.es_nacional ? 'Feriado oficial de Chile' : 'Agregado a mano') + '</span>')
+                + (canEdit ? F.pie('<button type="button" class="fcB-btn borra" onclick="deleteFeriado(' + x.id + ')"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar feriado</button>', '') : '');
+        }
+    });
 }
 
 function changeCalendarYear(delta) {

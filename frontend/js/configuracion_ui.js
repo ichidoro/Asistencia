@@ -1548,64 +1548,49 @@ function showToast(msg, type = "success") {
 // ROBOT BIOALBA LOGS [NEW]
 // ==========================================
 window.loadRobotSyncLogs = async function() {
-    const tbody = document.getElementById('table-robot-logs');
-    if (!tbody) return;
-
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><i class="spinner-border spinner-border-sm text-primary"></i> Cargando logs del robot...</td></tr>';
-    
+    // Diseño B (02-11-2026): ejecuciones del robot a la izquierda y su detalle a la derecha (solo lectura).
+    const cont = document.getElementById('robot-fcb');
+    if (!cont || !window.FichaCfg) return;
+    const F = window.FichaCfg;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let logs = [];
     try {
-        const response = await fetch('/api/sync/logs/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },  signal: controller.signal });
+        const response = await fetch('/api/sync/logs/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }, signal: controller.signal });
         clearTimeout(timeoutId);
-        
-        if (!response.ok) throw new Error("Error obteniendo logs de sincronización");
-        const logs = await response.json();
-        
-        if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 bg-light text-muted">No existen registros de ejecución.</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = logs.map(log => {
-            const errores = log.errores || 0;
-            const isError = errores > 0;
-            const badgeClass = isError ? 'bg-danger' : 'bg-success';
-            const statusText = isError ? 'Completado con Errores' : 'Exitoso';
-            const duracion = log.duracion_segundos != null ? parseFloat(log.duracion_segundos).toFixed(2) : '0.00';
-            
-            // Asegurar formato ISO para navegadores estrictos
-            const rawFecha = log.fecha_inicio || '';
-            let formattedDate = 'N/A';
-            if (rawFecha) {
-                const parts = rawFecha.split(/[\sT]/);
-                const datePart = parts[0];
-                const timePart = parts[1] || '';
-                const formattedDatePart = window.formatFechaDDMMYYYY(datePart);
-                formattedDate = formattedDatePart + (timePart ? ' ' + timePart.split('.')[0] : '');
-            }
-
-            return `
-                <tr>
-                    <td class="small text-muted text-center" style="width: 60px;">#${log.id}</td>
-                    <td class="fw-bold">${formattedDate}</td>
-                    <td><span class="badge bg-secondary">${log.tipo_sync || 'COMPLETA'}</span></td>
-                    <td class="text-center fw-bold text-success">${log.marcaciones_nuevas || log.dias_recalculados || 0}</td>
-                    <td class="text-center ${errores > 0 ? 'fw-bold text-danger' : 'text-muted'}">${errores}</td>
-                    <td>${duracion}s</td>
-                    <td>
-                        <span class="badge ${badgeClass} mb-1">${statusText}</span>
-                        ${log.detalle ? `<div class="small text-muted border-start border-3 border-info ps-2 mt-1" style="max-height: 60px; overflow-y: auto; font-size: 0.75rem; white-space: pre-wrap;">${typeof log.detalle === 'object' ? JSON.stringify(log.detalle, null, 2) : log.detalle}</div>` : ''}
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
+        if (!response.ok) throw new Error('No se pudo leer el registro del robot.');
+        logs = await response.json() || [];
     } catch (e) {
-        console.error(e);
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill"></i> Error: ${e.message}</td></tr>`;
+        cont.innerHTML = '<p class="fcB-vacio">' + F.esc(e.name === 'AbortError' ? 'El servidor tardó demasiado en responder.' : e.message)
+            + ' <button type="button" class="fcB-btn" onclick="loadRobotSyncLogs()">Reintentar</button></p>';
+        return;
     }
+    const cuando = function (raw) {
+        if (!raw) return 'Sin fecha';
+        const p = String(raw).split(/[\sT]/);
+        return (window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(p[0]) : p[0]) + (p[1] ? ' ' + p[1].split('.')[0].slice(0, 5) : '');
+    };
+    F.montar(cont, {
+        clave: 'robot',
+        titulo: 'Robot BioAlba',
+        descripcion: 'Últimas ejecuciones del robot que trae las marcas desde BioAlba, automáticas o a mano. Solo se consulta: no se cambia nada desde aquí.',
+        acciones: '<button type="button" class="fcB-btn" onclick="loadRobotSyncLogs()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button>',
+        items: logs,
+        id: function (l) { return l.id; },
+        etiqueta: function (l) { return cuando(l.fecha_inicio); },
+        sub: function (l) { const e = l.errores || 0; return e ? e + (e === 1 ? ' error' : ' errores') : 'Sin errores'; },
+        vacio: 'Todavía no hay ejecuciones registradas.',
+        ficha: function (l, panel) {
+            const e = l.errores || 0;
+            const dur = l.duracion_segundos != null ? Number(l.duracion_segundos).toLocaleString('es-CL', { maximumFractionDigits: 1 }) + ' segundos' : 'Sin dato';
+            panel.innerHTML = F.cabeza('Ejecución del ' + cuando(l.fecha_inicio), e ? 'Terminó con ' + e + (e === 1 ? ' error.' : ' errores.') : 'Terminó sin errores.')
+                + F.campo('Tipo', '<span>' + F.esc(String(l.tipo_sync || 'COMPLETA').charAt(0) + String(l.tipo_sync || 'COMPLETA').slice(1).toLowerCase()) + '</span>')
+                + F.campo('Marcas nuevas o días recalculados', '<span class="num">' + F.esc(l.marcaciones_nuevas || l.dias_recalculados || 0) + '</span>')
+                + F.campo('Errores', '<span class="num">' + F.esc(e) + '</span>')
+                + F.campo('Duración', '<span class="num">' + F.esc(dur) + '</span>')
+                + (l.detalle ? F.campo('Detalle', '<pre class="fcB-nota" style="white-space:pre-wrap;margin:0;max-height:320px;overflow:auto;font:500 12.5px/1.5 \'Barlow\',sans-serif;width:100%">' + F.esc(l.detalle) + '</pre>') : '');
+        }
+    });
 }
 
 // ==========================================
