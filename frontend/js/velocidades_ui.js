@@ -299,7 +299,7 @@
         });
         const yTabla = doc.lastAutoTable.finalY;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
-        doc.text('Velocidad máxima registrada por el GPS del vehículo asignado al chofer en la programación de Despacho Diario.', M, yTabla + 16);
+        doc.text('Velocidad máxima registrada por el GPS del vehículo asignado al chofer.', M, yTabla + 16);
         doc.text('Tiempo sobre ' + LIMITE + ' km/h: lo que el GPS lo registró andando por encima de ese límite durante el día.', M, yTabla + 28);
 
         // Declaración y firma
@@ -309,7 +309,7 @@
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...GRIS);
         doc.text('DECLARACIÓN DE CONOCIMIENTO', M, yDecl);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(...TINTA);
-        const texto = `Yo, ${nombre}${rut ? ', RUT ' + rut : ''}, declaro haber tomado conocimiento de las velocidades máximas registradas por el GPS ${res.patentes.length === 1 ? 'del vehículo' : 'de los vehículos'} patente ${veh}, asignado${res.patentes.length === 1 ? '' : 's'} a mi nombre en la programación de Despacho Diario durante la semana del ${larga(lunes)} al ${larga(domingo)}, tal como se detallan en este documento.`;
+        const texto = `Yo, ${nombre}${rut ? ', RUT ' + rut : ''}, declaro haber tomado conocimiento de las velocidades máximas registradas por el GPS ${res.patentes.length === 1 ? 'del vehículo' : 'de los vehículos'} patente ${veh}, asignado${res.patentes.length === 1 ? '' : 's'} a mi nombre durante la semana del ${larga(lunes)} al ${larga(domingo)}, tal como se detallan en este documento.`;
         doc.text(doc.splitTextToSize(texto, W - 2 * M), M, yDecl + 18, { lineHeightFactor: 1.5 });
 
         const yCaja = Math.max(yDecl + 96, 626);
