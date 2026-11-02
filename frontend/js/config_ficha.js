@@ -7,12 +7,17 @@ window.FichaCfg = (function () {
     'use strict';
     const elegido = {};       // clave de pestaña → id del elemento elegido ('nuevo' = ficha de uno nuevo)
     const opciones = {};      // clave de pestaña → opciones con que se montó
+    const buscado = {};       // clave de pestaña → texto escrito en el buscador de la lista
 
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function puede(p) { return typeof AuthService === 'undefined' || !p || AuthService.hasPermission(p); }
+    function plano(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 
+    // Opciones extra (Portería, 02-11-2026): detalle(x) = segunda línea bajo el nombre; estado(x) = { t, tono: 'si' | 'fuera' | '' }
+    // dibuja un punto de color a la derecha (sub va debajo); buscar = texto del buscador sobre la lista.
     function montar(cont, o) {
         if (!cont) return;
+        const conFoco = !!(document.activeElement && cont.contains(document.activeElement) && document.activeElement.matches('.fcB-buscar input'));
         opciones[o.clave] = Object.assign({}, o, { cont: cont });
         const items = o.items || [];
         let sel = elegido[o.clave];
@@ -20,19 +25,46 @@ window.FichaCfg = (function () {
         elegido[o.clave] = sel;
         let lista = items.map(function (x) {
             const id = String(o.id(x)), on = id === String(sel);
-            return '<button type="button" class="fcB-it' + (on ? ' sel' : '') + (o.apagado && o.apagado(x) ? ' apagado' : '') + '" data-fcb="' + esc(o.clave) + '" data-id="' + esc(id) + '" aria-pressed="' + on + '">'
-                + '<span class="n">' + esc(o.etiqueta(x)) + '</span>' + (o.sub ? '<small>' + esc(o.sub(x)) + '</small>' : '') + '</button>';
+            const det = o.detalle ? o.detalle(x) : '', est = o.estado ? o.estado(x) : null, sub = o.sub ? o.sub(x) : '';
+            const der = est
+                ? '<small class="fcB-r"><span class="fcB-est ' + esc(est.tono || '') + '"><i aria-hidden="true"></i>' + esc(est.t) + '</span>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</small>'
+                : (o.sub ? '<small>' + esc(sub) + '</small>' : '');
+            return '<button type="button" class="fcB-it' + (on ? ' sel' : '') + (o.apagado && o.apagado(x) ? ' apagado' : '') + '" data-fcb="' + esc(o.clave) + '" data-id="' + esc(id) + '" aria-pressed="' + on + '"'
+                + (o.buscar ? ' data-texto="' + esc(plano(o.etiqueta(x) + ' ' + det)) + '"' : '') + '>'
+                + '<span class="n">' + esc(o.etiqueta(x)) + (det ? '<small class="d">' + esc(det) + '</small>' : '') + '</span>' + der + '</button>';
         }).join('');
         if (!items.length) lista = '<p class="fcB-vacio">' + esc(o.vacio || 'Todavía no hay nada aquí.') + '</p>';
+        const buscador = (o.buscar && items.length)
+            ? '<div class="fcB-buscar"><i class="bi bi-search" aria-hidden="true"></i><input type="search" data-fcb-buscar="' + esc(o.clave) + '" placeholder="' + esc(o.buscar) + '" aria-label="' + esc(o.buscar) + '" value="' + esc(buscado[o.clave] || '') + '" autocomplete="off"></div>'
+              + '<p class="fcB-vacio d-none" data-fcb-nada>No hay coincidencias.</p>'
+            : '';
         const cabecera = (o.titulo || o.acciones)
             ? '<div class="fcB-h"><div>' + (o.titulo ? '<h2>' + esc(o.titulo) + '</h2>' : '') + (o.descripcion ? '<p>' + esc(o.descripcion) + '</p>' : '') + '</div>'
               + (o.acciones ? '<div class="fcB-acc">' + o.acciones + '</div>' : '') + '</div>'
             : '';
+        // Con la lista vacía no se dibuja la ficha: el aviso de la lista basta (no se repite)
+        const solo = o.soloLista || (!items.length && sel !== 'nuevo');
         cont.innerHTML = '<div class="fcB">' + cabecera
             + (o.antes || '')
-            + '<div class="fcB-md' + (o.soloLista ? ' solo' : '') + '"><nav class="fcB-lista" aria-label="' + esc(o.titulo) + '">' + lista + '</nav>'
-            + (o.soloLista ? '' : '<section class="fcB-ficha" aria-live="polite"></section>') + '</div></div>';
+            + '<div class="fcB-md' + (solo ? ' solo' : '') + '"><nav class="fcB-lista" aria-label="' + esc(o.titulo || o.buscar || 'Lista') + '">' + buscador + lista + '</nav>'
+            + (solo ? '' : '<section class="fcB-ficha" aria-live="polite"></section>') + '</div></div>';
+        if (o.buscar) filtrar(o.clave);
+        if (conFoco) { const i = cont.querySelector('.fcB-buscar input'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
         pintarFicha(o.clave);
+    }
+
+    function filtrar(clave) {
+        const o = opciones[clave];
+        if (!o) return;
+        const q = plano(buscado[clave] || '').trim();
+        let visibles = 0;
+        o.cont.querySelectorAll('.fcB-it[data-fcb="' + clave + '"]').forEach(function (b) {
+            const ve = !q || (b.dataset.texto || '').indexOf(q) !== -1;
+            b.classList.toggle('d-none', !ve);
+            if (ve) visibles++;
+        });
+        const nada = o.cont.querySelector('[data-fcb-nada]');
+        if (nada) nada.classList.toggle('d-none', visibles > 0);
     }
 
     function pintarFicha(clave) {
@@ -42,7 +74,7 @@ window.FichaCfg = (function () {
         if (!panel) return;
         const sel = elegido[clave];
         const item = sel === 'nuevo' ? null : (o.items || []).find(function (x) { return String(o.id(x)) === String(sel); });
-        if (sel !== 'nuevo' && !item) { panel.innerHTML = '<p class="fcB-vacio">' + esc(o.vacioFicha || 'Elija uno de la lista.') + '</p>'; return; }
+        if (sel !== 'nuevo' && !item) { panel.innerHTML = '<p class="fcB-vacio">' + esc(o.vacioFicha || ((o.items || []).length ? 'Elija uno de la lista.' : (o.vacio || 'Todavía no hay nada aquí.'))) + '</p>'; return; }
         o.ficha(item || null, panel);
     }
 
@@ -66,6 +98,12 @@ window.FichaCfg = (function () {
         if (s && !s.disabled) {
             s.parentElement.querySelectorAll('button').forEach(function (x) { const on = x === s; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
         }
+    });
+    document.addEventListener('input', function (ev) {
+        const i = ev.target && ev.target.matches && ev.target.matches('[data-fcb-buscar]') ? ev.target : null;
+        if (!i) return;
+        buscado[i.dataset.fcbBuscar] = i.value;
+        filtrar(i.dataset.fcbBuscar);
     });
 
     // ── piezas de una ficha ──────────────────────────────────
@@ -93,7 +131,10 @@ window.FichaCfg = (function () {
     }
     function leerSeg(raiz, id) { const b = raiz.querySelector('#' + id + ' button.on'); return b ? b.dataset.v : null; }
     function pie(izq, der) { return '<div class="fcB-pie"><div>' + (izq || '') + '</div><div class="fcB-pie-d">' + (der || '') + '</div></div>'; }
-    function cabeza(titulo, sub) { return '<div class="fcB-fh"><h3>' + esc(titulo) + '</h3>' + (sub ? '<p>' + esc(sub) + '</p>' : '') + '</div>'; }
+    function cabeza(titulo, sub, accion) {
+        const t = '<h3>' + esc(titulo) + '</h3>' + (sub ? '<p>' + esc(sub) + '</p>' : '');
+        return accion ? '<div class="fcB-fh con"><div>' + t + '</div><div class="fcB-fh-a">' + accion + '</div></div>' : '<div class="fcB-fh">' + t + '</div>';
+    }
     function seccion(titulo) { return '<div class="fcB-sec">' + esc(titulo) + '</div>'; }
     function mas(titulo, contenido) { return '<details class="fcB-mas"><summary>' + esc(titulo) + '</summary>' + contenido + '</details>'; }
 
@@ -104,7 +145,9 @@ window.FichaCfg = (function () {
         finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = original; } }
     }
 
-    return { montar: montar, elegir: elegir, nuevo: nuevo, recordar: recordar, pintarFicha: pintarFicha, esc: esc, puede: puede,
+    function elegidoDe(clave) { return elegido[clave]; }
+
+    return { montar: montar, elegir: elegir, nuevo: nuevo, recordar: recordar, pintarFicha: pintarFicha, elegidoDe: elegidoDe, esc: esc, puede: puede,
              campo: campo, texto: texto, numero: numero, area: area, seg: seg, lista: lista, interruptor: interruptor, leerSeg: leerSeg,
              pie: pie, cabeza: cabeza, seccion: seccion, mas: mas, trabajando: trabajando };
 })();

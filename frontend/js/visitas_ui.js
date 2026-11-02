@@ -4,7 +4,6 @@
  * Auto-detect: PDF417 (antigua) + QR (nueva) + MRZ (cámara) + Manual
  */
 const VisitasModule = (() => {
-    let _fechaActual = new Date().toISOString().slice(0, 10);
     let _refreshInterval = null;
     let _wedgeBuffer = '';
     let _wedgeTimer = null;
@@ -18,293 +17,177 @@ const VisitasModule = (() => {
     // ════════════════════════════════════════════════
     // INIT
     // ════════════════════════════════════════════════
+    // ── Diseño B (02-11-2026): registro arriba; abajo, las visitas del día elegido en lista y ficha ──
+    const _DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    let _fecha = _hoy(), _datos = null, _error = null, _preguntando = false;
+    function _pad(n) { return (n < 10 ? '0' : '') + n; }
+    function _hoy() { const d = new Date(); return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+    function _fechaDe(x) { return new Date(x + 'T12:00:00'); }
+    function _sumar(x, n) { const d = _fechaDe(x); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+    function _dmy(x) { return x ? String(x).split('-').reverse().join('-') : ''; }
+    function _esc(t) { return window.FichaCfg ? FichaCfg.esc(t) : String(t == null ? '' : t); }
+    function _nombre(t) { return window.nombrePersona ? window.nombrePersona(t) : String(t || '').toUpperCase(); }
+    function _titulo(t) { return String(t || '').toLowerCase().replace(/(^|[\s\-'])([a-záéíóúñü])/g, function (m, a, b) { return a + b.toUpperCase(); }); }
+    function _rut(r) {
+        const t = String(r || '').replace(/[^0-9kK]/g, '');
+        if (t.length < 2) return String(r || '');
+        return t.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + t.slice(-1).toUpperCase();
+    }
+    function _min(h) { if (!h) return null; const p = String(h).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
+    function _dur(m) { m = Math.max(0, Math.floor(m || 0)); return Math.floor(m / 60) + 'h ' + _pad(m % 60) + 'm'; }
+    function _aviso(m, t) { if (typeof showToast === 'function') showToast(m, t || 'success'); }
+
+    const _REGISTRO = `
+            <section class="ptB-reg" id="vis-registro" aria-label="Registrar visita">
+                <div class="ptB-reg-top">
+                    <div class="vis-scan-zone" id="vis-scan-zone">
+                        <i class="bi bi-upc-scan" aria-hidden="true"></i>
+                        <input type="text" class="vis-scan-input" id="vis-scan-input" placeholder="Pase la cédula por el lector"
+                            aria-label="Lectura de la cédula" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                    </div>
+                    <div class="ptB-reg-b">
+                        <button type="button" class="fcB-btn" onclick="VisitasModule.iniciarCamara()"><i class="bi bi-camera" aria-hidden="true"></i>Escanear con cámara</button>
+                        <button type="button" class="fcB-btn" onclick="VisitasModule.toggleManual()"><i class="bi bi-keyboard" aria-hidden="true"></i>Ingreso manual</button>
+                    </div>
+                </div>
+                <p class="vis-hint" id="vis-scan-hint">El lector escribe solo: al terminar se abre el formulario con el RUT para completar los datos.</p>
+                <div class="vis-camera-container" id="vis-camera-container">
+                    <div class="vis-ocr-status" id="vis-ocr-status"><div class="vis-ocr-spinner"></div><span id="vis-ocr-text">Leyendo la cédula…</span></div>
+                    <video id="vis-camera-video" autoplay playsinline muted></video>
+                    <div class="vis-camera-guide"><span class="vis-camera-guide-text">Alinee las 3 líneas de la cédula aquí</span></div>
+                    <div class="vis-camera-controls">
+                        <button type="button" class="vis-camera-btn capture" onclick="VisitasModule.capturarMRZ()"><i class="bi bi-camera" aria-hidden="true"></i>Capturar</button>
+                        <button type="button" class="vis-camera-btn stop" onclick="VisitasModule.detenerCamara()"><i class="bi bi-x-lg" aria-hidden="true"></i>Cerrar</button>
+                    </div>
+                    <canvas id="vis-camera-canvas" style="display:none"></canvas>
+                </div>
+                <div class="vis-result-card" id="vis-result-card">
+                    <div class="ptB-res-h"><div><span class="badge" id="vis-result-tipo">—</span> <span class="badge" id="vis-result-parse">—</span></div></div>
+                    <div class="ptB-res-g">
+                        <div><label for="vis-rut">RUT</label><input type="text" class="fcB-inp" id="vis-rut"></div>
+                        <div><label for="vis-nombre">Nombre</label><input type="text" class="fcB-inp" id="vis-nombre"></div>
+                        <div><label for="vis-empresa">Empresa</label><input type="text" class="fcB-inp" id="vis-empresa"></div>
+                        <div><label for="vis-motivo">Motivo</label><select class="fcB-inp" id="vis-motivo">
+                            <option value="">Seleccionar…</option><option value="Reunión">Reunión</option><option value="Entrega">Entrega / Despacho</option>
+                            <option value="Servicio">Servicio Técnico</option><option value="Auditoría">Auditoría</option><option value="Capacitación">Capacitación</option><option value="Otro">Otro</option></select></div>
+                        <div><label for="vis-area">Área destino</label><input type="text" class="fcB-inp" id="vis-area"></div>
+                        <div><label for="vis-contacto">Contacto interno</label><input type="text" class="fcB-inp" id="vis-contacto"></div>
+                        <div><label for="vis-patente">Patente del vehículo</label><input type="text" class="fcB-inp" id="vis-patente" placeholder="Opcional"></div>
+                        <div class="ancho"><label for="vis-obs">Observaciones</label><input type="text" class="fcB-inp" id="vis-obs" placeholder="Opcional"></div>
+                    </div>
+                    <div class="fcB-pie"><div><button type="button" class="fcB-btn" onclick="VisitasModule.cancelarRegistro()">Cancelar</button></div>
+                        <div class="fcB-pie-d"><button type="button" class="fcB-btn ok" id="vis-btn-registrar" onclick="VisitasModule.registrarVisita()"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>Registrar ENTRADA</button></div></div>
+                </div>
+            </section>`;
+
     async function initTab() {
         const container = document.getElementById('visitas-container');
         if (!container) return;
-
-        const hoy = new Date();
-        const diasSemana = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-        const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-        const fechaDisplay = `${diasSemana[hoy.getDay()]} ${hoy.getDate()} ${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
-
-        container.innerHTML = `
-            <style>
-                .vis-kpi { position:relative; overflow:hidden; border-radius:12px; padding:1.25rem 1.5rem; color:#fff; transition:transform 0.3s; }
-                .vis-kpi:hover { transform:translateY(-2px); }
-                .vis-kpi .kpi-icon { position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.08; }
-                .vis-kpi .kpi-number { font-size:2.25rem; font-weight:800; line-height:1; }
-                .vis-kpi .kpi-label { font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; opacity:0.9; }
-                .vis-kpi .kpi-sub { font-size:0.8rem; font-weight:500; opacity:0.8; margin-top:2px; }
-                .vis-scan-zone { background:#fff; border:2px dashed #c5d3f1; border-radius:16px; padding:1.5rem; text-align:center; transition:all 0.3s; position:relative; }
-                .vis-scan-zone.active { border-color:#3f6fd6; background:#eaf0fb; box-shadow:0 0 0 4px rgba(63, 111, 214, 0.1); }
-                .vis-scan-zone.success { border-color:#10b981; background:#d1fae5; }
-                .vis-scan-zone.error { border-color:#f43f5e; background:#ffe4e6; }
-                .vis-scan-input { width:100%; font-size:1rem; padding:12px 16px; border:1px solid #e2e8f0; border-radius:10px; text-align:center; font-family: var(--font-sans); font-weight:500; transition:all 0.2s; caret-color:#3f6fd6; }
-                .vis-scan-input:focus { outline:none; border-color:#3f6fd6; box-shadow:0 0 0 3px rgba(63, 111, 214, 0.15); }
-                .vis-scan-input::placeholder { color:#94a3b8; font-weight:400; }
-                .vis-result-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:1.2rem; margin-top:1rem; display:none; }
-                .vis-result-card.show { display:block; animation: visSlideIn 0.3s ease-out; }
-                @keyframes visSlideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-                .vis-visitor-row { display:flex; align-items:center; padding:0.8rem 1rem; border-left:4px solid transparent; transition:background 0.15s; }
-                .vis-visitor-row:hover { background:#f8fafc; }
-                .vis-visitor-row:not(:last-child) { border-bottom:1px solid #f1f5f9; }
-                .vis-visitor-row.en_planta { border-left-color:var(--success-color); }
-                .vis-visitor-row.fuera { border-left-color:#94a3b8; }
-                .vis-avatar { width:38px; height:38px; border-radius:50%; background:#eaf0fb; display:flex; align-items:center; justify-content:center; font-weight:700; font-size: 0.75rem; color:#14235c; flex-shrink:0; border:1px solid #c5d3f1; }
-                .vis-section-header { background:rgba(248,250,252,0.5); padding:0.9rem 1.2rem; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; }
-                .vis-section-title { font-size:1rem; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:8px; }
-                .vis-status-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size: 0.75rem; font-weight:600; }
-                .vis-status-en_planta { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
-                .vis-status-en_planta .dot { width:6px; height:6px; border-radius:50%; background:#10b981; }
-                .vis-status-fuera { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
-                .vis-status-fuera .dot { width:6px; height:6px; border-radius:50%; background:#94a3b8; }
-                .vis-hist-table thead th { font-size: 0.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#64748b; padding:10px 12px; background:#f8fafc; }
-                .vis-hist-table tbody td { padding:10px 12px; font-size:0.82rem; }
-                .vis-hist-table tbody tr:hover { background:rgba(248,250,252,0.5); }
-                .vis-hint { font-size: 0.75rem; color:#94a3b8; margin-top:6px; }
-                .vis-pulse { animation: visPulse 2s infinite; }
-                @keyframes visPulse { 0%, 100% { opacity:1; } 50% { opacity:0.5; } }
-                .vis-camera-container { display:none; margin-top:1rem; position:relative; border-radius:12px; overflow:hidden; background:#000; max-height:50vh; }
-                .vis-camera-container.active { display:block; animation: visSlideIn 0.3s ease-out; }
-                .vis-camera-container video { width:100%; max-height:50vh; object-fit:cover; border-radius:12px; }
-                .vis-camera-guide { position:absolute; left:50%; bottom:22%; transform:translateX(-50%); width:90%; height:28%; border:2px solid rgba(63, 111, 214, 0.8); border-radius:6px; pointer-events:none; box-shadow:0 0 0 2000px rgba(0,0,0,0.45); }
-                .vis-camera-guide-text { position:absolute; top:-28px; left:50%; transform:translateX(-50%); color:#fff; font-size: 0.75rem; font-weight:600; background:rgba(63, 111, 214, 0.85); padding:3px 12px; border-radius:999px; white-space:nowrap; }
-                .vis-camera-controls { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:5; }
-                .vis-camera-btn { border:none; border-radius:999px; padding:10px 24px; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.2s; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
-                .vis-camera-btn:hover { transform:scale(1.05); }
-                .vis-camera-btn.capture { background:#3f6fd6; color:#fff; }
-                .vis-camera-btn.stop { background:#f43f5e; color:#fff; }
-                .vis-ocr-status { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:#fff; padding:6px 16px; border-radius:999px; font-size:0.78rem; font-weight:600; z-index:5; display:none; }
-                .vis-ocr-status.show { display:flex; align-items:center; gap:6px; }
-                .vis-ocr-spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:visSpin 0.8s linear infinite; }
-                @keyframes visSpin { to { transform:rotate(360deg); } }
-            </style>
-
-            <!-- ENCABEZADO -->
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <div class="d-flex align-items-center gap-3">
-                    <div style="background:#fff; padding:8px; border-radius:10px; box-shadow:var(--shadow-sm); border:1px solid #e2e8f0; color:var(--primary-color); display:flex;">
-                        <i class="bi bi-person-badge-fill" style="font-size:1.3rem"></i>
-                    </div>
-                    <div>
-                        <h4 class="fw-bold mb-0" style="color:#1e293b; letter-spacing:-0.02em">Control de visitas</h4>
-                        <p class="mb-0" style="font-size:0.82rem; color:#64748b; font-weight:500">Registro de ingreso y salida de visitantes</p>
-                    </div>
-                </div>
-                <span style="background:#fff; padding:6px 16px; border-radius:999px; box-shadow:var(--shadow-sm); border:1px solid #e2e8f0; font-size:0.85rem; font-weight:600; color:#475569">
-                    <i class="bi bi-calendar3 me-1" style="color:#94a3b8"></i>${fechaDisplay}
-                </span>
-            </div>
-
-            <!-- KPI STATS -->
-            <div class="row g-3 mb-4 pt-repetido">
-                <div class="col-md-4">
-                    <div class="vis-kpi" style="background:var(--primary-color)">
-                        <i class="bi bi-people-fill kpi-icon"></i>
-                        <div class="kpi-label">Visitas de hoy</div>
-                        <div class="d-flex align-items-baseline gap-2 mt-2">
-                            <span class="kpi-number" id="vis-stat-total">—</span>
-                            <span class="kpi-sub">registradas</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="vis-kpi" style="background:var(--success-color)">
-                        <i class="bi bi-building-fill-check kpi-icon"></i>
-                        <div class="kpi-label">En planta</div>
-                        <div class="d-flex align-items-baseline gap-2 mt-2">
-                            <span class="kpi-number" id="vis-stat-enplanta">—</span>
-                            <span class="kpi-sub">ahora mismo</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="vis-kpi" style="background:#64748b">
-                        <i class="bi bi-box-arrow-right kpi-icon"></i>
-                        <div class="kpi-label">Salieron</div>
-                        <div class="d-flex align-items-baseline gap-2 mt-2">
-                            <span class="kpi-number" id="vis-stat-salieron">—</span>
-                            <span class="kpi-sub">retirados</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ZONA DE ESCANEO -->
-            <div class="card border-0 shadow-sm mb-4" style="border-radius:12px; overflow:hidden">
-                <div class="vis-section-header">
-                    <span class="vis-section-title">
-                        <i class="bi bi-upc-scan" style="color:var(--primary-color)"></i>Escanear cédula
-                    </span>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-primary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.iniciarCamara()">
-                            <i class="bi bi-camera-fill me-1"></i>Escanear con cámara
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem; border-radius:6px" onclick="VisitasModule.toggleManual()">
-                            <i class="bi bi-keyboard me-1"></i>Ingreso manual
-                        </button>
-                    </div>
-                </div>
-                <div class="card-body p-4">
-                    <div class="vis-scan-zone" id="vis-scan-zone">
-                        <div class="mb-3">
-                            <i class="bi bi-credit-card-2-front vis-pulse" style="font-size:2.5rem; color:var(--primary-color)"></i>
-                        </div>
-                        <input type="text" class="vis-scan-input" id="vis-scan-input"
-                            placeholder="🔍 Toque aquí y escanee la cédula con el teclado scanner..."
-                            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-                        <div class="vis-hint" id="vis-scan-hint">
-                            <i class="bi bi-info-circle me-1"></i>El campo detecta automáticamente cuando el scanner termina de escribir
-                        </div>
-
-                        <!-- CÁMARA MRZ -->
-                        <div class="vis-camera-container" id="vis-camera-container">
-                            <div class="vis-ocr-status" id="vis-ocr-status">
-                                <div class="vis-ocr-spinner"></div>
-                                <span id="vis-ocr-text">Procesando OCR...</span>
-                            </div>
-                            <video id="vis-camera-video" autoplay playsinline muted></video>
-                            <div class="vis-camera-guide">
-                                <span class="vis-camera-guide-text">📋 Alinee las 3 líneas de la cédula aquí</span>
-                            </div>
-                            <div class="vis-camera-controls">
-                                <button class="vis-camera-btn capture" onclick="VisitasModule.capturarMRZ()">
-                                    <i class="bi bi-camera-fill"></i>Capturar
-                                </button>
-                                <button class="vis-camera-btn stop" onclick="VisitasModule.detenerCamara()">
-                                    <i class="bi bi-x-lg"></i>Cerrar
-                                </button>
-                            </div>
-                            <canvas id="vis-camera-canvas" style="display:none"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Resultado del parseo -->
-                    <div class="vis-result-card" id="vis-result-card">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <div>
-                                <span class="badge" id="vis-result-tipo" style="font-size: 0.75rem">—</span>
-                                <span class="badge bg-light text-dark border ms-1" id="vis-result-parse" style="font-size: 0.75rem">—</span>
-                            </div>
-                            <button class="btn btn-sm btn-outline-danger" onclick="VisitasModule.cancelarRegistro()" style="font-size: 0.75rem">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-4">
-                                <label for="vis-rut" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">RUT</label>
-                                <input type="text" class="form-control form-control-sm fw-bold" id="vis-rut" style="font-size:1rem">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="vis-nombre" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Nombre</label>
-                                <input type="text" class="form-control form-control-sm" id="vis-nombre">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="vis-empresa" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Empresa</label>
-                                <input type="text" class="form-control form-control-sm" id="vis-empresa">
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-4">
-                                <label for="vis-motivo" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Motivo</label>
-                                <select class="form-select form-select-sm" id="vis-motivo">
-                                    <option value="">Seleccionar...</option>
-                                    <option value="Reunión">Reunión</option>
-                                    <option value="Entrega">Entrega / Despacho</option>
-                                    <option value="Servicio">Servicio Técnico</option>
-                                    <option value="Auditoría">Auditoría</option>
-                                    <option value="Capacitación">Capacitación</option>
-                                    <option value="Otro">Otro</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="vis-area" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Área destino</label>
-                                <input type="text" class="form-control form-control-sm" id="vis-area">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="vis-contacto" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Contacto interno</label>
-                                <input type="text" class="form-control form-control-sm" id="vis-contacto">
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-4">
-                                <label for="vis-patente" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Patente vehículo</label>
-                                <input type="text" class="form-control form-control-sm" id="vis-patente" placeholder="Opcional">
-                            </div>
-                            <div class="col-md-8">
-                                <label for="vis-obs" class="form-label" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Observaciones</label>
-                                <input type="text" class="form-control form-control-sm" id="vis-obs" placeholder="Opcional">
-                            </div>
-                        </div>
-                        <button class="btn btn-primary fw-bold w-100" id="vis-btn-registrar" onclick="VisitasModule.registrarVisita()" style="border-radius:8px; padding:10px">
-                            <i class="bi bi-check-circle me-1"></i>Registrar Ingreso
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- VISITANTES DEL DÍA -->
-            <div class="card border-0 shadow-sm mb-4 pt-repetido" style="border-radius:12px; overflow:hidden">
-                <div class="vis-section-header">
-                    <span class="vis-section-title">
-                        <i class="bi bi-people" style="color:var(--primary-color)"></i>Visitantes del día
-                    </span>
-                    <button class="btn btn-sm text-primary fw-semibold" style="font-size:0.8rem" onclick="VisitasModule.cargarEstadoDia()">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-                    </button>
-                </div>
-                <div id="vis-estado-body">
-                    <div class="text-center py-4 text-muted">Cargando...</div>
-                </div>
-            </div>
-
-            <!-- HISTORIAL -->
-            <div class="card border-0 shadow-sm" style="border-radius:12px; overflow:hidden">
-                <div class="vis-section-header" style="flex-wrap:wrap; gap:12px">
-                    <span class="vis-section-title">
-                        <i class="bi bi-clock-history" style="color:var(--primary-color)"></i>Historial
-                    </span>
-                    <div class="d-flex align-items-center gap-2" style="background:#f8fafc; padding:6px 10px; border-radius:8px; border:1px solid #f1f5f9">
-                        <label for="vis-hist-desde" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Desde</label>
-                        <input type="date" class="form-control form-control-sm" id="vis-hist-desde" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width:140px">
-                        <label for="vis-hist-hasta" style="font-size: 0.6875rem; font-weight:600; text-transform:uppercase; color:#64748b">Hasta</label>
-                        <input type="date" class="form-control form-control-sm" id="vis-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; max-width:140px">
-                        <button class="btn btn-sm btn-primary fw-bold" onclick="VisitasModule.cargarHistorial()" style="border-radius:6px; font-size:0.8rem; white-space:nowrap">
-                            <i class="bi bi-search me-1"></i>Consultar
-                        </button>
-                    </div>
-                </div>
-                <div class="table-responsive" style="max-height:350px">
-                    <table class="table mb-0 vis-hist-table">
-                        <thead><tr>
-                            <th>Fecha</th><th>RUT</th><th>Nombre</th><th>Empresa</th>
-                            <th>Área</th><th>1ª Entrada</th><th>Últ. Salida</th>
-                            <th class="text-center">Marcas</th><th>Tipo</th>
-                        </tr></thead>
-                        <tbody id="vis-historial-tbody">
-                            <tr><td colspan="9" class="text-center py-4 text-muted">Presione Consultar</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div id="vis-historial-pagination" class="d-flex justify-content-between align-items-center px-3 py-2 border-top" style="font-size:0.78rem; color:#64748b; background:#fff"></div>
-            </div>
-        `;
-
-        // Defaults historial
-        const hasta = document.getElementById('vis-hist-hasta');
-        const desde = document.getElementById('vis-hist-desde');
-        if (hasta) hasta.value = _fechaActual;
-        if (desde) { const d = new Date(); d.setDate(d.getDate()-7); desde.value = d.toISOString().slice(0,10); }
-
-        // Setup keyboard wedge listener
-        _setupWedgeListener();
-
-        // Focus en campo de escaneo
+        if (!document.getElementById('vis-registro')) {
+            container.innerHTML = '<div id="vis-cab"></div>' + _REGISTRO + '<div id="vis-fcb"></div>';
+            _setupWedgeListener();
+            container.addEventListener('click', _alHacerClic);
+            container.addEventListener('change', function (ev) { if (ev.target && ev.target.id === 'vis-fecha') _cambiarDia(ev.target.value); });
+        }
+        if (!_datos) _fecha = _hoy();
+        _pintarCabecera();
+        _pintar();
         setTimeout(() => { document.getElementById('vis-scan-input')?.focus(); }, 300);
-
         await cargarEstadoDia();
         if (_refreshInterval) clearInterval(_refreshInterval);
-        _refreshInterval = setInterval(() => cargarEstadoDia(), 60000);
+        _refreshInterval = setInterval(() => {
+            const pane = document.getElementById('tab-control-visitas');
+            if (!pane || !pane.classList.contains('active') || document.visibilityState !== 'visible') return;
+            if (_preguntando || _fecha !== _hoy()) return;
+            cargarEstadoDia();
+        }, 60000);
+    }
+
+    function _pintarCabecera() {
+        const c = document.getElementById('vis-cab');
+        if (!c) return;
+        const esHoy = _fecha === _hoy();
+        c.innerHTML = '<div class="fcB"><div class="fcB-h"><div><h2>Visitas</h2><p>Arriba se registra la visita con la cédula. Abajo, las visitas del día elegido: toque una para ver sus datos y registrar su salida.</p></div>'
+            + '<div class="fcB-acc"><div class="ptB-dia" role="group" aria-label="Día">'
+            + '<button type="button" data-vis-dia="-1" aria-label="Día anterior"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
+            + '<span>' + _DIAS[_fechaDe(_fecha).getDay()] + '</span>'
+            + '<input type="date" id="vis-fecha" value="' + _fecha + '" max="' + _hoy() + '" aria-label="Elegir día">'
+            + '<button type="button" data-vis-dia="1" aria-label="Día siguiente"' + (esHoy ? ' disabled' : '') + '><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div>'
+            + (esHoy ? '' : '<button type="button" class="fcB-btn" data-vis-hoy>Hoy</button>') + '</div></div></div>';
+    }
+
+    function _pintar() {
+        const c = document.getElementById('vis-fcb');
+        if (!c || !window.FichaCfg) return;
+        if (_error && !_datos) {
+            c.innerHTML = '<div class="fcB"><p class="fcB-vacio">' + _esc(_error) + ' <button type="button" class="fcB-btn" data-vis-recargar>Reintentar</button></p></div>';
+            return;
+        }
+        const esHoy = _fecha === _hoy();
+        const lista = ((_datos && _datos.visitantes) || []).slice().sort(function (a, b) { return String(b.ultima_marca || '').localeCompare(String(a.ultima_marca || '')); });
+        FichaCfg.montar(c, {
+            clave: 'visitas',
+            buscar: 'Buscar por nombre, RUT o empresa',
+            items: lista,
+            id: function (v) { return v.rut; },
+            etiqueta: function (v) { return v.nombre ? _nombre(v.nombre) : 'Sin nombre registrado'; },
+            detalle: function (v) { return [_titulo(v.empresa), 'RUT ' + _rut(v.rut)].filter(Boolean).join(' · '); },
+            estado: function (v) { return v.estado === 'en_planta' ? { t: 'En planta', tono: 'si' } : { t: 'Salió', tono: '' }; },
+            sub: function (v) {
+                const m = v.marcas || [], ini = m.length ? String(m[0].hora).slice(0, 5) : '', fin = m.length ? String(m[m.length - 1].hora).slice(0, 5) : '';
+                return v.estado === 'en_planta' ? 'desde ' + ini : ini + ' a ' + fin;
+            },
+            vacio: _datos ? (esHoy ? 'Todavía no hay visitas hoy. Se registran arriba, con la cédula.' : 'No hubo visitas este día.') : 'Cargando…',
+            ficha: _ficha
+        });
+    }
+
+    function _ficha(v, panel) {
+        const F = FichaCfg, esHoy = _fecha === _hoy(), m = v.marcas || [];
+        let dentro = 0, abierto = null;
+        for (let i = 0; i < m.length; i++) {
+            if (m[i].tipo === 'E' && m[i + 1] && m[i + 1].tipo === 'S') { dentro += _min(m[i + 1].hora) - _min(m[i].hora); i++; }
+            else if (m[i].tipo === 'E' && i === m.length - 1 && esHoy) { abierto = _min(m[i].hora); const d = new Date(); dentro += Math.max(0, d.getHours() * 60 + d.getMinutes() - abierto); }
+        }
+        const datos = [['Empresa', _titulo(v.empresa)], ['Motivo', v.motivo], ['Área destino', _titulo(v.area_destino)], ['Contacto interno', v.persona_contacto ? _nombre(v.persona_contacto) : ''],
+                       ['Patente del vehículo', String(v.patente || '').toUpperCase()], ['Cómo se registró', v.tipo_documento === 'MANUAL' ? 'Ingreso manual' : (v.tipo_documento ? 'Lectura de cédula (' + v.tipo_documento + ')' : '')]];
+        let accion;
+        if (esHoy) {
+            const tipo = v.estado === 'en_planta' ? 'S' : 'E';
+            accion = '<button type="button" class="fcB-btn ' + (tipo === 'E' ? 'ok' : 'pri') + '" data-vis-marcar="' + _esc(v.rut) + '" data-tipo="' + tipo + '">'
+                + '<i class="bi bi-box-arrow-' + (tipo === 'E' ? 'in-right' : 'right') + '" aria-hidden="true"></i>Registrar ' + (tipo === 'E' ? 'ENTRADA' : 'SALIDA') + '</button>';
+        } else {
+            accion = '<button type="button" class="fcB-btn" data-vis-hoy>Ir a hoy para registrar</button>';
+        }
+        let h = F.cabeza(v.nombre ? _nombre(v.nombre) : 'Sin nombre registrado', 'RUT ' + _rut(v.rut), accion)
+            + '<div class="ptB-cifras"><div><small>Estado</small><b>' + (v.estado === 'en_planta' ? 'En planta' : 'Salió') + '</b></div>'
+            + '<div><small>Llegó</small><b class="num">' + (m.length ? String(m[0].hora).slice(0, 5) : '—') + '</b></div>'
+            + '<div><small>Tiempo en planta' + (abierto !== null ? ' (hasta ahora)' : '') + '</small><b class="num">' + _dur(dentro) + '</b></div></div>'
+            + F.seccion('Datos de la visita')
+            + datos.map(function (d) { return F.campo(d[0], '<span' + (d[1] ? '' : ' class="ptB-sin"') + '>' + _esc(d[1] || 'Sin dato') + '</span>'); }).join('')
+            + F.seccion('Marcas del ' + _DIAS[_fechaDe(_fecha).getDay()].toLowerCase() + ' ' + _dmy(_fecha))
+            + '<div class="ptB-marcas">' + m.map(function (x) {
+                return '<div class="ptB-marca"><span class="ptB-mov ' + (x.tipo === 'E' ? 'e' : 's') + '">' + (x.tipo === 'E' ? 'ENTRADA' : 'SALIDA') + '</span><b class="num">' + _esc(String(x.hora).slice(0, 5)) + '</b></div>';
+            }).join('') + '</div>';
+        panel.innerHTML = h;
+    }
+
+    async function _cambiarDia(x) {
+        if (!x) return;
+        _fecha = x > _hoy() ? _hoy() : x;
+        _datos = null;
+        _pintarCabecera();
+        _pintar();
+        await cargarEstadoDia();
+    }
+
+    function _alHacerClic(ev) {
+        const b = ev.target.closest('button');
+        if (!b) return;
+        if (b.dataset.visDia) { _cambiarDia(_sumar(_fecha, parseInt(b.dataset.visDia, 10))); return; }
+        if (b.hasAttribute('data-vis-hoy')) { _cambiarDia(_hoy()); return; }
+        if (b.hasAttribute('data-vis-recargar')) { cargarEstadoDia(); return; }
+        if (b.dataset.visMarcar) marcarVisitante(b.dataset.visMarcar, b);
     }
 
     // ════════════════════════════════════════════════
@@ -353,7 +236,11 @@ const VisitasModule = (() => {
             // Si no hay resultado visible, re-enfocar
             const resultCard = document.getElementById('vis-result-card');
             if (!resultCard?.classList.contains('show')) {
-                setTimeout(() => input.focus(), 200);
+                setTimeout(() => {
+                    const a = document.activeElement;
+                    if (a && a !== document.body && a.matches && a.matches('input, select, textarea, button, a, [contenteditable]')) return;
+                    if (input.offsetParent !== null) input.focus();
+                }, 200);
             }
         });
     }
@@ -418,14 +305,15 @@ const VisitasModule = (() => {
         // Badges de tipo
         const tipoColors = { 'PDF417': 'bg-info', 'QR': 'bg-primary', 'MANUAL': 'bg-secondary', 'AUTO': 'bg-success', 'ERROR': 'bg-danger', 'DESCONOCIDO': 'bg-warning' };
         tipoEl.className = `badge ${tipoColors[data.tipo_documento] || 'bg-secondary'}`;
-        tipoEl.textContent = data.tipo_documento;
+        const tipoTexto = { 'PDF417': 'Cédula antigua', 'QR': 'Cédula nueva', 'MANUAL': 'Ingreso manual', 'AUTO': 'Lectura automática', 'ERROR': 'No se pudo leer', 'DESCONOCIDO': 'Formato desconocido' };
+        tipoEl.textContent = tipoTexto[data.tipo_documento] || data.tipo_documento;
 
         // Parse status + visitante conocido
         if (data.visitante_conocido) {
-            parseEl.textContent = `🔁 Visitante conocido (${data.visitas_previas} visitas)`;
+            parseEl.textContent = 'Visitante conocido (' + data.visitas_previas + (data.visitas_previas === 1 ? ' visita)' : ' visitas)');
             parseEl.className = 'badge bg-primary-subtle text-primary border border-primary-subtle ms-1';
         } else {
-            parseEl.textContent = data.parse_ok ? '✅ RUT Válido — Nueva visita' : '⚠️ Requiere verificación';
+            parseEl.textContent = data.parse_ok ? 'RUT válido · visita nueva' : (data.tipo_documento === 'MANUAL' ? 'Escriba los datos de la visita' : 'Revise el RUT');
             parseEl.className = `badge ${data.parse_ok ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-warning-subtle text-warning border border-warning-subtle'} ms-1`;
         }
 
@@ -544,7 +432,7 @@ const VisitasModule = (() => {
             const mrzData = _parsearMRZ(textoOCR);
 
             if (mrzData) {
-                statusText.textContent = '✅ Cédula detectada!';
+                statusText.textContent = 'Cédula leída';
                 setTimeout(() => {
                     detenerCamara();
                     // Mostrar formulario con datos extraídos
@@ -562,7 +450,7 @@ const VisitasModule = (() => {
                     }
                 }, 600);
             } else {
-                statusText.textContent = '⚠️ No se detectó MRZ — intente de nuevo';
+                statusText.textContent = 'No se pudo leer la cédula: intente de nuevo';
                 if (typeof showToast === 'function') showToast('No se pudo leer la cédula. Acomódela y vuelva a intentarlo.', 'warning');
                 _ocrProcessing = false;
                 setTimeout(() => status?.classList.remove('show'), 2500);
@@ -786,12 +674,12 @@ const VisitasModule = (() => {
             if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Error'); }
             const data = await res.json();
 
-            const icon = data.tipo_marca === 'E' ? '🟢' : '🔴';
             if (typeof showToast === 'function') {
-                showToast(`${icon} ${data.tipo_label}: ${data.rut} ${nombre || ''} — ${data.hora.substring(0,5)}`, 'success');
+                showToast((data.tipo_marca === 'E' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + (nombre ? _nombre(nombre) : 'RUT ' + _rut(data.rut)) + ' a las ' + String(data.hora).substring(0, 5), 'success');
             }
 
             cancelarRegistro();
+            if (_fecha !== _hoy()) { _fecha = _hoy(); _datos = null; _pintarCabecera(); }
             await cargarEstadoDia();
 
         } catch (e) {
@@ -801,118 +689,48 @@ const VisitasModule = (() => {
     }
 
     // ════════════════════════════════════════════════
-    // ESTADO DEL DÍA
+    // VISITAS DEL DÍA (diseño B)
     // ════════════════════════════════════════════════
     async function cargarEstadoDia() {
         try {
-            const res = await fetch(`/api/visitas/estado-dia/?fecha=${_fechaActual}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error");
-            const data = await res.json();
-
-            document.getElementById('vis-stat-total').textContent = data.stats.total_visitas;
-            document.getElementById('vis-stat-enplanta').textContent = data.stats.en_planta;
-            document.getElementById('vis-stat-salieron').textContent = data.stats.salieron;
-
-            const body = document.getElementById('vis-estado-body');
-            if (!data.visitantes.length) {
-                body.innerHTML = '<div class="text-center py-4 text-muted" style="font-size:0.85rem">Sin visitas registradas hoy</div>';
-                return;
-            }
-
-            body.innerHTML = data.visitantes.map(v => {
-                const initials = (v.nombre || v.rut || '??').substring(0,2).toUpperCase();
-                const statusClass = `vis-status-${v.estado}`;
-                const statusLabel = v.estado === 'en_planta' ? 'En planta' : 'Salió';
-                const marcasHtml = v.marcas.map(m => {
-                    const isE = m.tipo === 'E';
-                    const cls = isE ? 'art22-mark-e' : 'art22-mark-s';
-                    return `<span class="art22-mark ${cls}" style="font-size: 0.75rem; padding:2px 6px"><i class="bi bi-${isE ? 'box-arrow-in-right' : 'box-arrow-right'}" style="font-size: 0.75rem"></i>${m.hora.substring(0,5)}</span>`;
-                }).join(' ');
-
-                return `<div class="vis-visitor-row ${v.estado}">
-                    <div style="width:8%"><div class="vis-avatar">${initials}</div></div>
-                    <div style="width:18%">
-                        <div style="font-weight:600; color:#1e293b; font-size:0.85rem">${v.rut}</div>
-                        <div style="font-size: 0.75rem; color:#64748b">${v.nombre || 'Sin nombre'}</div>
-                    </div>
-                    <div style="width:15%">
-                        <div style="font-size:0.78rem; color:#475569">${v.empresa || ''}</div>
-                        <div style="font-size: 0.75rem; color:#94a3b8">${v.motivo || ''}</div>
-                    </div>
-                    <div style="width:12%">
-                        <span class="art22-area-badge">${v.area_destino || '—'}</span>
-                    </div>
-                    <div style="width:27%; display:flex; flex-wrap:wrap; gap:3px">${marcasHtml}</div>
-                    <div style="width:10%; text-align:center">
-                        <span class="vis-status-pill ${statusClass}"><span class="dot"></span>${statusLabel}</span>
-                    </div>
-                    <div style="width:10%; text-align:right">
-                        <button class="${v.estado === 'en_planta' ? 'art22-btn-salida' : 'art22-btn-entrada'}"
-                            onclick="VisitasModule.marcarVisitante('${v.rut}')" style="font-size: 0.75rem; padding:4px 10px">
-                            ${v.estado === 'en_planta' ? 'Salida' : 'Re-entrada'} <i class="bi bi-${v.estado === 'en_planta' ? 'box-arrow-right' : 'box-arrow-in-right'}"></i>
-                        </button>
-                    </div>
-                </div>`;
-            }).join('');
-
+            const res = await fetch('/api/visitas/estado-dia/?fecha=' + _fecha, { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } });
+            if (!res.ok) { let m = 'No se pudieron leer las visitas.'; try { m = (await res.json()).detail || m; } catch (_) {} throw new Error(m); }
+            _datos = await res.json();
+            _error = null;
         } catch (e) {
-            console.error(e);
-            const body = document.getElementById('vis-estado-body');
-            if (body) body.innerHTML = '<div class="text-center py-4 text-danger">Error al cargar</div>';
+            _error = e.message;
+            if (_datos) _aviso(e.message, 'danger');
         }
+        _pintar();
     }
 
-    async function marcarVisitante(rut) {
-        try {
-            const res = await fetch('/api/visitas/registrar/', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rut })
-            });
-            if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Error'); }
-            const data = await res.json();
-            const icon = data.tipo_marca === 'E' ? '🟢' : '🔴';
-            if (typeof showToast === 'function') showToast(`${icon} ${data.tipo_label}: ${data.rut} — ${data.hora.substring(0,5)}`, 'success');
-            await cargarEstadoDia();
-        } catch (e) { console.error(e); if (typeof Swal !== 'undefined') Swal.fire('Error', e.message, 'error'); }
-    }
-
-    // ════════════════════════════════════════════════
-    // HISTORIAL
-    // ════════════════════════════════════════════════
-    async function cargarHistorial(page = 1) {
-        const desde = document.getElementById('vis-hist-desde')?.value;
-        const hasta = document.getElementById('vis-hist-hasta')?.value;
-        const tbody = document.getElementById('vis-historial-tbody');
-        if (!desde || !hasta) return;
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
-
-        try {
-            const res = await fetch(`/api/visitas/historial/?desde=${desde}&hasta=${hasta}&page=${page}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error");
-            const data = await res.json();
-            if (!data.registros.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Sin registros</td></tr>'; return; }
-
-            tbody.innerHTML = data.registros.map(r => {
-                const f = r.fecha.split('-');
-                const ms = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-                return `<tr>
-                    <td style="font-weight:500; color:#475569">${parseInt(f[2])} ${ms[parseInt(f[1])]} ${f[0]}</td>
-                    <td style="font-weight:600; color:#1e293b">${r.rut}</td>
-                    <td>${r.nombre || '—'}</td>
-                    <td style="color:#475569">${r.empresa || '—'}</td>
-                    <td><span class="art22-area-badge">${r.area_destino || '—'}</span></td>
-                    <td style="color:#065f46; font-weight:500">${r.primera_entrada ? r.primera_entrada.substring(0,5) : '—'}</td>
-                    <td style="color:#9f1239; font-weight:500">${r.ultima_salida ? r.ultima_salida.substring(0,5) : '—'}</td>
-                    <td class="text-center"><span class="art22-marcas-circle">${r.total_marcas}</span></td>
-                    <td><span class="badge bg-light text-dark border" style="font-size: 0.75rem">${r.tipo_documento}</span></td>
-                </tr>`;
-            }).join('');
-        } catch (e) { tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error</td></tr>'; }
+    async function marcarVisitante(rut, btn) {
+        const v = ((_datos && _datos.visitantes) || []).find(function (x) { return x.rut === rut; });
+        const tipo = v && v.estado === 'en_planta' ? 'SALIDA' : 'ENTRADA';
+        const quien = v && v.nombre ? _nombre(v.nombre) : 'RUT ' + _rut(rut);
+        if (typeof uiConfirm === 'function') {
+            _preguntando = true;
+            let si = false;
+            try {
+                const d = new Date();
+                si = await uiConfirm('¿Registrar la ' + tipo + '?', { quien: quien, items: ['Visita · hora ' + _pad(d.getHours()) + ':' + _pad(d.getMinutes())], confirmText: 'Registrar ' + tipo });
+            } finally { _preguntando = false; }
+            if (!si) return;
+        }
+        const accion = async function () {
+            try {
+                const res = await fetch('/api/visitas/registrar/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token'), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rut: rut })
+                });
+                const data = await res.json().catch(function () { return {}; });
+                if (!res.ok) throw new Error(data.detail || 'No se pudo registrar.');
+                _aviso((data.tipo_marca === 'E' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + quien + (data.hora ? ' a las ' + String(data.hora).substring(0, 5) : ''));
+            } catch (e) { _aviso(e.message || 'No se pudo registrar.', 'danger'); }
+        };
+        if (btn && window.FichaCfg) await FichaCfg.trabajando(btn, accion); else await accion();
+        await cargarEstadoDia();
     }
 
     function destroy() {
@@ -920,5 +738,5 @@ const VisitasModule = (() => {
         detenerCamara();
     }
 
-    return { initTab, cargarEstadoDia, cargarHistorial, registrarVisita, marcarVisitante, toggleManual, cancelarRegistro, iniciarCamara, capturarMRZ, detenerCamara, destroy };
+    return { initTab, cargarEstadoDia, registrarVisita, marcarVisitante, toggleManual, cancelarRegistro, iniciarCamara, capturarMRZ, detenerCamara, destroy };
 })();

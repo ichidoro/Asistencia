@@ -764,129 +764,102 @@ const PorteriaModule = (function () {
     }
 
     // --- CARGAR HISTORIAL DE RONDAS ---
+    // Diseño B (02-11-2026): los puntos de ronda a la izquierda (revisado hoy o no) y, a la derecha, las revisiones del
+    // punto elegido con su hallazgo, su foto y si ya subió al servidor. Las revisiones guardadas en esta tableta sin
+    // conexión aparecen como «En esta tableta».
+    let _rondasB = [], _puntosB = [];
+    function _escB(t) { return window.FichaCfg ? FichaCfg.esc(t) : String(t == null ? '' : t); }
+    function _padB(n) { return (n < 10 ? '0' : '') + n; }
+    function _diaB(d) { return d.getFullYear() + '-' + _padB(d.getMonth() + 1) + '-' + _padB(d.getDate()); }
+    function _normalB(h) { const t = String((h && (h.hallazgo_nombre || h.detalle_personalizado)) || '').toLowerCase(); return !h || t.indexOf('sin novedad') !== -1 || t.indexOf('todo normal') !== -1; }
+    function _cuandoB(fh) {
+        const d = new Date(fh);
+        if (isNaN(d)) return String(fh || '');
+        const hoy = _diaB(new Date()), ay = new Date(); ay.setDate(ay.getDate() - 1);
+        const dia = _diaB(d) === hoy ? 'Hoy' : (_diaB(d) === _diaB(ay) ? 'Ayer' : _padB(d.getDate()) + '-' + _padB(d.getMonth() + 1) + '-' + d.getFullYear());
+        return dia + ' ' + _padB(d.getHours()) + ':' + _padB(d.getMinutes());
+    }
+
     async function cargarHistorialRondas() {
-        const tbody = document.getElementById('porteria-historial-tbody');
-        if (!tbody) return;
-
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> Cargando historial de rondas...</td></tr>';
-
-        try {
-            let backendRondas = [];
-            
-            // 1. Si estamos online, traer historial del backend
-            if (isOnline) {
-                try {
-                    const res = await fetch('/api/porteria/rondas/recientes/?limit=100', {
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-                    });
-                    if (res.ok) {
-                        backendRondas = await res.json();
-                    }
-                } catch (e) {
-                    console.warn("Fallo al traer historial remoto:", e);
-                }
-            }
-
-            // 2. Traer registros locales pendientes
-            const locales = await getRondasLocales();
-
-            // Combinar e inyectar en la tabla
-            const totalRondas = [];
-            
-            // Inyectar primero locales (con badge pendiente)
-            locales.forEach(r => {
-                totalRondas.push({
-                    uuid_offline: r.uuid_offline,
-                    fecha_hora: r.fecha_hora,
-                    ubicacion_nombre: r.ubicacion_nombre,
-                    usuario_nombre: r.usuario_nombre,
-                    sincronizado: false,
-                    hallazgos: r.hallazgos.map(h => ({
-                        hallazgo_nombre: h.hallazgo_id ? "Anomalía #" + h.hallazgo_id : "Detalle",
-                        detalle_personalizado: h.detalle_personalizado,
-                        local: true
-                    }))
-                });
-            });
-
-            // Inyectar remotos
-            backendRondas.forEach(r => {
-                totalRondas.push({
-                    ...r,
-                    sincronizado: true
-                });
-            });
-
-            // Ordenar por fecha descending
-            totalRondas.sort((a,b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
-
-            if (totalRondas.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No se han registrado rondas aún.</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = totalRondas.map(r => {
-                // Formatear fecha/hora
-                const fecha = new Date(r.fecha_hora);
-                const fechaFormat = window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fecha) : fecha.toLocaleDateString();
-                const horaFormat = fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-                // Detalle del hallazgo
-                let hallazgosText = "Sin novedades";
-                let tieneFoto = false;
-                let fotoUrl = "";
-
-                if (r.hallazgos && r.hallazgos.length > 0) {
-                    const h = r.hallazgos[0];
-                    if (h.hallazgo_nombre) {
-                        hallazgosText = `<span class="fw-bold">${h.hallazgo_nombre}</span>`;
-                        if (h.detalle_personalizado) {
-                            hallazgosText += `: ${h.detalle_personalizado}`;
-                        }
-                    } else {
-                        hallazgosText = h.detalle_personalizado || "Sin detalles";
-                    }
-                    
-                    // Verificar si tiene foto
-                    if (h.foto_url) {
-                        tieneFoto = true;
-                        fotoUrl = h.foto_url;
-                    } else if (h.local) {
-                        tieneFoto = true;
-                    }
-                }
-
-                // Render de celda evidencia
-                let evidenciaHtml = '<span class="text-muted small">Sin foto</span>';
-                if (tieneFoto) {
-                    if (r.sincronizado) {
-                        evidenciaHtml = `<a href="${fotoUrl}" target="_blank" class="btn btn-xs btn-outline-info py-1 px-2 fw-bold"><i class="bi bi-image me-1"></i>Ver Foto</a>`;
-                    } else {
-                        evidenciaHtml = `<button onclick="PorteriaModule.verFotoLocal('${r.uuid_offline}')" class="btn btn-xs btn-outline-warning py-1 px-2 fw-bold"><i class="bi bi-image me-1"></i>Ver Temp</button>`;
-                    }
-                }
-
-                // Render de badge sincronizacion
-                const syncHtml = r.sincronizado 
-                    ? `<span class="badge bg-success py-1 px-2 rounded"><i class="bi bi-cloud-check-fill me-1"></i>Sincronizado</span>`
-                    : `<span class="badge bg-warning text-dark py-1 px-2 rounded animate-pulse"><i class="bi bi-cloud-slash-fill me-1"></i>Local</span>`;
-
-                return `
-                    <tr>
-                        <td class="fw-bold text-dark">${fechaFormat} <span class="text-muted small font-monospace">${horaFormat}</span></td>
-                        <td><i class="bi bi-geo-alt-fill text-danger me-1"></i> ${r.ubicacion_nombre || 'Desconocido'}</td>
-                        <td>${r.usuario_nombre || 'Guardia'}</td>
-                        <td>${hallazgosText}</td>
-                        <td>${evidenciaHtml}</td>
-                        <td>${syncHtml}</td>
-                    </tr>
-                `;
-            }).join('');
-
-        } catch (e) {
-            console.error("Error al cargar historial:", e);
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-danger fw-bold">Error cargando historial.</td></tr>';
+        const cont = document.getElementById('rondas-fcb');
+        if (!cont || !window.FichaCfg) return;
+        let remotas = [], ubis = [];
+        if (isOnline) {
+            try {
+                const res = await fetch('/api/porteria/rondas/recientes/?limit=200', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+                if (res.ok) remotas = await res.json();
+            } catch (e) { console.warn('No se pudieron traer las rondas del servidor:', e); }
+            try {
+                const res = await fetch('/api/porteria/ubicaciones/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
+                if (res.ok) ubis = await res.json();
+            } catch (e) { console.warn('No se pudieron traer los puntos de ronda:', e); }
         }
+        if (!ubis.length) ubis = (cachedUbicaciones && cachedUbicaciones.length) ? cachedUbicaciones : await getUbicacionesLocal();
+        const locales = await getRondasLocales();
+        _rondasB = locales.map(r => ({ uuid_offline: r.uuid_offline, fecha_hora: r.fecha_hora, ubicacion_id: r.ubicacion_id, ubicacion_nombre: r.ubicacion_nombre, usuario_nombre: r.usuario_nombre, sincronizado: false,
+                                       hallazgos: (r.hallazgos || []).map(x => ({ hallazgo_nombre: '', detalle_personalizado: x.detalle_personalizado, local: true, tieneFoto: !!x.foto_blob })) }))
+            .concat(remotas.map(r => Object.assign({}, r, { sincronizado: true })))
+            .sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+        const hoy = _diaB(new Date());
+        const puntos = ubis.filter(u => u.activo !== false).map(u => ({ id: String(u.id), nombre: u.nombre, codigo: u.codigo }));
+        _rondasB.forEach(r => {
+            const id = String(r.ubicacion_id || '');
+            if (!puntos.some(p => p.id === id)) {
+                const clave = 'n-' + (r.ubicacion_nombre || 'sin-nombre');
+                if (!puntos.some(p => p.id === clave)) puntos.push({ id: clave, nombre: r.ubicacion_nombre || 'Punto sin nombre', codigo: '', fuera: true });
+            }
+        });
+        puntos.forEach(p => {
+            p.revs = _rondasB.filter(r => String(r.ubicacion_id || '') === p.id || ('n-' + (r.ubicacion_nombre || 'sin-nombre')) === p.id);
+            p.hoy = p.revs.filter(r => _diaB(new Date(r.fecha_hora)) === hoy);
+        });
+        _puntosB = puntos;
+        const revisados = puntos.filter(p => !p.fuera && p.hoy.length).length, activos = puntos.filter(p => !p.fuera).length;
+        FichaCfg.montar(cont, {
+            clave: 'rondas',
+            descripcion: '',
+            acciones: '',
+            antes: '<div class="ptB-rresumen"><b>' + revisados + ' de ' + activos + '</b> puntos revisados hoy'
+                + (locales.length ? ' · <span class="ojo">' + locales.length + (locales.length === 1 ? ' revisión espera' : ' revisiones esperan') + ' subir al servidor</span>' : '')
+                + '<button type="button" class="fcB-btn" onclick="PorteriaModule.cargarHistorialRondas()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Actualizar</button></div>',
+            buscar: 'Buscar punto de ronda',
+            items: puntos,
+            id: p => p.id,
+            etiqueta: p => p.nombre,
+            detalle: p => p.codigo ? 'Código ' + p.codigo : (p.fuera ? 'No está en la lista de puntos' : ''),
+            estado: p => {
+                if (!p.hoy.length) return { t: 'Sin revisar hoy', tono: '' };
+                return p.hoy.some(r => !_normalB((r.hallazgos || [])[0])) ? { t: 'Con hallazgo', tono: 'fuera' } : { t: 'Revisado hoy', tono: 'si' };
+            },
+            sub: p => p.hoy.length ? _cuandoB(p.hoy[0].fecha_hora).replace('Hoy ', '') : (p.revs.length ? 'última: ' + _cuandoB(p.revs[0].fecha_hora).toLowerCase() : 'Nunca revisado'),
+            vacio: 'No hay puntos de ronda. Se agregan en Configuración › Ubicaciones de ronda.',
+            ficha: _fichaPuntoB
+        });
+    }
+
+    function _fichaPuntoB(p, panel) {
+        const F = FichaCfg;
+        const hall = p.revs.filter(r => !_normalB((r.hallazgos || [])[0])).length;
+        let h = F.cabeza(p.nombre, p.codigo ? 'Código ' + p.codigo : '')
+            + '<div class="ptB-cifras"><div><small>Hoy</small><b>' + (p.hoy.length ? p.hoy.length + (p.hoy.length === 1 ? ' revisión' : ' revisiones') : 'Sin revisar') + '</b></div>'
+            + '<div><small>Última revisión</small><b class="num">' + (p.revs.length ? _escB(_cuandoB(p.revs[0].fecha_hora)) : '—') + '</b></div>'
+            + '<div><small>Con hallazgo (últimas ' + p.revs.length + ')</small><b class="num">' + hall + '</b></div></div>'
+            + F.seccion('Revisiones');
+        if (!p.revs.length) {
+            h += '<p class="fcB-nota">Este punto todavía no tiene revisiones.</p>';
+        } else {
+            h += p.revs.slice(0, 30).map(r => {
+                const x = (r.hallazgos || [])[0] || null, normal = _normalB(x);
+                const txt = x ? (x.hallazgo_nombre ? x.hallazgo_nombre + (x.detalle_personalizado && !normal ? ': ' + x.detalle_personalizado : '') : (x.detalle_personalizado || 'Sin detalle')) : 'Sin novedad';
+                let foto = '';
+                if (x && x.foto_url) foto = '<a class="fcB-btn" href="' + _escB(x.foto_url) + '" target="_blank" rel="noopener"><i class="bi bi-image" aria-hidden="true"></i>Ver foto</a>';
+                else if (x && x.local && x.tieneFoto) foto = '<button type="button" class="fcB-btn" onclick="PorteriaModule.verFotoLocal(\'' + _escB(r.uuid_offline) + '\')"><i class="bi bi-image" aria-hidden="true"></i>Ver foto</button>';
+                return '<div class="ptB-rev"><span class="num">' + _escB(_cuandoB(r.fecha_hora)) + '</span>'
+                    + '<span><b class="' + (normal ? '' : 'ojo') + '">' + _escB(txt) + '</b><small>' + _escB(String(r.usuario_nombre || 'Guardia').toUpperCase()) + (r.sincronizado ? '' : ' · En esta tableta, sin subir') + '</small></span>'
+                    + '<span>' + foto + '</span></div>';
+            }).join('');
+        }
+        panel.innerHTML = h;
     }
 
     async function verFotoLocal(uuid_offline) {

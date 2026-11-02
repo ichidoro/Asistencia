@@ -1,381 +1,276 @@
 /**
- * LlavesModule — Módulo de Entrega de Llaves
- * IIFE pattern siguiendo Articulo22Module / VisitasModule
+ * Llaves — diseño B elegido por el dueño (02-11-2026): las llaves a la izquierda con su estado y, a la derecha, la llave
+ * elegida: dónde está, quién la tuvo, quién la pide más y su botón para entregarla o recibirla. El nombre y la
+ * ubicación se cambian en la misma ficha. Se arma con FichaCfg (config_ficha.js). La entrega y la devolución usan la
+ * misma ventana desde el panel y desde aquí (abrirEntrega, confirmarDevolucion).
+ * Las cadenas se arman con «+» (el minificador del servidor junta las plantillas anidadas).
  */
-const LlavesModule = (() => {
-    let _initialized = false;
+const LlavesModule = (function () {
+    'use strict';
+    let datos = null, error = null;
+    const movs = {};   // id de llave → { t: hora de lectura, regs: movimientos (del más antiguo al más nuevo), total }
 
-    async function initTab() {
-        const container = document.getElementById('llaves-container');
-        if (!container) return;
-        
-        container.innerHTML = `
-            <style>
-                .llaves-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 16px; }
-                .llaves-kpi { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-                .llaves-kpi-item { flex: 1; min-width: 120px; padding: 16px; border-radius: 10px; text-align: center; }
-                .llaves-kpi-item .kpi-value { font-size: 2rem; font-weight: 700; }
-                .llaves-kpi-item .kpi-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
-                .llave-row { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
-                .llave-row:hover { background: #f8f9fa; }
-                .llave-estado { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
-                .llave-disponible { background: #d4edda; color: #155724; }
-                .llave-entregada { background: #f8d7da; color: #721c24; }
-                .llaves-section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-                .llaves-tabs { display: flex; gap: 0; border-bottom: 2px solid #e9ecef; margin-bottom: 20px; }
-                .llaves-tab-btn { padding: 10px 20px; border: none; background: none; font-weight: 500; color: #6c757d; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
-                .llaves-tab-btn.active { color: #0d6efd; border-bottom-color: #0d6efd; font-weight: 600; }
-                .llaves-tab-btn:hover { color: #0d6efd; }
-                .llaves-section { display: none; }
-                .llaves-section.active { display: block; }
-            </style>
-            
-            <div class="llaves-kpi pt-repetido" id="llaves-kpis">
-                <div class="llaves-kpi-item" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9)">
-                    <div class="kpi-value" id="kpi-total">-</div>
-                    <div class="kpi-label">Llaves</div>
-                </div>
-                <div class="llaves-kpi-item" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb)">
-                    <div class="kpi-value" id="kpi-disponibles">-</div>
-                    <div class="kpi-label">Disponibles</div>
-                </div>
-                <div class="llaves-kpi-item" style="background:linear-gradient(135deg,#fce4ec,#f8bbd0)">
-                    <div class="kpi-value" id="kpi-fuera">-</div>
-                    <div class="kpi-label">Entregadas</div>
-                </div>
-            </div>
-
-            <div class="llaves-tabs">
-                <button class="llaves-tab-btn pt-repetido" onclick="LlavesModule.showSection('estado')">Estado actual</button>
-                <button class="llaves-tab-btn active" onclick="LlavesModule.showSection('catalogo')">Catálogo</button>
-                <button class="llaves-tab-btn" onclick="LlavesModule.showSection('historial')">Historial</button>
-            </div>
-
-            <div id="seccion-estado" class="llaves-section pt-repetido">
-                <div class="llaves-card">
-                    <div id="llaves-estado-lista">Cargando...</div>
-                </div>
-            </div>
-
-            <div id="seccion-catalogo" class="llaves-section active">
-                <div class="llaves-card">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                        <div class="llaves-section-title">🗝️ Catálogo de Llaves</div>
-                        <button class="btn btn-primary btn-sm" onclick="LlavesModule.mostrarFormLlave()"><i class="bi bi-plus-lg me-1"></i>Nueva Llave</button>
-                    </div>
-                    <div id="form-llave-container" style="display:none;margin-bottom:16px;padding:16px;background:#f8f9fa;border-radius:8px">
-                        <input type="hidden" id="llave-edit-id">
-                        <div class="row g-2">
-                            <div class="col-md-5"><input type="text" class="form-control" id="llave-nombre" placeholder="Nombre de la llave"></div>
-                            <div class="col-md-5"><input type="text" class="form-control" id="llave-ubicacion" placeholder="Ubicación / Qué abre"></div>
-                            <div class="col-md-2 d-flex gap-1">
-                                <button class="btn btn-success btn-sm flex-fill" onclick="LlavesModule.guardarLlave()"><i class="bi bi-check-lg"></i></button>
-                                <button class="btn btn-secondary btn-sm" onclick="LlavesModule.cancelarFormLlave()"><i class="bi bi-x-lg"></i></button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="llaves-catalogo-lista">Cargando...</div>
-                </div>
-            </div>
-
-            <div id="seccion-historial" class="llaves-section">
-                <div class="llaves-card">
-                    <div class="llaves-section-title">📋 Historial de Movimientos</div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-3"><input type="date" class="form-control form-control-sm" id="hist-fecha-desde"></div>
-                        <div class="col-md-3"><input type="date" class="form-control form-control-sm" id="hist-fecha-hasta"></div>
-                        <div class="col-md-3"><select class="form-select form-select-sm" id="hist-llave-filter"><option value="">Todas las llaves</option></select></div>
-                        <div class="col-md-3"><button class="btn btn-primary btn-sm w-100" onclick="LlavesModule.cargarHistorial()"><i class="bi bi-search me-1"></i>Buscar</button></div>
-                    </div>
-                    <div id="llaves-historial-tabla">Cargando...</div>
-                    <div id="llaves-historial-paginacion" class="d-flex justify-content-center mt-3"></div>
-                </div>
-            </div>
-        `;
-
-        // Set default dates
-        const hoy = new Date().toISOString().slice(0, 10);
-        const hace30 = new Date(Date.now() - 30*24*60*60*1000).toISOString().slice(0, 10);
-        document.getElementById('hist-fecha-desde').value = hace30;
-        document.getElementById('hist-fecha-hasta').value = hoy;
-
-        await cargarEstado();
-        await cargarCatalogo();     // Catálogo es la primera pestaña: «Estado actual» ya está en el panel
-        _initialized = true;
+    // ── utilidades ─────────────────────────────────────────────
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function hoyISO() { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+    function dmy(f) { return f ? String(f).slice(0, 10).split('-').reverse().join('-') : ''; }
+    function esc(s) { return window.FichaCfg ? FichaCfg.esc(s) : String(s == null ? '' : s); }
+    function nombre(s) { return window.nombrePersona ? window.nombrePersona(String(s || '').replace(/\bNone\b/g, '')) : String(s || '').toUpperCase(); }
+    function aviso(msg, tipo) { if (typeof showToast === 'function') showToast(msg, tipo || 'success'); }
+    function token() { return localStorage.getItem('access_token') || localStorage.getItem('auth_token'); }
+    function cabeceras(json) { const h = { 'Authorization': 'Bearer ' + token() }; if (json) h['Content-Type'] = 'application/json'; return h; }
+    async function pedir(url, metodo, cuerpo) {
+        const r = await fetch(url, { method: metodo || 'GET', headers: cabeceras(!!cuerpo), body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+        const d = await r.json().catch(function () { return {}; });
+        if (!r.ok) throw new Error(d.detail || 'No se pudo completar la operación.');
+        return d;
+    }
+    function cont() { return document.getElementById('llaves-container'); }
+    function fechaHora(f, h) { return new Date(String(f).slice(0, 10) + 'T' + String(h || '00:00:00').slice(0, 8)); }
+    function duracion(min) {
+        min = Math.max(0, Math.round(min));
+        const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
+        return (d ? d + (d === 1 ? ' día ' : ' días ') : '') + h + 'h ' + pad(m) + 'm';
+    }
+    function cuando(f, h) {
+        const hoy = hoyISO();
+        return (String(f).slice(0, 10) === hoy ? 'hoy' : dmy(f)) + ' a las ' + String(h || '').slice(0, 5);
     }
 
-    function showSection(name) {
-        document.querySelectorAll('.llaves-section').forEach(s => s.classList.remove('active'));
-        document.querySelectorAll('.llaves-tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(`seccion-${name}`).classList.add('active');
-        event.target.classList.add('active');
-        if (name === 'catalogo') cargarCatalogo();
-        if (name === 'historial') { cargarFiltroLlaves(); cargarHistorial(); }
+    // ── pintar ─────────────────────────────────────────────────
+    function pintar() {
+        const c = cont();
+        if (!c || !window.FichaCfg) return;
+        if (error && !datos) {
+            c.innerHTML = '<div class="fcB"><p class="fcB-vacio">' + esc(error) + ' <button type="button" class="fcB-btn" data-ll-recargar>Reintentar</button></p></div>';
+            return;
+        }
+        const llaves = (datos && datos.llaves) || [];
+        FichaCfg.montar(c, {
+            clave: 'llaves',
+            titulo: 'Llaves',
+            descripcion: (datos ? llaves.length + (llaves.length === 1 ? ' llave' : ' llaves') + ': ' + (datos.fuera || 0) + ' entregada' + (datos.fuera === 1 ? '' : 's') + ' y ' + (datos.disponibles || 0) + ' en el tablero. ' : '')
+                + 'Elija una llave para ver quién la tuvo y para entregarla o recibirla.',
+            acciones: '<button type="button" class="fcB-btn ent" data-ll-nueva><i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva llave</button>',
+            buscar: 'Buscar llave',
+            items: llaves,
+            id: function (l) { return l.id; },
+            etiqueta: function (l) { return l.nombre; },
+            detalle: function (l) { return l.ubicacion || ''; },
+            estado: function (l) { return l.estado === 'DISPONIBLE' ? { t: 'En el tablero', tono: 'si' } : { t: 'Entregada', tono: 'fuera' }; },
+            sub: function (l) {
+                if (l.estado === 'DISPONIBLE' || !l.entregada_hora) return '';
+                const fh = String(l.entregada_hora);
+                return 'desde ' + (fh.slice(0, 10) === hoyISO() ? '' : dmy(fh).slice(0, 5) + ' ') + fh.slice(11, 16);
+            },
+            vacio: datos ? 'Todavía no hay llaves. Cree la primera con «Nueva llave».' : 'Cargando…',
+            ficha: ficha
+        });
     }
 
-    async function cargarEstado() {
+    function campos(l) {
+        const F = FichaCfg;
+        return F.campo('Nombre', F.texto('ll-nombre', l ? l.nombre : '', ' maxlength="80" placeholder="Ej.: Bodega Tradicional"'), 'Como la conocen en portería.', 'll-nombre')
+            + F.campo('Ubicación', F.texto('ll-ubicacion', l ? l.ubicacion : '', ' maxlength="120" placeholder="Ej.: Galpón Tradicional"'), 'Qué abre o dónde está la puerta.', 'll-ubicacion');
+    }
+
+    function ficha(l, panel) {
+        const F = FichaCfg;
+        if (!l) {
+            panel.innerHTML = F.cabeza('Nueva llave', 'Queda en el tablero, lista para entregarse.') + campos(null)
+                + F.pie('<button type="button" class="fcB-btn" data-ll-cancelar>Cancelar</button>',
+                    '<button type="button" class="fcB-btn pri" data-ll-crear><i class="bi bi-check-lg" aria-hidden="true"></i>Crear llave</button>');
+            const i = panel.querySelector('#ll-nombre'); if (i) i.focus();
+            return;
+        }
+        const fuera = l.estado !== 'DISPONIBLE';
+        const accion = fuera
+            ? (l.entregada_a ? '<button type="button" class="fcB-btn ok" data-ll-recibir="' + l.id + '"><i class="bi bi-box-arrow-in-left" aria-hidden="true"></i>Recibir llave</button>' : '')
+            : '<button type="button" class="fcB-btn pri" data-ll-entregar="' + l.id + '"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Entregar llave</button>';
+        let h = F.cabeza(l.nombre, l.ubicacion || '', accion);
+        if (fuera && l.entregada_a) {
+            const fh = String(l.entregada_hora || ''), desde = fechaHora(fh.slice(0, 10), fh.slice(11));
+            h += '<div class="ptB-aviso"><i class="bi bi-key-fill" aria-hidden="true"></i><div><b>Entregada a ' + esc(nombre(l.entregada_a.nombre)) + '</b>'
+                + '<span>Desde ' + esc(cuando(fh.slice(0, 10), fh.slice(11))) + (isNaN(desde) ? '' : ' · hace ' + duracion((Date.now() - desde) / 60000)) + '</span></div></div>';
+        }
+        h += '<div class="ptB-cifras" id="ll-cifras"><div><small>Estado</small><b>' + (fuera ? 'Entregada' : 'En el tablero') + '</b></div>'
+            + '<div><small>' + (fuera ? 'Salió' : 'Volvió') + '</small><b class="num" id="ll-ultima">—</b></div>'
+            + '<div><small>Entregas registradas</small><b class="num" id="ll-cuenta">—</b></div></div>'
+            + F.seccion('Últimas salidas') + '<div class="ptB-movs" id="ll-salidas"><p class="fcB-vacio">Cargando los movimientos…</p></div>'
+            + F.seccion('Quién la pide más') + '<div class="ptB-quien" id="ll-quien"></div>'
+            + F.mas('Cambiar nombre o ubicación', campos(l)
+                + F.pie('<button type="button" class="fcB-btn borra" data-ll-eliminar="' + l.id + '"><i class="bi bi-trash3" aria-hidden="true"></i>Eliminar llave</button>',
+                    '<button type="button" class="fcB-btn pri" data-ll-guardar="' + l.id + '"><i class="bi bi-check-lg" aria-hidden="true"></i>Guardar cambios</button>'));
+        panel.innerHTML = h;
+        pintarMovimientos(l);
+    }
+
+    async function pintarMovimientos(l) {
+        let m = movs[l.id];
         try {
-            const token = localStorage.getItem('auth_token');
-            const r = await fetch('/api/llaves/estado/', { headers: { 'Authorization': `Bearer ${token}` }});
-            const data = await r.json();
-            document.getElementById('kpi-total').textContent = data.total;
-            document.getElementById('kpi-disponibles').textContent = data.disponibles;
-            document.getElementById('kpi-fuera').textContent = data.fuera;
-            
-            const lista = document.getElementById('llaves-estado-lista');
-            if (!data.llaves.length) {
-                lista.innerHTML = '<div class="text-center text-muted py-4">No hay llaves registradas. Agrega llaves en el Catálogo.</div>';
-                return;
+            if (!m || Date.now() - m.t > 2 * 60000) {
+                const d = await pedir('/api/llaves/historial/?llave_id=' + l.id + '&page=1&page_size=100');
+                m = movs[l.id] = { t: Date.now(), regs: (d.registros || []).slice().reverse(), total: d.total || 0 };
             }
-            lista.innerHTML = data.llaves.map(ll => `
-                <div class="llave-row">
-                    <div style="flex:1">
-                        <div style="font-weight:600">🔑 ${ll.nombre}</div>
-                        <div style="font-size:0.85rem;color:#6c757d">📍 ${ll.ubicacion}</div>
-                    </div>
-                    <div style="flex:1;text-align:center">
-                        ${ll.estado === 'DISPONIBLE' 
-                            ? '<span class="llave-estado llave-disponible">✅ Disponible</span>'
-                            : `<span class="llave-estado llave-entregada">🔴 ${ll.entregada_a.nombre}</span>
-                               <div style="font-size:0.75rem;color:#6c757d;margin-top:2px">${ll.entregada_hora}</div>`
-                        }
-                    </div>
-                    <div style="width:120px;text-align:right">
-                        ${ll.estado === 'DISPONIBLE'
-                            ? `<button class="btn btn-success btn-sm" onclick="LlavesModule.abrirEntrega(${ll.id}, '${ll.nombre.replace(/'/g, "\\'")}')">
-                                <i class="bi bi-box-arrow-right me-1"></i>Entregar</button>`
-                            : `<button class="btn btn-warning btn-sm" onclick="LlavesModule.confirmarDevolucion(${ll.id}, '${ll.nombre.replace(/'/g, "\\'")}', ${ll.entregada_a.id}, '${ll.entregada_a.nombre.replace(/'/g, "\\'")}')">
-                                <i class="bi bi-box-arrow-in-left me-1"></i>Devolver</button>`
-                        }
-                    </div>
-                </div>
-            `).join('');
         } catch (e) {
-            console.error('Error cargando estado llaves:', e);
+            const b = document.getElementById('ll-salidas');
+            if (b) b.innerHTML = '<p class="fcB-vacio">' + esc(e.message) + '</p>';
+            return;
+        }
+        if (FichaCfg.elegidoDe('llaves') !== String(l.id)) return;
+        const regs = m.regs.slice().sort(function (a, b) { return fechaHora(a.fecha, a.hora) - fechaHora(b.fecha, b.hora); });
+        const salidas = [];
+        let abierta = null;
+        regs.forEach(function (r) {
+            if (r.tipo === 'ENTREGA') { if (abierta) salidas.push({ e: abierta, d: null }); abierta = r; }
+            else if (abierta) { salidas.push({ e: abierta, d: r }); abierta = null; }
+        });
+        if (abierta) salidas.push({ e: abierta, d: null, ahora: true });
+        const entregas = regs.filter(function (r) { return r.tipo === 'ENTREGA'; }).length;
+        const ult = regs[regs.length - 1];
+        const ue = document.getElementById('ll-ultima'), uc = document.getElementById('ll-cuenta');
+        if (ue) ue.textContent = ult ? (String(ult.fecha) === hoyISO() ? 'Hoy ' : dmy(ult.fecha) + ' ') + String(ult.hora).slice(0, 5) : 'Sin movimientos';
+        if (uc) uc.textContent = entregas + (m.total > regs.length ? '+' : '');
+        const box = document.getElementById('ll-salidas');
+        if (box) {
+            const ultimas = salidas.slice(-8).reverse();
+            box.innerHTML = ultimas.length ? ultimas.map(function (s) {
+                const ini = fechaHora(s.e.fecha, s.e.hora), fin = s.d ? fechaHora(s.d.fecha, s.d.hora) : null;
+                const mismoDia = s.d && String(s.d.fecha) === String(s.e.fecha);
+                const tramo = s.d
+                    ? (mismoDia ? dmy(s.e.fecha) + ' · ' + String(s.e.hora).slice(0, 5) + ' a ' + String(s.d.hora).slice(0, 5)
+                                : dmy(s.e.fecha).slice(0, 5) + ' ' + String(s.e.hora).slice(0, 5) + ' a ' + dmy(s.d.fecha).slice(0, 5) + ' ' + String(s.d.hora).slice(0, 5))
+                    : dmy(s.e.fecha) + ' · desde las ' + String(s.e.hora).slice(0, 5);
+                const t = s.d ? duracion((fin - ini) / 60000) + ' fuera' : (s.ahora ? 'Sigue entregada' : 'Sin DEVOLUCIÓN registrada');
+                const obs = [s.e.observaciones, s.d && s.d.observaciones].filter(Boolean).join(' · ');
+                return '<div class="ptB-mv"><span class="num">' + esc(tramo) + '</span><span>' + esc(nombre(s.e.empleado)) + (obs ? '<small>' + esc(obs) + '</small>' : '') + '</span>'
+                    + '<span class="num' + ((!s.d || !mismoDia) ? ' ojo' : '') + '">' + esc(t) + '</span></div>';
+            }).join('') : '<p class="fcB-nota">Esta llave todavía no se ha entregado.</p>';
+        }
+        const q = document.getElementById('ll-quien');
+        if (q) {
+            const cuenta = {};
+            regs.forEach(function (r) { if (r.tipo === 'ENTREGA') { const n = nombre(r.empleado); cuenta[n] = (cuenta[n] || 0) + 1; } });
+            const top = Object.keys(cuenta).sort(function (a, b) { return cuenta[b] - cuenta[a] || a.localeCompare(b, 'es'); }).slice(0, 3);
+            q.innerHTML = top.length ? top.map(function (n) { return '<div class="ptB-qd"><span>' + esc(n) + '</span><span class="num">' + cuenta[n] + (cuenta[n] === 1 ? ' vez' : ' veces') + '</span></div>'; }).join('')
+                : '<p class="fcB-nota">Sin entregas registradas.</p>';
         }
     }
+
+    // ── datos y acciones ───────────────────────────────────────
+    async function recargar() {
+        try { datos = await pedir('/api/llaves/estado/'); error = null; }
+        catch (e) { error = e.message; if (datos) aviso(e.message, 'danger'); }
+        pintar();
+    }
+    function tras(llaveId) { delete movs[llaveId]; if (cont() && cont().offsetParent !== null) return recargar(); }
 
     async function abrirEntrega(llaveId, llaveNombre) {
+        let autorizados;
+        try { autorizados = await pedir('/api/llaves/autorizados/'); }
+        catch (e) { aviso(e.message, 'danger'); return; }
+        if (!autorizados.length) { aviso('No hay personas autorizadas para recibir llaves en sus áreas. Se autorizan en la ficha de cada persona.', 'warning'); return; }
+        const ops = autorizados.map(function (e) { return { id: e.id, n: nombre(e.nombre), a: e.area || '' }; })
+            .sort(function (a, b) { return a.n.localeCompare(b.n, 'es'); })
+            .map(function (e) { return '<option value="' + e.id + '">' + esc(e.n) + (e.a ? ' · ' + esc(e.a) : '') + '</option>'; }).join('');
+        const r = await Swal.fire({
+            title: 'Entregar llave',
+            html: '<div class="av-quien">' + esc(llaveNombre) + '</div><div class="ptB-sw">'
+                + '<label for="swal-empleado">Persona que la recibe</label><select id="swal-empleado" class="form-select">' + ops + '</select>'
+                + '<label for="swal-obs">Observaciones</label><input id="swal-obs" class="form-control" placeholder="Opcional"></div>',
+            showCancelButton: true, reverseButtons: true, focusConfirm: false,
+            confirmButtonText: 'Entregar llave', cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'av-btn av-btn-pri' },
+            preConfirm: function () { return { empleado_id: parseInt(document.getElementById('swal-empleado').value, 10), observaciones: document.getElementById('swal-obs').value.trim() }; }
+        });
+        if (!r.isConfirmed || !r.value) return;
         try {
-            const token = localStorage.getItem('auth_token');
-            const r = await fetch('/api/llaves/autorizados/', { headers: { 'Authorization': `Bearer ${token}` }});
-            const empleados = await r.json();
-            if (!empleados.length) {
-                Swal.fire('Sin autorizados', 'No hay empleados autorizados en tus áreas asignadas.', 'warning');
-                return;
-            }
-            // Build options HTML
-            const optsHtml = empleados.map(e => `<option value="${e.id}">${e.nombre} — ${e.area}</option>`).join('');
-            const { value: formValues } = await Swal.fire({
-                title: `🔑 Entregar: ${llaveNombre}`,
-                html: `
-                    <div style="text-align:left">
-                        <label for="swal-empleado" class="form-label fw-bold">Empleado autorizado:</label>
-                        <select id="swal-empleado" class="form-select">${optsHtml}</select>
-                        <label for="swal-obs" class="form-label fw-bold mt-3">Observaciones:</label>
-                        <input id="swal-obs" class="form-control" placeholder="Opcional">
-                    </div>
-                `,
-                focusConfirm: false,
-                showCancelButton: true,
-                confirmButtonText: 'Confirmar Entrega',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#198754',
-                preConfirm: () => ({
-                    empleado_id: parseInt(document.getElementById('swal-empleado').value),
-                    observaciones: document.getElementById('swal-obs').value
-                })
-            });
-            if (!formValues) return;
-            const resp = await fetch('/api/llaves/registrar/', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ llave_id: llaveId, empleado_id: formValues.empleado_id, tipo: 'ENTREGA', observaciones: formValues.observaciones })
-            });
-            const result = await resp.json();
-            if (resp.ok) {
-                Swal.fire({ icon: 'success', title: 'Entrega registrada', text: result.message, timer: 2000, showConfirmButton: false });
-                await cargarEstado();
-            } else {
-                Swal.fire('Error', result.detail || 'Error al registrar', 'error');
-            }
-        } catch (e) {
-            console.error('Error en entrega:', e);
-            Swal.fire('Error', 'Error de conexión', 'error');
-        }
+            const d = await pedir('/api/llaves/registrar/', 'POST', { llave_id: llaveId, empleado_id: r.value.empleado_id, tipo: 'ENTREGA', observaciones: r.value.observaciones });
+            aviso(d.message || 'ENTREGA registrada.');
+        } catch (e) { aviso(e.message, 'danger'); }
+        await tras(llaveId);
     }
 
     async function confirmarDevolucion(llaveId, llaveNombre, empleadoId, empleadoNombre) {
-        const result = await Swal.fire({
-            title: '¿Confirmar devolución?',
-            html: `<div style="text-align:left"><p><strong>🔑 ${llaveNombre}</strong></p><p>👤 ${empleadoNombre}</p><label for="swal-obs-dev" class="form-label mt-2">Observaciones:</label><input id="swal-obs-dev" class="form-control" placeholder="Opcional"></div>`,
-            showCancelButton: true,
-            confirmButtonText: 'Confirmar Devolución',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#ffc107'
+        const r = await Swal.fire({
+            title: '¿Recibir la llave?',
+            html: '<div class="av-quien">' + esc(llaveNombre) + '</div><div class="ptB-sw"><p>La devuelve ' + esc(nombre(empleadoNombre)) + '.</p>'
+                + '<label for="swal-obs-dev">Observaciones</label><input id="swal-obs-dev" class="form-control" placeholder="Opcional"></div>',
+            showCancelButton: true, reverseButtons: true, focusConfirm: false,
+            confirmButtonText: 'Recibir llave', cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'av-btn av-btn-pri' },
+            preConfirm: function () { return { observaciones: document.getElementById('swal-obs-dev').value.trim() }; }
         });
-        if (!result.isConfirmed) return;
+        if (!r.isConfirmed) return;
         try {
-            const token = localStorage.getItem('auth_token');
-            const resp = await fetch('/api/llaves/registrar/', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ llave_id: llaveId, empleado_id: empleadoId, tipo: 'DEVOLUCION', observaciones: document.getElementById('swal-obs-dev')?.value || '' })
-            });
-            const data = await resp.json();
-            if (resp.ok) {
-                Swal.fire({ icon: 'success', title: 'Devolución registrada', text: data.message, timer: 2000, showConfirmButton: false });
-                await cargarEstado();
-            } else {
-                Swal.fire('Error', data.detail || 'Error al registrar', 'error');
-            }
-        } catch (e) {
-            Swal.fire('Error', 'Error de conexión', 'error');
-        }
+            const d = await pedir('/api/llaves/registrar/', 'POST', { llave_id: llaveId, empleado_id: empleadoId, tipo: 'DEVOLUCION', observaciones: (r.value && r.value.observaciones) || '' });
+            aviso(d.message || 'DEVOLUCIÓN registrada.');
+        } catch (e) { aviso(e.message, 'danger'); }
+        await tras(llaveId);
     }
 
-    // CATALOGO CRUD
-    async function cargarCatalogo() {
-        try {
-            const token = localStorage.getItem('auth_token');
-            const r = await fetch('/api/llaves/maestro/', { headers: { 'Authorization': `Bearer ${token}` }});
-            const llaves = await r.json();
-            const lista = document.getElementById('llaves-catalogo-lista');
-            if (!llaves.length) {
-                lista.innerHTML = '<div class="text-center text-muted py-4">No hay llaves. Agrega la primera.</div>';
+    function leerCampos(raiz) {
+        const n = raiz.querySelector('#ll-nombre'), u = raiz.querySelector('#ll-ubicacion');
+        const v = { nombre: n ? n.value.trim() : '', ubicacion: u ? u.value.trim() : '' };
+        if (!v.nombre || !v.ubicacion) { aviso('Falta el nombre o la ubicación de la llave.', 'warning'); (v.nombre ? u : n).focus(); return null; }
+        return v;
+    }
+
+    let oyentes = false;
+    function escuchar() {
+        if (oyentes) return;
+        oyentes = true;
+        document.addEventListener('click', async function (ev) {
+            const c = cont();
+            if (!c || !c.contains(ev.target)) return;
+            const b = ev.target.closest('button');
+            if (!b) return;
+            const l = function (id) { return ((datos && datos.llaves) || []).find(function (x) { return String(x.id) === String(id); }); };
+            if (b.hasAttribute('data-ll-recargar')) { recargar(); return; }
+            if (b.hasAttribute('data-ll-nueva')) { FichaCfg.nuevo('llaves'); return; }
+            if (b.hasAttribute('data-ll-cancelar')) { const k = (datos && datos.llaves && datos.llaves[0]); if (k) FichaCfg.elegir('llaves', String(k.id)); return; }
+            if (b.dataset.llEntregar) { const k = l(b.dataset.llEntregar); if (k) abrirEntrega(k.id, k.nombre); return; }
+            if (b.dataset.llRecibir) { const k = l(b.dataset.llRecibir); if (k && k.entregada_a) confirmarDevolucion(k.id, k.nombre, k.entregada_a.id, k.entregada_a.nombre); return; }
+            if (b.hasAttribute('data-ll-crear')) {
+                const v = leerCampos(c.querySelector('.fcB-ficha'));
+                if (!v) return;
+                await FichaCfg.trabajando(b, async function () {
+                    try {
+                        await pedir('/api/llaves/maestro/', 'POST', v);
+                        aviso('Llave creada: ' + v.nombre + '.');
+                        await recargar();
+                        const k = ((datos && datos.llaves) || []).filter(function (x) { return x.nombre === v.nombre; }).pop();
+                        if (k) FichaCfg.elegir('llaves', String(k.id));
+                    } catch (e) { aviso(e.message, 'danger'); }
+                });
                 return;
             }
-            lista.innerHTML = `<table class="table table-sm table-hover">
-                <thead><tr><th>Nombre</th><th>Ubicación</th><th style="width:100px">Acciones</th></tr></thead>
-                <tbody>${llaves.map(ll => `
-                    <tr>
-                        <td><strong>🔑 ${ll.nombre}</strong></td>
-                        <td>${ll.ubicacion}</td>
-                        <td>
-                            <button class="btn btn-outline-primary btn-sm" onclick="LlavesModule.editarLlave(${ll.id}, '${ll.nombre.replace(/'/g, "\\'")}', '${ll.ubicacion.replace(/'/g, "\\'")}')" title="Editar"><i class="bi bi-pencil"></i></button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="LlavesModule.eliminarLlave(${ll.id}, '${ll.nombre.replace(/'/g, "\\'")}')" title="Eliminar"><i class="bi bi-trash"></i></button>
-                        </td>
-                    </tr>
-                `).join('')}</tbody></table>`;
-        } catch (e) {
-            console.error('Error cargando catálogo:', e);
-        }
-    }
-
-    function mostrarFormLlave() {
-        document.getElementById('form-llave-container').style.display = 'block';
-        document.getElementById('llave-edit-id').value = '';
-        document.getElementById('llave-nombre').value = '';
-        document.getElementById('llave-ubicacion').value = '';
-        document.getElementById('llave-nombre').focus();
-    }
-
-    function editarLlave(id, nombre, ubicacion) {
-        document.getElementById('form-llave-container').style.display = 'block';
-        document.getElementById('llave-edit-id').value = id;
-        document.getElementById('llave-nombre').value = nombre;
-        document.getElementById('llave-ubicacion').value = ubicacion;
-        document.getElementById('llave-nombre').focus();
-    }
-
-    function cancelarFormLlave() {
-        document.getElementById('form-llave-container').style.display = 'none';
-    }
-
-    async function guardarLlave() {
-        const id = document.getElementById('llave-edit-id').value;
-        const nombre = document.getElementById('llave-nombre').value.trim();
-        const ubicacion = document.getElementById('llave-ubicacion').value.trim();
-        if (!nombre || !ubicacion) { Swal.fire('Campos requeridos', 'Nombre y ubicación son obligatorios', 'warning'); return; }
-        const token = localStorage.getItem('auth_token');
-        const url = id ? `/api/llaves/maestro/${id}/` : '/api/llaves/maestro/';
-        const method = id ? 'PUT' : 'POST';
-        try {
-            const r = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, ubicacion }) });
-            if (r.ok) {
-                cancelarFormLlave();
-                await cargarCatalogo();
-                await cargarEstado();
-                Swal.fire({ icon: 'success', title: id ? 'Llave actualizada' : 'Llave creada', timer: 1500, showConfirmButton: false });
-            } else {
-                const err = await r.json();
-                Swal.fire('Error', err.detail || 'Error al guardar', 'error');
-            }
-        } catch (e) { Swal.fire('Error', 'Error de conexión', 'error'); }
-    }
-
-    async function eliminarLlave(id, nombre) {
-        const result = await Swal.fire({ title: '¿Eliminar llave?', text: `Se eliminará "${nombre}"`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'Eliminar' });
-        if (!result.isConfirmed) return;
-        const token = localStorage.getItem('auth_token');
-        try {
-            await fetch(`/api/llaves/maestro/${id}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }});
-            await cargarCatalogo();
-            await cargarEstado();
-        } catch (e) { Swal.fire('Error', 'Error de conexión', 'error'); }
-    }
-
-    // HISTORIAL
-    async function cargarFiltroLlaves() {
-        try {
-            const token = localStorage.getItem('auth_token');
-            const r = await fetch('/api/llaves/maestro/', { headers: { 'Authorization': `Bearer ${token}` }});
-            const llaves = await r.json();
-            const sel = document.getElementById('hist-llave-filter');
-            sel.innerHTML = '<option value="">Todas las llaves</option>' + llaves.map(ll => `<option value="${ll.id}">${ll.nombre}</option>`).join('');
-        } catch(e) {}
-    }
-
-    async function cargarHistorial(page = 1) {
-        try {
-            const token = localStorage.getItem('auth_token');
-            const desde = document.getElementById('hist-fecha-desde').value;
-            const hasta = document.getElementById('hist-fecha-hasta').value;
-            const llaveId = document.getElementById('hist-llave-filter').value;
-            let url = `/api/llaves/historial/?page=${page}`;
-            if (desde) url += `&fecha_desde=${desde}`;
-            if (hasta) url += `&fecha_hasta=${hasta}`;
-            if (llaveId) url += `&llave_id=${llaveId}`;
-            const r = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` }});
-            const data = await r.json();
-            const tabla = document.getElementById('llaves-historial-tabla');
-            if (!data.registros.length) {
-                tabla.innerHTML = '<div class="text-center text-muted py-4">Sin registros en este período.</div>';
-                document.getElementById('llaves-historial-paginacion').innerHTML = '';
+            if (b.dataset.llGuardar) {
+                const v = leerCampos(c.querySelector('.fcB-ficha'));
+                if (!v) return;
+                await FichaCfg.trabajando(b, async function () {
+                    try { await pedir('/api/llaves/maestro/' + b.dataset.llGuardar + '/', 'PUT', v); aviso('Llave actualizada.'); await recargar(); }
+                    catch (e) { aviso(e.message, 'danger'); }
+                });
                 return;
             }
-            tabla.innerHTML = `<table class="table table-sm table-hover">
-                <thead><tr><th>Fecha</th><th>Hora</th><th>Llave</th><th>Empleado</th><th>Tipo</th><th>Guardia</th><th>Obs.</th></tr></thead>
-                <tbody>${data.registros.map(r => `
-                    <tr>
-                        <td>${r.fecha}</td><td>${r.hora}</td>
-                        <td><strong>${r.llave}</strong></td>
-                        <td>${r.empleado}</td>
-                        <td>${r.tipo === 'ENTREGA' ? '<span class="badge bg-danger">🔴 Entrega</span>' : '<span class="badge bg-success">🟢 Devolución</span>'}</td>
-                        <td>${r.guardia}</td>
-                        <td>${r.observaciones || '-'}</td>
-                    </tr>
-                `).join('')}</tbody></table>`;
-            // Pagination
-            if (data.pages > 1) {
-                let pagHtml = '<nav><ul class="pagination pagination-sm">';
-                for (let i = 1; i <= data.pages; i++) {
-                    pagHtml += `<li class="page-item ${i === data.page ? 'active' : ''}"><a class="page-link" href="#" onclick="event.preventDefault();LlavesModule.cargarHistorial(${i})">${i}</a></li>`;
-                }
-                pagHtml += '</ul></nav>';
-                document.getElementById('llaves-historial-paginacion').innerHTML = pagHtml;
-            } else {
-                document.getElementById('llaves-historial-paginacion').innerHTML = '';
+            if (b.dataset.llEliminar) {
+                const k = l(b.dataset.llEliminar);
+                if (!k) return;
+                if (k.estado !== 'DISPONIBLE') { aviso('La llave está entregada: recíbala antes de eliminarla.', 'warning'); return; }
+                const si = typeof uiConfirm === 'function' ? await uiConfirm('¿Eliminar la llave?', { quien: k.nombre, items: ['Deja de aparecer en el tablero y en el panel', 'Su historial de entregas se conserva'], confirmText: 'Eliminar llave', danger: true }) : true;
+                if (!si) return;
+                try { await pedir('/api/llaves/maestro/' + k.id + '/', 'DELETE'); aviso('Llave eliminada: ' + k.nombre + '.'); await recargar(); }
+                catch (e) { aviso(e.message, 'danger'); }
             }
-        } catch (e) {
-            console.error('Error cargando historial:', e);
-        }
+        });
     }
 
-    return {
-        initTab, showSection, cargarEstado,
-        abrirEntrega, confirmarDevolucion,
-        mostrarFormLlave, editarLlave, cancelarFormLlave, guardarLlave, eliminarLlave,
-        cargarCatalogo, cargarHistorial
-    };
+    async function initTab() {
+        escuchar();
+        pintar();
+        await recargar();
+    }
+
+    return { initTab: initTab, recargar: recargar, abrirEntrega: abrirEntrega, confirmarDevolucion: confirmarDevolucion };
 })();

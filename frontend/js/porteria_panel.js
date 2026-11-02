@@ -13,7 +13,7 @@ const PorteriaPanel = (function () {
         llaves: { pane: 'tab-entrega-llaves', permiso: 'porteria.llaves', init: function () { if (typeof LlavesModule !== 'undefined') LlavesModule.initTab(); } },
         visitas: { pane: 'tab-control-visitas', permiso: 'porteria.visitas', init: function () { if (typeof VisitasModule !== 'undefined') VisitasModule.initTab(); } },
         flota: { pane: 'tab-flota-aguacol', permiso: 'porteria.flota', init: function () { if (typeof FlotaModule !== 'undefined') FlotaModule.initTab(); } },
-        rondas: { pane: 'tab-rondas-nocturnas', permiso: 'porteria.rondas', init: function () {} },
+        rondas: { pane: 'tab-rondas-nocturnas', permiso: 'porteria.rondas', init: function () { if (typeof PorteriaModule !== 'undefined') PorteriaModule.cargarHistorialRondas(); } },
         proveedores: { pane: 'tab-ingreso-proveedores', permiso: 'porteria.proveedores', init: function () {} }
     };
     const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];

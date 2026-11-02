@@ -1,1133 +1,337 @@
 /**
- * Módulo Artículo 22 — Control de Presencia en Planta
- * Diseño Enterprise inspirado en Stitch/Linear/Stripe
+ * Artículo 22 — diseño B elegido por el dueño (02-11-2026): las personas del Artículo 22 a la izquierda y, a la derecha,
+ * el día y la semana de la persona elegida, con su botón para registrar. Se arma con FichaCfg (config_ficha.js); el
+ * historial por rango se descarga en Excel desde el encabezado.
+ * Las cadenas se arman con «+» (el minificador del servidor junta las plantillas anidadas).
  */
-const Articulo22Module = (() => {
-    // Fecha local del navegador (NO usar toISOString que convierte a UTC)
-    let _fechaActual = (() => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    })();
-    let _refreshInterval = null;
+const Articulo22Module = (function () {
+    'use strict';
+    const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const DIAS_C = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const REFRESCO_MS = 60000;
 
-    // ════════════════════════════════════════════════
-    // INIT
-    // ════════════════════════════════════════════════
-    async function initTab() {
-        const container = document.getElementById('art22-container');
-        if (!container) return;
+    let fecha = hoyISO(), datos = null, error = null, temporizador = null, preguntando = false, excelAbierto = false;
+    const semanas = {};   // 'empleado|lunes' → { t: hora de lectura, regs: registros del historial }
 
-        const hoy = new Date();
-        const diasSemana = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-        const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-        const fechaDisplay = `${diasSemana[hoy.getDay()]} ${hoy.getDate()} ${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
+    // ── utilidades ─────────────────────────────────────────────
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+    function hoyISO() { return iso(new Date()); }
+    function fechaDe(f) { return new Date(f + 'T12:00:00'); }
+    function sumar(f, n) { const d = fechaDe(f); d.setDate(d.getDate() + n); return iso(d); }
+    function dmy(f) { return f ? f.split('-').reverse().join('-') : ''; }
+    function lunesDe(f) { return sumar(f, -((fechaDe(f).getDay() + 6) % 7)); }
+    function minutos(h) { if (!h) return null; const p = String(h).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10) + (p[2] ? parseInt(p[2], 10) / 60 : 0); }
+    function hhmm(m) { m = Math.floor(m) % 1440; return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+    function ahoraMin() { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
+    function dur(m) { m = Math.max(0, Math.floor(m || 0)); return Math.floor(m / 60) + 'h ' + pad(m % 60) + 'm'; }
+    // Jornada y tiempo fuera se redondean al minuto y el tiempo en planta se trunca, igual que el servidor
+    function durR(m) { return dur(Math.round(m || 0)); }
+    function esc(s) { return window.FichaCfg ? FichaCfg.esc(s) : String(s == null ? '' : s); }
+    function nombre(s) { return window.nombrePersona ? window.nombrePersona(s) : String(s || '').toUpperCase(); }
+    function puede(p) { return typeof AuthService === 'undefined' || AuthService.hasPermission(p); }
+    function aviso(msg, tipo) { if (typeof showToast === 'function') showToast(msg, tipo || 'success'); }
+    function cabeceras() { return { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }; }
+    async function leer(url) {
+        const r = await fetch(url, { headers: cabeceras() });
+        if (!r.ok) { let m = 'No se pudo leer el Artículo 22.'; try { m = (await r.json()).detail || m; } catch (_) {} throw new Error(m); }
+        return r.json();
+    }
+    function cont() { return document.getElementById('art22-container'); }
+    function palabra(t) { return t === 'E' ? 'ENTRADA' : 'SALIDA'; }
 
-        container.innerHTML = `
-            <style>
-                .art22-kpi { position: relative; overflow: hidden; border-radius: 16px; padding: 1.25rem 1.5rem; color: #fff; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid rgba(255,255,255,0.1); }
-                .art22-kpi:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(0,0,0,0.15); }
-                .art22-kpi .kpi-icon { position: absolute; right: -10px; top: -10px; font-size: 5rem; opacity: 0.08; }
-                .art22-kpi .kpi-number { font-size: 2.25rem; font-weight: 800; line-height: 1; }
-                .art22-kpi .kpi-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.9; }
-                .art22-kpi .kpi-sub { font-size: 0.8rem; font-weight: 500; opacity: 0.8; margin-top: 2px; }
-                #art22-estado-body { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 20px !important; background: #f8fafc; }
-                @media (min-width: 992px) { #art22-estado-body { grid-template-columns: 1fr 1fr; } }
-                .art22-emp-card { background: #ffffff; border-radius: 16px; margin: 0; padding: 0; border: 1px solid #e2e8f0; border-left: 5px solid #cbd5e1; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(0,0,0,0.02); overflow: hidden; }
-                .art22-emp-card:hover { box-shadow: 0 12px 24px -10px rgba(0,0,0,0.08); transform: translateY(-2px); border-color: #cbd5e1; }
-                .art22-emp-card.estado-en_planta { border-left-color: #10b981; }
-                .art22-emp-card.estado-fuera { border-left-color: #f43f5e; }
-                .art22-emp-card.estado-sin_registro { border-left-color: #cbd5e1; }
-                .art22-card-header { display: flex; flex-direction: column; padding: 18px 20px 14px 20px; gap: 12px; }
-                .art22-card-top { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
-                .art22-card-identity { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
-                .art22-card-info { min-width: 0; flex: 1; }
-                .art22-card-name { font-weight: 700; color: #0f172a; font-size: 0.9rem; line-height: 1.2; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .art22-card-cargo { font-size: 0.75rem; color: #64748b; margin-top: 2px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .art22-card-meta-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; width: 100%; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
-                .art22-card-estadia { display: flex; align-items: center; gap: 6px; }
-                .art22-gantt-container { position: relative; padding: 50px 24px 24px 24px; border-top: 1px solid #f1f5f9; background: rgba(248,250,252,0.65); min-height: 130px; }
-                .art22-gantt-backdrop { position: relative; height: 22px; width: 100%; margin: 10px 0; }
-                .art22-gantt-track { height: 14px; background: #e2e8f0; border-radius: 7px; position: absolute; top: 2px; left: 0; width: 100%; overflow: hidden; display: flex; box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); border: 1px solid #cbd5e1; }
-                .art22-gantt-segment { height: 100%; position: absolute; background: linear-gradient(180deg, #10b981 0%, #059669 100%); border-right: 1px solid rgba(255,255,255,0.2); border-left: 1px solid rgba(255,255,255,0.2); transition: all 0.3s ease; }
-                .art22-gantt-segment.ongoing { background: repeating-linear-gradient(45deg, #10b981, #10b981 8px, #34d399 8px, #34d399 16px); border-right: none; }
-                .art22-gantt-grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(148, 163, 184, 0.15); z-index: 1; }
-                .art22-gantt-grid-label { position: absolute; font-size: 0.75rem; font-weight: 700; color: #94a3b8; top: -16px; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; }
-                @media (max-width: 768px) { .art22-gantt-grid-label.h-sub { display: none !important; } }
-                .art22-gantt-pulse-ring { position: absolute; top: 9px; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; border: 2px solid #10b981; animation: gantt-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite; pointer-events: none; z-index: 2; }
-                @keyframes gantt-ping { 75%, 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } }
-                .art22-gantt-empty-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 0.75rem; font-weight: 600; color: #64748b; font-style: italic; z-index: 2; pointer-events: none; }
-                .art22-gantt-track.empty { background: repeating-linear-gradient(-45deg, #f1f5f9, #f1f5f9 6px, #e2e8f0 6px, #e2e8f0 12px); border: 1px dashed #cbd5e1; }
-                .art22-area-badge { display: inline-block; padding: 2px 8px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 6px; }
-                .art22-estadia-label { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
-                .art22-estadia-val { font-size: 0.95rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
-                .art22-section-header { background: rgba(248,250,252,0.5); padding: 0.9rem 1.2rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-                .art22-section-title { font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px; }
-                .art22-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
-                .art22-filter-bar label { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
-                .art22-hist-table thead tr { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-                .art22-hist-table thead th { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; padding: 10px 14px; }
-                .art22-hist-table tbody td { padding: 10px 14px; font-size: 0.82rem; }
-                .art22-hist-table tbody tr { transition: background 0.15s; }
-                .art22-hist-table tbody tr:hover { background: rgba(248,250,252,0.5); }
-                .art22-hist-table tbody tr:not(:last-child) td { border-bottom: 1px solid #f1f5f9; }
-                .art22-marcas-circle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: 0.75rem; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-
-                /* ======================== REDISEÑO PREMIUM RADICAL ======================== */
-                /* Slide-to-Action Container */
-                .art22-slider-container {
-                    position: relative;
-                    width: 170px;
-                    height: 36px;
-                    background: rgba(241, 245, 249, 0.85);
-                    border: 1.5px solid #cbd5e1;
-                    border-radius: 18px;
-                    overflow: hidden;
-                    user-select: none;
-                    -webkit-user-select: none;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
-                    backdrop-filter: blur(4px);
-                }
-                .art22-slider-container.slider-e {
-                    border-color: rgba(16, 185, 129, 0.4);
-                }
-                .art22-slider-container.slider-s {
-                    border-color: rgba(244, 63, 94, 0.4);
-                }
-
-                /* Slide-to-Action Handle */
-                .art22-slider-handle {
-                    position: absolute;
-                    left: 2px;
-                    width: 29px;
-                    height: 29px;
-                    background: #ffffff;
-                    border-radius: 50%;
-                    cursor: grab;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.05);
-                    z-index: 10;
-                    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, box-shadow 0.2s;
-                }
-                .art22-slider-handle:active {
-                    cursor: grabbing;
-                }
-                .art22-slider-handle.handle-e {
-                    color: #059669;
-                    border: 1px solid rgba(16, 185, 129, 0.2);
-                }
-                .art22-slider-handle.handle-s {
-                    color: #dc2626;
-                    border: 1px solid rgba(244, 63, 94, 0.2);
-                }
-
-                /* Slide-to-Action Text */
-                .art22-slider-text {
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.04em;
-                    pointer-events: none;
-                    z-index: 5;
-                    background: linear-gradient(90deg, #64748b 0%, #0f172a 50%, #64748b 100%);
-                    background-size: 200% 100%;
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    animation: slider-shine 2.2s infinite linear;
-                }
-                .art22-slider-container.slider-e .art22-slider-text {
-                    background: linear-gradient(90deg, #059669 0%, #047857 50%, #059669 100%);
-                    background-size: 200% 100%;
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                }
-                .art22-slider-container.slider-s .art22-slider-text {
-                    background: linear-gradient(90deg, #dc2626 0%, #b91c1c 50%, #dc2626 100%);
-                    background-size: 200% 100%;
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                }
-
-                @keyframes slider-shine {
-                    0% { background-position: 200% 0; }
-                    100% { background-position: -200% 0; }
-                }
-
-                /* Locked / Processing State */
-                .art22-slider-container.locked {
-                    background: #f1f5f9 !important;
-                    border-color: #cbd5e1 !important;
-                }
-                .art22-slider-container.locked .art22-slider-handle {
-                    background: #e2e8f0;
-                    cursor: not-allowed;
-                    box-shadow: none;
-                }
-
-                /* Glowing live halos on Avatar */
-                .art22-avatar {
-                    position: relative;
-                    width: 44px;
-                    height: 44px;
-                    border-radius: 50% !important;
-                    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: 700;
-                    font-size: 0.95rem;
-                    color: #334155;
-                    flex-shrink: 0;
-                    border: 2px solid #ffffff;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-                    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                .art22-avatar.live-in {
-                    border-color: #10b981;
-                    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15), 0 0 12px rgba(16, 185, 129, 0.35);
-                    animation: avatar-pulse-in 2.5s infinite alternate;
-                }
-                .art22-avatar.live-out {
-                    border-color: #f43f5e;
-                    box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.08), 0 0 10px rgba(244, 63, 94, 0.18);
-                    animation: avatar-pulse-out 2.5s infinite alternate;
-                }
-
-                @keyframes avatar-pulse-in {
-                    0% { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1), 0 0 6px rgba(16, 185, 129, 0.25); }
-                    100% { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.2), 0 0 16px rgba(16, 185, 129, 0.45); }
-                }
-                @keyframes avatar-pulse-out {
-                    0% { box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.05), 0 0 4px rgba(244, 63, 94, 0.1); }
-                    100% { box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.12), 0 0 10px rgba(244, 63, 94, 0.25); }
-                }
-
-                .art22-avatar-badge {
-                    position: absolute;
-                    bottom: -1px;
-                    right: -1px;
-                    width: 11px;
-                    height: 11px;
-                    border-radius: 50%;
-                    border: 2px solid #ffffff;
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-                }
-                .art22-avatar-badge.in { background-color: #10b981; }
-                .art22-avatar-badge.out { background-color: #f43f5e; }
-                .art22-avatar-badge.none { background-color: #94a3b8; }
-
-                /* Status Monospace Live Dashboard Widget */
-                .art22-status-widget {
-                    font-family: 'JetBrains Mono', monospace;
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    padding: 3px 8px;
-                    border-radius: 6px;
-                    background: rgba(248, 250, 252, 0.8);
-                    border: 1px solid #e2e8f0;
-                }
-                .art22-status-widget.in {
-                    color: #047857;
-                    border-color: rgba(16, 185, 129, 0.25);
-                    background: rgba(240, 253, 244, 0.85);
-                }
-                .art22-status-widget.out {
-                    color: #b91c1c;
-                    border-color: rgba(244, 63, 94, 0.25);
-                    background: rgba(254, 242, 242, 0.85);
-                }
-                .art22-status-widget.none {
-                    color: #475569;
-                    border-color: #cbd5e1;
-                    background: rgba(241, 245, 249, 0.85);
-                }
-                .art22-status-widget .radar-dot {
-                    width: 6px;
-                    height: 6px;
-                    border-radius: 50%;
-                }
-                .art22-status-widget.in .radar-dot {
-                    background-color: #10b981;
-                    box-shadow: 0 0 6px #10b981;
-                    animation: radar-pulse 1.8s infinite;
-                }
-                .art22-status-widget.out .radar-dot {
-                    background-color: #f43f5e;
-                }
-                .art22-status-widget.none .radar-dot {
-                    background-color: #94a3b8;
-                }
-
-                @keyframes radar-pulse {
-                    0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-                    70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
-                    100% { transform: scale(1); opacity: 0; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-                }
-
-                /* Interactive timeline pins */
-                .art22-gantt-pin-container {
-                    position: absolute;
-                    top: 9px;
-                    transform: translateX(-50%);
-                    width: 14px;
-                    height: 14px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 10;
-                    cursor: pointer;
-                }
-                .art22-gantt-pin {
-                    width: 10px;
-                    height: 10px;
-                    border-radius: 50%;
-                    border: 2px solid #ffffff;
-                    box-shadow: 0 1.5px 3px rgba(0,0,0,0.15);
-                    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                }
-                .art22-gantt-pin.e {
-                    background-color: #10b981;
-                }
-                .art22-gantt-pin.s {
-                    background-color: #f43f5e;
-                }
-                .art22-gantt-pin-container:hover .art22-gantt-pin {
-                    transform: scale(1.45);
-                    box-shadow: 0 0 6px rgba(0,0,0,0.2);
-                }
-
-                /* Glassmorphic Tooltip */
-                .art22-gantt-tooltip {
-                    position: absolute;
-                    bottom: calc(100% + 8px);
-                    left: 50%;
-                    transform: translateX(-50%) translateY(4px);
-                    background: rgba(255, 255, 255, 0.94);
-                    border: 1px solid rgba(226, 232, 240, 0.8);
-                    border-radius: 8px;
-                    padding: 5px 9px;
-                    box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.08), 0 3px 6px -2px rgba(0, 0, 0, 0.03);
-                    z-index: 100;
-                    pointer-events: none;
-                    opacity: 0;
-                    transition: opacity 0.22s, transform 0.22s;
-                    backdrop-filter: blur(8px);
-                    -webkit-backdrop-filter: blur(8px);
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 1px;
-                }
-                .art22-gantt-pin-container:hover .art22-gantt-tooltip {
-                    opacity: 1;
-                    transform: translateX(-50%) translateY(0);
-                }
-                .art22-gantt-tooltip::after {
-                    content: '';
-                    position: absolute;
-                    top: 100%;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    border-width: 4px;
-                    border-style: solid;
-                    border-color: rgba(255, 255, 255, 0.94) transparent transparent transparent;
-                }
-                .art22-gantt-tooltip .tt-label {
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.04em;
-                    display: flex;
-                    align-items: center;
-                    gap: 3px;
-                }
-                .art22-gantt-tooltip.e .tt-label { color: #059669; }
-                .art22-gantt-tooltip.s .tt-label { color: #dc2626; }
-                .art22-gantt-tooltip .tt-time {
-                    font-family: 'JetBrains Mono', monospace;
-                    font-size: 0.75rem;
-                    font-weight: 800;
-                    color: #1e293b;
-                }
-
-                /* Log container for bottom horizontal list */
-                .art22-log-container {
-                    display: flex;
-                    align-items: center;
-                    padding: 10px 14px;
-                    background: rgba(248, 250, 252, 0.45);
-                    border-radius: 12px;
-                    border: 1px solid rgba(226, 232, 240, 0.8);
-                    margin-top: 18px;
-                    overflow-x: auto;
-                    max-width: 100%;
-                    -webkit-overflow-scrolling: touch;
-                }
-                .art22-log-container::-webkit-scrollbar {
-                    height: 4px;
-                }
-                .art22-log-container::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .art22-log-container::-webkit-scrollbar-thumb {
-                    background: #cbd5e1;
-                    border-radius: 2px;
-                }
-                .art22-log-title {
-                    font-size: 0.75rem;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                    color: #475569;
-                    background: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    padding: 4px 8px;
-                    border-radius: 6px;
-                    margin-right: 12px;
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-                    flex-shrink: 0;
-                }
-                .art22-log-flow {
-                    display: flex;
-                    align-items: center;
-                    gap: 0;
-                }
-                .art22-log-step {
-                    display: flex;
-                    align-items: center;
-                    flex-shrink: 0;
-                }
-                .art22-log-card {
-                    display: flex;
-                    flex-direction: column;
-                    background: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 8px;
-                    padding: 4px 10px;
-                    min-width: 80px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                .art22-log-card:hover {
-                    border-color: #cbd5e1;
-                    box-shadow: 0 3px 6px rgba(0,0,0,0.04);
-                    transform: translateY(-1px);
-                }
-                .art22-log-card.e {
-                    border-left: 3px solid #10b981;
-                }
-                .art22-log-card.s {
-                    border-left: 3px solid #f43f5e;
-                }
-                .art22-log-card-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 5px;
-                }
-                .art22-log-dot {
-                    width: 6px;
-                    height: 6px;
-                    border-radius: 50%;
-                }
-                .art22-log-card.e .art22-log-dot { background-color: #10b981; }
-                .art22-log-card.s .art22-log-dot { background-color: #f43f5e; }
-                
-                .art22-log-time {
-                    font-family: 'JetBrains Mono', monospace;
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                    color: #0f172a;
-                }
-                .art22-log-label {
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.04em;
-                    color: #64748b;
-                    margin-top: 1px;
-                }
-                .art22-log-connector {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: #94a3b8;
-                    margin: 0 6px;
-                    font-size: 0.8rem;
-                    opacity: 0.6;
-                    flex-shrink: 0;
-                }
-            </style>
-
-            <!-- ENCABEZADO -->
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 pt-repetido">
-                <div class="d-flex align-items-center gap-3">
-                    <div style="background:#fff; padding:8px; border-radius:10px; box-shadow: var(--shadow-sm); border:1px solid #e2e8f0; color:var(--primary-color); display:flex; align-items:center; justify-content:center;">
-                        <i class="bi bi-clipboard-check-fill" style="font-size:1.3rem"></i>
-                    </div>
-                    <div>
-                        <h4 class="fw-bold mb-0" style="color:#1e293b; letter-spacing:-0.02em">Control de Presencia — Artículo 22</h4>
-                        <p class="mb-0" style="font-size:0.82rem; color:#64748b; font-weight:500">Gestión de personal exento de jornada laboral</p>
-                    </div>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <span style="background:#fff; padding:6px 16px; border-radius:999px; box-shadow:var(--shadow-sm); border:1px solid #e2e8f0; font-size:0.85rem; font-weight:600; color:#475569">
-                        <i class="bi bi-calendar3 me-1" style="color:#94a3b8"></i>${fechaDisplay}
-                    </span>
-                    <button class="btn btn-sm btn-light border" onclick="Articulo22Module.cargarEstadoDia()" style="border-radius:8px">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- KPI STATS -->
-            <div class="row g-3 mb-4 pt-repetido">
-                <div class="col-md-4">
-                    <div class="art22-kpi" style="background: var(--primary-color)">
-                        <i class="bi bi-people-fill kpi-icon"></i>
-                        <div class="kpi-label">Personas exentas</div>
-                        <div class="d-flex align-items-baseline gap-2 mt-2">
-                            <span class="kpi-number" id="art22-stat-total">—</span>
-                            <span class="kpi-sub">en total</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="art22-kpi" style="background: var(--success-color)">
-                        <i class="bi bi-building-fill kpi-icon"></i>
-                        <div class="kpi-label">En planta</div>
-                        <div class="d-flex align-items-baseline gap-2 mt-2">
-                            <span class="kpi-number" id="art22-stat-presentes">—</span>
-                            <span class="kpi-sub">activos ahora</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="art22-kpi" style="background: var(--warning-color)">
-                        <i class="bi bi-clock-history kpi-icon"></i>
-                        <div class="kpi-label">Sin registro</div>
-                        <div class="d-flex align-items-baseline gap-2 mt-2">
-                            <span class="kpi-number" id="art22-stat-sin">—</span>
-                            <span class="kpi-sub">pendientes hoy</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ESTADO DEL DÍA -->
-            <div class="card border-0 shadow-sm mb-4 pt-repetido" style="border-radius:12px; overflow:hidden">
-                <div class="art22-section-header">
-                    <span class="art22-section-title">
-                        <i class="bi bi-list-check" style="color:var(--primary-color)"></i>Estado del día
-                    </span>
-                    <button class="btn btn-sm text-primary fw-semibold" style="font-size:0.8rem" onclick="Articulo22Module.cargarEstadoDia()">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-                    </button>
-                </div>
-                <div id="art22-estado-body">
-                    <div class="text-center py-5 text-muted">
-                        <div class="spinner-border spinner-border-sm text-primary"></div> Cargando...
-                    </div>
-                </div>
-            </div>
-
-            <!-- HISTORIAL -->
-            <div class="card border-0 shadow-sm" style="border-radius:12px; overflow:hidden">
-                <div class="art22-section-header" style="flex-wrap:wrap; gap:12px;">
-                    <span class="art22-section-title">
-                        <i class="bi bi-clock-history" style="color:var(--primary-color)"></i>Historial de Ingresos
-                    </span>
-                    <div class="art22-filter-bar">
-                        <div class="d-flex align-items-center gap-2">
-                            <label for="art22-hist-desde">Desde</label>
-                            <input type="date" class="form-control form-control-sm" id="art22-hist-desde" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <label for="art22-hist-hasta">Hasta</label>
-                            <input type="date" class="form-control form-control-sm" id="art22-hist-hasta" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px;">
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <label for="art22-hist-emp">Empleado</label>
-                            <select class="form-select form-select-sm" id="art22-hist-emp" style="font-size:0.82rem; border-color:#e2e8f0; border-radius:6px; min-width:210px; max-width:280px;">
-                                <option value="">Todos</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-sm btn-primary fw-bold px-3" onclick="Articulo22Module.cargarHistorial()" style="border-radius:6px; font-size:0.8rem">
-                            <i class="bi bi-search me-1"></i>Consultar
-                        </button>
-                        <button class="btn btn-sm btn-success fw-bold px-3" onclick="Articulo22Module.descargarExcel()" style="border-radius:6px; font-size:0.8rem" title="Descarga las marcaciones del rango (y del empleado elegido) en Excel">
-                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
-                        </button>
-                    </div>
-                </div>
-                <div id="art22-hist-resumen" style="display:none"></div>
-                <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
-                    <table class="table mb-0 art22-hist-table">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Nombre</th>
-                                <th>Cargo / Área</th>
-                                <th>1ª Entrada</th>
-                                <th>Últ. Salida</th>
-                                <th class="text-center">Marcas</th>
-                                <th class="text-end" title="Desde la primera entrada hasta la última salida del día">Jornada</th>
-                                <th class="text-end" title="Tiempo fuera de planta entre una salida y la entrada siguiente del mismo día">Fuera</th>
-                                <th class="text-end" title="Jornada menos el tiempo fuera: tiempo realmente en planta">Estadía en planta</th>
-                            </tr>
-                        </thead>
-                        <tbody id="art22-historial-tbody">
-                            <tr><td colspan="9" class="text-center py-4 text-muted" style="font-size:0.85rem">Seleccione fechas y presione Consultar</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div id="art22-historial-pagination" class="d-flex justify-content-between align-items-center px-3 py-2 border-top" style="font-size:0.78rem; color:#64748b; background:#fff;"></div>
-            </div>
-        `;
-
-        const hasta = document.getElementById('art22-hist-hasta');
-        const desde = document.getElementById('art22-hist-desde');
-        if (hasta) hasta.value = _fechaActual;
-        if (desde) { const d = new Date(); d.setDate(d.getDate()-7); desde.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-
-        cargarEmpleadosFiltro();
-        await cargarEstadoDia();
-        if (_refreshInterval) clearInterval(_refreshInterval);
-        _refreshInterval = setInterval(() => cargarEstadoDia(), 60000);
+    // Mismo cálculo del servidor (_analizar_dia): un tramo es una ENTRADA seguida de una SALIDA; «fuera» es el tiempo
+    // entre una SALIDA y la ENTRADA siguiente; la jornada va de la primera ENTRADA a la última SALIDA. Hoy, una ENTRADA
+    // sin SALIDA cuenta hasta ahora.
+    function analizar(marcas, esHoy) {
+        const ms = [];
+        let previo = null;
+        marcas.forEach(function (m) {
+            let v = minutos(m.hora);
+            while (previo !== null && v < previo) v += 1440;
+            previo = v;
+            ms.push({ t: m.tipo, v: v, m: m });
+        });
+        const tramos = [];
+        let enPlanta = 0, fuera = 0, primera = null, ultimaS = null, cierre = null, abierto = null, incompleto = false;
+        for (let i = 0; i < ms.length; i++) {
+            if (ms[i].t === 'E' && ms[i + 1] && ms[i + 1].t === 'S') {
+                if (primera === null) primera = ms[i].v;
+                if (cierre !== null) fuera += ms[i].v - cierre;
+                enPlanta += ms[i + 1].v - ms[i].v;
+                tramos.push([ms[i].v, ms[i + 1].v, false]);
+                cierre = ultimaS = ms[i + 1].v;
+                i++;
+            } else if (ms[i].t === 'E' && i === ms.length - 1 && esHoy) {
+                abierto = ms[i].v;
+                if (primera === null) primera = ms[i].v;
+                if (cierre !== null) fuera += ms[i].v - cierre;
+                const ahora = Math.max(ahoraMin(), ms[i].v);
+                enPlanta += ahora - ms[i].v;
+                tramos.push([ms[i].v, ahora, true]);
+            } else {
+                incompleto = true;
+            }
+        }
+        const fin = abierto !== null ? Math.max(ahoraMin(), abierto) : ultimaS;
+        return { tramos: tramos, enPlanta: enPlanta, fuera: fuera, primera: primera, fin: fin, abierto: abierto, incompleto: incompleto,
+                 jornada: (primera !== null && fin !== null) ? fin - primera : null };
     }
 
-    // ════════════════════════════════════════════════
-    // CARGAR ESTADO DEL DÍA
-    // ════════════════════════════════════════════════
-    function initSliders() {
-        const sliders = document.querySelectorAll('.art22-slider-container');
-        sliders.forEach(slider => {
-            const handle = slider.querySelector('.art22-slider-handle');
-            const text = slider.querySelector('.art22-slider-text');
-            const empId = slider.dataset.empId;
-            
-            let isDragging = false;
-            let startX = 0;
-            
-            // Mouse Events
-            handle.addEventListener('mousedown', startDrag);
-            window.addEventListener('mousemove', drag);
-            window.addEventListener('mouseup', endDrag);
-            
-            // Touch Events
-            handle.addEventListener('touchstart', startDrag, { passive: true });
-            window.addEventListener('touchmove', drag, { passive: false });
-            window.addEventListener('touchend', endDrag);
-            
-            function startDrag(e) {
-                if (slider.classList.contains('locked')) return;
-                isDragging = true;
-                slider.style.transition = 'none';
-                handle.style.transition = 'none';
-                startX = e.touches ? e.touches[0].clientX : e.clientX;
-            }
-            
-            function drag(e) {
-                if (!isDragging) return;
-                
-                if (e.cancelable) e.preventDefault();
-                
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const maxSlide = slider.clientWidth - handle.clientWidth - 4;
-                let deltaX = clientX - startX;
-                
-                if (deltaX < 0) deltaX = 0;
-                if (deltaX > maxSlide) deltaX = maxSlide;
-                
-                handle.style.transform = `translateX(${deltaX}px)`;
-                
-                const pct = deltaX / maxSlide;
-                text.style.opacity = (1 - pct * 1.5).toFixed(2);
-            }
-            
-            function endDrag(e) {
-                if (!isDragging) return;
-                isDragging = false;
-                
-                const maxSlide = slider.clientWidth - handle.clientWidth - 4;
-                const currentX = parseFloat(handle.style.transform.replace('translateX(', '').replace('px)', '')) || 0;
-                
-                handle.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s';
-                text.style.transition = 'opacity 0.2s';
-                
-                if (currentX >= maxSlide * 0.9) {
-                    slider.classList.add('locked');
-                    handle.style.transform = `translateX(${maxSlide}px)`;
-                    text.style.opacity = '0';
-                    handle.innerHTML = '<span class="spinner-border spinner-border-sm text-primary" role="status" style="width: 1rem; height: 1rem; border-width: 0.15em;"></span>';
-                    Articulo22Module.marcar(empId, slider);
-                } else {
-                    handle.style.transform = 'translateX(0px)';
-                    text.style.opacity = '1';
-                }
-            }
+    function personas() {
+        const esHoy = fecha === hoyISO();
+        return ((datos && datos.empleados) || []).map(function (e) {
+            const marcas = (e.marcas || []).slice();
+            return { id: e.empleado_id, n: nombre(e.nombre), cargo: e.cargo || '', area: e.area || '', marcas: marcas,
+                     dentro: !!e.sesion_abierta && esHoy, estadia: e.estadia_total_min || 0, a: analizar(marcas, esHoy) };
+        }).sort(function (x, y) { return x.n.localeCompare(y.n, 'es'); });
+    }
+
+    // ── pintar ─────────────────────────────────────────────────
+    function navDia() {
+        const esHoy = fecha === hoyISO();
+        return '<div class="ptB-dia" role="group" aria-label="Día">'
+            + '<button type="button" data-a22-dia="-1" aria-label="Día anterior"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>'
+            + '<span>' + DIAS[fechaDe(fecha).getDay()] + '</span>'
+            + '<input type="date" id="a22-fecha" value="' + fecha + '" max="' + hoyISO() + '" aria-label="Elegir día">'
+            + '<button type="button" data-a22-dia="1" aria-label="Día siguiente"' + (esHoy ? ' disabled' : '') + '><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div>'
+            + (esHoy ? '' : '<button type="button" class="fcB-btn" data-a22-hoy>Hoy</button>');
+    }
+
+    function barraExcel(ps) {
+        const lunes = lunesDe(fecha), hasta = sumar(lunes, 6) > hoyISO() ? hoyISO() : sumar(lunes, 6);
+        return '<div class="ptB-excel' + (excelAbierto ? '' : ' d-none') + '" id="a22-excel">'
+            + '<div class="ptB-excel-c"><label for="a22-x-desde">Desde</label><input type="date" class="fcB-inp" id="a22-x-desde" value="' + lunes + '" max="' + hoyISO() + '"></div>'
+            + '<div class="ptB-excel-c"><label for="a22-x-hasta">Hasta</label><input type="date" class="fcB-inp" id="a22-x-hasta" value="' + hasta + '" max="' + hoyISO() + '"></div>'
+            + '<div class="ptB-excel-c ancho"><label for="a22-x-emp">Persona</label><select class="fcB-inp" id="a22-x-emp"><option value="">Todas</option>'
+            + ps.map(function (p) { return '<option value="' + p.id + '">' + esc(p.n) + '</option>'; }).join('') + '</select></div>'
+            + '<div class="ptB-excel-b"><button type="button" class="fcB-btn pri" data-a22-descargar><i class="bi bi-download" aria-hidden="true"></i>Descargar Excel</button>'
+            + '<button type="button" class="fcB-btn" data-a22-excel>Cerrar</button></div></div>';
+    }
+
+    function pintar() {
+        const c = cont();
+        if (!c || !window.FichaCfg) return;
+        if (error && !datos) {
+            c.innerHTML = '<div class="fcB"><p class="fcB-vacio">' + esc(error) + ' <button type="button" class="fcB-btn" data-a22-recargar>Reintentar</button></p></div>';
+            return;
+        }
+        const esHoy = fecha === hoyISO(), ps = personas();
+        FichaCfg.montar(c, {
+            clave: 'art22',
+            titulo: 'Artículo 22',
+            descripcion: 'Las personas del Artículo 22 a la izquierda; a la derecha, el día y la semana de la persona elegida, con su botón para registrar.',
+            acciones: navDia() + '<button type="button" class="fcB-btn" data-a22-excel aria-expanded="' + excelAbierto + '"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>Excel</button>',
+            antes: barraExcel(ps),
+            buscar: 'Buscar persona',
+            items: ps,
+            id: function (p) { return p.id; },
+            etiqueta: function (p) { return p.n; },
+            detalle: function (p) { return p.area; },
+            estado: esHoy ? function (p) { return p.dentro ? { t: 'En planta', tono: 'si' } : (p.marcas.length ? { t: 'Fuera', tono: 'fuera' } : { t: 'Sin marcas', tono: '' }); } : null,
+            sub: function (p) { return p.marcas.length ? dur(p.estadia) + ' · ' + p.marcas.length + (p.marcas.length === 1 ? ' marca' : ' marcas') : (esHoy ? '' : 'Sin marcas'); },
+            vacio: datos ? 'No hay personas en el Artículo 22. Se marcan desde la ficha de cada persona, en Empleados.' : 'Cargando…',
+            ficha: ficha
         });
     }
 
-    async function cargarEstadoDia() {
+    function linea(p) {
+        const t = p.a.tramos;
+        if (!t.length) return '';
+        let ini = Math.min(7 * 60, Math.floor(t[0][0] / 60) * 60), fin = Math.max(21 * 60, Math.ceil(t[t.length - 1][1] / 60) * 60);
+        const w = fin - ini;
+        const segs = t.map(function (s) {
+            return '<span class="ptB-seg' + (s[2] ? ' abierto' : '') + '" style="left:' + ((s[0] - ini) / w * 100).toFixed(2) + '%;width:' + Math.max(0.6, (s[1] - s[0]) / w * 100).toFixed(2) + '%"'
+                + ' title="' + hhmm(s[0]) + ' a ' + (s[2] ? 'ahora' : hhmm(s[1])) + '"></span>';
+        }).join('');
+        let reg = '';
+        for (let h = Math.ceil(ini / 60) + 1; h < fin / 60; h += 2) reg += '<span style="left:' + ((h * 60 - ini) / w * 100).toFixed(2) + '%">' + pad(h % 24) + ':00</span>';
+        return '<div class="ptB-linea" role="img" aria-label="En planta: ' + esc(t.map(function (s) { return hhmm(s[0]) + ' a ' + (s[2] ? 'ahora' : hhmm(s[1])); }).join(', ')) + '"><span class="ptB-pista"></span>' + segs + '</div>'
+            + '<div class="ptB-reglas" aria-hidden="true">' + reg + '</div>';
+    }
+
+    function ficha(p, panel) {
+        const F = FichaCfg, esHoy = fecha === hoyISO(), a = p.a;
+        const diaLargo = DIAS[fechaDe(fecha).getDay()].toLowerCase() + ' ' + dmy(fecha);
+        let accion = '';
+        if (esHoy && puede('porteria.art22')) {
+            const tipo = p.dentro ? 'S' : 'E';
+            accion = '<button type="button" class="fcB-btn ' + (tipo === 'E' ? 'ok' : 'pri') + '" data-a22-marcar="' + p.id + '" data-tipo="' + tipo + '">'
+                + '<i class="bi bi-box-arrow-' + (tipo === 'E' ? 'in-right' : 'right') + '" aria-hidden="true"></i>Registrar ' + palabra(tipo) + '</button>';
+        } else if (!esHoy) {
+            accion = '<button type="button" class="fcB-btn" data-a22-hoy>Ir a hoy para registrar</button>';
+        }
+        let h = F.cabeza(p.n, [p.cargo, p.area].filter(Boolean).join(' · '), accion);
+        if (p.marcas.length) {
+            h += '<div class="ptB-cifras">'
+                + '<div><small>Jornada' + (a.primera !== null ? ' (' + hhmm(a.primera) + ' a ' + (a.abierto !== null ? 'ahora' : hhmm(a.fin)) + ')' : '') + '</small><b class="num">' + (a.jornada !== null ? durR(a.jornada) : '—') + '</b></div>'
+                + '<div><small>Tiempo fuera de planta</small><b class="num">' + durR(a.fuera) + '</b></div>'
+                + '<div><small>Tiempo en planta</small><b class="num">' + dur(a.enPlanta) + '</b></div></div>'
+                + (a.incompleto ? '<p class="fcB-nota ptB-ojo"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Hay una marca sin su pareja (una ENTRADA sin SALIDA o al revés): ese tramo no suma horas.</p>' : '')
+                + F.seccion('Línea del ' + diaLargo) + linea(p);
+        }
+        h += F.seccion('Marcas del ' + diaLargo)
+            + (p.marcas.length
+                ? '<div class="ptB-marcas">' + p.marcas.map(function (m) {
+                    return '<div class="ptB-marca"><span class="ptB-mov ' + (m.tipo === 'E' ? 'e' : 's') + '">' + palabra(m.tipo) + '</span><b class="num">' + esc(String(m.hora).substring(0, 5)) + '</b>'
+                        + '<small>' + (m.registrado_por_nombre ? 'Registró ' + esc(m.registrado_por_nombre) : '&nbsp;') + '</small>'
+                        + (m.observaciones ? '<small class="obs">' + esc(m.observaciones) + '</small>' : '') + '</div>';
+                }).join('') + '</div>'
+                : '<p class="fcB-nota">' + (esHoy ? 'Todavía no tiene marcas hoy.' : 'No tuvo marcas este día.') + '</p>');
+        const lunes = lunesDe(fecha);
+        h += F.seccion('Su semana (' + dmy(lunes).slice(0, 5) + ' al ' + dmy(sumar(lunes, 6)) + ')') + '<div class="ptB-semana" id="a22-semana"><p class="fcB-vacio">Cargando la semana…</p></div>';
+        panel.innerHTML = h;
+        pintarSemana(p);
+    }
+
+    async function pintarSemana(p) {
+        const lunes = lunesDe(fecha), clave = p.id + '|' + lunes, hoy = hoyISO();
+        let s = semanas[clave];
         try {
-            const res = await fetch(`/api/articulo22/estado-dia/?fecha=${_fechaActual}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error API");
-            const data = await res.json();
-
-            document.getElementById('art22-stat-total').textContent = data.stats.total;
-            document.getElementById('art22-stat-presentes').textContent = data.stats.en_planta;
-            document.getElementById('art22-stat-sin').textContent = data.stats.sin_registro;
-
-            const body = document.getElementById('art22-estado-body');
-            if (!data.empleados.length) {
-                body.innerHTML = '<div class="text-center py-5 text-muted">No hay empleados Art. 22 configurados</div>';
-                return;
+            if (!s || Date.now() - s.t > 5 * 60000) {
+                const d = await leer('/api/articulo22/historial/?desde=' + lunes + '&hasta=' + sumar(lunes, 6) + '&empleado_id=' + p.id + '&limit=20');
+                s = semanas[clave] = { t: Date.now(), regs: d.registros || [] };
             }
-            body.innerHTML = data.empleados.map(emp => renderEmpleadoCard(emp)).join('');
-            initSliders();
         } catch (e) {
-            console.error(e);
-            const body = document.getElementById('art22-estado-body');
-            if (body) body.innerHTML = '<div class="text-center py-5 text-danger fw-bold">Error al cargar estado</div>';
+            const box = document.getElementById('a22-semana');
+            if (box) box.innerHTML = '<p class="fcB-vacio">' + esc(e.message) + '</p>';
+            return;
         }
-    }
-
-    function renderEmpleadoCard(emp) {
-        // Avatar initials
-        const parts = (emp.nombre || '').split(',');
-        const initials = parts.length > 1
-            ? (parts[0].trim()[0] || '') + (parts[1].trim()[0] || '')
-            : (emp.nombre || '').substring(0,2);
-
-        // Marks timeline — Gantt style
-        let marcasHtml = '';
-        if (emp.marcas && emp.marcas.length > 0) {
-            const segments = [];
-            let currentEntradaMinutes = null;
-
-            // Sort marks by time to be absolutely sure
-            const sortedMarcas = [...emp.marcas].sort((a, b) => a.hora.localeCompare(b.hora));
-
-            sortedMarcas.forEach(m => {
-                const parts = m.hora.split(':');
-                const minutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-                if (m.tipo === 'E') {
-                    if (currentEntradaMinutes === null) {
-                        currentEntradaMinutes = minutes;
-                    }
-                } else if (m.tipo === 'S') {
-                    if (currentEntradaMinutes !== null) {
-                        segments.push({ start: currentEntradaMinutes, end: minutes, ongoing: false });
-                        currentEntradaMinutes = null;
-                    } else {
-                        // Salida sin entrada previa hoy -> asumir dentro desde medianoche
-                        segments.push({ start: 0, end: minutes, ongoing: false });
-                    }
-                }
-            });
-
-            // If still inside at the end of marks list
-            if (currentEntradaMinutes !== null) {
-                const todayStr = (() => {
-                    const d = new Date();
-                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                })();
-                let endMin = 1440;
-                let isOngoing = false;
-                if (_fechaActual === todayStr && emp.estado === 'en_planta') {
-                    const now = new Date();
-                    endMin = Math.min(now.getHours() * 60 + now.getMinutes(), 1440);
-                    isOngoing = true;
-                }
-                segments.push({ start: currentEntradaMinutes, end: endMin, ongoing: isOngoing });
-            }
-
-            const nowPct = (() => {
-                const now = new Date();
-                return ((Math.min(now.getHours() * 60 + now.getMinutes(), 1440) / 1440) * 100).toFixed(2);
-            })();
-
-            const todayStr = (() => {
-                const d = new Date();
-                return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            })();
-            const isToday = (_fechaActual === todayStr);
-
-            // Generate the horizontal log badges for today's marcas
-            const logHtml = sortedMarcas.length > 0
-                ? `<div class="art22-log-container">
-                    <span class="art22-log-title">Marcaciones de Hoy</span>
-                    <div class="art22-log-flow">
-                        ${sortedMarcas.map((m, idx) => {
-                            const typeCls = m.tipo === 'E' ? 'e' : 's';
-                            const typeLabel = m.tipo === 'E' ? 'Entrada' : 'Salida';
-                            const isLast = idx === sortedMarcas.length - 1;
-                            const connector = !isLast 
-                                ? `<div class="art22-log-connector"><i class="bi bi-chevron-right"></i></div>`
-                                : '';
-                            return `
-                                <div class="art22-log-step">
-                                    <div class="art22-log-card ${typeCls}">
-                                        <div class="art22-log-card-header">
-                                            <span class="art22-log-dot"></span>
-                                            <span class="art22-log-time">${m.hora.substring(0,5)}</span>
-                                        </div>
-                                        <span class="art22-log-label">${typeLabel}</span>
-                                    </div>
-                                    ${connector}
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                   </div>`
-                : '';
-
-            marcasHtml = `
-                <div class="art22-gantt-backdrop">
-                    <!-- Regla de tiempo de fondo -->
-                    <span class="art22-gantt-grid-label h-main" style="left: 0%;">00:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 12.5%;">03:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 25%;">06:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 37.5%;">09:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 50%;">12:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 62.5%;">15:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 75%;">18:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 87.5%;">21:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 100%;">24:00</span>
-
-                    <!-- Pista Gantt -->
-                    <div class="art22-gantt-track">
-                        <div class="art22-gantt-grid-line" style="left: 12.5%;"></div>
-                        <div class="art22-gantt-grid-line" style="left: 25%;"></div>
-                        <div class="art22-gantt-grid-line" style="left: 37.5%;"></div>
-                        <div class="art22-gantt-grid-line" style="left: 50%;"></div>
-                        <div class="art22-gantt-grid-line" style="left: 62.5%;"></div>
-                        <div class="art22-gantt-grid-line" style="left: 75%;"></div>
-                        <div class="art22-gantt-grid-line" style="left: 87.5%;"></div>
-                        ${segments.map(seg => {
-                            const startPct = ((seg.start / 1440) * 100).toFixed(2);
-                            const widthPct = (((seg.end - seg.start) / 1440) * 100).toFixed(2);
-                            const cls = seg.ongoing ? 'ongoing' : '';
-                            return `<div class="art22-gantt-segment ${cls}" style="left: ${startPct}%; width: ${widthPct}%;"></div>`;
-                        }).join('')}
-                    </div>
-
-                    <!-- Pines y Tooltips de marcación -->
-                    ${(() => {
-                        const items = sortedMarcas.map(m => {
-                            const parts = m.hora.split(':');
-                            return {
-                                minutes: parseInt(parts[0]) * 60 + parseInt(parts[1]),
-                                label: m.tipo === 'E' ? 'Entrada' : 'Salida',
-                                timeStr: m.hora.substring(0, 5),
-                                isAhora: false,
-                                tipo: m.tipo
-                            };
-                        });
-
-                        if (isToday && emp.estado === 'en_planta') {
-                            const now = new Date();
-                            const nowMinutes = now.getHours() * 60 + now.getMinutes();
-                            items.push({
-                                minutes: nowMinutes,
-                                label: 'AHORA',
-                                timeStr: 'En Planta',
-                                isAhora: true,
-                                tipo: 'E'
-                            });
-                        }
-
-                        items.sort((a, b) => a.minutes - b.minutes);
-
-                        return items.map((item, index) => {
-                            const pct = ((item.minutes / 1440) * 100).toFixed(2);
-                            const cls = item.tipo === 'E' ? 'e' : 's';
-
-                            if (item.isAhora) {
-                                return `
-                                    <div class="art22-gantt-pulse-ring" style="left: ${pct}%"></div>
-                                    <div class="art22-gantt-pin-container" style="left: ${pct}%">
-                                        <div class="art22-gantt-pin e" style="background-color: #34d399; box-shadow: 0 0 8px #10b981;"></div>
-                                        <div class="art22-gantt-tooltip e">
-                                            <span class="tt-label">AHORA</span>
-                                            <span class="tt-time">En Planta</span>
-                                        </div>
-                                    </div>
-                                `;
-                            } else {
-                                return `
-                                    <div class="art22-gantt-pin-container" style="left: ${pct}%">
-                                        <div class="art22-gantt-pin ${cls}"></div>
-                                        <div class="art22-gantt-tooltip ${cls}">
-                                            <span class="tt-label">
-                                                <i class="bi ${item.tipo === 'E' ? 'bi-box-arrow-in-right' : 'bi-box-arrow-right'}"></i>
-                                                ${item.label}
-                                            </span>
-                                            <span class="tt-time">${item.timeStr}</span>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                        }).join('');
-                    })()}
-                </div>
-                ${logHtml}
-            `;
-        } else {
-            marcasHtml = `
-                <div class="art22-gantt-backdrop" style="margin-bottom: 5px;">
-                    <!-- Regla de tiempo de fondo -->
-                    <span class="art22-gantt-grid-label h-main" style="left: 0%;">00:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 12.5%;">03:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 25%;">06:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 37.5%;">09:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 50%;">12:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 62.5%;">15:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 75%;">18:00</span>
-                    <span class="art22-gantt-grid-label h-sub" style="left: 87.5%;">21:00</span>
-                    <span class="art22-gantt-grid-label h-main" style="left: 100%;">24:00</span>
-
-                    <div class="art22-gantt-track empty">
-                        <div class="art22-gantt-empty-text">Sin registros de marcación hoy</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Estadía
-        const estadiaHtml = emp.estadia_display !== '—'
-            ? `<span class="art22-estadia-val">${emp.estadia_display}</span>`
-            : '<span style="color:#94a3b8">—</span>';
-
-        // Live Halo around Avatar
-        const liveClass = emp.estado === 'en_planta' ? 'live-in' : (emp.estado === 'fuera' ? 'live-out' : '');
-        const badgeClass = emp.estado === 'en_planta' ? 'in' : (emp.estado === 'fuera' ? 'out' : 'none');
-
-        // Dynamic Slide-to-Action control
-        const proximaTipo = (!emp.marcas || emp.marcas.length === 0 || emp.marcas[emp.marcas.length - 1].tipo === 'S') ? 'Entrada' : 'Salida';
-        const sliderClass = proximaTipo === 'Entrada' ? 'slider-e' : 'slider-s';
-        const handleClass = proximaTipo === 'Entrada' ? 'handle-e' : 'handle-s';
-        const sliderText = proximaTipo === 'Entrada' ? 'Deslizar ENTRADA' : 'Deslizar SALIDA';
-        const handleIcon = proximaTipo === 'Entrada' ? 'bi-chevron-right' : 'bi-chevron-left';
-
-        const sliderHtml = `
-            <div class="art22-slider-container ${sliderClass}" data-emp-id="${emp.empleado_id}" data-proxima-tipo="${proximaTipo}">
-                <div class="art22-slider-handle ${handleClass}">
-                    <i class="bi ${handleIcon}"></i>
-                </div>
-                <span class="art22-slider-text">${sliderText}</span>
-            </div>
-        `;
-
-        return `
-            <div class="art22-emp-card estado-${emp.estado}">
-                <div class="art22-card-header">
-                    <div class="art22-card-top">
-                        <div class="art22-card-identity">
-                            <div class="art22-avatar ${liveClass}">
-                                ${initials.toUpperCase()}
-                                <div class="art22-avatar-badge ${badgeClass}"></div>
-                            </div>
-                            <div class="art22-card-info">
-                                <div class="art22-card-name">${window.nombreTitulo(String(emp.nombre || '').replace(/\s*\.\s*,/, ','))}</div>
-                                <div class="art22-card-cargo">${emp.cargo || ''}</div>
-                            </div>
-                        </div>
-                        ${sliderHtml}
-                    </div>
-                    <div class="art22-card-meta-row">
-                        <span class="art22-area-badge" style="margin-top: 0;">${emp.area || ''}</span>
-                        <div class="art22-card-estadia">
-                            <div class="art22-estadia-label">Estadía:</div>
-                            ${estadiaHtml}
-                        </div>
-                        <div class="art22-status-widget ${badgeClass}">
-                            <span class="radar-dot"></span>
-                            <span>${emp.estado === 'en_planta' ? 'En planta' : (emp.estado === 'fuera' ? 'Fuera' : 'Sin registro')}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="art22-gantt-container">
-                    ${marcasHtml}
-                </div>
-            </div>`;
-    }
-
-    // ════════════════════════════════════════════════
-    // MARCAR
-    // ════════════════════════════════════════════════
-    async function marcar(empleadoId, btn) {
-        let originalHtml = "";
-        const isSlider = btn && btn.classList.contains('art22-slider-container');
-        if (btn) {
-            if (isSlider) {
-                btn.classList.add('locked');
+        const box = document.getElementById('a22-semana');
+        if (!box || FichaCfg.elegidoDe('art22') !== String(p.id)) return;
+        const filas = [];
+        for (let i = 0; i < 7; i++) {
+            const f = sumar(lunes, i);
+            let r = s.regs.find(function (x) { return x.fecha === f; }) || null;
+            let txt, min = 0, ojo = false;
+            if (f === fecha) {
+                // El día elegido se toma de las marcas en pantalla (hoy, hasta este minuto)
+                min = p.a.enPlanta;
+                txt = p.marcas.length ? (p.a.primera !== null ? hhmm(p.a.primera) + ' a ' + (p.a.abierto !== null ? 'ahora' : (p.a.fin !== null ? hhmm(p.a.fin) : '—')) + ' · ' : '') + dur(min) : 'Sin marcas';
+                ojo = p.a.incompleto;
+            } else if (r) {
+                min = r.estadia_min || 0;
+                txt = (r.primera_entrada ? r.primera_entrada.substring(0, 5) : '—') + ' a ' + (r.ultima_salida ? r.ultima_salida.substring(0, 5) : 'sin SALIDA') + ' · ' + r.estadia_display;
+                ojo = !!r.incompleto;
             } else {
-                btn.disabled = true;
-                originalHtml = btn.innerHTML;
-                btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>`;
+                txt = f > hoy ? '' : 'Sin marcas';
             }
+            filas.push({ f: f, txt: txt, min: min, ojo: ojo });
         }
+        const max = Math.max(60, Math.max.apply(null, filas.map(function (x) { return x.min; })));
+        box.innerHTML = filas.map(function (x) {
+            const d = fechaDe(x.f);
+            return '<div class="ptB-sd' + (x.f === fecha ? ' hoy' : '') + '"><span>' + DIAS_C[d.getDay()] + ' ' + d.getDate() + '</span>'
+                + '<span class="ptB-sb"><span style="width:' + (x.min / max * 100).toFixed(1) + '%"></span></span>'
+                + '<span class="num' + (x.ojo ? ' ojo' : '') + '">' + esc(x.txt) + (x.ojo ? ' · marca sin pareja' : '') + '</span></div>';
+        }).join('');
+    }
+
+    // ── datos y acciones ───────────────────────────────────────
+    async function recargar() {
         try {
-            const res = await fetch('/api/articulo22/marcar/', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ empleado_id: empleadoId })
-            });
-            if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Error'); }
-            const data = await res.json();
-            if (typeof showToast === 'function') {
-                const icon = data.tipo === 'E' ? '🟢' : '🔴';
-                showToast(`${icon} ${data.tipo_label}: ${data.nombre} a las ${data.hora.substring(0,5)}`, 'success');
-            }
-            await cargarEstadoDia();
+            datos = await leer('/api/articulo22/estado-dia/?fecha=' + fecha);
+            error = null;
         } catch (e) {
-            console.error(e);
-            if (btn) {
-                if (isSlider) {
-                    btn.classList.remove('locked');
-                    const handle = btn.querySelector('.art22-slider-handle');
-                    const text = btn.querySelector('.art22-slider-text');
-                    if (handle) {
-                        handle.style.transform = 'translateX(0px)';
-                        const proximaTipo = btn.dataset.proximaTipo;
-                        const icon = proximaTipo === 'Entrada' ? 'bi-chevron-right' : 'bi-chevron-left';
-                        handle.innerHTML = `<i class="bi ${icon}"></i>`;
-                    }
-                    if (text) text.style.opacity = '1';
-                } else {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
-            }
-            if (typeof Swal !== 'undefined') Swal.fire('Error', e.message, 'error');
+            error = e.message;
+            if (datos) aviso(e.message, 'danger');
         }
+        pintar();
     }
 
-    // ════════════════════════════════════════════════
-    // HISTORIAL
-    // ════════════════════════════════════════════════
-    async function cargarEmpleadosFiltro() {
-        const sel = document.getElementById('art22-hist-emp');
-        if (!sel) return;
-        try {
-            const res = await fetch('/api/articulo22/empleados/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
-            if (!res.ok) return;
-            const lista = await res.json();
-            const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-            sel.innerHTML = '<option value="">Todos</option>' + lista.map(e =>
-                '<option value="' + e.id + '">' + esc((window.nombrePersona || String)(((e.apellido_paterno || '') + ' ' + (e.apellido_materno || '')).trim() + ', ' + (e.nombre || ''))) + '</option>').join('');
-        } catch (e) { console.error(e); }
+    async function cambiarDia(f) {
+        if (!f) return;
+        fecha = f > hoyISO() ? hoyISO() : f;
+        datos = null;
+        pintar();
+        await recargar();
     }
 
-    function _historialParams() {
-        const desde = document.getElementById('art22-hist-desde')?.value;
-        const hasta = document.getElementById('art22-hist-hasta')?.value;
-        const emp = document.getElementById('art22-hist-emp')?.value;
-        return { desde, hasta, emp };
+    async function marcar(btn) {
+        const id = parseInt(btn.dataset.a22Marcar, 10), tipo = btn.dataset.tipo;
+        const p = personas().find(function (x) { return x.id === id; });
+        if (!p) return;
+        const ahora = hhmm(ahoraMin());
+        if (typeof uiConfirm === 'function') {
+            preguntando = true;
+            let si = false;
+            try { si = await uiConfirm('¿Registrar la ' + palabra(tipo) + '?', { quien: p.n, items: ['Artículo 22 · hora ' + ahora], confirmText: 'Registrar ' + palabra(tipo) }); }
+            finally { preguntando = false; }
+            if (!si) return;
+        }
+        await FichaCfg.trabajando(btn, async function () {
+            try {
+                const r = await fetch('/api/articulo22/marcar/', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, cabeceras()), body: JSON.stringify({ empleado_id: id }) });
+                const d = await r.json().catch(function () { return {}; });
+                if (!r.ok) throw new Error(d.detail || 'No se pudo registrar.');
+                aviso(palabra(d.tipo || tipo) + ' registrada: ' + nombre(d.nombre || p.n) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : ''));
+                Object.keys(semanas).forEach(function (k) { if (k.indexOf(id + '|') === 0) delete semanas[k]; });
+            } catch (e) { aviso(e.message || 'No se pudo registrar.', 'danger'); }
+        });
+        await recargar();
     }
 
-    async function descargarExcel() {
-        const { desde, hasta, emp } = _historialParams();
-        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Faltan las fechas. Elija desde y hasta.', 'warning'); return; }
-        try {
-            const res = await fetch(`/api/articulo22/exportar-excel/?desde=${desde}&hasta=${hasta}${emp ? '&empleado_id=' + emp : ''}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) {
-                let msg = 'No se pudo generar el Excel';
-                try { msg = (await res.json()).detail || msg; } catch (_) {}
-                if (typeof showToast === 'function') showToast(msg, 'warning');
+    async function descargarExcel(btn) {
+        const desde = document.getElementById('a22-x-desde').value, hasta = document.getElementById('a22-x-hasta').value, emp = document.getElementById('a22-x-emp').value;
+        if (!desde || !hasta) { aviso('Faltan las fechas. Elija desde y hasta.', 'warning'); return; }
+        if (desde > hasta) { aviso('La fecha «desde» es posterior a «hasta».', 'warning'); return; }
+        await FichaCfg.trabajando(btn, async function () {
+            try {
+                const r = await fetch('/api/articulo22/exportar-excel/?desde=' + desde + '&hasta=' + hasta + (emp ? '&empleado_id=' + emp : ''), { headers: cabeceras() });
+                if (!r.ok) { let m = 'No se pudo generar el Excel.'; try { m = (await r.json()).detail || m; } catch (_) {} throw new Error(m); }
+                const blob = await r.blob(), a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'articulo22_' + desde + '_a_' + hasta + (emp ? '_emp' + emp : '') + '.xlsx';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+            } catch (e) { aviso(e.message || 'No se pudo descargar el Excel.', 'danger'); }
+        });
+    }
+
+    let oyentes = false;
+    function escuchar() {
+        if (oyentes) return;
+        oyentes = true;
+        document.addEventListener('click', function (ev) {
+            const c = cont();
+            if (!c || !c.contains(ev.target)) return;
+            const b = ev.target.closest('button');
+            if (!b) return;
+            if (b.dataset.a22Dia) { cambiarDia(sumar(fecha, parseInt(b.dataset.a22Dia, 10))); return; }
+            if (b.hasAttribute('data-a22-hoy')) { cambiarDia(hoyISO()); return; }
+            if (b.hasAttribute('data-a22-recargar')) { recargar(); return; }
+            if (b.hasAttribute('data-a22-excel')) {
+                excelAbierto = !excelAbierto;
+                const x = document.getElementById('a22-excel');
+                if (x) x.classList.toggle('d-none', !excelAbierto);
+                c.querySelectorAll('.fcB-acc [data-a22-excel]').forEach(function (k) { k.setAttribute('aria-expanded', excelAbierto); });
                 return;
             }
-            const blob = await res.blob();
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `articulo22_${desde}_a_${hasta}${emp ? '_emp' + emp : ''}.xlsx`;
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-        } catch (e) { console.error(e); if (typeof showToast === 'function') showToast('No se pudo descargar el Excel. Vuelva a intentarlo.', 'danger'); }
+            if (b.hasAttribute('data-a22-descargar')) { descargarExcel(b); return; }
+            if (b.dataset.a22Marcar) { marcar(b); }
+        });
+        document.addEventListener('change', function (ev) {
+            if (ev.target && ev.target.id === 'a22-fecha') cambiarDia(ev.target.value);
+        });
     }
 
-    function _renderResumen(r) {
-        const box = document.getElementById('art22-hist-resumen');
-        if (!box) return;
-        if (!r) { box.style.display = 'none'; box.innerHTML = ''; return; }
-        const f = (x) => x ? x.split('-').reverse().join('-') : '—';
-        box.style.display = 'block';
-        box.innerHTML = `<div class="d-flex flex-wrap gap-4 align-items-center px-3 py-3 border-bottom" style="background:#f0fdf4; font-size:0.85rem; color:#14532d">
-            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Jornada total</div><div style="font-size:1.1rem; font-weight:700">${r.jornada_display}</div></div>
-            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Tiempo fuera</div><div style="font-size:1.1rem; font-weight:700; color:#b45309">− ${r.fuera_display}</div></div>
-            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Estadía total en planta</div><div style="font-size:1.4rem; font-weight:800">${r.estadia_display} <span style="font-size:.85rem; font-weight:600">(${r.horas_decimal} h)</span></div></div>
-            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Días con marcas</div><div style="font-size:1.1rem; font-weight:700">${r.dias}</div></div>
-            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Promedio por día</div><div style="font-size:1.1rem; font-weight:700">${r.promedio_dia_display}</div></div>
-            <div><div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:.06em; opacity:.8">Primera / última marca</div><div style="font-size:1.1rem; font-weight:700">${f(r.primera_fecha)} · ${f(r.ultima_fecha)}</div></div>
-            ${r.dias_incompletos ? `<div style="color:#9a3412"><i class="bi bi-exclamation-triangle-fill me-1"></i>${r.dias_incompletos} día(s) con una marca sin par (no suman horas)</div>` : ''}
-        </div>`;
+    async function initTab() {
+        escuchar();
+        if (fecha !== hoyISO() && !datos) fecha = hoyISO();
+        pintar();
+        await recargar();
+        if (temporizador) clearInterval(temporizador);
+        temporizador = setInterval(function () {
+            const pane = document.getElementById('tab-ingreso-art22');
+            if (!pane || !pane.classList.contains('active') || !document.querySelector('#page-porteria.active') || document.visibilityState !== 'visible') return;
+            if (preguntando || fecha !== hoyISO()) return;
+            const act = document.activeElement;
+            if (act && act.closest && act.closest('#a22-excel')) return;
+            recargar();
+        }, REFRESCO_MS);
     }
 
-    async function cargarHistorial(page = 1) {
-        const { desde, hasta, emp } = _historialParams();
-        const tbody = document.getElementById('art22-historial-tbody');
-        const pagDiv = document.getElementById('art22-historial-pagination');
-        if (!desde || !hasta) { if (typeof showToast === 'function') showToast('Faltan las fechas. Elija desde y hasta.', 'warning'); return; }
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+    function destroy() { if (temporizador) { clearInterval(temporizador); temporizador = null; } }
 
-        try {
-            const res = await fetch(`/api/articulo22/historial/?desde=${desde}&hasta=${hasta}&page=${page}${emp ? '&empleado_id=' + emp : ''}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-            });
-            if (!res.ok) throw new Error("Error");
-            const data = await res.json();
-            _renderResumen(data.resumen);
-
-            if (!data.registros.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No hay registros en el período</td></tr>';
-                pagDiv.innerHTML = '';
-                return;
-            }
-
-            tbody.innerHTML = data.registros.map(r => {
-                const f = r.fecha.split('-');
-                const meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-                const fechaFmt = `${parseInt(f[2])} ${meses[parseInt(f[1])]} ${f[0]}`;
-                return `<tr>
-                    <td style="font-weight:500; color:#475569; white-space:nowrap">${fechaFmt}</td>
-                    <td style="font-weight:600; color:#1e293b">${(window.nombrePersona || String)(r.nombre)}</td>
-                    <td style="color:#475569">${r.cargo || ''}<br><span style="font-size: 0.75rem; color:#94a3b8">${r.area || ''}</span></td>
-                    <td style="color:#065f46; font-weight:500">${r.primera_entrada ? r.primera_entrada.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
-                    <td style="color:#9f1239; font-weight:500">${r.ultima_salida ? r.ultima_salida.substring(0,5) : '<span style="color:#94a3b8; font-style:italic">—</span>'}</td>
-                    <td class="text-center"><span class="art22-marcas-circle">${r.total_marcas}</span></td>
-                    <td class="text-end" style="color:#475569">${r.jornada_display || '<span style="color:#94a3b8">—</span>'}</td>
-                    <td class="text-end" style="color:${r.fuera_display && r.fuera_display !== '0h 00m' ? '#b45309' : '#475569'}">${r.fuera_display || '<span style="color:#94a3b8">—</span>'}</td>
-                    <td class="text-end" style="font-weight:700; color:#1e293b">${r.estadia_display}${r.incompleto ? ' <i class="bi bi-exclamation-triangle-fill" style="color:#d97706" title="Marca sin par (entrada sin salida): no suma horas"></i>' : ''}</td>
-                </tr>`;
-            }).join('');
-
-            if (data.pages > 1) {
-                let p = `<span>Mostrando ${data.page} de ${data.pages} (${data.total} registros)</span><div class="d-flex gap-1">`;
-                for (let i = 1; i <= Math.min(data.pages, 5); i++) {
-                    const cls = i === data.page ? 'btn-primary' : 'btn-outline-secondary';
-                    p += `<button class="btn btn-sm ${cls}" style="min-width:30px; font-size:0.75rem; padding:2px 8px; border-radius:4px" onclick="Articulo22Module.cargarHistorial(${i})">${i}</button>`;
-                }
-                p += '</div>';
-                pagDiv.innerHTML = p;
-            } else { pagDiv.innerHTML = `<span>${data.total} registro(s)</span>`; }
-        } catch (e) { console.error(e); tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error al cargar</td></tr>'; }
-    }
-
-    function destroy() { if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; } }
-
-    return { initTab, cargarEstadoDia, marcar, cargarHistorial, descargarExcel, destroy };
+    return { initTab: initTab, recargar: recargar, destroy: destroy };
 })();

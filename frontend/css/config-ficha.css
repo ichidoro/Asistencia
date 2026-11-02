@@ -75,6 +75,19 @@ textarea.fcB-inp { height: auto; padding: 8px 12px; resize: vertical; }
 .fcB-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 11px; border-radius: 8px; background: var(--fc-sunk); border: 1px solid var(--fc-line); font-size: 13px; color: var(--fc-ink-2); }
 .fcB-chip button { width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--fc-ink-3); display: inline-grid; place-items: center; cursor: pointer; }
 .fcB-chip button:hover { background: var(--fc-red-bg); color: var(--fc-red); }
+/* Lista con segunda línea, punto de estado y buscador (Portería, 02-11-2026) */
+.fcB-it .n .d { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; color: var(--fc-ink-3); }
+.fcB-it.sel .n .d { color: #4a5aa8; }
+.fcB-it .fcB-r { display: grid; justify-items: end; gap: 2px; text-align: right; }
+.fcB-est { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--fc-ink-2); font-weight: 600; }
+.fcB-est i { width: 8px; height: 8px; border-radius: 50%; background: #b7bfd2; flex: none; }
+.fcB-est.si i { background: var(--fc-ok); }
+.fcB-est.fuera i { background: #d08a2c; }
+.fcB-buscar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; background: #fff; border-bottom: 1px solid var(--fc-line-2); color: var(--fc-ink-3); }
+.fcB-buscar input { flex: 1; min-width: 0; height: 34px; border: 1px solid var(--fc-line); border-radius: 9px; padding: 0 10px; font: 500 14px 'Barlow', sans-serif; color: var(--fc-ink); background: #fff; }
+.fcB-buscar input:focus { outline: 0; border-color: var(--fc-navy); box-shadow: 0 0 0 3px rgba(27,47,143,.12); }
+.fcB-btn.ok { background: #16673b; border-color: #16673b; color: #fff; }
+.fcB-btn.ok:hover { background: #12552f; }
 
 @media (max-width: 991px) {
   .fcB-md { grid-template-columns: minmax(0, 1fr); }
@@ -88,3 +101,8 @@ textarea.fcB-inp { height: auto; padding: 8px 12px; resize: vertical; }
   .fcB-pie, .fcB-pie-d { width: 100%; }
   .fcB-pie-d .fcB-btn { flex: 1; }
 }
+.fcB-fh.con { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.fcB-fh.con > div:first-child { min-width: 0; flex: 1 1 260px; }
+.fcB-fh.con p { margin-bottom: 0; }
+.fcB-fh-a { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 600px) { .fcB-fh-a, .fcB-fh-a .fcB-btn { width: 100%; } .fcB-fh-a .fcB-btn { flex: 1; } }

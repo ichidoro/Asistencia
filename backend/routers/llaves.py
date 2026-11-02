@@ -148,13 +148,13 @@ async def listar_autorizados(
         placeholders = ','.join(['?' for _ in areas_filter])
         query += f" AND a.nombre IN ({placeholders})"
         params = areas_filter
-    query += " ORDER BY e.nombre, e.apellido_paterno"
+    query += " ORDER BY e.apellido_paterno, e.apellido_materno, e.nombre"
     rows = await db.fetch_all(query, tuple(params))
     return [
         {
             "id": r["id"],
             "rut": r["rut"],
-            "nombre": f"{r['nombre']} {r['apellido_paterno']} {r['apellido_materno']}",
+            "nombre": " ".join(p for p in (r["apellido_paterno"], r["apellido_materno"], r["nombre"]) if p),
             "area": r["area_nombre"]
         }
         for r in rows
