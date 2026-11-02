@@ -156,30 +156,30 @@ window.loadEstadosConfig = async function() {
 
 const COLOR_OPTIONS = [
     // ── Colores sólidos ──────────────────────────────────────────
-    { value: 'color-verde',    label: '🟢 Verde',         preview: '#10b981' },
-    { value: 'color-azul',     label: '🔵 Azul',          preview: '#3b82f6' },
-    { value: 'color-rojo',     label: '🔴 Rojo',          preview: '#ef4444' },
-    { value: 'color-amarillo', label: '🟡 Amarillo',      preview: '#f59e0b' },
-    { value: 'color-naranja',  label: '🟠 Naranja',       preview: '#f97316' },
-    { value: 'color-purpura',  label: '🟣 Púrpura',       preview: '#8b5cf6' },
-    { value: 'color-rosa',     label: '🩷 Rosa',           preview: '#f472b6' },
-    { value: 'color-cian',     label: '🩵 Cian',           preview: '#22d3ee' },
-    { value: 'color-lima',     label: '🍏 Lima',           preview: '#a3e635' },
-    { value: 'color-indigo',   label: '💜 Índigo',         preview: '#3f6fd6' },
-    { value: 'color-teal',     label: '🌊 Teal',           preview: '#14b8a6' },
-    { value: 'color-gris',     label: '⬜ Gris',           preview: '#64748b' },
-    { value: 'color-negro',    label: '⬛ Negro',          preview: '#1f2937' },
+    { value: 'color-verde',    label: 'Verde',         preview: '#10b981' },
+    { value: 'color-azul',     label: 'Azul',          preview: '#3b82f6' },
+    { value: 'color-rojo',     label: 'Rojo',          preview: '#ef4444' },
+    { value: 'color-amarillo', label: 'Amarillo',      preview: '#f59e0b' },
+    { value: 'color-naranja',  label: 'Naranja',       preview: '#f97316' },
+    { value: 'color-purpura',  label: 'Púrpura',       preview: '#8b5cf6' },
+    { value: 'color-rosa',     label: 'Rosa',           preview: '#f472b6' },
+    { value: 'color-cian',     label: 'Cian',           preview: '#22d3ee' },
+    { value: 'color-lima',     label: 'Lima',           preview: '#a3e635' },
+    { value: 'color-indigo',   label: 'Índigo',         preview: '#3f6fd6' },
+    { value: 'color-teal',     label: 'Teal',           preview: '#14b8a6' },
+    { value: 'color-gris',     label: 'Gris',           preview: '#64748b' },
+    { value: 'color-negro',    label: 'Negro',          preview: '#1f2937' },
     // ── Flúor (brillo neon) ──────────────────────────────────────
-    { value: 'color-fluor-verde',    label: '💚 Flúor Verde',    preview: '#b3f500' },
-    { value: 'color-fluor-azul',     label: '🩵 Flúor Azul',     preview: '#00d4ff' },
-    { value: 'color-fluor-amarillo', label: '💛 Flúor Amarillo', preview: '#ffe600' },
-    { value: 'color-fluor-rosa',     label: '🩷 Flúor Rosa',     preview: '#ff4dde' },
+    { value: 'color-fluor-verde',    label: 'Flúor Verde',    preview: '#b3f500' },
+    { value: 'color-fluor-azul',     label: 'Flúor Azul',     preview: '#00d4ff' },
+    { value: 'color-fluor-amarillo', label: 'Flúor Amarillo', preview: '#ffe600' },
+    { value: 'color-fluor-rosa',     label: 'Flúor Rosa',     preview: '#ff4dde' },
     // ── Intermitentes (animación) ────────────────────────────────
-    { value: 'color-pulso-rojo',  label: '🚨 Pulso Rojo',    preview: '#ef4444' },
-    { value: 'color-pulso-verde', label: '✅ Pulso Verde',   preview: '#b3f500' },
-    { value: 'color-pulso-azul',  label: '🔔 Pulso Azul',    preview: '#00d4ff' },
-    { value: 'color-glitter-oro',   label: '✨ Glitter Oro',   preview: '#f59e0b' },
-    { value: 'color-glitter-plata', label: '🪙 Glitter Plata', preview: '#94a3b8' },
+    { value: 'color-pulso-rojo',  label: 'Pulso Rojo',    preview: '#ef4444' },
+    { value: 'color-pulso-verde', label: 'Pulso Verde',   preview: '#b3f500' },
+    { value: 'color-pulso-azul',  label: 'Pulso Azul',    preview: '#00d4ff' },
+    { value: 'color-glitter-oro',   label: 'Glitter Oro',   preview: '#f59e0b' },
+    { value: 'color-glitter-plata', label: 'Glitter Plata', preview: '#94a3b8' },
 ];
 
 // ── Helpers de la pestaña Estados ───────────────────────────────────────────
@@ -720,7 +720,7 @@ function addBonoReglaRow(regla = null) {
                                 onclick="event.stopPropagation()"
                                 autocomplete="off">
                         </li>
-                        <li><a class="dropdown-item small py-2 cargo-item text-muted fst-italic" href="#" onclick="selectCargoRequerido(this, ''); return false;">✕ Limpiar selección</a></li>
+                        <li><a class="dropdown-item small py-2 cargo-item text-muted fst-italic" href="#" onclick="selectCargoRequerido(this, ''); return false;"><i class="bi bi-x-lg me-1" aria-hidden="true"></i>Limpiar selección</a></li>
                     </ul>
                 </div>
             </div>

@@ -1800,7 +1800,7 @@
 
     /* Landscape orientation hint for matrix page */
     #page-marcaciones::before {
-        content: "📱 Gira el celular para ver mejor la grilla";
+        content: "Gira el celular para ver mejor la grilla";
         display: block;
         background: linear-gradient(135deg, #eff6ff, #dbeafe);
         color: #1e40af;

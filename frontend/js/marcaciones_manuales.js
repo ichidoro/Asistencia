@@ -117,7 +117,7 @@ async function openAsistenciaActionModal(empId, dateStr, empNombre, horaEntrada 
         if (jaGeneral && jaGeneral.origen === 'COBERTURA_TURNO' && asistGeneral && (asistGeneral.horas_teoricas > 0 || asistGeneral.hora_entrada_real)) {
             const horasJa = jaGeneral.minutos_trabajados ? (Math.round(jaGeneral.minutos_trabajados / 60.0 * 10) / 10) : 0;
             const estadoJaBadge = jaGeneral.estado === 'HORAS_EXTRAS'
-                ? '<span class="badge bg-warning-subtle text-dark border border-warning fw-bold">⏱️ Horas Extras (50%)</span>'
+                ? '<span class="badge bg-warning-subtle text-dark border border-warning fw-bold"><i class="bi bi-stopwatch me-1" aria-hidden="true"></i>Horas Extras (50%)</span>'
                 : jaGeneral.estado === 'EXTRA'
                 ? '<span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">EXTRA Aprobada</span>'
                 : jaGeneral.estado === 'COMPENSATORIA'
@@ -2195,7 +2195,7 @@ window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
             const diffHours = ((dtRet - dtIni) / (1000 * 3600)).toFixed(1);
             const tagStr = c.tag || (c.consumida ? '(Consumida)' : '(Anomalía Libre)');
             const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : (!preselectedRetId && (c.recomendado || i === 0) ? 'selected' : '');
-            const starIcon = c.recomendado ? '⭐ ' : '';
+            const starIcon = c.recomendado ? 'Recomendada · ' : '';
             htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${starIcon}${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
         }
     }
@@ -2376,8 +2376,8 @@ window.onViajeLargoDestinoChange = function() {
         const horasDescansoSugeridas = totalReloj > 0 ? Math.max(0, Math.round((totalReloj - horasManejoSugeridas) * 2) / 2) : 0;
 
         cardSug.style.display = 'block';
-        txtDist.innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i> San Fernando ➔ ${ruta.nombre}: <strong>~${ruta.km_ida.toLocaleString()} km</strong> (Ida y Vuelta: <strong>~${kmTotal.toLocaleString()} km</strong>)`;
-        txtEst.innerHTML = `⏱️ Estimado Transporte: <strong>${horasManejoSugeridas.toFixed(1)}h</strong> manejo / servicio (${ruta.vel_prom} km/h) &nbsp;|&nbsp; 🛌 <strong>${horasDescansoSugeridas.toFixed(1)}h</strong> descanso sugerido`;
+        txtDist.innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i> San Fernando → ${ruta.nombre}: <strong>~${ruta.km_ida.toLocaleString()} km</strong> (Ida y Vuelta: <strong>~${kmTotal.toLocaleString()} km</strong>)`;
+        txtEst.innerHTML = `<i class="bi bi-stopwatch me-1" aria-hidden="true"></i>Estimado transporte: <strong>${horasManejoSugeridas.toFixed(1)}h</strong> manejo / servicio (${ruta.vel_prom} km/h) &nbsp;|&nbsp; <i class="bi bi-moon me-1" aria-hidden="true"></i><strong>${horasDescansoSugeridas.toFixed(1)}h</strong> descanso sugerido`;
         
         window._vl_sug_manejo = horasManejoSugeridas;
         window._vl_sug_descanso = horasDescansoSugeridas;
@@ -2386,8 +2386,8 @@ window.onViajeLargoDestinoChange = function() {
             const hManejoProp = Math.round((totalReloj * 0.45) * 2) / 2;
             const hDescProp = Math.max(0, Math.round((totalReloj - hManejoProp) * 2) / 2);
             cardSug.style.display = 'block';
-            txtDist.innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i> San Fernando ➔ ${val} (Destino Personalizado)`;
-            txtEst.innerHTML = `⏱️ Proporción Estándar Transporte: <strong>${hManejoProp.toFixed(1)}h</strong> manejo (~45%) &nbsp;|&nbsp; 🛌 <strong>${hDescProp.toFixed(1)}h</strong> descanso (~55%)`;
+            txtDist.innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i> San Fernando → ${val} (Destino Personalizado)`;
+            txtEst.innerHTML = `<i class="bi bi-stopwatch me-1" aria-hidden="true"></i>Proporción estándar de transporte: <strong>${hManejoProp.toFixed(1)}h</strong> manejo (~45%) &nbsp;|&nbsp; <i class="bi bi-moon me-1" aria-hidden="true"></i><strong>${hDescProp.toFixed(1)}h</strong> descanso (~55%)`;
             window._vl_sug_manejo = hManejoProp;
             window._vl_sug_descanso = hDescProp;
         } else {
@@ -2468,7 +2468,7 @@ window.aplicarSugerenciaRuta = function() {
         const kmStr = ruta ? `~${(ruta.km_ida * 2).toLocaleString()} km I/V` : '';
         const obsEl = document.getElementById('vl-observaciones');
         if (obsEl && !obsEl.value) {
-            obsEl.value = `Ruta San Fernando ➔ ${nomRuta} (${kmStr}). Estimación de ruta: ~${window._vl_sug_manejo.toFixed(1)}h conducción/servicio + ~${window._vl_sug_descanso.toFixed(1)}h descanso/esperas en ruta.`;
+            obsEl.value = `Ruta San Fernando → ${nomRuta} (${kmStr}). Estimación de ruta: ~${window._vl_sug_manejo.toFixed(1)}h conducción/servicio + ~${window._vl_sug_descanso.toFixed(1)}h descanso/esperas en ruta.`;
         }
         window.evaluarAlertasContextualesViajeLargo();
     }

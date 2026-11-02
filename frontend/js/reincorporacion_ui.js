@@ -53,9 +53,9 @@ window.openReincorporarWizard = async function(id) {
         console.error("Error inicializando wizard:", error);
         document.getElementById('reinc-sync-diff').innerHTML = `
             <div class="alert alert-danger py-2">
-                ❌ Error al conectar con BioAlba: ${error.message}
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>No se pudo conectar con BioAlba: ${error.message}
             </div>
-            <button class="btn btn-sm btn-outline-primary" onclick="reincFetchBioAlbaDiff()">🔄 Reintentar</button>
+            <button class="btn btn-sm btn-outline-primary" onclick="reincFetchBioAlbaDiff()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Reintentar</button>
         `;
     }
 };
@@ -82,7 +82,7 @@ async function reincFetchBioAlbaDiff() {
         if (!sourceData) {
             container.innerHTML = `
                 <div class="alert alert-warning">
-                    ⚠️ <strong>Empleado no encontrado en BioAlba.</strong> 
+                    <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i><strong>Empleado no encontrado en BioAlba.</strong> 
                     Debe estar creado en la fuente de verdad antes de reincorporar.
                 </div>
             `;
@@ -147,7 +147,7 @@ function reincUpdateUI() {
     document.querySelectorAll('.reinc-step-indicator').forEach((l, idx) => {
         if (idx + 1 < reincState.step) {
             l.className = 'reinc-step-indicator completed';
-            l.innerHTML = '✓';
+            l.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i>';
         } else if (idx + 1 === reincState.step) {
             l.className = 'reinc-step-indicator active';
             l.innerHTML = idx + 1;
@@ -222,7 +222,7 @@ async function reincLoadTurnos(area) {
         const turnos = await response.json();
         
         if (turnos.length === 0) {
-            select.innerHTML = '<option value="">❌ No hay turnos creados para esta área</option>';
+            select.innerHTML = '<option value="">No hay turnos creados para esta área</option>';
             return;
         }
         
@@ -242,7 +242,7 @@ async function reincLoadTurnos(area) {
         select.dispatchEvent(new Event('change'));
             
     } catch (e) {
-        select.innerHTML = '<option value="">❌ Error cargando turnos</option>';
+        select.innerHTML = '<option value="">No se pudieron cargar los turnos</option>';
     }
 }
 

@@ -457,7 +457,7 @@ const VisitasModule = (() => {
             }
         } catch (err) {
             console.error('Error OCR:', err);
-            statusText.textContent = '❌ Error: ' + err.message;
+            statusText.textContent = 'No se pudo leer la cédula: ' + err.message;
             if (typeof showToast === 'function') showToast('No se pudo leer la imagen. ' + err.message, 'danger');
             _ocrProcessing = false;
             setTimeout(() => status?.classList.remove('show'), 3000);

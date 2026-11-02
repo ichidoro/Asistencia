@@ -452,7 +452,7 @@ const Productos4Module = {
         const obsVal = sel.observaciones || "";
 
         Swal.fire({
-            title: `<span class="fw-bold fs-5">🎁 Asignar Productos a ${emp.nombre}</span>`,
+            title: `<span class="fw-bold fs-5">Asignar productos a ${emp.nombre}</span>`,
             html: `
                 <div class="text-start mt-3">
                     <p class="small text-muted mb-4">Seleccione hasta 4 productos propios. La interfaz validará en tiempo real que no exceda las cantidades máximas definidas por producto.</p>
@@ -683,8 +683,9 @@ const Productos4Module = {
                 // Si ya fue seleccionado tantas veces como su límite, y no es el valor actual de este dropdown
                 if (currentCount >= prod.max_cantidad && code !== currentValue) {
                     opt.disabled = true;
-                    if (!opt.innerText.startsWith("🔒")) {
-                        opt.innerText = `🔒 ${prod.codigo} · [${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Límite Máx alcanzado]`;
+                    if (!opt.dataset.limite) {
+                        opt.dataset.limite = "1";
+                        opt.innerText = `${prod.codigo} · [${prod.tipo}] ${prod.descripcion} (${prod.unidad}) [Límite Máx alcanzado]`;
                     }
                 } else {
                     opt.disabled = false;

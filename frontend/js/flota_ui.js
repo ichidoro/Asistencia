@@ -997,7 +997,7 @@ const FlotaModule = (() => {
 
         if (areasFiltradas.length === 0) {
             Swal.fire({
-                title: '⚠️ Sin áreas configuradas',
+                title: 'Sin áreas configuradas',
                 html: 'Antes de registrar un vehículo, debes habilitar al menos un área para flota.<br><br>Ve a la pestaña de <b>Áreas</b> y activa la casilla <b>"Aplica para Flota"</b> en el área que desees.',
                 icon: 'warning',
                 confirmButtonText: 'Entendido'
@@ -1009,7 +1009,7 @@ const FlotaModule = (() => {
             <option value="${a.id}" ${areaId === a.id ? 'selected' : ''}>${a.nombre}</option>
         `).join('');
 
-        const titulo = id ? '✏️ Editar Vehículo' : '🚛 Registrar Vehículo en Flota';
+        const titulo = id ? 'Editar vehículo' : 'Registrar vehículo en la flota';
         
         Swal.fire({
             title: titulo,
@@ -1054,7 +1054,7 @@ const FlotaModule = (() => {
                     
                     const duplicado = vehiculosExistentes.find(v => v.patente === pat && v.id !== id);
                     if (duplicado) {
-                        errorDiv.textContent = `⚠️ La patente ${pat} ya está registrada en: ${duplicado.area_nombre}.`;
+                        errorDiv.textContent = `La patente ${pat} ya está registrada en ${duplicado.area_nombre}.`;
                         errorDiv.classList.remove('d-none');
                         confirmBtn.disabled = true;
                     } else {

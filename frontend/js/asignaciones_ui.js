@@ -154,7 +154,7 @@ async function loadAsignacionesMatrix() {
             _asignacionesAreaCache = area;
         } catch (err) {
             console.error("Error loadAsignacionesMatrix:", err);
-            container.innerHTML = `<tr><td colspan="32" class="text-center py-5 text-danger">⚠️ Error: ${err.message}</td></tr>`;
+            container.innerHTML = `<tr><td colspan="32" class="text-center py-5 text-danger">No se pudo cargar: ${err.message}</td></tr>`;
             return;
         }
     }

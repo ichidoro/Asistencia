@@ -708,7 +708,7 @@ const ReglasMarcasModule = (() => {
             + '<button type="button" class="rmx-btn rmx-btn-sec" id="rm-ver-dias">Ver los días</button>'
             // Paso 1 «Guardar» y paso 2 «Correr»: el 1 está gris solo cuando no hay nada nuevo que guardar (pedido del dueño, 27-10-2026).
             + (edit ? '<button type="button" class="rmx-btn rmx-btn-pri" id="rm-guardar"' + (_hayCambios(r) ? '' : ' disabled title="No hay cambios por guardar: ya puede correr la regla (paso 2)."') + '>'
-                + (_hayCambios(r) ? '1. Guardar cambios' : '1. Guardado ✓') + '</button>' : '')
+                + (_hayCambios(r) ? '1. Guardar cambios' : '1. Guardado <i class="bi bi-check-lg" aria-hidden="true"></i>') + '</button>' : '')
             + (puede && data.motor_conectado
                 ? (r.activa ? '<button type="button" class="rmx-btn rmx-btn-no" id="rm-correr" data-encender="0">Apagar esta regla</button>'
                             : '<button type="button" class="rmx-btn rmx-btn-ok" id="rm-correr" data-encender="1">' + (edit ? '2. ' : '') + 'Correr esta regla</button>')

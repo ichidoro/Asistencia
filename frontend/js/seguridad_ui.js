@@ -51,8 +51,8 @@ const MAPA_UI_PERMISOS = {
     'marcaciones.editar':        { module: 'MARCACIONES', action: 'Editar',        description: 'Editar horas, relleno masivo, tramos, perdonazo', permissions: ['marcaciones.editar'] },
     'marcaciones.justificar':    { module: 'MARCACIONES', action: 'Justificar',    description: 'Crear y editar justificaciones de asistencia',  permissions: ['marcaciones.justificar'] },
     'marcaciones.horas_extras':  { module: 'MARCACIONES', action: 'Horas Extras',  description: 'Aprobar/rechazar horas extras',                 permissions: ['marcaciones.horas_extras'] },
-    'marcaciones.cierre_periodo':{ module: 'MARCACIONES', action: 'Cierre',        description: 'Cerrar y sellar período ⚠️ Contable',           permissions: ['marcaciones.cierre_periodo'] },
-    'marcaciones.bypass_cierre': { module: 'MARCACIONES', action: 'Bypass Cierre', description: 'Editar meses ya cerrados ⚠️ Alto Riesgo',       permissions: ['marcaciones.bypass_cierre'] },
+    'marcaciones.cierre_periodo':{ module: 'MARCACIONES', action: 'Cierre',        description: 'Cerrar y sellar período (contable)',           permissions: ['marcaciones.cierre_periodo'] },
+    'marcaciones.bypass_cierre': { module: 'MARCACIONES', action: 'Bypass Cierre', description: 'Editar meses ya cerrados (alto riesgo)',       permissions: ['marcaciones.bypass_cierre'] },
     'marcaciones.sincronizar':   { module: 'MARCACIONES', action: 'Sincronizar',   description: 'Sincronizar y reprocesar desde toolbar',        permissions: ['marcaciones.sincronizar'] },
     // «Días Compensatorios» (marcaciones.intercambio) ya no tiene botón: compensar se hace con este único permiso (27-10-2026)
     'marcaciones.compensar':     { module: 'MARCACIONES', action: 'Compensar Inasistencias', description: 'Compensar una inasistencia con una jornada EXTRA o con horas extra, y quitar la compensación', permissions: ['marcaciones.compensar'] },
@@ -72,9 +72,9 @@ const MAPA_UI_PERMISOS = {
     'configuracion.calendario':     { module: 'CONFIGURACIÓN', action: 'Calendario',     description: 'Gestionar feriados',                            permissions: ['configuracion.calendario'] },
     'configuracion.correo':         { module: 'CONFIGURACIÓN', action: 'Correo',         description: 'Configurar SMTP y alertas por área',            permissions: ['configuracion.correo'] },
     'configuracion.estados':        { module: 'CONFIGURACIÓN', action: 'Estados',        description: 'Editar estados de asistencia',                  permissions: ['configuracion.estados'] },
-    'configuracion.seguridad':      { module: 'CONFIGURACIÓN', action: 'Seguridad',      description: 'Gestionar usuarios y roles ⚠️ Riesgo Máximo',   permissions: ['configuracion.seguridad'] },
-    'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: '🧙 Wizard de Inicialización BioAlba (header)',   permissions: ['configuracion.wizard'] },
-    'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de BD y modo ⚠️ Solo Admin',        permissions: ['configuracion.sistema'] },
+    'configuracion.seguridad':      { module: 'CONFIGURACIÓN', action: 'Seguridad',      description: 'Gestionar usuarios y roles (riesgo máximo)',   permissions: ['configuracion.seguridad'] },
+    'configuracion.wizard':         { module: 'CONFIGURACIÓN', action: 'Wizard',         description: 'Asistente de inicialización de BioAlba',   permissions: ['configuracion.wizard'] },
+    'configuracion.sistema':        { module: 'CONFIGURACIÓN', action: 'Sistema',        description: 'Diagnóstico de la base y modo (solo administrador)',        permissions: ['configuracion.sistema'] },
     'configuracion.flota':          { module: 'CONFIGURACIÓN', action: 'Pestaña Flota',     description: 'Gestionar vehículos de la flota (CRUD) de Aguacol', permissions: ['configuracion.flota'] },
     'configuracion.editar':         { module: 'CONFIGURACIÓN', action: 'Áreas, Cargos y Períodos', description: 'Crear, editar y eliminar áreas, cargos y períodos de asistencia; catálogo de Portería', permissions: ['configuracion.editar'] },
 
@@ -392,7 +392,7 @@ window.marcarAreasUsuario = function (marcar) {
 window.openUserModal = async function () {
     ensureModalInstances();
     const title = document.getElementById('modalUsuarioTitle');
-    if (title) title.textContent = "👤 Nuevo Usuario Operador";
+    if (title) title.textContent = "Nuevo usuario";
     document.getElementById('formUsuario').reset();
     document.getElementById('user-id').value = "";
     document.getElementById('user-username').disabled = false;
@@ -410,7 +410,7 @@ window.editUsuario = async function (id) {
     if (!user) return;
     ensureModalInstances();
 
-    document.getElementById('modalUsuarioTitle').textContent = `👤 Editando: ${user.username}`;
+    document.getElementById('modalUsuarioTitle').textContent = `Editar usuario: ${user.username}`;
     document.getElementById('user-id').value = user.id;
     document.getElementById('user-username').value = user.username;
     document.getElementById('user-username').disabled = true;

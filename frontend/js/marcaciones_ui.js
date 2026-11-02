@@ -1312,7 +1312,7 @@ async function syncMarcacionesBioAlba(areas = null, fechaInicioOverride = null, 
         const duracion      = stats.duracion_segundos     ? parseFloat(stats.duracion_segundos).toFixed(1) : '—';
         const areasLabel    = areas ? `${areas.length} área${areas.length > 1 ? 's' : ''}` : 'Todas las áreas';
 
-        const iconoNuevas   = nuevas > 0 ? '🟢' : '⚪';
+        const iconoNuevas   = nuevas > 0 ? '<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i>' : '<i class="bi bi-dash-circle text-muted" aria-hidden="true"></i>';
         const mensajeExtra  = nuevas === 0
             ? '<p style="color:#64748b;font-size:0.85rem;margin-top:8px;">No hay marcaciones nuevas para el período. Los datos ya estaban actualizados.</p>'
             : '';
@@ -3924,7 +3924,7 @@ function renderBonoStatus(empId, bonoName, evaluations) {
 
     if (!b.califica) {
         // Perdió el bono
-        return `<span class="badge bg-danger" style="opacity:0.8;padding:0.4em 0.8em;min-width:55px;font-size:0.88em;" title="Motivo: ${b.motivo || ''}">✗ NO</span>`;
+        return `<span class="badge bg-danger" style="opacity:0.8;padding:0.4em 0.8em;min-width:55px;font-size:0.88em;" title="Motivo: ${b.motivo || ''}"><i class="bi bi-x-lg me-1" aria-hidden="true"></i>NO</span>`;
     }
 
     if (b.proporcional) {
@@ -3935,7 +3935,7 @@ function renderBonoStatus(empId, bonoName, evaluations) {
     }
 
     // Bono completo — verde
-    return `<span class="badge bg-success" style="padding:0.4em 1em;min-width:55px;font-size:0.95em;" title="Monto: $${montoFmt}&#10;${b.motivo || ''}">✓ SÍ</span>`;
+    return `<span class="badge bg-success" style="padding:0.4em 1em;min-width:55px;font-size:0.95em;" title="Monto: $${montoFmt}&#10;${b.motivo || ''}"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>SÍ</span>`;
 }
 
 
@@ -4552,7 +4552,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                     el('repr-day-label').textContent = 'Todo listo — puede revisar la grilla';
                     const bioAlbaNote = syncBioAlba ? ' (BioAlba + cálculo)' : '';
                     el('repr-resumen-texto').textContent =
-                        `${s.procesados} días procesados en ${elapsed}s${bioAlbaNote} ⋅ ✕ ${s.errores} errores`;
+                        `${s.procesados} días procesados en ${elapsed}s${bioAlbaNote} · ${s.errores} errores`;
 
                     const logEl = el('repr-log');
                     const okLine = document.createElement('div');
@@ -6562,7 +6562,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
         ${_I.atr!==undefined?`<td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.atr)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_atr||''}</td>`:''}
         ${_I.sad!==undefined?`<td class="text-center align-middle sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.sad)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_sad||''}</td>`:''}
         <td class="text-center align-middle ${r.cnt_inas>0?'text-danger fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.ina)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_inas||''}</td>
-        <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.esp)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_esp>0?r.cnt_esp+' ★':''}</td>
+        <td class="text-center align-middle ${r.cnt_esp>0?'text-info fw-bold':''} sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.esp)}px;${getStickyWidthStyleLocal('incidencias')}">${r.cnt_esp>0?r.cnt_esp+' <i class="bi bi-star-fill" aria-hidden="true"></i>':''}</td>
         <td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;left:${getStickyLeftLocal('incidencias', _I.tot)}px;${getStickyWidthStyleLocal('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))||''}</td>` : `<td class="text-center align-middle fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.78rem;border-left:3px solid #f59e0b;color:#f59e0b;left:${getStickyLeftLocal('incidencias')}px;${getStickyWidthStyleLocal('incidencias')}">${((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0))>0 ? '<i class="bi bi-flag-fill me-1"></i>' + ((r.cnt_per||0)+(r.cnt_atr||0)+(r.cnt_sad||0)+(r.cnt_inas||0)+(r.cnt_esp||0)) : ''}</td>`}
         ${showHE ? `
         ${_heFull?`<td class="text-center align-middle tabular-nums fw-bold sticky-premium-col" style="position:sticky; z-index:40; background:#f8fafc;font-size:0.8rem;border-left:3px solid #3b82f6;left:${getStickyLeftLocal('he', 0)}px;${getStickyWidthStyleLocal('he')}">${r.esBolsa ? '—' : (L.he_trabajadas>0?_fmtMin(L.he_trabajadas):'')}</td>`:''}
@@ -9115,7 +9115,7 @@ function _buildRichTooltipData(di, dateStr, dt, feriadoDesc, isWE, empInfo) {
         <div style="border: 1px solid ${borderStyle}; background-color: ${bgStyle}; border-radius: 6px; padding: 8px; margin-bottom: 12px; text-align: left;">
             <div style="color: ${badgeColor}; font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
                 <span><i class="bi bi-truck me-1"></i> ${badgeTitle}</span>
-                <span style="font-size: 0.6875rem; background-color: rgba(255,255,255,0.7); padding: 1px 6px; border-radius: 4px; border: 1px solid ${borderStyle}; display: inline-flex; align-items: center; text-transform: uppercase; color: ${badgeColor}; font-weight:700;"><i class="bi bi-geo-alt me-1"></i>${orig} ➔ ${dest}</span>
+                <span style="font-size: 0.6875rem; background-color: rgba(255,255,255,0.7); padding: 1px 6px; border-radius: 4px; border: 1px solid ${borderStyle}; display: inline-flex; align-items: center; text-transform: uppercase; color: ${badgeColor}; font-weight:700;"><i class="bi bi-geo-alt me-1"></i>${orig} → ${dest}</span>
             </div>
             <div style="font-size: 0.75rem; color: var(--text-primary, #1e293b); display: flex; flex-direction: column; gap: 3px; font-family: monospace;">
                 <div style="display:flex; justify-content:space-between;">
@@ -9428,7 +9428,7 @@ window.executeCondonacionMasiva = async function(empleadosIds, fechaInicio, fech
 
         Swal.fire({
             icon: isRevoke ? 'warning' : 'success',
-            title: isRevoke ? 'Condonación Revocada' : '✓ Perdonazo Aplicado',
+            title: isRevoke ? 'Condonación Revocada' : 'Perdonazo aplicado',
             html: `<b>${cuenta}</b> registro(s) ${accion}.<br><small class="text-muted">${tipotxt}</small>`,
             timer: 2500,
             showConfirmButton: false

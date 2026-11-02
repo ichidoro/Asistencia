@@ -1187,6 +1187,7 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 /* --- Universo de Celebraciones (Estética Premium v3.0) --- */
+.celebration-universe h4 { color: #fff !important; } /* el título quedaba oscuro sobre el fondo oscuro */
 .celebration-universe {
     background: radial-gradient(circle at top right, var(--ui-ink), var(--ui-ink-deep));
     padding: 40px 25px;
@@ -1255,6 +1256,8 @@ input[type="search"], .search-input, [class*="search"] input {
 
 .bday-card-icon {
     font-size: 3.5rem;
+    line-height: 1;
+    color: #f5c96b; /* regalo dorado: el ícono reemplazó a los dibujitos por mes (02-11-2026) */
     margin-bottom: 5px;
     filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.3));
     transition: transform 0.3s;
@@ -1296,7 +1299,7 @@ input[type="search"], .search-input, [class*="search"] input {
 }
 
 .bday-card-innovative.is-today::after {
-    content: "¡FESTEJADO! 🎂";
+    content: "¡FESTEJADO!";
     position: absolute;
     top: -15px;
     background: var(--danger-color);

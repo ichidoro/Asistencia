@@ -588,7 +588,7 @@ function renderWizardStep2() {
     if (cargosFiltrados.length === 0 && cargosConocidosFiltrados.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">
             No se detectaron cargos para las áreas seleccionadas.
-            ${areasSeleccionadas.size === 0 ? '<br><small class="text-warning">⚠️ No seleccionaste ningún área en el paso anterior.</small>' : ''}
+            ${areasSeleccionadas.size === 0 ? '<br><small class="text-warning"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>No seleccionaste ningún área en el paso anterior.</small>' : ''}
         </td></tr>`;
         return;
     }
@@ -1059,7 +1059,7 @@ async function fetchAndRenderWizardStep4_TiposJ() {
             let html = '<div class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">';
             tipos.forEach(t => {
                 const badge = t.requiere_documento 
-                    ? '<span class="badge bg-warning text-dark ms-2">📎 Req. Doc.</span>' 
+                    ? '<span class="badge bg-warning text-dark ms-2"><i class="bi bi-paperclip me-1" aria-hidden="true"></i>Req. Doc.</span>' 
                     : '';
                 html += `<div class="list-group-item d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-file-earmark-check me-2 text-primary"></i>${t.nombre}${badge}</span>
@@ -1247,7 +1247,7 @@ async function fetchAndRenderWizardStep3() {
                             </div>
                             <div class="mt-3 p-2 bg-light rounded border small text-muted">
                                 <i class="bi bi-info-circle me-1 text-primary"></i>
-                                <strong>Ruta:</strong> Módulo <em>Configuración</em> → pestaña <em>🕒 Turnos</em> → botón <em>Nuevo Turno</em>
+                                <strong>Ruta:</strong> Módulo <em>Configuración</em> → pestaña <em>Turnos</em> → botón <em>Nuevo Turno</em>
                             </div>
                         </div>
                     </div>

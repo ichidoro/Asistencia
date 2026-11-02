@@ -59,10 +59,10 @@ async function loadMonthlyBirthdays() {
             // Renderizar cumpleaños de HOY
             if (hoy.length > 0) {
                 listHoy.innerHTML = hoy.map(e =>
-                    `<div class="mb-1">🎉 <strong>${e.apellido_paterno} ${e.apellido_materno || ''} ${e.nombre}</strong></div>`
+                    `<div class="mb-1"><i class="bi bi-balloon me-1" aria-hidden="true"></i><strong>${e.apellido_paterno} ${e.apellido_materno || ''} ${e.nombre}</strong></div>`
                 ).join('');
             } else {
-                listHoy.innerHTML = '<span class="text-muted fst-italic">✨ Hoy no hay celebraciones, pero pronto habrá motivos para festejar</span>';
+                listHoy.innerHTML = '<span class="text-muted fst-italic">Hoy no hay celebraciones, pero pronto habrá motivos para festejar</span>';
             }
 
             // Renderizar cumpleaños del MES con fecha completa
@@ -221,7 +221,7 @@ function renderCelebrationUniverse() {
     if (bdayList.length === 0) {
         html += `
             <div class="col-12 text-center py-5">
-                <div class="display-1 mb-3">✨</div>
+                <div class="display-1 mb-3 text-muted"><i class="bi bi-calendar-heart" aria-hidden="true"></i></div>
                 <h5 class="text-muted">No hay alineaciones estelares este mes.</h5>
                 <p class="small text-muted">Intenta cambiar el filtro de área o mes.</p>
             </div>
@@ -234,8 +234,7 @@ function renderCelebrationUniverse() {
             const isToday = (mIdx === new Date().getMonth() && parseInt(day) === new Date().getDate());
 
             // Lógica innovadora: Icono dinámico según mes
-            const icons = ["❄️", "❤️", "🍀", "🌸", "☀️", "🏝️", "⛱️", "🌴", "🍎", "🎃", "🍂", "🎄"];
-            const icon = icons[mIdx];
+            const icon = '<i class="bi bi-gift" aria-hidden="true"></i>';
 
             html += `
                 <div class="bday-card-innovative ${isToday ? 'is-today' : ''}" style="--item-index: ${index}">

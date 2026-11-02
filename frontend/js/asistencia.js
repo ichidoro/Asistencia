@@ -433,7 +433,7 @@ function _pollReprocesoPeriodo(inicio, fin, area, onDone) {
 
             if (s.estado === 'completado' || s.estado === 'done' || s.estado === 'completed') {
                 showToast(
-                    `✅ Reproceso completado: ${s.procesados} días procesados${s.errores > 0 ? ` (${s.errores} errores)` : ''}`,
+                    `Reproceso completado: ${s.procesados} días procesados${s.errores > 0 ? ` (${s.errores} errores)` : ''}`,
                     s.errores > 0 ? 'warning' : 'success'
                 );
                 onDone();

@@ -121,7 +121,7 @@
                         <div class="pz-kicker">Perdonazo por día</div>
                         <div id="panel-perdonazo-titulo" style="font-size:1.1rem;font-weight:800;margin-top:1px;color:#14235c;">Cargando...</div>
                     </div>
-                    <button class="pz-close" onclick="cerrarPanelPerdonazo()" aria-label="Cerrar">✕</button>
+                    <button class="pz-close" onclick="cerrarPanelPerdonazo()" aria-label="Cerrar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                 </div>
             </div>
             <div class="panel-body" id="panel-perdonazo-body">
@@ -137,7 +137,7 @@
                             <option value="3" selected>Atraso + Salida Adelantada</option>
                         </optgroup>
                         <optgroup label="Cierre Operativo / Víspera de Feriado">
-                            <option value="5">Condonar Cierre de Turno (Inasistencia ➔ OK)</option>
+                            <option value="5">Condonar Cierre de Turno (Inasistencia → OK)</option>
                         </optgroup>
                     </select>
                 </div>
@@ -188,7 +188,7 @@ window.toggleModoPerdonazo = function(activo) {
     if (activo) {
         Swal.fire({
             icon: 'info',
-            title: '🎁 Modo Perdonazos activo',
+            title: 'Modo perdonazos activo',
             html: 'Haz <b>clic en el encabezado de una fecha</b> para gestionar los perdonazos de ese día.',
             timer: 3500,
             showConfirmButton: false,
@@ -332,7 +332,7 @@ window.renderizarListaPerdonazo = function() {
     if (tipo === 2 || tipo === 3) {
         if (hasAtrasos) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#374151;background:#f1f5f9;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
-                <span>⏳ ATRASOS</span>
+                <span><i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>ATRASOS</span>
                 <span style="font-size: 0.75rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${atrasosPendientes.length}</span>
             </div>`;
 
@@ -369,7 +369,7 @@ window.renderizarListaPerdonazo = function() {
                 }
             }
         } else if (tipo === 3) {
-            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;">⏳ Sin atrasos este día</div>`;
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;">Sin atrasos este día</div>`;
         }
     }
 
@@ -377,7 +377,7 @@ window.renderizarListaPerdonazo = function() {
     if (tipo === 1 || tipo === 3) {
         if (hasSalidas) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#374151;background:#f1f5f9;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:18px 0 6px;display:flex;justify-content:space-between;align-items:center;">
-                <span>🚶 SALIDAS ADELANTADAS</span>
+                <span><i class="bi bi-person-walking me-1" aria-hidden="true"></i>SALIDAS ADELANTADAS</span>
                 <span style="font-size: 0.75rem;background:#e2e8f0;padding:2px 6px;border-radius:999px;color:#475569;">Pendientes: ${salidasPendientes.length}</span>
             </div>`;
 
@@ -414,7 +414,7 @@ window.renderizarListaPerdonazo = function() {
                 }
             }
         } else if (tipo === 3) {
-            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">🚶 Sin salidas adelantadas este día</div>`;
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">Sin salidas adelantadas este día</div>`;
         }
     }
 
@@ -422,7 +422,7 @@ window.renderizarListaPerdonazo = function() {
     if (tipo === 5) {
         if (hasAusencias) {
             html += `<div style="font-size:0.7rem;font-weight:800;color:#92400e;background:#fef3c7;padding:6px 10px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center;">
-                <span>🚪 CIERRES DE TURNO / AUSENCIAS (INASISTENCIA ➔ OK)</span>
+                <span><i class="bi bi-door-open me-1" aria-hidden="true"></i>CIERRES DE TURNO / AUSENCIAS (INASISTENCIA → OK)</span>
                 <span style="font-size: 0.75rem;background:#fde68a;padding:2px 6px;border-radius:999px;color:#92400e;">Pendientes: ${ausenciasPendientes.length}</span>
             </div>`;
 
@@ -461,7 +461,7 @@ window.renderizarListaPerdonazo = function() {
                 }
             }
         } else {
-            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">🚪 Sin inasistencias este día</div>`;
+            html += `<div style="font-size:0.7rem;font-weight:800;color:#94a3b8;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;margin-top:10px;">Sin inasistencias este día</div>`;
         }
     }
 
