@@ -6603,6 +6603,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                                 ' días; este período solo le da ' + prb.dias_disponibles + ' días a esta persona. Es un aviso: no bloquea nada."></i>';
                         }
 
+                        metaTooltip = metaTooltip + ' · Clic: horas por semana';
                         // Espera: es un TOPE legal (88 h), no una meta — se muestra «usadas X de Y»
                         // y el uso en porcentaje; ya no hay «balance −88:00». Textos con comillas
                         // y concatenación por el minificador.
@@ -6622,7 +6623,7 @@ window.renderEmployeeRowHtml = function(r, dates, feriadosArray, getFeriadoDesc,
                         const usoTexto = usoPct === null ? '—' : (usoPct + ' %');
                         const usadasTitle = 'Horas de espera usadas en el ciclo';
 
-                        return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}">${avisoLey}${_fmtMin(r.metaMin)}</td>
+                        return `<td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;border-left:3px solid #8b5cf6;font-size:0.78rem;cursor:pointer;left:${getStickyLeftLocal('bolsa', 0)}px;${getStickyWidthStyleLocal('bolsa')}" title="${metaTooltip}" onclick="window.mxSemanasBolsa(${emp.id})">${avisoLey}${_fmtMin(r.metaMin)}</td>
                                 <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#faf5ff;font-size:0.78rem;left:${getStickyLeftLocal('bolsa', 1)}px;${getStickyWidthStyleLocal('bolsa')}" title="Horas acumuladas en el ciclo">${_fmtMin(r.acumBolsa)}</td>
                                 <td class="text-center align-middle tabular-nums fw-bold sticky-premium-col sticky-saldo-col" style="position:sticky; z-index:40; background:${smBg};color:${smColor};font-size:0.8rem;left:${getStickyLeftLocal('bolsa', 2)}px;${getStickyWidthStyleLocal('bolsa')}" title="Balance: negativo = falta, positivo = excedió">${smSign}${_fmtMin(Math.abs(sm))}</td>
                                 <td class="text-center align-middle tabular-nums sticky-premium-col" style="position:sticky; z-index:40; background:#fffbeb;border-left:3px solid #d97706;font-size:0.78rem;left:${getStickyLeftLocal('espera', 0)}px;${getStickyWidthStyleLocal('espera')}" title="${topeTooltip}">${_fmtMin(topeEsp)}</td>
@@ -6853,6 +6854,61 @@ window.reloadSingleEmployeeRow = async function(empId) {
         if (nameCell) nameCell.innerHTML = originalNameHtml;
         if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
     }
+};
+
+// ── Horas por semana de un chofer en Bolsa: la meta (180 h) repartida en las 4 o 5 semanas del tramo (del 26 al 25) ──
+// Clic en la celda «Meta» de la grilla. Cada semana trae 7 días desde el inicio del tramo; la última puede ser más corta (5.ª semana).
+// Los textos van con comillas y concatenación: el minificador del servidor (rjsmin) come los espacios de las plantillas anidadas.
+window.mxSemanasBolsa = function (empId) {
+    const st = window.stateMarcacionesApp;
+    const data = st && st.data;
+    const empData = data && data.matrix && data.matrix[empId];
+    if (!empData || !data.periodo) { showToast('No se encontraron los datos de esta persona.', 'error'); return; }
+    const dates = window.getDatesInRange(data.periodo.inicio, data.periodo.fin);
+    const feriadosArray = data.feriados ? data.feriados.map(f => f.fecha || f) : [];
+    const empRaw = (data.empleados || []).find(e => String(e.id) === String(empId)) || {};
+    const info = empData.info || empRaw;
+    const nombre = info.nombre_completo || empRaw.nombre_completo || empRaw.nombre || '';
+    // calcularStatsEmpleado deja en cada día el acumulado de la bolsa antes y después de él: la diferencia son las horas del día
+    const r = window.calcularStatsEmpleado({
+        id: empId, info, nombre_completo: nombre, area: info.area || empRaw.area || '', turno: info.turno || info.nombre_turno || '',
+        turno_dias: info.turno_dias || {}, tipo_programacion: info.tipo_programacion || '', activo: info.activo !== false, dias: empData
+    }, dates, feriadosArray);
+    if (!r.esBolsa) { showToast('Esta persona no está en Bolsa Flexible.', 'info'); return; }
+
+    const fmt = (min) => { const a = Math.round(Math.abs(min)); return String(Math.floor(a / 60)).padStart(2, '0') + ':' + String(a % 60).padStart(2, '0'); };
+    const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+    const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const semanas = [];
+    for (let i = 0; i < dates.length; i += 7) semanas.push(dates.slice(i, i + 7));
+    const filas = semanas.map((ds, k) => {
+        const trab = ds.reduce((s, d) => { const di = empData[d] || {}; return s + Math.max(0, (di._acumuladoBolsaSnap || 0) - (di._acumuladoBolsaSnapPrev || 0)); }, 0);
+        const meta = Math.round(r.metaMin * ds.length / dates.length);
+        const pct = meta > 0 ? Math.round(trab / meta * 100) : 0;
+        return { n: k + 1, desde: ds[0], hasta: ds[ds.length - 1], dias: ds.length, trab, meta, pct, dif: trab - meta };
+    });
+    const color = (p) => (p >= 100 ? '#059669' : p >= 75 ? '#d97706' : '#7c3aed');
+    const tabla = filas.map(f => {
+        const dif = (f.dif > 0 ? '+' : f.dif < 0 ? '−' : '') + fmt(f.dif);
+        return '<tr>'
+            + '<td class="text-start"><b>Semana ' + f.n + '</b><div class="text-muted" style="font-size:0.72rem;">' + dm(f.desde) + ' al ' + dm(f.hasta) + '</div></td>'
+            + '<td class="text-end tabular-nums"><b>' + fmt(f.trab) + '</b></td>'
+            + '<td class="text-end tabular-nums text-muted">' + fmt(f.meta) + '</td>'
+            + '<td style="min-width:120px;"><div style="height:8px;background:#ede9fe;border-radius:6px;overflow:hidden;"><div class="mx-sem-barra" data-w="' + Math.min(100, f.pct) + '" style="height:100%;width:0;background:' + color(f.pct) + ';border-radius:6px;transition:width 600ms cubic-bezier(.22,1,.36,1);"></div></div>'
+            + '<div class="text-end" style="font-size:0.72rem;color:' + color(f.pct) + ';font-weight:700;">' + f.pct + ' % · ' + dif + '</div></td>'
+            + '</tr>';
+    }).join('');
+    const sm = r.saldoMeta || 0;
+    const html = '<div class="text-start">'
+        + '<table class="table table-sm align-middle mb-2" style="font-size:0.85rem;"><thead><tr class="text-muted" style="font-size:0.72rem;text-transform:uppercase;"><th>Semana</th><th class="text-end">Horas</th><th class="text-end">Meta</th><th>Avance</th></tr></thead><tbody>' + tabla + '</tbody></table>'
+        + '<div class="d-flex justify-content-between align-items-center rounded-3 px-3 py-2" style="background:#faf5ff;border:1px solid #e9d5ff;">'
+        + '<span><b>Tramo completo</b> <span class="text-muted">' + fmt(r.acumBolsa) + ' de ' + fmt(r.metaMin) + ' h</span></span>'
+        + '<b style="color:' + (sm >= 0 ? '#059669' : '#dc2626') + ';">' + (sm > 0 ? '+' : sm < 0 ? '−' : '') + fmt(sm) + '</b></div></div>';
+    Swal.fire({
+        title: esc(window.nombreTitulo ? window.nombreTitulo(nombre) : nombre) || 'Horas por semana',
+        html: html, width: 560, confirmButtonText: 'Cerrar', confirmButtonColor: '#7c3aed',
+        didOpen: (el) => { requestAnimationFrame(() => setTimeout(() => el.querySelectorAll('.mx-sem-barra').forEach(b => { b.style.width = b.getAttribute('data-w') + '%'; }), 40)); }
+    });
 };
 
 // Vista previa al pasar el mouse por las celdas de la grilla (el cuadro flotante #grid-fly-tooltip): en pantallas chicas tapa la

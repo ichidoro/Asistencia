@@ -48,3 +48,14 @@ def test_dos_camiones_el_mismo_dia_deja_la_velocidad_mas_alta():
 def test_dos_choferes_en_un_camion_comparten_y_se_marca():
     por_emp, _ = calzar_choferes([dia("2026-10-29", ["Juan Perez Soto", "Pedro Lopez Garcia"])], CHOFERES)
     assert por_emp["1"]["2026-10-29"]["comparte"] and por_emp["4"]["2026-10-29"]["comparte"]
+
+
+def test_decimar_ruta_conserva_extremos_y_el_punto_de_velocidad_maxima():
+    from backend.services.gps_nexacol import decimar_ruta
+    pts = [{"s": i * 10, "la": -35.0 + i * 1e-4, "lo": -71.0, "v": 40} for i in range(2000)]
+    pts[777]["v"] = 99
+    out = decimar_ruta(pts, maximo=450)
+    assert len(out) <= 460
+    assert out[0]["s"] == 0 and out[-1]["s"] == 19990
+    assert any(p["v"] == 99 for p in out)
+    assert decimar_ruta(pts[:10], maximo=450) == [{k: p[k] for k in ("s", "la", "lo", "v")} for p in pts[:10]]

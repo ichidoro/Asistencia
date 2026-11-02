@@ -3151,6 +3151,14 @@ function recalcLibretaTotales() {
     }
 }
 
+// «Validar» solo sirve sobre un borrador ya guardado: la primera vez que se guarda un día siempre queda en borrador.
+function m180ActualizarValidar() {
+    const b = document.getElementById('btn-cerrar-guardar-180h');
+    if (!b) return;
+    b.disabled = !m180_chofer_tiene_datos;
+    b.title = m180_chofer_tiene_datos ? 'Validar el día: se cierra y ya no se puede editar (solo eliminar)' : 'Primero guarda el borrador; después podrás validarlo';
+}
+
 function m180SetLocked(locked) {
     m180_locked = Boolean(locked);
     const modalEl = document.getElementById('modalMarcacion180h');
@@ -3169,8 +3177,6 @@ function m180SetLocked(locked) {
     if (grp) grp.classList.toggle('d-none', m180_locked);
     const cancel = document.getElementById('m180-btn-cancel');
     if (cancel) cancel.textContent = m180_locked ? 'Cerrar' : 'Cancelar';
-    const reabrir = document.getElementById('m180-btn-reabrir');
-    if (reabrir) reabrir.classList.toggle('d-none', !(m180_locked && m180EsSuperAdmin()));
 }
 
 function m180EsSuperAdmin() {
@@ -3182,45 +3188,12 @@ function getLibretaAuthHeaders() {
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
-async function libreta180hReabrir() {
-    if (!m180_locked || !m180EsSuperAdmin()) return;
-    const empId = parseInt(document.getElementById('m180-empleado-id').value);
-    const dateStr = document.getElementById('m180-fecha-str').value;
-    const ok = await uiConfirm('¿Reabrir este día?', { items: ['Vuelve a borrador y se puede editar de nuevo.', 'Queda registrado quién lo reabrió.'], confirmText: 'Reabrir día', danger: false });
-    if (!ok) return;
-    const btn = document.getElementById('m180-btn-reabrir');
-    if (btn) btn.disabled = true;
-    try {
-        const resp = await fetch('/api/asistencia/libreta-180h/reabrir/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...getLibretaAuthHeaders()
-            },
-            body: JSON.stringify({ empleado_id: empId, fecha: dateStr })
-        });
-        if (!resp.ok) {
-            let msg = `Error ${resp.status}`;
-            try { const d = await resp.json(); if (typeof d.detail === 'string') msg = d.detail; } catch (_) { /* sin cuerpo */ }
-            throw new Error(msg);
-        }
-        m180SetBadge('borrador');
-        m180SetLocked(false);
-        if (typeof showToast === 'function') showToast('Listo. El día volvió a borrador y se puede editar.', 'success');
-        if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
-    } catch (e) {
-        Swal.fire({ icon: 'error', title: 'No se pudo reabrir', text: e.message, confirmButtonColor: '#059669' });
-    } finally {
-        if (btn) btn.disabled = false;
-    }
-}
-
 function m180SetBadge(kind) {
     const badge = document.getElementById('m180-badge-estado');
     if (!badge) return;
     if (kind === 'cerrado') {
         badge.className = 'badge bg-success-subtle text-success-emphasis border border-success px-2 py-1';
-        badge.textContent = 'DÍA CERRADO';
+        badge.textContent = 'VALIDADO';
     } else if (kind === 'inasistencia') {
         badge.className = 'badge bg-danger-subtle text-danger-emphasis border border-danger px-2 py-1';
         badge.textContent = 'INASISTENCIA';
@@ -3282,6 +3255,8 @@ async function proceedToMarcacion180h() {
     document.getElementById('m180-observaciones').value = '';
     m180SetBadge('sin');
     m180SetLocked(false);
+    m180_chofer_tiene_datos = false;
+    m180ActualizarValidar();
     const btnDelDiaInit = document.getElementById('m180-btn-delete-dia');
     if (btnDelDiaInit) btnDelDiaInit.classList.add('d-none');
     m180_chofer_id = null;
@@ -3306,6 +3281,7 @@ async function proceedToMarcacion180h() {
             m180_acomp_ocupados = (data.acompanantes_ocupados || []).map(Number);
             m180_chofer_id = data.chofer_id != null ? Number(data.chofer_id) : null;
             m180_chofer_tiene_datos = !!data.has_data;
+            m180ActualizarValidar();
             if (data.has_data && Array.isArray(data.slots_96) && data.slots_96.length === 96) {
                 m180_slots = data.slots_96.map(v => Number(v) || 0);
                 // Registros viejos traían "Acompañante del chofer ID n" escrito a mano por el sistema: ya lo dice la tarjeta del chofer.
@@ -3452,7 +3428,7 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         m180_dirty = false;
         window.m180_last_scanned_image = null;
         if (typeof showToast === 'function') {
-            showToast(cerrarDia ? "Listo. Día cerrado y guardado en la libreta (Art. 25 bis)." : "Listo. Borrador de la libreta guardado.", "success");
+            showToast(cerrarDia ? "Listo. Día validado y guardado en la libreta (Art. 25 bis)." : "Listo. Borrador de la libreta guardado: queda abierto hasta que lo valides.", "success");
         }
         let omitidos = [];
         try { omitidos = (await resp.json()).data.acompanantes_omitidos || []; } catch (_) {}
@@ -3477,6 +3453,7 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: e.message, confirmButtonColor: '#059669' });
     } finally {
         buttons.forEach(b => b.disabled = false);
+        m180ActualizarValidar();
     }
 }
 
@@ -3960,7 +3937,6 @@ function m180GpsPintar() {
         </div>`;
 }
 window.m180GpsVer = m180GpsVer; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset; window.m180GpsCargarVehiculos = m180GpsCargarVehiculos;
-window.libreta180hReabrir = libreta180hReabrir;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -4674,7 +4650,7 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
                 `,
                 showCancelButton: true,
                 showDenyButton: true,
-                confirmButtonText: '<i class="bi bi-moon-stars-fill me-1"></i> Rellenar Descanso y Guardar',
+                confirmButtonText: '<i class="bi bi-moon-stars-fill me-1"></i> Rellenar Descanso y Guardar Borrador',
                 confirmButtonColor: '#059669',
                 denyButtonText: '<i class="bi bi-save me-1"></i> Guardar Borrador (tal cual)',
                 denyButtonColor: '#3b82f6',
@@ -4686,7 +4662,7 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
             if (swalRes.isConfirmed) {
                 // Rellenar automáticamente los vacíos con descanso y guardar en base de datos directamente
                 libreta180hAutoDescanso();
-                await window.guardarLibreta180h(true, true);
+                await window.guardarLibreta180h(false, true);
             } else if (swalRes.isDenied) {
                 // Guardar como borrador tal como se detectó (sin repetir popups)
                 await window.guardarLibreta180h(false, true);
@@ -4694,7 +4670,7 @@ window.scannerProcesarConGemini = async function(directBase64 = null) {
                 // El usuario eligió revisar en grilla antes de guardar
                 m180_dirty = true;
                 if (typeof showToast === 'function') {
-                    showToast('Se cargaron los tramos de la foto. Para guardarlos, use «Guardar borrador» o «Cerrar día».', 'info', 6000);
+                    showToast('Se cargaron los tramos de la foto. Para guardarlos, use «Guardar borrador»; después se valida.', 'info', 6000);
                 }
             }
         } else if (typeof showToast === 'function') {

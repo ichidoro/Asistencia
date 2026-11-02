@@ -3546,46 +3546,6 @@ async def get_libreta_foto(
     return FileResponse(str(foto_path), media_type="image/jpeg")
 
 
-class Libreta180hReabrirRequest(BaseModel):
-    empleado_id: int
-    fecha: str
-
-
-@router.post("/libreta-180h/reabrir/")
-async def reabrir_libreta_180h(
-    payload: Libreta180hReabrirRequest,
-    service: AsistenciaService = Depends(get_asistencia_service),
-    current_user: SecurityContext = Depends(RequirePermission("marcaciones.editar"))
-):
-    """
-    Reabre un día cerrado de la libreta Art. 25 bis (vuelve a borrador, conserva los tramos).
-    Solo super administradores.
-    """
-    if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Solo un super administrador puede reabrir un día cerrado.")
-    try:
-        row = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
-        if not row:
-            raise HTTPException(status_code=404, detail="No hay libreta registrada para ese día.")
-        if int(row.get('cerrado') or 0) == 0:
-            return {"status": "success", "message": "El día ya estaba abierto.", "cerrado": 0}
-
-        val_id = getattr(current_user, 'user_id', None) or getattr(current_user, 'id', None)
-        await service.repository.db.execute(
-            "UPDATE libreta_art25bis_dias SET cerrado = 0, validador_id = ?, updated_at = datetime('now') "
-            "WHERE empleado_id = ? AND fecha = ?",
-            (val_id, payload.empleado_id, payload.fecha)
-        )
-        await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
-        logger.warning(f"🔓 Libreta 180h reabierta por {current_user.username}: emp={payload.empleado_id} fecha={payload.fecha}")
-        return {"status": "success", "message": "Día reabierto: vuelve a borrador.", "cerrado": 0}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"❌ Error en reabrir_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
-        raise HTTPException(status_code=500, detail=f"Error reabriendo Libreta 180h: {str(e)}")
-
-
 @router.post("/libreta-180h/")
 async def save_libreta_180h(
     payload: Libreta180hRequest,
@@ -3598,7 +3558,11 @@ async def save_libreta_180h(
     try:
         existente = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
         if existente and int(existente.get('cerrado') or 0) == 1:
-            raise HTTPException(status_code=409, detail="El día está cerrado: la libreta es de solo lectura.")
+            raise HTTPException(status_code=409, detail="El día está validado: la libreta es de solo lectura. Para corregirla hay que eliminar el registro del día.")
+
+        # La primera vez que se guarda un día siempre queda en borrador: solo se valida (se cierra) sobre un borrador ya guardado.
+        cerrar_dia = bool(payload.cerrado) and bool(existente)
+        forzado_borrador = bool(payload.cerrado) and not existente
 
         slots = list(payload.slots_96)
         if len(slots) < 96:
@@ -3628,7 +3592,7 @@ async def save_libreta_180h(
             'minutos_auxiliares': min_aux,
             'minutos_descanso': min_desc,
             'minutos_efectivos': min_efec,
-            'cerrado': 1 if payload.cerrado else 0,
+            'cerrado': 1 if cerrar_dia else 0,
             'validador_id': val_id,
             'observaciones': payload.observaciones or ""
         }
@@ -3677,7 +3641,7 @@ async def save_libreta_180h(
 
         return {
             "status": "success",
-            "message": "Libreta Art. 25 bis guardada exitosamente.",
+            "message": "Borrador guardado: queda abierto hasta que lo valides." if forzado_borrador else "Libreta Art. 25 bis guardada exitosamente.",
             "data": {
                 "empleado_id": payload.empleado_id,
                 "fecha": payload.fecha,
@@ -3691,6 +3655,7 @@ async def save_libreta_180h(
                 "horas_descanso": round(min_desc / 60.0, 2),
                 "total_horas_dia": round((min_efec + min_esp + min_desc) / 60.0, 2),
                 "cerrado": data['cerrado'],
+                "forzado_borrador": forzado_borrador,
                 "acompanantes_omitidos": acomp_omitidos,
                 "resultado_asistencia": res_dia
             }
@@ -3825,6 +3790,19 @@ async def gps_dia_libreta(
     """Recorrido de un camión en un día (paradas y 96 tramos de 15 min en movimiento/detenido) para compararlo con la libreta 180h."""
     try:
         return await gps_nexacol.recorrido_dia(vehiculo_id, fecha)
+    except gps_nexacol.GpsNexacolError as e:
+        raise HTTPException(status_code=e.status, detail=e.mensaje)
+
+
+@router.get("/gps/ruta-velocidad/")
+async def ruta_velocidad(
+    patente: str = Query(..., pattern=r"^[A-Za-z0-9 \-]{4,10}$"),
+    fecha: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+):
+    """Ruta del camión en un día (puntos reducidos con su velocidad), para dibujarla en el reporte semanal de velocidades que firma el chofer."""
+    try:
+        return await gps_nexacol.ruta_velocidad(patente, fecha)
     except gps_nexacol.GpsNexacolError as e:
         raise HTTPException(status_code=e.status, detail=e.mensaje)
 

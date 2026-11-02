@@ -183,7 +183,72 @@
 
     const slug = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
-    function paginaChofer(doc, nombre, rut, res, lunes) {
+    // ── Logo y ruta del reporte ──
+    let _logo = null;
+    /** Logo de Aguacol como imagen para el PDF (una sola vez); si no carga, el reporte sale con el texto «AGUACOL SPA». */
+    async function cargarLogo() {
+        if (_logo !== null) return _logo || null;
+        try {
+            const blob = await (await fetch('/static/assets/img/logo-aguacol.png')).blob();
+            const url = await new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = mal; r.readAsDataURL(blob); });
+            const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = url; });
+            _logo = { url, w: img.naturalWidth, h: img.naturalHeight };
+        } catch (_) { _logo = false; }
+        return _logo || null;
+    }
+
+    /** Ruta del camión el día de la velocidad máxima (puntos reducidos); null si el GPS no la entrega: el reporte sale igual, sin mapa. */
+    async function pedirRuta(patente, fecha) {
+        try {
+            const r = await fetch('/api/asistencia/gps/ruta-velocidad/?patente=' + encodeURIComponent(patente) + '&fecha=' + fecha, { headers: authHead() });
+            const j = await r.json().catch(() => ({}));
+            return r.ok && j.puntos && j.puntos.length > 1 ? j : null;
+        } catch (_) { return null; }
+    }
+
+    /** Dibuja la ruta como trazo vectorial (sin mapa de fondo): rojo donde iba sobre el límite, con el punto de la velocidad máxima marcado. */
+    function dibujarRuta(doc, x, y, w, h, ruta, res) {
+        const AZUL = [30, 58, 138], ROJO = [217, 45, 32], VERDE = [18, 112, 63], GRIS = [105, 115, 143], TINTA = [26, 35, 38];
+        const pts = ruta.puntos;
+        doc.setFillColor(244, 246, 251); doc.setDrawColor(213, 220, 235); doc.setLineWidth(0.8); doc.roundedRect(x, y, w, h, 8, 8, 'FD');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
+        doc.text('RUTA DEL ' + dmy(ruta.fecha) + '  ·  CAMIÓN ' + ruta.patente + (ruta.km ? '  ·  ' + Math.round(ruta.km) + ' KM' : ''), x + 14, y + 16);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+        doc.setDrawColor(...AZUL); doc.setLineWidth(1.6); doc.line(w + x - 168, y + 13, w + x - 154, y + 13);
+        doc.setTextColor(...GRIS); doc.text('Dentro del límite', w + x - 150, y + 16);
+        doc.setDrawColor(...ROJO); doc.line(w + x - 80, y + 13, w + x - 66, y + 13);
+        doc.text('Sobre ' + LIMITE + ' km/h', w + x - 62, y + 16);
+
+        const px = x + 16, py = y + 28, pw = w - 32, ph = h - 40;
+        const las = pts.map(p => p.la), los = pts.map(p => p.lo);
+        const minLa = Math.min(...las), maxLa = Math.max(...las), minLo = Math.min(...los), maxLo = Math.max(...los);
+        const k = Math.cos(((minLa + maxLa) / 2) * Math.PI / 180); // un grado de longitud mide menos que uno de latitud
+        const dx = Math.max((maxLo - minLo) * k, 1e-6), dy = Math.max(maxLa - minLa, 1e-6);
+        const sc = Math.min(pw / dx, ph / dy);
+        const X = lo => px + (pw - dx * sc) / 2 + (lo - minLo) * k * sc;
+        const Y = la => py + (ph - dy * sc) / 2 + (maxLa - la) * sc;
+
+        doc.setLineWidth(1.6);
+        for (let i = 1; i < pts.length; i++) {
+            const a = pts[i - 1], b = pts[i];
+            doc.setDrawColor(...(Math.max(a.v, b.v) > LIMITE ? ROJO : AZUL));
+            doc.line(X(a.lo), Y(a.la), X(b.lo), Y(b.la));
+        }
+        const marca = (p, col, r) => { doc.setFillColor(...col); doc.setDrawColor(255, 255, 255); doc.setLineWidth(1.4); doc.circle(X(p.lo), Y(p.la), r, 'FD'); };
+        marca(pts[0], VERDE, 4); marca(pts[pts.length - 1], TINTA, 4);
+        const m = ruta.punto_max || pts.reduce((a, p) => (p.v > a.v ? p : a), pts[0]);
+        marca(m, ROJO, 6);
+        const txt = 'MÁX. ' + res.max.vel + ' km/h' + (res.max.hora ? ' · ' + res.max.hora : '');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+        const tw = doc.getTextWidth(txt) + 14, mx = X(m.lo), my = Y(m.la);
+        const lx = mx > x + w / 2 ? mx - tw - 10 : mx + 10, ly = Math.min(Math.max(my - 9, y + 22), y + h - 22);
+        doc.setFillColor(...ROJO); doc.roundedRect(lx, ly, tw, 17, 4, 4, 'F');
+        doc.setTextColor(255, 255, 255); doc.text(txt, lx + 7, ly + 11.5);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...GRIS);
+        doc.text('Inicio', X(pts[0].lo) + 7, Y(pts[0].la) + 3); doc.text('Fin', X(pts[pts.length - 1].lo) + 7, Y(pts[pts.length - 1].la) + 3);
+    }
+
+    function paginaChofer(doc, nombre, rut, res, lunes, ruta, logo) {
         const W = doc.internal.pageSize.getWidth();
         const M = 40, domingo = sumar(lunes, 6);
         const AZUL = [30, 58, 138], TINTA = [26, 35, 38], GRIS = [105, 115, 143], ROJO = [217, 45, 32], VERDE = [18, 112, 63];
@@ -191,8 +256,9 @@
 
         // Cabecera
         doc.setFillColor(...AZUL); doc.rect(0, 0, W, 92, 'F');
-        doc.setTextColor(186, 200, 235); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('AGUACOL SPA', M, 34);
-        doc.setTextColor(255, 255, 255); doc.setFontSize(21); doc.text('Reporte semanal de velocidades', M, 62);
+        if (logo) doc.addImage(logo.url, 'PNG', M, 14, 108, 108 * logo.h / logo.w);
+        else { doc.setTextColor(186, 200, 235); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('AGUACOL SPA', M, 34); }
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(logo ? 19 : 21); doc.text('Reporte semanal de velocidades', M, logo ? 74 : 62);
         doc.setFontSize(8); doc.setTextColor(186, 200, 235); doc.setFont('helvetica', 'normal');
         doc.text('SEMANA', W - M, 34, { align: 'right' });
         doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5);
@@ -223,12 +289,14 @@
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GRIS);
         doc.text(`Límite de referencia: ${LIMITE} km/h`, W - M, 253, { align: 'right' });
 
-        // Detalle por día
+        // Ruta del día de la velocidad máxima (si el GPS la entregó) y detalle por día, más compacto para que la firma quede en la misma hoja
+        const compacto = !!ruta;
+        if (compacto) dibujarRuta(doc, M, 270, W - 2 * M, 118, ruta, res);
         doc.autoTable({
-            startY: 276, theme: 'grid', margin: { left: M, right: M },
+            startY: compacto ? 400 : 276, theme: 'grid', margin: { left: M, right: M },
             head: [['Fecha', 'Día', 'Patente', 'Velocidad máx.', 'Hora', 'Evaluación']],
             body: res.filas.map(r => [dmy(r.fecha), diaDe(r.fecha).replace(/^./, c => c.toUpperCase()), r.patente, `${r.vel} km/h`, r.hora || '—', r.vel > LIMITE ? `Sobre ${LIMITE} km/h` : 'Dentro del límite']),
-            styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 6, bottom: 6, left: 8, right: 8 }, lineColor: [228, 232, 241], lineWidth: 0.6, textColor: TINTA, valign: 'middle' },
+            styles: { font: 'helvetica', fontSize: compacto ? 9 : 9.5, cellPadding: compacto ? { top: 3.5, bottom: 3.5, left: 8, right: 8 } : { top: 6, bottom: 6, left: 8, right: 8 }, lineColor: [228, 232, 241], lineWidth: 0.6, textColor: TINTA, valign: 'middle' },
             headStyles: { fillColor: AZUL, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
             alternateRowStyles: { fillColor: [249, 250, 253] },
             columnStyles: { 3: { halign: 'right', fontStyle: 'bold' }, 4: { halign: 'center' } },
@@ -247,23 +315,25 @@
         doc.text('Velocidad máxima registrada por el GPS del vehículo asignado al chofer en la programación de Despacho Diario.', M, yTabla + 16);
 
         // Declaración y firma
-        let yDecl = Math.max(yTabla + 46, 500);
-        if (yDecl + 96 + 132 > doc.internal.pageSize.getHeight() - 50) { doc.addPage(); yDecl = 60; }
+        let yDecl = compacto ? yTabla + 36 : Math.max(yTabla + 46, 500);
+        const altoCaja = compacto ? 118 : 132;
+        if (yDecl + 96 + altoCaja > doc.internal.pageSize.getHeight() - 50) { doc.addPage(); yDecl = 60; }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...GRIS);
         doc.text('DECLARACIÓN DE CONOCIMIENTO', M, yDecl);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(...TINTA);
         const texto = `Yo, ${nombre}${rut ? ', RUT ' + rut : ''}, declaro haber tomado conocimiento de las velocidades máximas registradas por el GPS ${res.patentes.length === 1 ? 'del vehículo' : 'de los vehículos'} patente ${veh}, asignado${res.patentes.length === 1 ? '' : 's'} a mi nombre en la programación de Despacho Diario durante la semana del ${larga(lunes)} al ${larga(domingo)}, tal como se detallan en este documento.`;
         doc.text(doc.splitTextToSize(texto, W - 2 * M), M, yDecl + 18, { lineHeightFactor: 1.5 });
 
-        const yCaja = Math.max(yDecl + 96, 626);
-        doc.setDrawColor(213, 220, 235); doc.setLineWidth(0.8); doc.roundedRect(M, yCaja, W - 2 * M, 132, 10, 10, 'S');
+        const yCaja = compacto ? yDecl + 80 : Math.max(yDecl + 96, 626);
+        doc.setDrawColor(213, 220, 235); doc.setLineWidth(0.8); doc.roundedRect(M, yCaja, W - 2 * M, altoCaja, 10, 10, 'S');
         doc.setDrawColor(...TINTA); doc.setLineWidth(0.7);
-        doc.line(M + 24, yCaja + 88, M + 250, yCaja + 88); doc.line(W - M - 190, yCaja + 88, W - M - 24, yCaja + 88);
+        const yLin = yCaja + altoCaja - 44;
+        doc.line(M + 24, yLin, M + 250, yLin); doc.line(W - M - 190, yLin, W - M - 24, yLin);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...TINTA);
-        doc.text('Firma del chofer', M + 24, yCaja + 102); doc.text('Fecha de firma', W - M - 190, yCaja + 102);
+        doc.text('Firma del chofer', M + 24, yLin + 14); doc.text('Fecha de firma', W - M - 190, yLin + 14);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GRIS);
-        doc.text(`${nombre}${rut ? '  ·  RUT ' + rut : ''}`, M + 24, yCaja + 116);
-        doc.text('día  /  mes  /  año', W - M - 190, yCaja + 116);
+        doc.text(`${nombre}${rut ? '  ·  RUT ' + rut : ''}`, M + 24, yLin + 28);
+        doc.text('día  /  mes  /  año', W - M - 190, yLin + 28);
     }
 
     function pieDePagina(doc) {
@@ -281,10 +351,14 @@
         await window.ensureLib('jspdf');
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'pt', 'a4');
+        const logo = await cargarLogo();
+        const res = ids.map(id => resumenChofer(datos.velocidades[id], lunes));
+        // La ruta de cada chofer (la del día de su velocidad máxima) se pide en paralelo; si alguna falla, esa hoja sale sin mapa.
+        const rutas = await Promise.all(res.map(r => pedirRuta(r.max.patente, r.max.fecha)));
         ids.forEach((id, i) => {
             if (i) doc.addPage();
             const p = (datos.personas || {})[id] || {};
-            paginaChofer(doc, p.nombre || `Chofer ${id}`, p.rut || '', resumenChofer(datos.velocidades[id], lunes), lunes);
+            paginaChofer(doc, p.nombre || `Chofer ${id}`, p.rut || '', res[i], lunes, rutas[i], logo);
         });
         pieDePagina(doc);
         const un = ids.length === 1 ? ((datos.personas || {})[ids[0]] || {}).nombre : '';

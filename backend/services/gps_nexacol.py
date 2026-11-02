@@ -4,6 +4,7 @@ Nexacol (rutas /api/reports/camiones-gps-*, sin cambios en Nexacol) entrega los 
 (igual que la libreta) para que la pantalla los pueda comparar tramo a tramo.
 """
 import asyncio
+import re
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -147,6 +148,28 @@ async def recorrido_dia(vehiculo_id: str, fecha: str) -> Dict[str, Any]:
         "min_mov_gps": calc["min_mov"],
         "min_det_gps": calc["min_det"],
     }
+
+
+def decimar_ruta(puntos: List[Dict[str, Any]], maximo: int = 450) -> List[Dict[str, Any]]:
+    """Deja a lo más `maximo` puntos ({s, la, lo, v}) para dibujar la ruta en el reporte: uno de cada N, más siempre el primero, el último y el de mayor velocidad."""
+    pts = sorted((p for p in puntos if all(isinstance(p.get(k), (int, float)) for k in ("s", "la", "lo", "v"))), key=lambda p: p["s"])
+    if len(pts) <= maximo:
+        return [{k: p[k] for k in ("s", "la", "lo", "v")} for p in pts]
+    paso = -(-len(pts) // maximo)
+    idx = set(range(0, len(pts), paso)) | {len(pts) - 1, max(range(len(pts)), key=lambda i: pts[i]["v"])}
+    return [{k: pts[i][k] for k in ("s", "la", "lo", "v")} for i in sorted(idx)]
+
+
+async def ruta_velocidad(patente: str, fecha: str) -> Dict[str, Any]:
+    """Recorrido del camión (por patente) en un día, para dibujarlo en el reporte semanal de velocidades: puntos reducidos y el de la velocidad máxima."""
+    pat = re.sub(r"[^A-Z0-9]", "", str(patente).upper())
+    veh = next((v for v in await vehiculos() if re.sub(r"[^A-Z0-9]", "", v["patente"].upper()) == pat), None)
+    if not veh:
+        raise GpsNexacolError(404, f"El camión {patente} no está en la plataforma de GPS.")
+    data = await _get("/api/reports/camiones-gps-ruta", {"id": veh["id"], "fecha": fecha, "parada_min": str(PARADA_MIN_ASISTENCIA)})
+    puntos = decimar_ruta(data.get("puntos") or [])
+    mx = max(puntos, key=lambda p: p["v"]) if puntos else None
+    return {"success": True, "patente": veh["patente"], "fecha": fecha, "puntos": puntos, "punto_max": mx, "km": (data.get("resumen") or {}).get("km")}
 
 
 async def velocidades(desde: str, hasta: str) -> List[Dict[str, Any]]:
