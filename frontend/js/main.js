@@ -1013,7 +1013,7 @@ function renderBonosMatrix(data) {
                 <td style="position: sticky; left: 0; background: #fff; z-index: 1;">
                     <div class="d-flex flex-column">
                         <span class="fw-bold text-dark">${emp.nombre_completo}</span>
-                        <span class="small text-muted">${emp.rut}</span>
+                        <span class="small text-muted">${window.rutVista(emp.rut)}</span>
                     </div>
                 </td>
                 <td>
@@ -2353,7 +2353,7 @@ function renderSyncEmpleados(empleados) {
       <div class="flex-grow-1">
         <div class="fw-semibold">${emp.nombre} ${badgeHTML}</div>
         <div class="text-muted" style="font-size:0.75rem;">
-          ${emp.rut} · ${emp.area}${areaChangeDetail}${emp.cargo ? ' · ' + emp.cargo : ''}
+          ${window.rutVista(emp.rut)} · ${emp.area}${areaChangeDetail}${emp.cargo ? ' · ' + emp.cargo : ''}
         </div>
       </div>
     `;
@@ -2982,3 +2982,14 @@ async function setSyncSpeed(speed) {
   }
 }
 
+// RUT para mostrar: sin el prefijo que no es parte del RUT real (un "9" antepuesto) y con puntos y guión. El dato guardado no se toca.
+window.rutVista = function (rut) {
+    const crudo = String(rut == null ? '' : rut);
+    let s = crudo.replace(/[^0-9kK]/g, '').toUpperCase();
+    const dv = c => { let t = 0, m = 2; for (let i = c.length - 1; i >= 0; i--) { t += Number(c[i]) * m; m = m === 7 ? 2 : m + 1; } const r = 11 - t % 11; return r === 10 ? 'K' : r === 11 ? '0' : String(r); };
+    const ok = x => x.length >= 2 && /^\d+$/.test(x.slice(0, -1)) && dv(x.slice(0, -1)) === x.slice(-1);
+    while (s.length > 9) s = s.slice(1);
+    if (s.length === 9 && !ok(s) && ok(s.slice(1))) s = s.slice(1);
+    if (s.length < 2) return crudo;
+    return s.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + s.slice(-1);
+};

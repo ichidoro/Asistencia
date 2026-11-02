@@ -721,7 +721,8 @@ class ReportService:
                             val = emp_id
                             cell.alignment = Alignment(horizontal='center', vertical='center')
                         elif key == "RUT":
-                            val = r["rut"]
+                            from backend.core.rut import rut_visible
+                            val = rut_visible(r["rut"])
                             cell.alignment = Alignment(horizontal='center', vertical='center')
                         elif key == "Empleado":
                             val = r["nombre"]

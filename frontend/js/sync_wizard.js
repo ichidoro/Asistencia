@@ -1610,7 +1610,7 @@ async function fetchAndRenderWizardStep5() {
                 <td class="text-center align-middle">
                     <input type="checkbox" class="form-check-input wiz-chk-emp" data-rut="${e.rut}" checked>
                 </td>
-                <td class="text-nowrap">${e.rut}</td>
+                <td class="text-nowrap">${window.rutVista(e.rut)}</td>
                 <td>${e.nombre || ''}</td>
                 <td class="text-muted small">${e.cargo || '-'}</td>
                 <td>${e.area || '<span class="text-danger">Sin Área</span>'}</td>
@@ -2544,7 +2544,7 @@ window.renderWizardStep9 = function() {
         btn.innerHTML = `
             <div>
                 <div class="fw-bold">${emp.nombre}</div>
-                <div class="small ${window._wizardState.selectedOnboardingEmpId === emp.id ? 'text-white-50' : 'text-muted'}">${emp.rut}</div>
+                <div class="small ${window._wizardState.selectedOnboardingEmpId === emp.id ? 'text-white-50' : 'text-muted'}">${window.rutVista(emp.rut)}</div>
             </div>
             ${statusBadge}
         `;
@@ -2610,7 +2610,7 @@ async function loadOnboardingEmployeeForm(empId) {
 
         if (bio) {
             const formatName = `${bio.apellido_paterno || ''} ${bio.apellido_materno || ''} ${bio.nombre || ''}`.trim().replace(/\s+/g, ' ');
-            if (rutBio) rutBio.textContent = bio.rut || '-';
+            if (rutBio) rutBio.textContent = bio.rut ? window.rutVista(bio.rut) : '-';
             if (nombreBio) nombreBio.textContent = formatName || '-';
             if (areaBio) areaBio.textContent = bio.area || 'Sin Asignar';
             if (cargoBio) cargoBio.textContent = bio.cargo || '-';

@@ -435,7 +435,7 @@ function renderHistorialTable(empleados) {
     `;
 
     empleados.forEach((emp, idx) => {
-        const rutFormatted = emp.rut;
+        const rutFormatted = window.rutVista(emp.rut);
 
         // Estado pill
         const isProgramado = emp.estado_termino === 'PROGRAMADO';

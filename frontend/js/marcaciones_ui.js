@@ -1794,7 +1794,7 @@ window.updateVisorPDF = async function(isDownload = false) {
         nombreEmpleado = stateMarcacionesApp.data.empleado_nombre;
     }
 
-    const rut = empleadoInfo.rut || 'No Registrado';
+    const rut = empleadoInfo.rut ? window.rutVista(empleadoInfo.rut) : 'No Registrado';
     const cargo = empleadoInfo.cargo || 'No Registrado';
     const area = empleadoInfo.area || stateMarcacionesApp.data?.empleado_area || stateMarcacionesApp.data?.area || 'No Registrada';
 
@@ -3964,7 +3964,7 @@ function openRegularizacionModal(anomalias, fecha) {
         <tr>
             <td>
                 <div class="fw-bold text-dark">${window.nombreTitulo(fullNombre)}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">RUT ${a.rut || 'sin registrar'}</div>
+                <div class="text-muted" style="font-size: 0.75rem;">RUT ${a.rut ? window.rutVista(a.rut) : 'sin registrar'}</div>
             </td>
             <td><span class="badge bg-light text-dark border">${a.area}</span></td>
             <td>

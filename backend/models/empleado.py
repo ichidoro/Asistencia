@@ -65,24 +65,9 @@ class Empleado:
         if not self.rut:
             return ""
         
-        # Remover puntos y guión si existen
-        rut_limpio = self.rut.replace(".", "").replace("-", "")
-        
-        if len(rut_limpio) < 2:
-            return self.rut
-        
-        # Separar dígito verificador
-        digito = rut_limpio[-1]
-        numero = rut_limpio[:-1]
-        
-        # Formatear con puntos
-        numero_formateado = ""
-        for i, digit in enumerate(reversed(numero)):
-            if i > 0 and i % 3 == 0:
-                numero_formateado = "." + numero_formateado
-            numero_formateado = digit + numero_formateado
-        
-        return f"{numero_formateado}-{digito}"
+        # Sin el prefijo que no es parte del RUT real (un "9" antepuesto) y con formato; el dato guardado no se toca.
+        from backend.core.rut import rut_visible
+        return rut_visible(self.rut)
     
     def to_dict(self) -> dict:
         """Convierte el modelo a diccionario"""

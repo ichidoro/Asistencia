@@ -362,10 +362,29 @@
         });
         pieDePagina(doc);
         const un = ids.length === 1 ? ((datos.personas || {})[ids[0]] || {}).nombre : '';
-        doc.save(`Velocidades_${un ? slug(un) : 'choferes'}_${lunes}.pdf`);
+        return { blob: doc.output('blob'), nombre: `Velocidades_${un ? slug(un) : 'choferes'}_${lunes}.pdf` };
     }
 
-    /** Diálogo: elige la semana (lunes a domingo) y los choferes, y descarga el PDF con una hoja por chofer lista para firmar. */
+    /** Visor del PDF: se ve antes de decidir si se descarga o se imprime (la ventana queda abierta al hacer cualquiera de las dos). */
+    function verPdf(pdf) {
+        const url = URL.createObjectURL(pdf.blob);
+        Swal.fire({
+            title: 'Vista previa', width: 960, showCancelButton: true, showDenyButton: true, focusConfirm: false,
+            html: '<iframe id="vr-visor" class="vr-visor" title="Reporte de velocidades" src="' + url + '"></iframe>'
+                + '<a class="vr-abrir" href="' + url + '" target="_blank" rel="noopener">¿No se ve la vista previa? Ábrelo en una pestaña nueva</a>',
+            confirmButtonText: '<i class="bi bi-download me-1"></i> Descargar', denyButtonText: '<i class="bi bi-printer me-1"></i> Imprimir', cancelButtonText: 'Cerrar',
+            confirmButtonColor: '#1e3a8a', denyButtonColor: '#0f766e',
+            didClose: () => URL.revokeObjectURL(url),
+            preConfirm: () => { const a = document.createElement('a'); a.href = url; a.download = pdf.nombre; document.body.appendChild(a); a.click(); a.remove(); return false; },
+            preDeny: () => {
+                const f = document.getElementById('vr-visor');
+                try { f.contentWindow.focus(); f.contentWindow.print(); } catch (_) { window.open(url, '_blank'); }
+                return false;
+            },
+        });
+    }
+
+    /** Diálogo: elige la semana (lunes a domingo) y uno o todos los choferes, y abre el PDF (una hoja por chofer, lista para firmar) en un visor. */
     window.mxVelReporte = function () {
         if (typeof Swal === 'undefined') return;
         let lunes = lunesDe(sumar(hoyIso(), -7)); // por defecto, la última semana completa
@@ -383,25 +402,49 @@
 
         Swal.fire({
             title: 'Reporte semanal de velocidades', html, width: 580, showCancelButton: true, focusConfirm: false,
-            confirmButtonText: 'Descargar PDF', cancelButtonText: 'Cerrar', confirmButtonColor: '#1e3a8a',
+            confirmButtonText: 'Ver PDF', cancelButtonText: 'Cerrar', confirmButtonColor: '#1e3a8a',
             didOpen: () => {
                 const root = Swal.getHtmlContainer();
                 const $ = s => root.querySelector(s);
                 const confirmar = Swal.getConfirmButton();
 
-                const botonConteo = () => { confirmar.disabled = !datos || sel.size === 0; confirmar.textContent = sel.size ? `Descargar PDF (${sel.size})` : 'Descargar PDF'; };
+                // «Todos» imprime una hoja por chofer; «Solo uno» elige a uno de la lista (con buscador si son varios).
+                let modo = 'todos';
+                const botonConteo = () => {
+                    confirmar.disabled = !datos || sel.size === 0;
+                    confirmar.textContent = sel.size > 1 ? `Ver PDF (${sel.size} choferes)` : 'Ver PDF';
+                };
 
                 const lista = () => {
                     const ids = Object.keys(datos.velocidades || {}).filter(id => resumenChofer(datos.velocidades[id], lunes).max);
-                    if (!ids.length) { $('#vr-cont').innerHTML = '<div class="vr-vacio">Ningún chofer de Bolsa Flexible tiene velocidad registrada esa semana.</div>'; botonConteo(); return; }
-                    const filas = ids.map(id => ({ id, p: (datos.personas || {})[id] || {}, r: resumenChofer(datos.velocidades[id], lunes) })).filter(f => f.r.max).sort((a, b) => b.r.max.vel - a.r.max.vel);
-                    $('#vr-cont').innerHTML = `<div class="vr-top"><label><input type="checkbox" id="vr-todos" ${sel.size === ids.length ? 'checked' : ''}> Todos los choferes</label><span>${ids.length} ${ids.length === 1 ? 'chofer' : 'choferes'}</span></div>
-                        <div class="vr-lista">${filas.map(f => `<label class="vr-fila"><input type="checkbox" data-id="${esc(f.id)}" ${sel.has(f.id) ? 'checked' : ''}>
-                            <span class="vr-n">${esc(f.p.nombre || 'Chofer ' + f.id)}</span>
+                    if (!ids.length) { sel.clear(); $('#vr-cont').innerHTML = '<div class="vr-vacio">Ningún chofer de Bolsa Flexible tiene velocidad registrada esa semana.</div>'; botonConteo(); return; }
+                    const filas = ids.map(id => ({ id, p: (datos.personas || {})[id] || {}, r: resumenChofer(datos.velocidades[id], lunes) })).filter(f => f.r.max)
+                        .sort((a, b) => (modo === 'uno' ? String(a.p.nombre || '').localeCompare(String(b.p.nombre || ''), 'es') : b.r.max.vel - a.r.max.vel));
+                    if (modo === 'todos') { sel.clear(); filas.forEach(f => sel.add(f.id)); }
+                    else { const k = filas.find(f => sel.has(f.id)); sel.clear(); sel.add((k || filas[0]).id); }
+                    const fila = f => {
+                        const q = esc(`${f.p.nombre || ''} ${f.p.rut || ''}`.toLowerCase());
+                        const cuerpo = `<span class="vr-n">${esc(f.p.nombre || 'Chofer ' + f.id)}</span>
                             <span class="vel-p vel-${nivel(f.r.max.vel)}">${nivel(f.r.max.vel) === 'x' ? FLECHA : ''}${esc(f.r.max.vel)}</span>
-                            <span class="vr-s">${esc(f.p.rut || 'Sin RUT')} · ${esc(f.r.patentes.join(', '))} · ${f.r.filas.length} ${f.r.filas.length === 1 ? 'día' : 'días'}${f.r.sobre ? ` · ${f.r.sobre} sobre ${LIMITE}` : ''}</span></label>`).join('')}</div>`;
-                    $('#vr-todos').addEventListener('change', e => { sel.clear(); if (e.target.checked) ids.forEach(i => sel.add(i)); lista(); });
-                    root.querySelectorAll('.vr-fila input').forEach(c => c.addEventListener('change', () => { c.checked ? sel.add(c.dataset.id) : sel.delete(c.dataset.id); $('#vr-todos').checked = sel.size === ids.length; botonConteo(); }));
+                            <span class="vr-s">${esc(f.p.rut || 'Sin RUT')} · ${esc(f.r.patentes.join(', '))} · ${f.r.filas.length} ${f.r.filas.length === 1 ? 'día' : 'días'}${f.r.sobre ? ` · ${f.r.sobre} sobre ${LIMITE}` : ''}</span>`;
+                        return modo === 'uno'
+                            ? `<label class="vr-fila" data-q="${q}"><input type="radio" name="vr-uno" data-id="${esc(f.id)}" ${sel.has(f.id) ? 'checked' : ''}>${cuerpo}</label>`
+                            : `<div class="vr-fila vr-fija" data-q="${q}"><i class="bi bi-check-circle-fill vr-ok" aria-hidden="true"></i>${cuerpo}</div>`;
+                    };
+                    $('#vr-cont').innerHTML = `<div class="vr-modo" role="group" aria-label="Qué choferes imprimir">
+                            <button type="button" data-m="todos" aria-pressed="${modo === 'todos'}">Todos <span>${ids.length}</span></button>
+                            <button type="button" data-m="uno" aria-pressed="${modo === 'uno'}">Solo uno</button>
+                        </div>
+                        ${modo === 'uno' && ids.length > 4 ? '<input type="search" id="vr-buscar" class="vr-buscar" placeholder="Buscar por nombre o RUT" autocomplete="off" aria-label="Buscar chofer">' : ''}
+                        <div class="vr-lista">${filas.map(fila).join('')}<div class="vr-vacio" id="vr-sin" hidden>Ningún chofer coincide.</div></div>`;
+                    root.querySelectorAll('.vr-modo button').forEach(b => b.addEventListener('click', () => { if (modo !== b.dataset.m) { modo = b.dataset.m; lista(); } }));
+                    root.querySelectorAll('.vr-fila input').forEach(c => c.addEventListener('change', () => { sel.clear(); sel.add(c.dataset.id); botonConteo(); }));
+                    const buscar = $('#vr-buscar');
+                    if (buscar) buscar.addEventListener('input', () => {
+                        const t = buscar.value.trim().toLowerCase(); let n = 0;
+                        root.querySelectorAll('.vr-fila').forEach(f => { const ok = !t || f.dataset.q.includes(t); f.hidden = !ok; if (ok) n++; });
+                        $('#vr-sin').hidden = n > 0;
+                    });
                     botonConteo();
                 };
 
@@ -413,7 +456,7 @@
                     datos = null; sel.clear(); botonConteo();
                     $('#vr-cont').innerHTML = '<div class="vr-carga" aria-hidden="true"><span class="vel-sk"></span><span class="vel-sk"></span><span class="vel-sk"></span></div>';
                     const t = ++ticket;
-                    pedir(lunes, dom).then(j => { if (t !== ticket) return; datos = j; Object.keys(j.velocidades || {}).forEach(i => { if (resumenChofer(j.velocidades[i], lunes).max) sel.add(i); }); lista(); })
+                    pedir(lunes, dom).then(j => { if (t !== ticket) return; datos = j; lista(); })
                         .catch(e => { if (t === ticket) $('#vr-cont').innerHTML = `<div class="vr-vacio" role="alert" style="color:#a82f26">No se pudo leer el GPS: ${esc(e.message)}</div>`; });
                 };
 
@@ -423,10 +466,10 @@
             },
             preConfirm: async () => {
                 if (!datos || !sel.size) { Swal.showValidationMessage('Elige al menos un chofer.'); return false; }
-                try { await generarPdf(lunes, datos, Object.keys(datos.velocidades).filter(i => sel.has(i))); return true; }
+                try { return await generarPdf(lunes, datos, Object.keys(datos.velocidades).filter(i => sel.has(i))); }
                 catch (e) { Swal.showValidationMessage(`No se pudo generar el PDF: ${e.message}`); return false; }
             },
-        });
+        }).then(r => { if (r.isConfirmed && r.value) verPdf(r.value); });
     };
 
     // Si el archivo llegó después de pintada la grilla (carga diferida) y la lámina ya está activa, las celdas no tienen su espacio: se pinta una vez más.

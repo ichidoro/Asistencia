@@ -97,6 +97,20 @@ td.col-day:hover .vel-p.vel-x { box-shadow: 0 2px 4px rgba(145, 28, 20, .38), 0 
 .vr-n { font-weight: 700; font-size: .88rem; }
 .vr-s { font-size: .74rem; color: #69738f; grid-column: 2; }
 .vr-fila .vel-p { grid-row: span 2; }
+.vr-modo { display: flex; gap: 4px; padding: 4px; background: #f4f6fb; border-radius: 12px; margin-bottom: 10px; }
+.vr-modo button { flex: 1; border: 0; border-radius: 9px; padding: 9px 12px; background: transparent; color: #5b6878; font-weight: 700; font-size: .85rem; cursor: pointer; transition: background-color .18s ease, color .18s ease, box-shadow .18s ease; }
+.vr-modo button span { margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: #e4e8f1; font-size: .72rem; }
+.vr-modo button[aria-pressed="true"] { background: #fff; color: #1e3a8a; box-shadow: 0 1px 3px rgba(15, 30, 80, .16); }
+.vr-modo button:focus-visible { outline: 2px solid #3f6fd6; outline-offset: 1px; }
+.vr-buscar { width: 100%; margin-bottom: 8px; padding: 9px 12px; border: 1px solid #d9deea; border-radius: 10px; font-size: .85rem; outline: none; }
+.vr-buscar:focus { border-color: #3f6fd6; box-shadow: 0 0 0 3px rgba(63, 111, 214, .18); }
+.vr-fila[hidden] { display: none; }
+.vr-fila:has(input:checked) { background: #eef3ff; }
+.vr-fija { cursor: default; }
+.vr-fija:hover { background: transparent; }
+.vr-ok { color: #16a34a; font-size: 1.05rem; grid-row: span 2; }
+.vr-abrir { display: inline-block; margin-top: 8px; font-size: .78rem; color: #1e3a8a; text-decoration: underline; }
+.vr-visor { width: 100%; height: 68vh; border: 1px solid #e4e8f1; border-radius: 10px; background: #f4f6fb; }
 .vr-vacio { padding: 26px 12px; text-align: center; color: #69738f; font-size: .85rem; }
 .vr-carga { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .vr-carga .vel-sk { width: 100%; height: 42px; border-radius: 10px; }

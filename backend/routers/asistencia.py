@@ -3822,6 +3822,7 @@ async def velocidades_choferes(
     o cuyo nombre contiene TRANSPORTE, vigente en el rango. Con solo el tipo quedaban fuera los de TRANSPORTE, que la grilla sí muestra en Bolsa.
     Y solo del área LOGÍSTICA TRADICIONAL (pedido del dueño, 30-10-2026: por ahora se trabaja solo con ella)."""
     import time
+    from backend.core.rut import rut_visible
     from backend.services.velocidades_choferes import calzar_choferes
     ahora = time.time()
     previo = _VEL_CHOFERES.get((desde, hasta))
@@ -3845,7 +3846,7 @@ async def velocidades_choferes(
     por_emp, sin_calzar = calzar_choferes(dias, choferes)
     # Nombre y RUT de quienes tienen velocidades: el reporte semanal los imprime junto a la firma del chofer.
     personas = {
-        str(c["id"]): {"nombre": " ".join(str(c.get(k) or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(c.get(k) or "").strip()), "rut": c.get("rut") or ""}
+        str(c["id"]): {"nombre": " ".join(str(c.get(k) or "").strip() for k in ("nombre", "apellido_paterno", "apellido_materno") if str(c.get(k) or "").strip()), "rut": rut_visible(c.get("rut"))}
         for c in choferes if str(c["id"]) in por_emp
     }
     # Cuántos días entregó Nexacol y cuántos llegan hasta una persona: la pantalla lo muestra cuando no hay velocidades, para ver dónde se corta
