@@ -365,26 +365,7 @@
         return { blob: doc.output('blob'), nombre: `Velocidades_${un ? slug(un) : 'choferes'}_${lunes}.pdf` };
     }
 
-    /** Visor del PDF: se ve antes de decidir si se descarga o se imprime (la ventana queda abierta al hacer cualquiera de las dos). */
-    function verPdf(pdf) {
-        const url = URL.createObjectURL(pdf.blob);
-        Swal.fire({
-            title: 'Vista previa', width: 960, showCancelButton: true, showDenyButton: true, focusConfirm: false,
-            html: '<iframe id="vr-visor" class="vr-visor" title="Reporte de velocidades" src="' + url + '"></iframe>'
-                + '<a class="vr-abrir" href="' + url + '" target="_blank" rel="noopener">¿No se ve la vista previa? Ábrelo en una pestaña nueva</a>',
-            confirmButtonText: '<i class="bi bi-download me-1"></i> Descargar', denyButtonText: '<i class="bi bi-printer me-1"></i> Imprimir', cancelButtonText: 'Cerrar',
-            confirmButtonColor: '#1e3a8a', denyButtonColor: '#0f766e',
-            didClose: () => URL.revokeObjectURL(url),
-            preConfirm: () => { const a = document.createElement('a'); a.href = url; a.download = pdf.nombre; document.body.appendChild(a); a.click(); a.remove(); return false; },
-            preDeny: () => {
-                const f = document.getElementById('vr-visor');
-                try { f.contentWindow.focus(); f.contentWindow.print(); } catch (_) { window.open(url, '_blank'); }
-                return false;
-            },
-        });
-    }
-
-    /** Diálogo: elige la semana (lunes a domingo) y uno o todos los choferes, y abre el PDF (una hoja por chofer, lista para firmar) en un visor. */
+    /** Diálogo: elige la semana (lunes a domingo) y uno o todos los choferes, y abre el PDF (una hoja por chofer, lista para firmar) en una pestaña nueva, con el visor del navegador para descargarlo o imprimirlo. */
     window.mxVelReporte = function () {
         if (typeof Swal === 'undefined') return;
         let lunes = lunesDe(sumar(hoyIso(), -7)); // por defecto, la última semana completa
@@ -402,7 +383,7 @@
 
         Swal.fire({
             title: 'Reporte semanal de velocidades', html, width: 580, showCancelButton: true, focusConfirm: false,
-            confirmButtonText: 'Ver PDF', cancelButtonText: 'Cerrar', confirmButtonColor: '#1e3a8a',
+            confirmButtonText: 'Abrir PDF', cancelButtonText: 'Cerrar', confirmButtonColor: '#1e3a8a',
             didOpen: () => {
                 const root = Swal.getHtmlContainer();
                 const $ = s => root.querySelector(s);
@@ -412,7 +393,7 @@
                 let modo = 'todos';
                 const botonConteo = () => {
                     confirmar.disabled = !datos || sel.size === 0;
-                    confirmar.textContent = sel.size > 1 ? `Ver PDF (${sel.size} choferes)` : 'Ver PDF';
+                    confirmar.textContent = sel.size > 1 ? `Abrir PDF (${sel.size} choferes)` : 'Abrir PDF';
                 };
 
                 const lista = () => {
@@ -466,10 +447,18 @@
             },
             preConfirm: async () => {
                 if (!datos || !sel.size) { Swal.showValidationMessage('Elige al menos un chofer.'); return false; }
-                try { return await generarPdf(lunes, datos, Object.keys(datos.velocidades).filter(i => sel.has(i))); }
-                catch (e) { Swal.showValidationMessage(`No se pudo generar el PDF: ${e.message}`); return false; }
+                // La pestaña se abre en el mismo clic (después de generar el PDF el navegador podría bloquearla) y recibe el PDF cuando está listo.
+                const pestana = window.open('', '_blank');
+                if (pestana) pestana.document.title = 'Reporte de velocidades';
+                try {
+                    const pdf = await generarPdf(lunes, datos, Object.keys(datos.velocidades).filter(i => sel.has(i)));
+                    const url = URL.createObjectURL(new Blob([pdf.blob], { type: 'application/pdf' }));
+                    if (pestana) pestana.location.href = url; else window.open(url, '_blank');
+                    setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+                    return true;
+                } catch (e) { if (pestana) pestana.close(); Swal.showValidationMessage(`No se pudo generar el PDF: ${e.message}`); return false; }
             },
-        }).then(r => { if (r.isConfirmed && r.value) verPdf(r.value); });
+        });
     };
 
     // Si el archivo llegó después de pintada la grilla (carga diferida) y la lámina ya está activa, las celdas no tienen su espacio: se pinta una vez más.

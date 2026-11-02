@@ -109,8 +109,6 @@ td.col-day:hover .vel-p.vel-x { box-shadow: 0 2px 4px rgba(145, 28, 20, .38), 0 
 .vr-fija { cursor: default; }
 .vr-fija:hover { background: transparent; }
 .vr-ok { color: #16a34a; font-size: 1.05rem; grid-row: span 2; }
-.vr-abrir { display: inline-block; margin-top: 8px; font-size: .78rem; color: #1e3a8a; text-decoration: underline; }
-.vr-visor { width: 100%; height: 68vh; border: 1px solid #e4e8f1; border-radius: 10px; background: #f4f6fb; }
 .vr-vacio { padding: 26px 12px; text-align: center; color: #69738f; font-size: .85rem; }
 .vr-carga { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .vr-carga .vel-sk { width: 100%; height: 42px; border-radius: 10px; }
