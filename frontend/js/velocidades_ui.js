@@ -219,7 +219,7 @@
         doc.setDrawColor(...ROJO); doc.line(w + x - 80, y + 13, w + x - 66, y + 13);
         doc.text('Sobre ' + LIMITE + ' km/h', w + x - 62, y + 16);
 
-        const px = x + 16, py = y + 28, pw = w - 32, ph = h - 40;
+        const px = x + 16, py = y + 28, pw = w - 32, ph = h - 56; // abajo queda una línea para las coordenadas
         const las = pts.map(p => p.la), los = pts.map(p => p.lo);
         const minLa = Math.min(...las), maxLa = Math.max(...las), minLo = Math.min(...los), maxLo = Math.max(...los);
         const k = Math.cos(((minLa + maxLa) / 2) * Math.PI / 180); // un grado de longitud mide menos que uno de latitud
@@ -244,6 +244,16 @@
         const lx = mx > x + w / 2 ? mx - tw - 10 : mx + 10, ly = Math.min(Math.max(my - 9, y + 22), y + h - 22);
         doc.setFillColor(...ROJO); doc.roundedRect(lx, ly, tw, 17, 4, 4, 'F');
         doc.setTextColor(255, 255, 255); doc.text(txt, lx + 7, ly + 11.5);
+        // Dónde fue: coordenadas impresas y enlace a Google Maps (la etiqueta roja y el texto de abajo abren el mismo punto)
+        const mapa = 'https://www.google.com/maps/search/?api=1&query=' + m.la.toFixed(6) + ',' + m.lo.toFixed(6);
+        doc.link(lx, ly, tw, 17, { url: mapa });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
+        doc.text('Punto de la velocidad máxima:  ' + m.la.toFixed(5) + ',  ' + m.lo.toFixed(5), x + 14, y + h - 10);
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(...AZUL);
+        const gm = 'Abrir en Google Maps', gw = doc.getTextWidth(gm), gx = x + w - 14 - gw;
+        doc.text(gm, gx, y + h - 10); doc.setDrawColor(...AZUL); doc.setLineWidth(0.5); doc.line(gx, y + h - 8.5, gx + gw, y + h - 8.5);
+        doc.link(gx, y + h - 19, gw, 14, { url: mapa });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...GRIS);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...GRIS);
         doc.text('Inicio', X(pts[0].lo) + 7, Y(pts[0].la) + 3); doc.text('Fin', X(pts[pts.length - 1].lo) + 7, Y(pts[pts.length - 1].la) + 3);
     }
@@ -291,9 +301,9 @@
 
         // Ruta del día de la velocidad máxima (si el GPS la entregó) y detalle por día, más compacto para que la firma quede en la misma hoja
         const compacto = !!ruta;
-        if (compacto) dibujarRuta(doc, M, 270, W - 2 * M, 118, ruta, res);
+        if (compacto) dibujarRuta(doc, M, 270, W - 2 * M, 130, ruta, res);
         doc.autoTable({
-            startY: compacto ? 400 : 276, theme: 'grid', margin: { left: M, right: M },
+            startY: compacto ? 412 : 276, theme: 'grid', margin: { left: M, right: M },
             head: [['Fecha', 'Día', 'Patente', 'Velocidad máx.', 'Hora', 'Evaluación']],
             body: res.filas.map(r => [dmy(r.fecha), diaDe(r.fecha).replace(/^./, c => c.toUpperCase()), r.patente, `${r.vel} km/h`, r.hora || '—', r.vel > LIMITE ? `Sobre ${LIMITE} km/h` : 'Dentro del límite']),
             styles: { font: 'helvetica', fontSize: compacto ? 9 : 9.5, cellPadding: compacto ? { top: 3.5, bottom: 3.5, left: 8, right: 8 } : { top: 6, bottom: 6, left: 8, right: 8 }, lineColor: [228, 232, 241], lineWidth: 0.6, textColor: TINTA, valign: 'middle' },
@@ -315,8 +325,8 @@
         doc.text('Velocidad máxima registrada por el GPS del vehículo asignado al chofer en la programación de Despacho Diario.', M, yTabla + 16);
 
         // Declaración y firma
-        let yDecl = compacto ? yTabla + 36 : Math.max(yTabla + 46, 500);
-        const altoCaja = compacto ? 118 : 132;
+        let yDecl = compacto ? yTabla + 32 : Math.max(yTabla + 46, 500);
+        const altoCaja = compacto ? 106 : 132;
         if (yDecl + 96 + altoCaja > doc.internal.pageSize.getHeight() - 50) { doc.addPage(); yDecl = 60; }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...GRIS);
         doc.text('DECLARACIÓN DE CONOCIMIENTO', M, yDecl);
@@ -324,7 +334,7 @@
         const texto = `Yo, ${nombre}${rut ? ', RUT ' + rut : ''}, declaro haber tomado conocimiento de las velocidades máximas registradas por el GPS ${res.patentes.length === 1 ? 'del vehículo' : 'de los vehículos'} patente ${veh}, asignado${res.patentes.length === 1 ? '' : 's'} a mi nombre en la programación de Despacho Diario durante la semana del ${larga(lunes)} al ${larga(domingo)}, tal como se detallan en este documento.`;
         doc.text(doc.splitTextToSize(texto, W - 2 * M), M, yDecl + 18, { lineHeightFactor: 1.5 });
 
-        const yCaja = compacto ? yDecl + 80 : Math.max(yDecl + 96, 626);
+        const yCaja = compacto ? yDecl + 74 : Math.max(yDecl + 96, 626);
         doc.setDrawColor(213, 220, 235); doc.setLineWidth(0.8); doc.roundedRect(M, yCaja, W - 2 * M, altoCaja, 10, 10, 'S');
         doc.setDrawColor(...TINTA); doc.setLineWidth(0.7);
         const yLin = yCaja + altoCaja - 44;
