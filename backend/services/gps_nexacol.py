@@ -5,6 +5,7 @@ Nexacol (rutas /api/reports/camiones-gps-*, sin cambios en Nexacol) entrega los 
 """
 import asyncio
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -170,6 +171,34 @@ async def ruta_velocidad(patente: str, fecha: str) -> Dict[str, Any]:
     puntos = decimar_ruta(data.get("puntos") or [])
     mx = max(puntos, key=lambda p: p["v"]) if puntos else None
     return {"success": True, "patente": veh["patente"], "fecha": fecha, "puntos": puntos, "punto_max": mx, "km": (data.get("resumen") or {}).get("km")}
+
+
+def segundos_sobre_limite(puntos: List[Dict[str, Any]], limite: float) -> int:
+    """Segundos del día en que el camión iba a más de `limite` km/h: cada reporte sobre el límite cuenta hasta el siguiente (como mucho HUECO_MAX: más allá no hay dato)."""
+    pts = sorted((p for p in puntos if isinstance(p.get("s"), (int, float)) and isinstance(p.get("v"), (int, float))), key=lambda p: p["s"])
+    total = 0.0
+    for a, b in zip(pts, pts[1:]):
+        dt = b["s"] - a["s"]
+        if dt > 0 and a["v"] > limite:
+            total += min(dt, HUECO_MAX)
+    return int(round(total))
+
+
+_veh_cache: Dict[str, Any] = {"t": 0.0, "v": []}
+
+
+async def exceso_dia(patente: str, fecha: str, limite: float) -> Optional[int]:
+    """Segundos que el camión (por patente) anduvo sobre `limite` km/h ese día, con todos los puntos del GPS; None si no se pudo leer."""
+    if time.time() - _veh_cache["t"] > 600:
+        _veh_cache["v"] = await vehiculos()
+        _veh_cache["t"] = time.time()
+    pat = re.sub(r"[^A-Z0-9]", "", str(patente).upper())
+    veh = next((v for v in _veh_cache["v"] if re.sub(r"[^A-Z0-9]", "", v["patente"].upper()) == pat), None)
+    if not veh:
+        return None
+    data = await _get("/api/reports/camiones-gps-ruta", {"id": veh["id"], "fecha": fecha, "parada_min": str(PARADA_MIN_ASISTENCIA)})
+    puntos = data.get("puntos") or []
+    return segundos_sobre_limite(puntos, limite) if puntos else None
 
 
 async def velocidades(desde: str, hasta: str) -> List[Dict[str, Any]]:

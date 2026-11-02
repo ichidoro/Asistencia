@@ -59,3 +59,13 @@ def test_decimar_ruta_conserva_extremos_y_el_punto_de_velocidad_maxima():
     assert out[0]["s"] == 0 and out[-1]["s"] == 19990
     assert any(p["v"] == 99 for p in out)
     assert decimar_ruta(pts[:10], maximo=450) == [{k: p[k] for k in ("s", "la", "lo", "v")} for p in pts[:10]]
+
+
+def test_segundos_sobre_limite_cuenta_solo_lo_que_iba_sobre_el_limite():
+    from backend.services.gps_nexacol import segundos_sobre_limite
+    pts = [{"s": 0, "v": 60}, {"s": 30, "v": 95}, {"s": 60, "v": 97}, {"s": 90, "v": 80}, {"s": 120, "v": 91}, {"s": 150, "v": 50}]
+    # sobre 90: del segundo 30 al 90 (60 s) y del 120 al 150 (30 s)
+    assert segundos_sobre_limite(pts, 90) == 90
+    assert segundos_sobre_limite(pts, 120) == 0
+    # un hueco enorme sin reportar no cuenta entero
+    assert segundos_sobre_limite([{"s": 0, "v": 100}, {"s": 7200, "v": 100}], 90) == 15 * 60

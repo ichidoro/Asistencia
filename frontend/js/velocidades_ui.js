@@ -197,7 +197,22 @@
         return _logo || null;
     }
 
-    /** Ruta del camión el día de la velocidad máxima (puntos reducidos); null si el GPS no la entrega: el reporte sale igual, sin mapa. */
+    /** Segundos de cada día que cada camión anduvo sobre el límite ({'PATENTE|fecha': segundos}); lo que no se pudo leer queda sin dato. */
+    async function pedirExcesos(resumenes) {
+        const pares = [...new Set(resumenes.flatMap(r => r.filas.map(f => f.patente + ':' + f.fecha)))];
+        const out = {};
+        for (let i = 0; i < pares.length; i += 40) {
+            try {
+                const r = await fetch('/api/asistencia/gps/exceso-velocidad/?limite=' + LIMITE + '&items=' + encodeURIComponent(pares.slice(i, i + 40).join(',')), { headers: authHead() });
+                const j = await r.json().catch(() => ({}));
+                if (r.ok && j.segundos) Object.assign(out, j.segundos);
+            } catch (_) { /* esos días salen "Sin dato" */ }
+        }
+        return out;
+    }
+    const duracion = sg => (sg == null ? 'Sin dato' : sg <= 0 ? 'Ninguno' : sg < 60 ? sg + ' s' : Math.floor(sg / 60) + ' min' + (sg % 60 ? ' ' + (sg % 60) + ' s' : ''));
+
+    /** Punto de la velocidad máxima (de la ruta de ese día); null si el GPS no lo entrega: el reporte sale igual, sin las coordenadas. */
     async function pedirRuta(patente, fecha) {
         try {
             const r = await fetch('/api/asistencia/gps/ruta-velocidad/?patente=' + encodeURIComponent(patente) + '&fecha=' + fecha, { headers: authHead() });
@@ -206,59 +221,7 @@
         } catch (_) { return null; }
     }
 
-    /** Dibuja la ruta como trazo vectorial (sin mapa de fondo): rojo donde iba sobre el límite, con el punto de la velocidad máxima marcado. */
-    function dibujarRuta(doc, x, y, w, h, ruta, res) {
-        const AZUL = [30, 58, 138], ROJO = [217, 45, 32], VERDE = [18, 112, 63], GRIS = [105, 115, 143], TINTA = [26, 35, 38];
-        const pts = ruta.puntos;
-        doc.setFillColor(244, 246, 251); doc.setDrawColor(213, 220, 235); doc.setLineWidth(0.8); doc.roundedRect(x, y, w, h, 8, 8, 'FD');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
-        doc.text('RUTA DEL ' + dmy(ruta.fecha) + '  ·  CAMIÓN ' + ruta.patente + (ruta.km ? '  ·  ' + Math.round(ruta.km) + ' KM' : ''), x + 14, y + 16);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
-        doc.setDrawColor(...AZUL); doc.setLineWidth(1.6); doc.line(w + x - 168, y + 13, w + x - 154, y + 13);
-        doc.setTextColor(...GRIS); doc.text('Dentro del límite', w + x - 150, y + 16);
-        doc.setDrawColor(...ROJO); doc.line(w + x - 80, y + 13, w + x - 66, y + 13);
-        doc.text('Sobre ' + LIMITE + ' km/h', w + x - 62, y + 16);
-
-        const px = x + 16, py = y + 28, pw = w - 32, ph = h - 56; // abajo queda una línea para las coordenadas
-        const las = pts.map(p => p.la), los = pts.map(p => p.lo);
-        const minLa = Math.min(...las), maxLa = Math.max(...las), minLo = Math.min(...los), maxLo = Math.max(...los);
-        const k = Math.cos(((minLa + maxLa) / 2) * Math.PI / 180); // un grado de longitud mide menos que uno de latitud
-        const dx = Math.max((maxLo - minLo) * k, 1e-6), dy = Math.max(maxLa - minLa, 1e-6);
-        const sc = Math.min(pw / dx, ph / dy);
-        const X = lo => px + (pw - dx * sc) / 2 + (lo - minLo) * k * sc;
-        const Y = la => py + (ph - dy * sc) / 2 + (maxLa - la) * sc;
-
-        doc.setLineWidth(1.6);
-        for (let i = 1; i < pts.length; i++) {
-            const a = pts[i - 1], b = pts[i];
-            doc.setDrawColor(...(Math.max(a.v, b.v) > LIMITE ? ROJO : AZUL));
-            doc.line(X(a.lo), Y(a.la), X(b.lo), Y(b.la));
-        }
-        const marca = (p, col, r) => { doc.setFillColor(...col); doc.setDrawColor(255, 255, 255); doc.setLineWidth(1.4); doc.circle(X(p.lo), Y(p.la), r, 'FD'); };
-        marca(pts[0], VERDE, 4); marca(pts[pts.length - 1], TINTA, 4);
-        const m = ruta.punto_max || pts.reduce((a, p) => (p.v > a.v ? p : a), pts[0]);
-        marca(m, ROJO, 6);
-        const txt = 'MÁX. ' + res.max.vel + ' km/h' + (res.max.hora ? ' · ' + res.max.hora : '');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
-        const tw = doc.getTextWidth(txt) + 14, mx = X(m.lo), my = Y(m.la);
-        const lx = mx > x + w / 2 ? mx - tw - 10 : mx + 10, ly = Math.min(Math.max(my - 9, y + 22), y + h - 22);
-        doc.setFillColor(...ROJO); doc.roundedRect(lx, ly, tw, 17, 4, 4, 'F');
-        doc.setTextColor(255, 255, 255); doc.text(txt, lx + 7, ly + 11.5);
-        // Dónde fue: coordenadas impresas y enlace a Google Maps (la etiqueta roja y el texto de abajo abren el mismo punto)
-        const mapa = 'https://www.google.com/maps/search/?api=1&query=' + m.la.toFixed(6) + ',' + m.lo.toFixed(6);
-        doc.link(lx, ly, tw, 17, { url: mapa });
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
-        doc.text('Punto de la velocidad máxima:  ' + m.la.toFixed(5) + ',  ' + m.lo.toFixed(5), x + 14, y + h - 10);
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(...AZUL);
-        const gm = 'Abrir en Google Maps', gw = doc.getTextWidth(gm), gx = x + w - 14 - gw;
-        doc.text(gm, gx, y + h - 10); doc.setDrawColor(...AZUL); doc.setLineWidth(0.5); doc.line(gx, y + h - 8.5, gx + gw, y + h - 8.5);
-        doc.link(gx, y + h - 19, gw, 14, { url: mapa });
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...GRIS);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...GRIS);
-        doc.text('Inicio', X(pts[0].lo) + 7, Y(pts[0].la) + 3); doc.text('Fin', X(pts[pts.length - 1].lo) + 7, Y(pts[pts.length - 1].la) + 3);
-    }
-
-    function paginaChofer(doc, nombre, rut, res, lunes, ruta, logo) {
+    function paginaChofer(doc, nombre, rut, res, lunes, ruta, logo, exc) {
         const W = doc.internal.pageSize.getWidth();
         const M = 40, domingo = sumar(lunes, 6);
         const AZUL = [30, 58, 138], TINTA = [26, 35, 38], GRIS = [105, 115, 143], ROJO = [217, 45, 32], VERDE = [18, 112, 63];
@@ -299,34 +262,49 @@
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GRIS);
         doc.text(`Límite de referencia: ${LIMITE} km/h`, W - M, 253, { align: 'right' });
 
-        // Ruta del día de la velocidad máxima (si el GPS la entregó) y detalle por día, más compacto para que la firma quede en la misma hoja
-        const compacto = !!ruta;
-        if (compacto) dibujarRuta(doc, M, 270, W - 2 * M, 130, ruta, res);
+        // Dónde fue la velocidad máxima: coordenadas y enlace a Google Maps (sin mapa dibujado)
+        let yTab = 276;
+        if (ruta && ruta.punto_max) {
+            const m = ruta.punto_max, mapa = 'https://www.google.com/maps/search/?api=1&query=' + m.la.toFixed(6) + ',' + m.lo.toFixed(6);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GRIS);
+            doc.text('Punto de la velocidad máxima (' + dmy(ruta.fecha) + '):  ' + m.la.toFixed(5) + ',  ' + m.lo.toFixed(5), M, 282);
+            doc.setFont('helvetica', 'bold'); doc.setTextColor(...AZUL);
+            const gm = 'Abrir en Google Maps', gw = doc.getTextWidth(gm), gx = W - M - gw;
+            doc.text(gm, gx, 282); doc.setDrawColor(...AZUL); doc.setLineWidth(0.5); doc.line(gx, 283.5, gx + gw, 283.5);
+            doc.link(gx, 271, gw, 14, { url: mapa });
+            yTab = 296;
+        }
         doc.autoTable({
-            startY: compacto ? 412 : 276, theme: 'grid', margin: { left: M, right: M },
-            head: [['Fecha', 'Día', 'Patente', 'Velocidad máx.', 'Hora', 'Evaluación']],
-            body: res.filas.map(r => [dmy(r.fecha), diaDe(r.fecha).replace(/^./, c => c.toUpperCase()), r.patente, `${r.vel} km/h`, r.hora || '—', r.vel > LIMITE ? `Sobre ${LIMITE} km/h` : 'Dentro del límite']),
-            styles: { font: 'helvetica', fontSize: compacto ? 9 : 9.5, cellPadding: compacto ? { top: 3.5, bottom: 3.5, left: 8, right: 8 } : { top: 6, bottom: 6, left: 8, right: 8 }, lineColor: [228, 232, 241], lineWidth: 0.6, textColor: TINTA, valign: 'middle' },
+            startY: yTab, theme: 'grid', margin: { left: M, right: M },
+            head: [['Fecha', 'Día', 'Patente', 'Velocidad máx.', 'Hora', 'Tiempo sobre ' + LIMITE + ' km/h', 'Evaluación']],
+            body: res.filas.map(r => [dmy(r.fecha), diaDe(r.fecha).replace(/^./, c => c.toUpperCase()), r.patente, `${r.vel} km/h`, r.hora || '—', duracion(exc ? exc[r.patente + '|' + r.fecha] : null), r.vel > LIMITE ? `Sobre ${LIMITE} km/h` : 'Dentro del límite']),
+            styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 6, bottom: 6, left: 7, right: 7 }, lineColor: [228, 232, 241], lineWidth: 0.6, textColor: TINTA, valign: 'middle' },
             headStyles: { fillColor: AZUL, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
             alternateRowStyles: { fillColor: [249, 250, 253] },
-            columnStyles: { 3: { halign: 'right', fontStyle: 'bold' }, 4: { halign: 'center' } },
+            columnStyles: { 3: { halign: 'right', fontStyle: 'bold' }, 4: { halign: 'center' }, 5: { halign: 'right', fontStyle: 'bold' } },
             didParseCell: d => {
                 if (d.section !== 'body') return;
                 const r = res.filas[d.row.index];
-                if (d.column.index === 3 || d.column.index === 5) {
+                if (d.column.index === 3 || d.column.index === 6) {
                     d.cell.styles.textColor = r.vel > LIMITE ? [168, 47, 38] : VERDE;
                     d.cell.styles.fillColor = r.vel > LIMITE ? [253, 236, 234] : [235, 247, 240];
-                    if (d.column.index === 5) d.cell.styles.fontStyle = 'bold';
+                    if (d.column.index === 6) d.cell.styles.fontStyle = 'bold';
+                }
+                if (d.column.index === 5) {
+                    const sg = exc ? exc[r.patente + '|' + r.fecha] : null;
+                    d.cell.styles.textColor = sg > 0 ? [168, 47, 38] : [105, 115, 143];
+                    d.cell.styles.fillColor = sg > 0 ? [253, 236, 234] : [249, 250, 253];
                 }
             },
         });
         const yTabla = doc.lastAutoTable.finalY;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...GRIS);
         doc.text('Velocidad máxima registrada por el GPS del vehículo asignado al chofer en la programación de Despacho Diario.', M, yTabla + 16);
+        doc.text('Tiempo sobre ' + LIMITE + ' km/h: lo que el GPS lo registró andando por encima de ese límite durante el día.', M, yTabla + 28);
 
         // Declaración y firma
-        let yDecl = compacto ? yTabla + 32 : Math.max(yTabla + 46, 500);
-        const altoCaja = compacto ? 106 : 132;
+        let yDecl = Math.max(yTabla + 50, 500);
+        const altoCaja = 132;
         if (yDecl + 96 + altoCaja > doc.internal.pageSize.getHeight() - 50) { doc.addPage(); yDecl = 60; }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...GRIS);
         doc.text('DECLARACIÓN DE CONOCIMIENTO', M, yDecl);
@@ -334,7 +312,7 @@
         const texto = `Yo, ${nombre}${rut ? ', RUT ' + rut : ''}, declaro haber tomado conocimiento de las velocidades máximas registradas por el GPS ${res.patentes.length === 1 ? 'del vehículo' : 'de los vehículos'} patente ${veh}, asignado${res.patentes.length === 1 ? '' : 's'} a mi nombre en la programación de Despacho Diario durante la semana del ${larga(lunes)} al ${larga(domingo)}, tal como se detallan en este documento.`;
         doc.text(doc.splitTextToSize(texto, W - 2 * M), M, yDecl + 18, { lineHeightFactor: 1.5 });
 
-        const yCaja = compacto ? yDecl + 74 : Math.max(yDecl + 96, 626);
+        const yCaja = Math.max(yDecl + 96, 626);
         doc.setDrawColor(213, 220, 235); doc.setLineWidth(0.8); doc.roundedRect(M, yCaja, W - 2 * M, altoCaja, 10, 10, 'S');
         doc.setDrawColor(...TINTA); doc.setLineWidth(0.7);
         const yLin = yCaja + altoCaja - 44;
@@ -363,12 +341,12 @@
         const doc = new jsPDF('p', 'pt', 'a4');
         const logo = await cargarLogo();
         const res = ids.map(id => resumenChofer(datos.velocidades[id], lunes));
-        // La ruta de cada chofer (la del día de su velocidad máxima) se pide en paralelo; si alguna falla, esa hoja sale sin mapa.
-        const rutas = await Promise.all(res.map(r => pedirRuta(r.max.patente, r.max.fecha)));
+        // El punto de la velocidad máxima de cada chofer y el tiempo diario sobre el límite se piden en paralelo; si algo falla, esa hoja sale sin ese dato.
+        const [rutas, excesos] = await Promise.all([Promise.all(res.map(r => pedirRuta(r.max.patente, r.max.fecha))), pedirExcesos(res)]);
         ids.forEach((id, i) => {
             if (i) doc.addPage();
             const p = (datos.personas || {})[id] || {};
-            paginaChofer(doc, p.nombre || `Chofer ${id}`, p.rut || '', res[i], lunes, rutas[i], logo);
+            paginaChofer(doc, p.nombre || `Chofer ${id}`, p.rut || '', res[i], lunes, rutas[i], logo, excesos);
         });
         pieDePagina(doc);
         const un = ids.length === 1 ? ((datos.personas || {})[ids[0]] || {}).nombre : '';

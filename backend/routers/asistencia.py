@@ -3807,6 +3807,27 @@ async def ruta_velocidad(
         raise HTTPException(status_code=e.status, detail=e.mensaje)
 
 
+@router.get("/gps/exceso-velocidad/")
+async def exceso_velocidad(
+    items: str = Query(..., pattern=r"^[A-Za-z0-9 \-]{4,10}:\d{4}-\d{2}-\d{2}(,[A-Za-z0-9 \-]{4,10}:\d{4}-\d{2}-\d{2}){0,39}$"),
+    limite: int = Query(90, ge=30, le=200),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver")),
+):
+    """Segundos de cada día (patente:fecha, separados por coma) que el camión anduvo sobre el límite de velocidad, para el reporte semanal que firma el chofer."""
+    import asyncio
+    sem = asyncio.Semaphore(4)
+
+    async def uno(par: str):
+        pat, fecha = par.split(":", 1)
+        async with sem:
+            try:
+                return f"{pat.strip().upper()}|{fecha}", await gps_nexacol.exceso_dia(pat, fecha, limite)
+            except gps_nexacol.GpsNexacolError:
+                return f"{pat.strip().upper()}|{fecha}", None
+    pares = list(dict.fromkeys(items.split(",")))
+    return {"success": True, "limite": limite, "segundos": dict(await asyncio.gather(*(uno(p) for p in pares)))}
+
+
 _VEL_CHOFERES: Dict[Any, Any] = {}   # (desde, hasta) -> (momento, filas de Nexacol): la grilla pide el mismo mes varias veces seguidas
 
 
