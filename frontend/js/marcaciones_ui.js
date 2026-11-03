@@ -350,6 +350,9 @@ async function initMarcacionesUI() {
 
     const container = document.getElementById('page-marcaciones');
     if (!container) return; // No estamos en la página correcta o no existe el contenedor
+    // Cada vez que se entra a Asistencia, los horarios de la grilla parten plegados
+    window._mxDesplegados = new Set();
+    try { localStorage.removeItem('mx-horarios-plegados'); } catch (e) { /* lo guardaba la primera versión de los bloques */ }
     if (!stateMarcacionesApp._filtrosRestaurados) { stateMarcacionesApp._filtrosRestaurados = true; window.mxRestaurarFiltros(); }
 
     // Estimar fechas locales temporales para pintar el Toolbar de inmediato si no están cargadas
@@ -6215,41 +6218,38 @@ window.mxCeldaEspera = function (r) {
 };
 
 // ── Grilla por horario (diseño B elegido por el dueño, 03-11-2026) ─────────────────────────────────────────────────
-// Con «Todos los horarios» y dos o más horarios a la vista, la tabla se arma en bloques: uno por horario (orden
-// alfabético), con su título plegable, la cantidad de personas y, desde el segundo, su propio encabezado; las personas
-// siguen en orden alfabético dentro de su bloque. Con un horario elegido en el filtro la grilla queda como siempre.
+// Con «Todos los horarios» la tabla se arma en bloques, aunque haya un solo horario: uno por horario (orden alfabético),
+// con su título plegable, la cantidad de personas y, desde el segundo, su propio encabezado; las personas siguen en
+// orden alfabético dentro de su bloque. Con un horario o una persona elegidos en los filtros la grilla queda sin bloques.
 window.mxGruposPorHorario = function (rows) {
-    if (stateMarcacionesApp.turnoId) return null;
+    if (stateMarcacionesApp.turnoId || stateMarcacionesApp.empleadoId) return null;
     const mapa = new Map();
     rows.forEach(r => {
         const k = String((r.emp && r.emp.turno) || '').trim() || 'Sin horario';
         if (!mapa.has(k)) mapa.set(k, []);
         mapa.get(k).push(r);
     });
-    if (mapa.size < 2) return null;
+    if (!mapa.size) return null;
     // Dentro de cada bloque, el orden de siempre (el servidor las entrega por apellido paterno, materno y nombre)
     return [...mapa.keys()].sort((a, b) => a.localeCompare(b, 'es')).map(k => ({ nombre: k, filas: mapa.get(k) }));
 };
-window.mxHorariosPlegados = function () {
-    if (!window._mxPlegados) {
-        let a = [];
-        try { a = JSON.parse(localStorage.getItem('mx-horarios-plegados') || '[]'); } catch (e) { a = []; }
-        window._mxPlegados = new Set(Array.isArray(a) ? a : []);
-    }
-    return window._mxPlegados;
+// Los horarios parten plegados cada vez que se entra a Asistencia (initMarcacionesUI vacía la lista); los que la persona
+// abre siguen abiertos mientras trabaja, aunque la grilla se vuelva a dibujar
+window.mxHorariosDesplegados = function () {
+    if (!window._mxDesplegados) window._mxDesplegados = new Set();
+    return window._mxDesplegados;
 };
 window.mxPlegarHorario = function (btn) {
     const tb = btn && btn.closest('tbody.gh-grupo');
     if (!tb) return;
     const plegado = tb.classList.toggle('gh-plegado');
     btn.setAttribute('aria-expanded', String(!plegado));
-    const set = window.mxHorariosPlegados();
-    if (plegado) set.add(tb.dataset.horario); else set.delete(tb.dataset.horario);
-    try { localStorage.setItem('mx-horarios-plegados', JSON.stringify([...set])); } catch (e) { /* sin almacenamiento: solo esta vez */ }
+    const set = window.mxHorariosDesplegados();
+    if (plegado) set.delete(tb.dataset.horario); else set.add(tb.dataset.horario);
 };
 window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const e = window.escHtml || (x => String(x));
-    const n = g.filas.length, plegado = window.mxHorariosPlegados().has(g.nombre);
+    const n = g.filas.length, plegado = !window.mxHorariosDesplegados().has(g.nombre);
     return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
         + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
         + '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>'
