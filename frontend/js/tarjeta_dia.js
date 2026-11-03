@@ -525,7 +525,11 @@
             return '<th class="' + cls + '" scope="col">' + DIAS_SEM[d.getDay()] + '<b>' + String(d.getDate()).padStart(2, '0') + '</b></th>';
         }).join('');
 
-        const filas = tabla.querySelectorAll('tbody tr[id^="row-empleado-"]');
+        const filas = [...tabla.querySelectorAll('tbody tr[id^="row-empleado-"]')];
+        // La grilla por horario reparte las filas en bloques; la semana sigue con una sola lista en el orden de siempre (el del servidor)
+        const orden = new Map(((stateMarcacionesApp.data && stateMarcacionesApp.data.empleados) || []).map((e, i) => [String(e.id), i]));
+        const posicion = tr => { const v = orden.get(tr.id.replace('row-empleado-', '')); return v === undefined ? 1e9 : v; };
+        if (orden.size) filas.sort((a, b) => posicion(a) - posicion(b));
         const cuerpo = document.createElement('tbody');
         if (semDir) cuerpo.className = semDir === 'izq' ? 'sem-izq' : 'sem-der';
         filas.forEach(tr => {
@@ -575,14 +579,16 @@
     }
 
     // Una fila recargada (reloadSingleEmployeeRow) o un pintado nuevo de la grilla vuelven a armar la semana
+    // Vigila todos los cuerpos de la tabla (la grilla por horario tiene uno por horario)
     function vigilarCuerpo(tabla) {
-        const tb = tabla.tBodies && tabla.tBodies[0];
-        if (!tb || (obsCuerpo && obsCuerpo._tb === tb)) return;
+        const tbs = tabla.tBodies ? [...tabla.tBodies] : [];
+        if (!tbs.length || (obsCuerpo && obsCuerpo._tb === tabla && obsCuerpo._n === tbs.length)) return;
         if (obsCuerpo) obsCuerpo.disconnect();
         let raf = 0;
         obsCuerpo = new MutationObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (esMovil()) pintarSemana(); }); });
-        obsCuerpo._tb = tb;
-        obsCuerpo.observe(tb, { childList: true });
+        obsCuerpo._tb = tabla;
+        obsCuerpo._n = tbs.length;
+        tbs.forEach(tb => obsCuerpo.observe(tb, { childList: true }));
     }
 
     if (typeof renderVistaAnalitica === 'function') {

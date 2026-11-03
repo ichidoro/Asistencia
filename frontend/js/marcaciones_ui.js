@@ -6214,6 +6214,51 @@ window.mxCeldaEspera = function (r) {
         + '<div class="mx-av-tx" style="color:' + col + '">' + frase + '</div></div>';
 };
 
+// ── Grilla por horario (diseño B elegido por el dueño, 03-11-2026) ─────────────────────────────────────────────────
+// Con «Todos los horarios» y dos o más horarios a la vista, la tabla se arma en bloques: uno por horario (orden
+// alfabético), con su título plegable, la cantidad de personas y, desde el segundo, su propio encabezado; las personas
+// siguen en orden alfabético dentro de su bloque. Con un horario elegido en el filtro la grilla queda como siempre.
+window.mxGruposPorHorario = function (rows) {
+    if (stateMarcacionesApp.turnoId) return null;
+    const mapa = new Map();
+    rows.forEach(r => {
+        const k = String((r.emp && r.emp.turno) || '').trim() || 'Sin horario';
+        if (!mapa.has(k)) mapa.set(k, []);
+        mapa.get(k).push(r);
+    });
+    if (mapa.size < 2) return null;
+    // Dentro de cada bloque, el orden de siempre (el servidor las entrega por apellido paterno, materno y nombre)
+    return [...mapa.keys()].sort((a, b) => a.localeCompare(b, 'es')).map(k => ({ nombre: k, filas: mapa.get(k) }));
+};
+window.mxHorariosPlegados = function () {
+    if (!window._mxPlegados) {
+        let a = [];
+        try { a = JSON.parse(localStorage.getItem('mx-horarios-plegados') || '[]'); } catch (e) { a = []; }
+        window._mxPlegados = new Set(Array.isArray(a) ? a : []);
+    }
+    return window._mxPlegados;
+};
+window.mxPlegarHorario = function (btn) {
+    const tb = btn && btn.closest('tbody.gh-grupo');
+    if (!tb) return;
+    const plegado = tb.classList.toggle('gh-plegado');
+    btn.setAttribute('aria-expanded', String(!plegado));
+    const set = window.mxHorariosPlegados();
+    if (plegado) set.add(tb.dataset.horario); else set.delete(tb.dataset.horario);
+    try { localStorage.setItem('mx-horarios-plegados', JSON.stringify([...set])); } catch (e) { /* sin almacenamiento: solo esta vez */ }
+};
+window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
+    const e = window.escHtml || (x => String(x));
+    const n = g.filas.length, plegado = window.mxHorariosPlegados().has(g.nombre);
+    return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
+        + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
+        + '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>'
+        + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span></div></td></tr>'
+        // El encabezado repetido va bajo el encabezado fijo de arriba (capa 55 < 90) y con su mismo aspecto (clase gh-cab)
+        + (i > 0 ? cabecera.split('<tr class="').join('<tr class="gh-cab ').replace(/z-index:\s*1\d\d/g, 'z-index:55') : '')
+        + g.filas.map(htmlDe).join('') + '</tbody>';
+};
+
 window.buildStickyCols = function(sh, bonosNombres) {
     const C = window.GRID_COLLAPSED_W;
     // Horas extra del libro mayor: trabajadas, usadas, a pagar, no pagadas, por decidir (5 columnas)
@@ -7224,9 +7269,9 @@ function renderVistaAnalitica(respData, container) {
 
 
     // ── 7. Filas de empleados ────────────────────────────────────────────────
-    const bodyRows = visibleRows.map(r => {
-        return window.renderEmployeeRowHtml(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols);
-    }).join('');
+    const filaHtml = new Map(visibleRows.map(r => [r, window.renderEmployeeRowHtml(r, dates, feriadosArray, getFeriadoDesc, hasBonos, showBonos, bonosNombres, bonosEval, showIncidencias, showHE, showDeudas, hayBolsa, showSaldoMeta, s, stickyCols)]));
+    const bodyRows = visibleRows.map(r => filaHtml.get(r)).join('');
+    const gruposHorario = window.mxGruposPorHorario(visibleRows);   // null: una sola lista, como siempre
 
     // Fila totales
     const totSClass = tot.saldo > 0 ? 'text-success' : tot.saldo < 0 ? 'text-danger' : 'matrix-saldo-zero';
@@ -7402,24 +7447,8 @@ function renderVistaAnalitica(respData, container) {
         vaciaHtml = `<div class="gc-vacio" role="status"><i class="bi bi-inbox"></i><div class="gc-vacio-t">${msg}</div>${salto}</div>`;
     }
 
-    container.innerHTML = `
-    ${tabsHtml}
-    ${sw}
-    ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
-        ${activeVM === 'velocidad' && window.mxVelLeyenda ? window.mxVelLeyenda() : _leyendaEstadosHtml()}
-        ${(() => {
-            const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
-            if (!cs.length) return '';
-            const fechas = cs.map(c => c.split('-').reverse().join('-')).join(', ');
-            return '<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> '
-                + 'Línea violeta: desde ' + fechas + ' se usa libreta (fecha del horario de cada persona); antes, reloj biométrico</span>';
-        })()}
-        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
-    </div>`}
-    ${vaciaHtml || `<div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
-    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
-    <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
-        <tr class="text-center" style="background:#f8f9fa;font-size: 0.75rem">
+    // Las dos filas del encabezado: arriba en la tabla y, en la grilla por horario, otra vez en cada bloque
+    const cabeceraFilas = `<tr class="text-center" style="background:#f8f9fa;font-size: 0.75rem">
             <th rowspan="2" class="sticky-col-analitica align-middle text-start ps-2" style="position:sticky; left:0; z-index:120; white-space:nowrap; background:#f8f9fa; width:260px; min-width:260px; max-width:260px;">Empleado</th>
             ${bonosHeadersTop}
             ${incHeadersTop}
@@ -7444,15 +7473,42 @@ function renderVistaAnalitica(respData, container) {
             ${saldoMetaHeadersSub}
             ${esperaHeadersSub}
             ${dayHeaders}
-        </tr>
+        </tr>`;
+
+    container.innerHTML = `
+    ${tabsHtml}
+    ${sw}
+    ${vaciaHtml ? '' : `<div class="va-legend-bar d-flex gap-3 flex-wrap align-items-center" style="font-size: 0.75rem;color:#6b7280">
+        ${activeVM === 'velocidad' && window.mxVelLeyenda ? window.mxVelLeyenda() : _leyendaEstadosHtml()}
+        ${(() => {
+            const cs = gf.esBolsa ? window.getCortesLibreta(rows).filter(c => dates.includes(c)) : [];
+            if (!cs.length) return '';
+            const fechas = cs.map(c => c.split('-').reverse().join('-')).join(', ');
+            return '<span class="text-muted" style="font-size:.75rem"><i class="bi bi-layout-sidebar-inset" style="color:#8b5cf6"></i> '
+                + 'Línea violeta: desde ' + fechas + ' se usa libreta (fecha del horario de cada persona); antes, reloj biométrico</span>';
+        })()}
+        <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
+    </div>`}
+    ${vaciaHtml || `<div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
+    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
+    <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
+        ${cabeceraFilas}
     </thead>
-    <tbody id="matrix-tbody">${bodyRows}</tbody>
+    ${gruposHorario ? gruposHorario.map((g, i) => window.mxBloqueHorario(g, i, r => filaHtml.get(r), cabeceraFilas)).join('') : `<tbody id="matrix-tbody">${bodyRows}</tbody>`}
     <tfoot>${totalsRow}</tfoot>
     </table>
     </div>`}
 `;
 
     window._gridApplyPinCap();
+
+    // Grilla por horario: el título de cada bloque ocupa todo el ancho de la tabla
+    const _tablaGh = container.querySelector('.matrix-table-premium');
+    if (_tablaGh && _tablaGh.querySelector('.gh-titulo')) {
+        const ref = _tablaGh.querySelector('tr[id^="row-empleado-"]');
+        const nCol = ref ? [...ref.children].reduce((a, td) => a + (td.colSpan || 1), 0) : 1;
+        _tablaGh.querySelectorAll('.gh-titulo > td').forEach(td => { td.colSpan = nCol; });
+    }
 
     // ── TOOLTIP VOLANTE (reemplaza Bootstrap Popover) ─────────────────────────
     // Un solo div en el body, pointer-events:none para no interceptar eventos del mouse.

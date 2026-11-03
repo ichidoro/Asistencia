@@ -160,3 +160,31 @@ body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
 .mx-av-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
 .mx-av-marca { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; background: #1e1b4b; }
 .mx-av-tx { font-size: 11.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Grilla por horario (diseño B elegido por el dueño, 03-11-2026; marcaciones_ui.js → mxBloqueHorario) */
+.matrix-table-premium tbody.gh-grupo + tbody.gh-grupo > tr.gh-titulo > td { border-top: 20px solid #f4f6fb !important; }
+.matrix-table-premium tr.gh-titulo > td { background: #fff !important; padding: 10px 12px 8px !important; text-align: left; border-bottom: 1px solid #e3e8f4; }
+.gh-tit { position: sticky; left: 8px; display: inline-flex; align-items: center; gap: 10px; }
+.gh-tit b { font: 600 15px/1.2 'Barlow', system-ui, sans-serif; color: #101a3d; }
+.gh-tit span { font: 500 12.5px/1.2 'Barlow', system-ui, sans-serif; color: #5b6678; }
+.gh-plegar { width: 28px; height: 28px; display: inline-grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #1b2f8f; cursor: pointer; }
+.gh-plegar:hover { background: #eef1fb; }
+.gh-plegar:focus-visible { outline: 2px solid #1b2f8f; outline-offset: 2px; }
+.gh-plegar i { display: inline-block; transition: transform .2s ease; }
+.gh-grupo.gh-plegado .gh-plegar i { transform: rotate(-90deg); }
+.gh-grupo.gh-plegado > tr:not(.gh-titulo) { display: none; }
+/* El encabezado repetido de cada bloque, igual al de arriba (esos estilos valen solo dentro de <thead>) */
+#marcaciones-view-container .matrix-table-premium tr.gh-cab > th {
+  background: #fff !important; color: var(--ov-ink-3, #69738f); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+  font-size: 0.75rem !important; padding: 6px 4px !important; vertical-align: middle; white-space: nowrap;
+  border-bottom: 2px solid var(--ui-line-strong) !important;
+}
+#marcaciones-view-container .matrix-table-premium tr.gh-cab + tr.gh-cab > th { letter-spacing: 0.2px; }
+#marcaciones-view-container .matrix-table-premium tr.gh-cab > th.dh-dom { background: #f6f7fa !important; }
+#marcaciones-view-container .matrix-table-premium tr.gh-cab > th.dh-sab { background: #fafbfd !important; }
+#marcaciones-view-container .matrix-table-premium tr.gh-cab > th.dh-fer { background: #fff8e6 !important; }
+#marcaciones-view-container .matrix-table-premium tr.gh-cab > th.dh-mes {
+  font: 600 10.5px 'Barlow', sans-serif !important; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ov-ink-4, #9ca4ba) !important; border-left: 1px solid var(--ov-line-2, #eff1f6);
+}
+@media (prefers-reduced-motion: reduce) { .gh-plegar i { transition: none; } }
