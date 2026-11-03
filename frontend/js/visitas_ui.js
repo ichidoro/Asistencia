@@ -282,6 +282,30 @@ const VisitasModule = (() => {
         }
     }
 
+    // Lectura de la cédula (diseño HD): una línea recorre la tarjeta, los campos se llenan uno a uno y el visto confirma la
+    // lectura. Solo cuando los datos vienen del lector o de la cámara; en el ingreso manual no aparece.
+    function _marcarLectura(card, leida) {
+        if (!card) return;
+        let ok = document.getElementById('vis-leida-ok');
+        if (!ok) {
+            ok = document.createElement('span');
+            ok.id = 'vis-leida-ok';
+            ok.className = 'vis-leida-ok';
+            ok.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i>Cédula leída';
+            const cab = card.querySelector('.ptB-res-h > div');
+            if (cab) cab.appendChild(ok);
+        }
+        ok.hidden = !leida;
+        card.classList.remove('vis-leyendo');
+        clearTimeout(card._visLectura);
+        if (!leida) return;
+        // Solo se pintan los campos que la lectura llenó (los que quedan vacíos no)
+        card.querySelectorAll('.ptB-res-g .fcB-inp').forEach(function (i) { i.classList.toggle('vis-llena', String(i.value || '').trim() !== ''); });
+        void card.offsetWidth;
+        card.classList.add('vis-leyendo');
+        card._visLectura = setTimeout(function () { card.classList.remove('vis-leyendo'); }, 1800);
+    }
+
     function _mostrarFormulario(data, rawScan) {
         const resultCard = document.getElementById('vis-result-card');
         const tipoEl = document.getElementById('vis-result-tipo');
@@ -318,6 +342,7 @@ const VisitasModule = (() => {
         }
 
         resultCard?.classList.add('show');
+        _marcarLectura(resultCard, data.tipo_documento && data.tipo_documento !== 'MANUAL' && data.tipo_documento !== 'ERROR' && data.rut && data.rut !== 'PENDIENTE');
 
         // Focus: si visitante conocido → botón registrar. Si nuevo → nombre.
         if (data.visitante_conocido && data.nombre) {

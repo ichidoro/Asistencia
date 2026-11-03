@@ -261,6 +261,46 @@ window.mxTrasPintar = function (container) {
     });
 };
 
+// Cambiar de vista (diseño HD): la pastilla de la vista elegida se desliza desde la anterior y los días cambian con un
+// fundido corto. Con «menos movimiento» la pastilla no viaja y solo queda el fundido.
+window.mxVistaCambiada = function (container, desde) {
+    if (!container) return;
+    const quieto = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const nuevo = container.querySelector('.va-toolbar-premium .segmented-btn.active');
+    const barra = nuevo && nuevo.parentElement;
+    if (!quieto && desde && desde.width > 0 && nuevo && barra) {
+        const r1 = nuevo.getBoundingClientRect(), rb = barra.getBoundingClientRect();
+        const dx = desde.left - r1.left;
+        if (Math.abs(dx) > 1 && r1.width > 0) {
+            const p = document.createElement('span');
+            p.className = 'mx-seg-pasa';
+            p.setAttribute('aria-hidden', 'true');
+            p.style.cssText = 'left:' + (r1.left - rb.left + barra.scrollLeft) + 'px;top:' + (r1.top - rb.top + barra.scrollTop) + 'px;width:'
+                + r1.width + 'px;height:' + r1.height + 'px;transform:translateX(' + dx + 'px) scaleX(' + (desde.width / r1.width) + ')';
+            barra.appendChild(p);
+            // Sin transición propia mientras la pastilla viaja: al llegar, el botón toma su color de una vez (sin destello)
+            nuevo.style.transition = 'none';
+            nuevo.classList.add('mx-seg-llega');
+            let listo = false;
+            const fin = () => {
+                if (listo) return;
+                listo = true;
+                nuevo.classList.remove('mx-seg-llega');
+                void nuevo.offsetWidth;
+                p.remove();
+                requestAnimationFrame(() => { nuevo.style.transition = ''; });
+            };
+            requestAnimationFrame(() => requestAnimationFrame(() => { p.style.transform = 'none'; }));
+            p.addEventListener('transitionend', fin, { once: true });
+            setTimeout(fin, 600);
+        }
+    }
+    container.classList.remove('mx-vista-cambia');
+    void container.offsetWidth;
+    container.classList.add('mx-vista-cambia');
+    setTimeout(() => container.classList.remove('mx-vista-cambia'), 400);
+};
+
 // ── Generador robusto de rango de fechas (inmune a saltos DST / Timezone offset) ──
 window.getDatesInRange = function(fechaInicio, fechaFin) {
     if (!fechaInicio || !fechaFin) return [];
@@ -5811,10 +5851,21 @@ async function confirmarCierreRRHH() {
             const m = bootstrap.Modal.getInstance(document.getElementById('modal-cierre-wizard'));
             if (m) m.hide();
             loadMarcacionesData();
+            // Sello del cierre (diseño HD): los cinco pasos se completan uno a uno, el candado se cierra y el texto dice
+            // qué mes y qué área quedaron cerrados
+            const e = window.escHtml || (x => String(x == null ? '' : x));
+            const per = (s.periodos || []).find(p => p.fecha_inicio === s.fIni && p.fecha_fin === s.fFin);
+            const queMes = per && per.mes_cierre ? per.mes_cierre : 'Tramo ' + window.formatFechaDDMMYYYY(s.fIni) + ' al ' + window.formatFechaDDMMYYYY(s.fFin);
+            const pasos = ['Anomalías', 'En curso', 'Horas extra', 'Inasistencias', 'Reporte final'];
             Swal.fire({
                 title: 'Período cerrado',
-                text: 'El período quedó sellado para ' + s.area + '. El acta trae el resumen completo: haberes, tiempo no trabajado, compensaciones, bolsa y espera.',
+                html: '<div class="cz-sello"><div class="cz-pasos" role="list" aria-label="Pasos del cierre">'
+                    + pasos.map(p => '<i role="listitem" title="' + p + '" aria-label="' + p + ': listo"></i>').join('')
+                    + '</div><b class="cz-que">' + e(queMes) + ' cerrado · ' + e(s.area) + '</b></div>'
+                    + '<p class="cz-tx">El acta trae el resumen completo: haberes, tiempo no trabajado, compensaciones, bolsa y espera.</p>',
                 icon: 'success',
+                iconHtml: '<svg class="cz-candado" viewBox="0 0 40 48" aria-hidden="true"><path class="cz-arco" d="M11 22 V14 a9 9 0 0 1 18 0 V22" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><rect x="5" y="21" width="30" height="24" rx="6" fill="currentColor"/></svg>',
+                customClass: { popup: 'cz-cerrado' },
                 showCancelButton: true,
                 confirmButtonText: 'Descargar acta (PDF)',
                 cancelButtonText: 'Cerrar'
@@ -8043,10 +8094,15 @@ window.vaToggleCol = function(key) {
 
 // ─── SETTER DE VIEWMODE (6 switches de la grilla) ────────────────────────────────
 window.vaSetViewMode = function(mode) {
+    // Se recuerda dónde estaba la vista elegida para que su pastilla se deslice hasta la nueva (mxVistaCambiada)
+    const antes = document.querySelector('#marcaciones-view-container .va-toolbar-premium .segmented-btn.active');
+    const desde = antes ? antes.getBoundingClientRect() : null;
+    const cambia = mode !== stateMarcacionesApp.viewMode;
     stateMarcacionesApp.viewMode = mode;
     if (stateMarcacionesApp.data) {
         const container = document.getElementById('marcaciones-view-container');
-        renderVistaAnalitica(stateMarcacionesApp.data, container);
+        Promise.resolve(renderVistaAnalitica(stateMarcacionesApp.data, container))
+            .then(() => { if (cambia && window.mxVistaCambiada) window.mxVistaCambiada(container, desde); });
     }
 }
 

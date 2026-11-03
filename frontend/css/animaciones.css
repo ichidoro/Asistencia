@@ -5,8 +5,10 @@
      visto (ui_dialogs.js le pone .vn-trabajando / .vn-listo).
    - Tarjeta del día: crece un poco desde arriba al abrirse.
    - En línea: el punto verde late suave; sin conexión deja de latir.
+   - Cambiar de vista, compensar, cerrar el período y leer la cédula
+     (03-11-2026): al final de este archivo.
    Las demás (hoja del celular, semana, carga de la grilla, deslizar para
-   marcar) ya están en tarjeta-dia.css, ventanas.css y sus módulos.
+   marcar) ya están en tarjeta-dia.css, ventanas.css, styles.css y sus módulos.
    Va al final de bundle-tema.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -59,4 +61,91 @@
   .vn-trabajando::after { animation-duration: 1.6s; }
   .vn-listo::before { animation: none; }
   .sidebar-footer .status-dot, #porteria-sync-indicator { animation: none !important; }
+}
+
+/* ── Cambiar de vista: la pastilla se desliza (mxVistaCambiada) y los días cambian con un fundido ── */
+.va-toolbar-premium .segmented-control { position: relative; }
+.va-toolbar-premium .segmented-control > .segmented-btn { position: relative; z-index: 1; }
+.mx-seg-pasa {
+  position: absolute; z-index: 0; border-radius: 6px; background: var(--ag-navy, #1b2f8f);
+  transform-origin: left center; pointer-events: none; will-change: transform;
+  transition: transform .3s cubic-bezier(.16, 1, .3, 1);
+}
+.va-toolbar-premium .segmented-control > .segmented-btn.active.mx-seg-llega {
+  background: transparent !important; color: var(--ui-text-muted, #5b6678) !important; box-shadow: none !important;
+}
+.mx-vista-cambia tbody td.col-day > * { animation: vn-fundido .2s ease-out both; }
+@keyframes vn-fundido { from { opacity: 0; } }
+
+/* ── Compensar una inasistencia: flecha de la jornada EXTRA al día faltado (compensar_inasistencia.js) ── */
+.ci-arco {
+  position: fixed; z-index: 1030; pointer-events: none; overflow: visible; color: #0f7c86;
+  animation: vn-sale .25s 1.55s ease-in forwards;
+}
+.ci-arco .ci-trazo { stroke-dasharray: 100; stroke-dashoffset: 100; animation: ci-traza .55s .1s cubic-bezier(.16, 1, .3, 1) forwards; }
+.ci-arco .ci-punta { opacity: 0; animation: vn-aparece .18s .58s ease-out forwards; }
+td.col-day.ci-llega > *, td.col-day.ci-llega-tarde > * { animation: ci-estado .28s cubic-bezier(.16, 1, .3, 1) both; }
+td.col-day.ci-llega-tarde > * { animation-delay: .62s; }
+td.col-day.ci-usada { animation: ci-anillo .7s .55s ease-out both; }
+@keyframes ci-traza { to { stroke-dashoffset: 0; } }
+@keyframes ci-estado { from { opacity: 0; transform: scale(.82); } }
+@keyframes ci-anillo {
+  0%, 100% { box-shadow: inset 0 0 0 0 rgba(15, 124, 134, 0); }
+  35% { box-shadow: inset 0 0 0 2px rgba(15, 124, 134, .6); }
+}
+@keyframes vn-aparece { to { opacity: 1; } }
+@keyframes vn-sale { to { opacity: 0; } }
+
+/* ── Cerrar el período: cinco pasos, candado que se cierra y el mes con su área (confirmarCierreRRHH) ── */
+.swal2-popup.cz-cerrado .swal2-icon.av-ic svg.cz-candado { width: 20px; height: 24px; overflow: visible; }
+.cz-sello { display: flex; flex-direction: column; gap: 10px; margin: 2px 0 12px; }
+.cz-pasos { display: flex; gap: 8px; }
+.cz-pasos i { width: 12px; height: 12px; border-radius: 50%; background: #6aad3a; }
+.cz-que { font: 600 14px/1.35 'Barlow', system-ui, sans-serif; color: var(--av-ink, #101a3d); }
+.cz-tx { margin: 0; }
+.cz-cerrado .cz-pasos i { animation: cz-paso .2s cubic-bezier(.16, 1, .3, 1) both; }
+.cz-cerrado .cz-pasos i:nth-child(1) { animation-delay: .1s; }
+.cz-cerrado .cz-pasos i:nth-child(2) { animation-delay: .3s; }
+.cz-cerrado .cz-pasos i:nth-child(3) { animation-delay: .5s; }
+.cz-cerrado .cz-pasos i:nth-child(4) { animation-delay: .7s; }
+.cz-cerrado .cz-pasos i:nth-child(5) { animation-delay: .9s; }
+.cz-cerrado .cz-arco { animation: cz-cierra .3s 1.15s cubic-bezier(.16, 1, .3, 1) both; }
+.cz-cerrado .cz-que { animation: vn-fundido .25s 1.35s ease-out both; }
+@keyframes cz-paso { from { background: #e6e9f1; transform: scale(.75); } }
+@keyframes cz-cierra { from { transform: translateY(-7px); } }
+
+/* ── Leer la cédula (visitas): línea que recorre la tarjeta, campos que se llenan y el visto (visitas_ui.js) ── */
+.vis-result-card { position: relative; }
+.vis-result-card.vis-leyendo::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 2; pointer-events: none;
+  background: #6aad3a; box-shadow: 0 0 12px rgba(106, 173, 58, .75);
+  animation: vis-barre .9s cubic-bezier(.4, 0, .2, 1) both;
+}
+.vis-leyendo .ptB-res-g > div .fcB-inp.vis-llena { animation: vis-valor .35s cubic-bezier(.16, 1, .3, 1) both; }
+.vis-leyendo .ptB-res-g > div:nth-child(1) .fcB-inp.vis-llena { animation-delay: .35s; }
+.vis-leyendo .ptB-res-g > div:nth-child(2) .fcB-inp.vis-llena { animation-delay: .42s; }
+.vis-leyendo .ptB-res-g > div:nth-child(3) .fcB-inp.vis-llena { animation-delay: .49s; }
+.vis-leyendo .ptB-res-g > div:nth-child(4) .fcB-inp.vis-llena { animation-delay: .56s; }
+.vis-leyendo .ptB-res-g > div:nth-child(n+5) .fcB-inp.vis-llena { animation-delay: .63s; }
+.vis-leida-ok {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 5px 9px; border-radius: 6px;
+  font: 600 12px 'Barlow', system-ui, sans-serif; color: #167a46; background: #e6f5ec; vertical-align: middle;
+}
+.vis-leida-ok[hidden] { display: none; }
+.vis-leyendo .vis-leida-ok { animation: vis-visto .25s .85s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes vis-barre { 0% { top: 0; opacity: 1; } 85% { opacity: 1; } 100% { top: calc(100% - 2px); opacity: 0; } }
+@keyframes vis-valor { from { color: transparent; background-color: #eef8e8; } }
+@keyframes vis-visto { from { opacity: 0; transform: scale(.6); } }
+
+/* Menos movimiento: nada se desplaza; queda el fundido que dice qué cambió */
+@media (prefers-reduced-motion: reduce) {
+  .mx-seg-pasa { display: none; }
+  .ci-arco { display: none; }
+  td.col-day.ci-llega > *, td.col-day.ci-llega-tarde > * { animation: vn-fundido .2s both; }
+  td.col-day.ci-usada { animation: none; }
+  .cz-cerrado .cz-pasos i, .cz-cerrado .cz-arco { animation: none; }
+  .cz-cerrado .cz-que { animation: vn-fundido .2s both; }
+  .vis-result-card.vis-leyendo::before { display: none; }
+  .vis-leyendo .ptB-res-g > div .fcB-inp.vis-llena { animation: vn-fundido .2s both; }
+  .vis-leyendo .vis-leida-ok { animation: vn-fundido .2s both; }
 }

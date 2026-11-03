@@ -31,8 +31,67 @@
         else alert(msg);
     }
     function recargar(empId) {
-        if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(parseInt(empId, 10));
-        else if (typeof window.loadMarcacionesData === 'function') window.loadMarcacionesData();
+        if (typeof window.reloadSingleEmployeeRow === 'function') return window.reloadSingleEmployeeRow(parseInt(empId, 10));
+        if (typeof window.loadMarcacionesData === 'function') return window.loadMarcacionesData();
+    }
+
+    // Compensar (diseño HD): una flecha punteada une la jornada EXTRA usada con el día faltado, el día faltado muestra su
+    // nuevo estado y la jornada se marca un instante. Con «menos movimiento» no hay flecha: solo cambia el estado.
+    function animarCompensacion(empId, fechaFalta, fechaJornada) {
+        const celda = function (f) { return f ? document.querySelector('#marcaciones-view-container td.col-day[data-tip="' + empId + '|' + f + '"]') : null; };
+        const a = celda(fechaFalta);
+        if (!a) return;
+        const b = celda(fechaJornada);
+        const quieto = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const conFlecha = !quieto && b && aLaVista(a) && aLaVista(b);
+        marcar(a, conFlecha ? 'ci-llega-tarde' : 'ci-llega', 1400);
+        if (b && !quieto) marcar(b, 'ci-usada', 1500);
+        if (conFlecha) dibujarFlecha(b.getBoundingClientRect(), a.getBoundingClientRect());
+    }
+    function marcar(el, clase, ms) {
+        el.classList.remove(clase);
+        void el.offsetWidth;
+        el.classList.add(clase);
+        setTimeout(function () { el.classList.remove(clase); }, ms);
+    }
+    // Se ve de verdad: dentro de la grilla que se desliza y no tapada por las columnas fijas (nombre, saldo…)
+    function aLaVista(el) {
+        const r = el.getBoundingClientRect(), x = r.left + r.width / 2;
+        let izq = 0, der = window.innerWidth;
+        for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+            const ox = getComputedStyle(n).overflowX;
+            if (ox === 'auto' || ox === 'scroll') { const c = n.getBoundingClientRect(); izq = Math.max(izq, c.left); der = Math.min(der, c.right); break; }
+        }
+        el.parentElement.querySelectorAll('td[style*="position:sticky"], .sticky-premium-col, .sticky-col-analitica').forEach(function (s) {
+            const sr = s.getBoundingClientRect();
+            if (sr.right > izq && sr.left < x) izq = Math.max(izq, sr.right);
+        });
+        return r.width > 0 && x > izq && x < der && r.bottom > 0 && r.top < window.innerHeight;
+    }
+    function dibujarFlecha(desde, hasta) {
+        const x1 = desde.left + desde.width / 2, x2 = hasta.left + hasta.width / 2;
+        const izq = Math.min(x1, x2), ancho = Math.max(Math.abs(x1 - x2), 1);
+        const alto = Math.max(22, Math.min(56, ancho * 0.3)), m = 8;
+        const sx = x1 - izq + m, ex = x2 - izq + m, y0 = alto + 2, k = (ex - sx) * 0.15;
+        const d = 'M' + sx + ' ' + y0 + ' C ' + (sx + k) + ' 2, ' + (ex - k) + ' 2, ' + ex + ' ' + y0;
+        // Punta de la flecha según la dirección final de la curva
+        const tl = Math.hypot(k, y0 - 2) || 1, tx = k / tl, ty = (y0 - 2) / tl;
+        const bx = ex - 7 * tx, by = y0 - 7 * ty;
+        const punta = ex + ',' + y0 + ' ' + (bx - 4 * ty) + ',' + (by + 4 * tx) + ' ' + (bx + 4 * ty) + ',' + (by - 4 * tx);
+        const w = ancho + 2 * m, h = alto + 6, id = 'ci-m' + Date.now();
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ci-arco');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('width', w);
+        svg.setAttribute('height', h);
+        svg.style.left = (izq - m) + 'px';
+        svg.style.top = (Math.min(desde.top, hasta.top) + 4 - y0) + 'px';
+        svg.innerHTML = '<defs><mask id="' + id + '" maskUnits="userSpaceOnUse" x="0" y="0" width="' + w + '" height="' + h + '">'
+            + '<path class="ci-trazo" d="' + d + '" pathLength="100" fill="none" stroke="#fff" stroke-width="6"/></mask></defs>'
+            + '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round" mask="url(#' + id + ')"/>'
+            + '<polygon class="ci-punta" points="' + punta + '" fill="currentColor"/>';
+        document.body.appendChild(svg);
+        setTimeout(function () { svg.remove(); }, 1900);
     }
 
     function asegurarModal() {
@@ -126,7 +185,8 @@
             if (!resp.ok) throw new Error(data.detail || 'No se pudo compensar.');
             bootstrap.Modal.getInstance(document.getElementById(MODAL_ID)).hide();
             avisar(data.mensaje || 'Inasistencia compensada.', 'success');
-            recargar(estado.empId);
+            const empId = estado.empId, fecha = estado.fecha, jornada = partes[0] === 'EXTRA' ? partes[1] : null;
+            Promise.resolve(recargar(empId)).then(function () { animarCompensacion(empId, fecha, jornada); });
         } catch (e) {
             avisar(e.message, 'error');
         } finally {
