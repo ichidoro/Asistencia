@@ -490,3 +490,49 @@
   .vn-ruta .vn-linea { flex: 1; }
   #modalUsuario .area-pill-box { min-height: 44px; }
 }
+
+/* ═══ Etapa 9 · tanda 3: ventanas con campos sobre SweetAlert (window.ventanaForm) y tarjeta QR (03-11-2026) ═════════
+   Mismo encabezado que las ventanas HD (ícono, título y su detalle), raya bajo el encabezado, campos con la etiqueta en
+   letra normal y el pie de .av-dlg (avisos.css). */
+.swal2-popup.av-dlg.vn-swal { width: 500px; grid-template-columns: 40px minmax(0, 1fr); padding-top: 20px !important; }
+.swal2-popup.av-dlg.vn-swal .swal2-icon.av-ic { grid-row: 1; width: 40px; height: 40px; align-self: center; }
+.swal2-popup.av-dlg.vn-swal .swal2-icon.av-ic .swal2-icon-content i { font-size: 18px; line-height: 1; }
+.swal2-popup.av-dlg.vn-swal .swal2-title { align-self: center; }
+.swal2-popup.av-dlg.vn-swal .vn-swal-sub {
+  display: block; margin-top: 3px; font: 400 13px/1.35 'Barlow', system-ui, sans-serif; color: var(--ov-ink-3);
+  letter-spacing: 0; text-wrap: pretty; overflow-wrap: anywhere;
+}
+.swal2-popup.av-dlg.vn-swal .swal2-html-container {
+  grid-column: 1 / -1 !important; grid-row: 2; width: calc(100% + 22px); box-sizing: border-box;
+  margin: 18px 0 0 -22px !important; padding: 18px 22px 2px !important; border-top: 1px solid var(--av-ln2); overflow: visible;
+}
+.swal2-popup.av-dlg.vn-swal .swal2-validation-message { grid-column: 1 / -1 !important; }
+.swal2-popup.av-dlg.vn-swal .vn-fld > label {
+  font: 500 13px/1.3 'Barlow', system-ui, sans-serif; color: var(--ov-ink-2); text-transform: none; letter-spacing: 0; margin: 0;
+}
+.swal2-popup.av-dlg.vn-swal .vn-fld .form-control,
+.swal2-popup.av-dlg.vn-swal .vn-fld .form-select { min-height: 42px; font-size: 14px; border-radius: 10px; }
+.swal2-popup.av-dlg.vn-swal .vn-fld textarea.form-control { min-height: 64px; resize: vertical; }
+.swal2-popup.av-dlg.vn-swal .vn-p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ov-ink-2); }
+.swal2-popup.av-dlg.vn-swal .vn-p b { color: var(--ov-ink); font-weight: 600; }
+
+/* Tarjeta QR de un punto de ronda */
+#modalVerQR .modal-dialog { max-width: min(420px, 94vw); }
+.vn-qr { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 4px 0; }
+.vn-qr-caja {
+  width: 200px; height: 200px; display: grid; place-items: center;
+  border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1px var(--ov-line);
+}
+.vn-qr-caja img, .vn-qr-caja canvas { display: block; }
+.vn-qr-nombre {
+  font: 600 15px/1.25 'Barlow', system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ov-ink); text-align: center; overflow-wrap: anywhere;
+}
+
+/* En el celular los botones del pie centran su texto (antes quedaba a la izquierda al estirarse) y la tarjeta QR pone
+   «Imprimir» arriba, como las ventanas con campos */
+@media (max-width: 768px) {
+  .modal:not(#modalScannerLibreta) .modal-footer .btn { justify-content: center; text-align: center; }
+  #modalVerQR.modal .modal-footer { flex-direction: column-reverse; }
+  #modalVerQR.modal .modal-footer .btn { flex: none; width: 100%; white-space: nowrap; }
+}

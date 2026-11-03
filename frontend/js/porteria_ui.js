@@ -1143,6 +1143,7 @@ const PorteriaModule = (function () {
         const cleanText = qrText.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ñ/gi, "n");
 
         // Actualizar textos en el modal
+        document.getElementById('modal-qr-titulo').textContent = nombre + ' · ' + codigo;
         document.getElementById('modal-qr-ubicacion-nombre').innerText = nombre;
         document.getElementById('modal-qr-ubicacion-codigo').innerText = `Código: ${codigo}`;
 
@@ -1153,8 +1154,8 @@ const PorteriaModule = (function () {
         // Generar QR para pantalla (modal)
         new QRCode(document.getElementById('modal-qr-container'), {
             text: cleanText,
-            width: 130,
-            height: 130,
+            width: 168,
+            height: 168,
             colorDark: "#000000",
             colorLight: "#ffffff",
             correctLevel: QRCode.CorrectLevel.H
@@ -1175,8 +1176,7 @@ const PorteriaModule = (function () {
         document.getElementById('qr-print-code-text').innerText = `CÓDIGO: ${codigo}`;
 
         // Mostrar el modal
-        const modal = new bootstrap.Modal(document.getElementById('modalVerQR'));
-        modal.show();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalVerQR')).show();
     }
 
     // Exponer API del módulo

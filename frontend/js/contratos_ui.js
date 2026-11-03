@@ -239,9 +239,10 @@ function openVencimientoModal(empleado) {
     document.getElementById('venc-emp-nombre').innerText = window.nombreTitulo ? window.nombreTitulo(empleado.nombre_completo) : empleado.nombre_completo;
     document.getElementById('venc-emp-cargo-area').innerText = (empleado.cargo || 'Sin cargo') + ' · ' + (empleado.area || 'Sin área');
     const nContrato = parseInt(empleado.cant_contratos, 10) || 0;
-    document.getElementById('venc-contrato-txt').firstChild.textContent = (nContrato ? 'contrato N° ' + nContrato + ' ' : '') + 'vence el ';
+    // Sin fecha de término (temporal sin fecha) no se escribe «vence el»
+    document.getElementById('venc-contrato-txt').firstChild.textContent = (nContrato ? 'contrato N° ' + nContrato + ' ' : '') + (empleado.fecha_salida ? 'vence el ' : 'sin fecha de término');
     document.getElementById('venc-fecha').innerText = empleado.fecha_salida
-        ? (window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(empleado.fecha_salida) : empleado.fecha_salida) : 'sin fecha';
+        ? (window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(empleado.fecha_salida) : empleado.fecha_salida) : '';
 
     const alertaLegal = document.getElementById('venc-alerta-legal');
     const numContratoSpan = document.getElementById('venc-num-contrato');

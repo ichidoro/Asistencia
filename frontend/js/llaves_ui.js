@@ -165,23 +165,33 @@ const LlavesModule = (function () {
     }
     function tras(llaveId) { delete movs[llaveId]; if (cont() && cont().offsetParent !== null) return recargar(); }
 
+    // Nombre y ubicación de la llave para el encabezado de sus ventanas (la ubicación, si el tablero ya está cargado).
+    function detalleLlave(llaveId, llaveNombre) {
+        const k = ((datos && datos.llaves) || []).find(function (x) { return String(x.id) === String(llaveId); });
+        return [llaveNombre, k && k.ubicacion].filter(Boolean).join(' · ');
+    }
+
     async function abrirEntrega(llaveId, llaveNombre) {
         let autorizados;
         try { autorizados = await pedir('/api/llaves/autorizados/'); }
         catch (e) { aviso(e.message, 'danger'); return; }
         if (!autorizados.length) { aviso('No hay personas autorizadas para recibir llaves en sus áreas. Se autorizan en la ficha de cada persona.', 'warning'); return; }
+        const uno = autorizados.length === 1;
         const ops = autorizados.map(function (e) { return { id: e.id, n: nombre(e.nombre), a: e.area || '' }; })
             .sort(function (a, b) { return a.n.localeCompare(b.n, 'es'); })
-            .map(function (e) { return '<option value="' + e.id + '">' + esc(e.n) + (e.a ? ' · ' + esc(e.a) : '') + '</option>'; }).join('');
-        const r = await Swal.fire({
-            title: 'Entregar llave',
-            html: '<div class="av-quien">' + esc(llaveNombre) + '</div><div class="ptB-sw">'
-                + '<label for="swal-empleado">Persona que la recibe</label><select id="swal-empleado" class="form-select">' + ops + '</select>'
-                + '<label for="swal-obs">Observaciones</label><input id="swal-obs" class="form-control" placeholder="Opcional"></div>',
-            showCancelButton: true, reverseButtons: true, focusConfirm: false,
-            confirmButtonText: 'Entregar llave', cancelButtonText: 'Cancelar',
-            customClass: { confirmButton: 'av-btn av-btn-pri' },
-            preConfirm: function () { return { empleado_id: parseInt(document.getElementById('swal-empleado').value, 10), observaciones: document.getElementById('swal-obs').value.trim() }; }
+            .map(function (e) { return '<option value="' + e.id + '"' + (uno ? ' selected' : '') + '>' + esc(e.n) + (e.a ? ' · ' + esc(e.a) : '') + '</option>'; }).join('');
+        const r = await window.ventanaForm({
+            icono: 'key', titulo: 'Entregar llave', sub: detalleLlave(llaveId, llaveNombre),
+            cuerpo: '<div class="vn-fld"><label for="swal-empleado">Persona que la recibe</label>'
+                + '<select id="swal-empleado" class="form-select">' + (uno ? '' : '<option value="">Elegir persona</option>') + ops + '</select>'
+                + '<div class="form-text">Solo aparecen las personas autorizadas para llaves.</div></div>'
+                + '<div class="vn-fld"><label for="swal-obs">Observaciones</label><textarea id="swal-obs" class="form-control" rows="2" placeholder="Opcional"></textarea></div>',
+            confirmButtonText: 'Confirmar entrega',
+            preConfirm: function () {
+                const id = parseInt(document.getElementById('swal-empleado').value, 10);
+                if (!id) { Swal.showValidationMessage('Falta elegir quién recibe la llave.'); return false; }
+                return { empleado_id: id, observaciones: document.getElementById('swal-obs').value.trim() };
+            }
         });
         if (!r.isConfirmed || !r.value) return;
         try {
@@ -192,13 +202,11 @@ const LlavesModule = (function () {
     }
 
     async function confirmarDevolucion(llaveId, llaveNombre, empleadoId, empleadoNombre) {
-        const r = await Swal.fire({
-            title: '¿Recibir la llave?',
-            html: '<div class="av-quien">' + esc(llaveNombre) + '</div><div class="ptB-sw"><p>La devuelve ' + esc(nombre(empleadoNombre)) + '.</p>'
-                + '<label for="swal-obs-dev">Observaciones</label><input id="swal-obs-dev" class="form-control" placeholder="Opcional"></div>',
-            showCancelButton: true, reverseButtons: true, focusConfirm: false,
-            confirmButtonText: 'Recibir llave', cancelButtonText: 'Cancelar',
-            customClass: { confirmButton: 'av-btn av-btn-pri' },
+        const r = await window.ventanaForm({
+            icono: 'key', tono: 'g', titulo: '¿Recibir la llave?', sub: detalleLlave(llaveId, llaveNombre),
+            cuerpo: '<p class="vn-p">La devuelve <b>' + esc(nombre(empleadoNombre)) + '</b>.</p>'
+                + '<div class="vn-fld"><label for="swal-obs-dev">Observaciones</label><textarea id="swal-obs-dev" class="form-control" rows="2" placeholder="Opcional"></textarea></div>',
+            confirmButtonText: 'Recibir llave',
             preConfirm: function () { return { observaciones: document.getElementById('swal-obs-dev').value.trim() }; }
         });
         if (!r.isConfirmed) return;

@@ -852,18 +852,16 @@ const FlotaModule = (() => {
     async function marcar(flotaId, patente, choferActivo = '', tipoMarca = null) {
         const tipo = tipoMarca === 'ENTRADA' ? 'ENTRADA' : 'SALIDA';
         const d = new Date();
+        const veh = ((_datos && _datos.vehiculos) || []).find(function (x) { return String(x.id) === String(flotaId); });
         _preguntando = true;
         let r;
         try {
-            r = await Swal.fire({
-                title: '¿Registrar la ' + tipo + '?',
-                html: '<div class="av-quien">' + _esc(_patente(patente)) + '</div><div class="ptB-sw">'
-                    + '<p>' + (tipo === 'SALIDA' ? 'Sale a despacho' : 'Regresa a planta') + ' · hora ' + _pad(d.getHours()) + ':' + _pad(d.getMinutes()) + '</p>'
-                    + '<label for="swal-flota-chofer">Chofer</label><input type="text" id="swal-flota-chofer" class="form-control" placeholder="Nombre del chofer" value="' + _esc(choferActivo) + '">'
-                    + '<label for="swal-flota-obs">Observaciones o kilometraje</label><textarea id="swal-flota-obs" class="form-control" rows="2" placeholder="Opcional"></textarea></div>',
-                showCancelButton: true, reverseButtons: true, focusConfirm: false,
-                confirmButtonText: 'Registrar ' + tipo, cancelButtonText: 'Cancelar',
-                customClass: { confirmButton: 'av-btn av-btn-pri' },
+            r = await window.ventanaForm({
+                icono: 'truck', titulo: 'Registrar ' + tipo + ' · ' + _patente(patente),
+                sub: [veh && veh.area, (tipo === 'SALIDA' ? 'Sale a despacho' : 'Regresa a planta') + ' a las ' + _pad(d.getHours()) + ':' + _pad(d.getMinutes())].filter(Boolean).join(' · '),
+                cuerpo: '<div class="vn-fld"><label for="swal-flota-chofer">Chofer del vehículo</label><input type="text" id="swal-flota-chofer" class="form-control" placeholder="Nombre del chofer" value="' + _esc(choferActivo) + '"></div>'
+                    + '<div class="vn-fld"><label for="swal-flota-obs">Observaciones o kilometraje</label><textarea id="swal-flota-obs" class="form-control" rows="2" placeholder="Opcional"></textarea></div>',
+                confirmButtonText: 'Registrar ' + tipo,
                 preConfirm: function () {
                     const chofer = document.getElementById('swal-flota-chofer').value.trim(), obs = document.getElementById('swal-flota-obs').value.trim();
                     return (chofer ? 'Chofer: ' + chofer + '. ' : '') + obs;
@@ -940,7 +938,7 @@ const FlotaModule = (() => {
                 if (!canEdit) { panel.querySelectorAll('input, select').forEach(function (e) { e.disabled = true; }); return; }
                 panel.querySelector('#ffl-descartar').onclick = function () { F.pintarFicha('flota'); };
                 const borrar = panel.querySelector('#ffl-borrar');
-                if (borrar) borrar.onclick = function () { eliminarVehiculo(v.id, v.patente); };
+                if (borrar) borrar.onclick = function () { eliminarVehiculo(v.id, v.patente, v.area_nombre); };
                 panel.querySelector('#ffl-guardar').onclick = function (ev) {
                     const patente = panel.querySelector('#ffl-patente').value.toUpperCase().replace(/[\s.-]+/g, '');
                     const sel = panel.querySelector('#ffl-area');
@@ -1119,39 +1117,27 @@ const FlotaModule = (() => {
         });
     }
 
-    async function eliminarVehiculo(id, patente) {
-        Swal.fire({
-            title: `¿Eliminar vehículo ${patente}?`,
-            text: "Esta acción desactivará el vehículo del catálogo de flota. No se perderá el historial de marcas previas.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    const response = await fetch(`/api/flota/maestro/${id}/`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-                    });
-                    
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.detail || 'Error al eliminar el vehículo');
-                    }
-                    
-                    if(typeof showToast === 'function') {
-                        showToast("Listo. Vehículo quitado de la flota.", "success");
-                    }
-                    await cargarVehiculosAdmin();
-                } catch (error) {
-                    console.error(error);
-                    Swal.fire('Error', error.message, 'error');
-                }
-            }
+    async function eliminarVehiculo(id, patente, area) {
+        const ok = await uiConfirm('¿Eliminar el vehículo ' + _patente(patente) + '?', {
+            items: ['Se quita de la flota' + (area ? ' de ' + area : '') + '. Las marcas ya registradas se conservan.'],
+            confirmText: 'Eliminar', danger: true
         });
+        if (!ok) return;
+        try {
+            const response = await fetch(`/api/flota/maestro/${id}/`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(function () { return {}; });
+                throw new Error(err.detail || 'No se pudo eliminar el vehículo.');
+            }
+            if (typeof showToast === 'function') showToast("Listo. Vehículo quitado de la flota.", "success");
+            await cargarVehiculosAdmin();
+        } catch (error) {
+            console.error(error);
+            Swal.fire('No se pudo eliminar', error.message, 'error');
+        }
     }
 
     function destroy() {

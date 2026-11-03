@@ -2397,39 +2397,28 @@ window.activarPeriodoRRHH = async function(id) {
     }
 };
 
-window.abrirModalCrearArea = async function() {
-    Swal.fire({
-        title: 'Crear Nueva Área',
-        input: 'text',
-        inputLabel: 'Nombre del área',
-        inputPlaceholder: 'Ej: CONTABILIDAD, VENTAS...',
-        showCancelButton: true,
-        confirmButtonText: 'Crear Área',
-        cancelButtonText: 'Cancelar',
-        inputValidator: (value) => {
-            if (!value || !value.trim()) {
-                return 'El nombre del área no puede estar vacío';
-            }
-        },
-        customClass: {
-            confirmButton: 'btn btn-primary btn-sm px-3.5 me-2',
-            cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
-        },
-        buttonsStyling: false,
-        preConfirm: async (nombre) => {
+// Crear un área o un cargo: ventana con un solo campo (diseño HD). Mismas peticiones y avisos que antes.
+function crearEnCatalogo(o) {
+    return window.ventanaForm({
+        icono: o.icono, tono: 'g', titulo: o.titulo, sub: o.sub,
+        cuerpo: '<div class="vn-fld"><label for="vn-cat-nombre">' + o.etiqueta + '</label>'
+            + '<input type="text" id="vn-cat-nombre" class="form-control" autocomplete="off" placeholder="' + o.ejemplo + '"></div>',
+        confirmButtonText: 'Crear',
+        preConfirm: async () => {
+            const nombre = document.getElementById('vn-cat-nombre').value.trim();
+            if (!nombre) { Swal.showValidationMessage(o.falta); return false; }
             try {
                 Swal.showLoading();
-                const response = await fetch('/api/configuracion/areas/', {
+                const response = await fetch(o.url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
-                    body: JSON.stringify({ nombre: nombre.trim() })
+                    body: JSON.stringify({ nombre: nombre })
                 });
-
                 const res = await response.json();
-                if (!response.ok) throw new Error(res.detail || "Error al crear el área.");
+                if (!response.ok) throw new Error(res.detail || o.error);
                 return res;
             } catch (error) {
                 Swal.showValidationMessage(error.message);
@@ -2438,56 +2427,27 @@ window.abrirModalCrearArea = async function() {
         }
     }).then((result) => {
         if (result.isConfirmed) {
-            showToast("Listo. Área creada.", "success");
-            cargarCatalogoAreas();
+            showToast(o.listo, "success");
+            o.recargar();
         }
+    });
+}
+
+window.abrirModalCrearArea = async function() {
+    return crearEnCatalogo({
+        icono: 'diagram-3', titulo: 'Crear área', sub: 'Se agrega a la lista de áreas',
+        etiqueta: 'Nombre del área', ejemplo: 'Ej.: CONTABILIDAD, VENTAS…', falta: 'Falta el nombre del área.',
+        url: '/api/configuracion/areas/', error: 'No se pudo crear el área.', listo: 'Listo. Área creada.',
+        recargar: () => cargarCatalogoAreas()
     });
 };
 
 window.abrirModalCrearCargo = async function() {
-    Swal.fire({
-        title: 'Crear Nuevo Cargo',
-        input: 'text',
-        inputLabel: 'Nombre del cargo',
-        inputPlaceholder: 'Ej: ADMINISTRATIVO, OPERARIO...',
-        showCancelButton: true,
-        confirmButtonText: 'Crear Cargo',
-        cancelButtonText: 'Cancelar',
-        inputValidator: (value) => {
-            if (!value || !value.trim()) {
-                return 'El nombre del cargo no puede estar vacío';
-            }
-        },
-        customClass: {
-            confirmButton: 'btn btn-primary btn-sm px-3.5 me-2',
-            cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
-        },
-        buttonsStyling: false,
-        preConfirm: async (nombre) => {
-            try {
-                Swal.showLoading();
-                const response = await fetch('/api/configuracion/cargos/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                    },
-                    body: JSON.stringify({ nombre: nombre.trim() })
-                });
-
-                const res = await response.json();
-                if (!response.ok) throw new Error(res.detail || "Error al crear el cargo.");
-                return res;
-            } catch (error) {
-                Swal.showValidationMessage(error.message);
-                return false;
-            }
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            showToast("Listo. Cargo creado.", "success");
-            cargarCatalogoCargos();
-        }
+    return crearEnCatalogo({
+        icono: 'person-badge', titulo: 'Crear cargo', sub: 'Se agrega a la lista de cargos',
+        etiqueta: 'Nombre del cargo', ejemplo: 'Ej.: ADMINISTRATIVO, OPERARIO…', falta: 'Falta el nombre del cargo.',
+        url: '/api/configuracion/cargos/', error: 'No se pudo crear el cargo.', listo: 'Listo. Cargo creado.',
+        recargar: () => cargarCatalogoCargos()
     });
 };
 

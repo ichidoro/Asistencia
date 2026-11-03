@@ -239,6 +239,41 @@
         pintar();
     };
 
+    // Ventana con campos (diseño HD) sobre SweetAlert: ícono, título con su detalle, campos con la etiqueta en letra
+    // normal y el pie de siempre. preConfirm, Swal.showValidationMessage y Swal.showLoading funcionan igual que antes.
+    // Enter en un campo de una línea confirma y, con mouse, el primer campo queda listo para escribir.
+    // o = { icono (nombre de Bootstrap Icons), tono ('b' azul, 'a' ámbar, 'g' verde, 'r' rosado), titulo, sub, cuerpo (HTML) }
+    //     más cualquier opción de Swal.fire (confirmButtonText, preConfirm, didOpen…).
+    window.ventanaForm = function (o) {
+        const TONO = { b: 'info', a: 'warning', g: 'success', r: 'error' };
+        const p = Object.assign({}, o);
+        ['icono', 'tono', 'titulo', 'sub', 'cuerpo'].forEach((k) => delete p[k]);
+        const cc = Object.assign({}, p.customClass || {});
+        cc.popup = ((cc.popup || '') + ' vn-swal').trim();
+        const abrir = p.didOpen;
+        return window.Swal.fire(Object.assign(p, {
+            icon: TONO[o.tono] || 'info',
+            iconHtml: '<i class="bi bi-' + esc(o.icono || 'pencil') + '" aria-hidden="true"></i>',
+            title: esc(o.titulo || '') + (o.sub ? '<span class="vn-swal-sub">' + esc(o.sub) + '</span>' : ''),
+            html: '<div class="vn-cuerpo">' + (o.cuerpo || '') + '</div>',
+            customClass: cc,
+            showCancelButton: p.showCancelButton !== false,
+            focusConfirm: false,
+            didOpen: (popup) => {
+                popup.addEventListener('keydown', (e) => {
+                    const c = e.target;
+                    if (e.key !== 'Enter' || e.isComposing || !c || c.tagName !== 'INPUT' || /^(checkbox|radio|button|submit|file)$/i.test(c.type)) return;
+                    e.preventDefault();
+                    window.Swal.clickConfirm();
+                });
+                const primero = popup.querySelector('.vn-cuerpo input:not([type="hidden"]):not([disabled]), .vn-cuerpo select:not(.vn-select-oculto):not([disabled]), .vn-cuerpo textarea');
+                if (primero && window.matchMedia('(pointer: fine)').matches) primero.focus();
+                if (abrir) abrir(popup);
+            }
+        }));
+    };
+    window.escHtml = esc;
+
     window.Avisos = {
         sinConexion: () => avisar(SIN_CONEXION, 'error'),
         listo: (t, d) => avisoBreve(t, 'listo', d),

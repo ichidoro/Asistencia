@@ -1342,50 +1342,22 @@ const Productos4Module = {
         });
     },
 
-    // --- Modal Crear Producto ---
+    // --- Agregar producto propio (ventana con campos, diseño HD) ---
     abrirModalCrearProducto() {
-        Swal.fire({
-            title: '<span class="fw-bold fs-5"><i class="bi bi-plus-circle me-1 text-primary"></i> Agregar Producto Propio</span>',
-            html: `
-                <div class="text-start mt-3">
-                    <div class="mb-3">
-                        <label for="prod-new-codigo" class="form-label small fw-bold">Código Producto (Único)</label>
-                        <input type="number" id="prod-new-codigo" class="form-control form-control-sm" placeholder="Ej. 1302">
-                    </div>
-                    <div class="mb-3">
-                        <label for="prod-new-desc" class="form-label small fw-bold">Descripción / Nombre</label>
-                        <input type="text" id="prod-new-desc" class="form-control form-control-sm" placeholder="Ej. AGUA DESTILADA 5 LTS">
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label for="prod-new-tipo" class="form-label small fw-bold">Tipo Producto</label>
-                            <input type="text" id="prod-new-tipo" class="form-control form-control-sm" placeholder="Ej. AGUA">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="prod-new-marca" class="form-label small fw-bold">Marca</label>
-                            <input type="text" id="prod-new-marca" class="form-control form-control-sm" placeholder="Ej. AGUACOL">
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label for="prod-new-unidad" class="form-label small fw-bold">Unidad / Formato</label>
-                            <input type="text" id="prod-new-unidad" class="form-control form-control-sm" placeholder="Ej. 5 Lts">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="prod-new-max" class="form-label small fw-bold">Entrega Máxima por Persona</label>
-                            <input type="number" id="prod-new-max" class="form-control form-control-sm" value="2" min="1">
-                        </div>
-                    </div>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Guardar Producto',
-            cancelButtonText: 'Cancelar',
-            customClass: {
-                confirmButton: 'btn btn-primary btn-sm px-3.5',
-                cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
-            },
-            buttonsStyling: false,
+        const fld = (id, etiqueta, control) => '<div class="vn-fld"><label for="' + id + '">' + etiqueta + '</label>' + control + '</div>';
+        window.ventanaForm({
+            icono: 'box-seam', titulo: 'Agregar producto propio', sub: 'Beneficio mensual por 100 % de asistencia',
+            cuerpo: '<div class="vn-dos">'
+                    + fld('prod-new-codigo', 'Código (único)', '<input type="number" id="prod-new-codigo" class="form-control" placeholder="Ej.: 1302">')
+                    + fld('prod-new-desc', 'Nombre', '<input type="text" id="prod-new-desc" class="form-control" placeholder="Ej.: AGUA DESTILADA 5 LTS">')
+                + '</div><div class="vn-dos">'
+                    + fld('prod-new-tipo', 'Tipo', '<input type="text" id="prod-new-tipo" class="form-control" placeholder="Ej.: AGUA">')
+                    + fld('prod-new-marca', 'Marca', '<input type="text" id="prod-new-marca" class="form-control" placeholder="Ej.: AGUACOL">')
+                + '</div><div class="vn-dos">'
+                    + fld('prod-new-unidad', 'Formato', '<input type="text" id="prod-new-unidad" class="form-control" placeholder="Ej.: 5 Lts">')
+                    + fld('prod-new-max', 'Máximo por persona', '<input type="number" id="prod-new-max" class="form-control" value="2" min="1">')
+                + '</div>',
+            confirmButtonText: 'Guardar producto',
             preConfirm: async () => {
                 const code = document.getElementById('prod-new-codigo').value;
                 const desc = document.getElementById('prod-new-desc').value;
@@ -1395,7 +1367,7 @@ const Productos4Module = {
                 const max = document.getElementById('prod-new-max').value;
 
                 if (!code || !desc || !tipo || !marca || !unidad || !max) {
-                    Swal.showValidationMessage("Todos los campos son obligatorios.");
+                    Swal.showValidationMessage("Faltan datos: todos los campos son obligatorios.");
                     return false;
                 }
 
@@ -1419,7 +1391,7 @@ const Productos4Module = {
                     });
 
                     const res = await response.json();
-                    if (!response.ok) throw new Error(res.detail || "Error guardando producto.");
+                    if (!response.ok) throw new Error(res.detail || "No se pudo guardar el producto.");
 
                     return true;
                 } catch (error) {
@@ -1435,63 +1407,37 @@ const Productos4Module = {
         });
     },
 
-    // --- Modal Editar Producto ---
+    // --- Editar producto propio (ventana con campos, diseño HD) ---
     abrirModalEditarProducto(codigo) {
         const p = this.productos.find(prod => prod.codigo === codigo);
         if (!p) return;
+        const e = window.escHtml || ((s) => String(s == null ? '' : s));
+        const fld = (id, etiqueta, control) => '<div class="vn-fld"><label for="' + id + '">' + etiqueta + '</label>' + control + '</div>';
+        const txt = (id, v) => '<input type="text" id="' + id + '" class="form-control" value="' + e(v == null ? '' : v) + '">';
 
-        Swal.fire({
-            title: `<span class="fw-bold fs-5"><i class="bi bi-pencil me-1 text-primary"></i> Editar Producto Propio (${codigo})</span>`,
-            html: `
-                <div class="text-start mt-3">
-                    <div class="mb-3">
-                        <label for="prod-edit-desc" class="form-label small fw-bold">Descripción / Nombre</label>
-                        <input type="text" id="prod-edit-desc" class="form-control form-control-sm" value="${p.descripcion}">
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label for="prod-edit-tipo" class="form-label small fw-bold">Tipo Producto</label>
-                            <input type="text" id="prod-edit-tipo" class="form-control form-control-sm" value="${p.tipo}">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="prod-edit-marca" class="form-label small fw-bold">Marca</label>
-                            <input type="text" id="prod-edit-marca" class="form-control form-control-sm" value="${p.marca}">
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label for="prod-edit-unidad" class="form-label small fw-bold">Unidad / Formato</label>
-                            <input type="text" id="prod-edit-unidad" class="form-control form-control-sm" value="${p.unidad}">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="prod-edit-max" class="form-label small fw-bold">Entrega Máxima por Persona</label>
-                            <input type="number" id="prod-edit-max" class="form-control form-control-sm" value="${p.max_cantidad}" min="1">
-                        </div>
-                    </div>
-                    <div class="form-check form-switch mt-3.5">
-                        <input class="form-check-input" type="checkbox" role="switch" id="prod-edit-activo" ${p.activo ? 'checked' : ''}>
-                        <label class="form-check-label small fw-bold" for="prod-edit-activo">Producto Habilitado / Activo</label>
-                    </div>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Actualizar Producto',
-            cancelButtonText: 'Cancelar',
-            customClass: {
-                confirmButton: 'btn btn-primary btn-sm px-3.5',
-                cancelButton: 'btn btn-outline-secondary btn-sm px-3.5'
+        window.ventanaForm({
+            icono: 'pencil', titulo: 'Editar producto', sub: p.descripcion + ' · código ' + codigo,
+            cuerpo: fld('prod-edit-desc', 'Nombre', txt('prod-edit-desc', p.descripcion))
+                + '<div class="vn-dos">' + fld('prod-edit-tipo', 'Tipo', txt('prod-edit-tipo', p.tipo)) + fld('prod-edit-marca', 'Marca', txt('prod-edit-marca', p.marca)) + '</div>'
+                + '<div class="vn-dos">' + fld('prod-edit-unidad', 'Formato', txt('prod-edit-unidad', p.unidad))
+                    + fld('prod-edit-max', 'Máximo por persona', '<input type="number" id="prod-edit-max" class="form-control" value="' + e(p.max_cantidad) + '" min="1">') + '</div>'
+                + fld('prod-edit-activo', 'Estado', '<select id="prod-edit-activo" class="form-select"><option value="1">Activo</option><option value="0">Inactivo</option></select>'),
+            confirmButtonText: 'Guardar cambios',
+            didOpen: () => {
+                const s = document.getElementById('prod-edit-activo');
+                s.value = p.activo ? '1' : '0';
+                if (window.chipsDesdeSelect) window.chipsDesdeSelect(s);
             },
-            buttonsStyling: false,
             preConfirm: async () => {
                 const desc = document.getElementById('prod-edit-desc').value;
                 const tipo = document.getElementById('prod-edit-tipo').value;
                 const marca = document.getElementById('prod-edit-marca').value;
                 const unidad = document.getElementById('prod-edit-unidad').value;
                 const max = document.getElementById('prod-edit-max').value;
-                const activo = document.getElementById('prod-edit-activo').checked;
+                const activo = document.getElementById('prod-edit-activo').value === '1';
 
                 if (!desc || !tipo || !marca || !unidad || !max) {
-                    Swal.showValidationMessage("Todos los campos son obligatorios.");
+                    Swal.showValidationMessage("Faltan datos: todos los campos son obligatorios.");
                     return false;
                 }
 
@@ -1515,7 +1461,7 @@ const Productos4Module = {
                     });
 
                     const res = await response.json();
-                    if (!response.ok) throw new Error(res.detail || "Error actualizando producto.");
+                    if (!response.ok) throw new Error(res.detail || "No se pudo guardar el producto.");
 
                     return true;
                 } catch (error) {
