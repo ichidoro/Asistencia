@@ -17,6 +17,12 @@ turno. La meta de horas de espera (88 h, mismo artículo) se prorratea igual.
 
 Además se avisa —sin bloquear— cuando los días corridos disponibles no
 alcanzan los 21 días que exige la ley para repartir la jornada.
+
+El término de un contrato a plazo NO es un egreso (decisión del dueño,
+03-11-2026): mientras el contrato está «por decidir», la meta no se recorta;
+de eso se encarga la ventana «Contratos por decidir», por otro carril. La
+fecha de salida solo cuenta cuando la salida está decidida: la persona ya
+está de baja o se eligió «No renovar» (ver `salida_decidida`).
 """
 
 from datetime import date
@@ -34,6 +40,22 @@ def _leer_fecha(valor: Any) -> Optional[date]:
         return date.fromisoformat(str(valor)[:10])
     except (TypeError, ValueError):
         return None
+
+
+def salida_decidida(fecha_salida: Any, activo: Any, decision_vencimiento: Any) -> Optional[str]:
+    """La fecha de salida que recorta la meta: solo si la salida está decidida.
+
+    Cuenta si la persona ya está inactiva o si su decisión es «No renovar» o una
+    baja (NO_RENOVAR, BAJA: …). Un término de contrato sin decidir, renovado o
+    pasado a indefinido no recorta nada.
+    """
+    if not fecha_salida:
+        return None
+    inactivo = str(activo).strip().lower() in ("0", "false", "none", "")
+    decision = str(decision_vencimiento or "").strip().upper()
+    if inactivo or decision.startswith("NO_RENOVAR") or decision.startswith("BAJA"):
+        return str(fecha_salida)
+    return None
 
 
 def calcular_prorrateo_bolsa(

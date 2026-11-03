@@ -24,7 +24,7 @@ from backend.services.libreta_corte import (
     fecha_libreta_del_horario, normalizar_fecha_corte, regimen_del_dia, REGIMEN_LIBRETA,
 )
 from backend.repositories.empleado import EmpleadoRepository
-from backend.services.bolsa_prorrateo import calcular_prorrateo_bolsa
+from backend.services.bolsa_prorrateo import calcular_prorrateo_bolsa, salida_decidida
 from backend.services.quantum_matrix_engine import (
     QuantumPhaseTopology,
     TensorMarkDeduplicator,
@@ -2663,8 +2663,10 @@ class AsistenciaService:
                     # bolsa se prorratea por días corridos y se avisa si no se alcanzan
                     # los 21 días del art. 25 bis. Lo consumen la grilla, el Excel y el
                     # resumen de cierre desde este único cálculo.
+                    # El término de un contrato sin decidir no recorta la meta (dueño, 03-11-2026)
                     emp['bolsa_prorrateo'] = calcular_prorrateo_bolsa(
-                        emp.get('fecha_ingreso'), emp.get('fecha_salida'),
+                        emp.get('fecha_ingreso'),
+                        salida_decidida(emp.get('fecha_salida'), emp.get('activo'), emp.get('decision_vencimiento')),
                         fecha_inicio, fecha_fin
                     )
             matrix[eid] = {'info': emp}

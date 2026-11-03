@@ -92,3 +92,30 @@ def test_entradas_invalidas_no_rompen_nada():
     assert calcular_prorrateo_bolsa("basura", None, TRAMO_INI, TRAMO_FIN) is None
     assert calcular_prorrateo_bolsa(None, None, "basura", TRAMO_FIN) is None
     assert calcular_prorrateo_bolsa(None, None, TRAMO_FIN, TRAMO_INI) is None  # tramo invertido
+
+
+# ── El término de contrato sin decidir no recorta la meta (decisión del dueño, 03-11-2026) ──
+from backend.services.bolsa_prorrateo import salida_decidida  # noqa: E402
+
+TRAMO_NOV = ("2026-10-26", "2026-11-25")   # 31 días
+
+
+def test_termino_de_contrato_sin_decidir_no_recorta_la_meta_casos_reales_garrido_pina_gonzalez():
+    salida = salida_decidida("2026-11-15", 1, None)
+    assert salida is None
+    assert calcular_prorrateo_bolsa("2026-10-01", salida, *TRAMO_NOV) is None   # meta completa: 180 h
+
+
+def test_no_renovar_o_una_baja_si_recortan():
+    assert salida_decidida("2026-11-15", 1, "NO_RENOVAR") == "2026-11-15"
+    assert salida_decidida("2026-10-13", 0, "BAJA: Despido") == "2026-10-13"
+    assert salida_decidida("2026-10-13", 0, None) == "2026-10-13"      # ya inactiva
+    p = calcular_prorrateo_bolsa("2026-10-01", salida_decidida("2026-11-15", 1, "NO_RENOVAR"), *TRAMO_NOV)
+    assert p["dias_disponibles"] == 21 and aplicar_prorrateo(10800, p) == round(10800 * 21 / 31)
+
+
+def test_renovado_o_indefinido_no_recortan():
+    assert salida_decidida("2027-02-15", 1, None) is None
+    assert salida_decidida(None, 1, None) is None
+    assert salida_decidida("2026-11-15", True, "RENOVAR") is None
+    assert salida_decidida("2026-11-15", False, None) == "2026-11-15"
