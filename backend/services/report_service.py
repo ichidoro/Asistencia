@@ -317,6 +317,8 @@ class ReportService:
                             vl_min = round(vl_hrs * 60)
                             
                     trab = round((di.get("horas_trabajadas") or 0.0) * 60) + vl_min
+                    if es_bolsa and di.get("libreta_borrador"):
+                        trab = 0  # libreta en borrador: no descuenta de la bolsa hasta que se valida
                     di_estado = di.get("estado") or ""
                     
                     # Detección exhaustiva de Jornada Especial y Coberturas (idéntico a marcaciones_ui.js líneas 4665-4678)

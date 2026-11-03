@@ -1607,7 +1607,8 @@ function calcularMetricasEmpleado(data) {
             }
         }
 
-        if (a.horas_trabajadas || vlMin > 0) {
+        const borradorBolsa = a.libreta_borrador && (infoMeta.tipo_programacion === 'BOLSA_FLEXIBLE' || infoMeta.tipo_programacion === 'FLEXIBLE_BOLSA'); // sin validar: no descuenta de la bolsa
+        if (!borradorBolsa && (a.horas_trabajadas || vlMin > 0)) {
             minutosTrabajadosAcumulados += Math.round((a.horas_trabajadas || 0) * 60) + vlMin;
         }
         if (a.minutos_deuda) minutosDeuda += a.minutos_deuda;
@@ -6436,7 +6437,7 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
         if (esBolsa) {
             di._esBolsa = true;
             di._metaMinBolsa = metaMin;
-            if (di.minutos_espera) acumEspera += Number(di.minutos_espera || 0);
+            if (di.minutos_espera && !di.libreta_borrador) acumEspera += Number(di.minutos_espera || 0);
         }
 
         let vlMin = 0;
@@ -6448,7 +6449,8 @@ window.calcularStatsEmpleado = function(emp, dates, feriadosArray) {
             }
         }
 
-        const trab = Math.round((di.horas_trabajadas||0)*60) + vlMin;
+        // Libreta en borrador (sin validar): sus horas no descuentan de la bolsa.
+        const trab = (esBolsa && di.libreta_borrador) ? 0 : Math.round((di.horas_trabajadas||0)*60) + vlMin;
         const isEsp = di.estado === 'JORNADA_ESPECIAL' || di.estado === 'EXTRA' || di.estado === 'FERIADO Y JORNADA EXTRA' || di.estado === 'DÍA LIBRE Y JORNADA EXTRA' || (!esBolsa && Number(di.horas_teoricas || 0) === 0 && Number(di.horas_trabajadas || 0) > 0);
         const tieneJa = Boolean(di.jornada_adicional && di.jornada_adicional.estado !== 'RECHAZADA');
         
@@ -8236,7 +8238,7 @@ function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
             const snapHoy      = di._acumuladoBolsaSnap || 0;
             const snapAyer     = di._acumuladoBolsaSnapPrev || 0;
             const metaMinBolsa = di._metaMinBolsa || 0;
-            const trabHoy      = Math.round((di.horas_trabajadas || 0) * 60);
+            const trabHoy      = di.libreta_borrador ? 0 : Math.round((di.horas_trabajadas || 0) * 60);
             if (snapHoy > metaMinBolsa && trabHoy > 0) {
                 const heEste = snapAyer >= metaMinBolsa ? trabHoy : (snapHoy - metaMinBolsa);
                 if (heEste > 0) {
