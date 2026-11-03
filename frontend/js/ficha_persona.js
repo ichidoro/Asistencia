@@ -98,10 +98,11 @@
     });
   }
 
-  async function abrir(empId) {
+  // dia (aaaa-mm-dd, opcional): abre el tramo que lo contiene con ese día elegido (lo usa el buscador: «riquelme 07-10»)
+  async function abrir(empId, dia) {
     if (!empId) return;
     asegurar();
-    estado = { empId: Number(empId), periodos: estado.periodos || [], tramo: null, datos: null, elegido: null };
+    estado = { empId: Number(empId), periodos: estado.periodos || [], tramo: null, datos: null, elegido: dia || null };
     document.getElementById('fp-cuerpo').innerHTML = '<div class="fp-cargando">Cargando el tramo…</div>';
     document.getElementById('fp-cuadre').hidden = !(puede('marcaciones.ver') && typeof window.openCuadreModal === 'function');
     bootstrap.Modal.getOrCreateInstance(document.getElementById(ID)).show();
@@ -113,8 +114,10 @@
     } catch (e) { estado.periodos = []; }
     const hoy = new Date().toISOString().slice(0, 10);
     // Por defecto el tramo vigente (el que marca la configuración) o el que contiene hoy
-    estado.tramo = estado.periodos.find((p) => p.activo === 1 || p.activo === true)
+    estado.tramo = (dia && estado.periodos.find((p) => p.fecha_inicio <= dia && dia <= p.fecha_fin))
+      || estado.periodos.find((p) => p.activo === 1 || p.activo === true)
       || estado.periodos.find((p) => p.fecha_inicio <= hoy && hoy <= p.fecha_fin) || estado.periodos[0] || null;
+    if (dia && estado.tramo && !(estado.tramo.fecha_inicio <= dia && dia <= estado.tramo.fecha_fin)) estado.elegido = null;
     const sel = document.getElementById('fp-tramo');
     sel.innerHTML = estado.periodos.map((p) => `<option value="${esc(p.id)}">${esc(p.mes_cierre)} · ${esc(ddmm(p.fecha_inicio))} al ${esc(ddmm(p.fecha_fin))}</option>`).join('');
     if (estado.tramo) sel.value = String(estado.tramo.id);

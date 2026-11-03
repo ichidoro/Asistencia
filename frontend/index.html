@@ -43,7 +43,7 @@
         }
     </script>
     <!-- Módulo de Seguridad (Centralizado) -->
-    <script src="/static/js/auth.js?v={{ startup_id }}" defer></script>
+    <script src="/static/js/auth.js?v={{ startup_id }}_v2" defer></script>
     <script src="/static/js/update_banner.js?v={{ startup_id }}" defer></script>
     <script src="/static/js/a11y_dialogs.js?v={{ startup_id }}" defer></script>
     <script src="/static/js/modal_stack.js?v={{ startup_id }}" defer></script>
@@ -234,8 +234,8 @@
                 </div>
                 <div class="header-right">
                     <!-- Centro de Notificaciones (Alertas de Contrato) -->
-                    <button type="button" class="hd-buscar" id="hd-buscar" aria-label="Buscar persona o pantalla (Ctrl K)">
-                        <i class="bi bi-search" aria-hidden="true"></i><span>Buscar persona o pantalla</span><kbd>Ctrl K</kbd>
+                    <button type="button" class="hd-buscar" id="hd-buscar" aria-label="Buscar persona, día o acción (Ctrl K)">
+                        <i class="bi bi-search" aria-hidden="true"></i><span>Buscar persona, día o acción</span><kbd>Ctrl K</kbd>
                     </button>
                     <div id="notification-center" role="list" class="notification-center me-3" title="No hay alertas críticas">
                         <li class="nav-item list-unstyled">
@@ -260,49 +260,23 @@
                             <span class="user-avatar-circle" id="header-avatar">?</span>
                             <span class="d-none d-sm-inline" id="header-user-text">Cargando...</span>
                         </button>
-                        <div class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-2 p-0" style="min-width:300px; border-radius:16px; overflow:hidden;">
-                            <!-- Header del perfil -->
-                            <div style="background:linear-gradient(135deg, #1b2f8f 0%, #14235c 100%); padding:20px; color:#fff;">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div style="width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); border:2px solid rgba(255,255,255,0.4); display:flex; align-items:center; justify-content:center; font-size:1.2rem; font-weight:800;" id="dropdown-avatar-lg">?</div>
-                                    <div>
-                                        <div class="fw-bold" style="font-size:0.95rem;" id="dropdown-nombre">Cargando...</div>
-                                        <div style="font-size:0.75rem; opacity:0.85;" id="dropdown-email">—</div>
-                                    </div>
-                                </div>
+                        <div class="dropdown-menu dropdown-menu-end um-menu" aria-label="Menú del usuario">
+                            <!-- Diseño HD (03-11-2026): sin franja de color; lo llena auth.js -->
+                            <div class="um-cab">
+                                <span class="um-av" id="dropdown-avatar-lg" aria-hidden="true">?</span>
+                                <div><b id="dropdown-nombre">Cargando…</b><span id="dropdown-email">—</span></div>
                             </div>
-                            <!-- Info del usuario -->
-                            <div style="padding:12px 16px; background:#f8fafc;">
-                                <div class="d-flex align-items-center gap-2 mb-2" style="font-size:0.78rem;">
-                                    <i class="bi bi-shield-check" style="color:var(--primary-color); font-size:1rem;"></i>
-                                    <span class="text-muted">Rol:</span>
-                                    <span class="fw-bold" id="dropdown-rol">—</span>
-                                </div>
-                                <div class="d-flex align-items-center gap-2 mb-2" style="font-size:0.78rem;">
-                                    <i class="bi bi-geo-alt" style="color:var(--primary-color); font-size:1rem;"></i>
-                                    <span class="text-muted">Áreas:</span>
-                                    <span class="fw-600" id="dropdown-areas" style="font-size: 0.75rem;">—</span>
-                                </div>
-                                <div class="d-flex align-items-center gap-2" style="font-size:0.78rem;">
-                                    <i class="bi bi-clock-history" style="color:var(--primary-color); font-size:1rem;"></i>
-                                    <span class="text-muted">Último acceso:</span>
-                                    <span class="fw-600" id="dropdown-ultimo-acceso" style="font-size: 0.75rem;">—</span>
-                                </div>
+                            <dl class="um-datos">
+                                <div><dt>Rol</dt><dd id="dropdown-rol">—</dd></div>
+                                <div><dt>Áreas</dt><dd id="dropdown-areas">—</dd></div>
+                                <div><dt>Último acceso</dt><dd id="dropdown-ultimo-acceso">—</dd></div>
+                            </dl>
+                            <div class="um-acc">
+                                <a class="dropdown-item" href="#" onclick="switchPage('configuracion'); return false;"><i class="bi bi-gear" aria-hidden="true"></i>Configuración</a>
+                                <span class="um-ver">Versión 2.8 · Producción</span>
                             </div>
-                            <hr class="my-0">
-                            <!-- Acciones -->
-                            <div style="padding:8px;">
-                                <a class="dropdown-item rounded-2 py-2 px-3" href="#" onclick="switchPage('configuracion'); return false;" style="font-size:0.82rem;">
-                                    <i class="bi bi-gear me-2" style="color:#64748b;"></i>Configuración
-                                </a>
-                            </div>
-                            <hr class="my-0">
-                            <!-- Footer: versión + cerrar sesión -->
-                            <div style="padding:10px 16px; background:#f8fafc;" class="d-flex justify-content-between align-items-center">
-                                <span style="font-size: 0.75rem; color:#94a3b8; font-weight:600;">v2.8 • Producción</span>
-                                <a class="btn btn-sm btn-outline-danger fw-bold" href="#" onclick="AuthService.logout()" style="font-size: 0.75rem; border-radius:8px; padding:4px 14px;">
-                                    <i class="bi bi-box-arrow-right me-1"></i>Salir
-                                </a>
+                            <div class="um-acc">
+                                <a class="dropdown-item um-salir" href="#" onclick="AuthService.logout(); return false;"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Salir</a>
                             </div>
                         </div>
                     </div>
@@ -4592,10 +4566,10 @@
 
             <!-- Inicializador Principal -->
             <script src="/static/js/main.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/sidebar_riel.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/buscador.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/sidebar_riel.js?v={{ startup_id }}_v2" defer></script>
+            <script src="/static/js/buscador.js?v={{ startup_id }}_v3" defer></script>
             <script src="/static/js/personas_hd.js?v={{ startup_id }}" defer></script>
-            <script src="/static/js/ficha_persona.js?v={{ startup_id }}" defer></script>
+            <script src="/static/js/ficha_persona.js?v={{ startup_id }}_v2" defer></script>
 
     <!-- Carga diferida de pantallas secundarias (rendimiento): se descargan de a una, con el navegador
          libre, DESPUÉS de pintar el dashboard. switchPage() espera a __lazyPromise si alguien navega antes. -->
@@ -4615,7 +4589,7 @@
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v17",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
         "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v28",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v31",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v32",
         "/static/js/velocidades_ui.js?v={{ startup_id }}_v2",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v12",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}_v2",

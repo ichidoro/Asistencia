@@ -160,3 +160,31 @@
 .bq-vacio { padding: 18px 14px; color: var(--ov-ink-3); font-size: 13.5px; }
 .bq-pie { display: flex; gap: 14px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--ov-line-2); background: var(--ov-sunk); color: var(--ov-ink-3); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .bq { animation: none; } }
+.bq-nota { margin: 2px 12px 6px; padding: 8px 10px; border-radius: 8px; background: var(--ov-canvas, #f5f6fa); color: var(--ov-ink-3); font-size: 12.5px; line-height: 1.4; }
+
+/* Menú del usuario con el diseño HD (03-11-2026): blanco, sin franja de color */
+.dropdown-menu.um-menu { min-width: 300px; margin-top: 8px !important; padding: 6px; border: 0; border-radius: 14px; background: #fff;
+  box-shadow: 0 0 0 1px rgba(16, 26, 61, .08), 0 18px 40px -12px rgba(16, 26, 61, .32); font-family: 'Barlow', sans-serif; }
+.um-cab { display: flex; align-items: center; gap: 12px; padding: 10px 10px 8px; }
+.um-av { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; background: #eef1fb; color: #1b2f8f; font: 600 15px 'Barlow', sans-serif; }
+.um-cab b { display: block; font-size: 14px; font-weight: 600; color: #101a3d; line-height: 1.25; }
+.um-cab div span { display: block; font-size: 12.5px; color: #69738f; }
+.um-datos { margin: 0; padding: 4px 10px 10px; border-bottom: 1px solid #eff1f6; display: grid; gap: 3px; }
+.um-datos div { display: flex; gap: 6px; font-size: 12.5px; line-height: 1.4; }
+.um-datos dt { font-weight: 500; color: #69738f; }
+.um-datos dt::after { content: ':'; }
+.um-datos dd { margin: 0; color: #3c4767; min-width: 0; overflow-wrap: anywhere; }
+.um-acc { padding: 4px 0; border-bottom: 1px solid #eff1f6; display: grid; }
+.um-acc:last-child { border-bottom: 0; }
+.um-menu .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; font-size: 13.5px; color: #3c4767; }
+.um-menu .dropdown-item i { color: #69738f; font-size: 15px; }
+.um-menu .dropdown-item:hover, .um-menu .dropdown-item:focus { background: #f5f6fa; color: #101a3d; }
+.um-ver { padding: 6px 10px 8px; font-size: 12.5px; color: #69738f; }
+.um-menu .um-salir, .um-menu .um-salir i { color: #a3261c; }
+.um-menu .um-salir:hover, .um-menu .um-salir:focus { background: #fdecea; color: #a3261c; }
+
+/* Menú de la flecha de «Sincronizar BioAlba» (Asistencia): frases cortas con su explicación debajo */
+.dropdown-item.mx-op { display: block; padding: 8px 14px; white-space: normal; min-width: 240px; font-family: 'Barlow', sans-serif; }
+.dropdown-item.mx-op b { display: block; font-size: 13.5px; font-weight: 500; color: #101a3d; }
+.dropdown-item.mx-op small { display: block; font-size: 12px; color: #69738f; }
+.dropdown-item.mx-op:hover, .dropdown-item.mx-op:focus { background: #f5f6fa; }

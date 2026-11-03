@@ -243,8 +243,7 @@ const AuthService = {
 
                 // Rol con badge
                 if (ddRol) {
-                    const alcance = user.alcance_global ? 'Alcance Global' : 'Zonal';
-                    ddRol.innerHTML = `${user.rol_nombre || 'Usuario'} <span class="badge ${user.alcance_global ? 'bg-primary' : 'bg-secondary'}" style="font-size: 0.75rem; vertical-align:middle;">${alcance}</span>`;
+                    ddRol.textContent = (user.rol_nombre || 'Usuario') + ' · ' + (user.alcance_global ? 'todas las áreas' : 'por áreas');
                 }
 
                 // Áreas
@@ -253,7 +252,7 @@ const AuthService = {
                         const areaNames = user.areas.map(a => a.nombre || a).join(', ');
                         ddAreas.textContent = areaNames;
                     } else if (user.alcance_global) {
-                        ddAreas.textContent = 'Todas (Global)';
+                        ddAreas.textContent = 'Todas';
                     } else {
                         ddAreas.textContent = 'No asignadas';
                     }
@@ -262,8 +261,9 @@ const AuthService = {
                 // Último acceso
                 if (ddUltimo && user.ultimo_acceso) {
                     try {
-                        const d = new Date(user.ultimo_acceso);
-                        ddUltimo.textContent = d.toLocaleString('es-CL', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+                        const d = new Date(user.ultimo_acceso), p2 = (x) => String(x).padStart(2, '0');
+                        ddUltimo.textContent = isNaN(d) ? String(user.ultimo_acceso)
+                            : p2(d.getDate()) + '-' + p2(d.getMonth() + 1) + '-' + d.getFullYear() + ', ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
                     } catch { ddUltimo.textContent = user.ultimo_acceso; }
                 }
             }

@@ -469,20 +469,11 @@ function renderMarcacionesToolbar(container) {
                         <span class="visually-hidden">Opciones</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0">
-                        <li>
-                            <a class="dropdown-item py-2" href="#" onclick="syncMarcacionesBioAlba(); return false;">
-                                <i class="bi bi-lightning-fill text-warning"></i> Sincronización Rápida
-                                <small class="d-block text-muted">Todas las áreas del mes actual</small>
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item py-2" href="#" onclick="openSyncMarcacionesModal(); return false;">
-                                <i class="bi bi-funnel text-primary"></i> Filtrar por Áreas...
-                                <small class="d-block text-muted">Seleccionar áreas específicas</small>
-                            </a>
-                        </li>
-                    </ul>
+                            <li><a class="dropdown-item mx-op" href="#" onclick="syncMarcacionesBioAlba(); return false;"><b>Sincronización rápida</b><small>Todas las áreas del mes actual</small></a></li>
+                            <li><a class="dropdown-item mx-op" href="#" onclick="openSyncMarcacionesModal(); return false;"><b>Filtrar por áreas…</b><small>Elegir áreas específicas</small></a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item mx-op" href="#" onclick="openHistorialCierresModal(); return false;"><b>Historial de cierres</b></a></li>
+                        </ul>
                 </div>
 
                 <div class="d-flex align-items-center bg-white border rounded-3 px-3 py-1 shadow-sm mx-act-switch" style="height:38px;border-color:#e2e8f0 !important">
