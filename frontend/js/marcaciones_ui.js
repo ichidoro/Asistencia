@@ -4008,21 +4008,11 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
     document.getElementById('asig-indiv-empleado-id').value = empleadoId;
     document.getElementById('asig-indiv-fecha').value = fecha;
     document.getElementById('asig-indiv-nombre').innerText = nombre;
-    
-    const areaBadge = document.getElementById('asig-indiv-area-badge');
-    areaBadge.innerHTML = `<span class="badge bg-info text-dark border"><i class="bi bi-geo-alt me-1"></i> ${area}</span>`;
-    
+    document.getElementById('asig-indiv-area-badge').textContent = area || '';
     const cargoBadge = document.getElementById('asig-indiv-cargo');
-    if (cargoBadge) {
-        if (cargo) {
-            cargoBadge.innerHTML = `<i class="bi bi-person-badge me-1"></i>${cargo}`;
-            cargoBadge.classList.remove('d-none');
-        } else {
-            cargoBadge.classList.add('d-none');
-            cargoBadge.innerHTML = '';
-        }
-    }
-
+    if (cargoBadge) cargoBadge.textContent = cargo || '';
+    // Encabezado de persona (etapa 6): iniciales y «NOMBRE · área · cargo»
+    if (window.cabeceraPersona) window.cabeceraPersona(modalEl, { nombre: nombre, empId: empleadoId, detalle: [area, cargo].filter(Boolean).join(' · ') });
 
     // Ocultar la fila BioAlba hasta que RRHH decida buscar (no automático)
     const rowBioAlba = document.getElementById('asig-bioalba-row');
@@ -4032,7 +4022,7 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
     if (btnBuscarBioAlba) {
         btnBuscarBioAlba.dataset.empleadoId = empleadoId;
         btnBuscarBioAlba.disabled = false;
-        btnBuscarBioAlba.innerHTML = '<i class="bi bi-search me-1"></i>Buscar 1ª marca en BioAlba';
+        btnBuscarBioAlba.innerHTML = '<i class="bi bi-search me-1" aria-hidden="true"></i>Buscar 1.ª marca en BioAlba';
     }
 
     // Cargar Turnos del área
@@ -4051,9 +4041,11 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
         if (turnos.length === 0) {
             console.warn("\u26a0\ufe0f No se encontraron turnos para el \u00e1rea:", area);
             selectTurno.innerHTML = '<option value="">No hay turnos creados</option>';
-            document.getElementById('asig-indiv-alerta-area').innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> No existen turnos configurados para <u>${area}</u>.`;
+            const alertaArea = document.getElementById('asig-indiv-alerta-area');
+            alertaArea.textContent = 'No hay turnos creados para ' + area + '.';
+            alertaArea.classList.add('text-danger');
         } else {
-            selectTurno.innerHTML = '<option value="">-- Seleccione el Turno Oficial --</option>' +
+            selectTurno.innerHTML = '<option value="">Elegir turno</option>' +
                 turnos.map(t => {
                     const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
                         ? 'Bolsa Flexible'
@@ -4063,7 +4055,9 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
                         : '';
                     return `<option value="${t.id}" data-tipo="${tipoPlanificacion}" data-horario="${horario}">${t.nombre}</option>`;
                 }).join('');
-            document.getElementById('asig-indiv-alerta-area').innerHTML = `<i class="bi bi-info-circle me-1"></i> Mostrando ${turnos.length} turnos válidos para <strong>${area}</strong>.`;
+            const alertaArea = document.getElementById('asig-indiv-alerta-area');
+            alertaArea.textContent = 'Solo aparecen los turnos de ' + area + ' (' + turnos.length + ').';
+            alertaArea.classList.remove('text-danger');
             
             // Trigger change event to initialize dynamic label
             selectTurno.removeEventListener('change', window.updateTurnoInfoLabel);
@@ -4083,7 +4077,7 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
     const btnConfirmar = document.getElementById('btn-confirmar-asignacion-individual');
     if (btnConfirmar) {
         btnConfirmar.disabled = false;
-        btnConfirmar.innerHTML = '<i class="bi bi-check-lg me-2"></i>Confirmar Asignación';
+        btnConfirmar.textContent = 'Asignar';
     }
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -4091,6 +4085,12 @@ async function openAsignarTurnoForzado(empleadoId, fecha, area, nombre, cargo = 
 }
 // Exponer globalmente para que pueda ser llamada desde onclick en main.js
 window.openAsignarTurnoForzado = openAsignarTurnoForzado;
+
+// «Hoy» junto a la fecha de inicio: fecha local (toISOString daría el día siguiente después de las 21:00)
+window.asigIndivHoy = function () {
+    const d = new Date();
+    document.getElementById('asig-indiv-fecha').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
 
 // Búsqueda bajo demanda: RRHH decide cuándo buscar la primera marcación en BioAlba
 window.buscarPrimeraMarcaBioAlba = async function(btn) {
@@ -4116,7 +4116,7 @@ window.buscarPrimeraMarcaBioAlba = async function(btn) {
         const primeraMarca = data?.primera_marcacion || null;
 
         if (primeraMarca) {
-            if (valBioAlba) valBioAlba.textContent = primeraMarca;
+            if (valBioAlba) valBioAlba.textContent = window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(primeraMarca) : primeraMarca;
             if (btnUsarFecha) {
                 btnUsarFecha.dataset.fecha = primeraMarca;
                 btnUsarFecha.classList.remove('d-none');
@@ -4125,7 +4125,7 @@ window.buscarPrimeraMarcaBioAlba = async function(btn) {
         } else {
             if (valBioAlba) valBioAlba.textContent = data?.motivo || 'Sin marcaciones históricas en BioAlba';
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-search me-1"></i>Buscar 1ª marca en BioAlba';
+            btn.innerHTML = '<i class="bi bi-search me-1" aria-hidden="true"></i>Buscar 1.ª marca en BioAlba';
         }
     } catch (e) {
         if (valBioAlba) valBioAlba.textContent = 'Error conectando a BioAlba';
@@ -4247,7 +4247,7 @@ async function saveAsignacionIndividual() {
         // Restaurar botón siempre
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = btnOrigHtml || '<i class="bi bi-check-lg me-2"></i>Confirmar Asignación';
+            btn.innerHTML = btnOrigHtml || 'Asignar';
         }
     }
 }
@@ -4361,17 +4361,22 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
 
     // ── Resetear estado del modal ───────────────────────────────
     const el = id => document.getElementById(id);
-    const syncLabel = syncBioAlba ? ' · Incluye sync BioAlba' : '';
-    el('repr-emp-nombre').textContent = `${nombre} · desde ${fechaDesde}${syncLabel}`;
-    el('repr-header-title').textContent = syncBioAlba ? 'Sincronizando y Calculando...' : 'Reprocesando Asistencia';
+    const syncLabel = syncBioAlba ? ' · con descarga de BioAlba' : '';
+    // «13-10» a partir de «2026-10-13»
+    const diaCorto = (f) => { const m = String(f || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '-' + m[2] : String(f || ''); };
+    const cerrarDiaEnCurso = (logEl) => {
+        const previo = logEl.querySelector('.vn-ahora');
+        if (previo) { previo.classList.remove('vn-ahora'); previo.textContent = previo.dataset.dia + ' calculado'; }
+    };
+    el('repr-emp-nombre').textContent = (window.nombreTitulo ? window.nombreTitulo(nombre) : nombre) + ' · desde el '
+        + (window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(fechaDesde) : fechaDesde) + syncLabel;
+    el('repr-header-title').textContent = syncBioAlba ? 'Descargando marcas y recalculando' : 'Recalculando asistencia';
     el('repr-progress-bar').style.width = '2%';
-    el('repr-progress-bar').style.background = 'linear-gradient(90deg,#0ea5e9,#2563eb)';
-    el('repr-progress-bar').classList.add('progress-bar-animated', 'progress-bar-striped');
-    el('repr-pct').textContent = '0%';
-    el('repr-pct').className = 'badge rounded-pill bg-info';
-    el('repr-day-label').textContent = syncBioAlba ? 'Descargando marcaciones BioAlba...' : 'Iniciando cálculo...';
-    el('repr-counter').textContent = syncBioAlba ? 'Fase 1 de 2: Sincronización' : 'Iniciando...';
-    el('repr-log').innerHTML = `<span style="color:#38bdf8;">⟳</span> ${syncBioAlba ? 'Conectando a BioAlba...' : 'Esperando inicio del proceso...'}`;
+    el('repr-progress-bar').dataset.tono = '';
+    el('repr-pct').textContent = '0 %';
+    el('repr-day-label').textContent = syncBioAlba ? 'Descargando las marcas de BioAlba…' : 'Preparando…';
+    el('repr-counter').textContent = syncBioAlba ? 'Paso 1 de 2 · descarga de BioAlba' : '';
+    el('repr-log').innerHTML = '<div class="vn-espera">' + (syncBioAlba ? 'Conectando con BioAlba…' : 'Esperando el inicio…') + '</div>';
     el('repr-footer-completado').classList.add('d-none');
     el('repr-header-spinner').classList.remove('d-none');
     el('repr-header-ok').classList.add('d-none');
@@ -4409,23 +4414,21 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
             if (s.status === 'not_found') {
                 clearInterval(_reprocesoPollingTimer);
                 const bar = el('repr-progress-bar');
-                bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-                bar.style.background = 'linear-gradient(90deg,#f59e0b,#d97706)';
+                bar.dataset.tono = 'atn';
                 bar.style.width = '100%';
                 el('repr-pct').textContent = '';
-                el('repr-pct').className = 'badge rounded-pill bg-warning text-dark';
-                el('repr-header-title').textContent = 'Proceso Interrumpido';
-                el('repr-day-label').textContent = 'El servidor se reinició durante el proceso.';
-                el('repr-counter').textContent = 'Los datos ya sincronizados están guardados.';
-                el('repr-resumen-texto').textContent = 'El proceso fue interrumpido por una actualización del servidor. Los empleados y marcaciones descargados antes de la interrupción se guardaron correctamente. Puede reintentar la sincronización de marcaciones desde la grilla.';
-                el('repr-resumen').classList.remove('d-none');
-                el('repr-done-actions').classList.remove('d-none');
+                el('repr-header-title').textContent = 'Recálculo interrumpido';
+                el('repr-day-label').textContent = 'El servidor se reinició durante el recálculo.';
+                el('repr-counter').textContent = 'Lo que alcanzó a descargarse quedó guardado.';
+                el('repr-resumen-texto').textContent = 'Se interrumpió por una actualización del servidor. Las personas y marcas descargadas antes quedaron guardadas; puede volver a sincronizar desde la grilla.';
                 const logEl = el('repr-log');
                 const warnLine = document.createElement('div');
-                warnLine.style.color = '#fbbf24';
-                warnLine.textContent = `Job ${jobId} no encontrado — el servidor fue reiniciado`;
+                warnLine.className = 'vn-mal';
+                warnLine.textContent = 'El servidor se reinició y el recálculo quedó a medias';
                 logEl.appendChild(warnLine);
                 logEl.scrollTop = logEl.scrollHeight;
+                el('repr-header-spinner').classList.add('d-none');
+                el('repr-footer-completado').classList.remove('d-none');
                 return;
             }
 
@@ -4439,22 +4442,20 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
             // ── FASE: syncing (BioAlba) ───────────────────────────
             if (isSyncing) {
                 _restartPolling(POLL_SLOW); // BioAlba es lento — reducir requests
-                const phaseLabel = s.phase_label || 'Descargando marcaciones BioAlba...';
-                el('repr-progress-bar').style.background = 'linear-gradient(90deg,#0ea5e9,#2563eb)';
+                const phaseLabel = s.phase_label || 'Descargando las marcas de BioAlba…';
+                el('repr-progress-bar').dataset.tono = '';
                 // Actualizar barra proporcional al pct reportado por el backend
                 el('repr-progress-bar').style.width = `${Math.max(pct, 2)}%`;
-                el('repr-pct').className = 'badge rounded-pill bg-info';
-                el('repr-pct').textContent = `${pct}%`;
+                el('repr-pct').textContent = `${pct} %`;
                 el('repr-day-label').textContent = `${phaseLabel}`;
-                el('repr-counter').textContent = 'Fase 1 de 2: Sincronización BioAlba';
+                el('repr-counter').textContent = 'Paso 1 de 2 · descarga de BioAlba';
 
                 // Agregar entrada al log al cambiar de fase
                 if (prevPhase !== 'syncing') {
                     prevPhase = 'syncing';
                     const logEl = el('repr-log');
                     const line = document.createElement('div');
-                    line.style.color = '#38bdf8';
-                    line.textContent = `Conectado a BioAlba — descargando marcaciones...`;
+                    line.textContent = 'Conectado con BioAlba: descargando las marcas…';
                     logEl.appendChild(line);
                     logEl.scrollTop = logEl.scrollHeight;
                 }
@@ -4464,14 +4465,13 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
             // ── TRANSICION syncing → running ───────────────────────
             if (isRunning && prevPhase !== 'running') {
                 prevPhase = 'running';
-                el('repr-progress-bar').style.background = 'linear-gradient(90deg,#2563eb,#7c3aed)';
-                el('repr-pct').className = 'badge rounded-pill bg-primary';
-                el('repr-header-title').textContent = 'Calculando Asistencia...';
+                el('repr-progress-bar').dataset.tono = '';
+                el('repr-header-title').textContent = 'Recalculando asistencia';
                 // Log de transición
                 const logEl = el('repr-log');
                 const sep = document.createElement('div');
-                sep.style.cssText = 'color:#64748b;border-top:1px solid #1e293b;margin:4px 0;padding-top:4px;';
-                sep.textContent = 'BioAlba OK — Iniciando cálculo día a día...';
+                sep.className = 'vn-ok';
+                sep.textContent = 'Marcas descargadas · recalculando día a día';
                 logEl.appendChild(sep);
                 logEl.scrollTop = logEl.scrollHeight;
             }
@@ -4480,17 +4480,19 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
             if (isRunning) {
                 _restartPolling(POLL_FAST); // Cálculo es rápido — volver a 1.5s
                 el('repr-progress-bar').style.width = `${pct}%`;
-                el('repr-pct').textContent = `${pct}%`;
-                el('repr-day-label').textContent = `Procesando ${s.current_day || '...'}...`;
-                el('repr-counter').textContent = `${syncBioAlba ? 'Fase 2 de 2 — ' : ''}Día ${s.day_index ?? 0} de ${s.total_days ?? '?'}`;
+                el('repr-pct').textContent = `${pct} %`;
+                el('repr-day-label').textContent = 'Día ' + (s.day_index ?? 0) + ' de ' + (s.total_days ?? '?');
+                el('repr-counter').textContent = syncBioAlba ? 'Paso 2 de 2 · recálculo' : '';
 
                 // Log por cada día nuevo
                 if (s.day_index !== prevDayIndex && s.current_day) {
                     prevDayIndex = s.day_index;
                     const logEl = el('repr-log');
+                    cerrarDiaEnCurso(logEl);
                     const line = document.createElement('div');
-                    line.style.color = '#94a3b8';
-                    line.textContent = `→ [${String(s.day_index).padStart(2, '0')}/${s.total_days}] ${s.current_day}`;
+                    line.className = 'vn-ahora';
+                    line.dataset.dia = diaCorto(s.current_day);
+                    line.textContent = line.dataset.dia + ' calculando…';
                     logEl.appendChild(line);
                     logEl.scrollTop = logEl.scrollHeight;
                 }
@@ -4511,7 +4513,7 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                         if (!allDone) {
                             // Actualizar label para mostrar progreso del batch
                             const doneCount = allResponses.filter(j => j.status === 'done' || j.status === 'completed' || j.status === 'error').length;
-                            el('repr-day-label').textContent = `${doneCount}/${_allJobs.length} empleados completados...`;
+                            el('repr-day-label').textContent = `${doneCount} de ${_allJobs.length} personas listas…`;
                             el('repr-progress-bar').style.width = `${Math.round(50 + 50 * doneCount / _allJobs.length)}%`;
                             return; // Seguir polling hasta que TODOS terminen
                         }
@@ -4525,30 +4527,30 @@ function abrirModalProgresoJob(jobId, nombre, fechaDesde, opts = {}) {
                 bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
 
                 if (isError) {
-                    bar.style.background = 'linear-gradient(90deg,#dc2626,#ef4444)';
-                    el('repr-pct').className = 'badge rounded-pill bg-danger';
-                    el('repr-day-label').textContent = 'Error en el proceso';
-                    el('repr-resumen-texto').textContent = `Error: ${s.error || 'Desconocido'}. Revise la terminal.`;
+                    bar.dataset.tono = 'mal';
+                    el('repr-header-title').textContent = 'No se pudo recalcular';
+                    el('repr-day-label').textContent = 'No se pudo terminar';
+                    el('repr-resumen-texto').textContent = 'No se pudo recalcular: ' + (s.error || 'error desconocido') + '.';
                     const logEl = el('repr-log');
                     const errLine = document.createElement('div');
-                    errLine.style.color = '#fca5a5';
+                    errLine.className = 'vn-mal';
                     errLine.textContent = `${s.error || 'Error desconocido'}`;
                     logEl.appendChild(errLine);
                 } else {
                     bar.style.width = '100%';
-                    bar.style.background = 'linear-gradient(90deg,#059669,#10b981)';
-                    el('repr-pct').textContent = '100%';
-                    el('repr-pct').className = 'badge rounded-pill bg-success';
-                    el('repr-header-title').textContent = 'Proceso Completado';
-                    el('repr-day-label').textContent = 'Todo listo — puede revisar la grilla';
-                    const bioAlbaNote = syncBioAlba ? ' (BioAlba + cálculo)' : '';
+                    bar.dataset.tono = '';
+                    el('repr-pct').textContent = '100 %';
+                    el('repr-header-title').textContent = 'Asistencia recalculada';
+                    el('repr-day-label').textContent = 'Listo · la grilla ya muestra el resultado';
+                    const bioAlbaNote = syncBioAlba ? ', con la descarga de BioAlba' : '';
                     el('repr-resumen-texto').textContent =
-                        `${s.procesados} días procesados en ${elapsed}s${bioAlbaNote} · ${s.errores} errores`;
+                        `${s.procesados} días recalculados en ${String(elapsed).replace('.', ',')} s${bioAlbaNote}` + (s.errores ? ` · ${s.errores} con error` : ' · sin errores');
 
                     const logEl = el('repr-log');
+                    cerrarDiaEnCurso(logEl);
                     const okLine = document.createElement('div');
-                    okLine.style.cssText = 'color:#86efac;font-weight:bold;margin-top:4px;';
-                    okLine.textContent = `Completado: ${s.procesados} días (${elapsed}s)`;
+                    okLine.className = 'vn-ok';
+                    okLine.textContent = `Listo: ${s.procesados} días`;
                     logEl.appendChild(okLine);
                     logEl.scrollTop = logEl.scrollHeight;
 
@@ -5953,64 +5955,51 @@ async function openHistorialCierresModal() {
 
         const user = AuthService.getUser();
         const isSuperAdmin = user && (user.alcance_global === true || user.alcance_global === 1);
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        const p2 = (n) => String(n).padStart(2, '0');
+        const anioHoy = new Date().getFullYear();
+        // «26-09 al 25-10», con el año solo si no es el de hoy
+        const tramoTxt = (c) => {
+            const a = String(c.fecha_inicio || '').slice(0, 10).split('-'), b = String(c.fecha_fin || '').slice(0, 10).split('-');
+            if (a.length < 3 || b.length < 3) return esc((c.fecha_inicio || '') + ' al ' + (c.fecha_fin || ''));
+            return a[2] + '-' + a[1] + ' al ' + b[2] + '-' + b[1] + (Number(b[0]) !== anioHoy ? '-' + b[0] : '');
+        };
+        const cerradoTxt = (c) => {
+            const d = new Date(c.created_at || c.fecha_cierre);
+            return isNaN(d.getTime()) ? '—' : p2(d.getDate()) + '-' + p2(d.getMonth() + 1) + '-' + d.getFullYear() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+        };
+        // El comentario del cierre en palabras: con qué rol se cerró y si se aceptaron las inasistencias
+        const ROLES = { JEFE_AREA: 'Jefe de área', SUPER_ADMIN: 'Administrador', ADMIN: 'Administrador' };
+        const notaTxt = (c) => {
+            const txt = String(c.comentarios || c.comentario || '').trim();
+            if (!txt) return '';
+            const rol = txt.match(/\[([A-Z_]+)\]/);
+            const ina = txt.match(/inasistencias aceptadas:\s*(si|sí|no)/i);
+            if (!rol && !ina) return txt;
+            const partes = [];
+            if (rol) { const r = ROLES[rol[1]] || rol[1].replace(/_/g, ' ').toLowerCase(); partes.push(r.charAt(0).toUpperCase() + r.slice(1)); }
+            if (ina) partes.push('inasistencias aceptadas: ' + (/^n/i.test(ina[1]) ? 'no' : 'sí'));
+            return partes.join(' · ');
+        };
+        const cols = isSuperAdmin ? 5 : 4;
+        const filas = historial.length === 0
+            ? '<tr><td colspan="' + cols + '" class="vn-vacio">Todavía no hay cierres.</td></tr>'
+            : historial.map((c) => {
+                const nota = notaTxt(c);
+                return '<tr><td class="vn-nw">' + tramoTxt(c) + '</td><td>' + esc(c.area || 'Todas') + '</td><td class="vn-nw">' + cerradoTxt(c) + '</td><td>' + esc(c.username || c.usuario_cierre || '—') + '</td>'
+                    + (isSuperAdmin ? '<td class="vn-acc"><button type="button" class="btn btn-light btn-sm" onclick="reabrirPeriodo(' + Number(c.id) + ', \'' + esc(c.fecha_inicio) + '\', \'' + esc(c.fecha_fin) + '\', \'' + esc(c.area) + '\')">Reabrir</button></td>' : '')
+                    + '</tr>' + (nota ? '<tr class="vn-gp"><td colspan="' + cols + '">' + esc(nota) + '</td></tr>' : '');
+            }).join('');
 
-        const html = `
-            <div class="modal fade" id="modal-historial-cierres" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header border-0 pb-0">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i> Historial de Cierres RRHH</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="table-responsive rounded border">
-                                <table class="table table-hover mb-0">
-                                    <thead class="table-light">
-                                        <tr class="small text-uppercase">
-                                            <th>Periodo</th>
-                                            <th>Área</th>
-                                            <th>Fecha Registro</th>
-                                            <th>Usuario</th>
-                                            <th>Comentarios</th>
-                                            ${isSuperAdmin ? '<th>Acciones</th>' : ''}
-                                        </tr>
-                                    </thead>
-                                    <tbody class="align-middle">
-                                        ${historial.length === 0 ? `<tr><td colspan="${isSuperAdmin ? '6' : '5'}" class="text-center py-5 text-muted">No se registran cierres previos.</td></tr>` : 
-                                            historial.map(c => `
-                                            <tr>
-                                                <td><span class="badge bg-info-subtle text-info border border-info-subtle">${window.formatFechaDDMMYYYY(c.fecha_inicio)} al ${window.formatFechaDDMMYYYY(c.fecha_fin)}</span></td>
-                                                <td><span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">${c.area || 'Todas'}</span></td>
-                                                <td class="small">${(() => {
-                                                    const d = new Date(c.created_at || c.fecha_cierre);
-                                                    if (isNaN(d.getTime())) return 'N/A';
-                                                    const formattedDatePart = window.formatFechaDDMMYYYY(d);
-                                                    const timePart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-                                                    return `${formattedDatePart} ${timePart}`;
-                                                })()}</td>
-                                                <td><i class="bi bi-person-circle me-1"></i> ${c.username || c.usuario_cierre || 'N/A'}</td>
-                                                <td class="small text-muted italic">${c.comentarios || c.comentario || '--'}</td>
-                                                ${isSuperAdmin ? `
-                                                    <td>
-                                                        <button class="btn btn-sm btn-outline-danger fw-bold py-0" onclick="reabrirPeriodo(${c.id}, '${c.fecha_inicio}', '${c.fecha_fin}', '${c.area}')">
-                                                            <i class="bi bi-unlock-fill"></i> Reabrir
-                                                        </button>
-                                                    </td>
-                                                ` : ''}
-                                            </tr>
-                                            `).join('')
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="modal-footer border-0 pt-0">
-                            <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Cerrar</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        const html = '<div class="modal fade" id="modal-historial-cierres" tabindex="-1" aria-labelledby="hc-titulo">'
+            + '<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">'
+            + '<div class="modal-header"><span class="vn-ico" aria-hidden="true"><i class="bi bi-clock-history"></i></span>'
+            + '<div class="vn-tit"><h5 class="modal-title" id="hc-titulo">Historial de cierres</h5><div class="vn-sub">Cada cierre con su área, fecha y usuario</div></div>'
+            + '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>'
+            + '<div class="modal-body"><div class="vn-tbl-caja"><table class="vn-tbl"><thead><tr><th>Tramo</th><th>Área</th><th>Cerrado</th><th>Por</th>'
+            + (isSuperAdmin ? '<th><span class="visually-hidden">Reabrir</span></th>' : '') + '</tr></thead><tbody>' + filas + '</tbody></table></div></div>'
+            + '<div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button></div>'
+            + '</div></div></div>';
 
         const old = document.getElementById('modal-historial-cierres');
         if (old) old.remove();

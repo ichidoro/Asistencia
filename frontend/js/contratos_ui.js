@@ -230,16 +230,25 @@ function _updateVencSortIcons() {
 function openVencimientoModal(empleado) {
     currentEmpleadoVencimiento = empleado;
 
-    document.getElementById('venc-emp-nombre').innerText = empleado.nombre_completo;
-    document.getElementById('venc-emp-cargo-area').innerText = `${empleado.cargo || 'Sin Cargo'} | ${empleado.area || 'Sin Área'}`;
-    document.getElementById('venc-fecha').innerText = empleado.fecha_salida || 'Sin definir';
+    // Encabezado de persona (diseño HD): iniciales y «NOMBRE · cargo · área · contrato N° n vence el dd-mm-aaaa»
+    const av = document.getElementById('venc-av');
+    if (av) {
+        av.textContent = window.inicialesDe ? window.inicialesDe(empleado.nombre_completo) : '';
+        av.className = 'vn-av td-t' + ((Math.abs(parseInt(empleado.id, 10) || 0) % 6) + 1);
+    }
+    document.getElementById('venc-emp-nombre').innerText = window.nombreTitulo ? window.nombreTitulo(empleado.nombre_completo) : empleado.nombre_completo;
+    document.getElementById('venc-emp-cargo-area').innerText = (empleado.cargo || 'Sin cargo') + ' · ' + (empleado.area || 'Sin área');
+    const nContrato = parseInt(empleado.cant_contratos, 10) || 0;
+    document.getElementById('venc-contrato-txt').firstChild.textContent = (nContrato ? 'contrato N° ' + nContrato + ' ' : '') + 'vence el ';
+    document.getElementById('venc-fecha').innerText = empleado.fecha_salida
+        ? (window.formatFechaDDMMYYYY ? window.formatFechaDDMMYYYY(empleado.fecha_salida) : empleado.fecha_salida) : 'sin fecha';
 
     const alertaLegal = document.getElementById('venc-alerta-legal');
     const numContratoSpan = document.getElementById('venc-num-contrato');
 
-    if (empleado.cant_contratos >= 2) {
+    if (nContrato >= 2) {
         alertaLegal.classList.remove('d-none');
-        numContratoSpan.innerText = `${empleado.cant_contratos}°`;
+        numContratoSpan.innerText = ({ 2: 'segundo', 3: 'tercer', 4: 'cuarto', 5: 'quinto', 6: 'sexto' })[nContrato] || ('N° ' + nContrato);
     } else {
         alertaLegal.classList.add('d-none');
     }

@@ -492,8 +492,8 @@ function setupEventListeners() {
       // Si el usuario cambia la fecha manualmente, el selector debe marcar "Manual" 
       // para evitar confusión visual entre la regla y la fecha real
       if (areaRuleSelect.value !== 'custom') {
-        console.log("🧩 Cambio manual de fecha detectado: Sincronizando selector a 'Manual'");
         areaRuleSelect.value = 'custom';
+        areaRuleSelect.dispatchEvent(new Event('change'));  // repinta las fichas «Alinear la fecha a»
       }
     });
   }
@@ -1747,56 +1747,24 @@ async function saveEmpleado() {
 /** Muestra el modal de bonos asignados con los datos del empleado */
 function mostrarModalBonos(empleado, bonos) {
   const nombre = `${empleado.apellido_paterno} ${empleado.apellido_materno || ''} ${empleado.nombre}`.trim().replace(/  +/g, ' ');
-  document.getElementById('bonos-emp-nombre').textContent = nombre;
-  document.getElementById('bonos-emp-subtitulo').textContent =
-    `Recálculo automático completado · ${empleado.cargo || 'Sin cargo'}`;
-
-  const hoy = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
-  document.getElementById('bonos-fecha-hoy').textContent = hoy;
-
-  // Inyectar lista de bonos con badges animiados
-  const lista = document.getElementById('bonos-lista');
-  const sinBonos = document.getElementById('bonos-sin-bonos');
-  lista.innerHTML = '';
-  lista.classList.remove('d-none');
-  sinBonos.classList.add('d-none');
-
-  bonos.forEach((nombre, i) => {
-    const item = document.createElement('div');
-    item.className = 'bono-item d-flex align-items-center gap-3 p-3 rounded-3 border';
-    item.style.cssText = `
-      background: linear-gradient(135deg, #fffbeb, #fef3c7);
-      border-color: #fcd34d !important;
-      animation: bonoFadeIn 0.3s ease ${i * 0.08}s both;
-    `;
-    item.innerHTML = `
-      <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-           style="width:36px;height:36px;background:linear-gradient(135deg,#d97706,#f59e0b);">
-        <i class="bi bi-currency-dollar text-white fw-bold"></i>
-      </div>
-      <div class="flex-grow-1">
-        <div class="fw-semibold text-dark">${nombre}</div>
-        <div class="small text-muted">Activo desde hoy</div>
-      </div>
-      <span class="badge rounded-pill" style="background:#d97706;">
-        <i class="bi bi-check-lg me-1"></i>Asignado
-      </span>
-    `;
-    lista.appendChild(item);
-  });
-
-  // Agregar keyframe de animación si no existe
-  if (!document.getElementById('bono-anim-style')) {
-    const style = document.createElement('style');
-    style.id = 'bono-anim-style';
-    style.textContent = `
-      @keyframes bonoFadeIn {
-        from { opacity: 0; transform: translateY(8px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-    `;
-    document.head.appendChild(style);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const lista = (bonos || []).map((b) => (b && typeof b === 'object') ? (b.nombre || '') : b).filter(Boolean);
+  const contrato = ({ Temporal: 'a plazo fijo', Indefinido: 'indefinido' })[empleado.tipo_contrato] || String(empleado.tipo_contrato || '').toLowerCase();
+  document.getElementById('bonos-emp-nombre').textContent = window.nombreTitulo ? window.nombreTitulo(nombre) : nombre;
+  document.getElementById('bonos-emp-detalle').textContent = [empleado.cargo || 'Sin cargo', contrato].filter(Boolean).join(' · ');
+  const av = document.getElementById('bonos-emp-av');
+  if (av) {
+    av.textContent = window.inicialesDe ? window.inicialesDe(nombre) : nombre.slice(0, 2).toUpperCase();
+    av.className = 'vn-av td-t' + ((Math.abs(parseInt(empleado.id, 10) || 0) % 6) + 1);
   }
+  const d = new Date();
+  document.getElementById('bonos-fecha-hoy').textContent = String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + d.getFullYear();
+
+  // Solo el nombre de cada bono: el servidor no manda monto ni condición (están en Configuración › Bonos)
+  const caja = document.getElementById('bonos-lista');
+  caja.innerHTML = lista.map((b) => '<div class="vn-bono"><div><b>' + esc(b) + '</b><span class="vn-t">Asignado desde hoy</span></div><span class="vn-pill g">Asignado</span></div>').join('');
+  caja.classList.toggle('d-none', !lista.length);
+  document.getElementById('bonos-sin-bonos').classList.toggle('d-none', !!lista.length);
 
   const modalEl = document.getElementById('modal-bonos-asignados');
   if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
@@ -2814,14 +2782,17 @@ window.openConfirmarAreaModal = function (historialId, empName, oldArea, newArea
   const modalConfirm = document.getElementById('modal-confirmar-area-pendiente');
   if (!modalConfirm) return;
 
-  document.getElementById('area-pending-emp-name').textContent = empName;
+  document.getElementById('area-pending-emp-name').textContent = window.nombreTitulo ? window.nombreTitulo(empName) : empName;
   document.getElementById('area-pending-historial-id').value = historialId;
-  document.getElementById('area-pending-old').textContent = oldArea || '(Sin área anterior)';
+  document.getElementById('area-pending-old').textContent = oldArea || 'Sin área anterior';
   document.getElementById('area-pending-new').textContent = newArea;
-  document.getElementById('area-pending-fecha').value = new Date().toISOString().split('T')[0];
-  
-  // Reset select de alineación
-  document.getElementById('area-pending-align-rule').value = 'custom';
+  document.getElementById('area-pending-fecha').value = isoLocalArea(new Date());
+
+  // «Alinear la fecha a» como fichas (la lista oculta sigue mandando)
+  const reglaArea = document.getElementById('area-pending-align-rule');
+  reglaArea.value = 'custom';
+  if (window.chipsDesdeSelect) window.chipsDesdeSelect(reglaArea);
+  reglaArea.dispatchEvent(new Event('change'));
   
   // Cargar turnos compatibles con la nueva área
   loadTurnosForNewArea(newArea);
@@ -2835,7 +2806,7 @@ window.loadTurnosForNewArea = async function(areaName) {
     const turnoSelect = document.getElementById('area-pending-turno');
     if (!turnoSelect) return;
 
-    turnoSelect.innerHTML = '<option value="">Cargando turnos...</option>';
+    turnoSelect.innerHTML = '<option value="">Cargando turnos…</option>';
     console.log(`🔍 Cargando turnos para área: ${areaName}`);
     
     try {
@@ -2846,7 +2817,7 @@ window.loadTurnosForNewArea = async function(areaName) {
         console.log(`✅ Turnos recibidos: ${turnos.length}`);
         
         if (turnos && turnos.length > 0) {
-            turnoSelect.innerHTML = '<option value="">-- Seleccionar Turno --</option>';
+            turnoSelect.innerHTML = '<option value="">Elegir turno</option>';
             turnos.forEach(t => {
                 const opt = document.createElement('option');
                 opt.value = t.id;
@@ -2881,27 +2852,28 @@ window.loadTurnosForNewArea = async function(areaName) {
     }
 }
 
+// Fecha local aaaa-mm-dd (toISOString usa la hora UTC y después de las 21:00 daría el día siguiente)
+function isoLocalArea(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 window.applyAlignmentRule = function() {
     const ruleSelect = document.getElementById('area-pending-align-rule');
     const dateInput = document.getElementById('area-pending-fecha');
     if (!ruleSelect || !dateInput) return;
-    
+
     const rule = ruleSelect.value;
     const today = new Date();
-    console.log(`📏 Aplicando regla de alineación: ${rule}`);
-    
     if (rule === 'today') {
-        dateInput.value = today.toISOString().split('T')[0];
+        dateInput.value = isoLocalArea(today);
     } else if (rule === 'monday') {
-        const day = today.getDay(); 
+        const day = today.getDay();
         const diff = (day === 1) ? 0 : (day === 0 ? 1 : 8 - day);
-        const nextMonday = new Date();
-        nextMonday.setDate(today.getDate() + diff);
-        dateInput.value = nextMonday.toISOString().split('T')[0];
+        dateInput.value = isoLocalArea(new Date(today.getFullYear(), today.getMonth(), today.getDate() + diff));
     } else if (rule === 'month') {
-        dateInput.value = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+        dateInput.value = isoLocalArea(new Date(today.getFullYear(), today.getMonth(), 1));
     } else if (rule === 'next_month') {
-        dateInput.value = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().split('T')[0];
+        dateInput.value = isoLocalArea(new Date(today.getFullYear(), today.getMonth() + 1, 1));
     }
 }
 

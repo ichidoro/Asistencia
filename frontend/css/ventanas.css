@@ -299,3 +299,143 @@
   .modal.fade .modal-dialog { transition: none !important; transform: none !important; }
   .vn-op, .ci-op { transition: none; }
 }
+
+
+/* ═══ Etapa 9 · Ventanas de «Lo que faltaba» (diseño HD aprobado, 03-11-2026) ════════════════════════════════════
+   Cuadro de ícono en el encabezado, campos con etiqueta en letra normal, franja de aviso, tarjetas de opción con radio,
+   pasos, tabla, barra de avance con su registro y botón de texto en el pie. Solo presentación: ids y lógica iguales. */
+.modal-header:has(> .vn-ico), .modal-header:has(> .vn-av) { gap: 14px; }
+.modal-header > .vn-tit { flex: 1; min-width: 0; }
+.modal-header > .vn-tit .modal-title { margin: 0; }
+.vn-ico {
+  width: 40px; height: 40px; border-radius: 12px; flex: none;
+  display: grid; place-items: center; font-size: 18px; line-height: 1;
+  background: var(--vn-navy-soft); color: var(--vn-navy);
+}
+.vn-ico.a { background: #fff0e2; color: #b0500b; }
+.vn-ico.g { background: #e6f5ec; color: #167a46; }
+.vn-ico .spinner-border { width: 18px; height: 18px; border-width: 2px; }
+.modal-header .vn-ico i { color: inherit !important; }
+
+.vn-cuerpo { display: flex; flex-direction: column; gap: 14px; }
+.vn-cuerpo > * { margin-top: 0; margin-bottom: 0; }
+.vn-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.modal .vn-fld > label,
+.modal .vn-fld > .vn-lbl-fila > label {
+  font: 500 13px/1.3 'Barlow', system-ui, sans-serif; color: var(--ov-ink-2);
+  text-transform: none; letter-spacing: 0; margin: 0;
+}
+.vn-fld .form-text, .vn-cuerpo > .form-text { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ov-ink-3); }
+.vn-fld .form-text.text-danger { color: #a3215f !important; }
+.modal .vn-fld .form-control, .modal .vn-fld .form-select { min-height: 42px; font-size: 14px; }
+.vn-lbl-fila { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.vn-link {
+  border: 0; background: none; padding: 2px 0; cursor: pointer;
+  font: 600 12.5px/1.3 'Barlow', system-ui, sans-serif; color: var(--vn-navy);
+}
+.vn-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.vn-link:focus-visible { outline: 2px solid var(--vn-navy); outline-offset: 2px; border-radius: 4px; }
+.vn-bio { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.vn-bio .vn-nota { align-self: stretch; display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; align-items: baseline; }
+
+/* Franja de aviso */
+.vn-ban { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--vn-navy-soft); color: #16267a; font-size: 13px; line-height: 1.45; }
+.vn-ban > i { font-size: 18px; line-height: 1.1; flex: none; }
+.vn-ban b { display: block; font-size: 13.5px; font-weight: 600; }
+.vn-ban.a { background: #fff0e2; color: #7a3e05; }
+
+/* Tarjetas de opción con radio de verdad (Gestionar contrato) */
+.vn-opr {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: start;
+  padding: 14px; margin: 0; border: 1px solid var(--ov-line); border-radius: 14px; background: #fff; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+.vn-opr:hover { border-color: #c5cdea; }
+.vn-opr > input[type="radio"] {
+  appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin: 1px 0 0; border: 0; border-radius: 50%;
+  background: #fff; box-shadow: inset 0 0 0 1.5px var(--ov-line-strong); cursor: pointer; transition: box-shadow .15s;
+}
+.vn-opr > input[type="radio"]:checked { box-shadow: inset 0 0 0 6px var(--vn-navy); }
+.vn-opr > input[type="radio"]:focus-visible { outline: 2px solid var(--vn-navy); outline-offset: 2px; }
+.vn-opr:has(> input:checked) { border-color: var(--vn-navy); box-shadow: 0 0 0 3px var(--vn-ring); background: var(--vn-sel); }
+.vn-opr b { display: block; font-weight: 600; font-size: 14px; color: var(--ov-ink); }
+.vn-opr .vn-t { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--ov-ink-3); }
+.vn-opr .vn-opr-extra .form-control { width: 160px; min-height: 38px; font-size: 13.5px; }
+
+/* Pasos (Reincorporar) */
+.vn-steps { display: flex; align-items: center; padding: 2px 0; }
+.vn-st { display: flex; align-items: center; gap: 8px; color: var(--ov-ink-3); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.vn-st > i {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font: 600 11px/1 'Barlow', system-ui, sans-serif; font-style: normal; background: #eef0f5; color: var(--ov-ink-3);
+}
+.vn-st > i .bi { font-size: 13px; }
+.vn-st.ok > i { background: #e6f5ec; color: #167a46; }
+.vn-st.cur { color: var(--vn-navy); }
+.vn-st.cur > i { background: var(--vn-navy); color: #fff; }
+.vn-sl { flex: 1; height: 1.5px; min-width: 12px; margin: 0 10px; background: var(--ov-line); }
+.vn-sl.ok { background: #6aad3a; }
+
+/* Tabla de una ventana (Historial de cierres) */
+.vn-tbl-caja { max-height: min(62vh, 560px); overflow: auto; overscroll-behavior: contain; }
+.vn-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.vn-tbl th {
+  position: sticky; top: 0; z-index: 1; background: #fff; text-align: left; white-space: nowrap;
+  font: 500 12px/1.3 'Barlow', system-ui, sans-serif; color: var(--ov-ink-3); padding: 8px 12px; border-bottom: 1px solid var(--ov-line-2);
+}
+.vn-tbl td { padding: 9px 12px; border-bottom: 1px solid var(--ov-line-2); font-size: 13px; color: var(--ov-ink); vertical-align: middle; }
+.vn-tbl tr.vn-gp td { padding: 5px 12px 7px; font-size: 12px; color: var(--ov-ink-3); background: var(--ov-sunk); }
+.vn-tbl .vn-nw { white-space: nowrap; }
+.vn-tbl td.vn-acc { text-align: right; padding-top: 4px; padding-bottom: 4px; }
+.vn-tbl .vn-vacio { text-align: center; color: var(--ov-ink-3); padding: 28px 12px; }
+
+/* Avance del recálculo */
+.vn-avance { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; color: var(--ov-ink-2); }
+.vn-avance b { font-weight: 600; color: var(--ov-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vn-trk { height: 10px; border-radius: 5px; background: #eef0f5; overflow: hidden; }
+.vn-trk > div { height: 100%; border-radius: 5px; background: #6aad3a; transition: width .6s cubic-bezier(.23, 1, .32, 1); }
+.vn-trk > div[data-tono="atn"] { background: #e08a12; }
+.vn-trk > div[data-tono="mal"] { background: #c0267a; }
+.vn-log {
+  font: 500 12px/1.7 'Barlow', system-ui, sans-serif; color: var(--ov-ink-3); font-variant-numeric: tabular-nums;
+  background: var(--ov-sunk); border-radius: 10px; padding: 10px 12px; max-height: 132px; overflow-y: auto; overscroll-behavior: contain;
+}
+.vn-log .vn-ahora { font-weight: 600; color: var(--ov-ink); }
+.vn-log > .vn-espera:not(:only-child) { display: none; }  /* «Esperando…» se va con la primera línea */
+.vn-log .vn-ok { font-weight: 600; color: #167a46; }
+.vn-log .vn-mal { font-weight: 600; color: #a3215f; }
+.vn-resumen { flex: 1 1 240px; margin-right: auto; font-size: 13px; line-height: 1.45; color: var(--ov-ink-2); }
+
+/* Persona y bonos */
+.vn-per { display: flex; align-items: center; gap: 12px; }
+.vn-per .vn-av { width: 32px; height: 32px; font-size: 12px; }
+.vn-per b { display: block; font-weight: 600; font-size: 14px; color: var(--ov-ink); }
+.vn-per .vn-t { display: block; font-size: 12.5px; color: var(--ov-ink-3); }
+.vn-bonos { display: flex; flex-direction: column; gap: 10px; max-height: 45vh; overflow-y: auto; }
+.vn-bono {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: 14px;
+  border: 1.5px solid var(--vn-navy); box-shadow: 0 0 0 4px rgba(27, 47, 143, .08); background: #fbfcff;
+}
+.vn-bono b { display: block; font-weight: 600; font-size: 14px; color: var(--ov-ink); }
+.vn-bono .vn-t { display: block; margin-top: 2px; font-size: 12.5px; color: var(--ov-ink-3); }
+.vn-pie-nota { font-size: 12.5px; line-height: 1.45; color: var(--ov-ink-3); }
+.vn-cuerpo .vn-check .form-check-label { font-size: 13.5px; line-height: 1.4; color: var(--ov-ink); }
+.vn-cuerpo .vn-check .form-check-label span { font-size: 12.5px; }
+/* El historial de cierres con el ancho del diseño (antes ocupaba hasta 1100 px) */
+#modal-historial-cierres .modal-dialog { max-width: min(720px, 94vw); }
+
+/* Botón de texto en el pie («Después») */
+.modal-footer .btn.vn-ghost { background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--ov-ink-2) !important; }
+.modal-footer .btn.vn-ghost:hover { background: var(--ov-line-2) !important; }
+
+@media (max-width: 560px) {
+  .vn-opr { grid-template-columns: 20px minmax(0, 1fr); }
+  .vn-opr .vn-opr-extra { grid-column: 2; }
+  .vn-opr .vn-opr-extra .form-control { width: 100%; min-height: 44px; }
+  .vn-st { font-size: 12px; gap: 6px; }
+  .vn-sl { margin: 0 6px; }
+  .vn-link { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vn-opr, .vn-opr > input[type="radio"], .vn-trk > div { transition: none; }
+}

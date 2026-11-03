@@ -15,6 +15,9 @@ let reincState = {
 window.openReincorporarWizard = async function(id) {
     reincState.empleadoId = id;
     reincState.step = 1;
+    reincState.empleadoData = null;
+    reincState.bioAlbaData = null;
+    reincState.nombre = '';
     
     // Abrir modal (Bootstrap)
     const modalEl = document.getElementById('modal-reincorporacion-wizard');
@@ -38,7 +41,8 @@ window.openReincorporarWizard = async function(id) {
         }
     };
     
-    selectTipo.addEventListener('change', updateFinVisibility);
+    selectTipo.onchange = updateFinVisibility;  // una sola vez aunque el asistente se abra varias veces
+    if (window.chipsDesdeSelect) window.chipsDesdeSelect(selectTipo);  // «A plazo fijo» / «Indefinido» como fichas
     updateFinVisibility(); // Inicializar
 
     try {
@@ -46,130 +50,90 @@ window.openReincorporarWizard = async function(id) {
         const response = await fetch(`/api/empleados/${id}/`);
         if (!response.ok) throw new Error("No se pudo cargar el empleado");
         reincState.empleadoData = await response.json();
+        const emp = reincState.empleadoData;
+        const nom = emp.nombre_completo || [emp.apellido_paterno, emp.apellido_materno, emp.nombre].filter(Boolean).join(' ');
+        reincState.nombre = window.nombreTitulo ? window.nombreTitulo(nom) : nom;
+        reincUpdateUI();
         
         // Paso 0: Sincronización BioAlba
         await reincFetchBioAlbaDiff();
     } catch (error) {
         console.error("Error inicializando wizard:", error);
-        document.getElementById('reinc-sync-diff').innerHTML = `
-            <div class="alert alert-danger py-2">
-                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>No se pudo conectar con BioAlba: ${error.message}
-            </div>
-            <button class="btn btn-sm btn-outline-primary" onclick="reincFetchBioAlbaDiff()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Reintentar</button>
-        `;
+        document.getElementById('reinc-sync-diff').innerHTML =
+            '<div class="vn-ban a"><i class="bi bi-wifi-off" aria-hidden="true"></i><div><b>No se pudo consultar BioAlba</b>' + String(error.message || '').replace(/</g, '&lt;') + '</div></div>'
+            + '<div><button type="button" class="btn btn-light btn-sm" onclick="reincFetchBioAlbaDiff()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Reintentar</button></div>';
     }
 };
 
 // 2. Sincronización BioAlba (Paso 1)
 async function reincFetchBioAlbaDiff() {
     const container = document.getElementById('reinc-sync-diff');
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border spinner-border-sm text-primary"></div>
-            Consultando BioAlba para RUT ${reincState.empleadoData.rut}...
-        </div>
-    `;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    container.innerHTML = '<div class="vn-nota"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Buscando a la persona en BioAlba (RUT ' + esc(reincState.empleadoData.rut) + ')…</div>';
 
     try {
-        // Reutilizamos el endpoint de sync por RUT (si existe) o el general de empleados
-        // Simulamos consulta (en producción esto llama al sync de rrhh)
         const response = await fetch(`/api/sync/search/?rut=${reincState.empleadoData.rut}`);
-        if (!response.ok) throw new Error("Fallo en sincronización externa");
-        
+        if (!response.ok) throw new Error("BioAlba no respondió");
+
         const results = await response.json();
         const sourceData = results.find(r => r.rut === reincState.empleadoData.rut);
-        
+
         if (!sourceData) {
-            container.innerHTML = `
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i><strong>Empleado no encontrado en BioAlba.</strong> 
-                    Debe estar creado en la fuente de verdad antes de reincorporar.
-                </div>
-            `;
+            container.innerHTML = '<div class="vn-ban a"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div><b>La persona no está en BioAlba</b>Debe crearse allí antes de reincorporarla.</div></div>';
+            reincUpdateUI();
             return;
         }
 
         reincState.bioAlbaData = sourceData;
-        
-        // Mostrar comparativa
         const local = reincState.empleadoData;
         const remote = sourceData;
-        
-        let diffHTML = '<table class="table table-sm table-borderless mb-0 small">';
-        diffHTML += `<tr><td class="text-muted">Nombre:</td><td class="fw-bold">${remote.nombre}</td></tr>`;
-        
-        // Resaltar cambios de Area/Cargo
-        const areaDiff = local.area !== remote.area;
-        diffHTML += `<tr><td class="text-muted">Área:</td><td>
-            ${areaDiff ? `<span class="text-danger decoration-line-through me-2">${local.area || 'N/A'}</span>` : ''}
-            <span class="badge ${areaDiff ? 'bg-warning text-dark' : 'bg-success'}">${remote.area}</span>
-        </td></tr>`;
-        
-        const cargoDiff = local.cargo !== remote.cargo;
-        diffHTML += `<tr><td class="text-muted">Cargo:</td><td>
-            ${cargoDiff ? `<span class="text-danger decoration-line-through me-2">${local.cargo || 'N/A'}</span>` : ''}
-            <span class="badge ${cargoDiff ? 'bg-warning text-dark' : 'bg-success'}">${remote.cargo}</span>
-        </td></tr>`;
-        
-        diffHTML += '</table>';
-        
-        container.innerHTML = `
-            <div class="mb-3">Se han detectado los siguientes datos actualizados:</div>
-            ${diffHTML}
-            <div class="mt-3 text-muted" style="font-size: 0.8rem;">
-                * Al continuar, se actualizarán estos campos automáticamente.
-            </div>
-        `;
+        // Área y cargo como quedarán; si cambiaron, debajo dice cómo estaban
+        const dato = (nuevo, antes) => esc(nuevo || '—') + (antes !== nuevo ? '<span>antes: ' + esc(antes || 'sin dato') + '</span>' : '');
+        container.innerHTML = '<div class="vn-kvs">'
+            + '<div><span>Nombre</span><b>' + esc(window.nombreTitulo ? window.nombreTitulo(remote.nombre) : remote.nombre) + '</b></div>'
+            + '<div><span>Área</span><b>' + dato(remote.area, local.area) + '</b></div>'
+            + '<div><span>Cargo</span><b>' + dato(remote.cargo, local.cargo) + '</b></div>'
+            + '</div><div class="form-text">Al seguir, el área y el cargo quedan como en BioAlba.</div>';
 
-        // Pre-poblar form de paso 2
+        // Datos del paso 2 (vienen de BioAlba)
         document.getElementById('reinc-area').value = remote.area;
         document.getElementById('reinc-cargo').value = remote.cargo;
         document.getElementById('reinc-compania').value = remote.compania || local.compania || '';
         document.getElementById('reinc-area-display').textContent = remote.area;
-        
-        // Habilitar siguiente
-        document.getElementById('btn-reinc-next').disabled = false;
+        reincUpdateUI();
 
     } catch (err) {
-        container.innerHTML = `<div class="text-danger">Error: ${err.message}</div>`;
+        container.innerHTML = '<div class="vn-ban a"><i class="bi bi-wifi-off" aria-hidden="true"></i><div><b>No se pudo consultar BioAlba</b>' + esc(err.message) + '</div></div>'
+            + '<div><button type="button" class="btn btn-light btn-sm" onclick="reincFetchBioAlbaDiff()"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Reintentar</button></div>';
+        reincUpdateUI();
     }
 }
 
 // 3. Navegación entre pasos
+const REINC_PASOS = ['BioAlba', 'Contrato', 'Horario'];
 function reincUpdateUI() {
-    // Panes
-    document.querySelectorAll('.reinc-pane').forEach((p, idx) => {
-        if (idx + 1 === reincState.step) p.classList.remove('d-none');
-        else p.classList.add('d-none');
-    });
+    document.querySelectorAll('.reinc-pane').forEach((p, idx) => p.classList.toggle('d-none', idx + 1 !== reincState.step));
 
-    // Labels
+    // Pasos: hechos con ✓, el actual en azul
     document.querySelectorAll('.reinc-step-indicator').forEach((l, idx) => {
-        if (idx + 1 < reincState.step) {
-            l.className = 'reinc-step-indicator completed';
-            l.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i>';
-        } else if (idx + 1 === reincState.step) {
-            l.className = 'reinc-step-indicator active';
-            l.innerHTML = idx + 1;
-        } else {
-            l.className = 'reinc-step-indicator';
-            l.innerHTML = idx + 1;
-        }
+        const paso = l.parentElement;
+        const hecho = idx + 1 < reincState.step;
+        paso.classList.toggle('ok', hecho);
+        paso.classList.toggle('cur', idx + 1 === reincState.step);
+        l.innerHTML = hecho ? '<i class="bi bi-check-lg" aria-hidden="true"></i>' : String(idx + 1);
+        const linea = paso.nextElementSibling;
+        if (linea && linea.classList.contains('vn-sl')) linea.classList.toggle('ok', hecho);
     });
+    const sub = document.getElementById('reinc-sub');
+    if (sub) sub.textContent = [reincState.nombre, 'Paso ' + reincState.step + ' de 3 · ' + REINC_PASOS[reincState.step - 1]].filter(Boolean).join(' · ');
 
-    // Buttons
     document.getElementById('btn-reinc-prev').disabled = reincState.step === 1;
-    
     const btnNext = document.getElementById('btn-reinc-next');
     const btnFinish = document.getElementById('btn-reinc-finish');
-    
-    if (reincState.step === 3) {
-        btnNext.classList.add('d-none');
-        btnFinish.classList.remove('d-none');
-    } else {
-        btnNext.classList.remove('d-none');
-        btnFinish.classList.add('d-none');
-    }
+    btnNext.classList.toggle('d-none', reincState.step === 3);
+    btnFinish.classList.toggle('d-none', reincState.step !== 3);
+    // Sin la persona en BioAlba no se sigue: el área y el cargo salen de ahí
+    btnNext.disabled = reincState.step === 1 && !reincState.bioAlbaData;
 }
 
 // Botón Siguiente
@@ -215,7 +179,7 @@ document.getElementById('btn-reinc-prev').addEventListener('click', () => {
 // Cargar Turnos por Área
 async function reincLoadTurnos(area) {
     const select = document.getElementById('reinc-turno-id');
-    select.innerHTML = '<option value="">-- Cargando turnos... --</option>';
+    select.innerHTML = '<option value="">Cargando turnos…</option>';
     
     try {
         const response = await fetch(`/api/turnos/?area=${encodeURIComponent(area)}&activo=true`);
@@ -226,7 +190,7 @@ async function reincLoadTurnos(area) {
             return;
         }
         
-        select.innerHTML = '<option value="">-- Seleccionar Turno --</option>' + 
+        select.innerHTML = '<option value="">Elegir turno</option>' + 
             turnos.map(t => {
                 const tipoPlanificacion = (t.tipo_programacion === 'BOLSA_FLEXIBLE' || t.tipo_programacion === 'FLEXIBLE_BOLSA')
                     ? 'Bolsa Flexible'
@@ -268,7 +232,7 @@ window.finishReincorporacion = async function() {
 
     try {
         btnFinish.disabled = true;
-        btnFinish.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+        btnFinish.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Reincorporando…';
 
         const response = await fetch(`/api/empleados/${reincState.empleadoId}/reincorporar/`, {
             method: 'POST',
@@ -286,7 +250,7 @@ window.finishReincorporacion = async function() {
         bootstrap.Modal.getInstance(modalEl).hide();
         
         if (window.showToast) {
-            window.showToast("Empleado reincorporado con éxito. Asistencia recalculada.", "success");
+            window.showToast("Listo: persona reincorporada y asistencia recalculada.", "success");
         } else {
             Avisos.listo("Listo. Persona reincorporada.");
         }
@@ -299,6 +263,6 @@ window.finishReincorporacion = async function() {
         Avisos.error("No se pudo reincorporar a la persona. " + error.message);
     } finally {
         btnFinish.disabled = false;
-        btnFinish.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Finalizar y Activar';
+        btnFinish.textContent = 'Reincorporar';
     }
 }

@@ -1882,76 +1882,50 @@
                 </div>
             </div>
 
-            <!-- Modal para Validar Cambio de Área Pendiente (RLS Temporal) -->
-            <div id="modal-confirmar-area-pendiente" class="modal fade" tabindex="-1" aria-hidden="true">
+            <!-- Validar cambio de área (BioAlba informó otra área): desde qué día vale y con qué turno. Diseño HD 03-11-2026 -->
+            <div id="modal-confirmar-area-pendiente" class="modal fade" tabindex="-1" aria-hidden="true" aria-labelledby="area-pending-titulo">
                 <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-warning text-dark">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-calendar-event me-2"></i>Validar Cambio de
-                                Área</h5>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico a" aria-hidden="true"><i class="bi bi-arrow-left-right"></i></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="area-pending-titulo">Validar cambio de área</h5>
+                                <div class="vn-sub">BioAlba informó un cambio de área</div>
+                            </div>
                             <button aria-label="Cerrar" type="button" class="btn-close" onclick="closeConfirmarAreaModal()"></button>
                         </div>
-                        <div class="modal-body p-4">
-                            <div id="area-pending-msg" class="alert alert-warning small mb-3">
-                                El empleado ha cambiado de área en BioAlba. Por favor, confirme la fecha exacta en que
-                                este cambio debe hacerse efectivo para la visibilidad de asistencia.
+                        <div class="modal-body vn-cuerpo">
+                            <input type="hidden" id="area-pending-historial-id">
+                            <div class="vn-kvs">
+                                <div><span>Persona</span><b id="area-pending-emp-name"></b></div>
+                                <div><span>Área anterior</span><b id="area-pending-old"></b></div>
+                                <div><span>Nueva área</span><b id="area-pending-new"></b></div>
                             </div>
-
-                            <div class="mb-3">
-                                <span class="form-label fw-bold small d-block mb-1">Empleado</span>
-                                <div id="area-pending-emp-name" class="form-control bg-light"></div>
-                                <input type="hidden" id="area-pending-historial-id">
-                            </div>
-
-                            <div class="row g-3 mb-3">
-                                <div class="col-6">
-                                    <span class="form-label fw-bold small d-block mb-1">Área Anterior</span>
-                                    <div id="area-pending-old" class="form-control bg-light text-muted"></div>
-                                </div>
-                                <div class="col-6">
-                                    <span class="form-label fw-bold small text-primary d-block mb-1">Nueva Área</span>
-                                    <div id="area-pending-new" class="form-control bg-primary-subtle fw-bold"></div>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="area-pending-align-rule" class="form-label fw-bold small text-muted">Alinear Fecha a:</label>
-                                <select id="area-pending-align-rule" class="form-select form-select-sm" onchange="applyAlignmentRule()">
-                                    <option value="custom">Selección Manual</option>
-                                    <option value="today">Hoy mismo</option>
-                                    <option value="monday">Próximo Lunes (Inicio Semana)</option>
-                                    <option value="month">Día 1 del Mes Actual</option>
-                                    <option value="next_month">Día 1 del Mes Próximo</option>
+                            <div class="vn-fld">
+                                <label for="area-pending-align-rule">Alinear la fecha a</label>
+                                <select id="area-pending-align-rule" class="form-select" onchange="applyAlignmentRule()">
+                                    <option value="custom">Elegir</option>
+                                    <option value="today">Hoy</option>
+                                    <option value="monday">Próximo lunes</option>
+                                    <option value="month">Día 1 de este mes</option>
+                                    <option value="next_month">Día 1 del próximo mes</option>
                                 </select>
                             </div>
-
-                            <div class="mb-3">
-                                <label for="area-pending-fecha" class="form-label fw-bold small text-danger">Fecha de
-                                    Cambio (Primer día en nueva área)</label>
-                                <input type="date" id="area-pending-fecha" class="form-control border-danger" required>
-                                <div id="area-pending-fecha-hint" class="form-text">El empleado será visible para el nuevo jefe desde esta fecha.</div>
+                            <div class="vn-fld">
+                                <label for="area-pending-fecha">Primer día en la nueva área</label>
+                                <input type="date" id="area-pending-fecha" class="form-control" required>
+                                <div id="area-pending-fecha-hint" class="form-text">Desde ese día la persona aparece para el jefe de la nueva área.</div>
                             </div>
-
-                            <hr class="my-3">
-
-                            <div class="mb-3">
-                                <label for="area-pending-turno" class="form-label fw-bold small text-primary">Asignar Turno en Nueva Área</label>
-                                <select id="area-pending-turno" class="form-select border-primary" required>
-                                    <option value="">Cargando turnos disponibles...</option>
+                            <div class="vn-fld">
+                                <label for="area-pending-turno">Turno en la nueva área</label>
+                                <select id="area-pending-turno" class="form-select" required>
+                                    <option value="">Cargando turnos…</option>
                                 </select>
-                                <div class="form-text small text-primary">Es obligatorio asignar un turno de la nueva área para evitar conflictos de visibilidad.</div>
                             </div>
-
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-warning fw-bold"
-                                    onclick="executeConfirmarCambioArea()">
-                                    Confirmar Fecha y Validar
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm"
-                                    onclick="closeConfirmarAreaModal()">
-                                    Validar después (Permanecerá pendiente)
-                                </button>
-                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn vn-ghost me-auto" title="Queda pendiente para validarlo después" onclick="closeConfirmarAreaModal()">Después</button>
+                            <button type="button" class="btn btn-primary" onclick="executeConfirmarCambioArea()">Confirmar y validar</button>
                         </div>
                     </div>
                 </div>
@@ -2902,182 +2876,77 @@
                 </div>
             </div>
 
-            <!-- MODAL DE ASIGNACIÓN INDIVIDUAL (REGULARIZACIÓN) -->
-            <div id="modal-asignar-turno-individual" class="modal fade" data-bs-backdrop="static" tabindex="-1">
+            <!-- Asignar turno oficial: desde qué día vale y cuál turno del área. Diseño HD 03-11-2026 -->
+            <div id="modal-asignar-turno-individual" class="modal fade" data-bs-backdrop="static" tabindex="-1" aria-labelledby="asig-indiv-titulo">
                 <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title fw-bold">Asignar Turno Oficial</h5>
-                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-av" aria-hidden="true"></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="asig-indiv-titulo">Asignar turno oficial</h5>
+                                <div class="vn-sub">Desde cuándo vale y cuál turno</div>
+                            </div>
+                            <button aria-label="Cerrar" type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <div class="modal-body p-4">
+                        <div class="modal-body vn-cuerpo">
                             <input type="hidden" id="asig-indiv-empleado-id">
-
-                            <div class="mb-4">
-                                <div class="form-label text-muted small fw-bold text-uppercase">Empleado</div>
-                                <div id="asig-indiv-nombre" class="fw-bold fs-5 text-dark">-</div>
-                                <div class="d-flex align-items-center gap-2 mt-1">
-                                    <div id="asig-indiv-area-badge"></div>
-                                    <span id="asig-indiv-cargo" class="badge bg-dark text-white fw-bold shadow-sm px-2 py-1 d-none"></span>
+                            <!-- Persona, área y cargo: los llena openAsignarTurnoForzado y se leen en el subtítulo -->
+                            <div hidden><span id="asig-indiv-nombre">-</span><span id="asig-indiv-area-badge"></span><span id="asig-indiv-cargo" class="d-none"></span></div>
+                            <div class="vn-bio">
+                                <button type="button" id="asig-btn-buscar-bioalba" class="btn btn-light btn-sm" onclick="buscarPrimeraMarcaBioAlba(this)"><i class="bi bi-search me-1" aria-hidden="true"></i>Buscar 1.ª marca en BioAlba</button>
+                                <div id="asig-bioalba-row" class="vn-nota d-none" role="status">
+                                    <span>Primera marca en BioAlba: <b id="asig-bioalba-valor">-</b></span>
+                                    <button type="button" id="asig-btn-primera-marca" class="vn-link d-none" onclick="document.getElementById('asig-indiv-fecha').value = this.dataset.fecha">Usar esta fecha</button>
                                 </div>
                             </div>
-
-                            <!-- Búsqueda bajo demanda: RRHH decide si necesita la primera marca de BioAlba -->
-                            <div class="mb-3">
-                                <button type="button" id="asig-btn-buscar-bioalba"
-                                        class="btn btn-sm btn-outline-info fw-bold"
-                                        onclick="buscarPrimeraMarcaBioAlba(this)">
-                                    <i class="bi bi-search me-1"></i>Buscar 1ª marca en BioAlba
-                                </button>
-                                <span class="text-muted small ms-2">Opcional: busca desde ene 2026 hacia adelante</span>
+                            <div class="vn-fld">
+                                <div class="vn-lbl-fila"><label for="asig-indiv-fecha">Fecha de inicio *</label><button type="button" class="vn-link" onclick="asigIndivHoy()">Hoy</button></div>
+                                <input type="date" id="asig-indiv-fecha" class="form-control" required>
+                                <div class="form-text" id="asig-indiv-fecha-hint">Desde esta fecha vale el turno y se recalcula la asistencia.</div>
                             </div>
-
-                            <!-- Resultado de la búsqueda BioAlba (oculto hasta que se use el botón) -->
-                            <div id="asig-bioalba-row" class="alert alert-info border-0 shadow-sm d-flex gap-2 align-items-center d-none mb-3" style="font-size:0.88rem;">
-                                <i class="bi bi-fingerprint fs-5 text-primary flex-shrink-0"></i>
-                                <div class="flex-grow-1">
-                                    <strong>Primera marcación en BioAlba:</strong>
-                                    <span id="asig-bioalba-valor" class="ms-1">-</span>
-                                </div>
-                                <button type="button" id="asig-btn-primera-marca"
-                                        class="btn btn-sm btn-primary fw-bold d-none"
-                                        onclick="document.getElementById('asig-indiv-fecha').value = this.dataset.fecha">
-                                    Usar esta fecha
-                                </button>
-                            </div>
-
-                            <!-- RFC PASO 7: Fecha de inicio editable -->
-                            <div class="mb-4">
-                                <label for="asig-indiv-fecha" class="form-label fw-bold">
-                                    <i class="bi bi-calendar-event text-primary me-1"></i>
-                                    Fecha de Inicio de Asignación *
-                                </label>
-                                <input type="date" id="asig-indiv-fecha" class="form-control form-control-lg border-primary shadow-sm" required>
-                                <div class="form-text" id="asig-indiv-fecha-hint">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    Esta fecha define desde cuándo el turno es válido. El reproceso histórico usará esta misma fecha como límite.
-                                </div>
-                                <div class="mt-2 d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('asig-indiv-fecha').value = new Date().toISOString().split('T')[0]">
-                                        <i class="bi bi-calendar-check me-1"></i>Hoy
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="asig-indiv-turno-id" class="form-label fw-bold">Seleccionar Turno Válido para el Área *</label>
-                                <select id="asig-indiv-turno-id" class="form-select form-select-lg border-primary shadow-sm" required>
-                                    <option value="">-- Cargando Turnos Disponibles --</option>
+                            <div class="vn-fld">
+                                <label for="asig-indiv-turno-id">Turno del área *</label>
+                                <select id="asig-indiv-turno-id" class="form-select" required>
+                                    <option value="">Cargando turnos…</option>
                                 </select>
-                                <div class="form-text text-danger mt-2" id="asig-indiv-alerta-area">
-                                    <i class="bi bi-info-circle me-1"></i> Solo se muestran turnos creados para el área del empleado.
-                                </div>
+                                <div class="form-text" id="asig-indiv-alerta-area">Solo aparecen los turnos del área de la persona.</div>
                             </div>
-                            <!-- Checkbox: Descargar marcaciones desde BioAlba después de asignar -->
-                            <div class="form-check form-switch p-3 bg-light rounded border mt-3">
-                                <input class="form-check-input ms-0 me-2" type="checkbox" id="asig-chk-bioalba-sync" checked>
-                                <label class="form-check-label fw-bold small" for="asig-chk-bioalba-sync">
-                                    <i class="bi bi-cloud-download me-1 text-primary"></i>
-                                    Descargar marcaciones desde BioAlba tras asignar
-                                </label>
-                                <div class="text-muted small mt-1 ms-4">
-                                    Descarga automáticamente las marcaciones reales del empleado desde BioAlba
-                                    a partir de la fecha de asignación. Si es nuevo, puede no registrar nada.
-                                </div>
+                            <div class="form-check vn-check">
+                                <input class="form-check-input" type="checkbox" id="asig-chk-bioalba-sync" checked>
+                                <label class="form-check-label" for="asig-chk-bioalba-sync"><strong>Descargar las marcas desde BioAlba</strong><br><span>Desde la fecha de inicio, en segundo plano.</span></label>
                             </div>
                         </div>
-                        <div class="modal-footer bg-light px-4 py-3">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" id="btn-confirmar-asignacion-individual"
-                                    class="btn btn-primary px-4 fw-bold"
-                                    onclick="saveAsignacionIndividual()">
-                                <i class="bi bi-check-lg me-2"></i>Confirmar Asignación
-                            </button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" id="btn-confirmar-asignacion-individual" class="btn btn-primary" onclick="saveAsignacionIndividual()">Asignar</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <!-- MODAL: PROGRESO REPROCESO (barra de progreso día a día)         -->
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <div id="modal-reproceso-progreso" class="modal fade" data-bs-backdrop="static"
-                 data-bs-keyboard="false" tabindex="-1" aria-modal="true">
-                <div class="modal-dialog modal-dialog-centered modal-md">
-                    <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius:16px;">
-
-                        <!-- Header azul con spinner girando -->
-                        <div class="modal-header border-0 text-white pb-3 pt-4 px-4"
-                             style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);">
-                            <div class="d-flex align-items-center gap-3 w-100">
-                                <div id="repr-header-spinner"
-                                     class="spinner-border text-white flex-shrink-0"
-                                     style="width:32px;height:32px;border-width:3px;"
-                                     role="status" aria-label="Procesando"></div>
-                                <i id="repr-header-ok" class="bi bi-check-circle-fill text-white fs-3 flex-shrink-0 d-none"></i>
-                                <div class="flex-grow-1 min-w-0">
-                                    <h5 class="mb-0 fw-bold" id="repr-header-title">Reprocesando Asistencia</h5>
-                                    <div class="small opacity-75 text-truncate" id="repr-emp-nombre">Iniciando...</div>
-                                </div>
+            <!-- Recalculando asistencia: avance día a día del recálculo de una persona. Diseño HD 03-11-2026 -->
+            <div id="modal-reproceso-progreso" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-modal="true" aria-labelledby="repr-header-title">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico g" aria-hidden="true">
+                                <span id="repr-header-spinner" class="spinner-border"></span>
+                                <i id="repr-header-ok" class="bi bi-check-lg d-none"></i>
+                            </span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="repr-header-title">Recalculando asistencia</h5>
+                                <div class="vn-sub" id="repr-emp-nombre">Iniciando…</div>
                             </div>
                         </div>
-
-                        <!-- Body: contadores + barra + log -->
-                        <div class="modal-body p-4">
-                            <!-- Contadores -->
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="small fw-semibold text-secondary" id="repr-day-label">
-                                    Calculando días...
-                                </span>
-                                <span class="badge rounded-pill bg-primary" id="repr-pct">0%</span>
-                            </div>
-
-                            <!-- Barra de progreso principal -->
-                            <div class="progress mb-2" style="height:12px;border-radius:8px;background:#e2e8f0;">
-                                <div id="repr-progress-bar"
-                                     class="progress-bar progress-bar-striped progress-bar-animated"
-                                     role="progressbar"
-                                     style="width:0%;border-radius:8px;
-                                            background:linear-gradient(90deg,#1b2f8f,#4a8f24);
-                                            transition:width 1.2s ease;">
-                                </div>
-                            </div>
-
-                            <div class="text-muted small text-center mb-3" id="repr-counter">
-                                Día 0 de 0
-                            </div>
-
-                            <!-- Log de actividad (últimas líneas) -->
-                            <div class="border rounded-3 overflow-hidden">
-                                <div class="px-3 py-2 bg-light border-bottom d-flex align-items-center gap-2">
-                                    <i class="bi bi-terminal-fill text-secondary small"></i>
-                                    <span class="small fw-semibold text-secondary text-uppercase">
-                                        Actividad en tiempo real
-                                    </span>
-                                </div>
-                                <div id="repr-log"
-                                     class="p-3 font-monospace"
-                                     style="font-size: 0.75rem;max-height:120px;overflow-y:auto;
-                                            background:#0f172a;color:#94a3b8;line-height:1.7;">
-                                    <span class="text-blue-400">⟳</span> Esperando inicio del proceso...
-                                </div>
-                            </div>
+                        <div class="modal-body vn-cuerpo">
+                            <div class="vn-avance"><span id="repr-day-label">Preparando…</span><b id="repr-pct">0 %</b></div>
+                            <div class="vn-trk" aria-hidden="true"><div id="repr-progress-bar" style="width:0%"></div></div>
+                            <div class="form-text" id="repr-counter"></div>
+                            <div id="repr-log" class="vn-log" aria-live="polite"><div class="vn-espera">Esperando el inicio…</div></div>
                         </div>
-
-                        <!-- Footer: visible SOLO al completar -->
-                        <div id="repr-footer-completado" class="modal-footer border-0 px-4 py-3 d-none"
-                             style="background:#f0fdf4;">
-                            <div class="d-flex align-items-center gap-2 text-success small mb-2 w-100">
-                                <i class="bi bi-check2-all fs-5"></i>
-                                <span id="repr-resumen-texto">Proceso finalizado correctamente.</span>
-                            </div>
-                            <button type="button" class="btn fw-bold w-100 py-2"
-                                    style="background:linear-gradient(135deg,#059669,#10b981);
-                                           color:white;border:none;border-radius:10px;"
-                                    onclick="cerrarModalReproceso()">
-                                <i class="bi bi-check2-circle me-2"></i>Completado — Cerrar
-                            </button>
+                        <div id="repr-footer-completado" class="modal-footer d-none">
+                            <span id="repr-resumen-texto" class="vn-resumen">Listo.</span>
+                            <button type="button" class="btn btn-primary" onclick="cerrarModalReproceso()">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -3118,76 +2987,25 @@
             <!-- FIN OVERLAY BATCH ============================================== -->
 
 
-            <!-- MODAL: BONOS ASIGNADOS (se muestra al guardar empleado)         -->
-            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- Bonos asignados: al guardar la ficha de una persona con bonos según cargo y contrato. Diseño HD 03-11-2026 -->
             <div id="modal-bonos-asignados" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="modal-bonos-title" aria-modal="true">
-                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-md">
-                    <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius:16px;">
-                        <!-- Header premium -->
-                        <div class="modal-header border-0 text-white pb-3 pt-4 px-4"
-                             style="background: linear-gradient(135deg, #92400e 0%, #d97706 50%, #f59e0b 100%);">
-                            <div class="d-flex align-items-center gap-3 w-100">
-                                <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                                     style="width:48px;height:48px;background:rgba(255,255,255,0.2);backdrop-filter:blur(4px);">
-                                    <i class="bi bi-award-fill fs-4"></i>
-                                </div>
-                                <div>
-                                    <h5 class="modal-title fw-bold mb-0" id="modal-bonos-title">Bonos Asignados</h5>
-                                    <div class="small opacity-75" id="bonos-emp-subtitulo">Recálculo automático completado</div>
-                                </div>
+                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico g" aria-hidden="true"><i class="bi bi-cash-coin"></i></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="modal-bonos-title">Bonos asignados</h5>
+                                <div class="vn-sub" id="bonos-emp-subtitulo">Recálculo listo · según cargo y contrato, desde hoy</div>
                             </div>
                         </div>
-
-                        <!-- Body -->
-                        <div class="modal-body p-0">
-                            <!-- Resumen empleado -->
-                            <div class="px-4 pt-4 pb-3 border-bottom bg-light">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-person-fill text-warning"></i>
-                                    <span class="fw-semibold" id="bonos-emp-nombre">-</span>
-                                </div>
-                                <div class="small text-muted mt-1">
-                                    <i class="bi bi-calendar-check me-1"></i>
-                                    Asignación efectiva desde hoy — <span id="bonos-fecha-hoy"></span>
-                                </div>
-                            </div>
-
-                            <!-- Lista de bonos -->
-                            <div class="px-4 py-4">
-                                <div class="small text-muted text-uppercase fw-bold letter-spacing-1 mb-3">
-                                    <i class="bi bi-check2-circle me-1 text-success"></i>
-                                    Bonos que aplican según cargo y contrato
-                                </div>
-                                <div id="bonos-lista" class="d-flex flex-column gap-2" style="max-height: 45vh; overflow-y: auto;">
-                                    <!-- Inyectado por JS -->
-                                </div>
-                                <div id="bonos-sin-bonos" class="text-center py-3 d-none">
-                                    <i class="bi bi-info-circle text-muted fs-4 d-block mb-2"></i>
-                                    <span class="text-muted small">No se encontraron bonos aplicables para este cargo.</span>
-                                </div>
-                            </div>
-
-                            <!-- Nota informativa -->
-                            <div class="mx-4 mb-4 p-3 rounded-3 border"
-                                 style="background: #fffbeb; border-color: #fcd34d !important;">
-                                <div class="d-flex gap-2 align-items-start">
-                                    <i class="bi bi-lightning-charge-fill text-warning mt-1 flex-shrink-0"></i>
-                                    <div class="small text-muted">
-                                        Los bonos fueron asignados automáticamente según las reglas de cargo y tipo de contrato configuradas en el sistema.
-                                        Puede revisarlos en la sección <strong>Bonos</strong>.
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="modal-body vn-cuerpo">
+                            <div class="vn-per"><span class="vn-av" id="bonos-emp-av" aria-hidden="true"></span><div><b id="bonos-emp-nombre">-</b><span class="vn-t" id="bonos-emp-detalle"></span></div></div>
+                            <div id="bonos-lista" class="vn-bonos"></div>
+                            <div id="bonos-sin-bonos" class="vn-nota d-none">No hay bonos que correspondan a este cargo y contrato.</div>
+                            <p class="vn-pie-nota">Los bonos se asignan solos según las reglas de Configuración › Bonos. Rigen desde hoy, <span id="bonos-fecha-hoy"></span>.</p>
                         </div>
-
-                        <!-- Footer -->
-                        <div class="modal-footer border-0 bg-light px-4 py-3">
-                            <button type="button" id="btn-bonos-continuar"
-                                    class="btn btn-warning fw-bold w-100 py-2"
-                                    style="background: linear-gradient(135deg, #d97706, #f59e0b); border:none; border-radius:10px;"
-                                    onclick="cerrarModalBonos()">
-                                <i class="bi bi-check-circle me-2"></i>Entendido, continuar
-                            </button>
+                        <div class="modal-footer">
+                            <button type="button" id="btn-bonos-continuar" class="btn btn-primary" onclick="cerrarModalBonos()">Entendido</button>
                         </div>
                     </div>
                 </div>
@@ -3320,103 +3138,47 @@
                 </div>
             </div>
 
-            <!-- Modal para Gestión de Vencimientos -->
-            <div id="modal-gestion-vencimiento" class="modal fade" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-md modal-dialog-centered">
+            <!-- Gestionar vencimiento de contrato: renovar, pasar a indefinido o no renovar. Diseño HD 03-11-2026 -->
+            <div id="modal-gestion-vencimiento" class="modal fade" tabindex="-1" aria-hidden="true" aria-labelledby="venc-titulo">
+                <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
-                        <div class="modal-header bg-danger text-white" id="modal-vencimiento-header">
-                            <h3 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-warning" aria-hidden="true"></i> Contrato por vencer</h3>
-                            <button aria-label="Cerrar" class="btn-close btn-close-white" onclick="closeVencimientoModal()"></button>
+                        <div class="modal-header" id="modal-vencimiento-header">
+                            <span class="vn-av" id="venc-av" aria-hidden="true"></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="venc-titulo">Gestionar vencimiento de contrato</h5>
+                                <div class="vn-sub"><span id="venc-emp-nombre">-</span> · <span id="venc-emp-cargo-area">-</span> · <span id="venc-contrato-txt">vence el <span id="venc-fecha">-</span></span></div>
+                            </div>
+                            <button aria-label="Cerrar" type="button" class="btn-close" onclick="closeVencimientoModal()"></button>
                         </div>
-                        <div class="modal-body">
-                            <div class="d-flex align-items-center gap-3 mb-4 p-3 bg-light rounded shadow-sm">
-                                <div class="flex-shrink-0 fs-1"><i class="bi bi-person" aria-hidden="true"></i></div>
-                                <div class="flex-grow-1">
-                                    <h4 id="venc-emp-nombre" class="mb-0 fw-bold">-</h4>
-                                    <div class="text-muted" id="venc-emp-cargo-area">-</div>
-                                </div>
+                        <div class="modal-body vn-cuerpo">
+                            <div id="venc-alerta-legal" class="vn-ban a d-none" role="note">
+                                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                                <div><b>Alerta legal: es el <span id="venc-num-contrato">segundo</span> contrato a plazo</b>Según la ley, una renovación más podría convertirlo automáticamente en indefinido.</div>
                             </div>
-
-                            <div class="alert alert-warning border-start border-4 border-warning shadow-sm">
-                                <div class="d-flex gap-2">
-                                    <i class="bi bi-calendar-x fs-4"></i>
-                                    <div>
-                                        <strong>Contrato por vencer:</strong> El contrato actual finaliza el <span
-                                            id="venc-fecha" class="fw-bold">-</span>.
-                                        <div id="venc-alerta-legal"
-                                            class="mt-2 p-2 bg-white rounded border border-warning d-none">
-                                            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> <strong>¡ALERTA LEGAL!</strong> Este es el <span id="venc-num-contrato"
-                                                class="fw-bold">2do</span> contrato.
-                                            <br><small>Según legislación, una renovación adicional podría convertirlo
-                                                automáticamente en INDEFINIDO.</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="card border-0 bg-light p-3 mt-4">
-                                <div class="fw-bold mb-3">Seleccione una Acción:</div>
-                                <div class="d-grid gap-3">
-                                    <div class="btn-group-toggle d-flex flex-column gap-2" role="group">
-                                        <div class="p-3 border rounded bg-white shadow-sm action-option"
-                                            id="opt-renovar">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="venc-action"
-                                                    id="radio-renovar" value="renovar" checked>
-                                                <label class="form-check-label w-100" for="radio-renovar">
-                                                    <strong>Renovar Contrato Temporal</strong>
-                                                    <p class="small text-muted mb-2">Extiende el contrato por un nuevo
-                                                        periodo.
-                                                    </p>
-                                                </label>
-                                                <div id="new-date-container" class="mt-2 ms-4">
-                                                    <label for="venc-nueva-fecha" class="small fw-bold">Nueva Fecha de
-                                                        Término:</label>
-                                                    <input type="date" id="venc-nueva-fecha"
-                                                        class="form-control form-control-sm">
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="p-3 border rounded bg-white shadow-sm action-option"
-                                            id="opt-indefinido">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="venc-action"
-                                                    id="radio-indefinido" value="indefinido">
-                                                <label class="form-check-label w-100" for="radio-indefinido">
-                                                    <strong>Cambiar a Contrato INDEFINIDO</strong>
-                                                    <p class="small text-muted mb-0">El empleado pasa a planta
-                                                        permanente hoy.
-                                                    </p>
-                                                </label>
-                                            </div>
-                                        </div>
-
-                                        <div class="p-3 border rounded bg-white shadow-sm action-option border-danger-subtle"
-                                            id="opt-desactivar">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="venc-action"
-                                                    id="radio-desactivar" value="desactivar">
-                                                <label class="form-check-label w-100" for="radio-desactivar">
-                                                    <strong>No Renovar (Baja administrativa)</strong>
-                                                    <p class="small text-muted mb-0">El empleado dejará de estar activo
-                                                        en el
-                                                        sistema.</p>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="vn-ops" role="radiogroup" aria-label="Qué hacer con el contrato">
+                                <label class="vn-opr" for="radio-renovar">
+                                    <input type="radio" name="venc-action" id="radio-renovar" value="renovar" checked>
+                                    <span><b>Renovar el contrato a plazo</b><span class="vn-t">Extiende el contrato por un nuevo período.</span></span>
+                                    <span id="new-date-container" class="vn-opr-extra"><input type="date" id="venc-nueva-fecha" class="form-control" aria-label="Nueva fecha de término"></span>
+                                </label>
+                                <label class="vn-opr" for="radio-indefinido">
+                                    <input type="radio" name="venc-action" id="radio-indefinido" value="indefinido">
+                                    <span><b>Cambiar a contrato indefinido</b><span class="vn-t">La persona queda de planta, sin fecha de término.</span></span>
+                                </label>
+                                <label class="vn-opr" for="radio-desactivar">
+                                    <input type="radio" name="venc-action" id="radio-desactivar" value="desactivar">
+                                    <span><b>No renovar</b><span class="vn-t">Baja administrativa al término del contrato; si ya venció, desde hoy.</span></span>
+                                </label>
                             </div>
                         </div>
-                        <div class="modal-footer bg-light border-top shadow-sm">
-                            <button class="btn btn-outline-secondary" onclick="closeVencimientoModal()">Cerrar</button>
-                            <button class="btn btn-danger px-4 fw-bold" id="btn-procesar-vencimiento"
-                                onclick="confirmProcesarVencimiento()">Confirmar Acción</button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" onclick="closeVencimientoModal()">Cerrar</button>
+                            <button type="button" class="btn btn-primary" id="btn-procesar-vencimiento" onclick="confirmProcesarVencimiento()">Confirmar</button>
                         </div>
                     </div>
                 </div>
             </div>
+
             <!-- Modal para Corrección Manual (ANOMALIA) -->
             <div id="modal-marcacion-manual" class="modal fade" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
@@ -4446,101 +4208,72 @@
 
             <div id="modals-seguridad-container"></div>
 
-            <!-- MODAL WIZARD REINCORPORACION -->
-            <div id="modal-reincorporacion-wizard" class="modal fade" data-bs-backdrop="static" tabindex="-1" role="dialog" aria-modal="true" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-success text-white">
-                            <h5 class="modal-title fw-bold"><i class="bi bi-rocket-takeoff" aria-hidden="true"></i> Asistente de Reincorporación</h5>
-                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <!-- Reincorporar a una persona en tres pasos: BioAlba, contrato y horario. Diseño HD 03-11-2026 -->
+            <div id="modal-reincorporacion-wizard" class="modal fade" data-bs-backdrop="static" tabindex="-1" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="reinc-titulo">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico g" aria-hidden="true"><i class="bi bi-person-check"></i></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="reinc-titulo">Reincorporar</h5>
+                                <div class="vn-sub" id="reinc-sub">Paso 1 de 3 · BioAlba</div>
+                            </div>
+                            <button aria-label="Cerrar" type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <div class="modal-body p-4">
-                            <!-- Stepper visual -->
-                            <div class="d-flex justify-content-between mb-4 position-relative">
-                                <div class="w-100 position-absolute top-50 start-0 translate-middle-y" style="height: 2px; background: #e2e8f0; z-index: 0;"></div>
-                                <div class="reinc-step-indicator active" id="reinc-step-1-label">1</div>
-                                <div class="reinc-step-indicator" id="reinc-step-2-label">2</div>
-                                <div class="reinc-step-indicator" id="reinc-step-3-label">3</div>
-                            </div>
-                            <div class="d-flex justify-content-between mb-4 small fw-bold text-muted text-uppercase" style="margin-top: -10px;">
-                                <span>Sincronización</span>
-                                <span>Contrato</span>
-                                <span>Horario</span>
+                        <div class="modal-body vn-cuerpo">
+                            <div class="vn-steps" aria-hidden="true">
+                                <span class="vn-st"><i class="reinc-step-indicator" id="reinc-step-1-label">1</i>BioAlba</span><span class="vn-sl"></span>
+                                <span class="vn-st"><i class="reinc-step-indicator" id="reinc-step-2-label">2</i>Contrato</span><span class="vn-sl"></span>
+                                <span class="vn-st"><i class="reinc-step-indicator" id="reinc-step-3-label">3</i>Horario</span>
                             </div>
 
-                            <!-- PASO 1: Sincronización BioAlba -->
+                            <!-- Paso 1: la persona en BioAlba (área y cargo de hoy) -->
                             <div id="reinc-pane-1" class="reinc-pane">
-                                <div class="alert alert-info py-2 mb-3">
-                                    <i class="bi bi-info-circle me-2"></i><strong>Paso 1: Sincronización de Datos.</strong> Verifique si hay cambios en la Fuente de Verdad (BioAlba).
-                                </div>
-                                <div id="reinc-sync-diff" class="p-3 bg-light rounded border">
-                                    <div class="text-center py-4">
-                                        <div class="spinner-border spinner-border-sm text-primary"></div>
-                                        Cargando datos desde BioAlba...
-                                    </div>
+                                <div id="reinc-sync-diff" class="vn-cuerpo">
+                                    <div class="vn-nota"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Buscando a la persona en BioAlba…</div>
                                 </div>
                             </div>
 
-                            <!-- PASO 2: Datos de Contrato -->
+                            <!-- Paso 2: contrato -->
                             <div id="reinc-pane-2" class="reinc-pane d-none">
-                                <div class="alert alert-info py-2 mb-3">
-                                    <i class="bi bi-info-circle me-2"></i><strong>Paso 2: Definición de Periodo.</strong> Configure las fechas y tipo de contrato.
-                                </div>
-                                <form id="form-reinc-contrato">
-                                    <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <label for="reinc-fecha-inicio" class="form-label small fw-bold">Fecha de Re-Ingreso *</label>
-                                            <input type="date" id="reinc-fecha-inicio" class="form-control" required>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="reinc-tipo-contrato" class="form-label small fw-bold">Tipo de Contrato *</label>
-                                            <select id="reinc-tipo-contrato" class="form-select" required>
-                                                <option value="Temporal">Temporal (Plazo Fijo)</option>
-                                                <option value="Indefinido">Indefinido</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-6" id="reinc-fecha-fin-container">
-                                            <label for="reinc-fecha-fin" class="form-label small fw-bold">Fecha Término Estimada *</label>
-                                            <input type="date" id="reinc-fecha-fin" class="form-control">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="reinc-compania" class="form-label small fw-bold">Compañía</label>
-                                            <input type="text" id="reinc-compania" class="form-control" readonly disabled>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="reinc-area" class="form-label small fw-bold">Área Destino</label>
-                                            <input type="text" id="reinc-area" class="form-control" readonly disabled>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="reinc-cargo" class="form-label small fw-bold">Cargo Destino</label>
-                                            <input type="text" id="reinc-cargo" class="form-control" readonly disabled>
-                                        </div>
+                                <form id="form-reinc-contrato" class="vn-cuerpo" onsubmit="return false">
+                                    <div class="vn-fld">
+                                        <label for="reinc-fecha-inicio">Fecha de reingreso *</label>
+                                        <input type="date" id="reinc-fecha-inicio" class="form-control" required>
                                     </div>
+                                    <div class="vn-fld">
+                                        <label for="reinc-tipo-contrato">Tipo de contrato *</label>
+                                        <select id="reinc-tipo-contrato" class="form-select" required>
+                                            <option value="Temporal">A plazo fijo</option>
+                                            <option value="Indefinido">Indefinido</option>
+                                        </select>
+                                    </div>
+                                    <div class="vn-fld" id="reinc-fecha-fin-container">
+                                        <label for="reinc-fecha-fin">Término estimado *</label>
+                                        <input type="date" id="reinc-fecha-fin" class="form-control">
+                                    </div>
+                                    <!-- Compañía, área y cargo vienen de BioAlba (paso 1) -->
+                                    <input type="hidden" id="reinc-compania">
+                                    <input type="hidden" id="reinc-area">
+                                    <input type="hidden" id="reinc-cargo">
                                 </form>
                             </div>
 
-                            <!-- PASO 3: Selección de Horario -->
+                            <!-- Paso 3: horario -->
                             <div id="reinc-pane-3" class="reinc-pane d-none">
-                                <div class="alert alert-info py-2 mb-3">
-                                    <i class="bi bi-info-circle me-2"></i><strong>Paso 3: Asignación de Turno.</strong> El sistema obliga a definir un horario para evitar bloqueos.
-                                </div>
-                                <div class="mb-3">
-                                    <label for="reinc-turno-id" class="form-label fw-bold">Seleccionar Turno para el Área <span id="reinc-area-display" class="badge bg-primary"></span></label>
-                                    <select id="reinc-turno-id" class="form-select form-select-lg border-success" required>
-                                        <option value="">-- Seleccionar Turno --</option>
+                                <div class="vn-fld">
+                                    <label for="reinc-turno-id">Turno en <span id="reinc-area-display"></span> *</label>
+                                    <select id="reinc-turno-id" class="form-select" required>
+                                        <option value="">Elegir turno</option>
                                     </select>
-                                    <div class="form-text mt-2">
-                                        Solo se muestran turnos asignables a la nueva área del empleado.
-                                    </div>
+                                    <div class="form-text">Solo aparecen los turnos de esa área.</div>
                                 </div>
                             </div>
                         </div>
-                        <div class="modal-footer bg-light px-4">
-                            <button type="button" class="btn btn-secondary" id="btn-reinc-prev" disabled>Anterior</button>
-                            <button type="button" class="btn btn-primary" id="btn-reinc-next">Siguiente</button>
-                            <button type="button" class="btn btn-success d-none" id="btn-reinc-finish" onclick="finishReincorporacion()">
-                                <i class="bi bi-check-circle-fill me-2"></i>Finalizar y Activar
-                            </button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light me-auto" id="btn-reinc-prev" disabled>Anterior</button>
+                            <button type="button" class="btn btn-primary" id="btn-reinc-next" disabled>Siguiente</button>
+                            <button type="button" class="btn btn-primary d-none" id="btn-reinc-finish" onclick="finishReincorporacion()">Reincorporar</button>
                         </div>
                     </div>
                 </div>
@@ -4552,7 +4285,7 @@
             <!-- Componentes de UI (Orden de dependencia) -->
             <script src="/static/js/startup_ui.js?v={{ startup_id }}_v15" defer></script>
             <script src="/static/js/cumpleanos_ui.js?v={{ startup_id }}_v19" defer></script>
-            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v21" defer></script>
+            <script src="/static/js/contratos_ui.js?v={{ startup_id }}_v22" defer></script>
             <script src="/static/js/alerts_ui.js?v={{ startup_id }}_v17" defer></script>
             <script src="/static/js/asignaciones_ui.js?v={{ startup_id }}_v17" defer></script>
             <script src="/static/js/dashboard_react.js?v={{ startup_id }}" defer></script>
@@ -4586,10 +4319,10 @@
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v11",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v17",
-        "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v17",
+        "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v18",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
         "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v28",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v32",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v33",
         "/static/js/velocidades_ui.js?v={{ startup_id }}_v2",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v12",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}_v2",
