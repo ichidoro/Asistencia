@@ -19,11 +19,27 @@ def _now_chile():
 from backend.core.database import get_db, Database
 from backend.services.telegram_porteria import avisar_marca
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
+from backend.services.deshacer_porteria import MARGEN_RED_SEGUNDOS, permiso_deshacer, segundos_para_deshacer
 
 router = APIRouter(
     prefix="/articulo22",
     tags=["Artículo 22"]
 )
+
+
+# ============================================
+# AVISO DE TELEGRAM (vigilados)
+# ============================================
+async def _avisar_tras_plazo(db, reg_id, emp, tipo, hora, registrador, espera):
+    """Espera el plazo de Deshacer y no avisa una marca que se deshizo (sin plazo, avisa enseguida)."""
+    if espera > 0 and reg_id:
+        await asyncio.sleep(espera + MARGEN_RED_SEGUNDOS)
+        try:
+            if not await db.fetch_one("SELECT id FROM articulo22_registros WHERE id = ?", (reg_id,)):
+                return
+        except Exception as ex:
+            logger.warning(f"[ART22] No se pudo revisar si la marca {reg_id} se deshizo: {ex}")
+    await avisar_marca(emp, tipo, hora, registrador)
 
 
 # ============================================
@@ -197,7 +213,7 @@ async def marcar_presencia(
     # Registrar
     registrador = f"{current_user.nombre_completo}" if hasattr(current_user, 'nombre_completo') else (current_user.username or "Sistema")
 
-    await db.execute(
+    cur = await db.execute(
         """INSERT INTO articulo22_registros 
            (empleado_id, fecha, hora, tipo, registrado_por_id, registrado_por_nombre, observaciones)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -206,7 +222,10 @@ async def marcar_presencia(
          registrador, observaciones)
     )
 
-    asyncio.create_task(avisar_marca(emp, nuevo_tipo, hora_actual, registrador))
+    reg_id = getattr(cur, "lastrowid", None)
+    segundos = await segundos_para_deshacer(db)
+
+    asyncio.create_task(_avisar_tras_plazo(db, reg_id, emp, nuevo_tipo, hora_actual, registrador, segundos))
     nombre_emp = f"{emp.get('apellido_paterno', '')} {emp.get('nombre', '')}"
     tipo_label = "ENTRADA" if nuevo_tipo == "E" else "SALIDA"
     logger.info(f"[ART22] {tipo_label}: {nombre_emp} (ID={empleado_id}) a las {hora_actual} - Reg: {registrador}")
@@ -217,7 +236,8 @@ async def marcar_presencia(
         "tipo_label": tipo_label,
         "hora": hora_actual,
         "empleado_id": empleado_id,
-        "nombre": nombre_emp
+        "nombre": nombre_emp,
+        "deshacer": permiso_deshacer("art22", reg_id, segundos)
     }
 
 

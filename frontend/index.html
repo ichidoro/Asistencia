@@ -1532,6 +1532,7 @@
                                                 <button type="button" class="fcB-it" data-grupo-sis="cierre" aria-pressed="false"><span class="n">Cierre del período</span></button>
                                                 <button type="button" class="fcB-it" data-grupo-sis="bioalba" aria-pressed="false"><span class="n">Sincronización con BioAlba</span></button>
                                                 <button type="button" class="fcB-it" data-grupo-sis="extras" aria-pressed="false"><span class="n">Horas extra y emergencias</span></button>
+                                                <button type="button" class="fcB-it" data-grupo-sis="porteria" aria-pressed="false"><span class="n">Portería</span></button>
                                             </nav>
                                             <section class="fcB-ficha">
                                                 <div data-grupo-sis-panel="contratos">
@@ -1563,6 +1564,11 @@
                                                         <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-emergencia-gap" data-clave="asistencia_emergencia_gap_horas" min="0" max="24"></div></div>
                                                     <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-emergencia-limite">Duración máxima de un llamado de emergencia (horas)</label><p>Si esa otra jornada dura menos que esto, es un llamado de emergencia y sus minutos se suman a las horas extra. Si dura esto o más, es una jornada adicional (+2) que se aprueba aparte.</p></div>
                                                         <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-emergencia-limite" data-clave="asistencia_emergencia_jornada_limite_horas" min="0" max="12"></div></div>
+                                                </div>
+                                                <div data-grupo-sis-panel="porteria" class="d-none">
+                                                    <div class="fcB-fh"><h3>Portería</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-deshacer-segundos">Tiempo para deshacer un registro (segundos)</label><p>Después de registrar una ENTRADA o SALIDA del Artículo 22, una llave, una visita o un vehículo, el aviso «Listo» ofrece Deshacer durante estos segundos. Lo deshecho no se borra: queda anulado en el registro de cambios. Con 0 no se ofrece Deshacer.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="1" class="fcB-inp num" id="ajuste-deshacer-segundos" data-clave="porteria_deshacer_segundos" min="0" max="120"></div></div>
                                                 </div>
                                                 <div class="fcB-pie" data-permiso="configuracion.editar">
                                                     <div><span class="fcB-et"><p id="sistema-cambios">Sin cambios.</p></span></div>
@@ -4268,7 +4274,7 @@
         "/static/js/horarios.js?v={{ startup_id }}_v26",
         "/static/js/asistencia.js?v={{ startup_id }}_v21",
         "/static/js/config_ficha.js?v={{ startup_id }}_v5",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v25",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v26",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v11",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v17",
@@ -4283,14 +4289,14 @@
         "/static/js/compensaciones_he_panel.js?v={{ startup_id }}",
         "/static/js/compensar_inasistencia.js?v={{ startup_id }}_v2",
         "/static/js/tarjeta_dia.js?v={{ startup_id }}_v2",
-        "/static/js/seguridad_ui.js?v={{ startup_id }}_v4",
+        "/static/js/seguridad_ui.js?v={{ startup_id }}_v5",
         "/static/js/libs/qrcode.min.js",
-        "/static/js/porteria_panel.js?v={{ startup_id }}_v4",
+        "/static/js/porteria_panel.js?v={{ startup_id }}_v5",
         "/static/js/porteria_ui.js?v={{ startup_id }}_v9",
-        "/static/js/articulo22_ui.js?v={{ startup_id }}_v15",
-        "/static/js/visitas_ui.js?v={{ startup_id }}_v9",
-        "/static/js/llaves_ui.js?v={{ startup_id }}_v5",
-        "/static/js/flota_ui.js?v={{ startup_id }}_v10",
+        "/static/js/articulo22_ui.js?v={{ startup_id }}_v16",
+        "/static/js/visitas_ui.js?v={{ startup_id }}_v10",
+        "/static/js/llaves_ui.js?v={{ startup_id }}_v6",
+        "/static/js/flota_ui.js?v={{ startup_id }}_v11",
         "/static/js/productos_4.js?v={{ startup_id }}_v4",
         "/static/js/sync_wizard.js?v={{ startup_id }}_v2"
 ];

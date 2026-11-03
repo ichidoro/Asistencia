@@ -880,7 +880,9 @@ const FlotaModule = (() => {
             });
             const data = await res.json().catch(function () { return {}; });
             if (!res.ok) throw new Error(data.detail || 'No se pudo registrar.');
-            _aviso((data.tipo === 'ENTRADA' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + _patente(data.patente) + (data.hora ? ' a las ' + String(data.hora).substring(0, 5) : ''));
+            const txt = (data.tipo === 'ENTRADA' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + _patente(data.patente) + (data.hora ? ' a las ' + String(data.hora).substring(0, 5) : '');
+            if (data.deshacer && window.Avisos && Avisos.conDeshacer) Avisos.conDeshacer(txt, data.deshacer, { alDeshacer: function () { cargarEstadoDia(); } });
+            else _aviso(txt);
         } catch (e) {
             _aviso(e.message || 'No se pudo registrar.', 'danger');
         }

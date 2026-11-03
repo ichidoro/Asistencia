@@ -36,6 +36,11 @@ const VisitasModule = (() => {
     function _min(h) { if (!h) return null; const p = String(h).split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); }
     function _dur(m) { m = Math.max(0, Math.floor(m || 0)); return Math.floor(m / 60) + 'h ' + _pad(m % 60) + 'm'; }
     function _aviso(m, t) { if (typeof showToast === 'function') showToast(m, t || 'success'); }
+    // Aviso «Listo» con Deshacer cuando el servidor lo permite (si se deshace, se vuelve a leer el día)
+    function _avisoRegistro(texto, permiso) {
+        if (permiso && window.Avisos && Avisos.conDeshacer) Avisos.conDeshacer(texto, permiso, { alDeshacer: function () { cargarEstadoDia(); } });
+        else _aviso(texto);
+    }
 
     const _REGISTRO = `
             <section class="ptB-reg" id="vis-registro" aria-label="Registrar visita">
@@ -699,9 +704,7 @@ const VisitasModule = (() => {
             if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Error'); }
             const data = await res.json();
 
-            if (typeof showToast === 'function') {
-                showToast((data.tipo_marca === 'E' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + (nombre ? _nombre(nombre) : 'RUT ' + _rut(data.rut)) + ' a las ' + String(data.hora).substring(0, 5), 'success');
-            }
+            _avisoRegistro((data.tipo_marca === 'E' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + (nombre ? _nombre(nombre) : 'RUT ' + _rut(data.rut)) + ' a las ' + String(data.hora).substring(0, 5), data.deshacer);
 
             cancelarRegistro();
             if (_fecha !== _hoy()) { _fecha = _hoy(); _datos = null; _pintarCabecera(); }
@@ -751,7 +754,7 @@ const VisitasModule = (() => {
                 });
                 const data = await res.json().catch(function () { return {}; });
                 if (!res.ok) throw new Error(data.detail || 'No se pudo registrar.');
-                _aviso((data.tipo_marca === 'E' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + quien + (data.hora ? ' a las ' + String(data.hora).substring(0, 5) : ''));
+                _avisoRegistro((data.tipo_marca === 'E' ? 'ENTRADA' : 'SALIDA') + ' registrada: ' + quien + (data.hora ? ' a las ' + String(data.hora).substring(0, 5) : ''), data.deshacer);
             } catch (e) { _aviso(e.message || 'No se pudo registrar.', 'danger'); }
         };
         if (btn && window.FichaCfg) await FichaCfg.trabajando(btn, accion); else await accion();

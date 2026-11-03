@@ -8,6 +8,7 @@ from loguru import logger
 from backend.core.config import settings
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission, RequireAnyPermission
+from backend.services.deshacer_porteria import permiso_deshacer, segundos_para_deshacer
 from backend.repositories.flota import FlotaRepository
 
 router = APIRouter(
@@ -445,7 +446,7 @@ async def marcar(
     # Registrador
     registrador = f"{current_user.nombre_completo}" if hasattr(current_user, 'nombre_completo') else (current_user.username or "Sistema")
 
-    await repo.marcar_movimiento(
+    reg_id = await repo.marcar_movimiento(
         flota_id=flota_id,
         tipo=nuevo_tipo,
         fecha=fecha_registro,
@@ -461,7 +462,8 @@ async def marcar(
         "tipo_label": "DESPACHO" if nuevo_tipo == "SALIDA" else "RETORNO",
         "hora": hora_actual,
         "flota_id": flota_id,
-        "patente": vehiculo["patente"]
+        "patente": vehiculo["patente"],
+        "deshacer": permiso_deshacer("flota", reg_id, await segundos_para_deshacer(db))
     }
 
 @router.get("/historial/")

@@ -315,8 +315,10 @@ const PorteriaPanel = (function () {
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Guardando';
         try {
-            const msg = await accion();
-            if (msg) aviso(msg, 'success');
+            const r = await accion();
+            const msg = r && typeof r === 'object' ? r.texto : r;
+            if (msg && r && r.deshacer && window.Avisos && Avisos.conDeshacer) Avisos.conDeshacer(msg, r.deshacer);
+            else if (msg) aviso(msg, 'success');
             await recargar();
         } catch (e) {
             aviso(e.message || 'No se pudo registrar', 'danger');
@@ -337,7 +339,7 @@ const PorteriaPanel = (function () {
             if (!await preguntar('¿Registrar la ' + tipo.toLowerCase() + '?', quien, ['Artículo 22 · hora ' + horaAhora()], 'Registrar ' + tipo.toLowerCase())) return;
             ejecutar(b, async function () {
                 const d = await enviar('/api/articulo22/marcar/', { empleado_id: parseInt(b.dataset.a22, 10) });
-                return (d.tipo_label || tipo) + ' registrada: ' + nombre(d.nombre || quien) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
+                return { texto: (d.tipo_label || tipo) + ' registrada: ' + nombre(d.nombre || quien) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : ''), deshacer: d.deshacer };
             });
             return;
         }
@@ -347,7 +349,7 @@ const PorteriaPanel = (function () {
             if (!await preguntar('¿Registrar la salida?', quien, ['Visita · hora ' + horaAhora()], 'Registrar salida')) return;
             ejecutar(b, async function () {
                 const d = await enviar('/api/visitas/registrar/', { rut: b.dataset.visita });
-                return (d.tipo_label || 'Salida') + ' registrada: ' + quien + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
+                return { texto: (d.tipo_label || 'Salida') + ' registrada: ' + quien + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : ''), deshacer: d.deshacer };
             });
             return;
         }
@@ -415,6 +417,12 @@ const PorteriaPanel = (function () {
         }
         mostrar(vista === 'panel' ? vistaInicial() : vista);
     }
+
+    // Lo deshecho desde cualquier aviso de Portería se refleja en el panel si está a la vista
+    window.addEventListener('registro-deshecho', function () {
+        const p = document.getElementById('porteria-panel');
+        if (p && p.offsetParent !== null) recargar();
+    });
 
     return { init: init, mostrar: mostrar, recargar: recargar };
 })();

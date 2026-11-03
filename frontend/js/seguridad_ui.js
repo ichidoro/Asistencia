@@ -179,7 +179,7 @@ async function loadAreasParaSeguridad() {
 // ── Registro de cambios en palabras: el servidor guarda códigos (DECIDIR_CUADRE) y detalles en JSON ──
 const _ACCIONES_AUDITORIA = {
     LOGIN: 'Entró a la aplicación', CREATE: 'Creó', UPDATE: 'Modificó', DELETE: 'Eliminó',
-    INTENTO_ACCESO_DENEGADO: 'Intentó entrar sin permiso',
+    INTENTO_ACCESO_DENEGADO: 'Intentó entrar sin permiso', DESHACER_REGISTRO_PORTERIA: 'Deshizo un registro de Portería',
     ASSIGN_PRODUCTOS_PROPIOS: 'Asignó productos', DELIVER_PRODUCTOS_PROPIOS: 'Entregó productos',
     REVERT_DELIVER_PRODUCTOS_PROPIOS: 'Deshizo una entrega de productos', UPDATE_PRODUCTO_PROPIO: 'Modificó un producto',
     CLOSE_PERIOD_PRODUCTOS_4: 'Cerró el período de 4 Productos', REOPEN_PERIOD_PRODUCTOS_4: 'Reabrió el período de 4 Productos',

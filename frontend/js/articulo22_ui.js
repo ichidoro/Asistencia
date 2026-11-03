@@ -264,8 +264,11 @@ const Articulo22Module = (function () {
                 const r = await fetch('/api/articulo22/marcar/', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, cabeceras()), body: JSON.stringify({ empleado_id: id }) });
                 const d = await r.json().catch(function () { return {}; });
                 if (!r.ok) throw new Error(d.detail || 'No se pudo registrar.');
-                aviso(palabra(d.tipo || tipo) + ' registrada: ' + nombre(d.nombre || p.n) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : ''));
-                Object.keys(semanas).forEach(function (k) { if (k.indexOf(id + '|') === 0) delete semanas[k]; });
+                const txt = palabra(d.tipo || tipo) + ' registrada: ' + nombre(d.nombre || p.n) + (d.hora ? ' a las ' + String(d.hora).substring(0, 5) : '');
+                const olvidar = function () { Object.keys(semanas).forEach(function (k) { if (k.indexOf(id + '|') === 0) delete semanas[k]; }); };
+                if (d.deshacer && window.Avisos && Avisos.conDeshacer) Avisos.conDeshacer(txt, d.deshacer, { alDeshacer: function () { olvidar(); recargar(); } });
+                else aviso(txt);
+                olvidar();
             } catch (e) { aviso(e.message || 'No se pudo registrar.', 'danger'); }
         });
         await recargar();

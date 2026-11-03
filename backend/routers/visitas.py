@@ -14,6 +14,7 @@ import re
 
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
+from backend.services.deshacer_porteria import permiso_deshacer, segundos_para_deshacer
 
 router = APIRouter(
     prefix="/visitas",
@@ -396,7 +397,7 @@ async def registrar_visita(
     registrador = getattr(current_user, 'nombre_completo', None) or getattr(current_user, 'username', 'Sistema')
     reg_id = getattr(current_user, 'user_id', None)
 
-    await db.execute(
+    cur = await db.execute(
         """INSERT INTO visitas_registros 
            (rut, nombre, empresa, motivo, area_destino, persona_contacto,
             raw_scan, tipo_documento, tipo_marca, fecha, hora,
@@ -420,7 +421,8 @@ async def registrar_visita(
         "tipo_documento": tipo_doc,
         "parse_ok": parse_ok,
         "hora": hora_actual,
-        "requiere_manual": not parse_ok
+        "requiere_manual": not parse_ok,
+        "deshacer": permiso_deshacer("visita", getattr(cur, "lastrowid", None), await segundos_para_deshacer(db))
     }
 
 

@@ -466,13 +466,14 @@ async def set_ajuste(
         "dia_cierre_rrhh",
         "bioalba_dias_volatilidad",
         "asistencia_max_extras_ordinarias_dia_habil",
-        "asistencia_minimo_horas_extra_minutos"
+        "asistencia_minimo_horas_extra_minutos",
+        "porteria_deshacer_segundos"
     ]
     
     if clave in claves_numericas_criticas:
         try:
             val_int = int(valor)
-            if clave in ["bioalba_dias_volatilidad", "asistencia_max_extras_ordinarias_dia_habil", "asistencia_minimo_horas_extra_minutos"]:
+            if clave in ["bioalba_dias_volatilidad", "asistencia_max_extras_ordinarias_dia_habil", "asistencia_minimo_horas_extra_minutos", "porteria_deshacer_segundos"]:
                 if val_int < 0:
                     raise ValueError("El valor no puede ser menor a 0")
             else:

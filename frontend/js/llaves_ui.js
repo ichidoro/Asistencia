@@ -165,6 +165,12 @@ const LlavesModule = (function () {
     }
     function tras(llaveId) { delete movs[llaveId]; if (cont() && cont().offsetParent !== null) return recargar(); }
 
+    // Aviso «Listo» con Deshacer cuando el servidor lo permite (si se deshace, se vuelve a leer la llave)
+    function avisoRegistro(texto, permiso, llaveId) {
+        if (permiso && window.Avisos && Avisos.conDeshacer) Avisos.conDeshacer(texto, permiso, { alDeshacer: function () { tras(llaveId); } });
+        else aviso(texto);
+    }
+
     // Nombre y ubicación de la llave para el encabezado de sus ventanas (la ubicación, si el tablero ya está cargado).
     function detalleLlave(llaveId, llaveNombre) {
         const k = ((datos && datos.llaves) || []).find(function (x) { return String(x.id) === String(llaveId); });
@@ -196,7 +202,7 @@ const LlavesModule = (function () {
         if (!r.isConfirmed || !r.value) return;
         try {
             const d = await pedir('/api/llaves/registrar/', 'POST', { llave_id: llaveId, empleado_id: r.value.empleado_id, tipo: 'ENTREGA', observaciones: r.value.observaciones });
-            aviso(d.message || 'ENTREGA registrada.');
+            avisoRegistro(d.message || 'ENTREGA registrada.', d.deshacer, llaveId);
         } catch (e) { aviso(e.message, 'danger'); }
         await tras(llaveId);
     }
@@ -212,7 +218,7 @@ const LlavesModule = (function () {
         if (!r.isConfirmed) return;
         try {
             const d = await pedir('/api/llaves/registrar/', 'POST', { llave_id: llaveId, empleado_id: empleadoId, tipo: 'DEVOLUCION', observaciones: (r.value && r.value.observaciones) || '' });
-            aviso(d.message || 'DEVOLUCIÓN registrada.');
+            avisoRegistro(d.message || 'DEVOLUCIÓN registrada.', d.deshacer, llaveId);
         } catch (e) { aviso(e.message, 'danger'); }
         await tras(llaveId);
     }

@@ -11,6 +11,7 @@ from loguru import logger
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, RequirePermission, RequireAnyPermission, get_current_user
 from backend.repositories.porteria import PorteriaRepository
+from backend.services.deshacer_porteria import REGISTROS, deshacer, segundos_para_deshacer
 from backend.services.google_drive import GoogleDriveService
 from backend.schemas.porteria import (
     UbicacionCreate,
@@ -410,3 +411,30 @@ async def get_rondas_recientes(
 async def ping_connection(current_user: SecurityContext = Depends(get_current_user)):
     """Verificación rápida de conexión de red para la tablet/celular del guardia."""
     return {"status": "ok", "message": "Conexión activa con el servidor central"}
+
+
+# ============================================
+# DESHACER UN REGISTRO RECIÉN HECHO (aviso «Listo» con Deshacer)
+# ============================================
+@router.post("/deshacer/")
+async def deshacer_registro(
+    data: Dict[str, Any],
+    db: Database = Depends(get_db),
+    current_user: SecurityContext = Depends(get_current_user)
+):
+    """Anula un registro de Portería (Artículo 22, llave, visita o vehículo) dentro del plazo del ajuste.
+    El registro pasa completo a registros_anulados y queda en el registro de cambios."""
+    tipo = str(data.get("tipo") or "")
+    try:
+        registro_id = int(data.get("id") or 0)
+    except (TypeError, ValueError):
+        registro_id = 0
+    cfg = REGISTROS.get(tipo)
+    if not cfg or registro_id <= 0:
+        raise HTTPException(status_code=400, detail="No se entiende qué registro deshacer.")
+    if not current_user.check_permission(cfg["permiso"]):
+        raise HTTPException(status_code=403, detail="No tiene permiso para deshacer este registro.")
+    r = await deshacer(db, tipo, registro_id, current_user, await segundos_para_deshacer(db))
+    if not r["ok"]:
+        raise HTTPException(status_code=409, detail=r["motivo"])
+    return r

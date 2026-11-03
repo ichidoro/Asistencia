@@ -71,20 +71,24 @@
 
     // 1 · Aviso breve
     let pila = null;
-    function avisoBreve(texto, tipo, duracion) {
-        const t = enPalabras(texto);
-        if (!t) return;
+    function asegurarPila() {
         if (!pila || !document.body.contains(pila)) {
             pila = document.createElement('div');
             pila.className = 'av-pila';
             pila.setAttribute('aria-live', 'polite');
             document.body.appendChild(pila);
         }
+        return pila;
+    }
+    function avisoBreve(texto, tipo, duracion) {
+        const t = enPalabras(texto);
+        if (!t) return;
+        asegurarPila();
         const el = document.createElement('div');
-        el.className = 'av-toast' + (tipo === 'info' ? ' inf' : '');
+        el.className = 'av-toast' + (tipo === 'info' || tipo === 'deshecho' ? ' inf' : '');
         el.setAttribute('role', 'status');
         const ms = duracion || (t.length > 90 ? 6000 : 4000);
-        el.innerHTML = '<span class="av-t-ic">' + svg(tipo === 'info' ? 'info' : 'check') + '</span><span class="av-t-tx">' + rico(t) +
+        el.innerHTML = '<span class="av-t-ic">' + svg(tipo === 'info' ? 'info' : tipo === 'deshecho' ? 'revertir' : 'check') + '</span><span class="av-t-tx">' + rico(t) +
             '</span><button type="button" class="av-t-x" aria-label="Cerrar aviso">' + svg('x') + '</button><span class="av-t-barra" style="animation-duration:' + ms + 'ms"></span>';
         const cerrar = () => {
             if (el.classList.contains('sale')) return;
@@ -93,6 +97,55 @@
         };
         el.querySelector('.av-t-x').addEventListener('click', cerrar);
         el.querySelector('.av-t-barra').addEventListener('animationend', cerrar);
+        pila.appendChild(el);
+        while (pila.children.length > 3) pila.firstElementChild.remove();
+    }
+
+    // 1 bis · «Listo» con Deshacer (Portería, diseño A aprobado el 03-11-2026). permiso = { tipo, id, segundos } que devuelve
+    // el servidor al registrar. El botón vale lo que dura la barra, que no se detiene con el puntero porque es el plazo del
+    // servidor. Si se aprieta, el servidor anula el registro (queda en el registro de cambios) y el aviso lo confirma; si
+    // ya no se puede, dice por qué. Después avisa con el evento «registro-deshecho» para que las pantallas se pongan al día.
+    function avisoConDeshacer(texto, permiso, opts = {}) {
+        const t = enPalabras(texto);
+        if (!t) return;
+        const seg = Number(permiso && permiso.segundos);
+        if (!permiso || !permiso.id || !(seg > 0)) { avisoBreve(t, 'listo'); return; }
+        asegurarPila();
+        const el = document.createElement('div');
+        el.className = 'av-toast con-des';
+        el.setAttribute('role', 'status');
+        el.innerHTML = '<span class="av-t-ic">' + svg('check') + '</span><span class="av-t-tx">' + rico(t) + '</span>'
+            + '<button type="button" class="av-t-des">Deshacer</button>'
+            + '<button type="button" class="av-t-x" aria-label="Cerrar aviso">' + svg('x') + '</button>'
+            + '<span class="av-t-barra" style="animation-duration:' + (seg * 1000) + 'ms"></span>';
+        const boton = el.querySelector('.av-t-des');
+        const cerrar = () => {
+            if (el.classList.contains('sale')) return;
+            el.classList.add('sale');
+            setTimeout(() => el.remove(), 170);
+        };
+        el.querySelector('.av-t-x').addEventListener('click', cerrar);
+        el.querySelector('.av-t-barra').addEventListener('animationend', () => { if (!boton.disabled) cerrar(); });
+        boton.addEventListener('click', async () => {
+            boton.disabled = true;
+            boton.textContent = 'Deshaciendo…';
+            try {
+                const r = await fetch('/api/porteria/deshacer/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || '') },
+                    body: JSON.stringify({ tipo: permiso.tipo, id: permiso.id })
+                });
+                const d = await r.json().catch(() => ({}));
+                cerrar();
+                if (!r.ok) { avisar(d.detail || 'No se pudo deshacer.', 'error'); return; }
+                avisoBreve((d.mensaje || 'Registro anulado.') + ' Queda en el registro como anulada.', 'deshecho');
+                if (typeof opts.alDeshacer === 'function') opts.alDeshacer(d);
+                window.dispatchEvent(new CustomEvent('registro-deshecho', { detail: d }));
+            } catch (e) {
+                cerrar();
+                avisar(SIN_CONEXION, 'error');
+            }
+        });
         pila.appendChild(el);
         while (pila.children.length > 3) pila.firstElementChild.remove();
     }
@@ -278,6 +331,7 @@
         sinConexion: () => avisar(SIN_CONEXION, 'error'),
         listo: (t, d) => avisoBreve(t, 'listo', d),
         info: (t, d) => avisoBreve(t, 'info', d),
+        conDeshacer: avisoConDeshacer,
         falta: (t, opts = {}) => avisoEnVentana(t, Object.assign({ tipo: 'falta' }, opts)) || avisoVentana(t, 'falta', opts),
         error: (t, opts = {}) => avisoEnVentana(t, Object.assign({ tipo: 'error' }, opts)) || avisoVentana(t, 'error', opts),
         ventana: (t, tipo, opts) => avisoVentana(t, tipo || 'error', opts),

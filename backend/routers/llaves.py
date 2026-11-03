@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from backend.core.database import get_db, Database
 from backend.core.security import SecurityContext, get_current_user, RequirePermission
+from backend.services.deshacer_porteria import permiso_deshacer, segundos_para_deshacer
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta, timezone
@@ -245,7 +246,7 @@ async def registrar_movimiento(
         raise HTTPException(400, "Esta llave ya está disponible. No hay nada que devolver.")
 
     now = _now_chile()
-    await db.execute("""
+    cur = await db.execute("""
         INSERT INTO llaves_registros (llave_id, empleado_id, tipo, fecha, hora, registrado_por_id, registrado_por_nombre, observaciones)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
@@ -254,7 +255,8 @@ async def registrar_movimiento(
         current_user.user_id, current_user.username,
         data.observaciones or ''
     ))
-    return {"ok": True, "message": f"Llave '{llave['nombre']}' - {data.tipo} registrada"}
+    return {"ok": True, "message": f"Llave '{llave['nombre']}' - {data.tipo} registrada",
+            "deshacer": permiso_deshacer("llave", getattr(cur, "lastrowid", None), await segundos_para_deshacer(db))}
 
 
 # ============================================
