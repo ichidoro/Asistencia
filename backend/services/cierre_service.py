@@ -170,10 +170,6 @@ class CierreService:
                         vl_min = round(vl_hrs * 60)
 
                 trab = round((di.get("horas_trabajadas") or 0.0) * 60) + vl_min
-                # Libreta en borrador: no descuenta de la bolsa (ni de la espera) hasta que se valida.
-                borrador = es_bolsa and bool(di.get("libreta_borrador"))
-                if borrador:
-                    trab = 0
                 ja = di.get("jornada_adicional") or {}
                 es_ja_he = (ja.get("estado") == 'HORAS_EXTRAS')
                 is_esp = di_estado in ['JORNADA_ESPECIAL', 'EXTRA', 'FERIADO Y JORNADA EXTRA', 'DÍA LIBRE Y JORNADA EXTRA'] or (not es_bolsa and float(di.get("horas_teoricas") or 0.0) == 0.0 and float(di.get("horas_trabajadas") or 0.0) > 0.0)
@@ -181,7 +177,7 @@ class CierreService:
                 if es_bolsa:
                     if not is_esp:
                         acum_bolsa += trab
-                    if di.get("minutos_espera") and not borrador:
+                    if di.get("minutos_espera"):
                         acum_espera += float(di.get("minutos_espera") or 0.0)
                 else:
                     # Compensaciones (HE usadas para cubrir una inasistencia): la grilla

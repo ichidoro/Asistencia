@@ -33,7 +33,6 @@ from backend.services.quantum_matrix_engine import (
     QuantumShiftWeekMatcher,
     HumanDecisionMerger,
     fecha_feriado_de_la_jornada,
-    libreta_en_borrador,
 )
 from asyncio import Lock
 
@@ -2718,8 +2717,6 @@ class AsistenciaService:
                 cell = matrix[eid][f_lib]
                 cell['slots_96'] = lib_info.get('slots_96')
                 cell['libreta_cerrada'] = bool(lib_info.get('cerrado'))
-                # Borrador: sus horas no cuentan para la bolsa hasta que se valide (cierre, reporte y grilla lo respetan).
-                cell['libreta_borrador'] = libreta_en_borrador(lib_info)
                 cell['libreta_obs'] = lib_info.get('observaciones')
 
         # Jornadas especiales: se adjuntan como metadato (celda dividida). El estado lo decidió el motor.

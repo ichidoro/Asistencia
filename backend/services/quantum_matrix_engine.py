@@ -1257,12 +1257,6 @@ def libreta_es_inasistencia(libreta: Optional[Dict[str, Any]]) -> bool:
     return bool(libreta) and str(libreta.get('observaciones') or '').lstrip().startswith(MARCA_INASISTENCIA_LIBRETA)
 
 
-def libreta_en_borrador(libreta: Optional[Dict[str, Any]]) -> bool:
-    """Un día de libreta guardado pero aún sin validar (cerrado = 0). Sus horas se ven en la grilla, pero NO se descuentan de la Bolsa Flexible
-    (ni de la espera) hasta que se valida: la libreta puede cambiar. Una inasistencia marcada a mano no es un borrador de horas."""
-    return bool(libreta) and not _flag(libreta.get('cerrado')) and not libreta_es_inasistencia(libreta)
-
-
 class LibretaArt25BisResolver:
     """Resolución Art. 25 bis (Libreta Digital 180h) DENTRO del motor."""
 
