@@ -2832,45 +2832,29 @@
                 </div>
             </div>
 
-            <!-- MODAL DE REGULARIZACIÓN (AUDITORÍA BLOQUEANTE) -->
-            <div id="modal-regularizacion-asistencia" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-danger text-white">
-                            <h3 class="modal-title fw-bold"><i class="bi bi-person-exclamation me-2"></i>Personas con marcas y sin turno</h3>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="display:none;"></button>
-                        </div>
-                        <div class="modal-body p-4">
-                            <div class="alert alert-danger d-flex align-items-center mb-4 border-0 shadow-sm" style="background: #fef2f2; color: #991b1b;">
-                                <i class="bi bi-exclamation-octagon-fill me-3 fs-2"></i>
-                                <div>
-                                    <h5 class="fw-bold mb-1">Falta asignar un turno</h5>
-                                    Estas personas marcaron en el reloj y no tienen <strong>turno asignado</strong> en su área. Asígneles un turno para ver la grilla de asistencia.
-                                </div>
+            <!-- Personas con marcas y sin turno («muro de integridad»): hay que asignarles un turno oficial para ver la grilla. Diseño HD 03-11-2026 -->
+            <div id="modal-regularizacion-asistencia" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="reg-titulo">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico r" aria-hidden="true"><i class="bi bi-person-gear"></i></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="reg-titulo">Hay personas con marcas y sin turno</h5>
+                                <div class="vn-sub">Para ver la grilla de su área hay que asignarles un turno oficial.</div>
                             </div>
-                            
-                            <p class="text-muted mb-3 small">Personas sin turno:</p>
-                            <div class="table-responsive rounded border shadow-sm" style="max-height: 300px;">
-                                <table class="table table-hover align-middle mb-0">
-                                    <thead class="table-light sticky-top">
-                                        <tr>
-                                            <th>Persona</th>
-                                            <th>Área</th>
-                                            <th>Marcas</th>
-                                            <th class="text-end">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="lista-regularizacion-cuerpo" class="small">
-                                        <!-- Inyectado por JS -->
-                                    </tbody>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar" style="display:none;"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="vn-tbl-caja">
+                                <table class="vn-tbl">
+                                    <thead><tr><th>Persona</th><th>Área</th><th>Marca</th><th><span class="visually-hidden">Asignar turno</span></th></tr></thead>
+                                    <tbody id="lista-regularizacion-cuerpo"></tbody>
                                 </table>
                             </div>
                         </div>
-                        <div class="modal-footer bg-light d-flex justify-content-between">
-                            <button id="btn-bypass-seguridad" class="btn btn-warning fw-bold shadow-sm" style="display:none;" onclick="bypassSecurityWall()">
-                                <i class="bi bi-unlock-fill me-2"></i>Continuar (Admin Bypass)
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="window.location.reload()"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Reintentar / Recargar</button>
+                        <div class="modal-footer">
+                            <button id="btn-bypass-seguridad" type="button" class="btn vn-ghost me-auto" style="display:none;" onclick="bypassSecurityWall()">Continuar como administrador</button>
+                            <button type="button" class="btn btn-primary" onclick="window.location.reload()"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Revisar de nuevo</button>
                         </div>
                     </div>
                 </div>
@@ -3567,79 +3551,65 @@
                 </div>
             </div>
 
-            <!-- Modal de Configuración de Viaje Largo -->
-
-            <div class="modal fade" id="modalViajeLargo" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-md modal-dialog-centered">
-                    <div class="modal-content shadow-lg border-0" style="border-radius:20px; overflow:hidden;">
-                        <div class="modal-header border-0 text-white py-3 px-4" style="background: linear-gradient(135deg, #0f172a 0%, #3b82f6 100%);">
-                            <div class="d-flex align-items-center gap-3 w-100">
-                                <div class="d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;">
-                                    <i class="bi bi-truck text-white" style="font-size:1.1rem;"></i>
-                                </div>
-                                <div>
-                                    <h6 class="modal-title fw-bold mb-0" style="font-size:1rem;">Registrar Viaje Largo</h6>
-                                    <div class="text-white-50" style="font-size:0.75rem;">Bolsa Flexible - Unificación de Anomalías</div>
-                                </div>
-                                <button aria-label="Cerrar" type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+            <!-- Registrar viaje largo (bolsa flexible): une las marcas de un viaje en uno solo. Diseño HD 03-11-2026 -->
+            <div class="modal fade" id="modalViajeLargo" tabindex="-1" aria-hidden="true" aria-labelledby="vl-titulo">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico" aria-hidden="true"><i class="bi bi-signpost-split"></i></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="vl-titulo">Registrar viaje largo</h5>
+                                <div class="vn-sub">Bolsa flexible · une las marcas de un viaje en uno solo</div>
                             </div>
+                            <button aria-label="Cerrar" type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <div class="modal-body p-4" style="background:#f8fafc;">
+                        <div class="modal-body vn-cuerpo">
                             <input type="hidden" id="vl-emp-id">
                             <input type="hidden" id="vl-fecha-ini">
                             <input type="hidden" id="vl-log-entrada-id">
 
-                            <!-- Visual Timeline -->
-                            <div class="p-3 mb-3 bg-white rounded-3 border shadow-sm">
-                                <div class="fw-bold text-dark mb-2" style="font-size:0.85rem;"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Línea de Tiempo del Viaje</div>
-                                <div class="mb-2 p-2 rounded" style="background:#eff6ff;border:1px solid #bfdbfe;">
-                                    <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <label for="vl-select-inicio" class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">SALIDA DE PLANTA (INICIO)</label>
-                                        <span class="badge bg-primary" id="vl-txt-duracion">0h</span>
-                                    </div>
-                                    <select class="form-select form-select-sm" id="vl-select-inicio" onchange="window.updateViajeLargoCandidatosRetorno()"></select>
+                            <!-- Salida y retorno a planta, unidos por la ruta -->
+                            <div class="vn-viaje">
+                                <div class="vn-pto">
+                                    <span class="vn-ico" aria-hidden="true"><i class="bi bi-box-arrow-right"></i></span>
+                                    <label for="vl-select-inicio"><b>Salida de planta</b>inicio</label>
+                                    <select class="form-select" id="vl-select-inicio" onchange="window.updateViajeLargoCandidatosRetorno()"></select>
                                 </div>
-                                <div class="my-2 text-center text-muted" style="font-size:0.8rem;"><i class="bi bi-arrow-down-short"></i></div>
-                                <div>
-                                    <div class="d-flex align-items-center justify-content-between mb-1">
-                                        <label for="vl-select-retorno" class="form-label fw-bold text-dark mb-0" style="font-size:0.78rem;">RETORNO A PLANTA (TÉRMINO)</label>
-                                    </div>
+                                <div class="vn-ruta" aria-hidden="true"><span class="vn-linea"></span><span class="vn-dur" id="vl-txt-duracion">0 h</span></div>
+                                <div class="vn-pto">
+                                    <span class="vn-ico a" aria-hidden="true"><i class="bi bi-box-arrow-in-left"></i></span>
+                                    <label for="vl-select-retorno"><b>Retorno a planta</b>término</label>
                                     <div id="vl-container-select-retorno">
-                                        <select class="form-select form-select-sm" id="vl-select-retorno" onchange="window.updateViajeLargoCalculos()"></select>
-                                    </div>
-                                    
-                                    <!-- Toggle para Registro Manual de Retorno si el chofer olvidó marcar -->
-                                    <div class="form-check form-switch mt-2">
-                                        <input class="form-check-input" type="checkbox" id="vl-check-retorno-manual" onchange="window.toggleViajeLargoRetornoManual()">
-                                        <label class="form-check-label fw-semibold text-primary" for="vl-check-retorno-manual" style="font-size:0.78rem; cursor:pointer;">
-                                            <i class="bi bi-pencil-square me-1"></i> El chofer olvidó marcar retorno (Ingreso Manual)
-                                        </label>
-                                    </div>
-                                    <div id="vl-box-retorno-manual" class="mt-2 p-2 rounded bg-light border shadow-xs" style="display:none;">
-                                        <div class="row g-2">
-                                            <div class="col-6">
-                                                <label for="vl-manual-retorno-fecha" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;"><i class="bi bi-calendar3" aria-hidden="true"></i> Fecha Retorno <span class="text-danger">*</span></label>
-                                                <input type="date" class="form-control form-control-sm" id="vl-manual-retorno-fecha" onchange="window.updateViajeLargoCalculos()">
-                                            </div>
-                                            <div class="col-6">
-                                                <label for="vl-manual-retorno-hora" class="form-label text-dark fw-bold mb-1" style="font-size:0.75rem;"><i class="bi bi-alarm" aria-hidden="true"></i> Hora Retorno <span class="text-danger">*</span></label>
-                                                <input type="time" step="1" class="form-control form-control-sm" id="vl-manual-retorno-hora" onchange="window.updateViajeLargoCalculos()">
-                                            </div>
-                                        </div>
-                                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Se creará automáticamente la marcación de salida y se unirá al viaje.</small>
+                                        <select class="form-select" id="vl-select-retorno" onchange="window.updateViajeLargoCalculos()"></select>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Route Form -->
-                            <div class="row g-2 mb-2">
-                                <div class="col-6">
-                                    <label for="vl-ciudad-origen" class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Ciudad Origen</label>
-                                    <input type="text" class="form-control form-control-sm bg-light" id="vl-ciudad-origen" value="San Fernando (Planta Aguacol)" readonly>
+                            <div class="form-check vn-check">
+                                <input class="form-check-input" type="checkbox" id="vl-check-retorno-manual" onchange="window.toggleViajeLargoRetornoManual()">
+                                <label class="form-check-label" for="vl-check-retorno-manual"><strong>El chofer olvidó marcar el retorno</strong><br><span>Se crea la marca que faltó y se une al viaje.</span></label>
+                            </div>
+                            <div id="vl-box-retorno-manual" style="display:none;">
+                                <div class="vn-dos">
+                                    <div class="vn-fld">
+                                        <label for="vl-manual-retorno-fecha">Fecha de retorno *</label>
+                                        <input type="date" class="form-control" id="vl-manual-retorno-fecha" onchange="window.updateViajeLargoCalculos()">
+                                    </div>
+                                    <div class="vn-fld">
+                                        <label for="vl-manual-retorno-hora">Hora de retorno *</label>
+                                        <input type="time" step="1" class="form-control" id="vl-manual-retorno-hora" onchange="window.updateViajeLargoCalculos()">
+                                    </div>
                                 </div>
-                                <div class="col-6">
-                                    <label for="vl-ciudad-destino" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-geo-alt" aria-hidden="true"></i> Ciudad Destino <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control form-control-sm" id="vl-ciudad-destino" list="vl-ciudades-chile" placeholder="Ej: La Serena, Concepción..." oninput="window.onViajeLargoDestinoChange()">
+                            </div>
+
+                            <div class="vn-dos">
+                                <div class="vn-fld">
+                                    <label for="vl-ciudad-origen">Ciudad de origen</label>
+                                    <input type="text" class="form-control" id="vl-ciudad-origen" value="San Fernando (Planta Aguacol)" readonly disabled>
+                                </div>
+                                <div class="vn-fld">
+                                    <label for="vl-ciudad-destino">Ciudad de destino *</label>
+                                    <input type="text" class="form-control" id="vl-ciudad-destino" list="vl-ciudades-chile" placeholder="Ej.: La Serena" oninput="window.onViajeLargoDestinoChange()">
                                     <datalist id="vl-ciudades-chile">
                                         <option value="Arica">Arica (~2.190 km)</option>
                                         <option value="Iquique">Iquique (~1.900 km)</option>
@@ -3680,51 +3650,40 @@
                                 </div>
                             </div>
 
-                            <!-- Banner de Referencia de Distancia y Sugerencia de Manejo/Descanso -->
-                            <div id="vl-sugerencia-ruta-card" class="p-2 mb-3 rounded border shadow-xs" style="background:#f0fdf4; border-color:#bbf7d0; display:none;">
-                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                    <div class="fw-bold text-success" style="font-size:0.76rem;" id="vl-ruta-distancia-txt">
-                                        <i class="bi bi-geo-alt-fill me-1"></i> San Fernando → La Serena: ~610 km
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-success py-0 px-2 fw-bold" style="font-size: 0.75rem; border-radius:6px;" onclick="window.aplicarSugerenciaRuta()">
-                                        <i class="bi bi-magic me-1"></i> Aplicar Sugerencia
-                                    </button>
+                            <!-- Distancia de referencia y sugerencia de manejo y descanso -->
+                            <div id="vl-sugerencia-ruta-card" class="vn-nota" style="display:none;">
+                                <div class="vn-sug-cab">
+                                    <div id="vl-ruta-distancia-txt"></div>
+                                    <button type="button" class="vn-link" onclick="window.aplicarSugerenciaRuta()">Aplicar sugerencia</button>
                                 </div>
-                                <div class="text-secondary" style="font-size: 0.75rem;" id="vl-ruta-estimado-txt">
-                                    Estimado Transporte: ~18.0h manejo / ~27.5h descanso
+                                <div id="vl-ruta-estimado-txt"></div>
+                            </div>
+
+                            <div class="vn-tres">
+                                <div class="vn-fld">
+                                    <label for="vl-hrs-manejo">Horas de manejo *</label>
+                                    <input type="number" step="0.5" class="form-control" id="vl-hrs-manejo" oninput="window.updateViajeLargoCalculos('manejo')">
+                                </div>
+                                <div class="vn-fld">
+                                    <label for="vl-hrs-descanso">Horas de descanso</label>
+                                    <input type="number" step="0.5" class="form-control" id="vl-hrs-descanso" oninput="window.updateViajeLargoCalculos('descanso')">
+                                </div>
+                                <div class="vn-fld">
+                                    <label for="vl-hrs-reconocidas">Horas a la bolsa</label>
+                                    <input type="number" step="0.5" class="form-control" id="vl-hrs-reconocidas" oninput="window.updateViajeLargoCalculos('reconocidas')">
                                 </div>
                             </div>
 
-                            <!-- Hours Form -->
-                            <div class="row g-2 mb-3">
-                                <div class="col-4">
-                                    <label for="vl-hrs-manejo" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-stopwatch" aria-hidden="true"></i> Hrs. Manejo <span class="text-danger">*</span></label>
-                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-manejo" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('manejo')">
-                                </div>
-                                <div class="col-4">
-                                    <label for="vl-hrs-descanso" class="form-label fw-semibold text-dark mb-1" style="font-size:0.75rem;"><i class="bi bi-moon-stars" aria-hidden="true"></i> Hrs. Descanso</label>
-                                    <input type="number" step="0.5" class="form-control form-control-sm" id="vl-hrs-descanso" placeholder="Ej: 34.0" oninput="window.updateViajeLargoCalculos('descanso')">
-                                </div>
-                                <div class="col-4">
-                                    <label for="vl-hrs-reconocidas" class="form-label fw-semibold text-primary mb-1" style="font-size:0.75rem;"><i class="bi bi-cash-coin" aria-hidden="true"></i> Acreditar Bolsa</label>
-                                    <input type="number" step="0.5" class="form-control form-control-sm bg-white" id="vl-hrs-reconocidas" placeholder="Ej: 20.0" oninput="window.updateViajeLargoCalculos('reconocidas')">
-                                </div>
+                            <div class="vn-fld">
+                                <label for="vl-observaciones">Observaciones</label>
+                                <textarea class="form-control" id="vl-observaciones" rows="2" placeholder="Ruta, despacho u otra nota"></textarea>
                             </div>
 
-                            <!-- Obs -->
-                            <div class="mb-3">
-                                <label for="vl-observaciones" class="form-label fw-semibold text-muted mb-1" style="font-size:0.75rem;">Observaciones / Motivo</label>
-                                <textarea class="form-control form-control-sm" id="vl-observaciones" rows="2" placeholder="Notas sobre la ruta o despacho..."></textarea>
-                            </div>
-
-                            <!-- Banner alert -->
-                            <div class="alert alert-info py-2 px-3 mb-0" style="font-size: 0.75rem;border-radius:10px;" id="vl-alert-info">
-                                <i class="bi bi-info-circle-fill me-1"></i> Se eliminarán las falsas inasistencias en ruta y se acreditarán las horas de manejo en la Bolsa Flexible.
-                            </div>
+                            <div class="vn-nota" id="vl-alert-info">Al guardar se quitan las inasistencias falsas de los días en ruta y las horas de manejo se suman a la bolsa flexible.</div>
                         </div>
-                        <div class="modal-footer border-0 p-3 bg-white">
-                            <button type="button" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-sm btn-primary px-4 fw-bold" onclick="window.submitViajeLargo()"><i class="bi bi-check-lg me-1"></i> Guardar Viaje Largo</button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="window.submitViajeLargo()">Guardar viaje</button>
                         </div>
                     </div>
                 </div>
@@ -4321,8 +4280,8 @@
         "/static/js/calendario_ui.js?v={{ startup_id }}_v17",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v18",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
-        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v28",
-        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v33",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v29",
+        "/static/js/marcaciones_ui.js?v={{ startup_id }}_v34",
         "/static/js/velocidades_ui.js?v={{ startup_id }}_v2",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v12",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}_v2",
@@ -4330,7 +4289,7 @@
         "/static/js/compensaciones_he_panel.js?v={{ startup_id }}",
         "/static/js/compensar_inasistencia.js?v={{ startup_id }}_v1",
         "/static/js/tarjeta_dia.js?v={{ startup_id }}_v2",
-        "/static/js/seguridad_ui.js?v={{ startup_id }}_v3",
+        "/static/js/seguridad_ui.js?v={{ startup_id }}_v4",
         "/static/js/libs/qrcode.min.js",
         "/static/js/porteria_panel.js?v={{ startup_id }}_v4",
         "/static/js/porteria_ui.js?v={{ startup_id }}_v8",
@@ -4454,77 +4413,68 @@
             </div>
 
             <!-- Modales de Seguridad (Fase V11) -->
-            <!-- Modal Usuario -->
-            <div class="modal fade" id="modalUsuario" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content border-0 shadow-lg">
-                        <div class="modal-header bg-primary text-white">
-                            <h5 class="modal-title fw-bold" id="modalUsuarioTitle"><i class="bi bi-person" aria-hidden="true"></i> Usuario</h5>
-                            <button aria-label="Cerrar" type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <!-- Usuario: acceso a la aplicación, su rol y las áreas que ve. Diseño HD 03-11-2026 -->
+            <div class="modal fade" id="modalUsuario" tabindex="-1" aria-hidden="true" aria-labelledby="modalUsuarioTitle">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <span class="vn-ico" aria-hidden="true"><i class="bi bi-person-gear"></i></span>
+                            <div class="vn-tit">
+                                <h5 class="modal-title" id="modalUsuarioTitle">Usuario</h5>
+                                <div class="vn-sub">Acceso a la aplicación</div>
+                            </div>
+                            <button aria-label="Cerrar" type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <div class="modal-body p-4">
-                            <form id="formUsuario">
+                        <div class="modal-body">
+                            <form id="formUsuario" class="vn-cuerpo" onsubmit="return false">
                                 <input type="hidden" id="user-id">
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label for="user-username" class="form-label fw-bold">Username (Login)</label>
-                                        <input type="text" id="user-username" class="form-control" required
-                                            placeholder="ej: jsmith">
+                                <div class="vn-dos">
+                                    <div class="vn-fld">
+                                        <label for="user-username">Usuario (para entrar)</label>
+                                        <input type="text" id="user-username" class="form-control" required autocomplete="off">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="user-nombre" class="form-label fw-bold">Nombre Completo</label>
-                                        <input type="text" id="user-nombre" class="form-control" required
-                                            placeholder="ej: Juan Smith">
+                                    <div class="vn-fld">
+                                        <label for="user-nombre">Nombre completo</label>
+                                        <input type="text" id="user-nombre" class="form-control" required>
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="user-email" class="form-label fw-bold">Email</label>
-                                        <input type="email" id="user-email" class="form-control" autocomplete="off"
-                                            placeholder="ej: juan@empresa.com">
+                                </div>
+                                <div class="vn-dos">
+                                    <div class="vn-fld">
+                                        <label for="user-email">Email</label>
+                                        <input type="email" id="user-email" class="form-control" autocomplete="off">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="user-password" class="form-label fw-bold">Password</label>
-                                        <input type="password" id="user-password" name="user-password" class="form-control"
-                                            placeholder="Dejar vacío si no desea cambiar"
-                                            autocomplete="current-password">
-                                        <small class="text-muted" id="user-pw-hint">Mínimo 8 caracteres
-                                            recomendado.</small>
+                                    <div class="vn-fld">
+                                        <label for="user-password">Contraseña</label>
+                                        <input type="password" id="user-password" name="user-password" class="form-control" autocomplete="new-password">
+                                        <div class="form-text" id="user-pw-hint"></div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="user-rol" class="form-label fw-bold">Rol Asignado</label>
-                                        <select id="user-rol" class="form-select" required>
-                                            <!-- Cargado por JS -->
-                                        </select>
+                                </div>
+                                <div class="vn-dos">
+                                    <div class="vn-fld">
+                                        <label for="user-rol">Rol</label>
+                                        <select id="user-rol" class="form-select" required></select>
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="user-activo" class="form-label fw-bold">Estado</label>
+                                    <div class="vn-fld">
+                                        <label for="user-activo">Estado</label>
                                         <select id="user-activo" class="form-select">
-                                            <option value="1">Activo (Habilitar Acceso)</option>
-                                            <option value="0">Bloqueado (Inhabilitar)</option>
+                                            <option value="1">Activo</option>
+                                            <option value="0">Bloqueado</option>
                                         </select>
                                     </div>
-                                    <div class="col-12" id="user-areas-container">
-                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                            <p class="form-label fw-bold mb-0">Áreas Permitidas (Scope RLS)</p>
-                                            <span class="small">
-                                                <a href="#" class="text-decoration-none" onclick="marcarAreasUsuario(true); return false;">Marcar todas</a>
-                                                <span class="text-muted mx-1">·</span>
-                                                <a href="#" class="text-decoration-none" onclick="marcarAreasUsuario(false); return false;">Ninguna</a>
-                                            </span>
-                                        </div>
-                                        <small id="user-areas-note" class="text-muted d-block mb-2"></small>
-                                        <div id="user-areas-chips"
-                                            class="d-flex flex-wrap gap-2 p-3 bg-light border rounded">
-                                            <!-- Cargado por JS -->
-                                        </div>
+                                </div>
+                                <div class="vn-fld" id="user-areas-container">
+                                    <div class="vn-lbl-fila">
+                                        <span class="vn-lbl" id="user-areas-lbl">Áreas permitidas</span>
+                                        <span><button type="button" class="vn-link" onclick="marcarAreasUsuario(true)">Marcar todas</button> · <button type="button" class="vn-link" onclick="marcarAreasUsuario(false)">Ninguna</button></span>
                                     </div>
+                                    <div id="user-areas-chips" class="vn-chips" role="group" aria-labelledby="user-areas-lbl"></div>
+                                    <small id="user-areas-note" class="form-text"></small>
                                 </div>
                             </form>
                         </div>
-                        <div class="modal-footer bg-light border-top">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-primary px-4" onclick="saveUsuario()">
-                                <i class="bi bi-save me-2"></i>Guardar Cambios
-                            </button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" onclick="saveUsuario()">Guardar</button>
                         </div>
                     </div>
                 </div>

@@ -3948,28 +3948,23 @@ function openRegularizacionModal(anomalias, fecha) {
     }
 
     const tbody = document.getElementById('lista-regularizacion-cuerpo');
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const nombreDe = (a) => `${a.apellido_paterno} ${a.apellido_materno || ''} ${a.nombre}`.trim().replace(/  +/g, ' ');
     // a.fecha es la fecha MÍNIMA encontrada por el backend (agrupada por empleado)
-    tbody.innerHTML = anomalias.map(a => {
-        const fullNombre = `${a.apellido_paterno} ${a.apellido_materno || ''} ${a.nombre}`.trim().replace(/  +/g, ' ');
-        return `
-        <tr>
-            <td>
-                <div class="fw-bold text-dark">${window.nombreTitulo(fullNombre)}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">RUT ${a.rut ? window.rutVista(a.rut) : 'sin registrar'}</div>
-            </td>
-            <td><span class="badge bg-light text-dark border">${a.area}</span></td>
-            <td>
-                <div class="text-info small fw-bold"><i class="bi bi-calendar-check-fill me-1"></i>Desde: ${window.formatFechaDDMMYYYY(a.fecha)}</div>
-                <div class="text-muted x-small">Sin turno asignado</div>
-            </td>
-            <td class="text-end">
-                <button class="btn btn-sm btn-primary fw-bold shadow-sm" 
-                        onclick="openAsignarTurnoForzado(${a.id}, '${a.fecha}', '${a.area}', '${fullNombre.replace(/'/g, "\\'")}', '${a.cargo || ''}')">
-                    <i class="bi bi-pencil-square me-1"></i> Asignar
-                </button>
-            </td>
-        </tr>
-    `}).join('');
+    tbody.innerHTML = anomalias.length ? anomalias.map((a, k) => '<tr>'
+        + '<td><b class="vn-nom">' + esc(window.nombreTitulo(nombreDe(a))) + '</b><span class="vn-t">RUT ' + (a.rut ? esc(window.rutVista(a.rut)) : 'sin registrar') + '</span></td>'
+        + '<td>' + esc(a.area) + '</td>'
+        + '<td class="vn-nw">Desde ' + esc(window.formatFechaDDMMYYYY(a.fecha)) + '</td>'
+        + '<td class="vn-acc"><button type="button" class="btn btn-light btn-sm" data-i="' + k + '">Asignar turno</button></td>'
+        + '</tr>').join('')
+        : '<tr><td colspan="4" class="vn-vacio">No quedan personas sin turno.</td></tr>';
+    // El botón toma la persona de la lista (sin datos dentro del onclick: un apóstrofo en el nombre no rompe nada)
+    tbody.onclick = (ev) => {
+        const b = ev.target.closest('button[data-i]');
+        if (!b) return;
+        const a = anomalias[Number(b.dataset.i)];
+        if (a) openAsignarTurnoForzado(a.id, a.fecha, a.area, nombreDe(a), a.cargo || '');
+    };
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();

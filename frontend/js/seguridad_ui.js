@@ -343,6 +343,8 @@ async function prepararModalUsuario(areasUsuario) {
 }
 
 function poblarModalUsuario(areasUsuario) {
+    // «Activo» / «Bloqueado» como fichas (la lista oculta sigue mandando)
+    if (window.chipsDesdeSelect) window.chipsDesdeSelect(document.getElementById('user-activo'));
     const selRol = document.getElementById('user-rol');
     if (selRol) {
         selRol.innerHTML = cacheSeguridad.roles.map(r =>

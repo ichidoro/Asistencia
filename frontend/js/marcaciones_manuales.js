@@ -2101,7 +2101,7 @@ async function proceedToViajeLargo(customStartId, customRetId) {
             const c = candInicio[i];
             const tagStr = c.consumida ? '(Turno Ordinario)' : '(Anomalía Libre)';
             const isSel = (effectiveStartId && effectiveStartId == c.id) ? 'selected' : (!effectiveStartId && i === 0 ? 'selected' : '');
-            htmlOptsIni += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" ${isSel}>${c.fecha_hora} — ${c.tipo} ${tagStr}</option>`;
+            htmlOptsIni += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" ${isSel}>${vlFh(c.fecha_hora)} · ${String(c.tipo || '').toUpperCase()}${c.consumida ? ' · en turno' : ''}</option>`;
         }
         selectIni.innerHTML = htmlOptsIni;
 
@@ -2134,6 +2134,12 @@ async function proceedToViajeLargo(customStartId, customRetId) {
         console.error("Error abriendo Viaje Largo:", e);
         Avisos.error("No se pudieron leer las marcas para el viaje largo. " + e.message);
     }
+}
+
+// «13-10 07:02» a partir de «2026-10-13 07:02:11» (las opciones de salida y retorno del viaje largo)
+function vlFh(fh) {
+    const m = String(fh || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    return m ? m[3] + '-' + m[2] + ' ' + m[4] + ':' + m[5] : String(fh || '');
 }
 
 window.toggleViajeLargoRetornoManual = function() {
@@ -2196,7 +2202,7 @@ window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
             const tagStr = c.tag || (c.consumida ? '(Consumida)' : '(Anomalía Libre)');
             const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : (!preselectedRetId && (c.recomendado || i === 0) ? 'selected' : '');
             const starIcon = c.recomendado ? 'Recomendada · ' : '';
-            htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${starIcon}${c.fecha_hora} — ${c.tipo} ${tagStr} (${diffHours}h transcurridas)</option>`;
+            htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${starIcon}${vlFh(c.fecha_hora)} · ${String(c.tipo || '').toUpperCase()} · ${String(diffHours).replace('.', ',')} h</option>`;
         }
     }
 
@@ -2209,7 +2215,7 @@ window.updateViajeLargoCandidatosRetorno = function(preselectedRetId) {
                 const dtRet = new Date(c.fecha_hora.replace(' ', 'T'));
                 const diffHours = Math.max(0, ((dtRet - dtIni) / (1000 * 3600))).toFixed(1);
                 const isSel = (preselectedRetId && preselectedRetId == c.id) ? 'selected' : '';
-                htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${c.fecha_hora} — ${c.tipo} (${diffHours}h transcurridas)</option>`;
+                htmlOptsRet += `<option value="${c.id}" data-fecha="${c.fecha}" data-fecha-hora="${c.fecha_hora}" data-horas="${diffHours}" ${isSel}>${vlFh(c.fecha_hora)} · ${String(c.tipo || '').toUpperCase()} · ${String(diffHours).replace('.', ',')} h</option>`;
             }
         }
     }
@@ -2246,7 +2252,7 @@ function updateViajeLargoCalculos(sourceField) {
         }
     }
 
-    document.getElementById('vl-txt-duracion').innerText = `${totalReloj.toFixed(1)}h reloj`;
+    document.getElementById('vl-txt-duracion').innerText = `${totalReloj.toFixed(1).replace('.', ',')} h de viaje`;
 
     const elManejo = document.getElementById('vl-hrs-manejo');
     const elDescanso = document.getElementById('vl-hrs-descanso');

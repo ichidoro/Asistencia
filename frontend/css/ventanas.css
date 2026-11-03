@@ -314,6 +314,7 @@
 }
 .vn-ico.a { background: #fff0e2; color: #b0500b; }
 .vn-ico.g { background: #e6f5ec; color: #167a46; }
+.vn-ico.r { background: #fde7f1; color: #c0267a; }
 .vn-ico .spinner-border { width: 18px; height: 18px; border-width: 2px; }
 .modal-header .vn-ico i { color: inherit !important; }
 
@@ -321,7 +322,8 @@
 .vn-cuerpo > * { margin-top: 0; margin-bottom: 0; }
 .vn-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .modal .vn-fld > label,
-.modal .vn-fld > .vn-lbl-fila > label {
+.modal .vn-fld > .vn-lbl-fila > label,
+.modal .vn-fld > .vn-lbl-fila > .vn-lbl {
   font: 500 13px/1.3 'Barlow', system-ui, sans-serif; color: var(--ov-ink-2);
   text-transform: none; letter-spacing: 0; margin: 0;
 }
@@ -438,4 +440,53 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .vn-opr, .vn-opr > input[type="radio"], .vn-trk > div { transition: none; }
+}
+
+/* ═══ Etapa 9 · tanda 2: muro de integridad, viaje largo y usuario (03-11-2026) ═══════════════════════════════════ */
+.vn-tres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.vn-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.vn-tbl td b.vn-nom { display: block; font-weight: 600; color: var(--ov-ink); }
+.vn-tbl td .vn-t { display: block; font-size: 12px; color: var(--ov-ink-3); }
+#modal-regularizacion-asistencia .modal-dialog { max-width: min(640px, 94vw); }
+.vn-tbl td.vn-acc .btn { white-space: nowrap; }
+@media (max-width: 560px) {
+  /* En el celular cada persona es una fila apilada: nombre, área y marca, y el botón al lado */
+  #modal-regularizacion-asistencia .vn-tbl thead { display: none; }
+  #modal-regularizacion-asistencia .vn-tbl tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--ov-line-2); }
+  #modal-regularizacion-asistencia .vn-tbl td { grid-column: 1; border: 0; padding: 0; }
+  #modal-regularizacion-asistencia .vn-tbl td:nth-child(2), #modal-regularizacion-asistencia .vn-tbl td:nth-child(3) { font-size: 12.5px; color: var(--ov-ink-2); }
+  #modal-regularizacion-asistencia .vn-tbl td.vn-acc { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+  #modal-regularizacion-asistencia .vn-tbl td.vn-acc .btn { min-height: 44px; }
+}
+
+/* Viaje largo: la salida y el retorno unidos por la ruta */
+#modalViajeLargo .modal-dialog { max-width: min(620px, 94vw); }
+.vn-viaje {
+  display: grid; grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr); gap: 10px; align-items: start;
+  padding: 12px 14px; border-radius: 12px; background: var(--ov-sunk); border: 1px solid var(--ov-line-2);
+}
+.vn-pto { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.vn-pto .vn-ico { width: 32px; height: 32px; border-radius: 10px; font-size: 15px; }
+.vn-pto label { margin: 0; font-size: 11.5px; color: var(--ov-ink-3); line-height: 1.3; }
+.vn-pto label b { display: block; font-size: 12.5px; font-weight: 600; color: var(--ov-ink); }
+.vn-pto .form-select { margin-top: 4px; width: 100%; min-height: 34px; font-size: 12.5px; text-align: left; }
+.vn-pto > div { width: 100%; }
+.vn-ruta { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 12px; }
+.vn-ruta .vn-linea { width: 100%; height: 3px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--vn-navy) 0 10px, transparent 10px 16px); }
+.vn-ruta .vn-dur { font: 600 12px/1.2 'Barlow', system-ui, sans-serif; color: var(--vn-navy); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#vl-sugerencia-ruta-card { font-size: 12.5px; line-height: 1.5; color: var(--ov-ink-2); }
+#vl-sugerencia-ruta-card i { color: var(--vn-navy); }
+#vl-sugerencia-ruta-card strong { font-weight: 600; color: var(--ov-ink); }
+.vn-sug-cab { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+
+/* Usuario: áreas como fichas del diseño (sin el ✓, marcada = azul) */
+#modalUsuario .area-pill-box { min-height: 34px; padding: 0 14px !important; border-radius: 17px !important; font: 500 13px/1.2 'Barlow', system-ui, sans-serif; gap: 0 !important; box-shadow: none !important; }
+#modalUsuario .area-pill-tick { display: none !important; }
+
+@media (max-width: 560px) {
+  .vn-dos, .vn-tres { grid-template-columns: 1fr; }
+  .vn-viaje { grid-template-columns: 1fr; }
+  .vn-ruta { flex-direction: row; padding-top: 0; }
+  .vn-ruta .vn-linea { flex: 1; }
+  #modalUsuario .area-pill-box { min-height: 44px; }
 }
