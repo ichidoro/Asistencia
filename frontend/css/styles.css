@@ -3289,6 +3289,12 @@ tr:hover .emp-name-cell {
     border: none;
 }
 
+.badge-borrador-libreta {
+    background: #3730a3;
+    color: #ffffff;
+    border: none;
+}
+
 .color-rojo,
 .badge-state-danger {
     background: linear-gradient(135deg, var(--ui-danger), var(--ui-danger-strong));

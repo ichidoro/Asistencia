@@ -7689,7 +7689,7 @@ function _analiticaCellBadge(di) {
 
     // Inyectar mappings virtuales para los dos tipos de inasistencia compensada y borrador libreta
     badgeMap['BORRADOR_180H'] = [
-        'badge-state-warning', 
+        'badge-borrador-libreta', 
         '<i class="bi bi-pencil-square me-1"></i>BOR'
     ];
     badgeMap['INASISTENCIA_COMPENSADA_INTERCAMBIO'] = [

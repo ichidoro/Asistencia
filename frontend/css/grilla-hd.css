@@ -45,6 +45,8 @@
 .badge-status.badge-compensatorio,
 .badge-status.badge-inasistencia-compensada-he { --st-bg: #e2f4f5; --st-fg: #0f7c86; }
 .badge-status.bg-dark              { --st-bg: #2a3150; --st-fg: #ffffff; }
+/* Borrador de libreta (BOR): el índigo de "Tareas auxiliares" de la libreta, con letras blancas */
+.badge-status.badge-borrador-libreta { --st-bg: #3730a3; --st-fg: #ffffff; }
 
 /* La pastilla (grilla y leyenda) */
 body:not(.estados-chip) #marcaciones-view-container .matrix-table-premium td.col-day .badge-status,
