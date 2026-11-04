@@ -8174,12 +8174,26 @@ if (!window._gridPinCapBound) {
     window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(() => window._gridApplyPinCap(), 150); });
 }
 
+// Contraer o expandir un grupo de columnas (o cambiar de pestaña) vuelve a dibujar la grilla: los días se deslizan desde
+// donde estaban hasta su nuevo lugar y las columnas de resumen entran con un corrimiento corto (solo transform y opacity).
+// Se llama ANTES de dibujar; la animación se arma al terminar la función que dibuja (microtarea).
 window.mxCambioColumnas = function () {
     const c = document.getElementById('marcaciones-view-container');
-    if (!c) return;
-    c.classList.add('mx-col-cambia');
-    clearTimeout(window._mxColT);
-    window._mxColT = setTimeout(() => c.classList.remove('mx-col-cambia'), 320);
+    if (!c || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const pos = () => {
+        const th = c.querySelector('.matrix-table-premium thead th.col-day'), t = c.querySelector('.matrix-table-premium');
+        return th && t ? th.getBoundingClientRect().left - t.getBoundingClientRect().left : null;
+    };
+    const antes = pos();
+    queueMicrotask(() => {
+        const despues = pos(), dx = (antes !== null && despues !== null) ? antes - despues : 0;
+        const opt = { duration: 300, easing: 'cubic-bezier(.23, 1, .32, 1)' };
+        if (Math.abs(dx) > 1 && Math.abs(dx) < 700) {
+            c.querySelectorAll('.matrix-table-premium .col-day').forEach(el => el.animate([{ transform: 'translateX(' + dx + 'px)' }, { transform: 'none' }], opt));
+        }
+        c.querySelectorAll('.matrix-table-premium .sticky-premium-col').forEach(el => el.animate(
+            [{ opacity: 0, transform: 'translateX(' + (dx > 0 ? -10 : 10) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: opt.easing }));
+    });
 };
 window.vaToggleBonos = function() {
     window.mxCambioColumnas();

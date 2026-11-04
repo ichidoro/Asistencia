@@ -35,13 +35,11 @@
 
 /* ── Plegables ────────────────────────────────────────────────────────────
    Bootstrap (collapse/accordion) con la curva fuerte; bloques por horario y flecha (el movimiento de las filas
-   lo hace marcaciones_ui.js); columnas de resumen: la tabla nueva llega con un fundido corto. */
+   lo hace marcaciones_ui.js); las columnas de resumen se animan desde marcaciones_ui.js (mxCambioColumnas). */
 .collapsing { transition: height 260ms var(--fl-out) !important; }
 .gh-plegar i { transition: transform 260ms var(--fl-out); }
 .gh-plegar { transition: background-color 150ms ease, transform 160ms var(--fl-out); }
 .gh-plegar:active { transform: scale(.92); }
-.mx-col-cambia .matrix-table-premium thead th.sticky-premium-col,
-.mx-col-cambia .matrix-table-premium tbody td.sticky-premium-col { animation: fl-fundido 240ms var(--fl-out) backwards; }
 
 /* ── Menú lateral: se abre al acercar el mouse (sin botón) ─────────────────
    - Cerrado: 72 px, solo íconos. Abierto: 252 px ENCIMA del contenido (el contenido no se mueve).
@@ -112,11 +110,14 @@
   /* pie: el punto de estado queda fijo; el texto aparece */
   body[data-sidebar="fluido"] .sidebar-footer { padding: 14px 0 16px; overflow: hidden; }
   body[data-sidebar="fluido"] .sidebar-footer .status { padding-left: 31px; white-space: nowrap; }
+  body[data-sidebar="fluido"] .sidebar-footer .status-dot { flex: none; }
   body[data-sidebar="fluido"] .sidebar-footer .status > span:not(.status-dot) { opacity: 0; transition: opacity 120ms ease 150ms; }
   body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) .sidebar-footer .status > span:not(.status-dot) {
     opacity: 1; transition: opacity 200ms ease 120ms;
   }
-  /* relojes de marcación: cerrado, solo sus puntos (como en el riel) */
+  /* relojes de marcación: abiertos llevan el mismo margen lateral del menú; cerrados, solo sus puntos (como en el riel) */
+  body[data-sidebar="fluido"] .sidebar-footer .relojes { padding: 0 20px; }
+  body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) .relojes { padding: 0; }
   body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) .relojes:not([hidden]) { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
   body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) :is(.relojes-titulo, .relojes-nota, .reloj > span:not(.rd)) { display: none; }
   body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) .reloj,
@@ -125,8 +126,7 @@
 
 /* ── Menos movimiento: todo queda fijo y los cambios son instantáneos ───── */
 @media (prefers-reduced-motion: reduce) {
-  .page.active, .page.active .mx-page-head, .marcaciones-filter-bar, .marcaciones-filter-bar .row > [class*="col-"], .mx-entra,
-  .mx-col-cambia .matrix-table-premium thead th.sticky-premium-col, .mx-col-cambia .matrix-table-premium tbody td.sticky-premium-col { animation: none !important; }
+  .page.active, .page.active .mx-page-head, .marcaciones-filter-bar, .marcaciones-filter-bar .row > [class*="col-"], .mx-entra { animation: none !important; }
   .collapsing, .gh-plegar, .gh-plegar i { transition: none !important; }
   body[data-sidebar="fluido"] .sidebar, body[data-sidebar="fluido"] .sidebar *,
   body[data-sidebar="fluido"] .logo-container::before { transition: none !important; }
