@@ -207,10 +207,6 @@
 .matrix-table-premium tbody td.sticky-premium-col,
 .matrix-table-premium tbody td.sticky-col-analitica { isolation: isolate; background-clip: padding-box; }
 
-/* ── Bolsa flexible: grupos siempre abiertos ─────────────────────────────── */
-/* Bolsa 180h y Espera 88h no se contraen: se quita su botón de contraer. */
-.matrix-table-premium.gc-bolsa thead button[onclick*="showSaldoMeta"] { display: none; }
-
 /* Las pastillas responden al puntero sin mover el diseño */
 .matrix-table-premium.gc-bolsa td.col-day .badge-status { transition: transform .16s cubic-bezier(.22, 1, .36, 1); }
 .matrix-table-premium.gc-bolsa td.col-day:hover .badge-status { transform: translateY(-1px) scale(1.05); }

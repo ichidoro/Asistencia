@@ -6167,7 +6167,7 @@ window.getGridShow = function(f, hasBonos) {
         hasDeudas: !esBolsa,      // "Tiempo no trabajado": no aplica a bolsa
         hasSaldo: !esBolsa,       // "Saldo neto": no aplica a bolsa (su balance está en 180h / 88h)
         hayBolsa: esBolsa,        // grupos Bolsa (180h) y Espera (88h)
-        showSaldoMeta: esBolsa,   // Bolsa (180h) y Espera (88h) van siempre abiertas en bolsa flexible: contraídas dejaban ver los días por detrás
+        showSaldoMeta: esBolsa && (s.showSaldoMeta ?? true) === true,
         heFull: !esBolsa,         // HE: ciclo = Pend/Apr/Rech/Tot; bolsa = solo aprobadas (exceso sobre la meta)
         nInc: esBolsa ? 4 : 6     // bolsa: sin ATR ni S.ADL
     };
@@ -8132,6 +8132,8 @@ window._gridApplyPinCap = function() {
     const wrap = table.parentElement;
     table.classList.remove('gc-unpinned');
     if (window._stickyUnpinned) return;
+    // Bolsa flexible: los resúmenes nunca se fijan sobre los días (contraídos dejaban verlos por detrás); se deslizan con ellos.
+    if (table.classList.contains('gc-bolsa')) { table.classList.add('gc-unpinned'); return; }
     const visible = wrap.clientWidth;
     const nameTh = table.querySelector('thead th.sticky-col-analitica');
     let pinned = nameTh ? nameTh.getBoundingClientRect().width : 0;
