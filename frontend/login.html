@@ -26,10 +26,12 @@
 
     <section class="ac-marca" aria-label="Aguacol">
         <i class="ac-ola o1" aria-hidden="true"></i><i class="ac-ola o2" aria-hidden="true"></i><i class="ac-ola o3" aria-hidden="true"></i><i class="ac-ola o4" aria-hidden="true"></i>
-        <img class="ac-logo" src="/static/assets/img/logo-aguacol.png" width="300" height="83" alt="Aguacol, calidad y servicio">
-        <h2>Control de asistencia</h2>
-        <p>Marcaciones, turnos, horas extra, cierres de tramo y portería de Aguacol en un solo lugar.</p>
-        <div class="ac-pie">Aguacol<i></i>calidad y servicio</div>
+        <div class="ac-marca-in">
+            <img class="ac-logo" src="/static/assets/img/logo-aguacol.png" width="300" height="83" alt="Aguacol, calidad y servicio">
+            <h2>Control de asistencia</h2>
+            <p>Marcaciones, turnos, horas extra, cierres de tramo y portería de Aguacol en un solo lugar.</p>
+            <div class="ac-pie">Aguacol<i></i>calidad y servicio</div>
+        </div>
     </section>
 
     <main class="ac-lado" role="main">
@@ -54,6 +56,7 @@
         </form>
     </main>
 
+    <script src="/static/js/acceso_olas.js?v={{ startup_id }}" defer></script>
     <!-- Script de Login -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -67,6 +70,13 @@
             const btnText = loginBtn.querySelector('.btn-text');
             const spinner = loginBtn.querySelector('.loading-spinner');
             const errorMessage = document.getElementById('errorMessage');
+            // Un error nuevo sacude apenas los campos (también cuando es el mismo texto de antes) y el cursor parte en el usuario
+            new MutationObserver(() => {
+                if (!errorMessage.textContent || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                loginForm.querySelectorAll('.ac-fld').forEach(f => f.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-7px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(0)' }],
+                    { duration: 320, easing: 'cubic-bezier(.23, 1, .32, 1)' }));
+            }).observe(errorMessage, { childList: true, characterData: true, subtree: true });
+            if (matchMedia('(hover: hover)').matches) document.getElementById('username').focus({ preventScroll: true });
             const verClave = document.getElementById('verClave');
             const clave = document.getElementById('password');
             verClave.addEventListener('click', () => {

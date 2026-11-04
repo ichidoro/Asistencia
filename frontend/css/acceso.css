@@ -1,132 +1,164 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Pantalla de entrada (login.html) — diseño HD del orden visual común.
-   A la izquierda la marca (logo real y ondas del agua); a la derecha los
-   mismos dos campos y el botón de siempre. En el celular la marca va arriba
-   y el formulario abajo, al alcance del pulgar. Solo presentación.
+   Pantalla de entrada (login.html) — agua animada de fondo y tarjeta de vidrio (04-11-2026).
+   - El fondo es un canvas de olas que sigue al mouse (js/acceso_olas.js); la marca va a la izquierda y el formulario
+     en una tarjeta de vidrio (desenfoque + borde de luz) a la derecha, que deja ver el agua moverse por detrás.
+   - En el celular la marca va arriba y la tarjeta abajo, al alcance del pulgar.
+   - Sin JS o con «menos movimiento» el fondo queda quieto (anillos fijos / una sola imagen). Solo presentación.
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --ac-ink: #101a3d;
-  --ac-ink-2: #3c4767;
-  --ac-ink-3: #69738f;
-  --ac-ink-4: #9ca4ba;
-  --ac-line: #e6e9f1;
-  --ac-line-strong: #d9dde8;
-  --ac-sunk: #f9fafc;
-  --ac-navy: #1b2f8f;
-  --ac-navy-hover: #22389e;
-  --ac-pink: #c0267a;
+  --ac-ink-2: rgba(255, 255, 255, .86);
+  --ac-ink-3: rgba(222, 229, 255, .72);
+  --ac-ink-4: rgba(222, 229, 255, .5);
+  --ac-leaf: #86cc4b;
+  --ac-leaf-hover: #98d85f;
+  --ac-night: #0b1442;
+  --ac-out: cubic-bezier(.23, 1, .32, 1);
 }
 html, body { margin: 0; min-height: 100%; }
 body.ac {
+  position: relative;
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  background: #fff;
-  color: var(--ac-ink);
+  background: radial-gradient(1100px 760px at 28% 42%, #22399c 0%, #15246a 52%, #0b1442 100%) fixed;
+  color: #fff;
   font-family: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow-x: hidden;
 }
+.ac-olas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 
 /* Marca */
-.ac-marca {
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(900px 640px at 30% 45%, #22399c 0%, #15246a 50%, #0b1442 100%);
-  color: #fff;
-  padding: 56px 64px;
-  display: flex;
-  flex-direction: column;
-}
-.ac-ola {
-  position: absolute;
-  left: 34%; top: 58%;
-  border-radius: 50%;
-  border: 1.5px solid rgba(122, 196, 72, .16);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+.ac-marca { position: relative; z-index: 1; padding: 56px 64px; display: flex; flex-direction: column; }
+.ac-marca-in { display: flex; flex-direction: column; flex: 1; will-change: transform; }
+.ac-ola {   /* anillos fijos: solo si no carga el canvas */
+  position: absolute; left: 34%; top: 58%; border-radius: 50%;
+  border: 1.5px solid rgba(122, 196, 72, .16); transform: translate(-50%, -50%); pointer-events: none;
 }
 .ac-ola.o1 { width: 300px; height: 300px; }
 .ac-ola.o2 { width: 520px; height: 520px; }
 .ac-ola.o3 { width: 760px; height: 760px; }
 .ac-ola.o4 { width: 1020px; height: 1020px; }
-.ac-logo { position: relative; width: 300px; max-width: 100%; height: auto; border-radius: 14px; }
+.ac-con-olas .ac-ola { display: none; }
+.ac-logo { position: relative; width: 300px; max-width: 100%; height: auto; border-radius: 14px; align-self: flex-start; }
 .ac-marca h2 {
-  position: relative;
-  margin: auto 0 14px;
-  font: 600 46px/1.05 'Barlow Semi Condensed', 'Barlow', sans-serif;
-  letter-spacing: -.01em;
-  text-wrap: balance;
+  position: relative; margin: auto 0 14px;
+  font: 600 46px/1.05 'Barlow Semi Condensed', 'Barlow', sans-serif; letter-spacing: -.01em; text-wrap: balance;
 }
-.ac-marca p { position: relative; margin: 0; max-width: 440px; color: rgba(222, 229, 255, .78); font-size: 16.5px; line-height: 1.55; }
-.ac-pie { position: relative; margin-top: 44px; display: flex; gap: 10px; align-items: center; color: rgba(222, 229, 255, .5); font-size: 13px; }
+.ac-marca p { position: relative; margin: 0; max-width: 440px; color: rgba(222, 229, 255, .8); font-size: 16.5px; line-height: 1.55; }
+.ac-pie { position: relative; margin-top: 44px; display: flex; gap: 10px; align-items: center; color: var(--ac-ink-4); font-size: 13px; }
 .ac-pie i { width: 4px; height: 4px; border-radius: 50%; background: rgba(222, 229, 255, .4); }
 
-/* Formulario */
-.ac-lado { display: grid; place-items: center; padding: 40px 24px; background: #fff; }
-.ac-form { width: min(380px, 100%); display: flex; flex-direction: column; gap: 18px; }
-.ac-form h1 { margin: 0; font: 600 32px/1.1 'Barlow Semi Condensed', 'Barlow', sans-serif; color: var(--ac-ink); }
+/* Tarjeta de vidrio */
+.ac-lado { position: relative; z-index: 1; display: grid; place-items: center; padding: 40px 24px; }
+.ac-form {
+  --gx: 50%; --gy: 0px;
+  position: relative; isolation: isolate;
+  width: min(420px, 100%);
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 38px 36px 30px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, .10);
+  -webkit-backdrop-filter: blur(26px) saturate(1.5);
+  backdrop-filter: blur(26px) saturate(1.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .20), inset 0 1px 0 rgba(255, 255, 255, .34), 0 36px 80px -24px rgba(3, 8, 34, .7);
+  will-change: transform;
+}
+/* reflejo que sigue al puntero (la posición la pone acceso_olas.js) */
+.ac-form::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(260px circle at var(--gx) var(--gy), rgba(255, 255, 255, .16), transparent 70%);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ac-form { background: rgba(21, 36, 106, .92); }
+}
+.ac-form h1 { margin: 0; font: 600 32px/1.1 'Barlow Semi Condensed', 'Barlow', sans-serif; color: #fff; }
 .ac-sub { margin: -8px 0 6px; color: var(--ac-ink-3); font-size: 14px; }
 .ac-fld { display: flex; flex-direction: column; gap: 7px; }
-.ac-fld label { font-size: 13px; font-weight: 600; color: var(--ac-ink-2); }
+.ac-fld label { font-size: 13px; font-weight: 600; color: var(--ac-ink-2); transition: color .18s; }
+.ac-fld:focus-within label { color: #fff; }
 .ac-inp {
   display: flex; align-items: center; gap: 10px;
-  height: 50px;
-  padding: 0 6px 0 14px;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px var(--ac-line-strong);
-  transition: box-shadow .15s;
+  height: 52px; padding: 0 6px 0 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .09);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+  transition: box-shadow .18s var(--ac-out), background-color .18s;
 }
-.ac-inp:focus-within { box-shadow: inset 0 0 0 1.5px var(--ac-navy), 0 0 0 4px rgba(27, 47, 143, .12); }
-.ac-inp svg { width: 18px; height: 18px; flex: none; color: var(--ac-ink-4); }
-.ac-inp:focus-within > svg { color: var(--ac-navy); }
+.ac-inp:hover { background: rgba(255, 255, 255, .12); }
+.ac-inp:focus-within { background: rgba(255, 255, 255, .15); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .8), 0 0 0 4px rgba(134, 204, 75, .30); }
+.ac-inp svg { width: 18px; height: 18px; flex: none; color: var(--ac-ink-4); transition: color .18s; }
+.ac-inp:focus-within > svg { color: var(--ac-leaf); }
 .ac-inp input {
-  flex: 1; min-width: 0; height: 100%;
-  border: 0; outline: 0; background: transparent;
-  font: 400 16px 'Barlow', system-ui, sans-serif; color: var(--ac-ink);
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent;
+  font: 400 16px 'Barlow', system-ui, sans-serif; color: #fff; caret-color: var(--ac-leaf);
 }
 .ac-inp input::placeholder { color: var(--ac-ink-4); }
-.ac-ver {
-  width: 40px; height: 40px; border: 0; border-radius: 10px;
-  display: grid; place-items: center;
-  background: transparent; color: var(--ac-ink-3); cursor: pointer;
+/* el autocompletado del navegador pinta de blanco/amarillo: se mantiene el vidrio */
+.ac-inp input:-webkit-autofill, .ac-inp input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff; caret-color: #fff;
+  transition: background-color 9999s ease-out 0s;
+  box-shadow: 0 0 0 1000px rgba(32, 52, 140, .55) inset;
 }
-.ac-ver:hover { background: var(--ac-sunk); color: var(--ac-ink); }
-.ac-ver:focus-visible { outline: 2px solid var(--ac-navy); outline-offset: 1px; }
+.ac-ver {
+  width: 40px; height: 40px; border: 0; border-radius: 10px; display: grid; place-items: center;
+  background: transparent; color: var(--ac-ink-3); cursor: pointer; transition: background-color .15s, color .15s, transform .16s var(--ac-out);
+}
+.ac-ver:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.ac-ver:active { transform: scale(.92); }
+.ac-ver:focus-visible { outline: 2px solid var(--ac-leaf); outline-offset: 1px; }
 .ac-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  height: 52px; margin-top: 4px;
-  border: 0; border-radius: 12px;
-  background: var(--ac-navy); color: #fff;
-  font: 600 16px 'Barlow', system-ui, sans-serif;
-  cursor: pointer;
-  transition: background-color .15s, transform .1s;
+  height: 54px; margin-top: 6px; border: 0; border-radius: 14px;
+  background: var(--ac-leaf); color: var(--ac-night);
+  font: 700 16px 'Barlow', system-ui, sans-serif; cursor: pointer;
+  box-shadow: 0 10px 26px -10px rgba(134, 204, 75, .65);
+  transition: background-color .15s, transform .16s var(--ac-out), box-shadow .2s var(--ac-out);
 }
-.ac-btn:hover { background: var(--ac-navy-hover); }
-.ac-btn:active { transform: scale(.99); }
-.ac-btn:focus-visible { outline: 3px solid rgba(27, 47, 143, .35); outline-offset: 2px; }
-.ac-btn[disabled] { opacity: .75; cursor: progress; }
+@media (hover: hover) and (pointer: fine) {
+  .ac-btn:hover { background: var(--ac-leaf-hover); transform: translateY(-1px); box-shadow: 0 14px 30px -10px rgba(134, 204, 75, .8); }
+}
+.ac-btn:active { transform: scale(.97); }
+.ac-btn:focus-visible { outline: 3px solid rgba(255, 255, 255, .85); outline-offset: 3px; }
+.ac-btn[disabled] { opacity: .78; cursor: progress; transform: none; }
 .ac-btn svg { width: 18px; height: 18px; }
 .ac-btn .loading-spinner { display: none; width: 16px; height: 16px; border-width: 2px; }
-.ac-error { min-height: 20px; color: var(--ac-pink); font-size: 14px; font-weight: 500; }
+.ac-error { min-height: 20px; color: #ffb4d6; font-size: 14px; font-weight: 500; }
 .ac-error:empty { min-height: 0; }
-.ac-legal { color: var(--ac-ink-4); font-size: 12.5px; margin-top: 6px; }
+.ac-legal { color: var(--ac-ink-4); font-size: 12.5px; margin-top: 2px; }
 
-/* Celular: la marca arriba, el formulario abajo */
+/* Entrada: la marca y la tarjeta llegan en cascada corta (solo transform y opacity) */
+@keyframes ac-sube { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes ac-entra { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
+.ac-marca-in > * { animation: ac-sube .6s var(--ac-out) backwards; }
+.ac-marca-in > :nth-child(2) { animation-delay: .08s; }
+.ac-marca-in > :nth-child(3) { animation-delay: .14s; }
+.ac-marca-in > :nth-child(4) { animation-delay: .2s; }
+.ac-form > * { animation: ac-sube .55s var(--ac-out) backwards; }
+.ac-form > :nth-child(1) { animation-delay: .22s; }
+.ac-form > :nth-child(2) { animation-delay: .27s; }
+.ac-form > :nth-child(3) { animation-delay: .32s; }
+.ac-form > :nth-child(4) { animation-delay: .37s; }
+.ac-form > :nth-child(5) { animation-delay: .42s; }
+.ac-lado { animation: ac-entra .7s var(--ac-out) .1s backwards; }
+
+/* Celular: la marca arriba, la tarjeta abajo */
 @media (max-width: 820px) {
   body.ac { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .ac-marca {
-    padding: 46px 24px 34px;
-    border-radius: 0 0 28px 28px;
-    gap: 18px;
-  }
+  .ac-marca { padding: 40px 24px 12px; }
+  .ac-marca-in { gap: 14px; }
   .ac-ola { left: 30%; top: 60%; }
   .ac-ola.o3, .ac-ola.o4 { display: none; }
   .ac-logo { width: 190px; border-radius: 10px; }
   .ac-marca h2 { margin: 0; font-size: 28px; }
   .ac-marca p, .ac-pie { display: none; }
-  .ac-lado { place-items: start center; padding: 26px 22px calc(26px + env(safe-area-inset-bottom, 0px)); }
+  .ac-lado { place-items: start center; padding: 14px 18px calc(26px + env(safe-area-inset-bottom, 0px)); }
+  .ac-form { padding: 28px 22px 22px; border-radius: 22px; -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4); }
   .ac-form h1 { font-size: 24px; }
   .ac-sub { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .ac-inp, .ac-btn { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ac-marca-in > *, .ac-lado, .ac-form > * { animation: none; }
+  .ac-inp, .ac-btn, .ac-ver, .ac-fld label { transition: none; }
+  .ac-marca-in, .ac-form { will-change: auto; }
+}
