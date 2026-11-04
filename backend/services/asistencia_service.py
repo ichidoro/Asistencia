@@ -523,10 +523,13 @@ class AsistenciaService:
         areas: Optional[List[str]] = None,
         force: bool = False,
         empleado_ids: Optional[set] = None,
-    ):
+        omitir_ids: Optional[set] = None,
+    ) -> int:
+        """Calcula y guarda el día de las personas que corresponden; devuelve cuántas calculó.
+        omitir_ids: personas que no se calculan (el arranque pasa a quienes ya tienen el día calculado)."""
         bulk_ctx = await self.get_bulk_context(fecha, area, empleado_ids=empleado_ids)
         if not bulk_ctx:
-            return
+            return 0
         from backend.services.calendario_service import CalendarioService
         cal = CalendarioService()
         dt = datetime.strptime(fecha, "%Y-%m-%d")
@@ -544,6 +547,8 @@ class AsistenciaService:
         # recálculo del arranque cambió un día de un área ya cerrada y la política del cuadre volvió a repartir sus horas extra.
         cerrados = bulk_ctx.get('closed_dates') or {}
         emp_ids = [eid for eid in emp_ids if fecha not in cerrados.get(eid, set())]
+        if omitir_ids:
+            emp_ids = [eid for eid in emp_ids if eid not in omitir_ids]
 
         results_to_save = []
         he_to_save = []
@@ -601,6 +606,7 @@ class AsistenciaService:
 
         # Los hechos cambiaron: la política del tramo de cada persona se vuelve a repartir sola
         await self._reaplicar_politicas_cuadre(emp_ids, fecha)
+        return len(emp_ids)
 
     async def _reaplicar_politicas_cuadre(self, empleado_ids, fecha: str) -> None:
         """Tras recalcular un día, reparte de nuevo las horas extra de quienes tienen política de cuadre en ese tramo."""

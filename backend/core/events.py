@@ -24,15 +24,21 @@ if TYPE_CHECKING:
 # Scheduler global
 scheduler = AsyncIOScheduler()
 
+# Estados de un día que todavía no tiene su resultado definitivo: el arranque los vuelve a calcular (el día de hoy en
+# curso y el que espera marcas o la libreta). Un día con cualquier otro estado ya está calculado y el arranque no lo toca.
+ESTADOS_POR_DEFINIR = ('PENDIENTE', 'EN_CURSO')
+
 
 async def _recalcular_periodo_activo():
     """
-    Recalcula la tabla `asistencias` para el período activo al arrancar.
+    Completa al arrancar los días del período activo que no tienen resultado o que siguen por definir.
 
-    La tabla `asistencias` es un caché calculado: si el servidor estuvo apagado
-    varios días, los días nuevos no tienen registro y la grilla muestra inasistencias
-    incorrectas. Esta función corre en background (no bloquea la UI) y llama
-    `procesar_dia` para cada día del período activo de RRHH.
+    La tabla `asistencias` guarda el resultado calculado de cada día: si el servidor estuvo apagado varios días, los días
+    nuevos no tienen registro y la grilla mostraría inasistencias incorrectas. Esta función corre en segundo plano (no
+    bloquea la pantalla). Un día que ya tiene su resultado no se vuelve a calcular aquí (orden del dueño, 04-11-2026):
+    desde el 30-09-2026 se recalculaban todos con force y cada subida reescribía días ya revisados y decididos con las
+    reglas del momento. Un día ya calculado se recalcula cuando cambia algo suyo: marcas nuevas (el cron de ayer y hoy),
+    guardar un horario o un ajuste, correr una regla, justificar o editar.
     """
     try:
         from datetime import timedelta
@@ -93,17 +99,26 @@ async def _recalcular_periodo_activo():
                 dias_a_recalc.append(f_s)
             cur += timedelta(days=1)
 
-        logger.info(f"🔄 [Startup] Recalculando {len(dias_a_recalc)} días ({fecha_inicio} → {fecha_fin})...")
+        logger.info(f"🔄 [Startup] Revisando {len(dias_a_recalc)} días ({fecha_inicio} → {fecha_fin}): se completan los que faltan o siguen por definir...")
 
+        completados = 0
         for fecha_str in dias_a_recalc:
             try:
-                await asist_service.procesar_dia(fecha_str, force=True)
+                # Quien ya tiene el día calculado (estado definitivo) no se vuelve a calcular; sin force: también se respeta
+                # lo validado o rechazado a mano
+                filas = await db.fetch_all(
+                    "SELECT empleado_id FROM asistencias WHERE fecha = ? AND estado IS NOT NULL AND estado NOT IN (?, ?)",
+                    (fecha_str, *ESTADOS_POR_DEFINIR),
+                )
+                ya_calculados = {r['empleado_id'] for r in filas}
+                completados += await asist_service.procesar_dia(fecha_str, force=False, omitir_ids=ya_calculados) or 0
                 # Pausa breve para no saturar el WAL durante el arranque
                 await asyncio.sleep(0.05)
             except Exception as e:
                 logger.warning(f"⚠️ [Startup] Error recalculando {fecha_str}: {e}")
 
-        logger.success(f"✅ [Startup] Recálculo automático completado: {len(dias_a_recalc)} días procesados.")
+        logger.success(f"✅ [Startup] Recálculo automático completado: {len(dias_a_recalc)} días revisados, "
+                       f"{completados} resultados calculados (faltaban o seguían por definir).")
 
     except Exception as e:
         logger.error(f"❌ [Startup] Error en recálculo automático del período activo: {e}")
