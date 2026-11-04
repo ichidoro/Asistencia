@@ -211,17 +211,10 @@
 /* Bonos, Horas extra, Bolsa 180h y Espera 88h no se contraen: se quita el botón y el encabezado deja de parecer plegable. */
 .matrix-table-premium.gc-bolsa thead button[title="Contraer"] { display: none; }
 
-/* Barras de avance (Bolsa acumulada, uso de la Espera): crecen desde la izquierda al pintar la grilla (solo transform) */
-@keyframes gc-barra-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.matrix-table-premium .gc-barra-rel {
-    transform-origin: left center;
-    animation: gc-barra-in .75s cubic-bezier(.22, 1, .36, 1) .12s both;
-}
 /* Las pastillas responden al puntero sin mover el diseño */
 .matrix-table-premium.gc-bolsa td.col-day .badge-status { transition: transform .16s cubic-bezier(.22, 1, .36, 1); }
 .matrix-table-premium.gc-bolsa td.col-day:hover .badge-status { transform: translateY(-1px) scale(1.05); }
 @media (prefers-reduced-motion: reduce) {
-    .matrix-table-premium .gc-barra-rel { animation: none; }
     .matrix-table-premium.gc-bolsa td.col-day .badge-status { transition: none; }
     .matrix-table-premium.gc-bolsa td.col-day:hover .badge-status { transform: none; }
 }

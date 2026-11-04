@@ -188,3 +188,4 @@ body:not(.estados-chip) .sem-cel td.col-day .st-multi::after {
   color: var(--ov-ink-4, #9ca4ba) !important; border-left: 1px solid var(--ov-line-2, #eff1f6);
 }
 @media (prefers-reduced-motion: reduce) { .gh-plegar i { transition: none; } }
+.gh-grupo.gh-fijo .gh-tit { padding-left: 14px; }

@@ -6250,10 +6250,12 @@ window.mxPlegarHorario = function (btn) {
 };
 window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const e = window.escHtml || (x => String(x));
-    const n = g.filas.length, plegado = !window.mxHorariosDesplegados().has(g.nombre);
-    return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
+    // Bolsa flexible: los bloques van siempre abiertos y sin botón de plegar
+    const fijo = !!(window._gridFlags && window._gridFlags.esBolsa);
+    const n = g.filas.length, plegado = !fijo && !window.mxHorariosDesplegados().has(g.nombre);
+    return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + (fijo ? ' gh-fijo' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
         + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
-        + '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>'
+        + (fijo ? '' : '<button type="button" class="gh-plegar" aria-expanded="' + !plegado + '" aria-label="' + e('Plegar o desplegar ' + g.nombre) + '" onclick="window.mxPlegarHorario(this)"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>')
         + '<b>' + e(g.nombre) + '</b><span>' + n + (n === 1 ? ' persona' : ' personas') + '</span></div></td></tr>'
         // El encabezado repetido va bajo el encabezado fijo de arriba (capa 55 < 90) y con su mismo aspecto (clase gh-cab)
         + (i > 0 ? cabecera.split('<tr class="').join('<tr class="gh-cab ').replace(/z-index:\s*1\d\d/g, 'z-index:55') : '')
