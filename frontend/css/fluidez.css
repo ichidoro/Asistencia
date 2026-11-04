@@ -1,0 +1,133 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLUIDEZ — cambio de página, plegables y menú lateral que se abre al acercar el mouse (04-11-2026)
+   Reglas de movimiento: solo transform y opacity (nada de desenfoque ni de animar tamaños en la grilla),
+   entradas con curva de salida fuerte y cortas (≤ 280 ms), cascadas de 25–35 ms, y todo se apaga con
+   «menos movimiento». Va al FINAL de bundle-tema: gana por orden a las animaciones anteriores.
+   Revertir: quitar este archivo de _BUNDLES (static_files.py).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --fl-out: cubic-bezier(.23, 1, .32, 1);
+  --fl-drawer: cubic-bezier(.32, .72, 0, 1);
+}
+
+/* ── Cambio de página ─────────────────────────────────────────────────────
+   Antes: pantalla 260 ms + título 550 + barra 600 + filtros hasta 950 ms (≈ 1 s de cascada) y la grilla con desenfoque.
+   Ahora: la pantalla llega en 200 ms y sus partes la siguen en cascada corta (todo termina en ≈ 0,4 s). */
+@keyframes fl-pagina { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fl-sube   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fl-fundido { from { opacity: 0; } to { opacity: 1; } }
+/* la grilla ya no llega con desenfoque (era lo más caro de pintar) */
+@keyframes mxEntra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes mxFilaIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.page.active { animation: fl-pagina 200ms var(--fl-out) backwards; }
+.page.active .mx-page-head { animation: fl-sube 240ms var(--fl-out) 30ms backwards; }
+.marcaciones-filter-bar { animation: fl-sube 260ms var(--fl-out) 50ms backwards; }
+.marcaciones-filter-bar .row > [class*="col-"] { animation: fl-sube 240ms var(--fl-out) backwards; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(1) { animation-delay: 70ms; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(2) { animation-delay: 95ms; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(3) { animation-delay: 120ms; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(4) { animation-delay: 145ms; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(5) { animation-delay: 170ms; }
+.marcaciones-filter-bar .row > [class*="col-"]:nth-child(6) { animation-delay: 195ms; }
+.mx-entra { animation: mxEntra 260ms var(--fl-out) both; }
+
+/* ── Plegables ────────────────────────────────────────────────────────────
+   Bootstrap (collapse/accordion) con la curva fuerte; bloques por horario y flecha (el movimiento de las filas
+   lo hace marcaciones_ui.js); columnas de resumen: la tabla nueva llega con un fundido corto. */
+.collapsing { transition: height 260ms var(--fl-out) !important; }
+.gh-plegar i { transition: transform 260ms var(--fl-out); }
+.gh-plegar { transition: background-color 150ms ease, transform 160ms var(--fl-out); }
+.gh-plegar:active { transform: scale(.92); }
+.mx-col-cambia .matrix-table-premium thead th.sticky-premium-col,
+.mx-col-cambia .matrix-table-premium tbody td.sticky-premium-col { animation: fl-fundido 240ms var(--fl-out) backwards; }
+
+/* ── Menú lateral: se abre al acercar el mouse (sin botón) ─────────────────
+   - Cerrado: 72 px, solo íconos. Abierto: 252 px ENCIMA del contenido (el contenido no se mueve).
+   - El contenido interior tiene siempre su ancho abierto: abrir es solo revelar (sin reacomodar textos).
+   - Abre a los 40 ms de acercarse y cierra a los 150 ms de salir (no parpadea si el puntero pasa de largo).
+   - Con teclado (Tab) también abre; el foco por clic del mouse no lo deja abierto. */
+@media (min-width: 992px) {
+  body[data-sidebar="fluido"] { --sidebar-width: 72px; }
+
+  body[data-sidebar="fluido"] .sidebar {
+    width: 72px; overflow: hidden; contain: layout style;
+    transition: width 280ms var(--fl-drawer) 150ms, box-shadow 280ms var(--fl-out) 150ms;
+  }
+  body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) {
+    width: 252px; box-shadow: 18px 0 44px -12px rgba(6, 12, 46, .55);
+    transition-delay: 40ms;
+  }
+
+  /* logo: la gota cerrada, el logo completo abierto (se cruzan con un fundido) */
+  body[data-sidebar="fluido"] .logo-container {
+    height: 112px; padding: 0 20px; gap: 8px; justify-content: center; align-items: flex-start; overflow: hidden;
+  }
+  body[data-sidebar="fluido"] .logo-container::before {
+    content: ""; position: absolute; left: 16px; top: 50%; width: 40px; height: 40px; margin-top: -20px; border-radius: 12px;
+    background: rgba(255, 255, 255, .08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 74'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='0'%3E%3Cstop offset='0' stop-color='%239ccf4c'/%3E%3Cstop offset='.5' stop-color='%2372b33c'/%3E%3Cstop offset='.5' stop-color='%234f9a2c'/%3E%3Cstop offset='1' stop-color='%233c8424'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M28 0C28 0 0 34 0 47a28 27 0 0 0 56 0C56 34 28 0 28 0z' fill='url(%23g)'/%3E%3Cpath d='M15 46c0 7 5 12 11 13' stroke='rgba(255,255,255,.55)' stroke-width='3.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") center / 16px 21px no-repeat;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+    opacity: 1; transition: opacity 140ms ease 150ms;
+  }
+  body[data-sidebar="fluido"] .logo-container > * { flex: none; opacity: 0; pointer-events: none; transition: opacity 160ms ease 150ms; }
+  body[data-sidebar="fluido"] .brand-logo-img { width: 212px !important; }
+  body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) .logo-container::before { opacity: 0; transition-delay: 0ms; }
+  body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) .logo-container > * { opacity: 1; transition-delay: 110ms; }
+
+  /* entradas: el ícono queda siempre en el mismo lugar; el nombre aparece en cascada */
+  body[data-sidebar="fluido"] .sidebar-nav { padding: 12px 0; }
+  body[data-sidebar="fluido"] .sidebar-item {
+    flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px;
+    margin: 2px 10px; padding: 11px 0 11px 15px; white-space: nowrap; width: auto;
+  }
+  body[data-sidebar="fluido"] .sidebar-item > span:not(.icon) {
+    opacity: 0; transform: translateX(-6px); transition: opacity 120ms ease 150ms, transform 120ms ease 150ms;
+  }
+  body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) .sidebar-item > span:not(.icon) {
+    opacity: 1; transform: none;
+    transition: opacity 200ms var(--fl-out), transform 260ms var(--fl-out);
+    transition-delay: calc(70ms + var(--i, 0) * 22ms);
+  }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(1) { --i: 0; }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(2) { --i: 1; }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(3) { --i: 2; }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(4) { --i: 3; }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(5) { --i: 4; }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(6) { --i: 5; }
+  body[data-sidebar="fluido"] .sidebar-nav .sidebar-item:nth-child(7) { --i: 6; }
+  body[data-sidebar="fluido"] .sidebar-item.active::before { left: -10px; }
+  body[data-sidebar="fluido"] .sidebar-item .icon { width: 22px; height: 22px; }
+  body[data-sidebar="fluido"] .sidebar-item .icon::before { font-size: 19px; }
+  /* contador (contratos por decidir): sobre el ícono cerrado, al extremo abierto */
+  body[data-sidebar="fluido"] .sidebar-item .badge-alert-count {
+    position: absolute; top: 4px; right: 4px; margin: 0 !important; min-width: 17px; height: 17px; padding: 0 4px !important;
+    font-size: 10px !important; line-height: 17px !important; border-radius: 9px; box-shadow: 0 0 0 2px #14226c;
+    transition: top 240ms var(--fl-out), right 240ms var(--fl-out), transform 240ms var(--fl-out);
+  }
+  body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) .sidebar-item .badge-alert-count {
+    top: 50%; right: 12px; transform: translateY(-50%);
+  }
+
+  /* pie: el punto de estado queda fijo; el texto aparece */
+  body[data-sidebar="fluido"] .sidebar-footer { padding: 14px 0 16px; overflow: hidden; }
+  body[data-sidebar="fluido"] .sidebar-footer .status { padding-left: 31px; white-space: nowrap; }
+  body[data-sidebar="fluido"] .sidebar-footer .status > span:not(.status-dot) { opacity: 0; transition: opacity 120ms ease 150ms; }
+  body[data-sidebar="fluido"] .sidebar:is(:hover, :has(:focus-visible)) .sidebar-footer .status > span:not(.status-dot) {
+    opacity: 1; transition: opacity 200ms ease 120ms;
+  }
+  /* relojes de marcación: cerrado, solo sus puntos (como en el riel) */
+  body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) .relojes:not([hidden]) { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+  body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) :is(.relojes-titulo, .relojes-nota, .reloj > span:not(.rd)) { display: none; }
+  body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) .reloj,
+  body[data-sidebar="fluido"] .sidebar:not(:is(:hover, :has(:focus-visible))) .reloj .rd { display: block; }
+}
+
+/* ── Menos movimiento: todo queda fijo y los cambios son instantáneos ───── */
+@media (prefers-reduced-motion: reduce) {
+  .page.active, .page.active .mx-page-head, .marcaciones-filter-bar, .marcaciones-filter-bar .row > [class*="col-"], .mx-entra,
+  .mx-col-cambia .matrix-table-premium thead th.sticky-premium-col, .mx-col-cambia .matrix-table-premium tbody td.sticky-premium-col { animation: none !important; }
+  .collapsing, .gh-plegar, .gh-plegar i { transition: none !important; }
+  body[data-sidebar="fluido"] .sidebar, body[data-sidebar="fluido"] .sidebar *,
+  body[data-sidebar="fluido"] .logo-container::before { transition: none !important; }
+}

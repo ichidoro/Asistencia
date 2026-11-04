@@ -6242,10 +6242,34 @@ window.mxHorariosDesplegados = function () {
 window.mxPlegarHorario = function (btn) {
     const tb = btn && btn.closest('tbody.gh-grupo');
     if (!tb) return;
-    const plegado = tb.classList.toggle('gh-plegado');
-    btn.setAttribute('aria-expanded', String(!plegado));
+    const plegar = !tb.classList.contains('gh-plegado');
     const set = window.mxHorariosDesplegados();
-    if (plegado) set.delete(tb.dataset.horario); else set.add(tb.dataset.horario);
+    const reducir = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const filas = Array.from(tb.querySelectorAll(':scope > tr:not(.gh-titulo):not(.gh-cab)'));
+    // Solo se mueven las primeras filas (las que se ven); el resto entra y sale con ellas
+    const mover = (desde, hasta, ms, paso) => filas.slice(0, 14).map((tr, i) => tr.animate(
+        [{ opacity: desde, transform: desde ? 'none' : 'translateY(-8px)' }, { opacity: hasta, transform: hasta ? 'none' : 'translateY(-6px)' }],
+        { duration: ms, delay: i * paso, easing: 'cubic-bezier(.23, 1, .32, 1)', fill: 'both' }));
+    const aplicar = () => {
+        tb.classList.toggle('gh-plegado', plegar);
+        btn.setAttribute('aria-expanded', String(!plegar));
+        if (plegar) set.delete(tb.dataset.horario); else set.add(tb.dataset.horario);
+    };
+    (tb._ghAnim || []).forEach(a => a.cancel());
+    if (reducir || !filas.length) { aplicar(); return; }
+    if (plegar) {
+        // sale rápido (el sistema responde); al terminar se ocultan de verdad
+        btn.setAttribute('aria-expanded', 'false');
+        tb._ghAnim = mover(1, 0, 130, 8);
+        Promise.all(tb._ghAnim.map(a => a.finished.catch(() => null))).then(() => {
+            if (tb._ghAnim) tb._ghAnim.forEach(a => a.cancel());
+            aplicar();
+        });
+    } else {
+        aplicar();
+        tb._ghAnim = mover(0, 1, 260, 18);
+        tb._ghAnim.forEach(a => { a.onfinish = () => a.cancel(); });
+    }
 };
 window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const e = window.escHtml || (x => String(x));
@@ -8118,6 +8142,7 @@ function vaToggleFilter(key, value) {
 
 // Pestañas por tipo de horario (solo en el navegador: no llama al servidor)
 window.vaSetTab = function(tipo) {
+    window.mxCambioColumnas();
     window.vistaAnaliticaState.tabTipo = (tipo === 'bolsa') ? 'bolsa' : 'ciclo';
     if (stateMarcacionesApp.data) {
         renderVistaAnalitica(stateMarcacionesApp.data, document.getElementById('marcaciones-view-container'));
@@ -8149,7 +8174,15 @@ if (!window._gridPinCapBound) {
     window.addEventListener('resize', () => { clearTimeout(_t); _t = setTimeout(() => window._gridApplyPinCap(), 150); });
 }
 
+window.mxCambioColumnas = function () {
+    const c = document.getElementById('marcaciones-view-container');
+    if (!c) return;
+    c.classList.add('mx-col-cambia');
+    clearTimeout(window._mxColT);
+    window._mxColT = setTimeout(() => c.classList.remove('mx-col-cambia'), 320);
+};
 window.vaToggleBonos = function() {
+    window.mxCambioColumnas();
     window.vistaAnaliticaState.showBonos = !window.vistaAnaliticaState.showBonos;
     if (stateMarcacionesApp.data) {
         const container = document.getElementById('marcaciones-view-container');
@@ -8158,6 +8191,7 @@ window.vaToggleBonos = function() {
 }
 
 window.vaToggleCol = function(key) {
+    window.mxCambioColumnas();
     const st = window.vistaAnaliticaState;
     const esB = !!(window._gridFlags && window._gridFlags.esBolsa);
     // showHE y showSaldoMeta tienen valor por defecto según el tipo (null): se alterna el valor efectivo
