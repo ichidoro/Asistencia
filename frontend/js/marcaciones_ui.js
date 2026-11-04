@@ -6159,16 +6159,15 @@ window.getGridShow = function(f, hasBonos) {
     const esBolsa = f.esBolsa;
     return {
         hasBonos,
-        // Bolsa flexible: Bonos, Horas extra, Bolsa y Espera van siempre abiertos (sin botón de contraer).
-        showBonos: esBolsa || s.showBonos === true,
+        showBonos: s.showBonos === true,
         showIncidencias: s.showIncidencias === true,
-        showHE: esBolsa || (s.showHE ?? false) === true,
+        showHE: (s.showHE ?? esBolsa) === true,
         showDeudas: !esBolsa && s.showDeudas === true,
         hasInc: !esBolsa,         // "Incidencias": no aplica a bolsa
         hasDeudas: !esBolsa,      // "Tiempo no trabajado": no aplica a bolsa
         hasSaldo: !esBolsa,       // "Saldo neto": no aplica a bolsa (su balance está en 180h / 88h)
         hayBolsa: esBolsa,        // grupos Bolsa (180h) y Espera (88h)
-        showSaldoMeta: esBolsa,
+        showSaldoMeta: esBolsa,   // Bolsa (180h) y Espera (88h) van siempre abiertas en bolsa flexible: contraídas dejaban ver los días por detrás
         heFull: !esBolsa,         // HE: ciclo = Pend/Apr/Rech/Tot; bolsa = solo aprobadas (exceso sobre la meta)
         nInc: esBolsa ? 4 : 6     // bolsa: sin ATR ni S.ADL
     };

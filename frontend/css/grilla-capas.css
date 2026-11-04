@@ -208,8 +208,8 @@
 .matrix-table-premium tbody td.sticky-col-analitica { isolation: isolate; background-clip: padding-box; }
 
 /* ── Bolsa flexible: grupos siempre abiertos ─────────────────────────────── */
-/* Bonos, Horas extra, Bolsa 180h y Espera 88h no se contraen: se quita el botón y el encabezado deja de parecer plegable. */
-.matrix-table-premium.gc-bolsa thead button[title="Contraer"] { display: none; }
+/* Bolsa 180h y Espera 88h no se contraen: se quita su botón de contraer. */
+.matrix-table-premium.gc-bolsa thead button[onclick*="showSaldoMeta"] { display: none; }
 
 /* Las pastillas responden al puntero sin mover el diseño */
 .matrix-table-premium.gc-bolsa td.col-day .badge-status { transition: transform .16s cubic-bezier(.22, 1, .36, 1); }
