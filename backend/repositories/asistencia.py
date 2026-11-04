@@ -394,6 +394,16 @@ class AsistenciaRepository:
             logger.error(f"❌ Error al consultar libreta_art25bis_dias: {e}")
             return None
 
+    async def get_libreta_borradores_180h(self, empleado_id: int, excepto_fecha: str) -> List[Dict[str, Any]]:
+        """Días de libreta de la persona guardados pero aún sin validar (cerrado = 0), salvo el de `excepto_fecha`. Incluye las inasistencias marcadas: quien llama las descarta."""
+        try:
+            return await self.db.fetch_all(
+                "SELECT fecha, observaciones FROM libreta_art25bis_dias WHERE empleado_id = ? AND fecha <> ? AND COALESCE(cerrado, 0) = 0 ORDER BY fecha",
+                (empleado_id, excepto_fecha))
+        except Exception as e:
+            logger.error(f"❌ Error al buscar borradores de libreta: {e}")
+            return []
+
     async def upsert_libreta_180h(self, data: Dict[str, Any]) -> None:
         """
         Guarda o actualiza los 96 slots y cómputos de la libreta Art. 25 bis.

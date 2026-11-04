@@ -14,7 +14,7 @@ from loguru import logger
 from backend.services.gemini_vision_service import gemini_vision_service
 from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
-from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine
+from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine, libreta_es_inasistencia
 from backend.services import gps_nexacol
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
@@ -3559,6 +3559,14 @@ async def save_libreta_180h(
         existente = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
         if existente and int(existente.get('cerrado') or 0) == 1:
             raise HTTPException(status_code=409, detail="El día está validado: la libreta es de solo lectura. Para corregirla hay que eliminar el registro del día.")
+
+        # Un día nuevo no se abre mientras otro día de la misma persona siga en borrador: primero se valida (o se borra) ese.
+        if not existente:
+            pendientes = [b for b in await service.repository.get_libreta_borradores_180h(payload.empleado_id, payload.fecha)
+                          if not libreta_es_inasistencia(b)]
+            if pendientes:
+                f = str(pendientes[0]['fecha'])
+                raise HTTPException(status_code=409, detail=f"Primero valida el borrador del {f[8:10]}-{f[5:7]}-{f[:4]}: no se puede guardar otro día de esta persona hasta entonces.")
 
         # La primera vez que se guarda un día siempre queda en borrador: solo se valida (se cierra) sobre un borrador ya guardado.
         cerrar_dia = bool(payload.cerrado) and bool(existente)

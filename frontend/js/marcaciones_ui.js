@@ -6159,15 +6159,16 @@ window.getGridShow = function(f, hasBonos) {
     const esBolsa = f.esBolsa;
     return {
         hasBonos,
-        showBonos: s.showBonos === true,
+        // Bolsa flexible: Bonos, Horas extra, Bolsa y Espera van siempre abiertos (sin botón de contraer).
+        showBonos: esBolsa || s.showBonos === true,
         showIncidencias: s.showIncidencias === true,
-        showHE: (s.showHE ?? esBolsa) === true,
+        showHE: esBolsa || (s.showHE ?? false) === true,
         showDeudas: !esBolsa && s.showDeudas === true,
         hasInc: !esBolsa,         // "Incidencias": no aplica a bolsa
         hasDeudas: !esBolsa,      // "Tiempo no trabajado": no aplica a bolsa
         hasSaldo: !esBolsa,       // "Saldo neto": no aplica a bolsa (su balance está en 180h / 88h)
         hayBolsa: esBolsa,        // grupos Bolsa (180h) y Espera (88h)
-        showSaldoMeta: esBolsa && (s.showSaldoMeta ?? true) === true,
+        showSaldoMeta: esBolsa,
         heFull: !esBolsa,         // HE: ciclo = Pend/Apr/Rech/Tot; bolsa = solo aprobadas (exceso sobre la meta)
         nInc: esBolsa ? 4 : 6     // bolsa: sin ATR ni S.ADL
     };
@@ -7490,7 +7491,7 @@ function renderVistaAnalitica(respData, container) {
         <span class="ms-auto text-muted" style="font-size: 0.75rem"><i class="bi bi-info-circle me-1"></i><span class="tp-kb">Click: Acciones · DblClick celda: Justificar · DblClick nombre: Gestionar HE</span><span class="tp-touch">Toque: acciones · Mantén pulsado: detalle del día · Doble toque: justificar</span></span>
     </div>`}
     ${vaciaHtml || `<div style="overflow:auto;max-height:calc(100vh - 260px);border-radius:0 0 8px 8px;border:1px solid #dee2e6;border-top:none">
-    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
+    <table class="table table-bordered table-sm mb-0 matrix-table matrix-table-premium ${window._stickyUnpinned ? 'unpin-sticky-columns' : ''} ${sh.hayBolsa ? 'gc-bolsa' : ''}" style="font-size:0.8rem;border-collapse:separate;border-spacing:0">
     <thead style="position:sticky;top:0;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.05)">
         ${cabeceraFilas}
     </thead>
