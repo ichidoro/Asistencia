@@ -488,6 +488,23 @@ async def set_ajuste(
             msg_error = "Debe ser un número entero válido mayor o igual a 0." if clave == "bioalba_dias_volatilidad" else "Debe ser un número entero válido mayor a 0."
             raise HTTPException(status_code=400, detail=f"Valor inválido para {clave}: {msg_error}")
 
+    # Límites de la revisión de la libreta y del GPS (05-11-2026): horas con decimales; tolerancia en minutos (puede ser 0); km/h enteros
+    from backend.services.libreta_revision import AJUSTES_REVISION
+    if clave in AJUSTES_REVISION:
+        try:
+            num = float(str(valor).replace(",", "."))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Debe ser un número.")
+        if clave == "libreta_tolerancia_gps_minutos":
+            if num < 0 or num > 120 or num != int(num):
+                raise HTTPException(status_code=400, detail="La tolerancia es en minutos enteros, de 0 a 120.")
+        elif clave == "gps_velocidad_limite_kmh":
+            if num < 1 or num > 200 or num != int(num):
+                raise HTTPException(status_code=400, detail="La velocidad es en km/h enteros, de 1 a 200.")
+        elif num <= 0 or num > 24:
+            raise HTTPException(status_code=400, detail="Las horas deben ser mayores que 0 y no más de 24.")
+        valor = str(int(num)) if num == int(num) else str(num)
+
     success = await service.set_ajuste(clave, valor)
     # Si el motor usa este ajuste, se recalcula solo el tramo abierto de todas las personas (en segundo plano)
     recalculo = None

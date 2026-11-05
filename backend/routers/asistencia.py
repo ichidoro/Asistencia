@@ -3533,8 +3533,15 @@ async def get_libreta_180h(
         bloqueo = None if (validado and not puede_validado) else await _libreta_bloqueo(
             service, empleado_id, fecha, con_orden=(not row and chofer_id is None))
         camion = {k: (row or {}).get(k) for k in ("patente", "vehiculo_id", "patente_origen")}
+        # «Cosas por revisar» (05-11-2026): límites de Configuración y cómo terminó el día anterior. Si falla, la libreta se abre igual.
+        from backend.services.libreta_revision import contexto_revision
+        try:
+            revision = await contexto_revision(service.repository.db, service.repository, empleado_id, fecha)
+        except Exception as e_rev:
+            logger.warning(f"[Libreta] sin contexto de revisión (emp={empleado_id}, fecha={fecha}): {e_rev}")
+            revision = None
         extra = {"bloqueo": bloqueo, "puede_editar_validado": puede_validado,
-                 "enlazados": await _enlazados_libreta(service, empleado_id, fecha, row, chofer_id), **camion}
+                 "enlazados": await _enlazados_libreta(service, empleado_id, fecha, row, chofer_id), **camion, "revision": revision}
         if not row:
             return {
                 "has_data": False,
@@ -4145,7 +4152,11 @@ async def velocidades_choferes(
     }
     # Cuántos días entregó Nexacol y cuántos llegan hasta una persona: la pantalla lo muestra cuando no hay velocidades, para ver dónde se corta
     diagnostico = {"dias_plan": len(dias), "dias_con_gps": sum(1 for d in dias if d.get("velMax") is not None), "choferes": len(choferes), "con_velocidad": len(por_emp)}
-    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "personas": personas, "sin_calzar": sin_calzar, "diagnostico": diagnostico}
+    # Límite de velocidad de Configuración › Sistema (05-11-2026); sin ajuste válido va None y la pantalla no evalúa el límite
+    from backend.services.libreta_revision import limites_desde_ajustes
+    lim = limites_desde_ajustes([dict(f) for f in await db.fetch_all("SELECT clave, valor FROM ajustes WHERE clave = ?", ("gps_velocidad_limite_kmh",))])
+    return {"success": True, "desde": desde, "hasta": hasta, "velocidades": por_emp, "personas": personas, "sin_calzar": sin_calzar,
+            "diagnostico": diagnostico, "limite_kmh": int(lim["velocidad_kmh"]) if lim["velocidad_kmh"] else None}
 
 
 _APRENDIDO_EN: Dict[str, float] = {}

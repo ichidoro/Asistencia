@@ -1613,7 +1613,11 @@ window.loadAjustesSistema = async function() {
             'asistencia_emergencia_jornada_limite_horas': 'ajuste-emergencia-limite',
             'asistencia_max_extras_ordinarias_dia_habil': 'ajuste-max-extras-dia-habil',
             'asistencia_minimo_horas_extra_minutos': 'ajuste-minimo-extras',
-            'porteria_deshacer_segundos': 'ajuste-deshacer-segundos'
+            'porteria_deshacer_segundos': 'ajuste-deshacer-segundos',
+            'libreta_conduccion_continua_max_horas': 'ajuste-libreta-cond-continua',
+            'libreta_descanso_ininterrumpido_horas': 'ajuste-libreta-descanso',
+            'libreta_tolerancia_gps_minutos': 'ajuste-libreta-tolerancia',
+            'gps_velocidad_limite_kmh': 'ajuste-gps-velocidad'
         };
 
         // Rellenar valores

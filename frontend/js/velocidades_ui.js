@@ -7,8 +7,9 @@
 (function () {
     'use strict';
 
-    // Hasta 90 km/h está bien; sobre 90 va en rojo (los camiones de carretera tienen tope de 90). Cambiar acá si la regla de la empresa es otra.
-    const LIMITE = 90;
+    // Velocidad máxima de referencia: la entrega el servidor desde Configuración › Sistema › Libreta y GPS de choferes (05-11-2026).
+    // Hasta que llega (o si no está configurada) no se marca ningún exceso.
+    let LIMITE = null;
     const MAX_DIAS = 62; // lo que acepta Nexacol en una consulta
 
     const ST = { clave: '', estado: 'idle', datos: {}, sinCalzar: [], diag: null, error: '', ticket: 0 };
@@ -19,7 +20,8 @@
     const esChofer = emp => typeof window.categoriaCargo === 'function' && window.categoriaCargo(emp && emp.cargo) === 'chofer';
     // Solo los de Bolsa Flexible (pedido del dueño, 30-10-2026): la lámina muestra cifras en la pestaña «Bolsa flexible»; el servidor además solo entrega a esos choferes.
     const enBolsa = () => !!(window._gridFlags && window._gridFlags.esBolsa);
-    const nivel = v => (v > LIMITE ? 'x' : 'ok');
+    const excede = v => LIMITE != null && Number(v) > LIMITE;
+    const nivel = v => (excede(v) ? 'x' : 'ok');
     const FLECHA = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10V2M2.8 5.2 6 2l3.2 3.2"/></svg>';
     const dmy = f => String(f).split('-').reverse().join('-');
     const ddmm = f => { const p = String(f).split('-'); return p.length === 3 ? `${p[2]}-${p[1]}` : f; };
@@ -47,6 +49,7 @@
         const r = await fetch(`/api/asistencia/gps/velocidades-choferes/?desde=${desde}&hasta=${hasta}`, { headers: authHead() });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : `error ${r.status}`);
+        LIMITE = j.limite_kmh != null ? Number(j.limite_kmh) : null;   // el de Configuración, también para el reporte semanal
         return j;
     }
 
@@ -103,10 +106,10 @@
             let max = null, sobre = 0;
             Object.keys(ST.datos).forEach(id => Object.keys(ST.datos[id]).forEach(f => {
                 const i = ST.datos[id][f];
-                if (i.vel > LIMITE) sobre++;
+                if (excede(i.vel)) sobre++;
                 if (!max || i.vel > max.vel) max = { vel: i.vel, id, f };
             }));
-            if (max) estado += `<span class="vel-resumen ${max.vel > LIMITE ? 'vel-rojo' : ''}" title="La velocidad más alta registrada en el período">Máxima del período <b>${esc(max.vel)} km/h</b>${nombreDe(max.id) ? ' · ' + esc(nombreDe(max.id)) : ''} · ${esc(ddmm(max.f))}</span>`;
+            if (max) estado += `<span class="vel-resumen ${excede(max.vel) ? 'vel-rojo' : ''}" title="La velocidad más alta registrada en el período">Máxima del período <b>${esc(max.vel)} km/h</b>${nombreDe(max.id) ? ' · ' + esc(nombreDe(max.id)) : ''} · ${esc(ddmm(max.f))}</span>`;
             else {
                 const d = ST.diag;
                 estado += '<span class="vel-resumen">Ningún chofer con velocidad en este período</span>';
@@ -119,10 +122,12 @@
                 estado += `<span class="vel-aviso" tabindex="0" title="Nombres del plan de Despacho que no se pudieron asociar a una sola persona de Asistencia: ${esc(lista)}"><i class="bi bi-person-exclamation"></i>${ST.sinCalzar.length} ${ST.sinCalzar.length === 1 ? 'nombre' : 'nombres'} del plan sin asociar</span>`;
             }
         }
+        // Con comillas, no `${}` dentro de otro: el compresor de la aplicación borraría los espacios («hasta90»)
+        const leyLim = LIMITE == null ? '' : '<span class="vel-ley"><span class="vel-p vel-ok">' + LIMITE + '</span>Bien · hasta ' + LIMITE + '</span>'
+            + '<span class="vel-ley"><span class="vel-p vel-x">' + FLECHA + (LIMITE + 1) + '</span>Sobre ' + LIMITE + '</span>';
         return `<div class="vel-leyenda" id="vel-leyenda">
             <span class="fw-bold" style="color:#1a2326">Velocidad máxima del GPS · km/h</span>
-            <span class="vel-ley"><span class="vel-p vel-ok">${LIMITE}</span>Bien · hasta ${LIMITE}</span>
-            <span class="vel-ley"><span class="vel-p vel-x">${FLECHA}${LIMITE + 1}</span>Sobre ${LIMITE}</span>
+            ${leyLim}
             <span class="vel-ley">Sin velocidad: se ve el estado del día</span>
             ${estado}
             ${BTN_REPORTE}
@@ -191,7 +196,7 @@
         const domingo = sumar(lunes, 6);
         const filas = Object.keys(velocidades).filter(f => f >= lunes && f <= domingo).sort().map(f => ({ fecha: f, ...velocidades[f] }));
         const max = filas.reduce((a, r) => (!a || r.vel > a.vel ? r : a), null);
-        return { filas, max, sobre: filas.filter(r => r.vel > LIMITE).length, patentes: [...new Set(filas.map(r => r.patente))] };
+        return { filas, max, sobre: filas.filter(r => excede(r.vel)).length, patentes: [...new Set(filas.map(r => r.patente))] };
     }
 
     const slug = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -263,7 +268,7 @@
         doc.text(rut || 'No registrado', M + 18, 190); doc.text(veh, M + 170, 190); doc.text(String(res.filas.length), M + 350, 190);
 
         // Resumen: la máxima de la semana y los días sobre el límite
-        const rojo = res.max.vel > LIMITE;
+        const rojo = excede(res.max.vel);
         doc.setFillColor(...(rojo ? ROJO : [227, 244, 234])); doc.roundedRect(M, 228, 86, 30, 8, 8, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...(rojo ? [255, 255, 255] : VERDE));
         doc.text(`${res.max.vel} km/h`, M + 43, 248, { align: 'center' });
@@ -290,7 +295,7 @@
         doc.autoTable({
             startY: yTab, theme: 'grid', margin: { left: M, right: M },
             head: [['Fecha', 'Día', 'Patente', 'Velocidad máx.', 'Hora', 'Tiempo sobre ' + LIMITE + ' km/h', 'Evaluación']],
-            body: res.filas.map(r => [dmy(r.fecha), diaDe(r.fecha).replace(/^./, c => c.toUpperCase()), r.patente, `${r.vel} km/h`, r.hora || '—', duracion(exc ? exc[r.patente + '|' + r.fecha] : null), r.vel > LIMITE ? `Sobre ${LIMITE} km/h` : 'Dentro del límite']),
+            body: res.filas.map(r => [dmy(r.fecha), diaDe(r.fecha).replace(/^./, c => c.toUpperCase()), r.patente, `${r.vel} km/h`, r.hora || '—', duracion(exc ? exc[r.patente + '|' + r.fecha] : null), excede(r.vel) ? `Sobre ${LIMITE} km/h` : 'Dentro del límite']),
             styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 6, bottom: 6, left: 7, right: 7 }, lineColor: [228, 232, 241], lineWidth: 0.6, textColor: TINTA, valign: 'middle' },
             headStyles: { fillColor: AZUL, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
             alternateRowStyles: { fillColor: [249, 250, 253] },
@@ -299,8 +304,8 @@
                 if (d.section !== 'body') return;
                 const r = res.filas[d.row.index];
                 if (d.column.index === 3 || d.column.index === 6) {
-                    d.cell.styles.textColor = r.vel > LIMITE ? [168, 47, 38] : VERDE;
-                    d.cell.styles.fillColor = r.vel > LIMITE ? [253, 236, 234] : [235, 247, 240];
+                    d.cell.styles.textColor = excede(r.vel) ? [168, 47, 38] : VERDE;
+                    d.cell.styles.fillColor = excede(r.vel) ? [253, 236, 234] : [235, 247, 240];
                     if (d.column.index === 6) d.cell.styles.fontStyle = 'bold';
                 }
                 if (d.column.index === 5) {

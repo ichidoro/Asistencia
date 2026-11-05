@@ -1533,6 +1533,7 @@
                                                 <button type="button" class="fcB-it" data-grupo-sis="bioalba" aria-pressed="false"><span class="n">Sincronización con BioAlba</span></button>
                                                 <button type="button" class="fcB-it" data-grupo-sis="extras" aria-pressed="false"><span class="n">Horas extra y emergencias</span></button>
                                                 <button type="button" class="fcB-it" data-grupo-sis="porteria" aria-pressed="false"><span class="n">Portería</span></button>
+                                                <button type="button" class="fcB-it" data-grupo-sis="libreta" aria-pressed="false"><span class="n">Libreta y GPS de choferes</span></button>
                                             </nav>
                                             <section class="fcB-ficha">
                                                 <div data-grupo-sis-panel="contratos">
@@ -1569,6 +1570,17 @@
                                                     <div class="fcB-fh"><h3>Portería</h3><p>Cambie los números que necesite y guarde una sola vez.</p></div>
                                                     <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-deshacer-segundos">Tiempo para deshacer un registro (segundos)</label><p>Después de registrar una ENTRADA o SALIDA del Artículo 22, una llave, una visita o un vehículo, el aviso «Listo» ofrece Deshacer durante estos segundos. Lo deshecho no se borra: queda anulado en el registro de cambios. Con 0 no se ofrece Deshacer.</p></div>
                                                         <div class="fcB-ctl"><input type="number" step="1" class="fcB-inp num" id="ajuste-deshacer-segundos" data-clave="porteria_deshacer_segundos" min="0" max="120"></div></div>
+                                                </div>
+                                                <div data-grupo-sis-panel="libreta" class="d-none">
+                                                    <div class="fcB-fh"><h3>Libreta y GPS de choferes</h3><p>Límites con que la ventana de la libreta muestra las «cosas por revisar». Cambie los números que necesite y guarde una sola vez.</p></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-libreta-cond-continua">Conducción continua máxima (horas)</label><p>Art. 25 bis: si la libreta marca más horas de conducción seguidas, queda «fuera de norma».</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-libreta-cond-continua" data-clave="libreta_conduccion_continua_max_horas" min="0.5" max="24"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-libreta-descanso">Descanso mínimo ininterrumpido (horas)</label><p>Art. 25 bis: el descanso antes de empezar el día, contando el final del día anterior. Si es menor, queda «fuera de norma».</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="0.5" class="fcB-inp num" id="ajuste-libreta-descanso" data-clave="libreta_descanso_ininterrumpido_horas" min="0.5" max="24"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-libreta-tolerancia">Tolerancia con el GPS (minutos)</label><p>Diferencia entre la libreta y el GPS que todavía se considera que calza: hora de inicio, hora de término y horas de conducción.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="1" class="fcB-inp num" id="ajuste-libreta-tolerancia" data-clave="libreta_tolerancia_gps_minutos" min="0" max="120"></div></div>
+                                                    <div class="fcB-campo"><div class="fcB-et"><label for="ajuste-gps-velocidad">Velocidad máxima de los camiones (km/h)</label><p>Sobre esta velocidad el GPS marca exceso: en el switch de velocidad, en el reporte semanal y en la revisión de la libreta.</p></div>
+                                                        <div class="fcB-ctl"><input type="number" step="1" class="fcB-inp num" id="ajuste-gps-velocidad" data-clave="gps_velocidad_limite_kmh" min="1" max="200"></div></div>
                                                 </div>
                                                 <div class="fcB-pie" data-permiso="configuracion.editar">
                                                     <div><span class="fcB-et"><p id="sistema-cambios">Sin cambios.</p></span></div>
@@ -3737,6 +3749,11 @@
                                     <select id="m180-gps-patente" class="form-select form-select-sm m180-dia-sel" aria-label="Camión del día"><option value="">Cargando…</option></select>
                                     <span id="m180-patente-origen" class="m180-dia-tag d-none"></span>
                                 </div>
+                                <!-- Observaciones del día, al lado del camión (pedido del dueño, 05-11-2026) -->
+                                <div class="m180-dia-obs">
+                                    <label for="m180-observaciones" class="m180-dia-lbl">Observaciones</label>
+                                    <input type="text" class="form-control form-control-sm m180-dia-obs-inp" id="m180-observaciones" placeholder="Ruta, faena, cambio de posta o novedades…">
+                                </div>
                                 <button type="button" id="m180-btn-inasistencia" class="m180-btn-inas m180-edit-btn" onclick="window.marcarInasistenciaLibreta()" title="Registrar la inasistencia de este día en Marcaciones (sin horas de libreta)">
                                     <i class="bi bi-person-x-fill" aria-hidden="true"></i> Marcar inasistencia
                                 </button>
@@ -3956,54 +3973,12 @@
                                 </div>
                             </div>
 
-                            <!-- Bajo las dos líneas de tiempo (libreta y GPS): resumen, observaciones y comparación con el GPS; al final, las facturas -->
-                            <!-- Panel de Resumen Legal (3 Bento Cards) -->
-                            <div class="row g-2 mb-3">
-                                <div class="col-md-4">
-                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100">
-                                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Jornada Efectiva Diaria</div>
-                                        <div class="small text-muted" style="font-size: 0.75rem;">(Conducción + Tareas Auxiliares)</div>
-                                        <div class="fs-4 fw-extrabold text-dark mt-1 font-monospace" id="m180-res-jornada-efectiva">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100">
-                                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Tiempos de Espera del Día</div>
-                                        <div class="small text-muted" style="font-size: 0.75rem;">(No imputables a jornada efectiva)</div>
-                                        <div class="fs-4 fw-extrabold text-amber-700 mt-1 font-monospace" id="m180-res-horas-espera" style="color:#b45309;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="p-3 rounded-3 border bg-white shadow-sm h-100">
-                                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.6875rem; letter-spacing:0.5px;">Descanso Efectivo Registrado</div>
-                                        <div class="small text-muted" style="font-size: 0.75rem;">(En tierra o litera adecuada)</div>
-                                        <div class="fs-4 fw-extrabold text-sky-700 mt-1 font-monospace" id="m180-res-horas-descanso" style="color:#0369a1;">00:00 <span class="fs-6 fw-normal text-muted">hrs</span></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Observaciones -->
-                            <div class="mb-0">
-                                <label for="m180-observaciones" class="form-label fw-semibold text-secondary mb-1" style="font-size:0.75rem;">Observaciones del Día (Opcional)</label>
-                                <input type="text" class="form-control form-control-sm" id="m180-observaciones" placeholder="Ruta, faena, cambio de posta o novedades...">
-                            </div>
-
-                            <!-- Comparación con el GPS del camión (ruta GPS de Nexacol): se carga sola con el camión del día (m180GpsAuto), sin botón -->
-                            <section id="m180-gps-panel" class="mt-3 rounded-3 border bg-white shadow-sm overflow-hidden" style="border-top:3px solid #0d6efd !important;">
-                                <div class="d-flex flex-wrap align-items-center gap-3 px-3 py-2 border-bottom" style="background:#f8fafc;">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="d-inline-flex align-items-center justify-content-center" style="width:30px;height:30px;border-radius:9px;background:#e7f0ff;color:#0d6efd;"><i class="bi bi-geo-alt-fill"></i></span>
-                                        <div>
-                                            <div class="fw-bold text-dark" style="font-size:0.875rem;">Comparación con el GPS del camión</div>
-                                            <div class="text-muted" style="font-size:0.72rem;">Ruta GPS de Nexacol contra lo ingresado en la libreta</div>
-                                        </div>
-                                    </div>
-                                    <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
-                                        <span id="m180-gps-estado" class="small text-muted" role="status" aria-live="polite"></span>
-                                    </div>
-                                </div>
-                                <div class="p-3">
-                                    <div id="m180-gps-kpis" class="row g-2 mb-3"></div>
+                            <!-- Bajo las dos líneas de tiempo: «cosas por revisar» de la libreta contra el GPS y las reglas del Art. 25 bis (pedido del dueño,
+                                 05-11-2026; reemplaza los cuadros de resumen y los de comparación). Lo arma m180RevisionPintar; el detalle de paradas, m180GpsPintar. -->
+                            <section id="m180-gps-panel" class="m180-rev" aria-labelledby="m180-rev-titulo">
+                                <div id="m180-revision"></div>
+                                <div class="m180-rev-gps">
+                                    <span id="m180-gps-estado" class="m180-rev-estado" role="status" aria-live="polite"></span>
                                     <div id="m180-gps-resultado"></div>
                                 </div>
                             </section>
@@ -4290,15 +4265,15 @@
         "/static/js/horarios.js?v={{ startup_id }}_v26",
         "/static/js/asistencia.js?v={{ startup_id }}_v21",
         "/static/js/config_ficha.js?v={{ startup_id }}_v5",
-        "/static/js/configuracion_ui.js?v={{ startup_id }}_v26",
+        "/static/js/configuracion_ui.js?v={{ startup_id }}_v27",
         "/static/js/reglas_marcas_ui.js?v={{ startup_id }}_v11",
         "/static/js/tablas_tarjetas.js?v={{ startup_id }}_v1",
         "/static/js/calendario_ui.js?v={{ startup_id }}_v17",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v18",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
-        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v31",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v32",
         "/static/js/marcaciones_ui.js?v={{ startup_id }}_v40",
-        "/static/js/velocidades_ui.js?v={{ startup_id }}_v3",
+        "/static/js/velocidades_ui.js?v={{ startup_id }}_v4",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v12",
         "/static/js/perdonazo_panel.js?v={{ startup_id }}_v2",
         "/static/js/intercambios_panel.js?v={{ startup_id }}",

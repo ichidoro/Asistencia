@@ -223,6 +223,8 @@ class ConfiguracionRepository:
                 ("asistencia_minimo_horas_extra_minutos", "0", "Minutos mínimos de tiempo trabajado de más para contarlo como hora extra (0 = cuenta todo, aunque sean segundos)"),
                 ("porteria_deshacer_segundos", "10", "Segundos en que el aviso «Listo» de Portería ofrece Deshacer el registro recién hecho (0 = sin Deshacer)"),
             ]
+            from backend.services.libreta_revision import SEMILLAS_REVISION   # límites de la revisión de la libreta (05-11-2026)
+            semillas_emergencia += SEMILLAS_REVISION
             await self.db.executemany(
                 "INSERT OR IGNORE INTO ajustes (clave, valor, descripcion) VALUES (?, ?, ?)",
                 semillas_emergencia
