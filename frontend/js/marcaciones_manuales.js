@@ -3325,11 +3325,12 @@ async function m180PatenteCargar(data, empId, fecha) {
     if (!sel) return;
     await m180GpsCargarVehiculos();
     sel.disabled = m180_locked || m180_chofer_id != null;   // el peoneta enlazado lleva el camión de su chofer
-    if (data.patente_origen === 'SIN_CAMION') { sel.value = M180_SIN_CAMION; m180_patente_origen = 'SIN_CAMION'; m180PatenteTag(M180_ORIGEN_TXT.SIN_CAMION); return; }
+    if (data.patente_origen === 'SIN_CAMION') { sel.value = M180_SIN_CAMION; m180_patente_origen = 'SIN_CAMION'; m180PatenteTag(M180_ORIGEN_TXT.SIN_CAMION); m180GpsAuto(); return; }
     if (data.patente) {
         m180SelPatente(data.vehiculo_id, data.patente);
         m180_patente_origen = data.patente_origen || 'MANUAL';
         m180PatenteTag(data.patente_origen === 'PLAN' ? 'Guardado con el día · ' + M180_ORIGEN_TXT.PLAN : (M180_ORIGEN_TXT[data.patente_origen] || 'Guardado con el día'));
+        m180GpsAuto();
         return;
     }
     try {
@@ -3344,6 +3345,7 @@ async function m180PatenteCargar(data, empId, fecha) {
             m180PatenteTag(d.mensaje || '', true);
         }
     } catch (_) { m180PatenteTag('No se pudo leer la planificación: elige el camión a mano.', true); }
+    m180GpsAuto();   // con camión, el GPS aparece solo; sin camión, la comparación dice qué falta
 }
 let m180_patente_previa = '';
 document.addEventListener('focusin', (e) => { if (e.target && e.target.id === 'm180-gps-patente') m180_patente_previa = e.target.value; });
@@ -3360,6 +3362,7 @@ document.addEventListener('change', async (e) => {
     m180_patente_origen = e.target.value === M180_SIN_CAMION ? 'SIN_CAMION' : (e.target.value ? 'MANUAL' : null);
     m180PatenteTag(m180_patente_origen ? M180_ORIGEN_TXT[m180_patente_origen] : '');
     m180_dirty = true;
+    m180GpsAuto();   // otro camión: su GPS se trae solo
 });
 
 // «¿A quién más le aplico este cambio?»: con el chofer, los acompañantes de su lista que no reciben la copia solos (su día validado o con
@@ -3501,10 +3504,12 @@ async function proceedToMarcacion180h() {
         } else {
             console.warn(`GET libreta-180h returned status ${resp.status}`);
             if (typeof showToast === 'function') showToast('No se pudo abrir lo guardado de este día. Vuelva a intentarlo.', 'warning');
+            if (typeof m180GpsAuto === 'function') m180GpsAuto();
         }
     } catch (e) {
         console.warn("No se pudo cargar registro previo de libreta 180h:", e);
         if (typeof showToast === 'function') showToast('No se pudo abrir lo guardado de este día. Vuelva a intentarlo.', 'warning');
+        if (typeof m180GpsAuto === 'function') m180GpsAuto();
     }
 
     refreshAllSlotsVisuals();
@@ -3806,15 +3811,54 @@ let m180_gps = null;
 let m180_gps_vehiculos = null;
 const M180_GPS_COLOR = { 0: '#e5e7eb', 1: '#16a34a', 2: '#f59e0b' };
 
-function m180GpsReset() {
-    m180_gps = null;
+// El GPS se trae solo con el camión del día (guardado con el día, propuesto por Despacho Diario o elegido a mano): sin botón (05-11-2026).
+// m180_gps_tok descarta la respuesta de un camión o de un día que ya no está en pantalla.
+let m180_gps_tok = 0;
+function m180GpsAviso(html) {
     const r = document.getElementById('m180-gps-resultado');
-    if (r) r.innerHTML = '<div class="text-muted small">Elige la patente del camión que usó el chofer y pulsa <b>Ver recorrido</b>: se compara su día con los tramos de la libreta.</div>';
+    if (r) r.innerHTML = html ? '<div class="small text-secondary">' + html + '</div>' : '';
+}
+function m180GpsLimpiar(estadoTxt) {
+    m180_gps = null; m180_gps_tok++;
     const k = document.getElementById('m180-gps-kpis'); if (k) k.innerHTML = '';
-    const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = '';
+    const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = estadoTxt || '';
     m180GpsTabla(null);
     m180_gps_ent_tok++; m180_gps_ent = null; m180GpsEntregasPintar();
+}
+function m180GpsReset() {
+    m180GpsLimpiar('Buscando el camión del día…');
+    m180GpsAviso('');
     m180GpsCargarVehiculos();
+}
+function m180GpsAuto() {
+    const sel = document.getElementById('m180-gps-patente');
+    if (!sel) return;
+    const v = sel.value || '';
+    if (!v || v === M180_OTRA_PATENTE) {
+        m180GpsLimpiar(); m180GpsAviso('<i class="bi bi-arrow-up-circle me-1"></i>Elige el <b>camión del día</b> (arriba) y el GPS aparece solo.'); return;
+    }
+    if (v === M180_SIN_CAMION) { m180GpsLimpiar(); m180GpsAviso('Este día no anduvo en camión: no hay GPS que comparar.'); return; }
+    if (v.startsWith('p:')) {
+        m180GpsLimpiar();
+        if (!m180_gps_vehiculos) {   // la lista de camiones del GPS no llegó: no se puede saber si el camión está
+            m180GpsAviso('<i class="bi bi-exclamation-circle me-1"></i>El GPS (Nexacol) no respondió: no se pudo leer su lista de camiones.'
+                + ' <button type="button" class="btn btn-link btn-sm p-0 align-baseline fw-semibold" style="display:inline;" onclick="window.m180GpsReintentarLista()">Reintentar</button>');
+        } else {
+            m180GpsAviso('<b>' + m180GpsEsc(v.slice(2)) + '</b> no está en la plataforma de GPS: no hay recorrido que comparar.');
+        }
+        return;
+    }
+    m180GpsVer();
+}
+async function m180GpsReintentarLista() {
+    const sel = document.getElementById('m180-gps-patente');
+    if (!sel) return;
+    const v = sel.value || '';
+    const pat = v.startsWith('p:') ? v.slice(2) : '';
+    m180GpsLimpiar('Buscando la lista de camiones…'); m180GpsAviso('');
+    await m180GpsCargarVehiculos();
+    if (pat) m180SelPatente(null, pat);
+    m180GpsAuto();
 }
 
 const m180GpsEsShell = lugar => /^\s*shell\b/i.test(String(lugar || ''));
@@ -4045,28 +4089,34 @@ async function m180GpsCargarVehiculos() {
     }
 }
 
+// Trae el día del camión elegido (lo llama m180GpsAuto; «Reintentar» solo aparece si el GPS no respondió).
 async function m180GpsVer() {
     const sel = document.getElementById('m180-gps-patente');
-    const estado = document.getElementById('m180-gps-estado');
-    const btn = document.getElementById('m180-gps-btn');
+    const v = sel ? sel.value : '';
+    if (!v || v === M180_OTRA_PATENTE || v === M180_SIN_CAMION || v.startsWith('p:')) { m180GpsAuto(); return; }
     const emp = document.getElementById('m180-empleado-id').value;
     const fecha = document.getElementById('m180-fecha-str').value;
-    if (!sel.value) { estado.textContent = 'Elige el camión del día arriba.'; return; }
-    if (sel.value === M180_SIN_CAMION) { estado.textContent = 'Este día no anduvo en camión.'; return; }
-    if (sel.value.startsWith('p:')) { estado.textContent = 'Este camión no está en la plataforma de GPS.'; return; }
-    try { localStorage.setItem('asistencia_gps_patente:' + emp, sel.value); } catch (_) {}
-    estado.textContent = 'Consultando el GPS…'; btn.disabled = true;
+    const opt = sel.options[sel.selectedIndex];
+    const patente = (opt && (opt.dataset.patente || opt.textContent)) || '';
+    try { localStorage.setItem('asistencia_gps_patente:' + emp, v); } catch (_) {}
+    m180GpsLimpiar('Trayendo el GPS de ' + patente + '…');
+    m180GpsAviso('');
+    const tok = m180_gps_tok;
     try {
-        const resp = await fetch(`/api/asistencia/libreta-180h/gps/dia/?vehiculo_id=${encodeURIComponent(sel.value)}&fecha=${encodeURIComponent(fecha)}`, { headers: getLibretaAuthHeaders() });
+        const resp = await fetch(`/api/asistencia/libreta-180h/gps/dia/?vehiculo_id=${encodeURIComponent(v)}&fecha=${encodeURIComponent(fecha)}`, { headers: getLibretaAuthHeaders() });
         const d = await resp.json().catch(() => ({}));
+        if (tok !== m180_gps_tok) return;   // mientras tanto cambió el camión o se abrió otro día
         if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
-        m180_gps = d; estado.textContent = '';
+        m180_gps = d;
+        document.getElementById('m180-gps-estado').textContent = '';
         m180GpsPintar();
-        m180GpsEntregas(sel.value, fecha);
+        m180GpsEntregas(v, fecha);
     } catch (err) {
-        m180_gps = null; estado.textContent = err.message; m180GpsTabla(null); m180_gps_ent_tok++; m180_gps_ent = null; m180GpsEntregasPintar();
-        const r = document.getElementById('m180-gps-resultado'); if (r) r.innerHTML = '';
-    } finally { btn.disabled = false; }
+        if (tok !== m180_gps_tok) return;
+        m180GpsLimpiar();
+        m180GpsAviso('<i class="bi bi-exclamation-circle me-1"></i>No se pudo traer el GPS de <b>' + m180GpsEsc(patente) + '</b>: ' + m180GpsEsc(err.message)
+            + ' <button type="button" class="btn btn-link btn-sm p-0 align-baseline fw-semibold" style="display:inline;" onclick="window.m180GpsVer()">Reintentar</button>');
+    }
 }
 
 function m180GpsHora(i) { return String(Math.floor(i / 4)).padStart(2, '0') + ':' + String((i % 4) * 15).padStart(2, '0'); }
@@ -4161,7 +4211,7 @@ function m180GpsPintar() {
                 ${filasParadas ? `<div class="table-responsive" style="max-height:420px;overflow:auto"><table class="table align-middle mb-0 m180-par-tabla" style="font-size:.95rem"><thead><tr><th>N°</th><th>Hora</th><th class="text-end">Duración</th><th>Lugar</th><th>Libreta en ese tramo</th></tr></thead><tbody>${filasParadas}</tbody></table></div>` : '<div class="text-muted small">Sin paradas de 5 minutos o más fuera de la planta.</div>'}</div>
         </div>`;
 }
-window.m180GpsVer = m180GpsVer; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset; window.m180GpsCargarVehiculos = m180GpsCargarVehiculos;
+window.m180GpsVer = m180GpsVer; window.m180GpsAuto = m180GpsAuto; window.m180GpsReintentarLista = m180GpsReintentarLista; window.m180GpsPintar = m180GpsPintar; window.m180GpsReset = m180GpsReset; window.m180GpsCargarVehiculos = m180GpsCargarVehiculos;
 window.toggleLibretaBrushMode = toggleLibretaBrushMode;
 
 // ═══════════════════════════════════════════════════════════════════
