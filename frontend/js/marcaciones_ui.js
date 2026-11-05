@@ -6223,6 +6223,17 @@ window.mxCeldaEspera = function (r) {
 // orden alfabético dentro de su bloque. Con un horario o una persona elegidos en los filtros la grilla queda sin bloques.
 window.mxGruposPorHorario = function (rows) {
     if (stateMarcacionesApp.turnoId || stateMarcacionesApp.empleadoId) return null;
+    // Bolsa flexible: en vez de un bloque por horario, uno por cargo — Choferes (siempre abierto) y Peonetas (plegado hasta que se abra).
+    // Quien tenga otro cargo va en «Otros cargos», también abierto, para que nadie quede escondido tras un bloque plegado.
+    if (window._gridFlags && window._gridFlags.esBolsa) {
+        const por = { chofer: [], peoneta: [], otros: [] };
+        rows.forEach(r => { const c = window.categoriaCargo((r.emp && r.emp.cargo) || ''); (por[c] || por.otros).push(r); });
+        return [
+            { nombre: 'Choferes', filas: por.chofer, fijo: true },
+            { nombre: 'Peonetas', filas: por.peoneta, fijo: false },
+            { nombre: 'Otros cargos', filas: por.otros, fijo: true }
+        ].filter(g => g.filas.length);
+    }
     const mapa = new Map();
     rows.forEach(r => {
         const k = String((r.emp && r.emp.turno) || '').trim() || 'Sin horario';
@@ -6273,8 +6284,8 @@ window.mxPlegarHorario = function (btn) {
 };
 window.mxBloqueHorario = function (g, i, htmlDe, cabecera) {
     const e = window.escHtml || (x => String(x));
-    // Bolsa flexible: los bloques van siempre abiertos y sin botón de plegar
-    const fijo = !!(window._gridFlags && window._gridFlags.esBolsa);
+    // Bloque fijo (siempre abierto y sin botón de plegar): los Choferes y «Otros cargos» de la Bolsa flexible
+    const fijo = !!g.fijo;
     const n = g.filas.length, plegado = !fijo && !window.mxHorariosDesplegados().has(g.nombre);
     return '<tbody class="gh-grupo' + (plegado ? ' gh-plegado' : '') + (fijo ? ' gh-fijo' : '') + '"' + (i === 0 ? ' id="matrix-tbody"' : '') + ' data-horario="' + e(g.nombre) + '">'
         + '<tr class="gh-titulo"><td colspan="1"><div class="gh-tit">'
