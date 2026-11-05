@@ -12,6 +12,8 @@
     const MAX_DIAS = 62; // lo que acepta Nexacol en una consulta
 
     const ST = { clave: '', estado: 'idle', datos: {}, sinCalzar: [], diag: null, error: '', ticket: 0 };
+    // Lo que mostraría la vista normal en cada celda ("id|fecha"): es lo que se ve cuando el día no tiene velocidad del GPS
+    const NORMAL = new Map();
 
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const esChofer = emp => typeof window.categoriaCargo === 'function' && window.categoriaCargo(emp && emp.cargo) === 'chofer';
@@ -55,17 +57,24 @@
         return `<span class="vel-p vel-${n}" role="img" aria-label="${aria}">${n === 'x' ? FLECHA : ''}${esc(info.vel)}</span>`;
     }
 
+    // Sin velocidad del GPS: el estado del día como en la vista normal (pendiente, borrador, descanso operativo, licencia…); «—» solo si no hay ninguno
     function interior(empId, fecha, trabajo) {
-        if (ST.estado === 'idle' || ST.estado === 'cargando') return trabajo ? '<span class="vel-sk" aria-hidden="true"></span>' : '';
-        if (ST.estado === 'error') return ''; // el aviso de la leyenda lo explica; los «—» dirían que no hubo dato
+        const normal = NORMAL.get(String(empId) + '|' + fecha) || '';
+        if (ST.estado === 'idle' || ST.estado === 'cargando') return trabajo ? '<span class="vel-sk" aria-hidden="true"></span>' : normal;
+        if (ST.estado === 'error') return normal; // el aviso de la leyenda explica que no se pudo leer el GPS
         const info = ST.datos[String(empId)] && ST.datos[String(empId)][fecha];
         if (info) return chip(info);
+        if (normal) return normal;
         return trabajo ? '<span class="vel-v" title="Sin velocidad del GPS ese día" aria-label="Sin dato de GPS">—</span>' : '';
     }
 
-    /** Contenido de la celda de un día. Solo los choferes de Bolsa Flexible llevan algo; el resto de la grilla queda en blanco. */
-    window.mxVelCelda = function (emp, fecha, trabajo) {
+    /** Contenido de la celda de un día. Solo los choferes de Bolsa Flexible llevan algo; el resto de la grilla queda en blanco.
+     *  `normal` (función) arma lo que mostraría la vista normal en esa celda: se usa cuando el día no tiene velocidad del GPS. */
+    window.mxVelCelda = function (emp, fecha, trabajo, normal) {
         if (!esChofer(emp) || !enBolsa()) return '';
+        const k = String(emp.id) + '|' + fecha;
+        const html = typeof normal === 'function' ? (normal() || '') : String(normal || '');
+        if (html) NORMAL.set(k, html); else NORMAL.delete(k);
         return `<span class="vel-slot" data-t="${trabajo ? 1 : 0}">${interior(emp.id, fecha, trabajo)}</span>`;
     };
 
@@ -114,7 +123,7 @@
             <span class="fw-bold" style="color:#1a2326">Velocidad máxima del GPS · km/h</span>
             <span class="vel-ley"><span class="vel-p vel-ok">${LIMITE}</span>Bien · hasta ${LIMITE}</span>
             <span class="vel-ley"><span class="vel-p vel-x">${FLECHA}${LIMITE + 1}</span>Sobre ${LIMITE}</span>
-            <span class="vel-ley"><span class="vel-v" style="font-size:.9rem">—</span>Sin dato</span>
+            <span class="vel-ley">Sin velocidad: se ve el estado del día</span>
             ${estado}
             ${BTN_REPORTE}
         </div>`;
@@ -164,7 +173,11 @@
         if (!s || s.viewMode !== 'velocidad' || !td.querySelector('.vel-slot') || ST.estado !== 'ok') return html;
         const [id, fecha] = String(td.getAttribute('data-tip')).split('|');
         const info = ST.datos[id] && ST.datos[id][fecha];
-        if (!info || !/<\/div>\s*$/.test(html)) return html;
+        if (!/<\/div>\s*$/.test(html)) return html;
+        if (!info) {   // trabajó y el GPS no trae velocidad: la celda muestra el estado, el pie lo aclara
+            if (td.querySelector('.vel-slot').getAttribute('data-t') !== '1') return html;
+            return html.replace(/<\/div>\s*$/, '<div class="tp-vel"><div class="tp-vel-t">Sin velocidad del GPS ese día</div></div></div>');
+        }
         const pie = `<div class="tp-vel vel-${nivel(info.vel)}"><div class="tp-vel-n">${esc(info.vel)}<small>km/h</small></div>`
             + `<div class="tp-vel-t">Velocidad máxima del GPS${info.hora ? ' · ' + esc(info.hora) : ''}</div>`
             + `<div class="tp-vel-s">Camión ${esc(info.patente)}${info.comparte ? ' · lo compartió con otro chofer ese día' : ''}</div></div>`;

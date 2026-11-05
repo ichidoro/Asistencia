@@ -8246,9 +8246,12 @@ window.vaSetViewMode = function(mode) {
 
 // ─── CONTENIDO DE CELDA SEGÚN VIEWMODE ──────────────────────────────────────
 function _analiticaCellContent(di, dateStr, emp, viewMode, isFer = false) {
-    // Lámina Velocidad (velocidades_ui.js): solo los choferes llevan algo; '—' únicamente en los días que trabajó
+    // Lámina Velocidad (velocidades_ui.js): solo los choferes llevan algo. Con velocidad del GPS se ve la velocidad; sin velocidad, el estado del
+    // día con la misma etiqueta de la vista normal (pendiente, borrador, descanso operativo, licencia, libre, feriado…) (pedido del dueño 05-11-2026)
     if (viewMode === 'velocidad') {
-        return window.mxVelCelda ? window.mxVelCelda(emp, dateStr, !!(di && ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO','VIAJE_LARGO'].includes(di.estado))) : '';
+        if (!window.mxVelCelda) return '';
+        const trabajo = !!(di && ['OK','ATRASO','SALIDA_ADELANTADA','ATR_SAD','EXTRA','EN_CURSO','VIAJE_LARGO'].includes(di.estado));
+        return window.mxVelCelda(emp, dateStr, trabajo, () => _analiticaCellContent(di, dateStr, emp, 'conceptos', isFer));
     }
     // Proyección visual de LIBRE o FERIADO para fechas sin datos o guardadas sin marcas
     const est = di ? di.estado : null;
