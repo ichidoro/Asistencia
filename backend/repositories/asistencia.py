@@ -358,6 +358,9 @@ class AsistenciaRepository:
                 cerrado INTEGER DEFAULT 0,
                 validador_id INTEGER,
                 observaciones TEXT,
+                patente TEXT,
+                vehiculo_id TEXT,
+                patente_origen TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
@@ -409,12 +412,14 @@ class AsistenciaRepository:
         Guarda o actualiza los 96 slots y cómputos de la libreta Art. 25 bis.
         """
         slots_str = json.dumps(data['slots_96']) if isinstance(data['slots_96'], list) else str(data['slots_96'])
+        # La patente del día se escribe solo si viene en los datos; si no, se conserva la guardada
+        con_patente = 'patente_origen' in data or 'patente' in data
         query = """
             INSERT INTO libreta_art25bis_dias (
                 empleado_id, fecha, slots_96,
                 minutos_conduccion, minutos_espera, minutos_auxiliares, minutos_descanso,
-                minutos_efectivos, cerrado, validador_id, observaciones, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                minutos_efectivos, cerrado, validador_id, observaciones""" + (", patente, vehiculo_id, patente_origen" if con_patente else "") + """, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?""" + (", ?, ?, ?" if con_patente else "") + """, datetime('now'))
             ON CONFLICT(empleado_id, fecha) DO UPDATE SET
                 slots_96=excluded.slots_96,
                 minutos_conduccion=excluded.minutos_conduccion,
@@ -424,7 +429,10 @@ class AsistenciaRepository:
                 minutos_efectivos=excluded.minutos_efectivos,
                 cerrado=excluded.cerrado,
                 validador_id=excluded.validador_id,
-                observaciones=excluded.observaciones,
+                observaciones=excluded.observaciones,""" + ("""
+                patente=excluded.patente,
+                vehiculo_id=excluded.vehiculo_id,
+                patente_origen=excluded.patente_origen,""" if con_patente else "") + """
                 updated_at=datetime('now')
         """
         params = (
@@ -439,7 +447,7 @@ class AsistenciaRepository:
             data.get('cerrado', 0),
             data.get('validador_id'),
             data.get('observaciones', '')
-        )
+        ) + ((data.get('patente'), data.get('vehiculo_id'), data.get('patente_origen')) if con_patente else ())
         try:
             await self.db.execute(query, params)
         except Exception as e:

@@ -16,6 +16,7 @@ from backend.services.asistencia_service import AsistenciaService
 from backend.services import quantum_matrix_engine as _motor  # su reloj (_get_now_local) es el único: las pruebas lo fijan en un solo lugar
 from backend.services.quantum_matrix_engine import MARCA_INASISTENCIA_LIBRETA, QuantumMatrixEngine, libreta_es_inasistencia
 from backend.services import gps_nexacol
+from backend.services import libreta_orden
 from backend.services.bono_service import BonoService
 from backend.services.empleado_service import EmpleadoService
 from backend.services.turno_service import TurnoService
@@ -3450,6 +3451,63 @@ async def get_viajes_largos_empleado(
 # MARCACIÓN DINÁMICA 180 HORAS (ART. 25 BIS DT)
 # ═════════════════════════════════════════════════════════════════════
 
+# Por qué no se puede ingresar un día de libreta directamente (guardar, validar, inasistencia, reasignar). Orden del dueño, 04-11-2026.
+_BLOQUEO_STATUS = {"PERIODO_CERRADO": 403, "FECHA_FUTURA": 400, "SIN_LIBRETA": 400, "PENDIENTE_ANTERIOR": 409}
+# Quien lo tenga en su rol puede editar un día de libreta ya validado (se asigna en Configuración → Seguridad → Roles)
+PERMISO_EDITAR_LIBRETA_VALIDADA = "marcaciones.editar_libreta_validada"
+
+
+async def _libreta_bloqueo(service: AsistenciaService, empleado_id: int, fecha: str, con_orden: bool = True) -> Optional[Dict[str, Any]]:
+    """None si el día se puede ingresar; si no, el motivo y el texto: período cerrado, día futuro, persona sin libreta ese día (resguardo
+    del servidor: la pantalla solo abre la libreta a horarios de libreta) o, con `con_orden` (crear un día nuevo), días anteriores del
+    tramo todavía pendientes (la libreta se llena en orden)."""
+    repo = service.repository
+    if await repo.check_rango_cerrado(fecha, fecha, empleado_id):
+        return {"motivo": "PERIODO_CERRADO", "mensaje": "La fecha se encuentra en un período cerrado."}
+    if str(fecha)[:10] > _motor._get_now_local().date().isoformat():
+        return {"motivo": "FECHA_FUTURA", "mensaje": "No se puede ingresar la libreta de un día que todavía no llega."}
+    asignacion = await repo.get_asignacion_vigente(empleado_id, fecha)
+    if not QuantumMatrixEngine.resolve_control_modality(asignacion or {}, fecha):
+        return {"motivo": "SIN_LIBRETA", "mensaje": "Este empleado no se controla con libreta 180h ese día."}
+    pendientes = await libreta_orden.pendientes_anteriores(service, empleado_id, fecha) if con_orden else []
+    if pendientes:
+        return {"motivo": "PENDIENTE_ANTERIOR", "mensaje": libreta_orden.mensaje_pendiente(pendientes), "pendientes": pendientes}
+    return None
+
+
+async def _exigir_libreta_ingresable(service: AsistenciaService, empleado_id: int, fecha: str, con_orden: bool = True) -> None:
+    b = await _libreta_bloqueo(service, empleado_id, fecha, con_orden)
+    if b:
+        raise HTTPException(status_code=_BLOQUEO_STATUS[b["motivo"]], detail=b["mensaje"])
+
+
+async def _enlazados_libreta(service: AsistenciaService, empleado_id: int, fecha: str, row: Optional[Dict[str, Any]],
+                             chofer_id: Optional[int]) -> List[Dict[str, Any]]:
+    """Quienes andan enlazados con esta persona ese día, para la pregunta «¿A quién más le aplico este cambio?»: sus acompañantes si es
+    chofer; el chofer y los otros acompañantes si es peoneta. Con si su día está validado o es distinto al de esta persona."""
+    repo = service.repository
+    if chofer_id is not None:
+        ids = [(chofer_id, 'chofer')] + [(a, 'acompañante') for a in await repo.get_acompanantes_180h(chofer_id, fecha) if a != empleado_id]
+    else:
+        ids = [(a, 'acompañante') for a in await repo.get_acompanantes_180h(empleado_id, fecha)]
+    nombres = await _nombres_personas(repo.db, [i for i, _ in ids])
+    res = []
+    for i, rol in ids:
+        lib = await repo.get_libreta_180h(i, fecha)
+        res.append({"empleado_id": i, "nombre": nombres.get(i, ""), "rol": rol, "tiene_libreta": bool(lib),
+                    "validado": bool(lib) and int(lib.get('cerrado') or 0) == 1,
+                    "distinto": bool(lib) and bool(row) and not libreta_orden.mismos_tramos(lib, row)})
+    return res
+
+
+async def _nombres_personas(db, ids: List[int]) -> Dict[int, str]:
+    if not ids:
+        return {}
+    marcas = ", ".join("?" for _ in ids)
+    filas = await db.fetch_all(f"SELECT id, nombre, apellido_paterno, apellido_materno FROM empleados WHERE id IN ({marcas})", tuple(ids))
+    return {int(f["id"]): libreta_orden.nombre_persona(dict(f)) for f in filas}
+
+
 @router.get("/libreta-180h/")
 async def get_libreta_180h(
     empleado_id: int = Query(...),
@@ -3467,6 +3525,16 @@ async def get_libreta_180h(
         foto_url = f"/api/asistencia/libreta-180h/foto/?empleado_id={empleado_id}&fecha={fecha}" if tiene_foto else None
 
         row = await service.repository.get_libreta_180h(empleado_id, fecha)
+        chofer_id = await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha)
+        validado = bool(row) and int(row.get('cerrado') or 0) == 1
+        puede_validado = current_user.check_permission(PERMISO_EDITAR_LIBRETA_VALIDADA)
+        # Si el día no se puede ingresar directamente la ventana lo dice al abrirse. El orden solo cuenta para crear un día nuevo propio (la
+        # copia del chofer al peoneta nunca se frena); un día validado sin el permiso es de solo lectura y no hace falta revisarlo.
+        bloqueo = None if (validado and not puede_validado) else await _libreta_bloqueo(
+            service, empleado_id, fecha, con_orden=(not row and chofer_id is None))
+        camion = {k: (row or {}).get(k) for k in ("patente", "vehiculo_id", "patente_origen")}
+        extra = {"bloqueo": bloqueo, "puede_editar_validado": puede_validado,
+                 "enlazados": await _enlazados_libreta(service, empleado_id, fecha, row, chofer_id), **camion}
         if not row:
             return {
                 "has_data": False,
@@ -3485,9 +3553,10 @@ async def get_libreta_180h(
                 "observaciones": "",
                 "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
                 "acompanantes_ocupados": list((await service.repository.get_acompanantes_ocupados_180h(fecha, empleado_id)).keys()),
-                "chofer_id": await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha),
+                "chofer_id": chofer_id,
                 "tiene_foto": tiene_foto,
-                "foto_url": foto_url
+                "foto_url": foto_url,
+                **extra
             }
 
         raw_s = row.get('slots_96', '[]')
@@ -3519,9 +3588,10 @@ async def get_libreta_180h(
             "observaciones": row.get('observaciones') or "",
             "acompanantes": await service.repository.get_acompanantes_180h(empleado_id, fecha),
                 "acompanantes_ocupados": list((await service.repository.get_acompanantes_ocupados_180h(fecha, empleado_id)).keys()),
-            "chofer_id": await service.repository.get_chofer_de_acompanante_180h(empleado_id, fecha),
+            "chofer_id": chofer_id,
             "tiene_foto": tiene_foto,
-            "foto_url": foto_url
+            "foto_url": foto_url,
+            **extra
         }
     except Exception as e:
         logger.exception(f"❌ Error en get_libreta_180h (emp={empleado_id}, fecha={fecha}): {e}")
@@ -3554,23 +3624,54 @@ async def save_libreta_180h(
 ):
     """
     Guarda la libreta diaria de 96 slots, persiste cómputos y sincroniza en asistencias.
+
+    Reglas (orden del dueño, 04-11-2026):
+    - Un día NUEVO solo se crea si los días anteriores del tramo ya tienen libreta (la libreta se llena en orden). Editar un día que ya
+      tiene libreta no se frena por el orden.
+    - Un día validado solo lo cambia quien tiene el permiso «Editar libreta validada» (se asigna en Seguridad → Roles); sigue validado y
+      la edición queda en la auditoría con las horas de antes y de después.
+    - Chofer → acompañantes: la copia es automática mientras el día del chofer no está validado y el del acompañante sigue igual al del
+      chofer (o no existe). Si el chofer edita un día validado, o el acompañante tiene su día validado, ajustado aparte o propio, no se pisa:
+      solo se copia a quienes vengan en `replicar_a` (la pantalla lo pregunta). Sacar a un acompañante de la lista borra su copia (si no
+      está validada). La copia nunca se frena por el orden: si al acompañante le queda un día anterior pendiente, se avisa.
+    - Peoneta enlazado a un chofer: su cambio nunca pasa solo al chofer; solo a quienes vengan en `replicar_a` (el chofer o los otros
+      acompañantes de ese día). Al chofer no se le cambia su patente.
     """
     try:
-        existente = await service.repository.get_libreta_180h(payload.empleado_id, payload.fecha)
-        if existente and int(existente.get('cerrado') or 0) == 1:
-            raise HTTPException(status_code=409, detail="El día está validado: la libreta es de solo lectura. Para corregirla hay que eliminar el registro del día.")
+        repo = service.repository
+        existente = await repo.get_libreta_180h(payload.empleado_id, payload.fecha)
+        validado = bool(existente) and int(existente.get('cerrado') or 0) == 1
+        puede_validado = current_user.check_permission(PERMISO_EDITAR_LIBRETA_VALIDADA)
+        if validado and not puede_validado:
+            raise HTTPException(status_code=409, detail="El día está validado: solo un usuario con el permiso «Editar libreta validada» puede cambiarlo. Sin ese permiso, para corregirlo hay que eliminar el registro del día.")
 
-        # Un día nuevo no se abre mientras otro día de la misma persona siga en borrador: primero se valida (o se borra) ese.
+        # Período cerrado, día futuro o persona sin libreta ese día; y si el día es nuevo, los días anteriores del tramo deben tener libreta
+        await _exigir_libreta_ingresable(service, payload.empleado_id, payload.fecha, con_orden=not existente)
+
+        # Un día nuevo no se abre mientras un día ANTERIOR de la misma persona siga en borrador: primero se valida (o se borra) ese. Un
+        # borrador posterior (p. ej. la copia del chofer) no frena completar un día anterior pendiente.
         if not existente:
-            pendientes = [b for b in await service.repository.get_libreta_borradores_180h(payload.empleado_id, payload.fecha)
-                          if not libreta_es_inasistencia(b)]
+            pendientes = [b for b in await repo.get_libreta_borradores_180h(payload.empleado_id, payload.fecha)
+                          if not libreta_es_inasistencia(b) and str(b['fecha'])[:10] < str(payload.fecha)[:10]]
             if pendientes:
                 f = str(pendientes[0]['fecha'])
                 raise HTTPException(status_code=409, detail=f"Primero valida el borrador del {f[8:10]}-{f[5:7]}-{f[:4]}: no se puede guardar otro día de esta persona hasta entonces.")
 
-        # La primera vez que se guarda un día siempre queda en borrador: solo se valida (se cierra) sobre un borrador ya guardado.
-        cerrar_dia = bool(payload.cerrado) and bool(existente)
+        # La primera vez que se guarda un día siempre queda en borrador: solo se valida (se cierra) sobre un borrador ya guardado. Un día ya
+        # validado sigue validado al editarlo.
+        cerrar_dia = validado or (bool(payload.cerrado) and bool(existente))
         forzado_borrador = bool(payload.cerrado) and not existente
+
+        chofer_id = await repo.get_chofer_de_acompanante_180h(payload.empleado_id, payload.fecha)
+
+        # Camión del día: se guarda si viene; para validar el día de quien maneja hace falta la patente o «No anduvo en camión»
+        camion = (libreta_orden.normalizar_patente(payload.patente, payload.vehiculo_id, payload.patente_origen)
+                  if (payload.patente or payload.patente_origen) else None)
+        # (solo al validar: editar un día que ya estaba validado no pide un dato que no existía cuando se validó)
+        if cerrar_dia and not validado and not libreta_es_inasistencia(existente) and chofer_id is None:
+            vigente = camion or {k: (existente or {}).get(k) for k in ("patente", "patente_origen")}
+            if not (vigente.get('patente') or vigente.get('patente_origen') == 'SIN_CAMION'):
+                raise HTTPException(status_code=409, detail="Para validar el día falta la patente del camión: elígela o marca «No anduvo en camión».")
 
         slots = list(payload.slots_96)
         if len(slots) < 96:
@@ -3604,28 +3705,122 @@ async def save_libreta_180h(
             'validador_id': val_id,
             'observaciones': payload.observaciones or ""
         }
+        if camion is not None:
+            data.update(camion)
 
         acomp_ids = [a for a in dict.fromkeys(payload.acompanantes or []) if a != payload.empleado_id]
-        acomp_omitidos = []
         if payload.acompanantes is not None:
-            ocupados = await service.repository.get_acompanantes_ocupados_180h(payload.fecha, payload.empleado_id)
+            ocupados = await repo.get_acompanantes_ocupados_180h(payload.fecha, payload.empleado_id)
             choque = [a for a in acomp_ids if a in ocupados]
             if choque:
                 raise HTTPException(status_code=409, detail="Uno o más acompañantes ya están asignados a otro chofer ese día. Reabre la libreta para actualizar la lista.")
 
-        await service.repository.upsert_libreta_180h(data)
+        enlazados_antes = await repo.get_acompanantes_180h(payload.empleado_id, payload.fecha) if payload.acompanantes is not None else []
+        await repo.upsert_libreta_180h(data)
 
-        # Acompañantes (peonetas): copian los horarios del chofer
-        acomp_omitidos = []
+        replicar = {int(x) for x in (payload.replicar_a or [])}
+        no_copiados, sacados, replicados, acomp_pendientes, acomp_omitidos = [], [], [], [], []
+
+        async def copiar(destino: int, base: Dict[str, Any], sin_patente: bool = False) -> Optional[str]:
+            """Copia `base` al día de `destino`; devuelve el motivo si no se pudo (validado sin permiso o período cerrado)."""
+            ex_d = await repo.get_libreta_180h(destino, payload.fecha)
+            destino_validado = bool(ex_d) and int(ex_d.get('cerrado') or 0) == 1
+            if destino_validado and not puede_validado:
+                return 'VALIDADO'
+            if await repo.check_rango_cerrado(payload.fecha, payload.fecha, destino):
+                return 'PERIODO_CERRADO'
+            copia = {**base, 'empleado_id': destino, 'cerrado': 1 if (base.get('cerrado') or destino_validado) else 0}
+            if sin_patente:
+                for k in ('patente', 'vehiculo_id', 'patente_origen'):
+                    copia.pop(k, None)
+            elif 'patente_origen' in base:
+                copia['patente_origen'] = 'SIN_CAMION' if base['patente_origen'] == 'SIN_CAMION' else ('CHOFER' if base.get('patente') else None)
+            await repo.upsert_libreta_180h(copia)
+            await service.procesar_empleado_dia(destino, payload.fecha, save=True, force=True)
+            return None
+
+        # Chofer → acompañantes
         if payload.acompanantes is not None:
-            await service.repository.set_acompanantes_180h(payload.empleado_id, payload.fecha, acomp_ids)
-            for aid in acomp_ids:
-                ex_a = await service.repository.get_libreta_180h(aid, payload.fecha)
-                if ex_a and int(ex_a.get('cerrado') or 0) == 1:
-                    acomp_omitidos.append(aid)
+            await repo.set_acompanantes_180h(payload.empleado_id, payload.fecha, acomp_ids)
+            # Quien salió de la lista pierde la copia que tenía ese día (si no está validada): su día vuelve a quedar pendiente
+            for aid in [a for a in enlazados_antes if a not in acomp_ids]:
+                lib = await repo.get_libreta_180h(aid, payload.fecha)
+                if not lib:
                     continue
-                await service.repository.upsert_libreta_180h({**data, 'empleado_id': aid})
+                if int(lib.get('cerrado') or 0) == 1 or await repo.check_rango_cerrado(payload.fecha, payload.fecha, aid):
+                    sacados.append({"empleado_id": aid, "borrado": False})
+                    continue
+                await repo.delete_libreta_180h(aid, payload.fecha)
                 await service.procesar_empleado_dia(aid, payload.fecha, save=True, force=True)
+                sacados.append({"empleado_id": aid, "borrado": True})
+            for aid in acomp_ids:
+                ex_a = await repo.get_libreta_180h(aid, payload.fecha)
+                igual_al_chofer = (not ex_a) or (existente is not None and libreta_orden.mismos_tramos(ex_a, existente)) \
+                    or libreta_orden.mismos_tramos(ex_a, data)
+                a_validado = bool(ex_a) and int(ex_a.get('cerrado') or 0) == 1
+                automatico = not validado and not a_validado and igual_al_chofer
+                if not automatico and aid not in replicar:
+                    motivo = 'EDICION_VALIDADA' if validado else ('VALIDADO' if a_validado else 'AJUSTADO')
+                    no_copiados.append({"empleado_id": aid, "motivo": motivo})
+                    continue
+                motivo = await copiar(aid, data)
+                if motivo:
+                    acomp_omitidos.append(aid)
+                    no_copiados.append({"empleado_id": aid, "motivo": motivo})
+                    continue
+                replicados.append(aid)
+                previos = await libreta_orden.pendientes_anteriores(service, aid, payload.fecha)
+                if previos:
+                    acomp_pendientes.append({"empleado_id": aid, "fecha_pendiente": previos[0], "pendientes": len(previos),
+                                             "chofer_id": await repo.get_chofer_de_acompanante_180h(aid, previos[0])})
+
+        # Peoneta enlazado → chofer y otros acompañantes de ese día: solo si se eligió en la pregunta
+        if chofer_id is not None and replicar:
+            otros = [chofer_id] + [a for a in await repo.get_acompanantes_180h(chofer_id, payload.fecha) if a != payload.empleado_id]
+            for did in otros:
+                if did not in replicar:
+                    continue
+                motivo = await copiar(did, data, sin_patente=(did == chofer_id))
+                if motivo:
+                    no_copiados.append({"empleado_id": did, "motivo": motivo})
+                else:
+                    replicados.append(did)
+
+        # Nombres y textos de los avisos
+        ids_nombres = ([a["empleado_id"] for a in acomp_pendientes] + [a["chofer_id"] for a in acomp_pendientes if a["chofer_id"] is not None]
+                       + [n["empleado_id"] for n in no_copiados] + [s["empleado_id"] for s in sacados])
+        nombres = await _nombres_personas(repo.db, list(dict.fromkeys(ids_nombres)))
+        for a in acomp_pendientes:
+            a["nombre"] = nombres.get(a["empleado_id"], "")
+            a["chofer_nombre"] = nombres.get(a["chofer_id"], "") if a["chofer_id"] is not None else ""
+            con = f" (con {a['chofer_nombre']})" if a["chofer_nombre"] else ""
+            a["mensaje"] = f"Se copió el día a {a['nombre']}. Le queda pendiente el {libreta_orden.fecha_legible(a['fecha_pendiente'])}{con}."
+        textos_motivo = {
+            'EDICION_VALIDADA': "no se le copió el cambio (el día del chofer está validado y no se eligió copiarlo)",
+            'VALIDADO': "no se le copió: su día está validado",
+            'AJUSTADO': "no se le copió: su día tiene horas propias o ajustadas aparte",
+            'PERIODO_CERRADO': "no se le copió: su período está cerrado",
+        }
+        for n in no_copiados:
+            n["nombre"] = nombres.get(n["empleado_id"], "")
+            n["mensaje"] = f"A {n['nombre']} {textos_motivo.get(n['motivo'], 'no se le copió')}."
+        for s in sacados:
+            s["nombre"] = nombres.get(s["empleado_id"], "")
+            s["mensaje"] = (f"{s['nombre']} salió de la lista: se borró la copia de este día y vuelve a quedar pendiente." if s["borrado"] else
+                            f"{s['nombre']} salió de la lista, pero su día está validado o en un período cerrado: no se borró; hay que borrarlo a mano.")
+
+        # Un día validado que se edita queda en la auditoría con las horas de antes y de después
+        if validado:
+            try:
+                antes = {k: int(existente.get(k) or 0) for k in ('minutos_conduccion', 'minutos_espera', 'minutos_auxiliares', 'minutos_descanso', 'minutos_efectivos')}
+                despues = {k: int(data[k]) for k in antes}
+                await repo.db.execute(
+                    "INSERT INTO logs_auditoria (usuario_id, username, accion, modulo, detalle) VALUES (?, ?, ?, ?, ?)",
+                    (current_user.user_id, current_user.username, 'EDITAR_LIBRETA_VALIDADA', 'Marcaciones',
+                     json.dumps({"empleado_id": payload.empleado_id, "fecha": payload.fecha, "antes": antes, "despues": despues,
+                                 "replicado_a": replicados}, ensure_ascii=False)))
+            except Exception as aud_err:
+                logger.warning(f"No se pudo registrar la auditoría de la libreta validada editada: {aud_err}")
 
         # Guardar fotografía de respaldo físico si viene adjunta
         if payload.imagen_base64:
@@ -3647,9 +3842,15 @@ async def save_libreta_180h(
         # Proyección atómica al motor de asistencia
         res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
 
+        if validado:
+            mensaje = "Cambio guardado: el día sigue validado y quedó registrado."
+        elif forzado_borrador:
+            mensaje = "Borrador guardado: queda abierto hasta que lo valides."
+        else:
+            mensaje = "Libreta Art. 25 bis guardada exitosamente."
         return {
             "status": "success",
-            "message": "Borrador guardado: queda abierto hasta que lo valides." if forzado_borrador else "Libreta Art. 25 bis guardada exitosamente.",
+            "message": mensaje,
             "data": {
                 "empleado_id": payload.empleado_id,
                 "fecha": payload.fecha,
@@ -3664,7 +3865,12 @@ async def save_libreta_180h(
                 "total_horas_dia": round((min_efec + min_esp + min_desc) / 60.0, 2),
                 "cerrado": data['cerrado'],
                 "forzado_borrador": forzado_borrador,
+                "editado_validado": validado,
                 "acompanantes_omitidos": acomp_omitidos,
+                "acompanantes_con_pendientes": acomp_pendientes,
+                "no_copiados": no_copiados,
+                "sacados": sacados,
+                "replicados": replicados,
                 "resultado_asistencia": res_dia
             }
         }
@@ -3700,10 +3906,16 @@ async def reasignar_turno_acompanante_180h(
         if not lib_chofer:
             raise HTTPException(status_code=409, detail="El chofer no tiene horario registrado ese día: no hay turno que asignar.")
         propio = await repo.get_libreta_180h(payload.empleado_id, payload.fecha)
-        if propio and int(propio.get('cerrado') or 0) == 1:
-            raise HTTPException(status_code=409, detail="El día del acompañante está cerrado: ábrelo para poder reasignarle el turno.")
+        propio_validado = bool(propio) and int(propio.get('cerrado') or 0) == 1
+        if propio_validado and not current_user.check_permission(PERMISO_EDITAR_LIBRETA_VALIDADA):
+            raise HTTPException(status_code=409, detail="El día del acompañante está validado: solo un usuario con el permiso «Editar libreta validada» puede reasignarle el turno.")
+        # Es la misma copia del chofer: no se frena por el orden (sí por período cerrado, día futuro o persona sin libreta)
+        await _exigir_libreta_ingresable(service, payload.empleado_id, payload.fecha, con_orden=False)
 
-        await repo.upsert_libreta_180h({**lib_chofer, 'empleado_id': payload.empleado_id})
+        copia = {**lib_chofer, 'empleado_id': payload.empleado_id, 'cerrado': 1 if (int(lib_chofer.get('cerrado') or 0) or propio_validado) else 0}
+        if lib_chofer.get('patente'):
+            copia['patente_origen'] = 'CHOFER'
+        await repo.upsert_libreta_180h(copia)
         res_dia = await service.procesar_empleado_dia(payload.empleado_id, payload.fecha, save=True, force=True)
 
         try:
@@ -3743,11 +3955,8 @@ async def marcar_inasistencia_libreta_180h(
     """
     try:
         repo = service.repository
-        if await repo.check_rango_cerrado(payload.fecha, payload.fecha, payload.empleado_id):
-            raise HTTPException(status_code=403, detail="La fecha se encuentra en un período cerrado.")
-        asignacion = await repo.get_asignacion_vigente(payload.empleado_id, payload.fecha)
-        if not QuantumMatrixEngine.resolve_control_modality(asignacion or {}, payload.fecha):
-            raise HTTPException(status_code=400, detail="Este empleado no se controla con libreta 180h ese día.")
+        # Período cerrado, día futuro, persona sin libreta o días anteriores pendientes (la inasistencia también completa el día)
+        await _exigir_libreta_ingresable(service, payload.empleado_id, payload.fecha)
         existente = await repo.get_libreta_180h(payload.empleado_id, payload.fecha)
         if existente:
             if int(existente.get('cerrado') or 0) == 1:
@@ -3778,6 +3987,62 @@ async def marcar_inasistencia_libreta_180h(
     except Exception as e:
         logger.exception(f"❌ Error en marcar_inasistencia_libreta_180h (emp={payload.empleado_id}, fecha={payload.fecha}): {e}")
         raise HTTPException(status_code=500, detail=f"Error registrando la inasistencia: {str(e)}")
+
+
+_PLAN_DIA: Dict[str, Any] = {}     # fecha -> (momento, filas de Despacho Diario de Nexacol)
+_VEHICULOS_GPS: Dict[str, Any] = {}  # 'v' -> (momento, vehículos de la plataforma de GPS)
+
+
+@router.get("/libreta-180h/gps/patente-propuesta/")
+async def patente_propuesta_libreta(
+    empleado_id: int = Query(...),
+    fecha: str = Query(...),
+    service: AsistenciaService = Depends(get_asistencia_service),
+    current_user: SecurityContext = Depends(RequirePermission("marcaciones.ver"))
+):
+    """Camión del día para la libreta: el guardado con el día; si no hay, el del chofer (acompañante enlazado) o el que planificó Despacho
+    Diario en Nexacol para esta persona (mismo calce de nombres que el reporte de velocidades). Si Nexacol no responde, la lista viene vacía
+    con el motivo y se elige a mano."""
+    import re
+    import time
+    from backend.services.velocidades_choferes import patentes_planificadas
+    repo = service.repository
+    propia = await repo.get_libreta_180h(empleado_id, fecha)
+    if propia and (propia.get('patente') or propia.get('patente_origen') == 'SIN_CAMION'):
+        props = [{"vehiculo_id": propia.get('vehiculo_id'), "patente": propia.get('patente')}] if propia.get('patente') else []
+        return {"success": True, "origen": propia.get('patente_origen') or 'MANUAL', "propuestas": props, "mensaje": ""}
+    chofer_id = await repo.get_chofer_de_acompanante_180h(empleado_id, fecha)
+    if chofer_id is not None:
+        lib = await repo.get_libreta_180h(chofer_id, fecha)
+        if lib and lib.get('patente'):
+            return {"success": True, "origen": "CHOFER", "propuestas": [{"vehiculo_id": lib.get('vehiculo_id'), "patente": lib.get('patente')}], "mensaje": ""}
+    ahora = time.time()
+    try:
+        previo = _PLAN_DIA.get(fecha)
+        if previo and ahora - previo[0] < 300:
+            dias = previo[1]
+        else:
+            dias = await gps_nexacol.velocidades(fecha, fecha)
+            _PLAN_DIA[fecha] = (ahora, dias)
+            if len(_PLAN_DIA) > 40:
+                _PLAN_DIA.pop(next(iter(_PLAN_DIA)))
+        previo_v = _VEHICULOS_GPS.get('v')
+        if previo_v and ahora - previo_v[0] < 600:
+            vehiculos = previo_v[1]
+        else:
+            vehiculos = await gps_nexacol.vehiculos()
+            _VEHICULOS_GPS['v'] = (ahora, vehiculos)
+    except gps_nexacol.GpsNexacolError as e:
+        return {"success": True, "origen": "PLAN", "propuestas": [], "mensaje": f"No se pudo leer la planificación de Nexacol: {e.mensaje}"}
+    personas = [dict(r) for r in await repo.db.fetch_all(
+        """SELECT e.id, e.activo, (e.apellido_paterno || ' ' || COALESCE(NULLIF(e.apellido_materno,''),'') || ' ' || e.nombre) AS nombre_completo
+           FROM empleados e WHERE e.area_id = (SELECT area_id FROM empleados WHERE id = ?)""", (empleado_id,))]
+    norm = lambda p: re.sub(r"[^A-Z0-9]", "", str(p).upper())
+    por_patente = {norm(v["patente"]): v for v in vehiculos}
+    props = [{"vehiculo_id": (por_patente.get(norm(p)) or {}).get("id"), "patente": p}
+             for p in patentes_planificadas(dias, personas, empleado_id, fecha)]
+    return {"success": True, "origen": "PLAN", "propuestas": props,
+            "mensaje": "" if props else "La planificación de Despacho Diario no trae camión para esta persona ese día: elígelo a mano."}
 
 
 @router.get("/libreta-180h/gps/vehiculos/")
@@ -3939,6 +4204,8 @@ async def delete_libreta_180h(
     del día devolviéndolo a su estado natural (LIBRE o PENDIENTE).
     """
     try:
+        if await service.repository.check_rango_cerrado(fecha, fecha, empleado_id):
+            raise HTTPException(status_code=403, detail="La fecha se encuentra en un período cerrado.")
         deleted = await service.repository.delete_libreta_180h(empleado_id, fecha)
         await service.repository.set_acompanantes_180h(empleado_id, fecha, [])
         if not deleted:
@@ -3969,9 +4236,14 @@ async def delete_libreta_180h(
         except Exception:
             pass
 
+        # Si después hay días con libreta, este vuelve a quedar pendiente y frena los días nuevos de la persona hasta llenarlo otra vez
+        posteriores = await libreta_orden.libretas_posteriores(service, empleado_id, fecha)
+        aviso = (" Este día vuelve a quedar pendiente: los días nuevos de esta persona no se podrán ingresar hasta volver a llenarlo."
+                 if posteriores else "")
         return {
             "status": "success",
-            "message": f"Registro de libreta del {fecha} eliminado correctamente.",
+            "message": f"Registro de libreta del {fecha} eliminado correctamente.{aviso}",
+            "dias_posteriores_con_libreta": posteriores,
             "resultado_asistencia": res_dia
         }
     except HTTPException:

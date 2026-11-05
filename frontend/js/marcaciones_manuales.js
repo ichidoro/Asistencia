@@ -2619,6 +2619,9 @@ let m180_chofer_id = null;       // si el empleado es peoneta de un chofer ese d
 let m180_chofer_tiene_datos = false;
 let m180_acomp = [];          // IDs de peonetas que copian la libreta del chofer
 let m180_acomp_ocupados = [];  // peonetas ya asignados a otro chofer ese día
+let m180_validado = false;     // el día abierto está validado (solo se edita con el permiso «Editar libreta validada»)
+let m180_enlazados = [];       // quienes andan con esta persona ese día (para «¿A quién más le aplico este cambio?»)
+let m180_patente_origen = null; // de dónde salió el camión elegido: PLAN, MANUAL, CHOFER o SIN_CAMION
 
 function m180Esc(t) {
     return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -3161,6 +3164,7 @@ function recalcLibretaTotales() {
 function m180ActualizarValidar() {
     const b = document.getElementById('btn-cerrar-guardar-180h');
     if (!b) return;
+    if (m180_validado) { b.disabled = false; b.title = 'Guardar el cambio: el día sigue validado y queda registrado'; return; }
     b.disabled = !m180_chofer_tiene_datos;
     b.title = m180_chofer_tiene_datos ? 'Validar el día: se cierra y ya no se puede editar (solo eliminar)' : 'Primero guarda el borrador; después podrás validarlo';
 }
@@ -3235,6 +3239,171 @@ function m180AttachCloseGuard(modalEl) {
     });
 }
 
+// Día validado abierto por alguien con el permiso «Editar libreta validada»: se puede editar y sigue validado (un solo botón «Guardar cambio»)
+function m180ModoValidado(activo) {
+    const banner = document.getElementById('m180-valedit-banner');
+    if (banner) banner.classList.toggle('d-none', !activo);
+    const borrador = document.querySelector('#modalMarcacion180h .m180-save-btn:not(#btn-cerrar-guardar-180h)');
+    if (borrador) borrador.classList.toggle('d-none', activo);
+    const btn = document.getElementById('btn-cerrar-guardar-180h');
+    if (btn) btn.innerHTML = activo ? '<i class="bi bi-check-circle-fill me-1"></i> Guardar cambio' : '<i class="bi bi-check-circle-fill me-1"></i> Validar Día';
+    if (activo) {
+        m180SetLocked(false);
+        const lock = document.getElementById('m180-lock-banner');
+        if (lock) lock.classList.add('d-none');
+    }
+}
+
+// Día que todavía no se puede llenar: la libreta va en orden dentro del tramo (o el período está cerrado, o el día no llega todavía)
+function m180MostrarBloqueo(b) {
+    const box = document.getElementById('m180-bloqueo');
+    if (!box) return;
+    if (!b) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+    m180SetLocked(true);
+    const lock = document.getElementById('m180-lock-banner');
+    if (lock) lock.classList.add('d-none');
+    let acciones = '';
+    if (b.motivo === 'PENDIENTE_ANTERIOR' && Array.isArray(b.pendientes) && b.pendientes.length) {
+        const f = String(b.pendientes[0]);
+        const corto = f.slice(8, 10) + '-' + f.slice(5, 7);
+        acciones = '<div class="m180-bloqueo-acts">'
+            + '<button type="button" class="m180-bk-btn pri" onclick="window.m180IrADia(\'' + f + '\')"><i class="bi bi-journal-text" aria-hidden="true"></i>Llenar libreta del ' + corto + '</button>'
+            + '<button type="button" class="m180-bk-btn sec" onclick="window.m180JustificarDia(\'' + f + '\')"><i class="bi bi-clipboard2-check" aria-hidden="true"></i>Justificar el ' + corto + '</button>'
+            + '<button type="button" class="m180-bk-btn dan" onclick="window.marcarInasistenciaLibreta(\'' + f + '\')"><i class="bi bi-person-x-fill" aria-hidden="true"></i>Marcar inasistencia el ' + corto + '</button>'
+            + '</div>';
+    }
+    const titulo = b.motivo === 'PENDIENTE_ANTERIOR' ? 'Este día todavía no se puede llenar' : 'Este día no se puede llenar';
+    box.innerHTML = '<div class="m180-bloqueo-ico"><i class="bi bi-hourglass-split" aria-hidden="true"></i></div>'
+        + '<div class="m180-bloqueo-txt"><b>' + titulo + '</b>' + m180Esc(b.mensaje || '') + '</div>' + acciones;
+    box.classList.remove('d-none');
+}
+
+// Abrir otro día de la misma persona (desde el aviso de día bloqueado)
+window.m180IrADia = function (fecha) {
+    m180_dirty = false;
+    marcacionesManualesState.currentDate = fecha;
+    proceedToMarcacion180h();
+};
+
+// Justificar un día pendiente (vacaciones, licencia, permiso…) desde el aviso de día bloqueado
+window.m180JustificarDia = function (fecha) {
+    const empId = parseInt(document.getElementById('m180-empleado-id').value);
+    const nombre = document.getElementById('m180-conductor-nombre').textContent || '';
+    m180_force_close = true;
+    const modalEl = document.getElementById('modalMarcacion180h');
+    const modal = modalEl && bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+    if (typeof openJustifyModal === 'function') openJustifyModal(empId, nombre, fecha);
+};
+
+// Camión del día: el guardado con el día; si no hay, el del chofer o el que planificó Despacho Diario (Nexacol); se puede cambiar
+const M180_SIN_CAMION = '__SIN_CAMION__';
+const M180_OTRA_PATENTE = '__OTRA__';
+const M180_OPCIONES_EXTRA = '<option value="' + M180_OTRA_PATENTE + '">Escribir otra patente…</option><option value="' + M180_SIN_CAMION + '">No anduvo en camión</option>';
+const M180_ORIGEN_TXT = { PLAN: 'Propuesta de Despacho Diario (Nexacol)', MANUAL: 'Elegido a mano', CHOFER: 'El de su chofer', SIN_CAMION: 'No anduvo en camión' };
+function m180PatenteTag(texto, gris) {
+    const tag = document.getElementById('m180-patente-origen');
+    if (!tag) return;
+    tag.classList.toggle('d-none', !texto);
+    tag.classList.toggle('gris', !!gris);
+    tag.textContent = texto || '';
+}
+function m180SelPatente(vehiculoId, patente) {
+    const sel = document.getElementById('m180-gps-patente');
+    if (!sel) return;
+    let opt = vehiculoId ? [...sel.options].find(o => o.value === String(vehiculoId)) : null;
+    if (!opt) opt = [...sel.options].find(o => (o.dataset.patente || '').toUpperCase() === String(patente || '').toUpperCase());
+    if (!opt && patente) {
+        opt = document.createElement('option');
+        opt.value = 'p:' + patente; opt.dataset.patente = patente; opt.textContent = patente;
+        sel.appendChild(opt);
+    }
+    if (opt) sel.value = opt.value;
+}
+async function m180PatenteCargar(data, empId, fecha) {
+    const sel = document.getElementById('m180-gps-patente');
+    if (!sel) return;
+    await m180GpsCargarVehiculos();
+    sel.disabled = m180_locked || m180_chofer_id != null;   // el peoneta enlazado lleva el camión de su chofer
+    if (data.patente_origen === 'SIN_CAMION') { sel.value = M180_SIN_CAMION; m180_patente_origen = 'SIN_CAMION'; m180PatenteTag(M180_ORIGEN_TXT.SIN_CAMION); return; }
+    if (data.patente) {
+        m180SelPatente(data.vehiculo_id, data.patente);
+        m180_patente_origen = data.patente_origen || 'MANUAL';
+        m180PatenteTag(data.patente_origen === 'PLAN' ? 'Guardado con el día · ' + M180_ORIGEN_TXT.PLAN : (M180_ORIGEN_TXT[data.patente_origen] || 'Guardado con el día'));
+        return;
+    }
+    try {
+        const resp = await fetch('/api/asistencia/libreta-180h/gps/patente-propuesta/?empleado_id=' + encodeURIComponent(empId) + '&fecha=' + encodeURIComponent(fecha), { headers: getLibretaAuthHeaders() });
+        const d = await resp.json().catch(() => ({}));
+        if (String(document.getElementById('m180-fecha-str').value) !== String(fecha)) return;   // ya se abrió otro día
+        if (resp.ok && Array.isArray(d.propuestas) && d.propuestas.length) {
+            m180SelPatente(d.propuestas[0].vehiculo_id, d.propuestas[0].patente);
+            m180_patente_origen = d.origen || 'PLAN';
+            m180PatenteTag(M180_ORIGEN_TXT[m180_patente_origen] || '');
+        } else {
+            m180PatenteTag(d.mensaje || '', true);
+        }
+    } catch (_) { m180PatenteTag('No se pudo leer la planificación: elige el camión a mano.', true); }
+}
+let m180_patente_previa = '';
+document.addEventListener('focusin', (e) => { if (e.target && e.target.id === 'm180-gps-patente') m180_patente_previa = e.target.value; });
+document.addEventListener('change', async (e) => {
+    if (!e.target || e.target.id !== 'm180-gps-patente') return;
+    if (e.target.value === M180_OTRA_PATENTE) {   // camión que no está en la lista (o Nexacol no responde)
+        const sel = e.target;
+        const r = await Swal.fire({ title: 'Patente del camión', input: 'text', inputPlaceholder: 'Ej.: PKDD13', showCancelButton: true,
+            confirmButtonText: 'Usar esta patente', cancelButtonText: 'Cancelar', confirmButtonColor: '#059669',
+            inputValidator: v => (String(v || '').replace(/[^A-Za-z0-9]/g, '').length >= 4 ? null : 'Escribe la patente completa') });
+        if (!r.isConfirmed) { sel.value = m180_patente_previa; return; }
+        m180SelPatente(null, String(r.value).toUpperCase().replace(/[^A-Z0-9]/g, ''));
+    }
+    m180_patente_origen = e.target.value === M180_SIN_CAMION ? 'SIN_CAMION' : (e.target.value ? 'MANUAL' : null);
+    m180PatenteTag(m180_patente_origen ? M180_ORIGEN_TXT[m180_patente_origen] : '');
+    m180_dirty = true;
+});
+
+// «¿A quién más le aplico este cambio?»: con el chofer, los acompañantes de su lista que no reciben la copia solos (su día validado o con
+// horas propias, o todos si el día del chofer está validado); con un peoneta enlazado, el chofer y los otros acompañantes de ese día.
+// Devuelve la lista elegida ([] = solo esta persona) o null si se canceló.
+async function m180PreguntarReplicar() {
+    const esPeoneta = m180_chofer_id != null;
+    const cand = esPeoneta ? m180_enlazados.slice()
+        : m180_enlazados.filter(e => m180_acomp.includes(e.empleado_id) && (m180_validado || e.validado || e.distinto));
+    if (!cand.length) return [];
+    const nombre = m180Esc(document.getElementById('m180-conductor-nombre').textContent || '');
+    const fecha = window.formatFechaDDMMYYYY(document.getElementById('m180-fecha-str').value);
+    const texto = esPeoneta ? 'Cambiaste el día de <b>' + nombre + '</b> (' + fecha + '). Su día viene de la copia de su chofer.'
+        : (m180_validado ? 'Cambiaste el día validado de <b>' + nombre + '</b> (' + fecha + ').'
+            : 'Algunos acompañantes tienen su día validado o con horas propias: no se les copia solo.');
+    const filas = cand.map(e => '<label class="m180-rep-chk"><input type="checkbox" class="m180-rep-id" value="' + e.empleado_id + '"> '
+        + m180Esc(e.nombre) + ' · ' + m180Esc(e.rol) + (e.validado ? ' · validado' : (e.distinto ? ' · con horas propias' : '')) + '</label>').join('');
+    const html = '<div class="m180-rep"><p>' + texto + '</p>'
+        + '<label class="m180-rep-opt"><input type="radio" name="m180-rep" value="solo" checked><span>Solo a ' + nombre + '<small>'
+        + (esPeoneta ? 'El chofer queda como está' : 'Sus acompañantes quedan como están') + '</small></span></label>'
+        + '<label class="m180-rep-opt"><input type="radio" name="m180-rep" value="mas"><span>' + (esPeoneta ? 'También a quienes anduvieron con él ese día' : 'También a sus acompañantes de ese día') + '</span></label>'
+        + filas + (m180_validado ? '<div class="m180-rep-nota"><i class="bi bi-shield-check"></i> El día sigue validado. Queda registrado quién lo cambió, cuándo y qué horas cambiaron.</div>' : '') + '</div>';
+    const r = await Swal.fire({
+        title: '¿A quién más le aplico este cambio?', html, showCancelButton: true, focusConfirm: false,
+        confirmButtonText: '<i class="bi bi-check-lg me-1"></i> Guardar cambio', cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#059669', cancelButtonColor: '#64748b',
+        didOpen: (el) => {
+            el.querySelectorAll('.m180-rep-id').forEach(chk => chk.addEventListener('change', () => {
+                if (chk.checked) el.querySelector('input[name="m180-rep"][value="mas"]').checked = true;
+            }));
+            el.querySelector('input[name="m180-rep"][value="mas"]').addEventListener('change', () => {
+                if (![...el.querySelectorAll('.m180-rep-id')].some(x => x.checked)) el.querySelectorAll('.m180-rep-id').forEach(x => { x.checked = true; });
+            });
+            el.querySelector('input[name="m180-rep"][value="solo"]').addEventListener('change', () => el.querySelectorAll('.m180-rep-id').forEach(x => { x.checked = false; }));
+        },
+        preConfirm: () => {
+            const el = Swal.getPopup();
+            if (el.querySelector('input[name="m180-rep"]:checked').value === 'solo') return [];
+            return [...el.querySelectorAll('.m180-rep-id')].filter(x => x.checked).map(x => parseInt(x.value));
+        }
+    });
+    return r.isConfirmed ? (r.value || []) : null;
+}
+
 async function proceedToMarcacion180h() {
     closeAsistenciaActionModal();
 
@@ -3266,6 +3435,11 @@ async function proceedToMarcacion180h() {
     const btnDelDiaInit = document.getElementById('m180-btn-delete-dia');
     if (btnDelDiaInit) btnDelDiaInit.classList.add('d-none');
     m180_chofer_id = null;
+    m180_validado = false;
+    m180_enlazados = [];
+    m180_patente_origen = null;
+    m180MostrarBloqueo(null);
+    m180ModoValidado(false);
     if (typeof m180GpsReset === 'function') m180GpsReset();
 
     try {
@@ -3296,6 +3470,13 @@ async function proceedToMarcacion180h() {
                 m180SetBadge(Number(data.cerrado) ? 'cerrado' : (esInasistencia ? 'inasistencia' : 'borrador'));
                 m180SetLocked(Number(data.cerrado) === 1);
             }
+
+            // Orden del tramo, día validado con permiso, enlazados y camión del día (04-11-2026)
+            m180_enlazados = Array.isArray(data.enlazados) ? data.enlazados : [];
+            m180_validado = Number(data.cerrado) === 1;
+            if (m180_validado && data.puede_editar_validado) m180ModoValidado(true);
+            m180MostrarBloqueo(data.bloqueo || null);
+            m180PatenteCargar(data, empId, dateStr);
 
             // Previsualización de fotografía archivada en el servidor (si existe)
             const previewContainer = document.getElementById('m180-ocr-preview-container');
@@ -3389,6 +3570,9 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         }
     }
 
+    const replicarA = await m180PreguntarReplicar();
+    if (replicarA === null) return;
+
     const payload = {
         empleado_id: empId,
         fecha: dateStr,
@@ -3396,8 +3580,21 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
         cerrado: Boolean(cerrarDia),
         observaciones: obs,
         acompanantes: m180_acomp,
-        imagen_base64: window.m180_last_scanned_image || null
+        imagen_base64: window.m180_last_scanned_image || null,
+        replicar_a: replicarA
     };
+    // Camión del día (el peoneta enlazado lleva el de su chofer: no se manda)
+    const selP = document.getElementById('m180-gps-patente');
+    if (selP && m180_chofer_id == null) {
+        if (selP.value === M180_SIN_CAMION) {
+            payload.patente_origen = 'SIN_CAMION';
+        } else if (selP.value) {
+            const opt = selP.selectedOptions[0];
+            payload.patente = (opt && (opt.dataset.patente || opt.textContent || '').trim()) || null;
+            payload.vehiculo_id = selP.value.startsWith('p:') ? null : selP.value;
+            payload.patente_origen = m180_patente_origen || 'MANUAL';
+        }
+    }
 
     const buttons = document.querySelectorAll('#modalMarcacion180h .m180-save-btn');
     try {
@@ -3433,13 +3630,21 @@ async function guardarLibreta180h(cerrarDia = false, skipPrompt = false) {
 
         m180_dirty = false;
         window.m180_last_scanned_image = null;
+        let res = {};
+        try { res = await resp.json(); } catch (_) {}
+        const d = res.data || {};
         if (typeof showToast === 'function') {
-            showToast(cerrarDia ? "Listo. Día validado y guardado en la libreta (Art. 25 bis)." : "Listo. Borrador de la libreta guardado: queda abierto hasta que lo valides.", "success");
+            showToast(d.editado_validado ? 'Listo. ' + (res.message || 'Cambio guardado.')
+                : (cerrarDia ? "Listo. Día validado y guardado en la libreta (Art. 25 bis)." : "Listo. Borrador de la libreta guardado: queda abierto hasta que lo valides."), "success");
         }
-        let omitidos = [];
-        try { omitidos = (await resp.json()).data.acompanantes_omitidos || []; } catch (_) {}
-        if (omitidos.length && typeof showToast === 'function') {
-            showToast('No se copió a ' + omitidos.map(m180AcompNombre).join(', ') + ': su día ya está cerrado.', 'warning');
+        // Avisos: acompañantes con un día pendiente, quienes salieron de la lista y a quienes no se pudo copiar
+        const avisos = [].concat(
+            (d.acompanantes_con_pendientes || []).map(a => a.mensaje),
+            (d.sacados || []).map(s => s.mensaje),
+            (d.no_copiados || []).filter(n => n.motivo === 'VALIDADO' || n.motivo === 'PERIODO_CERRADO').map(n => n.mensaje)
+        ).filter(Boolean);
+        if (avisos.length) {
+            Swal.fire({ icon: 'info', title: 'Para tener en cuenta', html: '<ul class="text-start mb-0">' + avisos.map(a => '<li>' + m180Esc(a) + '</li>').join('') + '</ul>', confirmButtonColor: '#059669' });
         }
 
         const modalEl = document.getElementById('modalMarcacion180h');
@@ -3502,7 +3707,11 @@ async function eliminarRegistroLibretaDia() {
 
         m180_dirty = false;
         window.m180_last_scanned_image = null;
-        if (typeof showToast === 'function') {
+        let resBorrado = {};
+        try { resBorrado = await resp.json(); } catch (_) {}
+        if (resBorrado.dias_posteriores_con_libreta > 0) {
+            Swal.fire({ icon: 'info', title: 'Día borrado', text: resBorrado.message, confirmButtonColor: '#059669' });
+        } else if (typeof showToast === 'function') {
             showToast('Listo. Se borró la libreta de este día y el día volvió a como estaba.', 'success');
         }
 
@@ -3540,11 +3749,12 @@ window.guardarLibreta180h = guardarLibreta180h;
 window.eliminarRegistroLibretaDia = eliminarRegistroLibretaDia;
 
 // Registra la inasistencia del día en Marcaciones para quien se controla con libreta (bolsa de 180 horas).
-async function marcarInasistenciaLibreta() {
+async function marcarInasistenciaLibreta(fechaPendiente) {
     const empId = parseInt(document.getElementById('m180-empleado-id').value);
-    const dateStr = document.getElementById('m180-fecha-str').value;
+    const otroDia = typeof fechaPendiente === 'string' && fechaPendiente.length >= 10;
+    const dateStr = otroDia ? fechaPendiente : document.getElementById('m180-fecha-str').value;
     const empNombre = document.getElementById('m180-conductor-nombre').textContent || 'el chofer';
-    if (m180_slots.some(v => v > 0)) {
+    if (!otroDia && m180_slots.some(v => v > 0)) {
         Swal.fire({ icon: 'info', title: 'La libreta tiene tramos', text: 'Para marcar la inasistencia el día no debe tener tramos dibujados. Límpialos primero (o usa "Borrar Registro del Día").', confirmButtonColor: '#059669' });
         return;
     }
@@ -3561,7 +3771,7 @@ async function marcarInasistenciaLibreta() {
         const resp = await fetch('/api/asistencia/libreta-180h/inasistencia/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getLibretaAuthHeaders() },
-            body: JSON.stringify({ empleado_id: empId, fecha: dateStr, observaciones: (document.getElementById('m180-observaciones').value || '').trim() })
+            body: JSON.stringify({ empleado_id: empId, fecha: dateStr, observaciones: otroDia ? '' : (document.getElementById('m180-observaciones').value || '').trim() })
         });
         if (!resp.ok) {
             let errMsg = `Error ${resp.status} al registrar la inasistencia`;
@@ -3570,6 +3780,11 @@ async function marcarInasistenciaLibreta() {
         }
         m180_dirty = false;
         if (typeof showToast === 'function') showToast('Listo. Se registró la inasistencia.', 'success');
+        if (otroDia) {   // vuelve a abrir el día que se quería llenar: ya puede estar libre (o muestra el siguiente pendiente)
+            if (typeof window.reloadSingleEmployeeRow === 'function') window.reloadSingleEmployeeRow(empId);
+            proceedToMarcacion180h();
+            return;
+        }
         const modalEl = document.getElementById('modalMarcacion180h');
         const modal = modalEl && bootstrap.Modal.getInstance(modalEl);
         if (modal) modal.hide();
@@ -3812,7 +4027,8 @@ async function m180GpsCargarVehiculos() {
     const elegir = () => {
         const emp = document.getElementById('m180-empleado-id').value;
         let guardada = ''; try { guardada = localStorage.getItem('asistencia_gps_patente:' + emp) || ''; } catch (_) {}
-        sel.value = guardada && (m180_gps_vehiculos || []).some(v => v.id === guardada) ? guardada : '';
+        sel.value = '';   // el camión del día lo pone m180PatenteCargar (guardado con el día o propuesto por Despacho Diario)
+        void guardada;
     };
     if (m180_gps_vehiculos) { elegir(); return; }
     try {
@@ -3820,10 +4036,11 @@ async function m180GpsCargarVehiculos() {
         const d = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(d.detail || `Error ${resp.status}`);
         m180_gps_vehiculos = d.vehiculos || [];
-        sel.innerHTML = '<option value="">Elegir patente…</option>' + m180_gps_vehiculos.map(v => `<option value="${v.id}">${String(v.patente).replace(/[<>&"]/g, '')}</option>`).join('');
+        sel.innerHTML = '<option value="">Elegir patente…</option>' + m180_gps_vehiculos.map(v => '<option value="' + m180Esc(v.id) + '" data-patente="' + m180Esc(v.patente) + '">' + m180Esc(v.patente) + '</option>').join('')
+            + M180_OPCIONES_EXTRA;
         elegir();
     } catch (err) {
-        sel.innerHTML = '<option value="">No disponible</option>';
+        sel.innerHTML = '<option value="">Lista de camiones no disponible</option>' + M180_OPCIONES_EXTRA;
         const e = document.getElementById('m180-gps-estado'); if (e) e.textContent = err.message;
     }
 }
@@ -3834,7 +4051,9 @@ async function m180GpsVer() {
     const btn = document.getElementById('m180-gps-btn');
     const emp = document.getElementById('m180-empleado-id').value;
     const fecha = document.getElementById('m180-fecha-str').value;
-    if (!sel.value) { estado.textContent = 'Elige una patente.'; return; }
+    if (!sel.value) { estado.textContent = 'Elige el camión del día arriba.'; return; }
+    if (sel.value === M180_SIN_CAMION) { estado.textContent = 'Este día no anduvo en camión.'; return; }
+    if (sel.value.startsWith('p:')) { estado.textContent = 'Este camión no está en la plataforma de GPS.'; return; }
     try { localStorage.setItem('asistencia_gps_patente:' + emp, sel.value); } catch (_) {}
     estado.textContent = 'Consultando el GPS…'; btn.disabled = true;
     try {

@@ -3723,6 +3723,49 @@
                                 <span><strong>Día validado · solo lectura.</strong> Ya no se puede editar; si hay un error, elimina el registro del día y vuelve a cargarlo.</span>
                             </div>
 
+                            <!-- Día que todavía no se puede llenar (la libreta va en orden dentro del tramo) y día validado editado con permiso -->
+                            <div id="m180-bloqueo" class="m180-bloqueo d-none" role="alert"></div>
+                            <div id="m180-valedit-banner" class="m180-valedit d-none" role="status">
+                                <i class="bi bi-unlock-fill" aria-hidden="true"></i>
+                                <span><strong>Día validado.</strong> Lo estás editando con el permiso «Editar libreta validada» de tu rol; el cambio queda registrado.</span>
+                            </div>
+
+                            <!-- Arriba, para no olvidarlos: camión del día, inasistencia, chofer y acompañantes (pedido del dueño, 04-11-2026) -->
+                            <div class="m180-dia" id="m180-dia-box">
+                                <div class="m180-dia-camion">
+                                    <span class="m180-dia-lbl">Camión del día</span>
+                                    <select id="m180-gps-patente" class="form-select form-select-sm m180-dia-sel" aria-label="Camión del día"><option value="">Cargando…</option></select>
+                                    <span id="m180-patente-origen" class="m180-dia-tag d-none"></span>
+                                </div>
+                                <button type="button" id="m180-btn-inasistencia" class="m180-btn-inas m180-edit-btn" onclick="window.marcarInasistenciaLibreta()" title="Registrar la inasistencia de este día en Marcaciones (sin horas de libreta)">
+                                    <i class="bi bi-person-x-fill" aria-hidden="true"></i> Marcar inasistencia
+                                </button>
+                            </div>
+
+                            <!-- Peoneta enlazado a un chofer: botón para volver a asignarle el turno del chofer -->
+                            <div id="m180-chofer-box" class="m180-chofer mb-3 d-none" role="status"></div>
+
+                            <!-- Acompañantes (peonetas): copian el horario del chofer -->
+                            <div class="m180-acomp mb-3" id="m180-acomp-box">
+                                <div class="m180-acomp-head">
+                                    <div class="m180-acomp-ico"><i class="bi bi-people-fill" aria-hidden="true"></i></div>
+                                    <div>
+                                        <div class="m180-acomp-title">Acompañantes</div>
+                                        <div class="m180-acomp-sub">Los peonetas que elijas reciben el mismo horario del chofer al guardar.</div>
+                                    </div>
+                                    <span class="m180-acomp-count" id="m180-acomp-count">0</span>
+                                </div>
+                                <div class="m180-acomp-combo" id="m180-acomp-combo">
+                                    <label class="m180-acomp-field" for="m180-acomp-input">
+                                        <i class="bi bi-search" aria-hidden="true"></i>
+                                        <input type="text" id="m180-acomp-input" class="m180-acomp-input" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="m180-acomp-panel" placeholder="Buscar peoneta por nombre...">
+                                    </label>
+                                    <div class="m180-acomp-panel" id="m180-acomp-panel" role="listbox"></div>
+                                </div>
+                                <div id="m180-acomp-chips"></div>
+                            </div>
+
+
                             <!-- Barra de Herramientas y Leyenda Directa -->
                             <!-- 1. BLOQUE DE ESCANEO INTELIGENTE CON CÁMARA (GEMINI VISION AI) -->
                             <div class="card border-0 shadow-sm mb-3 overflow-hidden" style="border-radius:14px; background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1.5px solid #a7f3d0 !important;">
@@ -3947,29 +3990,6 @@
                                 </div>
                             </div>
 
-                            <!-- Peoneta enlazado a un chofer: botón para volver a asignarle el turno del chofer -->
-                            <div id="m180-chofer-box" class="m180-chofer mb-3 d-none" role="status"></div>
-
-                            <!-- Acompañantes (peonetas): copian el horario del chofer -->
-                            <div class="m180-acomp mb-3" id="m180-acomp-box">
-                                <div class="m180-acomp-head">
-                                    <div class="m180-acomp-ico"><i class="bi bi-people-fill" aria-hidden="true"></i></div>
-                                    <div>
-                                        <div class="m180-acomp-title">Acompañantes</div>
-                                        <div class="m180-acomp-sub">Los peonetas que elijas reciben el mismo horario del chofer al guardar.</div>
-                                    </div>
-                                    <span class="m180-acomp-count" id="m180-acomp-count">0</span>
-                                </div>
-                                <div class="m180-acomp-combo" id="m180-acomp-combo">
-                                    <label class="m180-acomp-field" for="m180-acomp-input">
-                                        <i class="bi bi-search" aria-hidden="true"></i>
-                                        <input type="text" id="m180-acomp-input" class="m180-acomp-input" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="m180-acomp-panel" placeholder="Buscar peoneta por nombre...">
-                                    </label>
-                                    <div class="m180-acomp-panel" id="m180-acomp-panel" role="listbox"></div>
-                                </div>
-                                <div id="m180-acomp-chips"></div>
-                            </div>
-
                             <!-- Observaciones -->
                             <div class="mb-0">
                                 <label for="m180-observaciones" class="form-label fw-semibold text-secondary mb-1" style="font-size:0.75rem;">Observaciones del Día (Opcional)</label>
@@ -3988,13 +4008,12 @@
                                     </div>
                                     <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
                                         <span id="m180-gps-estado" class="small text-muted"></span>
-                                        <select id="m180-gps-patente" class="form-select form-select-sm" style="width:170px" aria-label="Patente del camión"><option value="">Cargando…</option></select>
                                         <button type="button" id="m180-gps-btn" class="btn btn-sm btn-primary fw-semibold px-3" onclick="window.m180GpsVer()"><i class="bi bi-search me-1"></i> Ver recorrido</button>
                                     </div>
                                 </div>
                                 <div class="p-3">
                                     <div id="m180-gps-kpis" class="row g-2 mb-3"></div>
-                                    <div id="m180-gps-resultado"><div class="text-muted small">Elige la patente del camión que usó el chofer y pulsa <b>Ver recorrido</b>: se compara su día con los tramos de la libreta.</div></div>
+                                    <div id="m180-gps-resultado"><div class="text-muted small">Elige el camión arriba, en <b>Camión del día</b>, y pulsa <b>Ver recorrido</b>: se compara su día con los tramos de la libreta.</div></div>
                                 </div>
                             </section>
                         </div>
@@ -4002,9 +4021,6 @@
                         <div class="modal-footer border-0 p-3 bg-white d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center gap-2">
                                 <button type="button" id="m180-btn-cancel" class="btn btn-sm btn-light px-3" data-bs-dismiss="modal">Cancelar</button>
-                                <button type="button" id="m180-btn-inasistencia" class="btn btn-sm btn-outline-danger px-3 m180-edit-btn" onclick="window.marcarInasistenciaLibreta()" title="Registrar la inasistencia de este día en Marcaciones (sin horas de libreta)">
-                                    <i class="bi bi-person-x-fill me-1"></i> Marcar inasistencia
-                                </button>
                                 <button type="button" id="m180-btn-delete-dia" class="btn btn-sm btn-outline-danger px-3 d-none" onclick="window.eliminarRegistroLibretaDia()" title="Eliminar registro de libreta y foto de este día">
                                     <i class="bi bi-trash3-fill me-1"></i> Borrar Registro del Día
                                 </button>
@@ -4280,7 +4296,7 @@
         "/static/js/calendario_ui.js?v={{ startup_id }}_v17",
         "/static/js/reincorporacion_ui.js?v={{ startup_id }}_v18",
         "/static/js/justificaciones_individuales.js?v={{ startup_id }}_v17",
-        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v29",
+        "/static/js/marcaciones_manuales.js?v={{ startup_id }}_v30",
         "/static/js/marcaciones_ui.js?v={{ startup_id }}_v38",
         "/static/js/velocidades_ui.js?v={{ startup_id }}_v2",
         "/static/js/cuadre_ui.js?v={{ startup_id }}_v12",

@@ -96,5 +96,13 @@ class Libreta180hRequest(BaseModel):
     observaciones: Optional[str] = None
     imagen_base64: Optional[str] = None
     acompanantes: Optional[List[int]] = None
+    # Camión del día (para comparar con el GPS): patente, id del vehículo en la plataforma de GPS y de dónde salió
+    # (PLAN = Despacho Diario de Nexacol, MANUAL, CHOFER, SIN_CAMION = «No anduvo en camión»). Sin estos campos se conserva lo guardado.
+    patente: Optional[str] = None
+    vehiculo_id: Optional[str] = None
+    patente_origen: Optional[str] = None
+    # A quién más se le aplica este cambio, cuando no va solo (lo elige la persona en la pregunta de la pantalla): acompañantes del chofer,
+    # o el chofer y los otros acompañantes si quien guarda es un peoneta enlazado
+    replicar_a: Optional[List[int]] = None
 
 

@@ -543,6 +543,13 @@ class TurnoRepository:
                 logger.info("✨ Tabla 'libreta_art25bis_dias' creada")
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_emp_fecha ON libreta_art25bis_dias (empleado_id, fecha)")
             await self.db.execute("CREATE INDEX IF NOT EXISTS idx_libreta_fecha ON libreta_art25bis_dias (fecha)")
+            # Camión del día, guardado con la libreta para poder comparar con el GPS después (04-11-2026)
+            cols_lib = set(await self.db.get_column_names("libreta_art25bis_dias"))
+            for col in ("patente", "vehiculo_id", "patente_origen"):
+                if col not in cols_lib:
+                    await self.db.execute(f"ALTER TABLE libreta_art25bis_dias ADD COLUMN {col} TEXT")
+                    logger.info(f"Migracion: Columna '{col}' agregada a libreta_art25bis_dias")
+            self.db._schema_cache.pop("libreta_art25bis_dias", None)
         except Exception as e_lib:
             logger.error(f"❌ Error asegurando tabla libreta_art25bis_dias: {e_lib}")
 

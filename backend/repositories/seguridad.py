@@ -208,6 +208,7 @@ class SeguridadRepository:
                 ('marcaciones.intercambio',      'Marcaciones',    'Registrar y revertir intercambios de días (Días Compensatorios)'),
                 ('marcaciones.compensar',        'Marcaciones',    'Compensar una inasistencia con una jornada EXTRA o con horas extra, y quitar la compensación'),
                 ('marcaciones.eliminar_manual',  'Marcaciones',    'Quitar una marcación manual (nunca las del reloj) desde "Marcaciones del día"; queda registro de quién, cuándo y por qué'),
+                ('marcaciones.editar_libreta_validada', 'Marcaciones', 'Editar el día de una libreta Art. 25 bis ya validado (sigue validado); queda registro de quién, cuándo y qué horas cambiaron'),
 
 
                 # ── Reportes (4 permisos) ──
