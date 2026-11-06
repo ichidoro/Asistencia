@@ -550,11 +550,12 @@ function renderMarcacionesToolbar(container) {
                 <!-- «Días Compensatorios» se quitó de aquí (27-10-2026): compensar una inasistencia se hace desde el día
                      faltado, en Acciones de asistencia → Compensar inasistencia -->
 
-                <!-- Días que una regla de marcaciones dejó en revisión: solo aparece cuando hay alguno -->
-                <button class="btn btn-sm btn-outline-danger shadow-sm ms-2 mx-act-wide" id="btn-por-revisar"
+                <!-- Días que una regla de marcaciones dejó en revisión: siempre a la vista (pedido del dueño, 06-11-2026);
+                     sin días dice «No hay nada por revisar» (actualizarPorRevisar lo pinta) -->
+                <button class="btn btn-sm btn-outline-secondary shadow-sm ms-2 mx-act-wide" id="btn-por-revisar"
                         onclick="abrirPanelPorRevisar()" title="Días que una regla de marcaciones dejó en revisión"
-                        style="height:38px; display:none; align-items:center; gap:5px;">
-                    <i class="bi bi-exclamation-triangle-fill"></i> <span class="fw-bold">Por revisar</span>
+                        style="height:38px; display:flex; align-items:center; gap:5px;">
+                    <i class="bi bi-hourglass-split"></i> <span class="fw-bold">Por revisar…</span>
                 </button>
 
             </div>
@@ -962,8 +963,26 @@ let _loadMarcacionesPendiente = false;
 // ── «Por revisar (N)»: días que una regla de marcaciones dejó en revisión ────
 // El botón vive en la barra de la grilla para que cualquiera que vea Marcaciones
 // llegue a los días sin pasar por Configuración (no todos entran ahí). Respeta el
-// filtro de área elegido y se esconde cuando no queda ninguno.
+// filtro de área elegido. Siempre está a la vista (pedido del dueño, 06-11-2026):
+// con días dice «Por revisar (N)»; sin días, «No hay nada por revisar». Si la consulta
+// falla no afirma que no hay nada: dice «Por revisar» y el motivo en su ayuda.
 window._porRevisarDias = [];
+function _pintarBotonPorRevisar(btn, estado, total) {
+    const v = {
+        hay:   { cls: 'btn-outline-danger',    icono: 'bi-exclamation-triangle-fill', texto: `Por revisar (${total})`,
+                 ayuda: 'Días que una regla de marcaciones dejó en revisión' },
+        nada:  { cls: 'btn-outline-success',   icono: 'bi-check-circle-fill',         texto: 'No hay nada por revisar',
+                 ayuda: 'Ninguna regla de marcaciones dejó días en revisión (con el área elegida en el filtro)' },
+        error: { cls: 'btn-outline-secondary', icono: 'bi-question-circle',           texto: 'Por revisar',
+                 ayuda: 'No se pudo consultar los días por revisar. Vuelva a intentarlo.' },
+    }[estado];
+    btn.classList.remove('btn-outline-danger', 'btn-outline-success', 'btn-outline-secondary');
+    btn.classList.add(v.cls);
+    btn.style.display = 'flex';
+    btn.title = v.ayuda;
+    btn.querySelector('i').className = `bi ${v.icono}`;
+    btn.querySelector('span').textContent = v.texto;
+}
 window.actualizarPorRevisar = async function () {
     const btn = document.getElementById('btn-por-revisar');
     if (!btn) return;
@@ -971,14 +990,13 @@ window.actualizarPorRevisar = async function () {
         const area = stateMarcacionesApp.area || '';
         const r = await fetch(`/api/configuracion/reglas-marcas/por-revisar/?area=${encodeURIComponent(area)}`,
             { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } });
-        if (!r.ok) { btn.style.display = 'none'; return; }
+        if (!r.ok) { window._porRevisarDias = null; _pintarBotonPorRevisar(btn, 'error'); return; }
         const body = await r.json();
         window._porRevisarDias = body.dias || [];
-        if (!body.total) { btn.style.display = 'none'; return; }
-        btn.style.display = 'flex';
-        btn.querySelector('span').textContent = `Por revisar (${body.total})`;
+        _pintarBotonPorRevisar(btn, body.total ? 'hay' : 'nada', body.total);
     } catch (e) {
-        btn.style.display = 'none';
+        window._porRevisarDias = null;
+        _pintarBotonPorRevisar(btn, 'error');
     }
 };
 
@@ -996,8 +1014,9 @@ window.abrirPanelPorRevisar = function () {
             <div class="modal-body" id="por-revisar-body"></div></div></div>`;
         document.body.appendChild(m);
     }
+    const fallo = window._porRevisarDias === null;   // la última consulta falló: no se afirma que no hay nada
     const dias = window._porRevisarDias || [];
-    const cuerpo = dias.length ? `
+    const cuerpo = fallo ? '<div class="text-muted py-3"><i class="bi bi-question-circle me-1"></i>No se pudo consultar los días por revisar. Vuelva a intentarlo en un momento.</div>' : dias.length ? `
         <div class="text-muted mb-2" style="font-size:.84rem;">Una regla de marcaciones dejó estos días en revisión. «Abrir» muestra sus marcas para corregirlas o confirmar que están bien. Mientras queden días aquí, el cierre del tramo de su área está bloqueado.</div>
         <div class="table-responsive"><table class="table table-sm align-middle" style="font-size:.85rem;">
             <thead><tr><th>Persona</th><th>Área</th><th>Fecha</th><th>Secuencia</th><th>Estado</th><th class="text-end">Horas</th><th class="text-end">Deuda (min)</th><th></th></tr></thead>
@@ -1009,7 +1028,7 @@ window.abrirPanelPorRevisar = function () {
                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary py-0" data-pr-abrir="${i}">Abrir</button></td>
                 </tr>`).join('')}</tbody>
         </table></div>` :
-        '<div class="text-muted py-3">No hay días por revisar con el filtro actual.</div>';
+        '<div class="text-success py-3"><i class="bi bi-check-circle-fill me-1"></i>No hay nada por revisar con el área elegida en el filtro.</div>';
     document.getElementById('por-revisar-body').innerHTML = cuerpo;
     const inst = bootstrap.Modal.getOrCreateInstance(m);
     m.querySelectorAll('[data-pr-abrir]').forEach(b => b.addEventListener('click', () => {

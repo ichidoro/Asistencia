@@ -579,7 +579,8 @@ class AsistenciaService:
                         'minutos_autorizados': resultado.get('_he_minutos_autorizados', 0),
                         'estado': resultado.get('_he_estado') or 'PENDIENTE'
                     })
-                else:
+                elif not resultado.get('_he_conservar'):
+                    # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
                     results_to_delete_he.append((emp_id, fecha))
             else:
                 results_to_delete.append((emp_id, fecha))
@@ -1230,7 +1231,8 @@ class AsistenciaService:
                             'minutos_autorizados': result.get('_he_minutos_autorizados', 0),
                             'estado': result.get('_he_estado') or 'PENDIENTE',
                         })
-                    else:
+                    elif not result.get('_he_conservar'):
+                        # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
                         he_to_delete.append((empleado_id, fecha_str))
                     # ── PERSISTENCIA DIFERIDA: jornadas_especiales (decidido por el motor) ──
                     if not result.get('_manual_override'):
@@ -2446,7 +2448,8 @@ class AsistenciaService:
                     minutos_autorizados=resultado.get('_he_minutos_autorizados', 0),
                     estado=resultado.get('_he_estado') or 'PENDIENTE',
                 )
-            else:
+            elif not resultado.get('_he_conservar'):
+                # (día sin calcular con horas extra ya decididas: su fila queda tal cual)
                 await self.he_repo.delete_by_empleado_fecha(empleado_id, fecha)
 
             await self.repository.upsert_asistencia(resultado)

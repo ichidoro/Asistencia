@@ -1687,6 +1687,14 @@ class HumanDecisionMerger:
                 tag = f"Preservando decisión humana previa (Estado HE: {estado_prev})"
                 if tag not in (res.get('observaciones') or ''):
                     res['observaciones'] = (res.get('observaciones') or '') + f"{tag} para {fecha}. "
+            elif res.get('estado') == 'ANOMALIA':
+                # Día que no se puede calcular (en revisión por una regla de marcaciones, o en anomalía por sus marcas): no
+                # tiene horas porque falta corregirlo, no porque no haya horas extra. La fila ya decidida NO se borra (antes
+                # se perdía la aprobación y volvía «por decidir»; caso Regla 4, 06-11-2026): queda tal cual y, al corregir las
+                # marcas, este mismo paso la vuelve a aplicar.
+                res['_he_conservar'] = True
+                res['observaciones'] = (res.get('observaciones') or '') + (
+                    f"Horas extra ya decididas ({he_previo['estado']}): se conservan hasta corregir el día. ")
 
         # 3. Jornada Especial: respetar validación humana
         if res.get('_jornada_especial'):
